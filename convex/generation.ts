@@ -8,12 +8,26 @@ import { call } from './lib/piAi';
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
 import { parseUiKitResponse } from './lib/uiKitParser';
 
-// Default model picks. Each can be overridden per-run via Convex env when
-// we wire that surface (v0.0.3). Picks chosen for a balance of quality, cost,
-// and vision capability.
-const GENERATE_MODEL = { provider: 'anthropic' as const, modelId: 'claude-sonnet-4-5' };
-const DECOMPOSE_MODEL = { provider: 'anthropic' as const, modelId: 'claude-sonnet-4-5' };
-const VISUAL_JUDGE_MODEL = { provider: 'google' as const, modelId: 'gemini-3-pro-preview' };
+// Cheap-tier defaults. Per user request: Kimi K2.6 via OpenRouter for the
+// LLM stages (~$0.05-0.10/call vs $0.30-0.40 for Opus), Gemini 2.5 Flash
+// via Google direct for the visual judge (~$0.005/call, vision-capable).
+//
+// Provider keys required on the deployment:
+//   ANTHROPIC_API_KEY    optional fallback if user overrides to claude-*
+//   OPENAI_API_KEY       required for image-gen + gpt-* model overrides
+//   GEMINI_API_KEY       required for the visual judge default
+//   OPENROUTER_API_KEY   required for kimi-k2.6 (any vendor/model id)
+//
+// Per-call overrides come through runs.start args (per-stage modelOverrides),
+// reaching here via the workflow handler.
+const GENERATE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
+const DECOMPOSE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
+// Judge stays on the strong tier: gemini-3.1-pro-preview is the best-available
+// vision verifier today. ~$0.02-0.05 per judge call (vs ~$0.005 for flash) but
+// the rubric quality difference matters — the judge is what catches drift the
+// deterministic checker can't see. False positives here have higher cost than
+// the small judge fee.
+const VISUAL_JUDGE_MODEL = { provider: 'openrouter' as const, modelId: 'google/gemini-3.1-pro-preview' };
 
 const MAX_ITERATIONS = 2;
 
@@ -31,6 +45,7 @@ export const generateInitial = internalAction({
     ),
   },
   handler: async (ctx, { runId, prompt, sourceImageBase64, sourceImageMimeType }) => {
+    const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'generating' });
 
     const userText =
@@ -59,9 +74,16 @@ export const generateInitial = internalAction({
 
     const html = stripWrappingFences(result.text);
     await ctx.runMutation(internal.artifacts.append, { runId, version: 0, html });
-    await ctx.runMutation(internal.runs.accumulateCost, {
+    await ctx.runMutation(internal.runs.recordStageTelemetry, {
       runId,
-      addMicroUsd: result.costMicroUsd,
+      stage: 'generate',
+      modelId: result.modelUsed,
+      provider: result.provider,
+      costMicroUsd: result.costMicroUsd,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      latencyMs: Date.now() - stageStartedAt,
+      stageStartedAt,
     });
     return { version: 0, costMicroUsd: result.costMicroUsd };
   },
@@ -77,6 +99,7 @@ export const decompose = internalAction({
     artifactHtml: v.string(),
   },
   handler: async (ctx, { runId, artifactVersion, artifactHtml }) => {
+    const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
     const result = await call({
@@ -108,9 +131,16 @@ export const decompose = internalAction({
       files: parsed.files,
       decomposeCostMicroUsd: result.costMicroUsd,
     });
-    await ctx.runMutation(internal.runs.accumulateCost, {
+    await ctx.runMutation(internal.runs.recordStageTelemetry, {
       runId,
-      addMicroUsd: result.costMicroUsd,
+      stage: 'decompose',
+      modelId: result.modelUsed,
+      provider: result.provider,
+      costMicroUsd: result.costMicroUsd,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      latencyMs: Date.now() - stageStartedAt,
+      stageStartedAt,
     });
     return {
       slug: parsed.slug,
@@ -182,6 +212,7 @@ export const iterate = internalAction({
     failedGaps: v.any(), // ParityGap[]
   },
   handler: async (ctx, args) => {
+    const iterateStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId: args.runId, status: 'iterating' });
 
     const previousFiles = args.previousUiKitFiles as Record<string, string>;
@@ -252,9 +283,16 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       files: parsed.files,
       decomposeCostMicroUsd: result.costMicroUsd,
     });
-    await ctx.runMutation(internal.runs.accumulateCost, {
+    await ctx.runMutation(internal.runs.recordStageTelemetry, {
       runId: args.runId,
-      addMicroUsd: result.costMicroUsd,
+      stage: `iterate-${args.iterationNumber}`,
+      modelId: result.modelUsed,
+      provider: result.provider,
+      costMicroUsd: result.costMicroUsd,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      latencyMs: Date.now() - iterateStartedAt,
+      stageStartedAt: iterateStartedAt,
     });
     await ctx.runMutation(internal.runs.updateStatus, {
       runId: args.runId,

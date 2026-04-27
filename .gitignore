@@ -24,3 +24,5 @@ runs/
 tsconfig.tsbuildinfo
 mcp/dist/
 mcp/node_modules/
+
+.vercel

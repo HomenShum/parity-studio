@@ -82,10 +82,14 @@ async function dashboardForTool(): Promise<string | null> {
 
 const VERSION = '0.0.1';
 
-// Model defaults — overridable via env
-const GENERATE_MODEL = process.env['PARITY_GENERATE_MODEL'] ?? 'claude-sonnet-4-5';
-const DECOMPOSE_MODEL = process.env['PARITY_DECOMPOSE_MODEL'] ?? 'claude-opus-4-1';
-const JUDGE_MODEL = process.env['PARITY_JUDGE_MODEL'] ?? 'claude-sonnet-4-5';
+// Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
+// for vision judge). Override via env for any tier you prefer:
+//   PARITY_GENERATE_MODEL=claude-sonnet-4-5
+//   PARITY_DECOMPOSE_MODEL=claude-opus-4-1
+//   PARITY_JUDGE_MODEL=gpt-4o
+const GENERATE_MODEL = process.env['PARITY_GENERATE_MODEL'] ?? 'moonshotai/kimi-k2.6';
+const DECOMPOSE_MODEL = process.env['PARITY_DECOMPOSE_MODEL'] ?? 'moonshotai/kimi-k2.6';
+const JUDGE_MODEL = process.env['PARITY_JUDGE_MODEL'] ?? 'google/gemini-3.1-pro-preview';
 
 // Image mime type, must match what most providers accept
 const IMG_MIME_SCHEMA = z.enum(['image/png', 'image/jpeg', 'image/webp']);

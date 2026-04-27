@@ -33,9 +33,26 @@ export default defineSchema({
     iterationsCompleted: v.number(),
     errorMessage: v.optional(v.string()),
     finishedAt: v.optional(v.number()),
-  })
-    .index('by_status', ['status'])
-    .index('by_creation', ['_creationTime']),
+    /**
+     * Per-stage cost + telemetry breakdown for the cost panel UI.
+     * Append-only: each stage push appends one entry; iterate stages
+     * append their own. Reads as a flat list ordered by stageStartedAt.
+     */
+    costBreakdown: v.optional(
+      v.array(
+        v.object({
+          stage: v.string(), // 'generate' | 'decompose' | 'verify-deterministic' | 'verify-visual' | 'iterate-1' | ...
+          modelId: v.string(),
+          provider: v.string(),
+          costMicroUsd: v.number(),
+          inputTokens: v.optional(v.number()),
+          outputTokens: v.optional(v.number()),
+          latencyMs: v.number(),
+          stageStartedAt: v.number(),
+        }),
+      ),
+    ),
+  }).index('by_status', ['status']),
 
   artifacts: defineTable({
     runId: v.id('runs'),

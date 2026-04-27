@@ -79,7 +79,9 @@ export const listRecent = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     const cap = Math.min(Math.max(limit ?? 20, 1), 100);
-    return await ctx.db.query('runs').withIndex('by_creation').order('desc').take(cap);
+    // _creationTime is the implicit default ordering on any query without
+    // an explicit index, so .order('desc') alone gives us the most recent.
+    return await ctx.db.query('runs').order('desc').take(cap);
   },
 });
 
@@ -145,5 +147,54 @@ export const accumulateCost = internalMutation({
     const run = await ctx.db.get(runId);
     if (run === null) return;
     await ctx.db.patch(runId, { costMicroUsd: run.costMicroUsd + addMicroUsd });
+  },
+});
+
+/**
+ * Append a per-stage telemetry entry. Used by every action so the cost panel
+ * can render a clean breakdown (model + tokens + cost + latency per stage).
+ * Also bumps the run's total cost in the same patch so the UI never sees a
+ * total that's out of sync with the per-stage sum.
+ */
+export const recordStageTelemetry = internalMutation({
+  args: {
+    runId: v.id('runs'),
+    stage: v.string(),
+    modelId: v.string(),
+    provider: v.string(),
+    costMicroUsd: v.number(),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    latencyMs: v.number(),
+    stageStartedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (run === null) return;
+    const breakdown = (run.costBreakdown ?? []).slice();
+    const entry: {
+      stage: string;
+      modelId: string;
+      provider: string;
+      costMicroUsd: number;
+      inputTokens?: number;
+      outputTokens?: number;
+      latencyMs: number;
+      stageStartedAt: number;
+    } = {
+      stage: args.stage,
+      modelId: args.modelId,
+      provider: args.provider,
+      costMicroUsd: args.costMicroUsd,
+      latencyMs: args.latencyMs,
+      stageStartedAt: args.stageStartedAt,
+    };
+    if (args.inputTokens !== undefined) entry.inputTokens = args.inputTokens;
+    if (args.outputTokens !== undefined) entry.outputTokens = args.outputTokens;
+    breakdown.push(entry);
+    await ctx.db.patch(args.runId, {
+      costBreakdown: breakdown,
+      costMicroUsd: run.costMicroUsd + args.costMicroUsd,
+    });
   },
 });

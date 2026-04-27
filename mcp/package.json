@@ -1,6 +1,6 @@
 {
   "name": "parity-studio-mcp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": false,
   "type": "module",
   "description": "MCP server for Parity Studio. Lets coding agents (Claude Code, Cursor, Windsurf) generate, decompose, and verify ui_kit/ bundles directly from a sketch or prompt — without leaving the editor.",
@@ -24,7 +24,10 @@
     "anthropic",
     "openai"
   ],
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "main": "./dist/index.js",
   "bin": {
     "parity-studio-mcp": "./dist/index.js"

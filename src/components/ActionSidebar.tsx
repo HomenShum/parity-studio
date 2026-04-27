@@ -122,10 +122,113 @@ export function ActionSidebar({
         </div>
       </div>
       <div className="section">
-        <div className="section-header">COST</div>
-        <div className="cost-section" style={{ borderRadius: 0, border: 0 }}>
-          <span className="cost-label">this run</span>
-          <span className="cost-value">{microUsdToUsd(run?.costMicroUsd)}</span>
+        <div className="section-header">COST · TELEMETRY</div>
+        <div style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              marginBottom: 'var(--space-md)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.18em',
+                color: 'var(--text-secondary, #9ca3af)',
+              }}
+            >
+              total
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 22,
+                fontWeight: 600,
+                color: 'var(--accent, #c96442)',
+              }}
+            >
+              {microUsdToUsd(run?.costMicroUsd)}
+            </span>
+          </div>
+          {(run?.costBreakdown ?? []).length === 0 ? (
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--text-faint, #6b7280)',
+              }}
+            >
+              no stages run yet
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(run?.costBreakdown ?? []).map((entry, i) => (
+                <div
+                  key={`${entry.stage}-${i}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto',
+                    gap: 4,
+                    padding: '6px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--edge, rgba(255,255,255,0.06))',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary, #e4e4e7)' }}>
+                      {entry.stage}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        color: 'var(--text-faint, #6b7280)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {entry.modelId}
+                    </div>
+                    {entry.inputTokens !== undefined && entry.outputTokens !== undefined ? (
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: 'var(--text-faint, #6b7280)',
+                          marginTop: 1,
+                        }}
+                      >
+                        {entry.inputTokens.toLocaleString()} in · {entry.outputTokens.toLocaleString()} out · {(entry.latencyMs / 1000).toFixed(1)}s
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: 'var(--text-faint, #6b7280)',
+                          marginTop: 1,
+                        }}
+                      >
+                        {(entry.latencyMs / 1000).toFixed(1)}s
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      color: 'var(--text-primary, #e4e4e7)',
+                      alignSelf: 'start',
+                    }}
+                  >
+                    {microUsdToUsd(entry.costMicroUsd)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="section">
@@ -133,6 +236,7 @@ export function ActionSidebar({
         <button
           type="button"
           className="tools-item"
+          // biome-ignore lint/a11y/useAriaPropsForRole: aria-pressed accepts boolean per W3C
           aria-pressed={commentModeActive}
           aria-label="toggle bbox region selection on the preview"
           onClick={onToggleCommentMode}

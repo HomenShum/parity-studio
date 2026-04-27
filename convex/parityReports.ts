@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+import { internalMutation, internalQuery, query } from './_generated/server';
 import { PARITY_STATUSES } from './schema';
 
 const STATUS_UNION = v.union(...PARITY_STATUSES.map((s) => v.literal(s)));
@@ -41,5 +41,17 @@ export const listForRun = query({
       .withIndex('by_run_iter', (q) => q.eq('runId', runId))
       .order('asc')
       .collect();
+  },
+});
+
+/** Internal mirror used by the workflow handler. */
+export const getLatestInternal = internalQuery({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    return await ctx.db
+      .query('parity_reports')
+      .withIndex('by_run_iter', (q) => q.eq('runId', runId))
+      .order('desc')
+      .first();
   },
 });

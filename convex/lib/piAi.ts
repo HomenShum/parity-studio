@@ -25,16 +25,25 @@ import {
   type AssistantMessage,
   type Context,
   type ImageContent,
-  type Provider,
   type TextContent,
   complete as piComplete,
   getModel,
 } from '@mariozechner/pi-ai';
 
-export type SupportedProvider = Extract<
-  Provider,
-  'openai' | 'anthropic' | 'google' | 'openrouter' | 'groq' | 'cerebras' | 'xai' | 'mistral'
->;
+/**
+ * pi-ai's Provider type is `KnownProvider | string` (open by design — users
+ * can register custom providers). We narrow to a known set of vision-capable
+ * providers we route to today. Same approach as mcp/src/lib/llmClient.ts.
+ */
+export type SupportedProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'google'
+  | 'openrouter'
+  | 'groq'
+  | 'cerebras'
+  | 'xai'
+  | 'mistral';
 
 export interface CallOptions {
   provider: SupportedProvider;
@@ -52,8 +61,8 @@ export interface CallResult {
   costMicroUsd: number;
   inputTokens: number;
   outputTokens: number;
+  modelUsed: string;
   provider: SupportedProvider;
-  modelId: string;
   stopReason: AssistantMessage['stopReason'];
   errorMessage?: string;
 }
@@ -79,7 +88,12 @@ export function microUsdToUsd(micro: number): number {
  *   whether to continue (`length` means truncated mid-response)
  */
 export async function call(opts: CallOptions): Promise<CallResult> {
-  const model = getModel(opts.provider, opts.modelId);
+  // pi-ai's getModel is typed against its compile-time MODEL registry; we
+  // accept arbitrary strings at this boundary (env-driven model overrides).
+  // Runtime validation inside getModel throws for unknown ids — surfaced
+  // back to the workflow as a clear error.
+  // biome-ignore lint/suspicious/noExplicitAny: see comment above
+  const model = (getModel as any)(opts.provider, opts.modelId);
 
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {
@@ -119,7 +133,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
     provider: opts.provider,
-    modelId: opts.modelId,
+    modelUsed: result.model,
     stopReason: result.stopReason,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
