@@ -1,0 +1,52 @@
+{
+  "name": "parity-studio-mcp",
+  "version": "0.0.1",
+  "private": false,
+  "type": "module",
+  "description": "MCP server for Parity Studio. Lets coding agents (Claude Code, Cursor, Windsurf) generate, decompose, and verify ui_kit/ bundles directly from a sketch or prompt — without leaving the editor.",
+  "license": "MIT",
+  "homepage": "https://github.com/HomenShum/parity-studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HomenShum/parity-studio.git",
+    "directory": "mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "cursor",
+    "ui-generation",
+    "design-to-code",
+    "decompose",
+    "ui-kit",
+    "parity",
+    "anthropic",
+    "openai"
+  ],
+  "files": ["dist", "README.md"],
+  "main": "./dist/index.js",
+  "bin": {
+    "parity-studio-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "jszip": "^3.10.1",
+    "openai": "^6.34.0",
+    "playwright": "^1.59.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

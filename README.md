@@ -2,7 +2,32 @@
 
 > Image to verified, componentized `ui_kit/`. Self-judged with a 12-check boolean rubric. Honest score drift on every iteration. Coding-agent-ready handoff.
 
-**Status**: pre-alpha · single-page web · Convex Cloud + pi-ai stack
+**Status**: pre-alpha · single-page web · Convex Cloud + pi-ai stack · **MCP server** for Claude Code / Cursor / Windsurf
+
+## Use it from your coding agent (MCP)
+
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package — a stdio MCP server with 4 tools: `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`.
+
+```jsonc
+// .claude/settings.json (Claude Code), settings.json (Cursor / Windsurf)
+{
+  "mcpServers": {
+    "parity-studio": {
+      "command": "npx",
+      "args": ["-y", "parity-studio-mcp"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
+        "PARITY_JUDGE_MODEL": "claude-sonnet-4-5"
+      }
+    }
+  }
+}
+```
+
+Then in Claude Code: *"use parity_pipeline to turn this sketch into a ui_kit"* and it returns the `ui_kit/<slug>/` files inline in the chat. See [mcp/README.md](./mcp/) for full tool docs.
+
+
 
 ## What it does
 

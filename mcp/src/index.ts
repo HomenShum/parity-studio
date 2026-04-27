@@ -1,0 +1,555 @@
+#!/usr/bin/env node
+/**
+ * parity-studio-mcp — MCP server exposing the decompose/verify/iterate loop
+ * to coding agents (Claude Code, Cursor, Windsurf, any MCP client).
+ *
+ * Tools:
+ *   - parity_pipeline    end-to-end: prompt|image -> ui_kit + ParityReport
+ *   - parity_decompose   HTML artifact -> ui_kit/<slug>/{...} files
+ *   - parity_verify      ui_kit + sourceHtml -> ParityReport (deterministic + visual)
+ *   - parity_export_zip  ui_kit files -> base64-encoded ZIP for handoff
+ *
+ * Stdio transport. Designed for `command + args` configs in MCP clients:
+ *
+ *   "parity-studio": {
+ *     "command": "npx",
+ *     "args": ["-y", "parity-studio-mcp"],
+ *     "env": {
+ *       "ANTHROPIC_API_KEY": "sk-ant-...",
+ *       "OPENAI_API_KEY": "sk-...",
+ *       "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
+ *       "PARITY_JUDGE_MODEL": "claude-sonnet-4-5"
+ *     }
+ *   }
+ */
+
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import JSZip from 'jszip';
+import { z } from 'zod';
+
+import { call } from './lib/llmClient.js';
+import {
+  type ParityReport,
+  checkDeterministic,
+  statusFromBooleans,
+} from './lib/parityChecker.js';
+import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts.js';
+import { renderHtmlToPng, shutdownRenderer } from './lib/render.js';
+import { parseUiKitResponse } from './lib/uiKitParser.js';
+
+const VERSION = '0.0.1';
+
+// Model defaults — overridable via env
+const GENERATE_MODEL = process.env['PARITY_GENERATE_MODEL'] ?? 'claude-sonnet-4-5';
+const DECOMPOSE_MODEL = process.env['PARITY_DECOMPOSE_MODEL'] ?? 'claude-opus-4-1';
+const JUDGE_MODEL = process.env['PARITY_JUDGE_MODEL'] ?? 'claude-sonnet-4-5';
+
+// Image mime type, must match what most providers accept
+const IMG_MIME_SCHEMA = z.enum(['image/png', 'image/jpeg', 'image/webp']);
+
+// ---------- Tool: parity_decompose ----------------------------------------
+
+const decomposeInput = {
+  artifactHtml: z
+    .string()
+    .min(50, 'artifactHtml must be substantial — pass the full HTML artifact'),
+  fallbackSlug: z
+    .string()
+    .optional()
+    .describe('kebab-case slug to use if model does not pick one (default "untitled")'),
+  decomposeModel: z
+    .string()
+    .optional()
+    .describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
+};
+
+async function handleDecompose(args: {
+  artifactHtml: string;
+  fallbackSlug?: string;
+  decomposeModel?: string;
+}) {
+  const model = args.decomposeModel ?? DECOMPOSE_MODEL;
+  const result = await call({
+    model,
+    systemPrompt: DECOMPOSE_SYSTEM,
+    userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
+    maxTokens: 24_000,
+  });
+
+  if (result.stopReason === 'error') {
+    throw new Error(`decompose stage error from model ${result.modelUsed}`);
+  }
+
+  const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            slug: parsed.slug,
+            files: parsed.files,
+            fileCount: Object.keys(parsed.files).length,
+            warnings: parsed.warnings,
+            costUsd: result.costUsd,
+            modelUsed: result.modelUsed,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+// ---------- Tool: parity_verify -------------------------------------------
+
+const verifyInput = {
+  uiKitFiles: z
+    .record(z.string())
+    .describe('Map of relative file paths to file contents (the parsed ui_kit/<slug>/ tree)'),
+  sourceHtml: z
+    .string()
+    .min(20)
+    .describe('Original HTML the ui_kit was decomposed from'),
+  sourceImageBase64: z
+    .string()
+    .optional()
+    .describe('Optional source mockup image. If provided, runs the visual judge in addition to deterministic checks.'),
+  sourceImageMimeType: IMG_MIME_SCHEMA.optional(),
+  judgeModel: z
+    .string()
+    .optional()
+    .describe(`override judge model (default ${JUDGE_MODEL})`),
+};
+
+async function handleVerify(args: {
+  uiKitFiles: Record<string, string>;
+  sourceHtml: string;
+  sourceImageBase64?: string;
+  sourceImageMimeType?: 'image/png' | 'image/jpeg' | 'image/webp';
+  judgeModel?: string;
+}) {
+  // Stage A: deterministic checks (no LLM, no cost)
+  const indexHtml = findFileEnding(args.uiKitFiles, '/index.html') ?? null;
+  const tokensCss = findFileEnding(args.uiKitFiles, '/tokens.css') ?? null;
+  const detReport = checkDeterministic({
+    sourceHtml: args.sourceHtml,
+    decomposedHtml: indexHtml,
+    tokensCss,
+    uiKitFiles: args.uiKitFiles,
+  });
+
+  // Stage B (optional): visual judge if a source image is supplied + index.html exists
+  let visualReport: VisualJudgeOutcome | null = null;
+  if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
+    visualReport = await runVisualJudge({
+      sourceImageBase64: args.sourceImageBase64,
+      sourceImageMimeType: args.sourceImageMimeType,
+      indexHtml,
+      judgeModel: args.judgeModel ?? JUDGE_MODEL,
+    });
+  }
+
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            deterministic: detReport,
+            visual: visualReport,
+            combined: combinedReport(detReport, visualReport),
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+interface VisualJudgeOutcome {
+  passCount: number;
+  totalChecks: number;
+  parityScore: number;
+  status: ParityReport['status'];
+  summary: string;
+  checks: Array<{ dimension: string; id: string; passed: boolean; note: string }>;
+  judgeCostUsd: number;
+  modelUsed: string;
+  renderLatencyMs: number;
+}
+
+async function runVisualJudge(args: {
+  sourceImageBase64: string;
+  sourceImageMimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+  indexHtml: string;
+  judgeModel: string;
+}): Promise<VisualJudgeOutcome> {
+  const rendered = await renderHtmlToPng(args.indexHtml);
+
+  // Build a single user message with both images side-by-side context.
+  // Some providers only accept one image per message — we send the rendered as
+  // primary and pass the source as a leading reference inside the userText.
+  // For Anthropic vision multi-image: use both via two image blocks.
+  // Simpler: pass them sequentially in the same prompt body, judge tolerates.
+  const judge = await call({
+    model: args.judgeModel,
+    systemPrompt: VISUAL_JUDGE_SYSTEM,
+    userText:
+      'IMAGE 1 = SOURCE (reference). IMAGE 2 = RENDERED candidate.\nReturn the JSON rubric described above.',
+    userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType },
+    maxTokens: 4_000,
+  });
+
+  // Parse JSON loosely — providers sometimes wrap in fences
+  const parsed = parseLooseJson(judge.text);
+  const checks: VisualJudgeOutcome['checks'] = Array.isArray(parsed?.['checks'])
+    ? (parsed['checks'] as VisualJudgeOutcome['checks'])
+    : [];
+  const passCount = checks.filter((c) => c.passed === true).length;
+  const totalChecks = checks.length || 12;
+  const parityScore = totalChecks === 0 ? 0 : passCount / totalChecks;
+  const status = statusFromBooleans(passCount, totalChecks);
+
+  return {
+    passCount,
+    totalChecks,
+    parityScore,
+    status,
+    summary:
+      typeof parsed?.['summary'] === 'string'
+        ? (parsed['summary'] as string)
+        : `${passCount}/${totalChecks} visual checks passed`,
+    checks,
+    judgeCostUsd: judge.costUsd,
+    modelUsed: judge.modelUsed,
+    renderLatencyMs: rendered.latencyMs,
+  };
+}
+
+function combinedReport(det: ParityReport, visual: VisualJudgeOutcome | null) {
+  if (visual === null) {
+    return {
+      passCount: det.passCount,
+      totalChecks: det.totalChecks,
+      parityScore: det.parityScore,
+      status: det.status,
+      basis: 'deterministic-only',
+    };
+  }
+  const passCount = det.passCount + visual.passCount;
+  const totalChecks = det.totalChecks + visual.totalChecks;
+  return {
+    passCount,
+    totalChecks,
+    parityScore: passCount / totalChecks,
+    status: statusFromBooleans(passCount, totalChecks),
+    basis: 'deterministic+visual',
+  };
+}
+
+// ---------- Tool: parity_pipeline -----------------------------------------
+
+const pipelineInput = {
+  prompt: z.string().optional().describe('Brief describing the desired UI. Either prompt or sourceImageBase64 (or both) required.'),
+  sourceImageBase64: z.string().optional().describe('Optional source mockup. Required if generating from a sketch/screenshot.'),
+  sourceImageMimeType: IMG_MIME_SCHEMA.optional(),
+  generateModel: z.string().optional(),
+  decomposeModel: z.string().optional(),
+  judgeModel: z.string().optional(),
+  skipGenerate: z
+    .boolean()
+    .optional()
+    .describe('If true, treat sourceImageBase64 as the rendered artifact — skip stage 1 generation. Useful when the image is already a polished mockup.'),
+};
+
+async function handlePipeline(args: {
+  prompt?: string;
+  sourceImageBase64?: string;
+  sourceImageMimeType?: 'image/png' | 'image/jpeg' | 'image/webp';
+  generateModel?: string;
+  decomposeModel?: string;
+  judgeModel?: string;
+  skipGenerate?: boolean;
+}) {
+  if (!args.prompt && !args.sourceImageBase64) {
+    throw new Error('parity_pipeline requires at least one of: prompt, sourceImageBase64');
+  }
+  const generateModel = args.generateModel ?? GENERATE_MODEL;
+  const decomposeModel = args.decomposeModel ?? DECOMPOSE_MODEL;
+  const judgeModel = args.judgeModel ?? JUDGE_MODEL;
+
+  let totalCostUsd = 0;
+  let artifactHtml: string;
+  let generateLatencyMs = 0;
+
+  // Stage 1: generate (or skip if image provided + skipGenerate flag)
+  if (args.skipGenerate && args.sourceImageBase64) {
+    artifactHtml = `<!-- skipGenerate: source image used directly -->`;
+  } else {
+    const t0 = Date.now();
+    const gen = await call({
+      model: generateModel,
+      systemPrompt: GENERATE_SYSTEM,
+      userText: args.prompt ?? 'Generate a polished UI matching the attached image.',
+      ...(args.sourceImageBase64 && args.sourceImageMimeType
+        ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
+        : {}),
+      maxTokens: 16_000,
+    });
+    artifactHtml = stripWrappingFences(gen.text);
+    totalCostUsd += gen.costUsd;
+    generateLatencyMs = Date.now() - t0;
+  }
+
+  // Stage 2: decompose
+  const dt0 = Date.now();
+  const dec = await call({
+    model: decomposeModel,
+    systemPrompt: DECOMPOSE_SYSTEM,
+    userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
+    maxTokens: 24_000,
+  });
+  const parsed = parseUiKitResponse(dec.text);
+  totalCostUsd += dec.costUsd;
+  const decomposeLatencyMs = Date.now() - dt0;
+
+  if (Object.keys(parsed.files).length === 0) {
+    throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+  }
+
+  // Stage 3: deterministic verify
+  const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
+  const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
+  const detReport = checkDeterministic({
+    sourceHtml: artifactHtml,
+    decomposedHtml: indexHtml,
+    tokensCss,
+    uiKitFiles: parsed.files,
+  });
+
+  // Stage 4: visual verify (only if we have a source image + emitted index.html)
+  let visualReport: VisualJudgeOutcome | null = null;
+  if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
+    visualReport = await runVisualJudge({
+      sourceImageBase64: args.sourceImageBase64,
+      sourceImageMimeType: args.sourceImageMimeType,
+      indexHtml,
+      judgeModel,
+    });
+    totalCostUsd += visualReport.judgeCostUsd;
+  }
+
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            uiKit: { slug: parsed.slug, files: parsed.files, warnings: parsed.warnings },
+            deterministic: detReport,
+            visual: visualReport,
+            combined: combinedReport(detReport, visualReport),
+            costs: {
+              totalUsd: Number(totalCostUsd.toFixed(4)),
+              generate: args.skipGenerate ? 0 : 'included',
+              decompose: dec.costUsd,
+              visualJudge: visualReport?.judgeCostUsd ?? 0,
+            },
+            latencies: {
+              generateMs: generateLatencyMs,
+              decomposeMs: decomposeLatencyMs,
+              renderMs: visualReport?.renderLatencyMs ?? 0,
+            },
+            modelsUsed: {
+              generate: args.skipGenerate ? null : generateModel,
+              decompose: decomposeModel,
+              judge: judgeModel,
+            },
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+// ---------- Tool: parity_export_zip ---------------------------------------
+
+const exportZipInput = {
+  uiKitFiles: z
+    .record(z.string())
+    .describe('Map of relative file paths to file contents (from parity_decompose or parity_pipeline output)'),
+  slug: z.string().describe('ui_kit slug to use as the root folder name'),
+  includeReadme: z
+    .boolean()
+    .optional()
+    .describe('Append a Claude Code / Cursor handoff README to the bundle (default true)'),
+};
+
+async function handleExportZip(args: {
+  uiKitFiles: Record<string, string>;
+  slug: string;
+  includeReadme?: boolean;
+}) {
+  const includeReadme = args.includeReadme !== false;
+  const zip = new JSZip();
+
+  for (const [path, content] of Object.entries(args.uiKitFiles)) {
+    zip.file(path, content);
+  }
+
+  if (includeReadme) {
+    const handoff = `# ${args.slug} — handoff to your coding agent
+
+This bundle was produced by parity-studio-mcp. To integrate:
+
+1. Unzip into your repo at the path of your choice.
+2. Open in Claude Code, Cursor, or Windsurf and run:
+
+   > Integrate the ui_kits/${args.slug}/ folder into the existing app at <your route>.
+   > Use components/*.tsx as the building blocks. Wire tokens.css into your global stylesheet.
+   > Preserve all visible text and numbers verbatim — they came from the source mockup.
+
+3. Verify visually before merging. If parity drifted, run parity_verify with the
+   integrated render to surface gaps.
+
+manifest.json schemaVersion 1 contract is stable across minor versions.
+`;
+    zip.file(`ui_kits/${args.slug}/HANDOFF.md`, handoff);
+  }
+
+  const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            slug: args.slug,
+            zipBase64: buf.toString('base64'),
+            zipSizeBytes: buf.length,
+            fileCount: Object.keys(args.uiKitFiles).length + (includeReadme ? 1 : 0),
+            includesHandoffReadme: includeReadme,
+            usage: 'base64-decode zipBase64 and write to disk, or pipe through `base64 -d > out.zip`',
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+// ---------- Helpers --------------------------------------------------------
+
+function findFileEnding(files: Record<string, string>, suffix: string): string | undefined {
+  for (const [path, content] of Object.entries(files)) {
+    if (path === suffix.replace(/^\/+/, '') || path.endsWith(suffix)) return content;
+  }
+  return undefined;
+}
+
+function stripWrappingFences(raw: string): string {
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/^```(?:html)?\s*\n([\s\S]*?)\n```$/);
+  return fenceMatch?.[1] ?? trimmed;
+}
+
+function parseLooseJson(raw: string): Record<string, unknown> | null {
+  const trimmed = raw.trim();
+  // Strip leading/trailing fence
+  const stripped = trimmed
+    .replace(/^```(?:json)?\s*\n?/, '')
+    .replace(/\n?```$/, '')
+    .trim();
+  try {
+    return JSON.parse(stripped) as Record<string, unknown>;
+  } catch {
+    // Try to extract first { ... } block
+    const m = stripped.match(/\{[\s\S]*\}/);
+    if (m) {
+      try {
+        return JSON.parse(m[0]) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// ---------- Server bootstrap ----------------------------------------------
+
+async function main() {
+  const server = new McpServer({
+    name: 'parity-studio',
+    version: VERSION,
+  });
+
+  server.registerTool(
+    'parity_pipeline',
+    {
+      title: 'Generate, decompose, and verify a ui_kit end-to-end',
+      description:
+        'Full pipeline: prompt or sketch -> HTML artifact -> componentized ui_kit/<slug>/ bundle -> deterministic + visual parity verification. Returns the bundle plus a ParityReport with bounded enum status (verified | needs_review | needs_iteration | failed | unavailable) derived from passCount/totalChecks.',
+      inputSchema: pipelineInput,
+    },
+    handlePipeline,
+  );
+
+  server.registerTool(
+    'parity_decompose',
+    {
+      title: 'Decompose an HTML artifact into a ui_kit bundle',
+      description:
+        'Takes a complete HTML artifact and emits ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}. Use when you already have a generated artifact from another source and want it shaped for coding-agent handoff.',
+      inputSchema: decomposeInput,
+    },
+    handleDecompose,
+  );
+
+  server.registerTool(
+    'parity_verify',
+    {
+      title: 'Verify a ui_kit against a source HTML (and optionally a source image)',
+      description:
+        'Runs deterministic parity checks (element count, visible text coverage, token fidelity, expected file presence). If sourceImageBase64 is provided, additionally runs the visual judge on a Playwright-rendered snapshot of the ui_kit. Returns derived parityScore = passCount / totalChecks with bounded enum status. No floating-point hallucination.',
+      inputSchema: verifyInput,
+    },
+    handleVerify,
+  );
+
+  server.registerTool(
+    'parity_export_zip',
+    {
+      title: 'Pack a ui_kit into a base64-encoded ZIP for handoff',
+      description:
+        'Bundles the ui_kit files into a ZIP and returns it as base64. Optionally appends a HANDOFF.md with integration instructions for Claude Code, Cursor, or Windsurf. Use when handing off the bundle to a downstream coding agent or saving to disk.',
+      inputSchema: exportZipInput,
+    },
+    handleExportZip,
+  );
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  // Cleanup on shutdown
+  const cleanup = async () => {
+    await shutdownRenderer();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void cleanup());
+  process.on('SIGTERM', () => void cleanup());
+}
+
+main().catch((err) => {
+  console.error('parity-studio-mcp failed to start:', err);
+  process.exit(1);
+});
