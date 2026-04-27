@@ -26,3 +26,4 @@ mcp/dist/
 mcp/node_modules/
 
 .vercel
+.vercel.env.tmp
