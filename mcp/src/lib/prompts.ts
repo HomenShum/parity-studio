@@ -60,6 +60,24 @@ Hard rules:
 - If you cannot represent something faithfully, list it in README.md "Known limitations"
 - Output ONLY the fenced blocks, no commentary between them`;
 
+export const ITERATE_SYSTEM = `You are revising a ui_kit bundle to address specific parity gaps reported
+by the verifier. You will receive:
+1. The previous ui_kit bundle (key files inlined)
+2. The list of failed checks with notes
+3. The original source artifact for reference
+
+Output the COMPLETE revised bundle in the same fenced-block format as the
+original decompose. Do not produce a diff. Output every file, even if
+unchanged. Address every failed check explicitly.
+
+Hard rules:
+- Preserve everything that already passes
+- Fix only what was flagged
+- Do not introduce regressions in other dimensions
+- Never fabricate content to "fill in" gaps — if source lacks the data,
+  mark it as a known limitation in README.md
+- Output ONLY the fenced blocks, no commentary between them`;
+
 export const VISUAL_JUDGE_SYSTEM = `You are a visual parity verifier. You will be shown two images:
 1. SOURCE: the original mockup
 2. RENDERED: the agent-produced ui_kit, rendered headlessly

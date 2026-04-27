@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
-import { internalMutation, mutation, query } from './_generated/server';
+import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
 
@@ -67,6 +67,14 @@ export const get = query({
   },
 });
 
+/** Internal mirror of `get` so http actions can read by id. */
+export const getInternal = internalQuery({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    return await ctx.db.get(runId);
+  },
+});
+
 export const listRecent = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
@@ -93,6 +101,40 @@ export const updateStatus = internalMutation({
     if (iterationsCompleted !== undefined) patch.iterationsCompleted = iterationsCompleted;
     if (status === 'done' || status === 'failed') patch.finishedAt = Date.now();
     await ctx.db.patch(runId, patch);
+  },
+});
+
+/**
+ * User-triggered iterate pass on a finished run, optionally folding in any
+ * open comments as additional gap feedback. Use this for "iterate now" from
+ * the action sidebar after the user has reviewed the previous output and
+ * dropped comments on regions they want changed.
+ *
+ * Kicks off a separate workflow that:
+ *   1. Reads the latest artifact + ui_kit + open comments
+ *   2. Calls iterate action with comments folded into failedGaps
+ *   3. Re-runs verifyDeterministic
+ *   4. Marks comments as 'addressed' on success
+ */
+export const iterateWithComments = mutation({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    const run = await ctx.db.get(runId);
+    if (run === null) throw new Error(`runs:iterateWithComments — run ${runId} not found`);
+    if (run.status !== 'done' && run.status !== 'failed') {
+      throw new Error(
+        `runs:iterateWithComments — current status is ${run.status}; can only iterate a settled run`,
+      );
+    }
+    const wfId = await workflow.start(ctx, internal.workflows.iterateWithCommentsWorkflow, {
+      runId,
+    });
+    await ctx.db.patch(runId, {
+      status: 'iterating',
+      workflowId: wfId.toString(),
+      iterationsCompleted: run.iterationsCompleted + 1,
+    });
+    return runId;
   },
 });
 

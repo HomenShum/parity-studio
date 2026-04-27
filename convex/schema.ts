@@ -56,6 +56,32 @@ export default defineSchema({
     .index('by_run', ['runId'])
     .index('by_run_version', ['runId', 'artifactVersion']),
 
+  /**
+   * User comments pinned to a region of the rendered artifact. Used by the
+   * "iterate with comments" path: the agent receives the bbox + text and
+   * is told to address each comment in the next decompose pass.
+   *
+   * Bbox coordinates are normalized to 0..1 over the rendered iframe so they
+   * survive viewport changes (desktop / tablet / mobile). status='open' until
+   * the next iterate run consumes it; then 'addressed'.
+   */
+  comments: defineTable({
+    runId: v.id('runs'),
+    artifactVersion: v.number(),
+    text: v.string(),
+    bbox: v.optional(
+      v.object({
+        x: v.number(),
+        y: v.number(),
+        w: v.number(),
+        h: v.number(),
+      }),
+    ),
+    status: v.union(v.literal('open'), v.literal('addressed'), v.literal('dismissed')),
+  })
+    .index('by_run', ['runId'])
+    .index('by_run_status', ['runId', 'status']),
+
   parity_reports: defineTable({
     runId: v.id('runs'),
     uiKitId: v.id('ui_kits'),

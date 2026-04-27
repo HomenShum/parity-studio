@@ -65,8 +65,22 @@ export function FilesPanel({ runId }: FilesPanelProps) {
     }
   }
 
-  const exportHref = runId !== null && uiKit ? `/api/runs/${runId}/zip` : '#';
-  const canExport = runId !== null && uiKit !== null && uiKit !== undefined;
+  // ZIP endpoint is served by the Convex HTTP router (convex/http.ts). The
+  // hosted URL replaces ".convex.cloud" with ".convex.site" by Convex's
+  // convention; for `convex dev` the local URL works as-is. We accept either
+  // via VITE_CONVEX_HTTP_URL override and fall back to the standard rewrite.
+  function convexHttpBase(): string | null {
+    const fromEnv = import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined;
+    if (fromEnv) return fromEnv.replace(/\/$/, '');
+    const wsUrl = (import.meta.env['VITE_CONVEX_URL'] as string | undefined) ?? '';
+    if (!wsUrl) return null;
+    // .convex.cloud (queries/mutations) -> .convex.site (HTTP routes)
+    return wsUrl.replace('.convex.cloud', '.convex.site').replace(/\/$/, '');
+  }
+  const httpBase = convexHttpBase();
+  const exportHref =
+    runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/zip` : '#';
+  const canExport = runId !== null && uiKit !== null && uiKit !== undefined && httpBase !== null;
 
   return (
     <>
@@ -98,6 +112,7 @@ export function FilesPanel({ runId }: FilesPanelProps) {
           className="handoff-button"
           href={exportHref}
           download
+          // biome-ignore lint/a11y/useAriaPropsForRole: aria-disabled accepts boolean per W3C
           aria-disabled={!canExport}
           onClick={(e) => {
             if (!canExport) e.preventDefault();

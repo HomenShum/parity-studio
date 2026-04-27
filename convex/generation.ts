@@ -164,6 +164,114 @@ export const verifyDeterministic = internalAction({
 });
 
 /**
+ * Stage 5: iterate — re-decompose with the previous parity report's gaps as
+ * explicit feedback. Produces a new ui_kit row + new artifactVersion so the
+ * verify stage can run again against it.
+ *
+ * Bounded by MAX_ITERATIONS (set in workflow). Each iteration costs another
+ * decompose call (~$0.05-0.40 depending on model). The workflow only invokes
+ * iterate when verifyDeterministic returns status='needs_iteration' AND the
+ * iteration count is below the cap — honest scope: never silent infinite loop.
+ */
+export const iterate = internalAction({
+  args: {
+    runId: v.id('runs'),
+    iterationNumber: v.number(),
+    sourceHtml: v.string(),
+    previousUiKitFiles: v.any(), // Record<string, string>
+    failedGaps: v.any(), // ParityGap[]
+  },
+  handler: async (ctx, args) => {
+    await ctx.runMutation(internal.runs.updateStatus, { runId: args.runId, status: 'iterating' });
+
+    const previousFiles = args.previousUiKitFiles as Record<string, string>;
+    const previousIndexHtml = findFileEnding(previousFiles, '/index.html') ?? '';
+    const previousTokensCss = findFileEnding(previousFiles, '/tokens.css') ?? '';
+
+    const failedGaps = (args.failedGaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
+    const gapText = failedGaps.length === 0
+      ? '(no specific gaps reported, but parity score was below threshold — review the previous bundle for opportunities to better match the source)'
+      : failedGaps
+          .map((g, i) => `${i + 1}. [${g.severity ?? 'medium'}/${g.kind ?? 'check'}] ${g.message ?? ''}`)
+          .join('\n');
+
+    const userText = `Previous decompose attempt fell below parity. Re-emit the COMPLETE
+ui_kit/<slug>/ bundle in the same fenced-block format, addressing the failed
+checks below. Preserve everything that already passed; only fix what was flagged.
+
+FAILED CHECKS:
+${gapText}
+
+PREVIOUS index.html (for reference):
+\`\`\`
+${previousIndexHtml.slice(0, 8_000)}
+\`\`\`
+
+PREVIOUS tokens.css:
+\`\`\`
+${previousTokensCss.slice(0, 2_000)}
+\`\`\`
+
+ORIGINAL SOURCE (the artifact you should be matching):
+${args.sourceHtml.slice(0, 8_000)}`;
+
+    const result = await call({
+      ...DECOMPOSE_MODEL,
+      systemPrompt: ITERATE_SYSTEM,
+      userText,
+      maxTokens: 24_000,
+    });
+
+    if (result.stopReason === 'error') {
+      await ctx.runMutation(internal.runs.updateStatus, {
+        runId: args.runId,
+        status: 'failed',
+        errorMessage: `iterate stage error: ${result.errorMessage ?? 'unknown'}`,
+      });
+      throw new Error(`iterate stage error: ${result.errorMessage ?? 'unknown'}`);
+    }
+
+    const parsed = parseUiKitResponse(result.text);
+    if (Object.keys(parsed.files).length === 0) {
+      await ctx.runMutation(internal.runs.updateStatus, {
+        runId: args.runId,
+        status: 'failed',
+        errorMessage: `iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`,
+      });
+      throw new Error(`iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+    }
+
+    await ctx.runMutation(internal.uiKits.save, {
+      runId: args.runId,
+      // Bump artifactVersion so getLatest disambiguates this iteration's ui_kit
+      // from the previous one. The artifact row stays the same — we're
+      // re-decomposing it, not regenerating it.
+      artifactVersion: args.iterationNumber + 1,
+      slug: parsed.slug,
+      schemaVersion: 1,
+      files: parsed.files,
+      decomposeCostMicroUsd: result.costMicroUsd,
+    });
+    await ctx.runMutation(internal.runs.accumulateCost, {
+      runId: args.runId,
+      addMicroUsd: result.costMicroUsd,
+    });
+    await ctx.runMutation(internal.runs.updateStatus, {
+      runId: args.runId,
+      status: 'verifying',
+      iterationsCompleted: args.iterationNumber,
+    });
+
+    return {
+      iterationNumber: args.iterationNumber,
+      slug: parsed.slug,
+      fileCount: Object.keys(parsed.files).length,
+      costMicroUsd: result.costMicroUsd,
+    };
+  },
+});
+
+/**
  * Stage 4: visual verifier. Renders the ui_kit headlessly, sends source +
  * rendered to a vision LLM, parses the boolean rubric.
  *
@@ -210,7 +318,7 @@ function findFileEnding(files: Record<string, string>, suffix: string): string |
   return undefined;
 }
 
-// Suppress unused-import warnings until iterate stage is wired (v0.0.2)
-void ITERATE_SYSTEM;
+// Suppress unused-import warnings — VISUAL_JUDGE_SYSTEM is referenced in
+// future visual-verifier wiring; MAX_ITERATIONS is consumed by the workflow.
 void VISUAL_JUDGE_SYSTEM;
 void MAX_ITERATIONS;

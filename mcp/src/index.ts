@@ -37,7 +37,12 @@ import {
   checkDeterministic,
   statusFromBooleans,
 } from './lib/parityChecker.js';
-import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts.js';
+import {
+  DECOMPOSE_SYSTEM,
+  GENERATE_SYSTEM,
+  ITERATE_SYSTEM,
+  VISUAL_JUDGE_SYSTEM,
+} from './lib/prompts.js';
 import { renderHtmlToPng, shutdownRenderer } from './lib/render.js';
 import { parseUiKitResponse } from './lib/uiKitParser.js';
 
@@ -369,105 +374,137 @@ async function handlePipeline(args: {
       eventBus.appendLog(runId, 'info', `generated ${artifactHtml.length} bytes in ${(generateLatencyMs / 1000).toFixed(1)}s, $${gen.costUsd.toFixed(4)}`);
     }
 
-    // Stage 2: decompose
-    eventBus.updateRun(runId, { status: 'decomposing' });
-    eventBus.setStage(runId, 'decompose', 'running', undefined, decomposeModel);
-    const dt0 = Date.now();
-    const dec = await callByModel({
-      model: decomposeModel,
-      systemPrompt: DECOMPOSE_SYSTEM,
-      userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
-      maxTokens: 24_000,
-    });
-    const parsed = parseUiKitResponse(dec.text);
-    totalCostUsd += dec.costUsd;
-    const decomposeLatencyMs = Date.now() - dt0;
-
-    if (Object.keys(parsed.files).length === 0) {
-      eventBus.setStage(runId, 'decompose', 'failed', decomposeLatencyMs, decomposeModel);
-      eventBus.appendLog(runId, 'error', `decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
-      eventBus.updateRun(runId, { status: 'failed', errorMessage: 'decompose returned 0 files' });
-      throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
-    }
-    eventBus.setStage(runId, 'decompose', 'done', decomposeLatencyMs, decomposeModel);
-    eventBus.addCost(runId, dec.costUsd);
-    eventBus.updateRun(runId, {
-      uiKitFiles: parsed.files,
-      uiKitSlug: parsed.slug,
-    });
-    eventBus.appendLog(
+    // Stage 2: decompose -> verify -> iterate loop. Bounded by MAX_ITERATIONS.
+    // Each iteration adds one decompose call + one verify pass.
+    const MAX_ITERATIONS = 2;
+    let iterationsCompleted = 0;
+    let parsed = await runDecompose({
       runId,
-      'info',
-      `decomposed into ui_kits/${parsed.slug}/ (${Object.keys(parsed.files).length} files) in ${(decomposeLatencyMs / 1000).toFixed(1)}s, $${dec.costUsd.toFixed(4)}`,
-    );
-
-    // Stage 3: deterministic verify
-    eventBus.updateRun(runId, { status: 'verifying' });
-    eventBus.setStage(runId, 'verify', 'running');
-    const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
-    const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
-    const detReport = checkDeterministic({
-      sourceHtml: artifactHtml,
-      decomposedHtml: indexHtml,
-      tokensCss,
-      uiKitFiles: parsed.files,
+      artifactHtml,
+      decomposeModel,
     });
-    eventBus.appendLog(
-      runId,
-      'info',
-      `deterministic verify: ${detReport.passCount}/${detReport.totalChecks} (${detReport.status})`,
-    );
+    let decomposeLatencyMs = parsed.latencyMs;
+    let decomposeCostUsd = parsed.costUsd;
+    totalCostUsd += parsed.costUsd;
 
-    // Stage 4: visual verify (only if we have a source image + emitted index.html)
+    // Verify-iterate loop. We always at least run verify once. We only
+    // iterate when status === needs_iteration AND we're below the cap.
+    let detReport: ParityReport;
     let visualReport: VisualJudgeOutcome | null = null;
-    if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
-      visualReport = await runVisualJudge({
-        sourceImageBase64: args.sourceImageBase64,
-        sourceImageMimeType: args.sourceImageMimeType,
-        indexHtml,
-        judgeModel,
+    let combined: ReturnType<typeof combinedReport>;
+    let failedGaps: Array<{ kind?: string; severity?: string; message: string }> = [];
+
+    while (true) {
+      eventBus.updateRun(runId, { status: 'verifying' });
+      eventBus.setStage(runId, 'verify', 'running');
+      const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
+      const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
+      detReport = checkDeterministic({
+        sourceHtml: artifactHtml,
+        decomposedHtml: indexHtml,
+        tokensCss,
+        uiKitFiles: parsed.files,
       });
-      totalCostUsd += visualReport.judgeCostUsd;
-      eventBus.addCost(runId, visualReport.judgeCostUsd);
       eventBus.appendLog(
         runId,
         'info',
-        `visual verify: ${visualReport.passCount}/${visualReport.totalChecks} (${visualReport.status})`,
+        `iter ${iterationsCompleted}: deterministic verify ${detReport.passCount}/${detReport.totalChecks} (${detReport.status})`,
       );
-    } else {
+
+      visualReport = null;
+      if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
+        visualReport = await runVisualJudge({
+          sourceImageBase64: args.sourceImageBase64,
+          sourceImageMimeType: args.sourceImageMimeType,
+          indexHtml,
+          judgeModel,
+        });
+        totalCostUsd += visualReport.judgeCostUsd;
+        eventBus.addCost(runId, visualReport.judgeCostUsd);
+        eventBus.appendLog(
+          runId,
+          'info',
+          `iter ${iterationsCompleted}: visual verify ${visualReport.passCount}/${visualReport.totalChecks} (${visualReport.status})`,
+        );
+      }
+
+      combined = combinedReport(detReport, visualReport);
+      const visualFailedChecks = visualReport?.checks?.filter((c) => !c.passed) ?? [];
+      // Aggregate gaps from BOTH verifiers for the iterate prompt's feedback
+      failedGaps = [
+        ...detReport.gaps.map((g) => ({
+          kind: g.kind,
+          severity: g.severity ?? 'medium',
+          message: g.message,
+        })),
+        ...visualFailedChecks.map((c) => ({
+          kind: c.dimension,
+          severity: 'high',
+          message: c.note,
+        })),
+      ];
+
+      eventBus.updateRun(runId, {
+        parityReport: {
+          passCount: combined.passCount,
+          totalChecks: combined.totalChecks,
+          parityScore: combined.parityScore,
+          status: combined.status,
+          summary: visualReport?.summary ?? detReport.summary,
+          basis: combined.basis as 'deterministic' | 'visual' | 'deterministic+visual',
+          failedChecks: visualFailedChecks,
+        },
+      });
+
+      const shouldIterate =
+        combined.status === 'needs_iteration' && iterationsCompleted < MAX_ITERATIONS;
+      if (!shouldIterate) {
+        eventBus.setStage(
+          runId,
+          'verify',
+          combined.status === 'verified' || combined.status === 'needs_review' ? 'done' : 'failed',
+        );
+        break;
+      }
+
+      // Iterate: re-decompose with gap feedback. New ui_kit replaces the
+      // current one in eventBus state so the dashboard reflects the latest.
+      iterationsCompleted += 1;
+      eventBus.updateRun(runId, { status: 'iterating' });
+      eventBus.setStage(runId, 'iterate', 'running', undefined, decomposeModel);
       eventBus.appendLog(
         runId,
         'info',
-        'visual verify skipped (no source image or no index.html in ui_kit)',
+        `iterating (round ${iterationsCompleted}/${MAX_ITERATIONS}) with ${failedGaps.length} gaps as feedback`,
+      );
+      const it0 = Date.now();
+      parsed = await runIterate({
+        runId,
+        artifactHtml,
+        previousFiles: parsed.files,
+        failedGaps,
+        decomposeModel,
+      });
+      const iterLatencyMs = Date.now() - it0;
+      void iterLatencyMs;
+      totalCostUsd += parsed.costUsd;
+      eventBus.setStage(runId, 'iterate', 'done', parsed.latencyMs, decomposeModel);
+      eventBus.appendLog(
+        runId,
+        'info',
+        `iter ${iterationsCompleted}: re-decomposed ${Object.keys(parsed.files).length} files in ${(parsed.latencyMs / 1000).toFixed(1)}s, $${parsed.costUsd.toFixed(4)}`,
       );
     }
 
-    const combined = combinedReport(detReport, visualReport);
-    const failedChecks = visualReport?.checks?.filter((c) => !c.passed) ?? [];
-    eventBus.updateRun(runId, {
-      parityReport: {
-        passCount: combined.passCount,
-        totalChecks: combined.totalChecks,
-        parityScore: combined.parityScore,
-        status: combined.status,
-        summary: visualReport?.summary ?? detReport.summary,
-        basis: combined.basis as 'deterministic' | 'visual' | 'deterministic+visual',
-        failedChecks,
-      },
-    });
-    eventBus.setStage(
-      runId,
-      'verify',
-      combined.status === 'verified' || combined.status === 'needs_review' ? 'done' : 'failed',
-    );
-    eventBus.setStage(runId, 'iterate', 'unavailable');
     eventBus.setStage(runId, 'done', 'done');
     eventBus.updateRun(runId, { status: 'done' });
     eventBus.appendLog(
       runId,
       'info',
-      `pipeline complete: parityScore ${combined.parityScore.toFixed(2)} (${combined.status}), total $${totalCostUsd.toFixed(4)}`,
+      `pipeline complete after ${iterationsCompleted} iter(s): parityScore ${combined.parityScore.toFixed(2)} (${combined.status}), total $${totalCostUsd.toFixed(4)}`,
     );
+    void decomposeLatencyMs;
+    void decomposeCostUsd;
 
     return {
       content: [
@@ -484,8 +521,9 @@ async function handlePipeline(args: {
               costs: {
                 totalUsd: Number(totalCostUsd.toFixed(4)),
                 generate: args.skipGenerate ? 0 : 'included',
-                decompose: dec.costUsd,
+                decomposeFirstPass: decomposeCostUsd,
                 visualJudge: visualReport?.judgeCostUsd ?? 0,
+                iterations: iterationsCompleted,
               },
               latencies: {
                 generateMs: generateLatencyMs,
@@ -576,6 +614,133 @@ manifest.json schemaVersion 1 contract is stable across minor versions.
         ),
       },
     ],
+  };
+}
+
+// ---------- Pipeline helpers ----------------------------------------------
+
+interface DecomposeOutput {
+  slug: string;
+  files: Record<string, string>;
+  warnings: string[];
+  costUsd: number;
+  latencyMs: number;
+}
+
+async function runDecompose(args: {
+  runId: string;
+  artifactHtml: string;
+  decomposeModel: string;
+}): Promise<DecomposeOutput> {
+  eventBus.updateRun(args.runId, { status: 'decomposing' });
+  eventBus.setStage(args.runId, 'decompose', 'running', undefined, args.decomposeModel);
+  const t0 = Date.now();
+  const dec = await callByModel({
+    model: args.decomposeModel,
+    systemPrompt: DECOMPOSE_SYSTEM,
+    userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
+    maxTokens: 24_000,
+  });
+  const parsed = parseUiKitResponse(dec.text);
+  const latencyMs = Date.now() - t0;
+
+  if (Object.keys(parsed.files).length === 0) {
+    eventBus.setStage(args.runId, 'decompose', 'failed', latencyMs, args.decomposeModel);
+    eventBus.appendLog(
+      args.runId,
+      'error',
+      `decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`,
+    );
+    eventBus.updateRun(args.runId, {
+      status: 'failed',
+      errorMessage: 'decompose returned 0 files',
+    });
+    throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+  }
+  eventBus.setStage(args.runId, 'decompose', 'done', latencyMs, args.decomposeModel);
+  eventBus.addCost(args.runId, dec.costUsd);
+  eventBus.updateRun(args.runId, {
+    uiKitFiles: parsed.files,
+    uiKitSlug: parsed.slug,
+  });
+  eventBus.appendLog(
+    args.runId,
+    'info',
+    `decomposed into ui_kits/${parsed.slug}/ (${Object.keys(parsed.files).length} files) in ${(latencyMs / 1000).toFixed(1)}s, $${dec.costUsd.toFixed(4)}`,
+  );
+  return {
+    slug: parsed.slug,
+    files: parsed.files,
+    warnings: parsed.warnings,
+    costUsd: dec.costUsd,
+    latencyMs,
+  };
+}
+
+async function runIterate(args: {
+  runId: string;
+  artifactHtml: string;
+  previousFiles: Record<string, string>;
+  failedGaps: Array<{ kind?: string; severity?: string; message: string }>;
+  decomposeModel: string;
+}): Promise<DecomposeOutput> {
+  const t0 = Date.now();
+  const previousIndexHtml = findFileEnding(args.previousFiles, '/index.html') ?? '';
+  const previousTokensCss = findFileEnding(args.previousFiles, '/tokens.css') ?? '';
+
+  const gapText =
+    args.failedGaps.length === 0
+      ? '(no specific gaps reported, but parity score was below threshold — review the previous bundle for opportunities to better match the source)'
+      : args.failedGaps
+          .map(
+            (g, i) =>
+              `${i + 1}. [${g.severity ?? 'medium'}/${g.kind ?? 'check'}] ${g.message ?? ''}`,
+          )
+          .join('\n');
+
+  const userText = `Previous decompose attempt fell below parity. Re-emit the COMPLETE
+ui_kit/<slug>/ bundle in the same fenced-block format, addressing the failed
+checks below. Preserve everything that already passed; only fix what was flagged.
+
+FAILED CHECKS:
+${gapText}
+
+PREVIOUS index.html (for reference):
+\`\`\`
+${previousIndexHtml.slice(0, 8_000)}
+\`\`\`
+
+PREVIOUS tokens.css:
+\`\`\`
+${previousTokensCss.slice(0, 2_000)}
+\`\`\`
+
+ORIGINAL SOURCE (the artifact you should be matching):
+${args.artifactHtml.slice(0, 8_000)}`;
+
+  const result = await callByModel({
+    model: args.decomposeModel,
+    systemPrompt: ITERATE_SYSTEM,
+    userText,
+    maxTokens: 24_000,
+  });
+  const parsed = parseUiKitResponse(result.text);
+  const latencyMs = Date.now() - t0;
+
+  if (Object.keys(parsed.files).length === 0) {
+    throw new Error(`iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+  }
+  eventBus.addCost(args.runId, result.costUsd);
+  eventBus.updateRun(args.runId, {
+    uiKitFiles: parsed.files,
+    uiKitSlug: parsed.slug,
+  });
+  return {
+    slug: parsed.slug,
+    files: parsed.files,
+    warnings: parsed.warnings,
+    costUsd: result.costUsd,
+    latencyMs,
   };
 }
 

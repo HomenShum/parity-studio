@@ -17,6 +17,7 @@ import { TopBar } from './components/TopBar';
  */
 export default function App() {
   const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(null);
+  const [commentModeActive, setCommentModeActive] = useState(false);
 
   return (
     <>
@@ -27,10 +28,14 @@ export default function App() {
           <FilesPanel runId={currentRunId} />
         </aside>
         <section className="center-section" aria-label="Artifact preview">
-          <PreviewPane runId={currentRunId} />
+          <PreviewPane runId={currentRunId} commentModeActive={commentModeActive} />
         </section>
         <aside className="right-panel" aria-label="Pipeline status and tools">
-          <ActionSidebar runId={currentRunId} />
+          <ActionSidebar
+            runId={currentRunId}
+            commentModeActive={commentModeActive}
+            onToggleCommentMode={() => setCommentModeActive((v) => !v)}
+          />
         </aside>
       </main>
     </>

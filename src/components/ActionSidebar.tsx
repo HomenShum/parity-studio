@@ -1,4 +1,5 @@
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
+import { useState } from 'react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 
@@ -18,6 +19,8 @@ type StageState = 'idle' | 'running' | 'done' | 'failed' | 'unavailable';
 
 interface ActionSidebarProps {
   runId: Id<'runs'> | null;
+  commentModeActive: boolean;
+  onToggleCommentMode: () => void;
 }
 
 const STAGE_ORDER: ReadonlyArray<{ id: string; label: string; status: string }> = [
@@ -28,11 +31,7 @@ const STAGE_ORDER: ReadonlyArray<{ id: string; label: string; status: string }> 
   { id: 'iterate', label: 'iterate', status: 'iterating' },
 ];
 
-const TOOLS: ReadonlyArray<{ label: string; ariaHint: string }> = [
-  { label: 'Comment mode', ariaHint: 'toggle bbox region selection on the preview' },
-  { label: 'Iterate now', ariaHint: 'run another decompose pass with current gaps' },
-  { label: 'Hand off to Claude Code', ariaHint: 'export bundle and copy CLI snippet' },
-];
+// TOOLS array removed — buttons are now wired individually in the component
 
 function stageStateFor(runStatus: string | undefined, stageStatus: string): StageState {
   if (runStatus === undefined || runStatus === 'queued') return 'idle';
@@ -53,9 +52,37 @@ function microUsdToUsd(micro: number | undefined): string {
   return `$${(micro / 1_000_000).toFixed(4)}`;
 }
 
-export function ActionSidebar({ runId }: ActionSidebarProps) {
+export function ActionSidebar({
+  runId,
+  commentModeActive,
+  onToggleCommentMode,
+}: ActionSidebarProps) {
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const parity = useQuery(api.parityReports.getLatest, runId ? { runId } : 'skip');
+  const openComments = useQuery(api.comments.listForRun, runId ? { runId } : 'skip');
+  const iterateWithComments = useMutation(api.runs.iterateWithComments);
+  const [iterateBusy, setIterateBusy] = useState(false);
+  const [iterateError, setIterateError] = useState<string | null>(null);
+
+  const openCount = (openComments ?? []).filter((c) => c.status === 'open').length;
+  const canIterate =
+    runId !== null &&
+    !iterateBusy &&
+    (run?.status === 'done' || run?.status === 'failed') &&
+    openCount > 0;
+
+  async function onIterateNow() {
+    if (runId === null) return;
+    setIterateError(null);
+    setIterateBusy(true);
+    try {
+      await iterateWithComments({ runId });
+    } catch (err) {
+      setIterateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIterateBusy(false);
+    }
+  }
 
   const passCountDisplay =
     parity && parity.totalChecks > 0 ? String(parity.passCount) : '--';
@@ -103,16 +130,53 @@ export function ActionSidebar({ runId }: ActionSidebarProps) {
       </div>
       <div className="section">
         <div className="section-header">TOOLS</div>
-        {TOOLS.map((t) => (
-          <button
-            key={t.label}
-            type="button"
-            className="tools-item"
-            aria-label={t.ariaHint}
+        <button
+          type="button"
+          className="tools-item"
+          aria-pressed={commentModeActive}
+          aria-label="toggle bbox region selection on the preview"
+          onClick={onToggleCommentMode}
+          style={
+            commentModeActive
+              ? { color: 'var(--accent)', background: 'rgba(217,119,87,0.08)' }
+              : undefined
+          }
+        >
+          Comment mode {commentModeActive ? '· active' : ''}
+        </button>
+        <button
+          type="button"
+          className="tools-item"
+          disabled={!canIterate}
+          onClick={onIterateNow}
+          aria-label="run another decompose pass folding in any open comments as feedback"
+          style={!canIterate ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+        >
+          {iterateBusy
+            ? 'Starting...'
+            : openCount > 0
+            ? `Iterate now (${openCount} comment${openCount === 1 ? '' : 's'})`
+            : 'Iterate now'}
+        </button>
+        <button
+          type="button"
+          className="tools-item"
+          aria-label="export bundle and copy CLI snippet for Claude Code"
+        >
+          Hand off to Claude Code
+        </button>
+        {iterateError !== null ? (
+          <div
+            style={{
+              padding: '6px var(--space-lg) var(--space-md)',
+              fontSize: 11,
+              color: 'var(--danger)',
+              fontFamily: 'var(--font-mono)',
+            }}
           >
-            {t.label}
-          </button>
-        ))}
+            {iterateError}
+          </div>
+        ) : null}
       </div>
     </>
   );
