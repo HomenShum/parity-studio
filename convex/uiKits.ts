@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+import { internalMutation, internalQuery, query } from './_generated/server';
 
 export const save = internalMutation({
   args: {
@@ -31,5 +31,25 @@ export const get = query({
   args: { uiKitId: v.id('ui_kits') },
   handler: async (ctx, { uiKitId }) => {
     return await ctx.db.get(uiKitId);
+  },
+});
+
+/** Internal mirror of `get` so internalActions can read by id. */
+export const getInternal = internalQuery({
+  args: { uiKitId: v.id('ui_kits') },
+  handler: async (ctx, { uiKitId }) => {
+    return await ctx.db.get(uiKitId);
+  },
+});
+
+/** Internal mirror used by the workflow handler. */
+export const getLatestInternal = internalQuery({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    return await ctx.db
+      .query('ui_kits')
+      .withIndex('by_run', (q) => q.eq('runId', runId))
+      .order('desc')
+      .first();
   },
 });

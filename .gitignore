@@ -13,6 +13,7 @@ dist
 
 # Convex
 .convex/
+convex/_generated/
 
 # Output of npm pack / pnpm pack
 *.tgz

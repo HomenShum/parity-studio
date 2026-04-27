@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+import { internalMutation, internalQuery, query } from './_generated/server';
 
 export const append = internalMutation({
   args: {
@@ -18,6 +18,18 @@ export const append = internalMutation({
 });
 
 export const getLatest = query({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    return await ctx.db
+      .query('artifacts')
+      .withIndex('by_run_version', (q) => q.eq('runId', runId))
+      .order('desc')
+      .first();
+  },
+});
+
+/** Internal mirror used by the workflow handler. Same shape, internal access. */
+export const getLatestInternal = internalQuery({
   args: { runId: v.id('runs') },
   handler: async (ctx, { runId }) => {
     return await ctx.db

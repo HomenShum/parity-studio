@@ -133,7 +133,7 @@ export const verifyDeterministic = internalAction({
   handler: async (ctx, { runId, uiKitId, iterationNumber, sourceHtml }) => {
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'verifying' });
 
-    const uiKit = await ctx.runQuery(internal.uiKits.get, { uiKitId });
+    const uiKit = await ctx.runQuery(internal.uiKits.getInternal, { uiKitId });
     if (uiKit === null) throw new Error(`ui_kit ${uiKitId} not found`);
     const files = (uiKit.files as Record<string, string>) ?? {};
 
