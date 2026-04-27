@@ -2,7 +2,12 @@
 
 > Image to verified, componentized `ui_kit/`. Self-judged with a 12-check boolean rubric. Honest score drift on every iteration. Coding-agent-ready handoff.
 
-**Status**: pre-alpha · single-page web · Convex Cloud + pi-ai stack · **MCP server** for Claude Code / Cursor / Windsurf
+**Status**: pre-alpha · LIVE
+
+- **Web app**: https://parity-studio.vercel.app
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) · `npx parity-studio-mcp`
+- **Convex prod**: `blissful-pig-998` · HTTP routes at https://blissful-pig-998.convex.site
+- Stack: single-page web · Convex Cloud + pi-ai · stdio MCP for Claude Code / Cursor / Windsurf
 
 ## Use it from your coding agent (MCP)
 
