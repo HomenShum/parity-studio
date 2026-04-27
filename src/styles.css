@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans:
+    'Manrope', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* NodeBench-derived warm-dark palette. */
+  --color-bg: #0e1117;
+  --color-surface: #151a21;
+  --color-surface-2: #1c222b;
+  --color-edge: rgba(255, 255, 255, 0.06);
+  --color-edge-strong: rgba(255, 255, 255, 0.12);
+
+  --color-content: #e6edf3;
+  --color-content-muted: #8d96a0;
+  --color-content-faint: #5b6470;
+
+  --color-accent: #d97757;
+  --color-accent-strong: #c96442;
+  --color-accent-soft: rgba(217, 119, 87, 0.12);
+
+  --color-success: #7ee787;
+  --color-warn: #f3c969;
+  --color-danger: #ff7b72;
+}
+
+* {
+  border-color: var(--color-edge);
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-content);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-content);
+}
+
+/* Glass card primitive used across the app. Earned, not decorative. */
+.glass {
+  background-color: color-mix(in oklab, var(--color-surface) 86%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-edge);
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-content-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

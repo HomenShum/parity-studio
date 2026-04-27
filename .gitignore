@@ -1,0 +1,22 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.log
+.vite
+.turbo
+
+# Convex
+.convex/
+
+# Output of npm pack / pnpm pack
+*.tgz
+
+# Local PoC artifacts
+runs/
+.cache/
