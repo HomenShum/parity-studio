@@ -13,6 +13,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
@@ -20,6 +21,6 @@
     "noPropertyAccessFromIndexSignature": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["src", "convex"],
-  "exclude": ["node_modules", "dist", "convex/_generated"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }

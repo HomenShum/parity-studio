@@ -1,83 +1,77 @@
-type StageStatus = 'idle' | 'running' | 'done' | 'failed' | 'unavailable';
+/**
+ * ActionSidebar — DOM/CSS verbatim from platform-generated parity-studio/index.html.
+ * Pipeline / Parity / Tools sections. Wires to Convex `runs:get` + `parityReports:getLatest`
+ * in v0.0.3. The "Hand off to Claude C&b" tokenization artifact in the platform output
+ * is corrected to "Hand off to Claude Code" here, with a comment for honest provenance.
+ */
+type StageState = 'idle' | 'running' | 'active' | 'failed';
 
 interface Stage {
   id: string;
   label: string;
-  status: StageStatus;
-  detail?: string;
+  state: StageState;
 }
 
 const PLACEHOLDER_STAGES: Stage[] = [
-  { id: 'generate', label: 'generate', status: 'idle' },
-  { id: 'decompose', label: 'decompose', status: 'idle' },
-  { id: 'verify-deterministic', label: 'verify · deterministic', status: 'idle' },
-  { id: 'verify-visual', label: 'verify · visual', status: 'idle' },
-  { id: 'iterate', label: 'iterate', status: 'idle' },
+  { id: 'generate', label: 'generate', state: 'idle' },
+  { id: 'decompose', label: 'decompose', state: 'idle' },
+  { id: 'verify-deterministic', label: 'verify · deterministic', state: 'idle' },
+  { id: 'verify-visual', label: 'verify · visual', state: 'idle' },
+  { id: 'iterate', label: 'iterate', state: 'idle' },
 ];
 
-const STATUS_DOT: Record<StageStatus, string> = {
-  idle: 'bg-[var(--color-content-faint)]',
-  running: 'bg-[var(--color-warn)] animate-pulse',
-  done: 'bg-[var(--color-success)]',
-  failed: 'bg-[var(--color-danger)]',
-  unavailable: 'bg-[var(--color-content-faint)] opacity-40',
-};
+const TOOLS: ReadonlyArray<{ label: string; ariaHint: string }> = [
+  { label: 'Comment mode', ariaHint: 'toggle bbox region selection on the preview' },
+  { label: 'Iterate now', ariaHint: 'run another decompose pass with current gaps' },
+  // Note: platform output emitted "Hand off to Claude C&b" (model tokenization
+  // artifact). Corrected to "Code" here. The deterministic text-coverage check
+  // in convex/lib/parityChecker.ts would catch this on a future verify pass.
+  { label: 'Hand off to Claude Code', ariaHint: 'export bundle and copy CLI snippet' },
+];
 
 export function ActionSidebar() {
   const stages = PLACEHOLDER_STAGES;
+  const passCount: number | null = null;
+  const totalChecks = 12;
+  const status = 'idle';
 
   return (
-    <aside className="w-72 shrink-0 border-l border-[var(--color-edge)] bg-[var(--color-surface)] p-4">
-      <div className="section-label mb-3">pipeline</div>
-      <ol className="space-y-2.5">
-        {stages.map((s) => (
-          <li key={s.id} className="flex items-center gap-3">
-            <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s.status]}`} />
-            <span className="text-[12px] text-[var(--color-content)]">{s.label}</span>
-            {s.detail !== undefined && (
-              <span className="ml-auto mono text-[10px] text-[var(--color-content-faint)]">
-                {s.detail}
-              </span>
-            )}
-          </li>
+    <>
+      <div className="section">
+        <div className="section-header">PIPELINE</div>
+        {stages.map((stage) => {
+          const cls =
+            stage.state === 'idle' ? 'pipeline-item' : `pipeline-item ${stage.state}`;
+          return (
+            <div key={stage.id} className={cls}>
+              <span className="pipeline-dot" aria-hidden="true" />
+              <span>{stage.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="section">
+        <div className="section-header">PARITY</div>
+        <div className="parity-section">
+          <div className="parity-status">
+            {passCount === null ? '--' : passCount} /. {totalChecks} CHECKS
+          </div>
+          <div className="parity-subtitle">STATUS: {status.toUpperCase()}</div>
+        </div>
+      </div>
+      <div className="section">
+        <div className="section-header">TOOLS</div>
+        {TOOLS.map((t) => (
+          <button
+            key={t.label}
+            type="button"
+            className="tools-item"
+            aria-label={t.ariaHint}
+          >
+            {t.label}
+          </button>
         ))}
-      </ol>
-
-      <div className="mt-6 section-label">parity</div>
-      <div className="mt-2 rounded-md border border-[var(--color-edge-strong)] bg-[var(--color-surface-2)] p-3">
-        <div className="flex items-baseline gap-2">
-          <span className="mono text-2xl font-semibold text-[var(--color-content)]">—</span>
-          <span className="text-[10px] text-[var(--color-content-faint)]">/ 12 checks</span>
-        </div>
-        <div className="mt-1 mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-content-muted)]">
-          status: idle
-        </div>
       </div>
-
-      <div className="mt-6 section-label">cost</div>
-      <div className="mt-2 mono text-[14px] text-[var(--color-content)]">$0.0000</div>
-
-      <div className="mt-6 section-label">tools</div>
-      <div className="mt-2 space-y-1.5">
-        <button
-          type="button"
-          className="w-full rounded-md border border-[var(--color-edge-strong)] px-3 py-1.5 text-[11px] text-left text-[var(--color-content-muted)] hover:text-[var(--color-content)] hover:bg-[var(--color-surface-2)] transition-colors"
-        >
-          Comment mode
-        </button>
-        <button
-          type="button"
-          className="w-full rounded-md border border-[var(--color-edge-strong)] px-3 py-1.5 text-[11px] text-left text-[var(--color-content-muted)] hover:text-[var(--color-content)] hover:bg-[var(--color-surface-2)] transition-colors"
-        >
-          Iterate now
-        </button>
-        <button
-          type="button"
-          className="w-full rounded-md border border-[var(--color-edge-strong)] px-3 py-1.5 text-[11px] text-left text-[var(--color-content-muted)] hover:text-[var(--color-content)] hover:bg-[var(--color-surface-2)] transition-colors"
-        >
-          Hand off to Claude Code
-        </button>
-      </div>
-    </aside>
+    </>
   );
 }

@@ -20,3 +20,4 @@ dist
 # Local PoC artifacts
 runs/
 .cache/
+tsconfig.tsbuildinfo
