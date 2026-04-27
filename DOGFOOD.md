@@ -10,7 +10,7 @@ The intent: prove that a sketch + a brief can become a verified, componentized, 
 prompt brief                         (parity-studio-shell.txt, hand-written)
      |
      v
-gpt-image-1                          source.png (1536x1024 mockup)
+gpt-image-2                          source.png (1536x1024 mockup)
      |
      v
 claude-opus-4-1 (vision)             ui_kit/parity-studio/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}
@@ -30,7 +30,7 @@ Input: `inputs/prompts/parity-studio-shell.txt` (the prompt described the 4-zone
 
 | Stage | Model | Latency | Cost |
 |---|---|---:|---:|
-| Source mockup | gpt-image-1 (1536x1024 high) | 81 s | $0.09 (cached on retry) |
+| Source mockup | gpt-image-2 (1536x1024 high) | 81 s | $0.09 (cached on retry; original BEFORE pass used gpt-image-1, now upgraded) |
 | Decompose | claude-opus-4-1 | 85 s | $0.40 |
 | Render | Playwright chromium | 1.3 s | $0.00 |
 | Judge | claude-sonnet-4-5 | 18 s | $0.025 |

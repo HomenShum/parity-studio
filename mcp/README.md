@@ -101,7 +101,7 @@ Either alone misses things. The deterministic check missed a layout regression i
 
 ## Cost reference
 
-Per `parity_pipeline` call with default models (claude-opus-4-1 decompose + claude-sonnet-4-5 judge), high-quality gpt-image-1 generate:
+Per `parity_pipeline` call with default models (kimi-k2.6 decompose + gemini-3.1-pro-preview judge), high-quality gpt-image-2 generate:
 
 | Stage | Latency | Cost |
 |---|---:|---:|
