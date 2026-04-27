@@ -25,7 +25,9 @@ The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp
 }
 ```
 
-Then in Claude Code: *"use parity_pipeline to turn this sketch into a ui_kit"* and it returns the `ui_kit/<slug>/` files inline in the chat. See [mcp/README.md](./mcp/) for full tool docs.
+Then in Claude Code: *"use parity_pipeline to turn this sketch into a ui_kit"* and it returns the `ui_kit/<slug>/` files inline in the chat.
+
+**The MCP server also auto-opens a local dashboard** on first invocation (port 6280 by default). Live view of the pipeline running: source ↔ rendered split, file tree as it streams, parity score with bounded enum status, cost meter, ZIP export. Set `PARITY_DASHBOARD=server-only` to disable auto-open in the env block above. See [mcp/README.md](./mcp/) for full tool docs + env flags.
 
 
 

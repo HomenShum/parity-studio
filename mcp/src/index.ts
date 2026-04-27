@@ -28,7 +28,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import JSZip from 'jszip';
 import { z } from 'zod';
 
-import { call } from './lib/llmClient.js';
+import { eventBus, makeRunId } from './dashboard/events.js';
+import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
+import { ensureDashboard } from './dashboard/server.js';
+import { callByModel } from './lib/llmClient.js';
 import {
   type ParityReport,
   checkDeterministic,
@@ -37,6 +40,40 @@ import {
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts.js';
 import { renderHtmlToPng, shutdownRenderer } from './lib/render.js';
 import { parseUiKitResponse } from './lib/uiKitParser.js';
+
+/**
+ * Eager-init the dashboard at MCP server boot. Returns the URL (or null
+ * if PARITY_DASHBOARD=disabled). Browser auto-open is deferred to the
+ * first actual tool call so we don't open an empty dashboard the moment
+ * an agent merely lists tools.
+ */
+let bootDashboardUrl: string | null = null;
+async function startDashboardAtBoot(): Promise<string | null> {
+  if (dashboardMode() === 'disabled') return null;
+  try {
+    const handle = await ensureDashboard();
+    bootDashboardUrl = handle.url;
+    return handle.url;
+  } catch (err) {
+    console.error(
+      '[parity-studio-mcp] dashboard boot failed; tools will run without it:',
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
+/**
+ * Called from each tool handler. Auto-opens the browser on the first real
+ * tool invocation (per PARITY_DASHBOARD=auto-open default), but never blocks
+ * the tool call. Returns the URL for inclusion in the response.
+ */
+async function dashboardForTool(): Promise<string | null> {
+  if (bootDashboardUrl !== null) {
+    await openDashboardOnce(bootDashboardUrl).catch(() => {});
+  }
+  return bootDashboardUrl;
+}
 
 const VERSION = '0.0.1';
 
@@ -69,8 +106,10 @@ async function handleDecompose(args: {
   fallbackSlug?: string;
   decomposeModel?: string;
 }) {
+  const dashboardUrl = await dashboardForTool().catch(() => null);
+  void dashboardUrl;
   const model = args.decomposeModel ?? DECOMPOSE_MODEL;
-  const result = await call({
+  const result = await callByModel({
     model,
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
@@ -197,7 +236,7 @@ async function runVisualJudge(args: {
   // primary and pass the source as a leading reference inside the userText.
   // For Anthropic vision multi-image: use both via two image blocks.
   // Simpler: pass them sequentially in the same prompt body, judge tolerates.
-  const judge = await call({
+  const judge = await callByModel({
     model: args.judgeModel,
     systemPrompt: VISUAL_JUDGE_SYSTEM,
     userText:
@@ -284,100 +323,193 @@ async function handlePipeline(args: {
   const decomposeModel = args.decomposeModel ?? DECOMPOSE_MODEL;
   const judgeModel = args.judgeModel ?? JUDGE_MODEL;
 
-  let totalCostUsd = 0;
-  let artifactHtml: string;
-  let generateLatencyMs = 0;
+  // Spin up dashboard on first call. Best-effort: never blocks the run.
+  const dashboardUrl = await dashboardForTool().catch(() => null);
 
-  // Stage 1: generate (or skip if image provided + skipGenerate flag)
-  if (args.skipGenerate && args.sourceImageBase64) {
-    artifactHtml = `<!-- skipGenerate: source image used directly -->`;
-  } else {
-    const t0 = Date.now();
-    const gen = await call({
-      model: generateModel,
-      systemPrompt: GENERATE_SYSTEM,
-      userText: args.prompt ?? 'Generate a polished UI matching the attached image.',
-      ...(args.sourceImageBase64 && args.sourceImageMimeType
-        ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
-        : {}),
-      maxTokens: 16_000,
-    });
-    artifactHtml = stripWrappingFences(gen.text);
-    totalCostUsd += gen.costUsd;
-    generateLatencyMs = Date.now() - t0;
-  }
-
-  // Stage 2: decompose
-  const dt0 = Date.now();
-  const dec = await call({
-    model: decomposeModel,
-    systemPrompt: DECOMPOSE_SYSTEM,
-    userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
-    maxTokens: 24_000,
+  // Create the run record so the dashboard sees it the moment the user
+  // looks. All subsequent stage updates broadcast via the event bus.
+  const runId = makeRunId();
+  eventBus.createRun(runId, {
+    status: 'queued',
+    ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+    ...(args.sourceImageBase64 !== undefined ? { sourceImageBase64: args.sourceImageBase64 } : {}),
+    ...(args.sourceImageMimeType !== undefined ? { sourceImageMimeType: args.sourceImageMimeType } : {}),
   });
-  const parsed = parseUiKitResponse(dec.text);
-  totalCostUsd += dec.costUsd;
-  const decomposeLatencyMs = Date.now() - dt0;
+  eventBus.appendLog(runId, 'info', `parity_pipeline started (decompose=${decomposeModel}, judge=${judgeModel})`);
 
-  if (Object.keys(parsed.files).length === 0) {
-    throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
-  }
+  try {
+    let totalCostUsd = 0;
+    let artifactHtml: string;
+    let generateLatencyMs = 0;
 
-  // Stage 3: deterministic verify
-  const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
-  const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
-  const detReport = checkDeterministic({
-    sourceHtml: artifactHtml,
-    decomposedHtml: indexHtml,
-    tokensCss,
-    uiKitFiles: parsed.files,
-  });
+    // Stage 1: generate (or skip if image provided + skipGenerate flag)
+    if (args.skipGenerate && args.sourceImageBase64) {
+      artifactHtml = `<!-- skipGenerate: source image used directly -->`;
+      eventBus.setStage(runId, 'generate', 'unavailable');
+      eventBus.appendLog(runId, 'info', 'generate stage skipped (skipGenerate=true)');
+    } else {
+      eventBus.updateRun(runId, { status: 'generating' });
+      eventBus.setStage(runId, 'generate', 'running', undefined, generateModel);
+      const t0 = Date.now();
+      const gen = await callByModel({
+        model: generateModel,
+        systemPrompt: GENERATE_SYSTEM,
+        userText: args.prompt ?? 'Generate a polished UI matching the attached image.',
+        ...(args.sourceImageBase64 && args.sourceImageMimeType
+          ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
+          : {}),
+        maxTokens: 16_000,
+      });
+      artifactHtml = stripWrappingFences(gen.text);
+      totalCostUsd += gen.costUsd;
+      generateLatencyMs = Date.now() - t0;
+      eventBus.setStage(runId, 'generate', 'done', generateLatencyMs, generateModel);
+      eventBus.addCost(runId, gen.costUsd);
+      eventBus.updateRun(runId, { artifactHtmlFull: artifactHtml });
+      eventBus.appendLog(runId, 'info', `generated ${artifactHtml.length} bytes in ${(generateLatencyMs / 1000).toFixed(1)}s, $${gen.costUsd.toFixed(4)}`);
+    }
 
-  // Stage 4: visual verify (only if we have a source image + emitted index.html)
-  let visualReport: VisualJudgeOutcome | null = null;
-  if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
-    visualReport = await runVisualJudge({
-      sourceImageBase64: args.sourceImageBase64,
-      sourceImageMimeType: args.sourceImageMimeType,
-      indexHtml,
-      judgeModel,
+    // Stage 2: decompose
+    eventBus.updateRun(runId, { status: 'decomposing' });
+    eventBus.setStage(runId, 'decompose', 'running', undefined, decomposeModel);
+    const dt0 = Date.now();
+    const dec = await callByModel({
+      model: decomposeModel,
+      systemPrompt: DECOMPOSE_SYSTEM,
+      userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
+      maxTokens: 24_000,
     });
-    totalCostUsd += visualReport.judgeCostUsd;
-  }
+    const parsed = parseUiKitResponse(dec.text);
+    totalCostUsd += dec.costUsd;
+    const decomposeLatencyMs = Date.now() - dt0;
 
-  return {
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(
-          {
-            uiKit: { slug: parsed.slug, files: parsed.files, warnings: parsed.warnings },
-            deterministic: detReport,
-            visual: visualReport,
-            combined: combinedReport(detReport, visualReport),
-            costs: {
-              totalUsd: Number(totalCostUsd.toFixed(4)),
-              generate: args.skipGenerate ? 0 : 'included',
-              decompose: dec.costUsd,
-              visualJudge: visualReport?.judgeCostUsd ?? 0,
-            },
-            latencies: {
-              generateMs: generateLatencyMs,
-              decomposeMs: decomposeLatencyMs,
-              renderMs: visualReport?.renderLatencyMs ?? 0,
-            },
-            modelsUsed: {
-              generate: args.skipGenerate ? null : generateModel,
-              decompose: decomposeModel,
-              judge: judgeModel,
-            },
-          },
-          null,
-          2,
-        ),
+    if (Object.keys(parsed.files).length === 0) {
+      eventBus.setStage(runId, 'decompose', 'failed', decomposeLatencyMs, decomposeModel);
+      eventBus.appendLog(runId, 'error', `decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+      eventBus.updateRun(runId, { status: 'failed', errorMessage: 'decompose returned 0 files' });
+      throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+    }
+    eventBus.setStage(runId, 'decompose', 'done', decomposeLatencyMs, decomposeModel);
+    eventBus.addCost(runId, dec.costUsd);
+    eventBus.updateRun(runId, {
+      uiKitFiles: parsed.files,
+      uiKitSlug: parsed.slug,
+    });
+    eventBus.appendLog(
+      runId,
+      'info',
+      `decomposed into ui_kits/${parsed.slug}/ (${Object.keys(parsed.files).length} files) in ${(decomposeLatencyMs / 1000).toFixed(1)}s, $${dec.costUsd.toFixed(4)}`,
+    );
+
+    // Stage 3: deterministic verify
+    eventBus.updateRun(runId, { status: 'verifying' });
+    eventBus.setStage(runId, 'verify', 'running');
+    const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
+    const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
+    const detReport = checkDeterministic({
+      sourceHtml: artifactHtml,
+      decomposedHtml: indexHtml,
+      tokensCss,
+      uiKitFiles: parsed.files,
+    });
+    eventBus.appendLog(
+      runId,
+      'info',
+      `deterministic verify: ${detReport.passCount}/${detReport.totalChecks} (${detReport.status})`,
+    );
+
+    // Stage 4: visual verify (only if we have a source image + emitted index.html)
+    let visualReport: VisualJudgeOutcome | null = null;
+    if (args.sourceImageBase64 && args.sourceImageMimeType && indexHtml !== null) {
+      visualReport = await runVisualJudge({
+        sourceImageBase64: args.sourceImageBase64,
+        sourceImageMimeType: args.sourceImageMimeType,
+        indexHtml,
+        judgeModel,
+      });
+      totalCostUsd += visualReport.judgeCostUsd;
+      eventBus.addCost(runId, visualReport.judgeCostUsd);
+      eventBus.appendLog(
+        runId,
+        'info',
+        `visual verify: ${visualReport.passCount}/${visualReport.totalChecks} (${visualReport.status})`,
+      );
+    } else {
+      eventBus.appendLog(
+        runId,
+        'info',
+        'visual verify skipped (no source image or no index.html in ui_kit)',
+      );
+    }
+
+    const combined = combinedReport(detReport, visualReport);
+    const failedChecks = visualReport?.checks?.filter((c) => !c.passed) ?? [];
+    eventBus.updateRun(runId, {
+      parityReport: {
+        passCount: combined.passCount,
+        totalChecks: combined.totalChecks,
+        parityScore: combined.parityScore,
+        status: combined.status,
+        summary: visualReport?.summary ?? detReport.summary,
+        basis: combined.basis as 'deterministic' | 'visual' | 'deterministic+visual',
+        failedChecks,
       },
-    ],
-  };
+    });
+    eventBus.setStage(
+      runId,
+      'verify',
+      combined.status === 'verified' || combined.status === 'needs_review' ? 'done' : 'failed',
+    );
+    eventBus.setStage(runId, 'iterate', 'unavailable');
+    eventBus.setStage(runId, 'done', 'done');
+    eventBus.updateRun(runId, { status: 'done' });
+    eventBus.appendLog(
+      runId,
+      'info',
+      `pipeline complete: parityScore ${combined.parityScore.toFixed(2)} (${combined.status}), total $${totalCostUsd.toFixed(4)}`,
+    );
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            {
+              runId,
+              dashboardUrl,
+              uiKit: { slug: parsed.slug, files: parsed.files, warnings: parsed.warnings },
+              deterministic: detReport,
+              visual: visualReport,
+              combined,
+              costs: {
+                totalUsd: Number(totalCostUsd.toFixed(4)),
+                generate: args.skipGenerate ? 0 : 'included',
+                decompose: dec.costUsd,
+                visualJudge: visualReport?.judgeCostUsd ?? 0,
+              },
+              latencies: {
+                generateMs: generateLatencyMs,
+                decomposeMs: decomposeLatencyMs,
+                renderMs: visualReport?.renderLatencyMs ?? 0,
+              },
+              modelsUsed: {
+                generate: args.skipGenerate ? null : generateModel,
+                decompose: decomposeModel,
+                judge: judgeModel,
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    eventBus.updateRun(runId, { status: 'failed', errorMessage: message });
+    eventBus.appendLog(runId, 'error', `pipeline failed: ${message}`);
+    throw err;
+  }
 }
 
 // ---------- Tool: parity_export_zip ---------------------------------------
@@ -488,6 +620,11 @@ function parseLooseJson(raw: string): Record<string, unknown> | null {
 // ---------- Server bootstrap ----------------------------------------------
 
 async function main() {
+  // Boot the local dashboard FIRST so it's already serving when the user looks.
+  // No-op if PARITY_DASHBOARD=disabled. Best-effort: failures are logged to
+  // stderr (which doesn't pollute MCP stdout) and tools continue without it.
+  await startDashboardAtBoot();
+
   const server = new McpServer({
     name: 'parity-studio',
     version: VERSION,

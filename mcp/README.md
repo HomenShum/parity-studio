@@ -26,6 +26,17 @@ In Claude Code, Cursor, Windsurf, or any MCP client config:
 
 You need at least one of: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` — depending on the model ids you use.
 
+## Local dashboard (auto-opens)
+
+The MCP server starts a tiny local HTTP server on port `6280` (overridable via `PARITY_DASHBOARD_PORT`) and opens it in your browser the first time your agent calls a parity tool. You watch the pipeline run live: source ↔ rendered side-by-side, file tree as it streams, parity score with bounded enum status, cost meter, log feed, ZIP export button.
+
+`PARITY_DASHBOARD` env values:
+- `auto-open` (default) — start server, open browser on first tool call
+- `server-only` — start server, never open browser (useful in headless / CI)
+- `disabled` — don't start server at all
+
+The dashboard reuses an open tab on subsequent runs — no spam.
+
 ## Tools
 
 ### `parity_pipeline` — end-to-end
