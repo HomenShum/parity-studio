@@ -10,7 +10,7 @@
     "dev:backend": "convex dev",
     "build": "tsc -b && vite build",
     "build:web": "tsc -b && vite build",
-    "vercel-build": "convex deploy --cmd 'tsc -b && vite build' --typecheck disable",
+    "vercel-build": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then convex deploy --cmd 'tsc -b && vite build' --typecheck disable; else echo 'no CONVEX_DEPLOY_KEY — skipping backend deploy, building frontend with committed _generated/' && tsc -b && vite build; fi",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

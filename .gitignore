@@ -13,7 +13,11 @@ dist
 
 # Convex
 .convex/
-convex/_generated/
+# convex/_generated/ is intentionally committed so Vercel can build the
+# frontend without CONVEX_DEPLOY_KEY. Regenerate locally with `convex dev`
+# or `convex codegen`. When CONVEX_DEPLOY_KEY IS set in Vercel env, the
+# vercel-build script runs `convex deploy` which regenerates these on the
+# server before vite build.
 
 # Output of npm pack / pnpm pack
 *.tgz
