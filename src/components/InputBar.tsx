@@ -86,7 +86,9 @@ export function InputBar({ onRunStarted }: InputBarProps) {
       const result = await generateImage({ prompt: prompt.trim() });
       setImageBase64(result.base64);
       setImageMime(result.mimeType);
-      setImageName(`gpt-image-2 (${(result.costMicroUsd / 1_000_000).toFixed(2)} USD)`);
+      const costUsd = (result.costMicroUsd / 1_000_000).toFixed(3);
+      const tag = result.costSource === 'usage' ? '' : '~';
+      setImageName(`gpt-image-2 ${tag}$${costUsd} (${result.latencyMs}ms)`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

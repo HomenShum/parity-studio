@@ -349,10 +349,22 @@ export const verifyVisual = internalAction({
  * Wired to the "Generate from prompt" button in InputBar. Closes the
  * "no in-app image generation" gap from issue #225.
  *
- * Cost: gpt-image-2 1024x1024 standard ≈ $0.04-0.05 per image. Recorded as
- * a flat 50_000 microUsd estimate; future work can read OpenAI's response
- * usage block for exact billing.
+ * Cost telemetry: prefer the OpenAI response `usage` block (gpt-image-2
+ * returns input/output token counts) and compute exact micro-USD using the
+ * published per-token pricing. Falls back to a size-based estimate if the
+ * API ever stops emitting usage.
  */
+const GPT_IMAGE_2_PRICING_PER_MTOK = {
+  textInput: 5,    // $5 per 1M input text tokens
+  imageInput: 10,  // $10 per 1M input image tokens (e.g. for edits, not used here)
+  imageOutput: 40, // $40 per 1M output image tokens
+} as const;
+const GPT_IMAGE_2_FALLBACK_MICRO_USD: Record<string, number> = {
+  '1024x1024': 40_000,
+  '1024x1536': 62_000,
+  '1536x1024': 62_000,
+};
+
 export const generateSourceImage = action({
   args: {
     prompt: v.string(),
@@ -367,7 +379,11 @@ export const generateSourceImage = action({
     base64: string;
     mimeType: 'image/png';
     costMicroUsd: number;
+    costSource: 'usage' | 'estimate';
+    inputTokens: number;
+    outputTokens: number;
     modelUsed: string;
+    latencyMs: number;
   }> => {
     const trimmed = prompt.trim();
     if (trimmed.length === 0) {
@@ -381,6 +397,7 @@ export const generateSourceImage = action({
       throw new Error('generateSourceImage: OPENAI_API_KEY not configured');
     }
 
+    const resolvedSize = size ?? '1024x1024';
     const startedAt = Date.now();
     const resp = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -391,36 +408,65 @@ export const generateSourceImage = action({
       body: JSON.stringify({
         model: 'gpt-image-2',
         prompt: trimmed,
-        size: size ?? '1024x1024',
+        size: resolvedSize,
         n: 1,
       }),
       signal: AbortSignal.timeout(120_000),
     });
+    const latencyMs = Date.now() - startedAt;
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       throw new Error(`gpt-image-2 HTTP ${resp.status}: ${text.slice(0, 400)}`);
     }
 
-    const json = (await resp.json()) as { data?: Array<{ b64_json?: string }> };
+    const json = (await resp.json()) as {
+      data?: Array<{ b64_json?: string }>;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        input_tokens_details?: {
+          text_tokens?: number;
+          image_tokens?: number;
+        };
+      };
+    };
     const b64 = json.data?.[0]?.b64_json;
     if (typeof b64 !== 'string' || b64.length === 0) {
       throw new Error('gpt-image-2 returned no b64_json payload');
     }
 
+    let costMicroUsd: number;
+    let costSource: 'usage' | 'estimate';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    if (json.usage && typeof json.usage.output_tokens === 'number') {
+      const textIn = json.usage.input_tokens_details?.text_tokens ?? json.usage.input_tokens ?? 0;
+      const imageIn = json.usage.input_tokens_details?.image_tokens ?? 0;
+      const out = json.usage.output_tokens;
+      inputTokens = (json.usage.input_tokens ?? textIn + imageIn) | 0;
+      outputTokens = out | 0;
+      const usd =
+        (textIn * GPT_IMAGE_2_PRICING_PER_MTOK.textInput +
+          imageIn * GPT_IMAGE_2_PRICING_PER_MTOK.imageInput +
+          out * GPT_IMAGE_2_PRICING_PER_MTOK.imageOutput) /
+        1_000_000;
+      costMicroUsd = Math.round(usd * 1_000_000);
+      costSource = 'usage';
+    } else {
+      costMicroUsd = GPT_IMAGE_2_FALLBACK_MICRO_USD[resolvedSize] ?? 40_000;
+      costSource = 'estimate';
+    }
+
     return {
       base64: b64,
       mimeType: 'image/png',
-      // Flat estimate. gpt-image-2 1024x1024 standard ≈ $0.04-0.05.
-      costMicroUsd: 50_000,
+      costMicroUsd,
+      costSource,
+      inputTokens,
+      outputTokens,
       modelUsed: 'openai/gpt-image-2',
-      // latency is captured client-side via the round-trip; expose via console
-      // to keep the return shape minimal. If the InputBar wants to render it,
-      // we can promote this to the return object in a follow-up.
-      ...(((): Record<string, never> => {
-        void (Date.now() - startedAt);
-        return {};
-      })()),
+      latencyMs,
     };
   },
 });

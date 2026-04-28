@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { CommentOverlay } from './CommentOverlay';
+import { FileEditor } from './FileEditor';
 
 /**
  * PreviewPane — live artifact preview from Convex `artifacts:getLatest`.
@@ -17,6 +18,7 @@ interface PreviewPaneProps {
 }
 
 type Viewport = 'desktop' | 'tablet';
+type Mode = 'preview' | 'code';
 
 const PLACEHOLDER_HTML = `<!doctype html><html><body style="margin:0;font-family:system-ui;background:#1c222b;color:#8d96a0;display:grid;place-items:center;height:100vh"><div style="text-align:center"><div style="font-size:13px;letter-spacing:0.2em;text-transform:uppercase;color:#5b6470;margin-bottom:12px;font-family:monospace">preview</div><div style="font-size:18px">Run a pipeline to see the artifact here.</div></div></body></html>`;
 
@@ -26,6 +28,7 @@ function loadingHtml(label: string): string {
 
 export function PreviewPane({ runId, commentModeActive, selectedFile }: PreviewPaneProps) {
   const [viewport, setViewport] = useState<Viewport>('desktop');
+  const [mode, setMode] = useState<Mode>('preview');
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
 
@@ -81,36 +84,56 @@ export function PreviewPane({ runId, commentModeActive, selectedFile }: PreviewP
               scoped → {selectedFile}
             </span>
           ) : null}
-          <div className="preview-tabs" role="tablist" aria-label="Preview viewport">
-            {(['desktop', 'tablet'] as const).map((v) => (
+          <div className="preview-tabs" role="tablist" aria-label="Preview mode">
+            {(['preview', 'code'] as const).map((m) => (
               <button
-                key={v}
+                key={m}
                 type="button"
                 role="tab"
                 // biome-ignore lint/a11y/useAriaPropsForRole: aria-selected accepts boolean per W3C
-                aria-selected={viewport === v}
-                className={`tab ${viewport === v ? 'active' : ''}`}
-                onClick={() => setViewport(v)}
+                aria-selected={mode === m}
+                className={`tab ${mode === m ? 'active' : ''}`}
+                onClick={() => setMode(m)}
               >
-                {v}
+                {m}
               </button>
             ))}
+            {mode === 'preview'
+              ? (['desktop', 'tablet'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="tab"
+                    // biome-ignore lint/a11y/useAriaPropsForRole: aria-selected accepts boolean per W3C
+                    aria-selected={viewport === v}
+                    className={`tab ${viewport === v ? 'active' : ''}`}
+                    onClick={() => setViewport(v)}
+                  >
+                    {v}
+                  </button>
+                ))
+              : null}
           </div>
         </div>
-        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-          <iframe
-            title="artifact preview"
-            srcDoc={srcDoc}
-            sandbox="allow-same-origin"
-            className="preview-iframe"
-            style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-          />
-          <CommentOverlay
-            runId={runId}
-            artifactVersion={artifactVersion}
-            active={commentModeActive}
-            targetFile={selectedFile ?? null}
-          />
+        <div className="preview-body">
+          {mode === 'preview' ? (
+            <>
+              <iframe
+                title="artifact preview"
+                srcDoc={srcDoc}
+                sandbox="allow-same-origin"
+                className="preview-iframe"
+              />
+              <CommentOverlay
+                runId={runId}
+                artifactVersion={artifactVersion}
+                active={commentModeActive}
+                targetFile={selectedFile ?? null}
+              />
+            </>
+          ) : (
+            <FileEditor runId={runId} selectedFile={selectedFile ?? null} />
+          )}
         </div>
       </div>
     </>
