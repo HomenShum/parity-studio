@@ -1,43 +1,20 @@
-import { useState } from 'react';
-import type { Id } from '../convex/_generated/dataModel';
-import { ActionSidebar } from './components/ActionSidebar';
-import { FilesPanel } from './components/FilesPanel';
-import { InputBar } from './components/InputBar';
-import { PreviewPane } from './components/PreviewPane';
-import { TopBar } from './components/TopBar';
+import { ChatComposerSurface } from './components/composer/ChatComposerSurface';
 
 /**
- * App layout structure verbatim from the platform-generated index.html
- * (parity-studio-before run, claude-opus-4-1 decompose). Container classes
- * match the platform's CSS one-to-one.
+ * App — root surface. Replaced the original 3-column workspace shell
+ * (FilesPanel / PreviewPane / ActionSidebar) with the platform-generated
+ * agentic-sidebar-chat composer for v0.0.3.
  *
- * State: `currentRunId` is the single piece of app state. InputBar.onRunStarted
- * sets it; all three panels (FilesPanel, PreviewPane, ActionSidebar) read it
- * and run their own useQuery against the matching Convex function.
+ * Provenance for the composer: gpt-image-2 → claude-opus-4-1 decompose →
+ * claude-sonnet-4-5 visual judge, parityScore 1.00 verified, $0.78, 305s.
+ * See DOGFOOD.md "v0.0.3 — composer dogfood" section.
+ *
+ * The old workspace components (TopBar, InputBar, FilesPanel, PreviewPane,
+ * ActionSidebar) live in src/components/* unchanged. Keeping them around
+ * because their useQuery wiring against runs/artifacts/uiKits/parityReports
+ * is the proven path — the composer surface needs to take those over in a
+ * follow-up (threads = runs, citations = sources, top cards = ui_kit slugs).
  */
 export default function App() {
-  const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(null);
-  const [commentModeActive, setCommentModeActive] = useState(false);
-
-  return (
-    <>
-      <TopBar />
-      <InputBar onRunStarted={setCurrentRunId} />
-      <main className="main-content" id="main-content">
-        <aside className="sidebar" aria-label="Files and handoff">
-          <FilesPanel runId={currentRunId} />
-        </aside>
-        <section className="center-section" aria-label="Artifact preview">
-          <PreviewPane runId={currentRunId} commentModeActive={commentModeActive} />
-        </section>
-        <aside className="right-panel" aria-label="Pipeline status and tools">
-          <ActionSidebar
-            runId={currentRunId}
-            commentModeActive={commentModeActive}
-            onToggleCommentMode={() => setCommentModeActive((v) => !v)}
-          />
-        </aside>
-      </main>
-    </>
-  );
+  return <ChatComposerSurface />;
 }

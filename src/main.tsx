@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
+import './composer-styles.css';
 
 const convexUrl = import.meta.env['VITE_CONVEX_URL'] as string | undefined;
 const convex = new ConvexReactClient(convexUrl ?? 'https://placeholder.convex.cloud');

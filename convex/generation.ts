@@ -20,7 +20,11 @@ import { parseUiKitResponse } from './lib/uiKitParser';
 //
 // Per-call overrides come through runs.start args (per-stage modelOverrides),
 // reaching here via the workflow handler.
-const GENERATE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
+// Reliability shift: kimi-k2.6 stalls on 1.5MB inline-image vision calls
+// (Moonshot edge timeout). Generate now uses claude-sonnet-4-5 — handles
+// large vision in 60-90s reliably (~$0.10/call vs $0.05 kimi). Decompose
+// stays on kimi (text-only payload after generate, no stall risk).
+const GENERATE_MODEL = { provider: 'anthropic' as const, modelId: 'claude-sonnet-4-5' };
 const DECOMPOSE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
 // Judge stays on the strong tier: gemini-3.1-pro-preview is the best-available
 // vision verifier today. ~$0.02-0.05 per judge call (vs ~$0.005 for flash) but
@@ -53,13 +57,36 @@ export const generateInitial = internalAction({
         ? prompt
         : 'Generate a polished, production-quality UI matching the attached image.';
 
+    // Resolve the image: prefer the inline base64 (e.g. user-uploaded direct
+    // call path), but if the run already has a sourceImageStorageId from a
+    // prior image-gen stage, read from Convex Storage. Reading from storage
+    // here keeps the workflow journal small (only `runId` passes through
+    // step args) — the workflow component persists every step input/output
+    // for replay, so passing 2MB base64 inline stalls the journal.
+    let resolvedBase64 = sourceImageBase64;
+    let resolvedMime = sourceImageMimeType;
+    if (resolvedBase64 === undefined) {
+      const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+      if (run?.sourceImageStorageId !== undefined) {
+        const blob = await ctx.storage.get(run.sourceImageStorageId);
+        if (blob !== null) {
+          // Node Buffer (available because this file has 'use node') — single
+          // O(n) allocation. The previous String.fromCharCode loop was O(n^2)
+          // and stalled V8 silently on 1.5MB images.
+          const buf = Buffer.from(await blob.arrayBuffer());
+          resolvedBase64 = buf.toString('base64');
+          resolvedMime = 'image/png';
+        }
+      }
+    }
+
     const result = await call({
       ...GENERATE_MODEL,
       systemPrompt: GENERATE_SYSTEM,
       userText,
       maxTokens: 16_000,
-      ...(sourceImageBase64 !== undefined && sourceImageMimeType !== undefined
-        ? { userImage: { base64: sourceImageBase64, mimeType: sourceImageMimeType } }
+      ...(resolvedBase64 !== undefined && resolvedMime !== undefined
+        ? { userImage: { base64: resolvedBase64, mimeType: resolvedMime } }
         : {}),
     });
 

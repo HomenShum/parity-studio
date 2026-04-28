@@ -22,6 +22,7 @@ export function InputBar({ onRunStarted }: InputBarProps) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMime, setImageMime] = useState<'image/png' | 'image/jpeg' | 'image/webp' | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
+  const [generateMockupFirst, setGenerateMockupFirst] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,11 +57,14 @@ export function InputBar({ onRunStarted }: InputBarProps) {
         prompt?: string;
         sourceImageBase64?: string;
         sourceImageMimeType?: 'image/png' | 'image/jpeg' | 'image/webp';
+        generateMockupFirst?: boolean;
       } = {};
       if (prompt.trim().length > 0) args.prompt = prompt.trim();
       if (imageBase64 !== null && imageMime !== null) {
         args.sourceImageBase64 = imageBase64;
         args.sourceImageMimeType = imageMime;
+      } else if (generateMockupFirst && prompt.trim().length > 0) {
+        args.generateMockupFirst = true;
       }
       const runId = await startRun(args);
       onRunStarted(runId);
@@ -107,8 +111,30 @@ export function InputBar({ onRunStarted }: InputBarProps) {
         </button>
       </div>
       <div className="help-text">
-        <span>{error ?? 'cmd/ctrl + enter to run'}</span>
-        <span>est. cost $0.10-0.80 per full pipeline</span>
+        <label
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: imageBase64 !== null ? 'not-allowed' : 'pointer',
+            opacity: imageBase64 !== null ? 0.4 : 1,
+          }}
+          title={
+            imageBase64 !== null
+              ? 'disabled: a source image is already attached'
+              : 'generate a mockup with gpt-image-2 first (~$0.16, ~30s), then decompose'
+          }
+        >
+          <input
+            type="checkbox"
+            checked={generateMockupFirst && imageBase64 === null}
+            disabled={imageBase64 !== null}
+            onChange={(e) => setGenerateMockupFirst(e.target.checked)}
+            style={{ accentColor: 'var(--accent, #c96442)' }}
+          />
+          <span>{error ?? 'mockup-first (gpt-image-2)'}</span>
+        </label>
+        <span>est. cost $0.10-0.80 · +$0.16 if mockup-first</span>
       </div>
     </>
   );

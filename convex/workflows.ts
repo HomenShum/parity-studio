@@ -144,9 +144,36 @@ export const parityStudioWorkflow = workflow.define({
     sourceImageMimeType: v.optional(
       v.union(v.literal('image/png'), v.literal('image/jpeg'), v.literal('image/webp')),
     ),
+    /**
+     * If true and no sourceImageBase64 was supplied, run gpt-image-2 first
+     * to produce a mockup that the generate stage will use as visual reference.
+     * Adds ~$0.16 + ~30s but produces a much richer artifact than prompt-only.
+     */
+    generateMockupFirst: v.optional(v.boolean()),
   },
   handler: async (step, args): Promise<void> => {
-    // Stage 1: generate initial HTML from prompt + optional image
+    // Stage 0 (optional): image-gen via gpt-image-2 when user wants a
+    // mockup-first flow. The action persists the PNG to Convex Storage and
+    // patches sourceImageStorageId onto the run row — we deliberately do
+    // NOT pass the base64 back through workflow step args because the
+    // workflow journal persists every step's I/O for replay, and a 2MB
+    // base64 string stalls the journal silently.
+    if (
+      args.generateMockupFirst === true &&
+      args.sourceImageBase64 === undefined &&
+      args.prompt !== undefined
+    ) {
+      await step.runAction(
+        internal.imageGen.generateSourceImage,
+        { runId: args.runId, prompt: args.prompt },
+        { retry: { maxAttempts: 2, initialBackoffMs: 3_000, base: 2 } },
+      );
+    }
+
+    // Stage 1: generate initial HTML. The action reads the image from
+    // sourceImageStorageId on the run row (set by image-gen above) — we
+    // only pass `prompt` + the original direct-upload image (if any) here.
+    // Workflow args stay tiny.
     const generateResult = await step.runAction(
       internal.generation.generateInitial,
       {

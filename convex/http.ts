@@ -24,6 +24,35 @@ http.route({
   method: 'GET',
   handler: httpAction(async (ctx, req) => {
     const url = new URL(req.url);
+
+    // /api/runs/:id/source — serve the gpt-image-2 source mockup as PNG
+    const sourceMatch = url.pathname.match(/^\/api\/runs\/([a-z0-9_]+)\/source$/i);
+    if (sourceMatch !== null && sourceMatch[1] !== undefined) {
+      const runId = sourceMatch[1] as Id<'runs'>;
+      const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+      if (run === null || run.sourceImageStorageId === undefined) {
+        return new Response(JSON.stringify({ error: 'no_source_image' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const blob = await ctx.storage.get(run.sourceImageStorageId);
+      if (blob === null) {
+        return new Response(JSON.stringify({ error: 'storage_miss' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(blob, {
+        status: 200,
+        headers: {
+          'content-type': 'image/png',
+          'cache-control': 'private, max-age=300',
+        },
+      });
+    }
+
+    // /api/runs/:id/zip — pack the latest ui_kit + return as a ZIP
     const m = url.pathname.match(/^\/api\/runs\/([a-z0-9_]+)\/zip$/i);
     if (m === null || m[1] === undefined) {
       return new Response(JSON.stringify({ error: 'not_found' }), {
