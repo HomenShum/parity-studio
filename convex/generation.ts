@@ -264,12 +264,29 @@ ${args.sourceHtml.slice(0, 8_000)}`;
 
     const parsed = parseUiKitResponse(result.text);
     if (Object.keys(parsed.files).length === 0) {
-      await ctx.runMutation(internal.runs.updateStatus, {
+      // Soft-fail: the LLM emitted fenced blocks without path annotations
+      // (a known kimi-k2.6 quirk on iterate prompts). The previous ui_kit
+      // is still intact, so don't throw — record the wasted-call telemetry
+      // and let the workflow detect "no new ui_kit" and exit the loop
+      // gracefully with status='done'. Previous behavior conflated this
+      // recoverable LLM-format glitch with a pipeline crash.
+      await ctx.runMutation(internal.runs.recordStageTelemetry, {
         runId: args.runId,
-        status: 'failed',
-        errorMessage: `iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`,
+        stage: `iterate-${args.iterationNumber}-noop`,
+        modelId: result.modelUsed,
+        provider: result.provider,
+        costMicroUsd: result.costMicroUsd,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        latencyMs: Date.now() - iterateStartedAt,
+        stageStartedAt: iterateStartedAt,
       });
-      throw new Error(`iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+      return {
+        iterationNumber: args.iterationNumber,
+        slug: '',
+        fileCount: 0,
+        costMicroUsd: result.costMicroUsd,
+      };
     }
 
     await ctx.runMutation(internal.uiKits.save, {

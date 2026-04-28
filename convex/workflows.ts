@@ -244,18 +244,25 @@ export const parityStudioWorkflow = workflow.define({
       );
 
       const status = report?.status ?? 'unavailable';
+      // 'needs_iteration' and 'failed' are both "parity below threshold,
+      // re-decompose with gaps as feedback" — iterate is exactly the tool
+      // for this. Don't conflate parity_reports.status ('failed' = low
+      // quality) with runs.status ('failed' = pipeline crashed). The
+      // pipeline DID succeed; the score is just low.
       const shouldIterate =
-        status === 'needs_iteration' && iterationNumber < MAX_ITERATIONS;
+        (status === 'needs_iteration' || status === 'failed') &&
+        iterationNumber < MAX_ITERATIONS;
 
       if (!shouldIterate) {
         // Either parity is good enough, OR we've hit the iteration cap.
-        // Either way, finalize the run honestly with the iteration count
-        // that was actually completed.
+        // Always finalize as 'done' — the run completed end-to-end, the
+        // ui_kit is produced, the parity report carries the honest score.
+        // Only actual thrown exceptions in stages flip runs.status to 'failed'.
         await step.runMutation(
           internal.runs.updateStatus,
           {
             runId: args.runId,
-            status: status === 'failed' ? 'failed' : 'done',
+            status: 'done',
             iterationsCompleted: iterationNumber,
           },
           { inline: true },
@@ -286,13 +293,34 @@ export const parityStudioWorkflow = workflow.define({
         { inline: true },
       );
       if (nextUiKit === null) {
-        // iterate should have written one — treat as terminal failure
+        // No ui_kit at all — terminal failure (shouldn't happen since
+        // decompose already wrote one earlier in this run).
         await step.runMutation(
           internal.runs.updateStatus,
           {
             runId: args.runId,
             status: 'failed',
             errorMessage: 'iterate produced no ui_kit',
+            iterationsCompleted: iterationNumber - 1,
+          },
+          { inline: true },
+        );
+        return;
+      }
+      // If iterate soft-failed (LLM emitted fenced blocks without path
+      // annotations, parser skipped them), getLatestInternal still
+      // returns the PREVIOUS ui_kit. Detect that and exit the loop with
+      // status='done' rather than wasting another iterate call on the
+      // same ui_kit. The previous ui_kit and its parity report remain
+      // visible to the user; iterationsCompleted reflects what actually
+      // changed (i.e. previous count, since this iteration produced no
+      // new artifact).
+      if (nextUiKit._id === currentUiKitId) {
+        await step.runMutation(
+          internal.runs.updateStatus,
+          {
+            runId: args.runId,
+            status: 'done',
             iterationsCompleted: iterationNumber - 1,
           },
           { inline: true },
