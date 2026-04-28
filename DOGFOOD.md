@@ -94,36 +94,6 @@ This is the boolean rubric working as designed: one failed content check honestl
 - That the pipeline is production-cost-efficient yet. $0.40-$0.43 per full run is fine for proof; it scales linearly with iter count, decompose model size, and judge model size. Cheaper-tier runs (Kimi K2.6 + Gemini Flash) cost ~$0.05-0.10 but trade off parity score (see `BENCHMARKS.md` once we port it from `feat/decompose-to-ui-kit`).
 - That the platform can recover from large parity drops yet. The iterate stage is a v0.0.2 placeholder; a true gap-driven re-decompose with feedback loop is v0.0.3.
 
-## v0.0.3 — composer dogfood (recursive)
-
-The platform was used to design its own next major surface: an agentic
-sidebar chat composer (threads rail + tab strip + answer-first hero +
-inline citations + composer chips + tweaks panel). Same dogfood method
-as v0.0.2: prompt → gpt-image-2 → claude-opus-4-1 decompose → claude-sonnet-4-5
-visual judge → wire output back into the platform.
-
-| Stage | Model | Latency | Cost |
-|---|---|---:|---:|
-| Source mockup | `gpt-image-2` (1536x1024 high) | 143 s | $0.135 |
-| Decompose | `claude-opus-4-1` | 141 s | $0.622 |
-| Render | Playwright chromium | 1.4 s | $0 |
-| Judge | `claude-sonnet-4-5` | 19 s | $0.025 |
-| **Total** | | **~305 s** | **$0.78** |
-
-Result:
-- **parityScore = 1.00**, status = `verified`, 12/12 visual judge checks passed (1 iter, threshold 0.85)
-- Judge summary: *"The candidate is a very close match to the source, preserving all major layout regions, color palette, typography hierarchy, content sections, and component structures. No significant gaps were found."*
-- Output: `ui_kits/nodebench-ai-dashboard/{index.html, components/{Badge.tsx, CompanyCard.tsx, ThreadItem.tsx}, tokens.css, manifest.json, README.md}`
-- Receipts in `runs/composer-dogfood/{source.png, rendered.png, parity.json}`
-
-The wire-in: `src/components/composer/ChatComposerSurface.tsx` preserves the platform-emitted DOM hierarchy and class names verbatim (`cc-` prefix added to avoid clash with the existing workspace shell). CSS dropped into `src/composer-styles.css` from the index.html `<style>` block. App.tsx now renders `ChatComposerSurface` as the only surface — old workspace components (FilesPanel, PreviewPane, ActionSidebar) sit dormant in `src/components/*` waiting for a follow-up that wires their useQuery hooks into the composer's threads/cards/sources slots.
-
-### Honest scope tradeoffs
-
-- **In-app pipeline stalled** during the parallel attempt to dogfood through the live Convex pipeline (3 runs, all stuck after image-gen completes). Image-gen + storage round-trip + claude-sonnet-4-5 vision call — one of those silently hangs in the workflow runtime past the 7-minute mark. Filed as v0.0.4 P0. Workaround: offline PoC pipeline (used for this dogfood) is reliable.
-- **Composer is static placeholder data** for v0.0.3 — the threads list is the same DISCO/Mercor/Everlaw/Turing/EU AI Act set the platform-emitted ui_kit shipped with. Per-design wiring (Convex `runs` → threads, `parityReports` → branches counter, `comments` → top cards) is the v0.0.4 follow-up.
-- **Library duplication smell** noted from the Antonio "scattered tool wiring" video pattern: 4 files duplicated between `convex/lib/*` and `mcp/src/lib/*` (`parityChecker.ts`, `uiKitParser.ts`, `prompts.ts`, plus `piAi.ts`/`llmClient.ts`). Right fix: extract `packages/parity-core/` workspace package, both consumers import from it. Filed as v0.0.4 refactor.
-
 ## Reproduce
 
 ```bash

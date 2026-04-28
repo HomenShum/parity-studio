@@ -20,13 +20,6 @@ export const start = mutation({
     sourceImageMimeType: v.optional(
       v.union(v.literal('image/png'), v.literal('image/jpeg'), v.literal('image/webp')),
     ),
-    /**
-     * Opt-in: generate a mockup via gpt-image-2 before the generate stage.
-     * Only effective when sourceImageBase64 is NOT supplied (you bring an
-     * image OR we make one — never both). Adds ~$0.16 + ~30s but the
-     * mockup-grounded artifacts score noticeably higher.
-     */
-    generateMockupFirst: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const hasPrompt = (args.prompt?.trim().length ?? 0) > 0;
@@ -60,7 +53,6 @@ export const start = mutation({
         ...(args.sourceImageMimeType !== undefined
           ? { sourceImageMimeType: args.sourceImageMimeType }
           : {}),
-        ...(args.generateMockupFirst === true ? { generateMockupFirst: true } : {}),
       },
     );
     await ctx.db.patch(runId, { workflowId: workflowId.toString() });
@@ -145,14 +137,6 @@ export const iterateWithComments = mutation({
       iterationsCompleted: run.iterationsCompleted + 1,
     });
     return runId;
-  },
-});
-
-/** Internal: persist the storageId of a generated source image on the run row. */
-export const setSourceImageStorageId = internalMutation({
-  args: { runId: v.id('runs'), storageId: v.id('_storage') },
-  handler: async (ctx, { runId, storageId }) => {
-    await ctx.db.patch(runId, { sourceImageStorageId: storageId });
   },
 });
 
