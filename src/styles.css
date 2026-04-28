@@ -473,3 +473,201 @@ body {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/*
+ * AgentChatSidebar — additive left rail (v0.0.4).
+ * Scoped under .agent-chat-* to avoid clashing with .sidebar / .section /
+ * .tab classes used by the existing 3-column workspace.
+ */
+.agent-chat-rail {
+  width: 248px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.agent-chat-rail-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.agent-chat-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agent-chat-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
+
+.agent-chat-brand-word {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.agent-chat-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg) 6px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+
+.agent-chat-add {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-text-secondary);
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.agent-chat-add:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+}
+
+.agent-chat-thread-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px var(--space-sm) var(--space-md);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.agent-chat-thread {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.agent-chat-thread:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-primary);
+}
+
+.agent-chat-thread.active {
+  background: rgba(201, 100, 66, 0.08);
+  border-left-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.agent-chat-thread-title {
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.agent-chat-thread-meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.agent-chat-composer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.agent-chat-composer-input {
+  width: 100%;
+  resize: none;
+  background: var(--color-bg-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  transition: border-color 0.15s ease;
+}
+
+.agent-chat-composer-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.agent-chat-composer-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.agent-chat-composer-send {
+  align-self: flex-end;
+  background: var(--color-accent);
+  border: none;
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.agent-chat-composer-send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.agent-chat-composer-send:hover:not(:disabled) {
+  opacity: 0.92;
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
 import { ActionSidebar } from './components/ActionSidebar';
+import { AgentChatSidebar } from './components/AgentChatSidebar';
 import { FilesPanel } from './components/FilesPanel';
 import { InputBar } from './components/InputBar';
 import { PreviewPane } from './components/PreviewPane';
@@ -24,6 +25,9 @@ export default function App() {
       <TopBar />
       <InputBar onRunStarted={setCurrentRunId} />
       <main className="main-content" id="main-content">
+        <aside className="agent-chat-rail" aria-label="Agent chat threads">
+          <AgentChatSidebar />
+        </aside>
         <aside className="sidebar" aria-label="Files and handoff">
           <FilesPanel runId={currentRunId} />
         </aside>
