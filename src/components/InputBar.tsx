@@ -1,4 +1,4 @@
-import { useMutation } from 'convex/react';
+import { useAction, useMutation } from 'convex/react';
 import { useState } from 'react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
@@ -18,11 +18,13 @@ const MAX_INLINE_IMAGE_BYTES = 2_000_000;
 
 export function InputBar({ onRunStarted }: InputBarProps) {
   const startRun = useMutation(api.runs.start);
+  const generateImage = useAction(api.generation.generateSourceImage);
   const [prompt, setPrompt] = useState('');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMime, setImageMime] = useState<'image/png' | 'image/jpeg' | 'image/webp' | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -73,7 +75,27 @@ export function InputBar({ onRunStarted }: InputBarProps) {
     }
   }
 
-  const canRun = !busy && (prompt.trim().length > 0 || imageBase64 !== null);
+  async function onGenerateImage() {
+    setError(null);
+    if (prompt.trim().length === 0) {
+      setError('type a prompt first, then click Generate image');
+      return;
+    }
+    setGenBusy(true);
+    try {
+      const result = await generateImage({ prompt: prompt.trim() });
+      setImageBase64(result.base64);
+      setImageMime(result.mimeType);
+      setImageName(`gpt-image-2 (${(result.costMicroUsd / 1_000_000).toFixed(2)} USD)`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
+  const canRun = !busy && !genBusy && (prompt.trim().length > 0 || imageBase64 !== null);
+  const canGenImage = !busy && !genBusy && prompt.trim().length > 0;
 
   return (
     <>
@@ -88,6 +110,17 @@ export function InputBar({ onRunStarted }: InputBarProps) {
             aria-label="Upload source image for the pipeline"
           />
         </label>
+        <button
+          type="button"
+          className="source-button"
+          onClick={onGenerateImage}
+          disabled={!canGenImage}
+          title="Generate a source image with gpt-image-2 from the prompt below"
+          aria-label="Generate source image with gpt-image-2"
+        >
+          <span aria-hidden="true">{genBusy ? '...' : '✨'}</span>
+          <span>{genBusy ? 'generating image...' : 'generate image'}</span>
+        </button>
         <input
           type="text"
           className="input-field"

@@ -23,6 +23,7 @@ export const create = mutation({
     artifactVersion: v.number(),
     text: v.string(),
     bbox: v.optional(BBOX_SCHEMA),
+    targetFile: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (args.text.trim().length === 0) {
@@ -31,11 +32,15 @@ export const create = mutation({
     if (args.text.length > 1_000) {
       throw new Error('comments:create text capped at 1000 chars');
     }
+    if (args.targetFile !== undefined && args.targetFile.length > 200) {
+      throw new Error('comments:create targetFile capped at 200 chars');
+    }
     return await ctx.db.insert('comments', {
       runId: args.runId,
       artifactVersion: args.artifactVersion,
       text: args.text.trim(),
       ...(args.bbox !== undefined ? { bbox: args.bbox } : {}),
+      ...(args.targetFile !== undefined ? { targetFile: args.targetFile } : {}),
       status: 'open',
     });
   },

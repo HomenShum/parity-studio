@@ -19,6 +19,7 @@ import { TopBar } from './components/TopBar';
 export default function App() {
   const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(null);
   const [commentModeActive, setCommentModeActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   return (
     <>
@@ -29,10 +30,18 @@ export default function App() {
           <AgentChatSidebar />
         </aside>
         <aside className="sidebar" aria-label="Files and handoff">
-          <FilesPanel runId={currentRunId} />
+          <FilesPanel
+            runId={currentRunId}
+            selectedFile={selectedFile}
+            onSelectFile={setSelectedFile}
+          />
         </aside>
         <section className="center-section" aria-label="Artifact preview">
-          <PreviewPane runId={currentRunId} commentModeActive={commentModeActive} />
+          <PreviewPane
+            runId={currentRunId}
+            commentModeActive={commentModeActive}
+            selectedFile={selectedFile}
+          />
         </section>
         <aside className="right-panel" aria-label="Pipeline status and tools">
           <ActionSidebar

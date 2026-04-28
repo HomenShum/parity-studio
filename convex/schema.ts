@@ -94,6 +94,13 @@ export default defineSchema({
         h: v.number(),
       }),
     ),
+    /**
+     * Optional file path within the latest ui_kit (e.g. "components/Button.tsx").
+     * Set when the user clicks a file in FilesPanel before commenting, so the
+     * iterate prompt can scope the change to that component instead of the whole
+     * artifact. Coexists with bbox — both can be present.
+     */
+    targetFile: v.optional(v.string()),
     status: v.union(v.literal('open'), v.literal('addressed'), v.literal('dismissed')),
   })
     .index('by_run', ['runId'])

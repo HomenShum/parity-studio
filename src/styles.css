@@ -260,6 +260,30 @@ body {
   padding-left: 48px;
 }
 
+button.file {
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+button.file:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-primary);
+}
+
+.file.selected,
+button.file.selected {
+  background: rgba(217, 119, 87, 0.12);
+  color: var(--color-text-primary);
+  border-left: 2px solid var(--color-accent);
+  padding-left: 46px;
+}
+
 .handoff-button {
   background: var(--color-bg-tertiary);
   border: 1px solid rgba(255, 255, 255, 0.1);

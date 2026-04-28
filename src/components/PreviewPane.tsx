@@ -13,6 +13,7 @@ import { CommentOverlay } from './CommentOverlay';
 interface PreviewPaneProps {
   runId: Id<'runs'> | null;
   commentModeActive: boolean;
+  selectedFile?: string | null;
 }
 
 type Viewport = 'desktop' | 'tablet';
@@ -23,7 +24,7 @@ function loadingHtml(label: string): string {
   return `<!doctype html><html><body style="margin:0;font-family:system-ui;background:#1c222b;color:#8d96a0;display:grid;place-items:center;height:100vh"><div style="text-align:center"><div style="font-size:13px;letter-spacing:0.2em;text-transform:uppercase;color:#5b6470;margin-bottom:12px;font-family:monospace">${label}</div><div style="font-size:14px">artifact streaming in...</div></div></body></html>`;
 }
 
-export function PreviewPane({ runId, commentModeActive }: PreviewPaneProps) {
+export function PreviewPane({ runId, commentModeActive, selectedFile }: PreviewPaneProps) {
   const [viewport, setViewport] = useState<Viewport>('desktop');
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
@@ -64,6 +65,22 @@ export function PreviewPane({ runId, commentModeActive }: PreviewPaneProps) {
               comment mode · drag to pin
             </span>
           ) : null}
+          {selectedFile ? (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                padding: '3px 8px',
+                background: 'rgba(34,197,94,0.12)',
+                color: '#22c55e',
+                borderRadius: 4,
+                letterSpacing: '0.04em',
+              }}
+              title="Comments will be scoped to this file"
+            >
+              scoped → {selectedFile}
+            </span>
+          ) : null}
           <div className="preview-tabs" role="tablist" aria-label="Preview viewport">
             {(['desktop', 'tablet'] as const).map((v) => (
               <button
@@ -92,6 +109,7 @@ export function PreviewPane({ runId, commentModeActive }: PreviewPaneProps) {
             runId={runId}
             artifactVersion={artifactVersion}
             active={commentModeActive}
+            targetFile={selectedFile ?? null}
           />
         </div>
       </div>

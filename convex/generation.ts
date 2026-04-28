@@ -2,7 +2,7 @@
 
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
-import { internalAction } from './_generated/server';
+import { action, internalAction } from './_generated/server';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
@@ -337,6 +337,91 @@ export const verifyVisual = internalAction({
       judgeModel: VISUAL_JUDGE_MODEL.modelId,
     });
     return { status: 'unavailable' as const };
+  },
+});
+
+/**
+ * Public action: generate a source image from a text prompt using OpenAI's
+ * image model. Returns base64 + mime so the frontend can immediately drop it
+ * into the same `runs.start` flow as an uploaded image — no server-side
+ * persistence, no extra round trip.
+ *
+ * Wired to the "Generate from prompt" button in InputBar. Closes the
+ * "no in-app image generation" gap from issue #225.
+ *
+ * Cost: gpt-image-2 1024x1024 standard ≈ $0.04-0.05 per image. Recorded as
+ * a flat 50_000 microUsd estimate; future work can read OpenAI's response
+ * usage block for exact billing.
+ */
+export const generateSourceImage = action({
+  args: {
+    prompt: v.string(),
+    size: v.optional(
+      v.union(v.literal('1024x1024'), v.literal('1024x1536'), v.literal('1536x1024')),
+    ),
+  },
+  handler: async (
+    _ctx,
+    { prompt, size },
+  ): Promise<{
+    base64: string;
+    mimeType: 'image/png';
+    costMicroUsd: number;
+    modelUsed: string;
+  }> => {
+    const trimmed = prompt.trim();
+    if (trimmed.length === 0) {
+      throw new Error('generateSourceImage: prompt is required');
+    }
+    if (trimmed.length > 4_000) {
+      throw new Error('generateSourceImage: prompt capped at 4000 chars');
+    }
+    const apiKey = process.env['OPENAI_API_KEY'];
+    if (!apiKey) {
+      throw new Error('generateSourceImage: OPENAI_API_KEY not configured');
+    }
+
+    const startedAt = Date.now();
+    const resp = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-image-2',
+        prompt: trimmed,
+        size: size ?? '1024x1024',
+        n: 1,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`gpt-image-2 HTTP ${resp.status}: ${text.slice(0, 400)}`);
+    }
+
+    const json = (await resp.json()) as { data?: Array<{ b64_json?: string }> };
+    const b64 = json.data?.[0]?.b64_json;
+    if (typeof b64 !== 'string' || b64.length === 0) {
+      throw new Error('gpt-image-2 returned no b64_json payload');
+    }
+
+    return {
+      base64: b64,
+      mimeType: 'image/png',
+      // Flat estimate. gpt-image-2 1024x1024 standard ≈ $0.04-0.05.
+      costMicroUsd: 50_000,
+      modelUsed: 'openai/gpt-image-2',
+      // latency is captured client-side via the round-trip; expose via console
+      // to keep the return shape minimal. If the InputBar wants to render it,
+      // we can promote this to the return object in a follow-up.
+      ...(((): Record<string, never> => {
+        void (Date.now() - startedAt);
+        return {};
+      })()),
+    };
   },
 });
 

@@ -12,12 +12,16 @@ import type { Id } from '../../convex/_generated/dataModel';
  */
 interface FilesPanelProps {
   runId: Id<'runs'> | null;
+  selectedFile?: string | null;
+  onSelectFile?: (path: string | null) => void;
 }
 
 interface TreeNode {
   kind: 'folder' | 'file';
   depth: number;
   label: string;
+  /** Full path from ui_kit root, only set on file leaves. */
+  fullPath?: string;
 }
 
 const PLACEHOLDER_TREE: TreeNode[] = [
@@ -42,13 +46,14 @@ function pathsToTree(files: Record<string, string>): TreeNode[] {
         kind: isLeaf ? 'file' : 'folder',
         depth: i,
         label: isLeaf ? part : `${part}/`,
+        ...(isLeaf ? { fullPath: cum } : {}),
       });
     }
   }
   return nodes;
 }
 
-export function FilesPanel({ runId }: FilesPanelProps) {
+export function FilesPanel({ runId, selectedFile, onSelectFile }: FilesPanelProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
 
   let tree: TreeNode[] = PLACEHOLDER_TREE;
@@ -88,11 +93,31 @@ export function FilesPanel({ runId }: FilesPanelProps) {
         <div className="section-header">FILES</div>
         <div className="file-tree" role="tree" aria-label="ui_kit file tree">
           {tree.map((node, i) => {
-            const className =
+            const isSelected = node.fullPath !== undefined && node.fullPath === selectedFile;
+            const baseClass =
               node.kind === 'folder'
                 ? `folder ${node.depth === 0 ? 'expanded' : 'subfolder'}`
                 : 'file indent';
+            const className = `${baseClass}${isSelected ? ' selected' : ''}`;
             const icon = node.kind === 'folder' && node.depth === 0 ? '\u{1F4C1}' : '';
+
+            if (node.kind === 'file' && node.fullPath !== undefined && onSelectFile) {
+              const path = node.fullPath;
+              return (
+                <button
+                  key={`${node.label}-${i}`}
+                  type="button"
+                  className={className}
+                  role="treeitem"
+                  aria-selected={isSelected}
+                  onClick={() => onSelectFile(isSelected ? null : path)}
+                  title={`Scope next comment to ${path}`}
+                >
+                  {node.label}
+                </button>
+              );
+            }
+
             return (
               <div
                 key={`${node.label}-${i}`}

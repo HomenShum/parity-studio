@@ -17,6 +17,8 @@ interface CommentOverlayProps {
   runId: Id<'runs'> | null;
   artifactVersion: number;
   active: boolean;
+  /** Optional ui_kit file path to scope the next comment to (set via FilesPanel click). */
+  targetFile?: string | null;
 }
 
 interface DraftBbox {
@@ -26,7 +28,7 @@ interface DraftBbox {
   curY: number;
 }
 
-export function CommentOverlay({ runId, artifactVersion, active }: CommentOverlayProps) {
+export function CommentOverlay({ runId, artifactVersion, active, targetFile }: CommentOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState<DraftBbox | null>(null);
   const [pendingBbox, setPendingBbox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -87,6 +89,7 @@ export function CommentOverlay({ runId, artifactVersion, active }: CommentOverla
         artifactVersion: number;
         text: string;
         bbox?: { x: number; y: number; w: number; h: number };
+        targetFile?: string;
       } = {
         runId,
         artifactVersion,
@@ -95,6 +98,9 @@ export function CommentOverlay({ runId, artifactVersion, active }: CommentOverla
       // Drop bbox if the user opted to comment on the whole artifact
       if (!(pendingBbox.x === 0 && pendingBbox.y === 0 && pendingBbox.w === 1 && pendingBbox.h === 1)) {
         args.bbox = pendingBbox;
+      }
+      if (targetFile && targetFile.length > 0) {
+        args.targetFile = targetFile;
       }
       await create(args);
       setPendingBbox(null);

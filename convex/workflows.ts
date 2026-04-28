@@ -76,15 +76,18 @@ export const iterateWithCommentsWorkflow = workflow.define({
     // Fold comments into the gap feedback list. Each comment becomes a
     // high-severity 'comment' kind so the iterate prompt prioritizes them
     // alongside any verifier-flagged gaps from the previous parity report.
-    const commentGaps = openComments.map((c, i) => ({
-      kind: 'comment',
-      severity: 'high',
-      message: `[user comment ${i + 1}${
-        c.bbox
-          ? ` @ bbox(${c.bbox.x.toFixed(2)},${c.bbox.y.toFixed(2)} ${c.bbox.w.toFixed(2)}x${c.bbox.h.toFixed(2)})`
-          : ''
-      }] ${c.text}`,
-    }));
+    const commentGaps = openComments.map((c, i) => {
+      const fileTag = c.targetFile ? ` on ${c.targetFile}` : '';
+      const bboxTag = c.bbox
+        ? ` @ bbox(${c.bbox.x.toFixed(2)},${c.bbox.y.toFixed(2)} ${c.bbox.w.toFixed(2)}x${c.bbox.h.toFixed(2)})`
+        : '';
+      return {
+        kind: 'comment',
+        severity: 'high',
+        message: `[user comment ${i + 1}${fileTag}${bboxTag}] ${c.text}`,
+        ...(c.targetFile ? { targetFile: c.targetFile } : {}),
+      };
+    });
     const verifierGaps = (previousReport?.gaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
     const allGaps = [...commentGaps, ...verifierGaps];
 
