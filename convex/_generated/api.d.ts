@@ -9,9 +9,12 @@
  */
 
 import type * as artifacts from "../artifacts.js";
+import type * as chat from "../chat.js";
+import type * as chatLoop from "../chatLoop.js";
 import type * as comments from "../comments.js";
 import type * as generation from "../generation.js";
 import type * as http from "../http.js";
+import type * as lib_canonicalShape from "../lib/canonicalShape.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
 import type * as lib_prompts from "../lib/prompts.js";
@@ -29,9 +32,12 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
+  chat: typeof chat;
+  chatLoop: typeof chatLoop;
   comments: typeof comments;
   generation: typeof generation;
   http: typeof http;
+  "lib/canonicalShape": typeof lib_canonicalShape;
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;
   "lib/prompts": typeof lib_prompts;

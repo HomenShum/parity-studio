@@ -1,8 +1,9 @@
-import { Code, Eye, Folder } from 'lucide-react';
+import { Bot, Code, Eye, Folder } from 'lucide-react';
 import { useState } from 'react';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
 import { ArtifactPreview } from './ArtifactPreview';
+import { ChatPanel } from './ChatPanel';
 import { FilesView } from './FilesView';
 import { LandingGuidance } from './LandingGuidance';
 import { SourceImagePopover } from './SourceImagePopover';
@@ -15,12 +16,13 @@ interface CanvasPanelProps {
   commentModeActive: boolean;
 }
 
-type Tab = 'files' | 'preview' | 'code';
+type Tab = 'files' | 'preview' | 'code' | 'chat';
 
 const TAB_META: Record<Tab, { label: string; Icon: typeof Folder }> = {
   files: { label: 'Files', Icon: Folder },
   preview: { label: 'preview', Icon: Eye },
   code: { label: 'code', Icon: Code },
+  chat: { label: 'chat', Icon: Bot },
 };
 
 export function CanvasPanel({
@@ -143,7 +145,7 @@ export function CanvasPanel({
               commentModeActive={commentModeActive}
             />
           </div>
-        ) : (
+        ) : tab === 'code' ? (
           <div
             style={{
               width: '100%',
@@ -157,6 +159,20 @@ export function CanvasPanel({
             }}
           >
             <FileEditor runId={runId} selectedFile={selectedFile} />
+          </div>
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              minWidth: 0,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box',
+            }}
+          >
+            <ChatPanel runId={runId} />
           </div>
         )}
 

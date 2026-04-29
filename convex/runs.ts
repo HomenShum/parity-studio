@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
+import { expandToCanonicalShape } from './lib/canonicalShape';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
 
@@ -131,14 +132,34 @@ export const startFromKit = mutation({
       sizeBytes: indexHtml.length,
     });
 
+    // Expand the imported kit into the full canonical shape so the
+    // chat agent can patch any preview/, assets/, or explorations/
+    // file from day one. Imported kit files override regenerated
+    // shape on conflicts (the spread below puts `files` last).
+    const importCanonical = expandToCanonicalShape({
+      slug: args.slug,
+      kitFiles: files,
+      run: {
+        runId: String(runId),
+        prompt: args.prompt,
+        costMicroUsd: 0,
+        iterationsCompleted: 0,
+        sourceImageMimeType: args.sourceImageMimeType,
+        hasSourceImage: Boolean(args.sourceImageBase64),
+      },
+      parity: null,
+      artifacts: [],
+    });
+    const importFullShape = { ...importCanonical, ...files };
+
     // Insert ui_kit row with cost = 0.
-    const fileCount = Object.keys(files).length;
+    const fileCount = Object.keys(importFullShape).length;
     await ctx.db.insert('ui_kits', {
       runId,
       artifactVersion: 0,
       slug: args.slug,
       schemaVersion: 1,
-      files,
+      files: importFullShape,
       fileCount,
       decomposeCostMicroUsd: 0,
     });

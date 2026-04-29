@@ -116,6 +116,46 @@ export default defineSchema({
     .index('by_run', ['runId'])
     .index('by_run_status', ['runId', 'status']),
 
+  /**
+   * Conversation log per run. Drives the ChatPanel surface — user turns,
+   * assistant turns (with optional tool calls), and tool result turns.
+   * The agent's tool calls (read_file, patch_file, upsert_file,
+   * iterate_now, list_files) act on the run's ui_kit row, so any edit
+   * is atomic and round-trips through the canonical-shape exporter.
+   */
+  chat_messages: defineTable({
+    runId: v.id('runs'),
+    role: v.union(v.literal('user'), v.literal('assistant'), v.literal('tool')),
+    /** Plain text content. Empty string allowed for tool turns whose
+     * payload is fully captured in toolName/toolArgs/toolResult. */
+    content: v.string(),
+    /** For assistant turns: the tool calls the model emitted alongside
+     * (or instead of) prose. Each entry has id + name + args (JSON). */
+    toolCalls: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          args: v.string(),
+        }),
+      ),
+    ),
+    /** For tool turns: the call id this result corresponds to. */
+    toolCallId: v.optional(v.string()),
+    /** For tool turns: short label of the tool (e.g. 'patch_file'). */
+    toolName: v.optional(v.string()),
+    /** Optional model + provider tag for assistant turns. */
+    modelId: v.optional(v.string()),
+    provider: v.optional(v.string()),
+    /** Provider-reported cost for this turn, if any. */
+    costMicroUsd: v.optional(v.number()),
+    /** Turn index, monotonic per run. Lets the UI keep order without
+     * needing to rely on _creationTime stability under high write rate. */
+    turn: v.number(),
+  })
+    .index('by_run_turn', ['runId', 'turn'])
+    .index('by_run', ['runId']),
+
   parity_reports: defineTable({
     runId: v.id('runs'),
     uiKitId: v.id('ui_kits'),

@@ -3,6 +3,7 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
+import { expandToCanonicalShape } from './lib/canonicalShape';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
@@ -123,12 +124,33 @@ export const decompose = internalAction({
       throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
     }
 
+    // Expand to the full canonical shape so the chat agent can patchFile
+    // any preview/, assets/, or explorations/ path atomically. Kit code
+    // wins over canonical-shape regeneration on conflicts (the spread
+    // order below makes the parsed kit files override).
+    const runRow = await ctx.runQuery(internal.runs.getInternal, { runId });
+    const canonical = expandToCanonicalShape({
+      slug: parsed.slug,
+      kitFiles: parsed.files,
+      run: {
+        runId: String(runId),
+        prompt: runRow?.prompt,
+        costMicroUsd: runRow?.costMicroUsd ?? 0,
+        iterationsCompleted: runRow?.iterationsCompleted ?? 0,
+        sourceImageMimeType: runRow?.sourceImageMimeType,
+        hasSourceImage: Boolean(runRow?.sourceImageBase64),
+      },
+      parity: null,
+      artifacts: [],
+    });
+    const fullShape = { ...canonical, ...parsed.files };
+
     await ctx.runMutation(internal.uiKits.save, {
       runId,
       artifactVersion,
       slug: parsed.slug,
       schemaVersion: 1,
-      files: parsed.files,
+      files: fullShape,
       decomposeCostMicroUsd: result.costMicroUsd,
     });
     await ctx.runMutation(internal.runs.recordStageTelemetry, {
@@ -293,6 +315,25 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       };
     }
 
+    // Expand to canonical shape on iterate too, so each new ui_kit row
+    // is fully addressable from the chat agent.
+    const iterRunRow = await ctx.runQuery(internal.runs.getInternal, { runId: args.runId });
+    const iterCanonical = expandToCanonicalShape({
+      slug: parsed.slug,
+      kitFiles: parsed.files,
+      run: {
+        runId: String(args.runId),
+        prompt: iterRunRow?.prompt,
+        costMicroUsd: iterRunRow?.costMicroUsd ?? 0,
+        iterationsCompleted: args.iterationNumber,
+        sourceImageMimeType: iterRunRow?.sourceImageMimeType,
+        hasSourceImage: Boolean(iterRunRow?.sourceImageBase64),
+      },
+      parity: null,
+      artifacts: [],
+    });
+    const iterFullShape = { ...iterCanonical, ...parsed.files };
+
     await ctx.runMutation(internal.uiKits.save, {
       runId: args.runId,
       // Bump artifactVersion so getLatest disambiguates this iteration's ui_kit
@@ -301,7 +342,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       artifactVersion: args.iterationNumber + 1,
       slug: parsed.slug,
       schemaVersion: 1,
-      files: parsed.files,
+      files: iterFullShape,
       decomposeCostMicroUsd: result.costMicroUsd,
     });
     await ctx.runMutation(internal.runs.recordStageTelemetry, {

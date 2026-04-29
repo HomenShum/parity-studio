@@ -95,3 +95,70 @@ export const getLatestInternal = internalQuery({
       .first();
   },
 });
+
+/**
+ * Atomic upsert across the full canonical shape. Adds the path if it
+ * doesn't exist; replaces content if it does. Caps content at 200KB
+ * to keep the ui_kit row under Convex doc-size limits when many
+ * files accumulate.
+ *
+ * Used by the chat agent's patch_file tool — needs to be able to
+ * create new specimen pages (e.g. `preview/component-NewThing.html`)
+ * as well as edit existing ones. patchFile keeps the existing-only
+ * semantic for safety; this mutation is the explicit-create variant.
+ */
+export const upsertFile = mutation({
+  args: {
+    uiKitId: v.id('ui_kits'),
+    path: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, { uiKitId, path, content }) => {
+    if (path.length === 0 || path.length > 200) {
+      throw new Error('uiKits:upsertFile path must be 1..200 chars');
+    }
+    if (content.length > 200_000) {
+      throw new Error('uiKits:upsertFile content capped at 200000 chars');
+    }
+    const kit = await ctx.db.get(uiKitId);
+    if (kit === null) throw new Error(`ui_kit ${uiKitId} not found`);
+    const files = { ...((kit.files as Record<string, string>) ?? {}) };
+    const created = !(path in files);
+    files[path] = content;
+    await ctx.db.patch(uiKitId, {
+      files,
+      fileCount: Object.keys(files).length,
+    });
+    return { path, sizeBytes: content.length, created };
+  },
+});
+
+/**
+ * Internal mirror of upsertFile so the chat agent's tool loop (running
+ * inside an action) can patch files without ctx-bridging.
+ */
+export const upsertFileInternal = internalMutation({
+  args: {
+    uiKitId: v.id('ui_kits'),
+    path: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, { uiKitId, path, content }) => {
+    if (path.length === 0 || path.length > 200) {
+      throw new Error('uiKits:upsertFileInternal path must be 1..200 chars');
+    }
+    if (content.length > 200_000) {
+      throw new Error('uiKits:upsertFileInternal content capped at 200000 chars');
+    }
+    const kit = await ctx.db.get(uiKitId);
+    if (kit === null) throw new Error(`ui_kit ${uiKitId} not found`);
+    const files = { ...((kit.files as Record<string, string>) ?? {}) };
+    const created = !(path in files);
+    files[path] = content;
+    await ctx.db.patch(uiKitId, {
+      files,
+      fileCount: Object.keys(files).length,
+    });
+    return { path, sizeBytes: content.length, created };
+  },
+});
