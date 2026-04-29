@@ -33,6 +33,14 @@ export const start = mutation({
       ...(args.sourceImageStorageId !== undefined
         ? { sourceImageStorageId: args.sourceImageStorageId }
         : {}),
+      // Persist inline source image so the SourceImagePopover can render
+      // it alongside the scoped component without a separate roundtrip.
+      ...(args.sourceImageBase64 !== undefined
+        ? { sourceImageBase64: args.sourceImageBase64 }
+        : {}),
+      ...(args.sourceImageMimeType !== undefined
+        ? { sourceImageMimeType: args.sourceImageMimeType }
+        : {}),
       status: 'queued',
       costMicroUsd: 0,
       iterationsCompleted: 0,

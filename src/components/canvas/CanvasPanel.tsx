@@ -4,6 +4,8 @@ import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
 import { ArtifactPreview } from './ArtifactPreview';
 import { FilesView } from './FilesView';
+import { LandingGuidance } from './LandingGuidance';
+import { SourceImagePopover } from './SourceImagePopover';
 
 interface CanvasPanelProps {
   runId: Id<'runs'> | null;
@@ -109,13 +111,17 @@ export function CanvasPanel({
               overflow: 'auto',
             }}
           >
-            <FilesView
-              runId={runId}
-              selectedFile={selectedFile}
-              onSelectFile={onSelectFile}
-              zoom={zoom}
-              commentModeActive={commentModeActive}
-            />
+            {runId === null ? (
+              <LandingGuidance />
+            ) : (
+              <FilesView
+                runId={runId}
+                selectedFile={selectedFile}
+                onSelectFile={onSelectFile}
+                zoom={zoom}
+                commentModeActive={commentModeActive}
+              />
+            )}
           </div>
         ) : tab === 'preview' ? (
           <div
@@ -153,6 +159,10 @@ export function CanvasPanel({
             <FileEditor runId={runId} selectedFile={selectedFile} />
           </div>
         )}
+
+        {/* SourceImagePopover floats bottom-right of the canvas pane.
+            Self-hides when there's no run, no scoped file, or no source. */}
+        <SourceImagePopover runId={runId} selectedFile={selectedFile} />
       </div>
     </section>
   );

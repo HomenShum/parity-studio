@@ -26,6 +26,16 @@ export default defineSchema({
   runs: defineTable({
     prompt: v.optional(v.string()),
     sourceImageStorageId: v.optional(v.id('_storage')),
+    /**
+     * Inline source-image bytes, persisted so the canvas can render the
+     * original sketch alongside whatever component is currently scoped
+     * (the SourceImagePopover). Same 2 MB cap as runs.start. For larger
+     * images, sourceImageStorageId is the path forward.
+     */
+    sourceImageBase64: v.optional(v.string()),
+    sourceImageMimeType: v.optional(
+      v.union(v.literal('image/png'), v.literal('image/jpeg'), v.literal('image/webp')),
+    ),
     status: v.union(...RUN_STATUSES.map((s) => v.literal(s))),
     workflowId: v.optional(v.string()),
     streamId: v.optional(v.string()),
