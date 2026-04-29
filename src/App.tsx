@@ -1,56 +1,103 @@
 import { useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
-import { ActionSidebar } from './components/ActionSidebar';
-import { AgentChatSidebar } from './components/AgentChatSidebar';
-import { FilesPanel } from './components/FilesPanel';
-import { InputBar } from './components/InputBar';
-import { PreviewPane } from './components/PreviewPane';
-import { TopBar } from './components/TopBar';
+import { Breadcrumb } from './components/Breadcrumb';
+import { CanvasPanel } from './components/canvas/CanvasPanel';
+import { HeaderActions } from './components/HeaderActions';
+import { ParityPanel } from './components/parity/ParityPanel';
+import { PipelinePanel } from './components/pipeline/PipelinePanel';
+import { Wordmark } from './components/Wordmark';
 
 /**
- * App layout structure verbatim from the platform-generated index.html
- * (parity-studio-before run, claude-opus-4-1 decompose). Container classes
- * match the platform's CSS one-to-one.
+ * App shell — reference layout (docs/plans/2026-04-28-shell-revamp-from-reference.md).
  *
- * State: `currentRunId` is the single piece of app state. InputBar.onRunStarted
- * sets it; all three panels (FilesPanel, PreviewPane, ActionSidebar) read it
- * and run their own useQuery against the matching Convex function.
+ *   ┌──────────────────────────────────────────┐
+ *   │  TopBar (h: 64px)                        │
+ *   ├────────────┬─────────────┬───────────────┤
+ *   │  Pipeline  │   Canvas    │   Parity      │
+ *   │   Panel    │   Panel     │   Panel       │
+ *   │  (296 px)  │   (1fr)     │  (432 px)     │
+ *   └────────────┴─────────────┴───────────────┘
  */
 export default function App() {
   const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(null);
   const [commentModeActive, setCommentModeActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(100);
+  const [starred, setStarred] = useState(false);
+
+  const breadcrumbTitle = currentRunId
+    ? 'Reimagine recording demo into parity UI kit'
+    : 'New design session';
+
+  function convexHttpBase(): string | null {
+    const fromEnv = import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined;
+    if (fromEnv) return fromEnv.replace(/\/$/, '');
+    const wsUrl = (import.meta.env['VITE_CONVEX_URL'] as string | undefined) ?? '';
+    if (!wsUrl) return null;
+    return wsUrl.replace('.convex.cloud', '.convex.site').replace(/\/$/, '');
+  }
+  const httpBase = convexHttpBase();
+  const exportHref =
+    currentRunId !== null && httpBase ? `${httpBase}/api/runs/${currentRunId}/zip` : '#';
 
   return (
-    <>
-      <TopBar />
-      <InputBar onRunStarted={setCurrentRunId} />
-      <main className="main-content" id="main-content">
-        <aside className="agent-chat-rail" aria-label="Agent chat threads">
-          <AgentChatSidebar />
-        </aside>
-        <aside className="sidebar" aria-label="Files and handoff">
-          <FilesPanel
-            runId={currentRunId}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
-          />
-        </aside>
-        <section className="center-section" aria-label="Artifact preview">
-          <PreviewPane
-            runId={currentRunId}
-            commentModeActive={commentModeActive}
-            selectedFile={selectedFile}
-          />
-        </section>
-        <aside className="right-panel" aria-label="Pipeline status and tools">
-          <ActionSidebar
-            runId={currentRunId}
-            commentModeActive={commentModeActive}
-            onToggleCommentMode={() => setCommentModeActive((v) => !v)}
-          />
-        </aside>
-      </main>
-    </>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'var(--layout-pipeline-width) 1fr var(--layout-parity-width)',
+        gridTemplateRows: 'var(--size-titlebar-height) 1fr',
+        height: '100vh',
+        background: 'var(--color-background)',
+        color: 'var(--color-text-primary)',
+        fontFamily: 'var(--font-sans)',
+      }}
+    >
+      <header
+        style={{
+          gridColumn: '1 / -1',
+          gridRow: 1,
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'center',
+          gap: 'var(--space-6)',
+          padding: '0 var(--space-6)',
+          background: 'var(--color-background)',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <Wordmark />
+        <Breadcrumb title={breadcrumbTitle} starred={starred} onToggleStar={() => setStarred((v) => !v)} />
+        <HeaderActions
+          commentModeActive={commentModeActive}
+          onToggleCommentMode={() => setCommentModeActive((v) => !v)}
+          zoom={zoom}
+          onZoomChange={setZoom}
+          exportHref={exportHref}
+          exportEnabled={currentRunId !== null && httpBase !== null}
+        />
+      </header>
+
+      <div style={{ gridColumn: 1, gridRow: 2, minHeight: 0, minWidth: 0, display: 'flex' }}>
+        <PipelinePanel
+          currentRunId={currentRunId}
+          onSelectRun={setCurrentRunId}
+          onRunStarted={setCurrentRunId}
+        />
+      </div>
+
+      <div style={{ gridColumn: 2, gridRow: 2, minHeight: 0, minWidth: 0, display: 'flex' }}>
+        <CanvasPanel
+          runId={currentRunId}
+          selectedFile={selectedFile}
+          onSelectFile={setSelectedFile}
+          zoom={zoom}
+          commentModeActive={commentModeActive}
+        />
+      </div>
+
+      <div style={{ gridColumn: 3, gridRow: 2, minHeight: 0, minWidth: 0, display: 'flex' }}>
+        <ParityPanel runId={currentRunId} />
+      </div>
+    </div>
   );
 }
