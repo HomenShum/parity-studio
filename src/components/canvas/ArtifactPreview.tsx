@@ -50,6 +50,70 @@ export function ArtifactPreview({
     return tag + html;
   }
 
+  // When comment mode is on, inject a tiny helper script that captures
+  // clicks on any element, computes its normalized rect inside the iframe
+  // viewport, and posts a `parity:element-click` message to the parent.
+  // CommentOverlay listens for these and shows an anchored quick-action
+  // bubble. Without this, comment mode would only support drag-bbox.
+  function injectCommentHelper(html: string, on: boolean): string {
+    if (!on) return html;
+    const script = `<script data-parity-comment-helper="on">
+(function(){
+  if (window.__parityCommentHelper) return;
+  window.__parityCommentHelper = true;
+  var hover = null;
+  var hoverRing = document.createElement('div');
+  hoverRing.style.cssText = 'position:fixed;pointer-events:none;border:2px dashed #C76D54;border-radius:4px;z-index:2147483647;transition:all 80ms ease;';
+  function attach() { if (document.body && !hoverRing.parentNode) document.body.appendChild(hoverRing); }
+  function setHover(el) {
+    if (!el || el === hover) return;
+    hover = el;
+    var r = el.getBoundingClientRect();
+    hoverRing.style.left = r.left + 'px';
+    hoverRing.style.top = r.top + 'px';
+    hoverRing.style.width = r.width + 'px';
+    hoverRing.style.height = r.height + 'px';
+  }
+  document.addEventListener('mousemove', function(e){ attach(); setHover(e.target); }, true);
+  document.addEventListener('click', function(e){
+    if (!e.target || e.target === hoverRing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var el = e.target;
+    var r = el.getBoundingClientRect();
+    var W = document.documentElement.clientWidth || window.innerWidth || 1;
+    var H = document.documentElement.clientHeight || window.innerHeight || 1;
+    var label = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    function buildSelector(node) {
+      if (!node || !node.tagName) return '';
+      if (node.id) return '#' + node.id;
+      var sel = node.tagName.toLowerCase();
+      if (node.className && typeof node.className === 'string') {
+        var cls = node.className.trim().split(/\\s+/).slice(0, 2).join('.');
+        if (cls) sel += '.' + cls;
+      }
+      return sel;
+    }
+    window.parent.postMessage({
+      type: 'parity:element-click',
+      selector: buildSelector(el),
+      tagName: el.tagName,
+      text: label,
+      rect: {
+        x: Math.max(0, Math.min(1, r.left / W)),
+        y: Math.max(0, Math.min(1, r.top / H)),
+        w: Math.max(0, Math.min(1, r.width / W)),
+        h: Math.max(0, Math.min(1, r.height / H))
+      }
+    }, '*');
+  }, true);
+})();
+</script>
+`;
+    if (html.includes('</body>')) return html.replace('</body>', `${script}</body>`);
+    return html + script;
+  }
+
   let srcDoc = PLACEHOLDER_HTML;
   let versionLabel = 'v0';
   let artifactVersion = 0;
@@ -59,7 +123,10 @@ export function ArtifactPreview({
     } else if (artifact === null) {
       srcDoc = loadingHtml(run?.status ?? 'queued');
     } else {
-      srcDoc = injectLiveTokens(artifact.html, liveTokensCss);
+      srcDoc = injectCommentHelper(
+        injectLiveTokens(artifact.html, liveTokensCss),
+        commentModeActive,
+      );
       versionLabel = `v${artifact.version}`;
       artifactVersion = artifact.version;
     }
@@ -129,7 +196,7 @@ export function ArtifactPreview({
             <iframe
               title="artifact preview"
               srcDoc={srcDoc}
-              sandbox="allow-same-origin"
+              sandbox={commentModeActive ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
               style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
             />
           </div>

@@ -1,11 +1,16 @@
-import { ChevronDown, Download, MessageSquare } from 'lucide-react';
+import { ChevronDown, Download, FileCode2, FileText, MessageSquare, Package } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface HeaderActionsProps {
   commentModeActive: boolean;
   onToggleCommentMode: () => void;
   zoom: number;
   onZoomChange: (next: number) => void;
-  exportHref: string;
+  /**
+   * Base path of the run's HTTP routes — e.g. https://blissful-pig-998.convex.site/api/runs/<runId>
+   * The dropdown appends `/zip`, `/html`, `/markdown` per format.
+   */
+  exportHrefBase: string;
   exportEnabled: boolean;
 }
 
@@ -27,18 +32,54 @@ const PILL: React.CSSProperties = {
   transition: 'background var(--duration-faster) var(--ease-out)',
 };
 
+const FORMATS = [
+  {
+    id: 'zip' as const,
+    label: 'Canonical ZIP',
+    sublabel: 'Full skill-pack — round-trips back into Parity Studio',
+    Icon: Package,
+  },
+  {
+    id: 'html' as const,
+    label: 'Single HTML',
+    sublabel: 'index.html with tokens inlined; drop into a CMS',
+    Icon: FileCode2,
+  },
+  {
+    id: 'markdown' as const,
+    label: 'Markdown',
+    sublabel: 'Prose handoff for coding agents',
+    Icon: FileText,
+  },
+];
+
 /**
  * Top-bar right cluster: Comment mode · zoom · Export.
- * Mirrors the reference exactly.
+ * Export is now a dropdown with 3 formats: ZIP / HTML / Markdown.
  */
 export function HeaderActions({
   commentModeActive,
   onToggleCommentMode,
   zoom,
   onZoomChange,
-  exportHref,
+  exportHrefBase,
   exportEnabled,
 }: HeaderActionsProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Click-outside to close
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   return (
     <div
       style={{
@@ -86,31 +127,108 @@ export function HeaderActions({
         <ChevronDown size={13} aria-hidden />
       </label>
 
-      {exportEnabled ? (
-        <a
-          href={exportHref}
-          download
-          style={{
-            ...PILL,
-            textDecoration: 'none',
-          }}
-        >
-          <Download size={13} />
-          Export
-        </a>
-      ) : (
-        <span
-          style={{
-            ...PILL,
-            opacity: 0.5,
-            cursor: 'not-allowed',
-          }}
-          aria-disabled
-        >
-          <Download size={13} />
-          Export
-        </span>
-      )}
+      <div ref={wrapRef} style={{ position: 'relative' }}>
+        {exportEnabled ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            style={PILL}
+          >
+            <Download size={13} />
+            Export
+            <ChevronDown size={12} aria-hidden style={{ marginLeft: 2 }} />
+          </button>
+        ) : (
+          <span
+            style={{
+              ...PILL,
+              opacity: 0.5,
+              cursor: 'not-allowed',
+            }}
+            aria-disabled
+          >
+            <Download size={13} />
+            Export
+          </span>
+        )}
+        {open && exportEnabled ? (
+          <div
+            role="menu"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              right: 0,
+              minWidth: 280,
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-elevated)',
+              padding: 4,
+              zIndex: 40,
+            }}
+          >
+            {FORMATS.map((f) => {
+              const { Icon } = f;
+              return (
+                <a
+                  key={f.id}
+                  role="menuitem"
+                  href={`${exportHrefBase}/${f.id}`}
+                  download
+                  onClick={() => setOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    textDecoration: 'none',
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 'var(--font-size-body-sm)',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLAnchorElement).style.background = 'var(--color-surface-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      display: 'inline-grid',
+                      placeItems: 'center',
+                      width: 28,
+                      height: 28,
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--color-accent-soft)',
+                      color: 'var(--color-accent)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon size={13} />
+                  </span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <span style={{ fontWeight: 500 }}>{f.label}</span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--color-text-secondary)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {f.sublabel}
+                    </span>
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

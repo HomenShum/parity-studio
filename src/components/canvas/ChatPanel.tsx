@@ -2,6 +2,7 @@ import { useMutation, useQuery } from 'convex/react';
 import {
   ArrowUp,
   Bot,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   FileEdit,
@@ -24,6 +25,7 @@ const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
   list_files: { Icon: FolderTree, label: 'list_files' },
   read_file: { Icon: FileText, label: 'read_file' },
   upsert_file: { Icon: FileEdit, label: 'upsert_file' },
+  done: { Icon: CheckCircle2, label: 'done' },
   iterate_now: { Icon: Sparkles, label: 'iterate_now' },
 };
 

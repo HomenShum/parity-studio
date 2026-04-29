@@ -18,6 +18,7 @@ import type * as lib_canonicalShape from "../lib/canonicalShape.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
 import type * as lib_prompts from "../lib/prompts.js";
+import type * as lib_staticLint from "../lib/staticLint.js";
 import type * as lib_uiKitParser from "../lib/uiKitParser.js";
 import type * as parityReports from "../parityReports.js";
 import type * as runs from "../runs.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;
   "lib/prompts": typeof lib_prompts;
+  "lib/staticLint": typeof lib_staticLint;
   "lib/uiKitParser": typeof lib_uiKitParser;
   parityReports: typeof parityReports;
   runs: typeof runs;

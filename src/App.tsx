@@ -57,8 +57,8 @@ export default function App() {
     return wsUrl.replace('.convex.cloud', '.convex.site').replace(/\/$/, '');
   }
   const httpBase = convexHttpBase();
-  const exportHref =
-    currentRunId !== null && httpBase ? `${httpBase}/api/runs/${currentRunId}/zip` : '#';
+  const exportHrefBase =
+    currentRunId !== null && httpBase ? `${httpBase}/api/runs/${currentRunId}` : '#';
 
   return (
     <div
@@ -92,7 +92,7 @@ export default function App() {
           onToggleCommentMode={() => setCommentModeActive((v) => !v)}
           zoom={zoom}
           onZoomChange={setZoom}
-          exportHref={exportHref}
+          exportHrefBase={exportHrefBase}
           exportEnabled={currentRunId !== null && httpBase !== null}
         />
       </header>

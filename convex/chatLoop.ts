@@ -16,6 +16,7 @@ import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { internalAction } from './_generated/server';
 import { usdToMicroUsd } from './lib/piAi';
+import { lintKit } from './lib/staticLint';
 
 // Same provider/model knobs as the pipeline. Override via Convex env:
 //   npx convex env set CHAT_PROVIDER anthropic
@@ -39,6 +40,7 @@ Tools at your disposal:
 - list_files() — every path in the kit
 - read_file({ path }) — content (capped at 30 KB inline for context)
 - upsert_file({ path, content }) — atomic write; creates if new, replaces if existing. Cap: 200 KB.
+- done({ paths? }) — runs static lint over the kit (or specified paths). Use AFTER making edits to confirm no syntax errors / a11y regressions / dangling debug statements. Returns { status: 'ok' | 'has_warnings' | 'has_errors', findings: [...] }. If status='has_errors', fix and call again.
 - iterate_now() — guidance only; user-driven via the right-rail Iterate now button
 
 Conventions:
@@ -67,6 +69,16 @@ const TOOLS: Tool[] = [
     parameters: Type.Object({
       path: Type.String({ description: 'Path inside the kit. 1..200 chars.' }),
       content: Type.String({ description: 'New file content. Capped at 200 KB.' }),
+    }),
+  },
+  {
+    name: 'done',
+    description:
+      'Run static lint across the kit (HTML/JSX structural balance, duplicate ids, img missing alt, button accessible name, a without href, brace balance, leftover console/debugger, JSON.parse). Returns status + findings. Call AFTER editing to self-verify. If status="has_errors", fix the listed issues and call again before declaring complete.',
+    parameters: Type.Object({
+      paths: Type.Optional(
+        Type.Array(Type.String(), { description: 'Optional subset of paths. Empty = lint every file in the kit.' }),
+      ),
     }),
   },
   {
@@ -274,6 +286,18 @@ async function executeTool(
         content,
       });
       return `${result.created ? 'created' : 'updated'} ${path} (${result.sizeBytes} bytes)`;
+    }
+    case 'done': {
+      const paths = Array.isArray(args['paths']) ? (args['paths'] as string[]) : undefined;
+      const report = lintKit(files, paths);
+      const head = `${report.summary} [status: ${report.status}]`;
+      if (report.findings.length === 0) return head;
+      const lines = report.findings
+        .slice(0, 50)
+        .map((f) => `  ${f.severity.toUpperCase()} ${f.path}:${f.line} [${f.rule}] ${f.message}`)
+        .join('\n');
+      const more = report.findings.length > 50 ? `\n…+${report.findings.length - 50} more findings (call done with narrower paths to drill in)` : '';
+      return `${head}\n${lines}${more}`;
     }
     case 'iterate_now':
       return 'iterate_now is user-driven — surface the suggestion in your reply and the user can hit the Iterate now button in the right rail.';
