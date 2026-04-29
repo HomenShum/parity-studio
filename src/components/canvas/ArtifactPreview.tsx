@@ -4,13 +4,22 @@ import { useMemo } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { CommentOverlay } from '../CommentOverlay';
+import type { Device } from '../HeaderActions';
 
 interface ArtifactPreviewProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   zoom: number;
+  device: Device;
   commentModeActive: boolean;
 }
+
+/** Reference device viewport dimensions in CSS px. */
+const DEVICE_BOUNDS: Record<Device, { width: number; height: number; bezel: number }> = {
+  desktop: { width: 0, height: 0, bezel: 0 }, // 0 = fill available
+  tablet: { width: 820, height: 1180, bezel: 18 },
+  phone: { width: 390, height: 844, bezel: 14 },
+};
 
 const PLACEHOLDER_HTML = `<!doctype html><html><body style="margin:0;font-family:system-ui;background:#FAF7F3;color:#7a6f64;display:grid;place-items:center;height:100vh"><div style="text-align:center"><div style="font-size:13px;letter-spacing:0.2em;text-transform:uppercase;color:#a89c8e;margin-bottom:12px;font-family:monospace">artifact preview</div><div style="font-size:18px;font-family:'Times New Roman',serif">Run a pipeline to see the rendered ui_kit here.</div></div></body></html>`;
 
@@ -22,6 +31,7 @@ export function ArtifactPreview({
   runId,
   selectedFile,
   zoom,
+  device,
   commentModeActive,
 }: ArtifactPreviewProps) {
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
@@ -176,37 +186,153 @@ export function ArtifactPreview({
           boxShadow: 'var(--shadow-card)',
         }}
       >
+        {device === 'desktop' ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              overflow: 'auto',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: 'top center',
+                position: 'relative',
+              }}
+            >
+              <iframe
+                title="artifact preview"
+                srcDoc={srcDoc}
+                sandbox={commentModeActive ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
+                style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
+              />
+              <CommentOverlay
+                runId={runId}
+                artifactVersion={artifactVersion}
+                active={commentModeActive}
+                targetFile={selectedFile ?? null}
+              />
+            </div>
+          </div>
+        ) : (
+          <DeviceFrame
+            device={device}
+            zoom={zoom}
+            commentModeActive={commentModeActive}
+            srcDoc={srcDoc}
+            runId={runId}
+            artifactVersion={artifactVersion}
+            targetFile={selectedFile ?? null}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * DeviceFrame — render the iframe inside a chrome bezel sized to the
+ * target device viewport (390×844 phone, 820×1180 tablet). The iframe
+ * gets the device's CSS pixel size so media queries fire correctly;
+ * an outer wrapper scales-to-fit the available canvas area at the
+ * user's chosen zoom level.
+ */
+function DeviceFrame({
+  device,
+  zoom,
+  srcDoc,
+  commentModeActive,
+  runId,
+  artifactVersion,
+  targetFile,
+}: {
+  device: Device;
+  zoom: number;
+  srcDoc: string;
+  commentModeActive: boolean;
+  runId: Id<'runs'> | null;
+  artifactVersion: number;
+  targetFile: string | null;
+}) {
+  const { width, height, bezel } = DEVICE_BOUNDS[device];
+  const radius = device === 'phone' ? 44 : 24;
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'auto',
+        padding: 24,
+        background:
+          'radial-gradient(ellipse at center, var(--color-surface-active), var(--color-background-secondary))',
+      }}
+    >
+      <div
+        style={{
+          transform: `scale(${zoom / 100})`,
+          transformOrigin: 'center center',
+        }}
+      >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            overflow: 'auto',
+            position: 'relative',
+            width,
+            height,
+            padding: bezel,
+            background: '#1a1a1a',
+            borderRadius: radius,
+            boxShadow:
+              '0 24px 48px rgba(0,0,0,0.18), 0 8px 16px rgba(0,0,0,0.10), inset 0 0 0 2px rgba(255,255,255,0.04)',
           }}
         >
           <div
             style={{
+              position: 'relative',
               width: '100%',
               height: '100%',
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
+              borderRadius: radius - bezel + 2,
+              overflow: 'hidden',
+              background: 'var(--color-artifact-bg)',
             }}
           >
             <iframe
               title="artifact preview"
               srcDoc={srcDoc}
               sandbox={commentModeActive ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
-              style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
+              style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', display: 'block' }}
+            />
+            <CommentOverlay
+              runId={runId}
+              artifactVersion={artifactVersion}
+              active={commentModeActive}
+              targetFile={targetFile}
             />
           </div>
+          {device === 'phone' ? (
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: bezel + 6,
+                transform: 'translateX(-50%)',
+                width: 100,
+                height: 24,
+                background: '#000',
+                borderRadius: 12,
+                pointerEvents: 'none',
+              }}
+            />
+          ) : null}
         </div>
-        <CommentOverlay
-          runId={runId}
-          artifactVersion={artifactVersion}
-          active={commentModeActive}
-          targetFile={selectedFile ?? null}
-        />
       </div>
     </div>
   );

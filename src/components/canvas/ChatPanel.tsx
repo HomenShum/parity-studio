@@ -2,14 +2,18 @@ import { useMutation, useQuery } from 'convex/react';
 import {
   ArrowUp,
   Bot,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Circle,
   FileEdit,
   FilePlus2,
   FileText,
   FolderTree,
+  ListChecks,
   type LucideIcon,
+  Palette,
   Sparkles,
   Wrench,
 } from 'lucide-react';
@@ -24,7 +28,9 @@ interface ChatPanelProps {
 const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
   list_files: { Icon: FolderTree, label: 'list_files' },
   read_file: { Icon: FileText, label: 'read_file' },
+  read_design_system: { Icon: Palette, label: 'read_design_system' },
   upsert_file: { Icon: FileEdit, label: 'upsert_file' },
+  set_todos: { Icon: ListChecks, label: 'set_todos' },
   done: { Icon: CheckCircle2, label: 'done' },
   iterate_now: { Icon: Sparkles, label: 'iterate_now' },
 };
@@ -386,6 +392,18 @@ function ToolCallCard({ call }: { call: { id: string; name: string; args: string
 }
 
 function ToolResultRow({ message }: { message: MessageRow }) {
+  // Set_todos special-case: render an inline checklist instead of plain text.
+  if (message.toolName === 'set_todos' && message.content.startsWith('__todos__:')) {
+    try {
+      const items = JSON.parse(message.content.slice('__todos__:'.length)) as Array<{
+        text: string;
+        checked: boolean;
+      }>;
+      return <TodosChecklist items={items} />;
+    } catch {
+      // fall through to default text rendering
+    }
+  }
   const [open, setOpen] = useState(false);
   const meta = TOOL_META[message.toolName ?? ''] ?? { Icon: Wrench, label: message.toolName ?? 'tool' };
   const { Icon } = meta;
@@ -438,6 +456,81 @@ function ToolResultRow({ message }: { message: MessageRow }) {
           {message.content}
         </pre>
       ) : null}
+    </div>
+  );
+}
+
+function TodosChecklist({ items }: { items: Array<{ text: string; checked: boolean }> }) {
+  if (items.length === 0) {
+    return (
+      <div
+        style={{
+          marginLeft: 38,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--color-text-faint)',
+        }}
+      >
+        (set_todos called with empty list)
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        marginLeft: 38,
+        background: 'var(--color-surface-hover)',
+        border: '1px solid var(--color-border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: 'var(--tracking-eyebrow)',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-secondary)',
+          marginBottom: 2,
+        }}
+      >
+        <ListChecks size={11} />
+        Plan ({items.filter((i) => i.checked).length}/{items.length})
+      </div>
+      {items.map((it, i) => (
+        <div
+          key={`${i}-${it.text.slice(0, 20)}`}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            fontFamily: 'var(--font-sans)',
+            fontSize: 'var(--font-size-body-sm)',
+            color: it.checked ? 'var(--color-text-faint)' : 'var(--color-text-primary)',
+            textDecoration: it.checked ? 'line-through' : 'none',
+            lineHeight: 1.5,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              flexShrink: 0,
+              marginTop: 2,
+              color: it.checked ? 'var(--color-success)' : 'var(--color-text-faint)',
+            }}
+          >
+            {it.checked ? <Check size={13} /> : <Circle size={13} />}
+          </span>
+          <span>{it.text}</span>
+        </div>
+      ))}
     </div>
   );
 }

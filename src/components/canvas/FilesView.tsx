@@ -218,6 +218,7 @@ export function FilesView({
         runId={runId}
         selectedFile={selectedFile}
         zoom={zoom}
+        device="desktop"
         commentModeActive={commentModeActive}
       />
     </div>

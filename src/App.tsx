@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
 import { Breadcrumb } from './components/Breadcrumb';
 import { CanvasPanel } from './components/canvas/CanvasPanel';
-import { HeaderActions } from './components/HeaderActions';
+import { HeaderActions, type Device } from './components/HeaderActions';
 import { ParityPanel } from './components/parity/ParityPanel';
 import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { Wordmark } from './components/Wordmark';
@@ -28,6 +28,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
   const [starred, setStarred] = useState(false);
+  const [device, setDevice] = useState<Device>('desktop');
 
   // Reflect currentRunId into the URL so the active session is shareable
   // and a deep-linked screenshot/demo can boot straight into context.
@@ -92,6 +93,8 @@ export default function App() {
           onToggleCommentMode={() => setCommentModeActive((v) => !v)}
           zoom={zoom}
           onZoomChange={setZoom}
+          device={device}
+          onDeviceChange={setDevice}
           exportHrefBase={exportHrefBase}
           exportEnabled={currentRunId !== null && httpBase !== null}
         />
@@ -111,6 +114,7 @@ export default function App() {
           selectedFile={selectedFile}
           onSelectFile={setSelectedFile}
           zoom={zoom}
+          device={device}
           commentModeActive={commentModeActive}
         />
       </div>

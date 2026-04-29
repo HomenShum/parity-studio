@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
+import type { Device } from '../HeaderActions';
 import { ArtifactPreview } from './ArtifactPreview';
 import { ChatPanel } from './ChatPanel';
 import { FilesView } from './FilesView';
@@ -16,6 +17,7 @@ interface CanvasPanelProps {
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
   zoom: number;
+  device: Device;
   commentModeActive: boolean;
 }
 
@@ -33,6 +35,7 @@ export function CanvasPanel({
   selectedFile,
   onSelectFile,
   zoom,
+  device,
   commentModeActive,
 }: CanvasPanelProps) {
   const [tab, setTab] = useState<Tab>('files');
@@ -182,6 +185,7 @@ export function CanvasPanel({
                 runId={runId}
                 selectedFile={selectedFile}
                 zoom={zoom}
+                device={device}
                 commentModeActive={commentModeActive}
               />
             </div>

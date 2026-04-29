@@ -1,11 +1,15 @@
-import { ChevronDown, Download, FileCode2, FileText, MessageSquare, Package } from 'lucide-react';
+import { ChevronDown, Download, FileCode2, FileText, MessageSquare, Monitor, Package, Smartphone, Tablet } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+
+export type Device = 'desktop' | 'tablet' | 'phone';
 
 interface HeaderActionsProps {
   commentModeActive: boolean;
   onToggleCommentMode: () => void;
   zoom: number;
   onZoomChange: (next: number) => void;
+  device: Device;
+  onDeviceChange: (next: Device) => void;
   /**
    * Base path of the run's HTTP routes — e.g. https://blissful-pig-998.convex.site/api/runs/<runId>
    * The dropdown appends `/zip`, `/html`, `/markdown` per format.
@@ -53,15 +57,24 @@ const FORMATS = [
   },
 ];
 
+const DEVICE_META: Record<Device, { Icon: typeof Monitor; label: string }> = {
+  desktop: { Icon: Monitor, label: 'Desktop' },
+  tablet: { Icon: Tablet, label: 'Tablet' },
+  phone: { Icon: Smartphone, label: 'Phone' },
+};
+
 /**
- * Top-bar right cluster: Comment mode · zoom · Export.
- * Export is now a dropdown with 3 formats: ZIP / HTML / Markdown.
+ * Top-bar right cluster: Comment mode · device · zoom · Export.
+ * Export is a dropdown with 3 formats: ZIP / HTML / Markdown.
+ * Device is a segmented control: Desktop / Tablet / Phone.
  */
 export function HeaderActions({
   commentModeActive,
   onToggleCommentMode,
   zoom,
   onZoomChange,
+  device,
+  onDeviceChange,
   exportHrefBase,
   exportEnabled,
 }: HeaderActionsProps) {
@@ -91,7 +104,7 @@ export function HeaderActions({
       <button
         type="button"
         onClick={onToggleCommentMode}
-        aria-pressed={commentModeActive}
+        aria-pressed={commentModeActive ? 'true' : 'false'}
         style={{
           ...PILL,
           background: commentModeActive ? 'var(--color-accent-soft)' : PILL.background,
@@ -104,6 +117,48 @@ export function HeaderActions({
         <MessageSquare size={13} />
         Comment mode
       </button>
+
+      <div
+        role="radiogroup"
+        aria-label="Preview device"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: 2,
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border-subtle)',
+          height: 32,
+        }}
+      >
+        {(Object.keys(DEVICE_META) as Device[]).map((d) => {
+          const active = d === device;
+          const { Icon, label } = DEVICE_META[d];
+          return (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={active ? 'true' : 'false'}
+              onClick={() => onDeviceChange(d)}
+              title={label}
+              style={{
+                display: 'inline-grid',
+                placeItems: 'center',
+                width: 28,
+                height: 26,
+                borderRadius: 'var(--radius-sm)',
+                background: active ? 'var(--color-accent-soft)' : 'transparent',
+                color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon size={13} />
+            </button>
+          );
+        })}
+      </div>
 
       <label style={{ ...PILL, paddingRight: 8 }}>
         <select
@@ -133,7 +188,7 @@ export function HeaderActions({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-haspopup="menu"
-            aria-expanded={open}
+            aria-expanded={open ? 'true' : 'false'}
             style={PILL}
           >
             <Download size={13} />

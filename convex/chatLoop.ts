@@ -39,7 +39,9 @@ const SYSTEM_PROMPT = `You are the Parity Studio chat agent. The user is iterati
 Tools at your disposal:
 - list_files() — every path in the kit
 - read_file({ path }) — content (capped at 30 KB inline for context)
+- read_design_system() — structured tokens grouped by type (color/spacing/radius/typography/etc.) parsed from tokens.css. Use this BEFORE upsert_file when you need to know what tokens are available; cheaper than read_file on tokens.css.
 - upsert_file({ path, content }) — atomic write; creates if new, replaces if existing. Cap: 200 KB.
+- set_todos({ items }) — publish a checklist of in-progress steps; renders as a visible checklist in the chat. items: [{ text, checked: boolean }]. Use for multi-step plans; replaces the previous todo list.
 - done({ paths? }) — runs static lint over the kit (or specified paths). Use AFTER making edits to confirm no syntax errors / a11y regressions / dangling debug statements. Returns { status: 'ok' | 'has_warnings' | 'has_errors', findings: [...] }. If status='has_errors', fix and call again.
 - iterate_now() — guidance only; user-driven via the right-rail Iterate now button
 
@@ -69,6 +71,25 @@ const TOOLS: Tool[] = [
     parameters: Type.Object({
       path: Type.String({ description: 'Path inside the kit. 1..200 chars.' }),
       content: Type.String({ description: 'New file content. Capped at 200 KB.' }),
+    }),
+  },
+  {
+    name: 'read_design_system',
+    description:
+      'Returns a compact structured view of the kit\'s design tokens — colors, spacing, radii, typography, motion, semantic — parsed from tokens.css. Use BEFORE upsert_file when picking values that should match existing tokens.',
+    parameters: Type.Object({}),
+  },
+  {
+    name: 'set_todos',
+    description:
+      'Publish a checklist for the user to watch progress on a multi-step task. Replaces the prior list. Each item has { text: string, checked: boolean }. Aim for 3–7 items.',
+    parameters: Type.Object({
+      items: Type.Array(
+        Type.Object({
+          text: Type.String(),
+          checked: Type.Boolean(),
+        }),
+      ),
     }),
   },
   {
@@ -286,6 +307,51 @@ async function executeTool(
         content,
       });
       return `${result.created ? 'created' : 'updated'} ${path} (${result.sizeBytes} bytes)`;
+    }
+    case 'read_design_system': {
+      // Find the active slug's tokens.css and group declarations by type.
+      const slug = uiKit.slug;
+      const tokensCss = files[`ui_kits/${slug}/tokens.css`] ?? '';
+      if (tokensCss.length === 0) return 'no tokens.css in kit';
+      const decl = /--([a-z][a-z0-9-]*)\s*:\s*([^;]+);/gi;
+      const groups: Record<string, Array<{ name: string; value: string }>> = {
+        color: [], spacing: [], radius: [], typography: [], motion: [], shadow: [], semantic: [], other: [],
+      };
+      for (const m of tokensCss.matchAll(decl)) {
+        const name = `--${m[1]}`;
+        const value = (m[2] ?? '').trim();
+        let bucket = 'other';
+        if (/(color|accent|brand|surface|border|background|text|fill)/i.test(name) || /^(#|oklch|rgb|hsl)/i.test(value)) bucket = 'color';
+        else if (/^(space|gap|size)/i.test(name.replace(/^--/, ''))) bucket = 'spacing';
+        else if (/^radius/i.test(name.replace(/^--/, ''))) bucket = 'radius';
+        else if (/^(font|text|leading|tracking)/i.test(name.replace(/^--/, ''))) bucket = 'typography';
+        else if (/^(duration|ease|motion)/i.test(name.replace(/^--/, ''))) bucket = 'motion';
+        else if (/^shadow/i.test(name.replace(/^--/, ''))) bucket = 'shadow';
+        else if (/^(success|warning|error|info|mcp|toast)/i.test(name.replace(/^--/, ''))) bucket = 'semantic';
+        const arr = groups[bucket];
+        if (arr) arr.push({ name, value });
+      }
+      const lines = [`design system for ${slug}:`];
+      for (const [g, list] of Object.entries(groups)) {
+        if (list.length === 0) continue;
+        lines.push(`\n## ${g} (${list.length})`);
+        for (const t of list) lines.push(`  ${t.name}: ${t.value}`);
+      }
+      return lines.join('\n');
+    }
+    case 'set_todos': {
+      const itemsRaw = args['items'];
+      if (!Array.isArray(itemsRaw)) return 'error: set_todos requires items: [{text, checked}]';
+      const items = itemsRaw
+        .filter((it): it is { text: string; checked: boolean } => {
+          if (typeof it !== 'object' || it === null) return false;
+          const o = it as { text?: unknown; checked?: unknown };
+          return typeof o.text === 'string' && typeof o.checked === 'boolean';
+        })
+        .slice(0, 12);
+      // Tool result is JSON so the ChatPanel can render it as a checklist.
+      // Format prefix `__todos__:` lets the renderer detect this shape.
+      return `__todos__:${JSON.stringify(items)}`;
     }
     case 'done': {
       const paths = Array.isArray(args['paths']) ? (args['paths'] as string[]) : undefined;
