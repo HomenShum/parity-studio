@@ -14,6 +14,7 @@ import type * as chatLoop from "../chatLoop.js";
 import type * as comments from "../comments.js";
 import type * as generation from "../generation.js";
 import type * as http from "../http.js";
+import type * as lib_autoRouter from "../lib/autoRouter.js";
 import type * as lib_canonicalShape from "../lib/canonicalShape.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   comments: typeof comments;
   generation: typeof generation;
   http: typeof http;
+  "lib/autoRouter": typeof lib_autoRouter;
   "lib/canonicalShape": typeof lib_canonicalShape;
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;

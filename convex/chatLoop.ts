@@ -14,7 +14,8 @@ import { Type } from '@sinclair/typebox';
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
-import { internalAction } from './_generated/server';
+import { action, internalAction } from './_generated/server';
+import { deploymentTier, resolveModel, sessionPick, type ModelTier } from './lib/autoRouter';
 import { usdToMicroUsd } from './lib/piAi';
 import { lintKit } from './lib/staticLint';
 
@@ -37,14 +38,77 @@ const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropi
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
   (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-4-5' : 'moonshotai/kimi-k2.6');
+// Advisor + Executor envs are read inline at hop time (in runAgentLoop)
+// since the tier resolver is the new default; only fall back to env on
+// explicit override. We keep the ADVISOR_* constants here for the
+// enhance action's fallback chain (ENHANCE_PROVIDER → ADVISOR_PROVIDER →
+// CHAT_PROVIDER → 'anthropic').
 const ADVISOR_PROVIDER = (process.env['CHAT_ADVISOR_PROVIDER'] ?? CHAT_PROVIDER) as
   | 'anthropic'
   | 'openrouter';
 const ADVISOR_MODEL = process.env['CHAT_ADVISOR_MODEL'] ?? CHAT_MODEL;
-const EXECUTOR_PROVIDER = (process.env['CHAT_EXECUTOR_PROVIDER'] ?? CHAT_PROVIDER) as
+
+// Enhance-prompt model — defaults to advisor (cheapest tier in our split).
+// Override on the deployment with CHAT_ENHANCE_PROVIDER + CHAT_ENHANCE_MODEL
+// to point at e.g. claude-haiku or openai/gpt-4o-mini for sub-second rewrites.
+const ENHANCE_PROVIDER = (process.env['CHAT_ENHANCE_PROVIDER'] ?? ADVISOR_PROVIDER) as
   | 'anthropic'
   | 'openrouter';
-const EXECUTOR_MODEL = process.env['CHAT_EXECUTOR_MODEL'] ?? CHAT_MODEL;
+const ENHANCE_MODEL = process.env['CHAT_ENHANCE_MODEL'] ?? ADVISOR_MODEL;
+
+// Verbatim from Kilo Code (packages/opencode/src/kilocode/enhance-prompt.ts).
+// Single instruction; no system identity, no tools, no surrounding chat
+// context — just rewrite. Bare model call mirrors Kilo's `singleCompletionHandler`.
+const ENHANCE_INSTRUCTION =
+  "Generate an enhanced version of this prompt (reply with only the enhanced prompt - no conversation, explanations, lead-in, bullet points, placeholders, or surrounding quotes):";
+
+function cleanEnhanced(text: string): string {
+  // Strip leading/trailing code fences and outer surrounding quotes.
+  const stripped = text.replace(/^```\w*\n?|```$/g, '').trim();
+  return stripped.replace(/^(['"])([\s\S]*)\1$/, '$2').trim();
+}
+
+/**
+ * Public enhance action — single-shot prompt rewrite.
+ *
+ * UX: user types a draft in the ChatPanel composer, clicks the ✨ button.
+ * We call a small/cheap model with the Kilo INSTRUCTION as system prompt
+ * and the user's text as a single user message. Returns the cleaned
+ * rewrite for the frontend to drop into the composer in place of the draft.
+ *
+ * Stateless — does NOT touch chat_messages. The user reviews + edits +
+ * sends via the normal chat:send flow afterwards (matches Kilo's UX:
+ * enhanced prompt is editable, not auto-sent).
+ *
+ * Cost: ~$0.001-$0.005 per call on advisor-tier models. Free-tier route
+ * possible via CHAT_ENHANCE_MODEL=openrouter/<free-slug>.
+ */
+export const enhance = action({
+  args: { text: v.string() },
+  handler: async (_ctx, { text }): Promise<{ text: string; modelUsed: string; provider: string }> => {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) throw new Error('chat:enhance text is empty');
+    if (trimmed.length > 8000) throw new Error('chat:enhance text > 8000 chars');
+
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+    const model = (getModel as any)(ENHANCE_PROVIDER, ENHANCE_MODEL);
+    const ctxObj: Context = {
+      systemPrompt: ENHANCE_INSTRUCTION,
+      messages: [
+        { role: 'user', content: trimmed, timestamp: Date.now() },
+      ],
+    };
+    const result = await piComplete(model, ctxObj, { maxOutputTokens: 1_000 });
+    const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
+    const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
+    if (out.length === 0) {
+      // Some free models return empty on rewrite; fail loudly so the UI
+      // can surface a "couldn't enhance — try again" affordance.
+      throw new Error('chat:enhance produced empty rewrite');
+    }
+    return { text: out, modelUsed: result.model, provider: result.provider };
+  },
+});
 
 const SYSTEM_PROMPT = `You are the Parity Studio chat agent. The user is iterating on a UI kit they generated or imported into parity-studio. The kit lives as a flat map of file paths under one ui_kit row in Convex; you have direct atomic edit access to every path in the canonical NodeBench skill-pack shape:
 
@@ -216,11 +280,26 @@ export const runAgentLoop = internalAction({
       return false;
     })();
 
+    // Resolve tier from run row (per-session pref) → falls back to
+    // deployment-wide PARITY_TIER → defaults to balanced.
+    const runRow = await ctx.runQuery(internal.runs.getInternal, { runId });
+    const tier: ModelTier = (runRow?.tier as ModelTier | undefined) ?? deploymentTier();
+
     const MAX_HOPS = 8;
     for (let hop = 0; hop < MAX_HOPS; hop += 1) {
       const useAdvisor = adviseMode && hop === 0;
-      const provider = useAdvisor ? ADVISOR_PROVIDER : EXECUTOR_PROVIDER;
-      const modelId = useAdvisor ? ADVISOR_MODEL : EXECUTOR_MODEL;
+      // Tier-aware resolution. The autoRouter lives in convex/lib/autoRouter.ts
+      // and curates which underlying model serves each (tier, phase) cell.
+      // Direct env overrides (CHAT_ADVISOR_MODEL / CHAT_EXECUTOR_MODEL) win
+      // over tier defaults, preserving the v1 dual-model knob.
+      const phase = useAdvisor ? 'advise' : 'execute';
+      const baseResolved = sessionPick(String(runId), resolveModel(tier, phase));
+      const provider = useAdvisor
+        ? (process.env['CHAT_ADVISOR_PROVIDER'] ?? baseResolved.provider)
+        : (process.env['CHAT_EXECUTOR_PROVIDER'] ?? baseResolved.provider);
+      const modelId = useAdvisor
+        ? (process.env['CHAT_ADVISOR_MODEL'] ?? baseResolved.modelId)
+        : (process.env['CHAT_EXECUTOR_MODEL'] ?? baseResolved.modelId);
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
       const model = (getModel as any)(provider, modelId);
       const ctxObj: Context = {

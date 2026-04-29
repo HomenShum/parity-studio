@@ -44,6 +44,14 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     finishedAt: v.optional(v.number()),
     /**
+     * Optional tier override for this run. When set, the agent loop +
+     * pipeline use it instead of the deployment-wide PARITY_TIER. UI
+     * lets the user cycle Frontier / Balanced / Free per session.
+     */
+    tier: v.optional(
+      v.union(v.literal('frontier'), v.literal('balanced'), v.literal('free'), v.literal('small')),
+    ),
+    /**
      * Per-stage cost + telemetry breakdown for the cost panel UI.
      * Append-only: each stage push appends one entry; iterate stages
      * append their own. Reads as a flat list ordered by stageStartedAt.

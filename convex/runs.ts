@@ -5,6 +5,28 @@ import { expandToCanonicalShape } from './lib/canonicalShape';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
 
+const TIER_UNION = v.union(
+  v.literal('frontier'),
+  v.literal('balanced'),
+  v.literal('free'),
+  v.literal('small'),
+);
+
+/**
+ * Set or clear the tier on an existing run. Used by the ModelPicker
+ * pill in the chat composer.
+ */
+export const setTier = mutation({
+  args: { runId: v.id('runs'), tier: v.optional(TIER_UNION) },
+  handler: async (ctx, { runId, tier }) => {
+    const run = await ctx.db.get(runId);
+    if (run === null) throw new Error('runs:setTier — run not found');
+    if (tier) await ctx.db.patch(runId, { tier });
+    else await ctx.db.patch(runId, { tier: undefined });
+    return { ok: true };
+  },
+});
+
 const STATUS_UNION = v.union(...RUN_STATUSES.map((s) => v.literal(s)));
 
 export const start = mutation({

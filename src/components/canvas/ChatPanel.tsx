@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import {
   ArrowUp,
   Bot,
@@ -11,9 +11,12 @@ import {
   FilePlus2,
   FileText,
   FolderTree,
+  Gauge,
+  Leaf,
   ListChecks,
   type LucideIcon,
   Palette,
+  Rocket,
   Sparkles,
   Wrench,
 } from 'lucide-react';
@@ -44,11 +47,44 @@ const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
  */
 export function ChatPanel({ runId }: ChatPanelProps) {
   const messages = useQuery(api.chat.list, runId ? { runId } : 'skip');
+  const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const send = useMutation(api.chat.send);
+  const setTier = useMutation(api.runs.setTier);
+  const enhance = useAction(api.chatLoop.enhance);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  type Tier = 'frontier' | 'balanced' | 'free';
+  const TIER_CYCLE: Tier[] = ['balanced', 'frontier', 'free'];
+  const TIER_META: Record<Tier, { Icon: LucideIcon; label: string; sublabel: string }> = {
+    frontier: { Icon: Rocket, label: 'Frontier', sublabel: 'opus + sonnet · best paid' },
+    balanced: { Icon: Gauge, label: 'Balanced', sublabel: 'sonnet + kimi · default' },
+    free: { Icon: Leaf, label: 'Free', sublabel: 'deepseek + qwen · $0' },
+  };
+  const currentTier: Tier = ((run?.tier as Tier | undefined) ?? 'balanced');
+  async function cycleTier() {
+    if (!runId) return;
+    const idx = TIER_CYCLE.indexOf(currentTier);
+    const next = TIER_CYCLE[(idx + 1) % TIER_CYCLE.length] as Tier;
+    await setTier({ runId, tier: next });
+  }
+
+  async function onEnhance() {
+    if (enhancing || draft.trim().length === 0) return;
+    setEnhancing(true);
+    setError(null);
+    try {
+      const result = await enhance({ text: draft });
+      setDraft(result.text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEnhancing(false);
+    }
+  }
 
   // Auto-scroll to the bottom whenever new turns arrive.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new messages
@@ -220,13 +256,87 @@ export function ChatPanel({ runId }: ChatPanelProps) {
           >
             <span
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
                 color: 'var(--color-text-faint)',
               }}
             >
-              {error ?? 'cmd/ctrl + ⏎ to send · agent can read, write, and create any canonical-shape file'}
+              {runId ? (
+                <button
+                  type="button"
+                  onClick={cycleTier}
+                  title={`${TIER_META[currentTier].sublabel} — click to cycle Balanced → Frontier → Free`}
+                  aria-label={`Tier: ${TIER_META[currentTier].label}. Click to cycle.`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: '1px solid var(--color-border-subtle)',
+                    background:
+                      currentTier === 'free'
+                        ? 'var(--color-success-soft, var(--color-surface-hover))'
+                        : currentTier === 'frontier'
+                          ? 'var(--color-accent-soft)'
+                          : 'var(--color-surface-hover)',
+                    color:
+                      currentTier === 'free'
+                        ? 'var(--color-success, var(--color-text-secondary))'
+                        : currentTier === 'frontier'
+                          ? 'var(--color-accent)'
+                          : 'var(--color-text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {(() => {
+                    const { Icon } = TIER_META[currentTier];
+                    return <Icon size={11} />;
+                  })()}
+                  {TIER_META[currentTier].label}
+                </button>
+              ) : null}
+              <span>
+                {error ?? 'cmd/ctrl + ⏎ to send · ✨ rewrites your draft (small-tier)'}
+              </span>
             </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={onEnhance}
+              disabled={enhancing || busy || draft.trim().length === 0}
+              aria-label="Enhance draft via the small-tier model"
+              title="Rewrite your draft into a clearer, more specific prompt before sending (small-tier model, ~$0.002 per call)"
+              style={{
+                display: 'inline-grid',
+                placeItems: 'center',
+                width: 30,
+                height: 30,
+                borderRadius: '50%',
+                background:
+                  enhancing
+                    ? 'var(--color-accent-soft)'
+                    : draft.trim().length === 0
+                      ? 'var(--color-surface-active)'
+                      : 'var(--color-surface-hover)',
+                color:
+                  enhancing
+                    ? 'var(--color-accent)'
+                    : draft.trim().length === 0
+                      ? 'var(--color-text-faint)'
+                      : 'var(--color-text-primary)',
+                border: `1px solid ${enhancing ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+                cursor: enhancing || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
+                animation: enhancing ? 'pulse 1.2s ease-in-out infinite' : 'none',
+              }}
+            >
+              <Sparkles size={13} />
+            </button>
             <button
               type="button"
               onClick={onSubmit}
@@ -252,6 +362,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
             >
               <ArrowUp size={13} />
             </button>
+            </span>
           </div>
         </div>
       </div>
