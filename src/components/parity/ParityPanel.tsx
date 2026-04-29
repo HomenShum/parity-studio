@@ -71,14 +71,25 @@ function buildCheckRows(report: {
     }));
   }
 
-  // Prefer the typed checks array when Sprint 3 ships it
+  // Prefer the typed checks array shipped in Sprint 3
   if (report.checks && report.checks.length > 0) {
-    return report.checks.slice(0, 16).map((c, i) => ({
+    const fixed = report.checks.slice(0, 16).map((c, i) => ({
       number: i + 1,
       label: c.label,
       verdict: c.status,
       evidence: c.evidence ?? [],
     }));
+    // Pad to 16 with unavailable rows if the backend ever ships < 16
+    while (fixed.length < 16) {
+      const idx = fixed.length;
+      fixed.push({
+        number: idx + 1,
+        label: SIXTEEN_LABELS[idx] ?? 'Reserved',
+        verdict: 'unavailable',
+        evidence: [],
+      });
+    }
+    return fixed;
   }
 
   // Sprint 2 fallback: derive from existing report shape, honestly

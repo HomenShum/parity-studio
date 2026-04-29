@@ -188,6 +188,10 @@ export const verifyDeterministic = internalAction({
       summary: report.summary,
       judgeCostMicroUsd: 0,
       judgeModel: 'deterministic',
+      // Sprint 3: persist the 16-row typed rubric so the right-rail
+      // ParityPanel renders honest per-check verdicts + evidence
+      // instead of bucket-derived approximations.
+      checks: report.checks,
     });
     return report;
   },

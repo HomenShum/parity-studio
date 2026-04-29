@@ -117,6 +117,14 @@ export default defineSchema({
     summary: v.string(),
     judgeCostMicroUsd: v.number(),
     judgeModel: v.optional(v.string()),
+    /**
+     * Sprint 3 (2026-04-28): typed 16-row check rubric per
+     * docs/plans/2026-04-28-shell-revamp-from-reference.md §6.
+     * Optional for back-compat with rows written before the rewrite.
+     * Each entry is { id, label, status: 'pass'|'warn'|'fail'|'unavailable',
+     * evidence: string[] }.
+     */
+    checks: v.optional(v.any()),
   })
     .index('by_run_iter', ['runId', 'iterationNumber'])
     .index('by_uikit', ['uiKitId']),
