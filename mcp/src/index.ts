@@ -80,7 +80,46 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.0.1';
+const VERSION = '0.1.0';
+
+// ── Hosted Convex deployment endpoints (used by parity_chat_*, parity_enhance_prompt,
+// parity_run_*, parity_export). Override via env to point at a self-hosted
+// or staging deployment. Public mutations / queries / actions accept POST
+// requests at these URLs without auth.
+const CONVEX_CLOUD_URL =
+  process.env['PARITY_CONVEX_URL'] ?? 'https://blissful-pig-998.convex.cloud';
+const CONVEX_SITE_URL =
+  process.env['PARITY_CONVEX_HTTP_URL'] ?? 'https://blissful-pig-998.convex.site';
+
+/**
+ * Thin Convex HTTP API client. Public functions (no `internal` prefix) are
+ * callable without auth; this is enough for the chat / run / enhance tools.
+ *
+ * Convex API contract:
+ *   POST {deployment}.convex.cloud/api/{query|mutation|action}
+ *   Body: { path: "module:function", args: {...}, format: "json" }
+ *   Response: { status: "success", value: any } | { status: "error", errorMessage: string }
+ */
+async function convexCall(
+  kind: 'query' | 'mutation' | 'action',
+  path: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const url = `${CONVEX_CLOUD_URL}/api/${kind}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, args, format: 'json' }),
+  });
+  if (!res.ok) {
+    throw new Error(`convex ${kind} ${path} → HTTP ${res.status} ${res.statusText}`);
+  }
+  const json = (await res.json()) as { status?: string; value?: unknown; errorMessage?: string };
+  if (json.status === 'error') {
+    throw new Error(`convex ${kind} ${path} → ${json.errorMessage ?? 'unknown error'}`);
+  }
+  return json.value;
+}
 
 // Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
 // for vision judge). Override via env for any tier you prefer:
@@ -798,6 +837,177 @@ async function main() {
     name: 'parity-studio',
     version: VERSION,
   });
+
+  // ── New (v0.1.0) — wraps the hosted Convex web-app services so a coding
+  // agent in Claude Code / Cursor / Windsurf can drive the chat, kick the
+  // advisor-executor auto-fix, list recent runs, fetch any export format,
+  // and rewrite a draft prompt without leaving the editor.
+
+  server.registerTool(
+    'parity_enhance_prompt',
+    {
+      title: 'Rewrite a draft prompt for clarity (Kilo-style)',
+      description:
+        'Stateless. Calls the hosted enhance action which uses a small/cheap model to rewrite a rough prompt into a clearer, more specific version. Returns { text, modelUsed, provider }. Mirrors Kilo Code\'s ✨ enhance feature.',
+      inputSchema: { text: z.string().min(1).max(8000) },
+    },
+    async ({ text }) => {
+      const result = (await convexCall('action', 'chatLoop:enhance', { text })) as {
+        text: string;
+        modelUsed: string;
+        provider: string;
+      };
+      return {
+        content: [
+          { type: 'text', text: result.text },
+          { type: 'text', text: `\n[via ${result.provider}/${result.modelUsed}]` },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'parity_chat_send',
+    {
+      title: 'Send a chat message to the parity-studio agent for a run',
+      description:
+        'Persists a user turn and schedules the agent loop (which has tools: list_files, read_file, read_design_system, upsert_file, set_todos, done). The agent runs server-side and writes assistant + tool turns back. Use parity_chat_history to read what came back.',
+      inputSchema: {
+        runId: z.string().min(20),
+        text: z.string().min(1).max(8000),
+      },
+    },
+    async ({ runId, text }) => {
+      await convexCall('mutation', 'chat:send', { runId, text });
+      return {
+        content: [{ type: 'text', text: `sent — poll parity_chat_history with runId=${runId}` }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'parity_chat_advise',
+    {
+      title: 'Auto-fix via the advisor-executor protocol (advise → execute → verify → close)',
+      description:
+        'Trigger the agent to autonomously plan + execute on a comment, file, or manual prompt. Synthesizes a user turn that begins with "Auto-fix triggered:" so the system prompt activates the 4-phase protocol. Use kind="comment" with commentId for a saved comment, kind="file" with filePath, or kind="manual" with prompt.',
+      inputSchema: {
+        runId: z.string().min(20),
+        kind: z.enum(['comment', 'file', 'manual']),
+        commentId: z.string().optional(),
+        filePath: z.string().optional(),
+        prompt: z.string().optional(),
+      },
+    },
+    async (args) => {
+      await convexCall('mutation', 'chat:startAdviseLoop', args);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `advisor-executor scheduled — poll parity_chat_history for the agent's plan + edits`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'parity_chat_history',
+    {
+      title: 'Read the chat conversation for a run',
+      description:
+        'Returns the chat_messages array (user / assistant / tool turns) for a runId, sorted by turn. Use after parity_chat_send / parity_chat_advise to see what the agent did.',
+      inputSchema: { runId: z.string().min(20), limit: z.number().int().min(1).max(200).optional() },
+    },
+    async ({ runId, limit }) => {
+      const turns = (await convexCall('query', 'chat:list', { runId })) as Array<{
+        turn: number;
+        role: string;
+        toolName?: string;
+        content: string;
+        modelId?: string;
+      }>;
+      const cap = limit ?? 50;
+      const tail = turns.slice(-cap);
+      const lines = tail.map((t) => {
+        const role = t.toolName ? `tool:${t.toolName}` : t.role;
+        const head = t.content.split('\n')[0]?.slice(0, 200) ?? '';
+        return `[${t.turn}] ${role} → ${head}`;
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: lines.length > 0 ? lines.join('\n') : '(no chat history yet)',
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'parity_run_listRecent',
+    {
+      title: 'List recent parity-studio runs',
+      description:
+        'Returns the most recent runs (most-recent first), each with status, prompt, costMicroUsd, iterationsCompleted, and finishedAt. Useful to find a runId to chat / advise / export against.',
+      inputSchema: { limit: z.number().int().min(1).max(50).optional() },
+    },
+    async ({ limit }) => {
+      const runs = (await convexCall('query', 'runs:listRecent', { limit: limit ?? 10 })) as Array<{
+        _id: string;
+        prompt?: string;
+        status: string;
+        costMicroUsd: number;
+        iterationsCompleted: number;
+        finishedAt?: number;
+      }>;
+      const lines = runs.map((r) => {
+        const prompt = (r.prompt ?? '(image-only)').slice(0, 60);
+        const cost = `$${(r.costMicroUsd / 1_000_000).toFixed(4)}`;
+        return `${r._id}  ${r.status.padEnd(12)}  ${cost}  iter=${r.iterationsCompleted}  ${prompt}`;
+      });
+      return {
+        content: [{ type: 'text', text: lines.length > 0 ? lines.join('\n') : '(no runs yet)' }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'parity_export',
+    {
+      title: 'Download a run in canonical zip / single HTML / markdown form',
+      description:
+        'Fetches the export at the chosen format. ZIP = full canonical NodeBench skill-pack (round-trips back into the importer). HTML = single index.html with tokens.css inlined. Markdown = prose handoff for coding agents. Returns the content as text (or base64 for zip).',
+      inputSchema: {
+        runId: z.string().min(20),
+        format: z.enum(['zip', 'html', 'markdown']),
+      },
+    },
+    async ({ runId, format }) => {
+      const url = `${CONVEX_SITE_URL}/api/runs/${runId}/${format}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        return {
+          content: [{ type: 'text', text: `error: HTTP ${res.status} from ${url}` }],
+          isError: true,
+        };
+      }
+      if (format === 'zip') {
+        const buf = await res.arrayBuffer();
+        const b64 = Buffer.from(buf).toString('base64');
+        return {
+          content: [
+            { type: 'text', text: `[zip · ${buf.byteLength} bytes · base64 below]` },
+            { type: 'text', text: b64 },
+          ],
+        };
+      }
+      const body = await res.text();
+      return { content: [{ type: 'text', text: body }] };
+    },
+  );
 
   server.registerTool(
     'parity_pipeline',

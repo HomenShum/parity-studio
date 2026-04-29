@@ -1,8 +1,8 @@
 # parity-studio-mcp
 
-> MCP server for [Parity Studio](../). Lets coding agents (Claude Code, Cursor, Windsurf, any MCP client) generate, decompose, and verify `ui_kit/` bundles directly from a sketch or prompt — without leaving the editor.
+> MCP server for [Parity Studio](../). Lets coding agents (Claude Code, Cursor, Windsurf, any MCP client) generate, decompose, verify, and now also **chat** with `ui_kit/` bundles directly from a sketch or prompt — without leaving the editor.
 
-**Status**: v0.0.1 · stdio transport · 4 tools
+**Status**: v0.1.0 · stdio transport · 10 tools
 
 ## Install
 
@@ -17,14 +17,18 @@ In Claude Code, Cursor, Windsurf, or any MCP client config:
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
-        "PARITY_JUDGE_MODEL": "claude-sonnet-4-5"
+        "PARITY_JUDGE_MODEL": "claude-sonnet-4-5",
+        "PARITY_CONVEX_URL": "https://blissful-pig-998.convex.cloud",
+        "PARITY_CONVEX_HTTP_URL": "https://blissful-pig-998.convex.site"
       }
     }
   }
 }
 ```
 
-You need at least one of: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` — depending on the model ids you use.
+You need at least one of: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` — depending on the model ids you use for the local pipeline (`parity_pipeline`, `parity_decompose`, `parity_verify`).
+
+The new v0.1.0 tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `parity_export`) call the **hosted parity-studio Convex deployment** at `PARITY_CONVEX_URL` (default `blissful-pig-998.convex.cloud`) — no local LLM keys required for those. Override the URLs to point at your own self-hosted deployment.
 
 ## Local dashboard (auto-opens)
 
@@ -85,6 +89,36 @@ Runs deterministic parity checks (element count, visible text coverage, token fi
 ### `parity_export_zip` — pack for handoff
 
 Bundles the `ui_kit` files into a ZIP and returns it as base64. Optionally appends a `HANDOFF.md` with integration instructions for Claude Code / Cursor / Windsurf.
+
+---
+
+### v0.1.0 hosted-Convex tools
+
+These call the hosted parity-studio deployment over HTTP. No local LLM keys required.
+
+### `parity_enhance_prompt` — Kilo-style ✨ rewrite
+
+Stateless. Takes a rough draft prompt and returns a clearer, more specific rewrite using the deployment's `chatLoop:enhance` action (small/cheap tier, no system identity, no tools — bare instruction). Use before sending to any model. Mirrors Kilo Code's enhance feature.
+
+### `parity_chat_send` — send a message to the agent
+
+Persists a user turn on the chat for a `runId`, then schedules the agent loop. The agent has full tool access (list_files, read_file, read_design_system, upsert_file, set_todos, done) and writes back assistant + tool turns. Use `parity_chat_history` to read the response.
+
+### `parity_chat_advise` — advisor-executor auto-fix
+
+Triggers the 4-phase advisor-executor protocol (advise → execute → verify → close) on a comment, file, or manual prompt. The agent autonomously plans + edits + self-verifies + summarizes. `kind: "comment"` resolves the comment's `targetFile` + text + bbox; `kind: "file"` opens a file for review; `kind: "manual"` accepts a verbatim instruction.
+
+### `parity_chat_history` — read the conversation
+
+Returns the chat_messages array for a run, sorted by turn. Use to see the agent's plan + tool calls + final summary after `parity_chat_send` or `parity_chat_advise`.
+
+### `parity_run_listRecent` — list recent runs
+
+Returns the most recent runs (most-recent first), each with status, prompt, cost, iteration count. Useful to find a `runId` for chat / export / verify.
+
+### `parity_export` — multi-format download
+
+Fetches the run as `zip` (canonical NodeBench skill-pack), `html` (single file with tokens.css inlined), or `markdown` (prose handoff for coding agents).
 
 ## Why a boolean rubric?
 
