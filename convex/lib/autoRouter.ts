@@ -25,7 +25,7 @@
 import type { SupportedProvider } from './piAi';
 
 export type ModelTier = 'frontier' | 'balanced' | 'free' | 'small';
-export type Phase = 'enhance' | 'advise' | 'execute' | 'decompose' | 'iterate' | 'judge';
+export type Phase = 'enhance' | 'advise' | 'execute' | 'generate' | 'decompose' | 'iterate' | 'judge';
 
 export interface ResolvedModel {
   provider: SupportedProvider;
@@ -54,6 +54,12 @@ const FRONTIER: Record<Phase, ResolvedModel> = {
     label: 'opus-4-1',
   },
   execute: {
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-5',
+    isFree: false,
+    label: 'sonnet-4-5',
+  },
+  generate: {
     provider: 'anthropic',
     modelId: 'claude-sonnet-4-5',
     isFree: false,
@@ -98,6 +104,12 @@ const BALANCED: Record<Phase, ResolvedModel> = {
     isFree: false,
     label: 'sonnet-4-5',
   },
+  generate: {
+    provider: 'openrouter',
+    modelId: 'moonshotai/kimi-k2.6',
+    isFree: false,
+    label: 'kimi-k2.6',
+  },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
@@ -118,99 +130,132 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   },
 };
 
-// VERIFIED-DATE: 2026-04-29. Free slugs on OpenRouter rotate during
-// promo periods. If a primary 404s, the agent loop falls through to the
-// fallback. Update this list when slugs go stale (search openrouter for
-// ":free" model ids).
+// VERIFIED-DATE: 2026-04-29. Slugs cross-checked against the pi-ai
+// 0.70.2 model catalog (node_modules/.../@mariozechner/pi-ai/dist/
+// models.generated.js). pi-ai's getModel(provider, modelId) does an
+// exact-match lookup against this catalog — slugs not in the registry
+// return undefined and crash with "Cannot read properties of undefined
+// (reading 'api')". So the curated free pool here is the INTERSECTION
+// of (pi-ai catalog) AND (OpenRouter free tier) AND (supports tool calls
+// for the executor phase).
+//
+// Ranked per the user's nodebench eval (separate chat thread):
+//   #1 score Gemma 4 26B-A4B  → SKIPPED (25% error rate, "unreliable")
+//   #2 score Nemotron 3 Super → not in :free pool (paid only)
+//   #3 score Ling 2.6 1T       → primary for advise/execute/decompose
+//                                "reliable, 9.1s, clean sweep"
+//   #5 score Hunyuan 3         → not in :free pool
+//   fallback Llama 3.3 70b     → broad coverage when Ling rate-limits
+//   light    Ling 2.6 flash    → fast text-only paths (enhance, judge)
+//
+// If a primary slug 404s mid-session, sessionPick's hash route may
+// already be on the fallback for ~12% of runs; for the other 88% the
+// agent loop surfaces the error and the user retries. Update this list
+// monthly as :free slugs rotate.
 const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
-    modelId: 'google/gemini-2.0-flash-exp:free',
+    modelId: 'inclusionai/ling-2.6-flash:free',
     fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'gemini-2.0-flash :free',
+    label: 'ling-2.6-flash :free',
   },
   advise: {
     provider: 'openrouter',
-    modelId: 'deepseek/deepseek-chat-v3.1:free',
+    modelId: 'inclusionai/ling-2.6-1t:free',
     fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'deepseek-v3.1 :free',
+    label: 'ling-2.6-1t :free',
   },
   execute: {
     provider: 'openrouter',
-    modelId: 'deepseek/deepseek-chat-v3.1:free',
-    fallback: { provider: 'openrouter', modelId: 'qwen/qwen-2.5-72b-instruct:free' },
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'deepseek-v3.1 :free',
+    label: 'ling-2.6-1t :free',
+  },
+  generate: {
+    provider: 'openrouter',
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    isFree: true,
+    label: 'ling-2.6-1t :free',
   },
   decompose: {
     provider: 'openrouter',
-    modelId: 'qwen/qwen-2.5-coder-32b-instruct:free',
-    fallback: { provider: 'openrouter', modelId: 'deepseek/deepseek-chat-v3.1:free' },
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'qwen-coder-32b :free',
+    label: 'ling-2.6-1t :free',
   },
   iterate: {
     provider: 'openrouter',
-    modelId: 'qwen/qwen-2.5-coder-32b-instruct:free',
-    fallback: { provider: 'openrouter', modelId: 'deepseek/deepseek-chat-v3.1:free' },
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'qwen-coder-32b :free',
+    label: 'ling-2.6-1t :free',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'google/gemini-2.0-flash-exp:free',
+    modelId: 'inclusionai/ling-2.6-flash:free',
     fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
     isFree: true,
-    label: 'gemini-2.0-flash :free',
+    label: 'ling-2.6-flash :free',
   },
 };
 
 // Internal — used for enhance-prompt + (future) title generation.
 // Mirrors Kilo's `kilo-auto/small`. Picks a paid Haiku when the
-// deployment has anthropic auth; falls through to a free pool otherwise.
+// deployment has anthropic auth; falls through to a pi-ai-catalog free
+// slug otherwise. Slugs verified against pi-ai 0.70.2 catalog.
 const SMALL: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'google/gemini-2.0-flash-exp:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-flash:free' },
     isFree: false,
     label: 'haiku-4-5',
   },
   advise: {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'google/gemini-2.0-flash-exp:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-flash:free' },
     isFree: false,
     label: 'haiku-4-5',
   },
   execute: {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'deepseek/deepseek-chat-v3.1:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
     isFree: false,
     label: 'haiku-4-5',
+  },
+  generate: {
+    provider: 'openrouter',
+    modelId: 'moonshotai/kimi-k2.6',
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    isFree: false,
+    label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'qwen/qwen-2.5-coder-32b-instruct:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'qwen/qwen-2.5-coder-32b-instruct:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'google/gemini-2.0-flash-exp:free',
+    modelId: 'inclusionai/ling-2.6-flash:free',
     isFree: true,
-    label: 'gemini-2.0-flash :free',
+    label: 'ling-2.6-flash :free',
   },
 };
 

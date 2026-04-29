@@ -3,11 +3,37 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
+import { deploymentTier, resolveModel, sessionPick, type ModelTier, type Phase } from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
 import { parseUiKitResponse } from './lib/uiKitParser';
+
+/**
+ * Resolve the (provider, modelId) for a pipeline phase given the run's
+ * tier. Reads runs.tier first; falls back to PARITY_TIER env (set on
+ * the Convex deployment); defaults to 'balanced' (which uses kimi-k2.6
+ * for generate/decompose/iterate — same behavior as the legacy hardcoded
+ * GENERATE_MODEL/DECOMPOSE_MODEL constants below).
+ *
+ * sessionPick spreads load across primary + fallback for free-tier slugs
+ * so a single :free model doesn't get hammered.
+ */
+async function tierForRun(
+  // biome-ignore lint/suspicious/noExplicitAny: action ctx
+  ctx: any,
+  runId: string,
+): Promise<ModelTier> {
+  const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+  const t = run?.tier as ModelTier | undefined;
+  return t ?? deploymentTier();
+}
+
+function pickPhase(tier: ModelTier, phase: Phase, runId: string): { provider: 'anthropic' | 'openai' | 'google' | 'openrouter' | 'groq' | 'cerebras' | 'xai' | 'mistral'; modelId: string; isFree: boolean } {
+  const resolved = sessionPick(runId, resolveModel(tier, phase));
+  return { provider: resolved.provider, modelId: resolved.modelId, isFree: resolved.isFree };
+}
 
 // Cheap-tier defaults. Per user request: Kimi K2.6 via OpenRouter for the
 // LLM stages (~$0.05-0.10/call vs $0.30-0.40 for Opus), Gemini 2.5 Flash
@@ -21,8 +47,12 @@ import { parseUiKitResponse } from './lib/uiKitParser';
 //
 // Per-call overrides come through runs.start args (per-stage modelOverrides),
 // reaching here via the workflow handler.
-const GENERATE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
-const DECOMPOSE_MODEL = { provider: 'openrouter' as const, modelId: 'moonshotai/kimi-k2.6' };
+// Legacy GENERATE_MODEL / DECOMPOSE_MODEL constants removed —
+// pipeline now resolves models via tierForRun(ctx, runId) +
+// pickPhase(tier, phase) above. The default tier is 'balanced' which
+// maps generate/decompose to openrouter/moonshotai/kimi-k2.6 — same
+// underlying model as the old hardcoded constants. Set runs.tier='free'
+// for $0 routes (qwen-coder-32b:free / deepseek-v3.1:free).
 // Judge stays on the strong tier: gemini-3.1-pro-preview is the best-available
 // vision verifier today. ~$0.02-0.05 per judge call (vs ~$0.005 for flash) but
 // the rubric quality difference matters — the judge is what catches drift the
@@ -54,8 +84,11 @@ export const generateInitial = internalAction({
         ? prompt
         : 'Generate a polished, production-quality UI matching the attached image.';
 
+    const tier = await tierForRun(ctx, String(runId));
+    const picked = pickPhase(tier, 'generate', String(runId));
     const result = await call({
-      ...GENERATE_MODEL,
+      provider: picked.provider,
+      modelId: picked.modelId,
       systemPrompt: GENERATE_SYSTEM,
       userText,
       maxTokens: 16_000,
@@ -103,8 +136,11 @@ export const decompose = internalAction({
     const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
+    const tier = await tierForRun(ctx, String(runId));
+    const picked = pickPhase(tier, 'decompose', String(runId));
     const result = await call({
-      ...DECOMPOSE_MODEL,
+      provider: picked.provider,
+      modelId: picked.modelId,
       systemPrompt: DECOMPOSE_SYSTEM,
       userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
       maxTokens: 24_000,
@@ -272,8 +308,11 @@ ${previousTokensCss.slice(0, 2_000)}
 ORIGINAL SOURCE (the artifact you should be matching):
 ${args.sourceHtml.slice(0, 8_000)}`;
 
+    const tier = await tierForRun(ctx, String(args.runId));
+    const picked = pickPhase(tier, 'iterate', String(args.runId));
     const result = await call({
-      ...DECOMPOSE_MODEL,
+      provider: picked.provider,
+      modelId: picked.modelId,
       systemPrompt: ITERATE_SYSTEM,
       userText,
       maxTokens: 24_000,
