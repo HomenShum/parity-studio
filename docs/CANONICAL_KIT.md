@@ -34,14 +34,23 @@ A canonical zip looks like this:
 
 | Path | Required? | Importer behavior | Exporter behavior |
 |---|---|---|---|
-| `README.md` (root) | optional on import, **emitted** on export | If present, the SKILL.md description seeds the run prompt | Auto-generated kit-level brand narrative |
+| `README.md` (root) | optional on import, **emitted** on export | If present, the SKILL.md description seeds the run prompt | Auto-generated kit-level brand narrative + run telemetry |
 | `SKILL.md` | optional on import, **emitted** on export | `description:` field becomes the run prompt for provenance | Auto-generated frontmatter pointing at the active slug |
 | `colors_and_type.css` | optional, **emitted** on export | Read but not yet merged into the active run | Stub that imports `ui_kits/<slug>/tokens.css` so consumers have a single root token entry |
 | `ui_kits/<slug>/...` | **required on import** | Parsed, the largest slug becomes the active run; other slugs are noted but not run | One slug per run (the latest ui_kit produced) |
-| `assets/` | optional | Currently ignored on import | Currently not generated on export (TODO) |
-| `preview/` | optional | Currently ignored on import | Currently not generated on export (TODO) |
+| `assets/logo-mark.svg` | optional, **emitted** on export | Ignored | Auto-generated terracotta P-mark with the slug's first initial |
+| `assets/og-<slug>.svg` | optional, **emitted** on export | Ignored | Auto-generated 1200×630 OpenGraph card with slug, prompt, parity score, cost |
+| `assets/README.md` | optional, **emitted** on export | Ignored | Documents how to extend assets/ with real brand artifacts |
+| `preview/_shell.css` | optional, **emitted** on export | Ignored | Shared shell for specimen pages (pulls in `colors_and_type.css`) |
+| `preview/index.html` | optional, **emitted** on export | Ignored | Specimen index linking every token + component preview |
+| `preview/component-<slug>.html` | optional, **emitted** on export (one per `.tsx`/`.jsx`) | Ignored | Per-component specimen page with the component's source in a code block |
+| `preview/tokens-{color,spacing,radius,typography}.html` | optional, **emitted** on export | Ignored | Auto-generated specimen pages parsed from `tokens.css` (color swatches, key/value lists) |
+| `explorations/iter-<N>.html` | optional, **emitted** on export | Ignored | One file per artifact iteration so a recipient can diff the run's history |
+| `explorations/README.md` | optional, **emitted** on export | Ignored | Describes the iteration history with per-iteration byte counts |
+| `screenshots/source.<ext>` | optional, **emitted** on export when source image is present | Ignored | Mirrors `uploads/` source for visual handoff |
+| `screenshots/README.md` | optional, **emitted** on export | Ignored | Documents the headless-render hook point (future visual verifier) |
+| `scraps/README.md` | optional, **emitted** on export | Ignored | Documents the working-PNGs convention (future intermediate-state capture) |
 | `uploads/<*.png\|jpg\|webp>` | optional | First image ≤ 2 MB becomes the run's `sourceImageBase64` for the source-image popover | The original source image is exported back here |
-| `explorations/`, `scraps/`, `screenshots/` | optional | Ignored | Not generated (TODO) |
 
 ## Multi-slug zips
 
