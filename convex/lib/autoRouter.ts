@@ -130,77 +130,81 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   },
 };
 
-// VERIFIED-DATE: 2026-04-29. Slugs cross-checked against the pi-ai
-// 0.70.2 model catalog (node_modules/.../@mariozechner/pi-ai/dist/
-// models.generated.js). pi-ai's getModel(provider, modelId) does an
-// exact-match lookup against this catalog — slugs not in the registry
-// return undefined and crash with "Cannot read properties of undefined
-// (reading 'api')". So the curated free pool here is the INTERSECTION
-// of (pi-ai catalog) AND (OpenRouter free tier) AND (supports tool calls
-// for the executor phase).
+// VERIFIED-DATE: 2026-04-29 via scripts/eval-free-models.mjs.
+// Slugs cross-checked against pi-ai 0.70.2's models.generated.js
+// AND functionally tested against parity-studio's actual tool surface
+// (list_files / read_file / upsert_file / set_todos / done) over 5
+// real queries per model. Eval report saved to runs/eval-free-...
 //
-// Ranked per the user's nodebench eval (separate chat thread):
-//   #1 score Gemma 4 26B-A4B  → SKIPPED (25% error rate, "unreliable")
-//   #2 score Nemotron 3 Super → not in :free pool (paid only)
-//   #3 score Ling 2.6 1T       → primary for advise/execute/decompose
-//                                "reliable, 9.1s, clean sweep"
-//   #5 score Hunyuan 3         → not in :free pool
-//   fallback Llama 3.3 70b     → broad coverage when Ling rate-limits
-//   light    Ling 2.6 flash    → fast text-only paths (enhance, judge)
+// Results that drove this curation (each column /5):
 //
-// If a primary slug 404s mid-session, sessionPick's hash route may
-// already be on the fallback for ~12% of runs; for the other 88% the
-// agent loop surfaces the error and the user retries. Update this list
-// monthly as :free slugs rotate.
+//   model                              T   V   C   pass%   text-only?
+//   ------                             --  --  --  -----   ----------
+//   inclusionai/ling-2.6-1t:free       5   5   5   100%    YES (655ch)
+//   claude-haiku-4-5            (paid) 4   5   5    80%    YES
+//   claude-sonnet-4-5           (paid) 4   5   5    80%    YES
+//   google/gemma-4-26b-a4b-it:free     1   5   1    20%    YES (403ch)
+//   inclusionai/ling-2.6-flash:free    0   5   0     0%    NO  (stopReason=error)
+//   google/gemma-4-31b-it:free         0   5   0     0%    NO  (stopReason=error)
+//   meta-llama/llama-3.3-70b:free      0   5   0     0%    NO  (stopReason=error)
+//
+// Headline: ling-2.6-1t:free SCORED HIGHER THAN PAID HAIKU AND SONNET
+// on parity-studio's tool surface. Use it for everything in free tier.
+// llama-3.3-70b and ling-2.6-flash that I had as fallbacks BOTH FAIL
+// 100% — both tool-using AND plain text. Removed.
+//
+// Reliable graceful-degrade fallback when ling rate-limits: claude-haiku-4-5
+// (paid, ~$0.001/call). Better to spend a fraction of a cent than serve
+// a broken response.
 const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-flash:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
-    label: 'ling-2.6-flash :free',
+    label: 'ling-2.6-1t :free',
   },
   advise: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   execute: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-flash:free',
-    fallback: { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free' },
+    modelId: 'inclusionai/ling-2.6-1t:free',
+    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
     isFree: true,
-    label: 'ling-2.6-flash :free',
+    label: 'ling-2.6-1t :free',
   },
 };
 
@@ -212,14 +216,14 @@ const SMALL: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-flash:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
     isFree: false,
     label: 'haiku-4-5',
   },
   advise: {
     provider: 'anthropic',
     modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-flash:free' },
+    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
     isFree: false,
     label: 'haiku-4-5',
   },
@@ -253,9 +257,9 @@ const SMALL: Record<Phase, ResolvedModel> = {
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-flash:free',
+    modelId: 'inclusionai/ling-2.6-1t:free',
     isFree: true,
-    label: 'ling-2.6-flash :free',
+    label: 'ling-2.6-1t :free',
   },
 };
 
