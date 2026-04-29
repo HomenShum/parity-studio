@@ -12,6 +12,7 @@ interface ArtifactPreviewProps {
   zoom: number;
   device: Device;
   commentModeActive: boolean;
+  onAutoFixKicked?: () => void;
 }
 
 /** Reference device viewport dimensions in CSS px. */
@@ -33,6 +34,7 @@ export function ArtifactPreview({
   zoom,
   device,
   commentModeActive,
+  onAutoFixKicked,
 }: ArtifactPreviewProps) {
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
@@ -216,6 +218,7 @@ export function ArtifactPreview({
                 artifactVersion={artifactVersion}
                 active={commentModeActive}
                 targetFile={selectedFile ?? null}
+                {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
               />
             </div>
           </div>
@@ -228,6 +231,7 @@ export function ArtifactPreview({
             runId={runId}
             artifactVersion={artifactVersion}
             targetFile={selectedFile ?? null}
+            {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
           />
         )}
       </div>
@@ -250,6 +254,7 @@ function DeviceFrame({
   runId,
   artifactVersion,
   targetFile,
+  onAutoFixKicked,
 }: {
   device: Device;
   zoom: number;
@@ -258,6 +263,7 @@ function DeviceFrame({
   runId: Id<'runs'> | null;
   artifactVersion: number;
   targetFile: string | null;
+  onAutoFixKicked?: () => void;
 }) {
   const { width, height, bezel } = DEVICE_BOUNDS[device];
   const radius = device === 'phone' ? 44 : 24;
@@ -314,6 +320,7 @@ function DeviceFrame({
               artifactVersion={artifactVersion}
               active={commentModeActive}
               targetFile={targetFile}
+              {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
             />
           </div>
           {device === 'phone' ? (

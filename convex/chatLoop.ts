@@ -18,13 +18,33 @@ import { internalAction } from './_generated/server';
 import { usdToMicroUsd } from './lib/piAi';
 import { lintKit } from './lib/staticLint';
 
-// Same provider/model knobs as the pipeline. Override via Convex env:
-//   npx convex env set CHAT_PROVIDER anthropic
-//   npx convex env set CHAT_MODEL claude-sonnet-4-5
+// Two-tier model setup so the advisor (planning, fast/cheap) can run a
+// different model than the executor (tool-using, accurate). When only
+// CHAT_MODEL is set, both phases use it. The split kicks in when the
+// user message starts with "Auto-fix triggered:" — the first turn (the
+// set_todos call) prefers ADVISOR, subsequent execute/verify turns use
+// EXECUTOR.
+//
+// Recommended via your nodebench eval ranking (set in Convex env):
+//   CHAT_ADVISOR_PROVIDER=openrouter
+//   CHAT_ADVISOR_MODEL=tencent/hunyuan-3              # 5.0s, fastest reliable
+//   CHAT_EXECUTOR_PROVIDER=openrouter
+//   CHAT_EXECUTOR_MODEL=nvidia/nemotron-3-super-120b  # best reliable, 14.5s
+// (Slugs subject to openrouter's catalog — verify with their /models endpoint.)
+//
+// Defaults: claude-sonnet-4-5 for both (already verified on prod, $0.021/turn).
 const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropic' | 'openrouter';
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
   (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-4-5' : 'moonshotai/kimi-k2.6');
+const ADVISOR_PROVIDER = (process.env['CHAT_ADVISOR_PROVIDER'] ?? CHAT_PROVIDER) as
+  | 'anthropic'
+  | 'openrouter';
+const ADVISOR_MODEL = process.env['CHAT_ADVISOR_MODEL'] ?? CHAT_MODEL;
+const EXECUTOR_PROVIDER = (process.env['CHAT_EXECUTOR_PROVIDER'] ?? CHAT_PROVIDER) as
+  | 'anthropic'
+  | 'openrouter';
+const EXECUTOR_MODEL = process.env['CHAT_EXECUTOR_MODEL'] ?? CHAT_MODEL;
 
 const SYSTEM_PROMPT = `You are the Parity Studio chat agent. The user is iterating on a UI kit they generated or imported into parity-studio. The kit lives as a flat map of file paths under one ui_kit row in Convex; you have direct atomic edit access to every path in the canonical NodeBench skill-pack shape:
 
@@ -50,7 +70,16 @@ Conventions:
 - Before editing, always read_file the target so you operate on the latest content.
 - After a batch of edits, summarize what changed and offer the next move.
 - Never invent file paths — if unsure, list_files first.
-- The 16-row deterministic parity rubric (right rail) doesn't auto-rerun on edits; mention this when changes are non-trivial so the user can hit Iterate now.`;
+- The 16-row deterministic parity rubric (right rail) doesn't auto-rerun on edits; mention this when changes are non-trivial so the user can hit Iterate now.
+
+ADVISOR-EXECUTOR PROTOCOL (when the user message starts with "Auto-fix triggered:"):
+You are running in two phases — be methodical, NOT chatty.
+  Phase 1 ADVISE: in the SAME turn, output one short sentence ("I'll plan and execute…") then call set_todos with 3–5 concrete, ordered, actionable items. Each item names a file or a check. No follow-up prose between set_todos and the first executor tool call.
+  Phase 2 EXECUTE: walk the plan top-to-bottom. For each item: read_file the target, upsert_file the change, mark the item checked by emitting set_todos again with the updated state. Don't over-edit — only touch files the comment references or that the comment naturally implicates.
+  Phase 3 VERIFY: call done({ paths: [<every path you upsert_file'd>] }). If status='has_errors', fix and call done again. If status='has_warnings', mention them in the close.
+  Phase 4 CLOSE: 1–2 sentence summary — "Updated X and Y; <key observation>. Run Iterate now if you want the parity score re-checked."
+
+When NOT triggered by Auto-fix (regular conversational chat), behave as usual — no forced protocol.`;
 
 const TOOLS: Tool[] = [
   {
@@ -175,10 +204,25 @@ export const runAgentLoop = internalAction({
       }
     }
 
+    // Detect advisor-executor mode by inspecting the most recent user
+    // turn. If it begins with "Auto-fix triggered:", route hop 0 (the
+    // planning turn that emits set_todos) to ADVISOR and hops 1+ to
+    // EXECUTOR. Otherwise both stay on CHAT_MODEL.
+    const adviseMode = (() => {
+      for (let i = history.length - 1; i >= 0; i -= 1) {
+        const m = history[i];
+        if (m && m.role === 'user') return m.content.startsWith('Auto-fix triggered:');
+      }
+      return false;
+    })();
+
     const MAX_HOPS = 8;
     for (let hop = 0; hop < MAX_HOPS; hop += 1) {
+      const useAdvisor = adviseMode && hop === 0;
+      const provider = useAdvisor ? ADVISOR_PROVIDER : EXECUTOR_PROVIDER;
+      const modelId = useAdvisor ? ADVISOR_MODEL : EXECUTOR_MODEL;
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
-      const model = (getModel as any)(CHAT_PROVIDER, CHAT_MODEL);
+      const model = (getModel as any)(provider, modelId);
       const ctxObj: Context = {
         systemPrompt: SYSTEM_PROMPT,
         messages,

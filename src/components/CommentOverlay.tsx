@@ -28,6 +28,11 @@ interface CommentOverlayProps {
   active: boolean;
   /** Optional ui_kit file path to scope the next comment to (set via FilesPanel click). */
   targetFile?: string | null;
+  /**
+   * Optional: switch to the chat tab when an auto-fix kicks off so the
+   * user sees the advisor-executor conversation unfold.
+   */
+  onAutoFixKicked?: () => void;
 }
 
 interface DraftBbox {
@@ -61,6 +66,7 @@ export function CommentOverlay({
   artifactVersion,
   active,
   targetFile,
+  onAutoFixKicked,
 }: CommentOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState<DraftBbox | null>(null);
@@ -70,6 +76,7 @@ export function CommentOverlay({
 
   const create = useMutation(api.comments.create);
   const dismiss = useMutation(api.comments.dismiss);
+  const startAdviseLoop = useMutation(api.chat.startAdviseLoop);
   const comments = useQuery(api.comments.listForRun, runId ? { runId } : 'skip');
 
   // Listen for element-click events posted from the iframe helper script.
@@ -137,7 +144,7 @@ export function CommentOverlay({
     setPending({ bbox: { x, y, w, h } });
   }
 
-  async function onSubmit(textOverride?: string) {
+  async function onSubmit(textOverride?: string, autoFix = false) {
     if (runId === null || pending === null) return;
     const text = (textOverride ?? pendingText).trim();
     if (text.length === 0) {
@@ -164,9 +171,17 @@ export function CommentOverlay({
         pending.bbox.h === 1;
       if (!isWhole) args.bbox = pending.bbox;
       if (targetFile && targetFile.length > 0) args.targetFile = targetFile;
-      await create(args);
+      const commentId = await create(args);
       setPending(null);
       setPendingText('');
+      if (autoFix) {
+        await startAdviseLoop({
+          runId,
+          kind: 'comment',
+          commentId,
+        });
+        if (onAutoFixKicked) onAutoFixKicked();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -181,7 +196,9 @@ export function CommentOverlay({
   function applyQuickAction(template: (el?: string) => string) {
     const text = template(pending?.elementLabel);
     setPendingText(text);
-    void onSubmit(text);
+    // Quick actions auto-fix: the user picked a precise template, so we
+    // can confidently kick off the advisor-executor without a second click.
+    void onSubmit(text, true);
   }
 
   const overlayStyle: React.CSSProperties = {
@@ -248,7 +265,7 @@ export function CommentOverlay({
           pending={pending}
           text={pendingText}
           onChange={setPendingText}
-          onSubmit={() => void onSubmit()}
+          onSubmit={(autoFix) => void onSubmit(undefined, autoFix)}
           onCancel={onCancel}
           onQuickAction={applyQuickAction}
           error={error}
@@ -270,7 +287,7 @@ function PendingBubble({
   pending: PendingComment;
   text: string;
   onChange: (next: string) => void;
-  onSubmit: () => void;
+  onSubmit: (autoFix: boolean) => void;
   onCancel: () => void;
   onQuickAction: (template: (el?: string) => string) => void;
   error: string | null;
@@ -388,7 +405,7 @@ function PendingBubble({
             {error}
           </div>
         ) : null}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
           <button
             type="button"
             onClick={onCancel}
@@ -407,10 +424,32 @@ function PendingBubble({
           </button>
           <button
             type="button"
-            onClick={onSubmit}
+            onClick={() => onSubmit(false)}
             disabled={text.trim().length === 0}
             style={{
-              padding: '6px 14px',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-surface)',
+              color:
+                text.trim().length === 0 ? 'var(--color-text-faint)' : 'var(--color-text-primary)',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12,
+              cursor: text.trim().length === 0 ? 'not-allowed' : 'pointer',
+            }}
+            title="Save the comment for the next manual iterate. Won't kick off any LLM calls."
+          >
+            save
+          </button>
+          <button
+            type="button"
+            onClick={() => onSubmit(true)}
+            disabled={text.trim().length === 0}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '6px 12px',
               borderRadius: 'var(--radius-sm)',
               border: 'none',
               background:
@@ -422,8 +461,9 @@ function PendingBubble({
               fontWeight: 500,
               cursor: text.trim().length === 0 ? 'not-allowed' : 'pointer',
             }}
+            title="Save the comment AND kick off the advisor-executor agent to fix it now."
           >
-            save comment
+            ✨ save + auto-fix
           </button>
         </div>
       </div>

@@ -187,6 +187,7 @@ export function CanvasPanel({
                 zoom={zoom}
                 device={device}
                 commentModeActive={commentModeActive}
+                onAutoFixKicked={() => setTab('chat')}
               />
             </div>
             {tweaksOpen ? (
