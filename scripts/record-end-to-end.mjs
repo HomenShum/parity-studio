@@ -1,25 +1,22 @@
-// End-to-end agent browser recording for parity-studio.
+// End-to-end agent browser recording for the Parity Studio shell revamp.
 //
-// What this captures (in order, in one continuous take):
+// Captures (in order, one continuous take, default ~5–8 min depending on
+// pipeline timing):
 //   1. Land on https://parity-studio.vercel.app/
-//   2. Drop the existing gpt-image-2 source image (composer-dogfood/source.png)
-//   3. Type the dogfood prompt
-//   4. Click Generate — watch generate -> decompose -> verify -> iterate -> done
-//   5. Switch the preview tab to "code" — Monaco loads
-//   6. Click a file in the file tree — FileEditor scopes to it
-//   7. Toggle "Comment mode" in the right rail
-//   8. Switch back to "preview" tab — rendered ui_kit visible
-//   9. Click "Export ZIP" — download fires (saved to recordings/<run>/zip/)
-//  10. Save video as MP4 (via ffmpeg if present, .webm otherwise)
+//   2. Drop the existing gpt-image-2 source (composer-dogfood/source.png)
+//   3. Type the dogfood prompt in the bottom-left composer
+//   4. Click ↑ (terracotta circle) — watch the right-rail PIPELINE
+//      ACTIVITY card light up green, parity score climb, cost
+//      telemetry stream as each stage completes
+//   5. Switch the canvas tab to "code" (Monaco lazy-loads)
+//   6. Click a file in the FILES group → green scoped→file badge
+//   7. Toggle "Comment mode" pill in the top right
+//   8. Switch to "preview" tab to show the rendered ui_kit
+//   9. Click "Export" in the top-right cluster (or Export ZIP card)
+//      and capture the downloaded zip
+//  10. Save .webm and convert to .mp4 if ffmpeg present
 //
-// Run from parity-studio root:
-//   node scripts/record-end-to-end.mjs
-//
-// Optional env:
-//   PARITY_STUDIO_URL — override target (default: https://parity-studio.vercel.app/)
-//   SOURCE_IMAGE_PATH — override the dropped image
-//   PROMPT — override the prompt text
-//   HEADED — set to "0" to record headless (smaller, no visible window)
+// Run: node scripts/record-end-to-end.mjs
 
 import { chromium } from 'playwright';
 import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
@@ -32,8 +29,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 
 const PARITY_STUDIO_URL = process.env.PARITY_STUDIO_URL ?? 'https://parity-studio.vercel.app/';
-// Default to the existing dogfood source — the same gpt-image-2 image the
-// pipeline was originally built around. 1.58 MB, fits the 2 MB inline cap.
 const DEFAULT_SOURCE = resolve(
   repoRoot,
   '..',
@@ -53,25 +48,21 @@ const PROMPT =
   'decompose this hero composer into a clean ui_kit with terracotta primary CTA and dark surface tokens';
 const HEADED = process.env.HEADED !== '0';
 
-// Pipeline can take 3-5 minutes (generate ~30s, decompose ~1-3min with retries,
-// iterate ~30-60s). Cap the wait at 8 minutes so a stuck run doesn't hang
-// the recording forever — partial video is still useful.
-const PIPELINE_MAX_MS = 8 * 60_000;
+const PIPELINE_MAX_MS = 9 * 60_000;
 
 async function main() {
   if (!existsSync(SOURCE_IMAGE_PATH)) {
     console.error(`source image not found: ${SOURCE_IMAGE_PATH}`);
-    console.error('set SOURCE_IMAGE_PATH env or move composer-dogfood/source.png into reach.');
     process.exit(2);
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const outDir = resolve(repoRoot, 'runs', `recording-${stamp}`);
+  const outDir = resolve(repoRoot, 'runs', `recording-shell-${stamp}`);
   const videoDir = join(outDir, 'video');
   const downloadDir = join(outDir, 'downloads');
   await mkdir(videoDir, { recursive: true });
   await mkdir(downloadDir, { recursive: true });
-  console.log(`[record] output dir: ${outDir}`);
+  console.log(`[record] output:     ${outDir}`);
   console.log(`[record] target:     ${PARITY_STUDIO_URL}`);
   console.log(`[record] source img: ${SOURCE_IMAGE_PATH}`);
   console.log(`[record] prompt:     "${PROMPT}"`);
@@ -80,154 +71,165 @@ async function main() {
     headless: !HEADED,
     args: ['--start-maximized'],
   });
-
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    recordVideo: {
-      dir: videoDir,
-      size: { width: 1440, height: 900 },
-    },
+    viewport: { width: 1680, height: 900 },
+    recordVideo: { dir: videoDir, size: { width: 1680, height: 900 } },
     acceptDownloads: true,
   });
-
   const page = await context.newPage();
   page.on('console', (msg) => {
-    if (msg.type() === 'error') console.error(`[browser console] ${msg.text()}`);
+    if (msg.type() === 'error') console.error(`[browser] ${msg.text()}`);
   });
 
   try {
-    // ── Step 1: load landing ─────────────────────────────────────────────
+    // ── 1. land ────────────────────────────────────────────────────────
     console.log('[record] step 1 — navigate');
     await page.goto(PARITY_STUDIO_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await page.waitForSelector('.input-section', { timeout: 30_000 });
-    await page.waitForTimeout(1_500);
+    await page.waitForTimeout(2_500);
 
-    // ── Step 2: drop the source image ────────────────────────────────────
+    // ── 2. drop source image (the hidden file input lives inside the
+    //      ComposerCard's paperclip button) ───────────────────────────
     console.log('[record] step 2 — upload source image');
-    const fileChooserInput = page.locator('input[type=file][accept*="png"]').first();
-    await fileChooserInput.setInputFiles(SOURCE_IMAGE_PATH);
+    const fileInput = page.locator('input[type=file][accept*="png"]').first();
+    await fileInput.setInputFiles(SOURCE_IMAGE_PATH);
     await page.waitForTimeout(800);
 
-    // ── Step 3: type prompt ──────────────────────────────────────────────
+    // ── 3. type prompt in the composer ────────────────────────────────
     console.log('[record] step 3 — type prompt');
-    const promptInput = page.locator('input.input-field');
-    await promptInput.click();
-    await promptInput.fill('');
-    await promptInput.type(PROMPT, { delay: 18 });
-    await page.waitForTimeout(600);
+    const composer = page.getByRole('textbox', { name: /describe the design/i });
+    await composer.click();
+    await composer.fill('');
+    await composer.type(PROMPT, { delay: 18 });
+    await page.waitForTimeout(800);
 
-    // ── Step 4: click Generate, then poll until pipeline completes ───────
-    console.log('[record] step 4 — click Generate, watch pipeline');
-    await page.locator('button.generate-button').click();
+    // ── 4. submit, watch the pipeline activity + parity rail ──────────
+    console.log('[record] step 4 — submit, watch pipeline');
+    await page.getByRole('button', { name: /^generate$/i }).click().catch(async () => {
+      // Fallback: terracotta circle ↑ button has aria-label "Generate"
+      // (or "Starting run…"); submit by Cmd+Enter on the textarea.
+      await composer.press('Control+Enter');
+    });
 
-    const pipelineStartedAt = Date.now();
-    let lastStatus = '';
-    while (Date.now() - pipelineStartedAt < PIPELINE_MAX_MS) {
-      // Read the right-rail "STATUS:" line. ActionSidebar renders it as
-      // ".parity-subtitle" with text "STATUS: <UPPER>". When parity report
-      // exists we'll see VERIFIED|NEEDS_ITERATION|FAILED|UNAVAILABLE; before
-      // that we see the run.status (GENERATING|DECOMPOSING|...).
-      const statusText = await page
-        .locator('.parity-subtitle')
-        .first()
-        .textContent()
-        .catch(() => '');
-      const normalized = (statusText ?? '').trim();
-      if (normalized && normalized !== lastStatus) {
-        console.log(`[record] pipeline: ${normalized}`);
-        lastStatus = normalized;
+    const startedAt = Date.now();
+    let lastSnapshot = '';
+    while (Date.now() - startedAt < PIPELINE_MAX_MS) {
+      // Read the right-rail score line "N / 16" + status pill text.
+      const score = await page.locator('aside[aria-label="Deterministic parity"] >> nth=0').first().textContent().catch(() => '');
+      const norm = (score ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (norm && norm !== lastSnapshot) {
+        console.log(`[record] right-rail: ${norm}`);
+        lastSnapshot = norm;
       }
-      // Terminal: parity rendered (VERIFIED/NEEDS_REVIEW/NEEDS_ITERATION/FAILED)
-      // OR a 9+ file count appears in FilesPanel meaning ui_kit landed.
+      // Terminal: parity score reaches 16/16 OR status pill says Done/Failed
       if (
-        normalized.includes('VERIFIED') ||
-        normalized.includes('NEEDS_REVIEW') ||
-        normalized.includes('NEEDS_ITERATION') ||
-        normalized.includes('FAILED')
+        /1[6-9]\s*\/\s*16/.test(norm) ||
+        norm.includes('Status: Done') ||
+        norm.includes('Failed')
       ) {
-        // Give the UI 2s to settle (cost panel finishes streaming, etc.)
-        await page.waitForTimeout(2_000);
+        await page.waitForTimeout(2_500);
         break;
       }
-      await page.waitForTimeout(2_500);
+      // Also break when an artifact iframe is rendered with non-placeholder content
+      const hasArtifact = await page.evaluate(() => {
+        const f = document.querySelector('iframe[title="artifact preview"]');
+        if (!f) return false;
+        try {
+          const doc = f.contentDocument;
+          if (!doc) return false;
+          return (doc.body?.innerText ?? '').length > 80;
+        } catch {
+          return false;
+        }
+      }).catch(() => false);
+      if (hasArtifact) {
+        // Pipeline completed enough to render a real artifact — keep watching for parity to stabilize, then break
+        await page.waitForTimeout(8_000);
+        break;
+      }
+      await page.waitForTimeout(3_000);
     }
-    console.log(`[record] pipeline reached: "${lastStatus}" after ${(Date.now() - pipelineStartedAt) / 1000}s`);
+    console.log(`[record] pipeline reached after ${Math.round((Date.now() - startedAt) / 1000)}s`);
 
-    // ── Step 5: switch preview to code mode ──────────────────────────────
-    console.log('[record] step 5 — switch preview to code mode');
-    const codeTab = page.getByRole('tab', { name: 'code', exact: true });
-    if (await codeTab.count() > 0) {
-      await codeTab.first().click();
-      // Monaco lazy-loads via CDN; wait for it to render.
-      await page.waitForSelector('.monaco-editor, [data-monaco], .file-editor', { timeout: 30_000 }).catch(() => {});
-      await page.waitForTimeout(2_500);
+    // ── 5. switch to code tab (Monaco lazy-loads) ─────────────────────
+    console.log('[record] step 5 — code tab');
+    await page.getByRole('tab', { name: /code/i }).click().catch(() => {});
+    await page.waitForTimeout(3_000);
+
+    // ── 6. click a file in the FILES group ────────────────────────────
+    console.log('[record] step 6 — click a file');
+    // First switch back to Files tab so the tree is visible
+    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page.waitForTimeout(1_000);
+    const firstFile = page.locator('button.file, button[title^="Scope next comment"]').first();
+    if (await firstFile.count() > 0) {
+      await firstFile.click();
+      await page.waitForTimeout(1_500);
     } else {
-      console.log('[record] code tab not found — skipping');
-    }
-
-    // ── Step 6: click a file in the tree ─────────────────────────────────
-    console.log('[record] step 6 — click a file in the tree');
-    const firstFileButton = page.locator('button.file').first();
-    if (await firstFileButton.count() > 0) {
-      await firstFileButton.click();
-      await page.waitForTimeout(2_000);
-      // If a second file exists, click it too to show file-switching.
-      const filesCount = await page.locator('button.file').count();
-      if (filesCount > 1) {
-        await page.locator('button.file').nth(1).click();
+      // New shell: file buttons are the inline buttons in the Files group
+      const fileBtn = page
+        .locator('aside[aria-label="Artifact canvas"], section[aria-label="Artifact canvas"]')
+        .locator('button[title^="Scope next comment"]')
+        .first();
+      if (await fileBtn.count() > 0) {
+        await fileBtn.click();
         await page.waitForTimeout(1_500);
       }
     }
 
-    // ── Step 7: toggle comment mode ──────────────────────────────────────
-    console.log('[record] step 7 — toggle comment mode');
-    const commentToggle = page.getByRole('button', {
-      name: /toggle bbox region selection/i,
-    });
+    // ── 7. toggle comment mode ────────────────────────────────────────
+    console.log('[record] step 7 — comment mode');
+    const commentToggle = page.getByRole('button', { name: /comment mode/i });
     if (await commentToggle.count() > 0) {
       await commentToggle.first().click();
-      await page.waitForTimeout(1_500);
-    }
-
-    // ── Step 8: switch back to preview tab to show rendered ui_kit ───────
-    console.log('[record] step 8 — back to preview tab');
-    const previewTab = page.getByRole('tab', { name: 'preview', exact: true });
-    if (await previewTab.count() > 0) {
-      await previewTab.first().click();
       await page.waitForTimeout(2_000);
     }
 
-    // ── Step 9: click Export ZIP ─────────────────────────────────────────
+    // ── 8. switch to preview tab ──────────────────────────────────────
+    console.log('[record] step 8 — preview tab');
+    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page.waitForTimeout(3_000);
+
+    // ── 9. export ZIP via top-right pill (or fall back to Export ZIP card) ─
     console.log('[record] step 9 — export zip');
-    const exportLink = page.getByText('Export ZIP', { exact: true });
-    if (await exportLink.count() > 0) {
+    const exportPill = page.getByRole('link', { name: /^export$/i });
+    let downloadFired = false;
+    try {
+      const dlPromise = page.waitForEvent('download', { timeout: 20_000 });
+      await exportPill.first().click({ timeout: 5_000 });
+      const dl = await dlPromise;
+      const path = join(downloadDir, dl.suggestedFilename() || 'ui_kit.zip');
+      await dl.saveAs(path);
+      const sz = (await stat(path)).size;
+      console.log(`[record] zip via top pill: ${path} (${sz} bytes)`);
+      downloadFired = true;
+    } catch (err) {
+      console.log(`[record] top export pill didn't fire — falling back to FILES card`);
+    }
+    if (!downloadFired) {
       try {
-        const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
-        await exportLink.first().click();
-        const download = await downloadPromise;
-        const zipPath = join(downloadDir, download.suggestedFilename() || 'ui_kit.zip');
-        await download.saveAs(zipPath);
-        const sz = (await stat(zipPath)).size;
-        console.log(`[record] zip saved: ${zipPath} (${sz} bytes)`);
+        const dlPromise = page.waitForEvent('download', { timeout: 20_000 });
+        await page.getByText(/^Export ZIP$/i).click({ timeout: 5_000 });
+        const dl = await dlPromise;
+        const path = join(downloadDir, dl.suggestedFilename() || 'ui_kit.zip');
+        await dl.saveAs(path);
+        const sz = (await stat(path)).size;
+        console.log(`[record] zip via FILES card: ${path} (${sz} bytes)`);
       } catch (err) {
-        console.log(`[record] export click did not produce a download: ${(err && err.message) || err}`);
+        console.log(`[record] no zip download fired: ${(err && err.message) || err}`);
       }
     }
 
-    // Final pause so the closing frame is calm, not mid-action.
     await page.waitForTimeout(2_500);
   } catch (err) {
-    console.error('[record] error during recording:', err);
+    console.error('[record] error:', err);
   } finally {
-    // Closing the context flushes the .webm to disk.
     await context.close();
     await browser.close();
   }
 
-  // ── Step 10: rename + try to convert to mp4 ────────────────────────────
   const videos = (await readdir(videoDir)).filter((f) => f.endsWith('.webm'));
   if (videos.length === 0) {
-    console.log('[record] no video file found — recording skipped or failed before any frames');
+    console.log('[record] no video file found');
     return;
   }
   const webmPath = join(videoDir, videos[0]);
@@ -235,15 +237,12 @@ async function main() {
   await copyFile(webmPath, renamedWebm);
   console.log(`[record] webm: ${renamedWebm}`);
 
-  // Try ffmpeg → mp4 if present. Not required.
   const mp4Path = join(outDir, 'recording.mp4');
-  const ff = spawnSync('ffmpeg', ['-y', '-i', renamedWebm, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', mp4Path], {
-    stdio: 'inherit',
-  });
+  const ff = spawnSync('ffmpeg', ['-y', '-i', renamedWebm, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', mp4Path], { stdio: 'inherit' });
   if (ff.status === 0) {
     console.log(`[record] mp4: ${mp4Path}`);
   } else {
-    console.log('[record] ffmpeg not available or failed; webm is the canonical output');
+    console.log('[record] ffmpeg unavailable; webm is canonical');
   }
 }
 
