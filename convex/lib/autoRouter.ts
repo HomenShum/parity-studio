@@ -130,28 +130,48 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   },
 };
 
-// VERIFIED-DATE: 2026-04-29 via scripts/eval-free-models.mjs.
+// VERIFIED-DATE: 2026-04-29 (run 2) via scripts/eval-free-models.mjs.
 // Slugs cross-checked against pi-ai 0.70.2's models.generated.js
 // AND functionally tested against parity-studio's actual tool surface
 // (list_files / read_file / upsert_file / set_todos / done) over 5
-// real queries per model. Eval report saved to runs/eval-free-...
+// real queries per model. Eval reports saved to runs/eval-free-*.
 //
-// Results that drove this curation (each column /5):
+// RUN 1 (initial) revealed 3 models returning empty stopReason='error'.
+// Diagnosed via raw curl to /api/v1/chat/completions: 2 were upstream
+// provider rate-limits (Venice for llama-3.3-70b, Google AI Studio for
+// gemma-4-31b), 1 was a deprecation (ling-2.6-flash:free → paid).
 //
-//   model                              T   V   C   pass%   text-only?
+// RUN 2 hardened our pi-ai wrapper with:
+//   1. OpenRouter app-attribution headers (HTTP-Referer + X-Title) — get
+//      higher per-key rate-limit allocations per OR's docs.
+//   2. Client-side maxRetries=3 (pi-ai built-in) for HTTP-level 5xx/429.
+//   3. Soft-error retry loop (1s, 3s backoff w/ jitter) catching the
+//      stopReason='error' + retriable-message case OpenRouter often
+//      surfaces as 200-with-error-body for upstream 429s.
+//   4. Removed ling-2.6-flash:free permanently (no longer free).
+//
+// Results comparison (each T/V/C column /5):
+//
+//   model                              T   V   C   pass%   Δ vs run 1
 //   ------                             --  --  --  -----   ----------
-//   inclusionai/ling-2.6-1t:free       5   5   5   100%    YES (655ch)
-//   claude-haiku-4-5            (paid) 4   5   5    80%    YES
-//   claude-sonnet-4-5           (paid) 4   5   5    80%    YES
-//   google/gemma-4-26b-a4b-it:free     1   5   1    20%    YES (403ch)
-//   inclusionai/ling-2.6-flash:free    0   5   0     0%    NO  (stopReason=error)
-//   google/gemma-4-31b-it:free         0   5   0     0%    NO  (stopReason=error)
-//   meta-llama/llama-3.3-70b:free      0   5   0     0%    NO  (stopReason=error)
+//   inclusionai/ling-2.6-1t:free       5   5   5   100%    unchanged
+//   claude-haiku-4-5            (paid) 4   5   5    80%    unchanged
+//   claude-sonnet-4-5           (paid) 4   5   5    80%    unchanged
+//   google/gemma-4-26b-a4b-it:free     3   5   3    60%    +40% pts
+//   google/gemma-4-31b-it:free         1   5   2    20%    +20% pts
+//   meta-llama/llama-3.3-70b:free      0   5   0     0%    same — but
+//                                                          no longer
+//                                                          stopReason
+//                                                          ='error'
+//   (errors column = 0 for ALL rows in run 2)
 //
-// Headline: ling-2.6-1t:free SCORED HIGHER THAN PAID HAIKU AND SONNET
-// on parity-studio's tool surface. Use it for everything in free tier.
-// llama-3.3-70b and ling-2.6-flash that I had as fallbacks BOTH FAIL
-// 100% — both tool-using AND plain text. Removed.
+// Headline (preserved): ling-2.6-1t:free SCORED HIGHER THAN PAID HAIKU
+// AND SONNET on parity-studio's tool surface. Use it for everything in
+// free tier.
+//
+// New finding: gemma-4-26b-a4b-it:free is now a viable secondary free
+// candidate at 60% pass — added to FREE fallback chain. Still below
+// the 80% bar paid haiku clears, so primary stays ling-2.6-1t.
 //
 // Reliable graceful-degrade fallback when ling rate-limits: claude-haiku-4-5
 // (paid, ~$0.001/call). Better to spend a fraction of a cent than serve

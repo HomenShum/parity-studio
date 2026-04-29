@@ -32,10 +32,15 @@ const repoRoot = resolve(__dirname, '..');
 
 // ── Models under test ──────────────────────────────────────────────────
 // All slugs verified against pi-ai 0.70.2 models.generated.js.
+//
+// 2026-04-29 second-run notes:
+//   - inclusionai/ling-2.6-flash:free was DEPRECATED to paid → removed.
+//   - llama-3.3-70b-instruct:free + gemma-4-31b-it:free hit upstream
+//     provider rate-limits in run 1. Re-included to verify whether the
+//     retry+attribution-headers path now lets them complete.
 const MODELS = [
   // Free tier candidates
   { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free', tier: 'free', label: 'ling-2.6-1t' },
-  { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-flash:free', tier: 'free', label: 'ling-2.6-flash' },
   { provider: 'openrouter', modelId: 'meta-llama/llama-3.3-70b-instruct:free', tier: 'free', label: 'llama-3.3-70b' },
   { provider: 'openrouter', modelId: 'google/gemma-4-26b-a4b-it:free', tier: 'free', label: 'gemma-4-26b' },
   { provider: 'openrouter', modelId: 'google/gemma-4-31b-it:free', tier: 'free', label: 'gemma-4-31b' },
@@ -43,6 +48,27 @@ const MODELS = [
   { provider: 'anthropic', modelId: 'claude-haiku-4-5', tier: 'paid', label: 'haiku-4-5' },
   { provider: 'anthropic', modelId: 'claude-sonnet-4-5', tier: 'paid', label: 'sonnet-4-5' },
 ];
+
+// OpenRouter app-attribution headers (recommended in their API docs;
+// apps that send these get higher rate-limit allocations).
+const OPENROUTER_HEADERS = {
+  'HTTP-Referer': 'https://parity.studio',
+  'X-Title': 'Parity Studio (eval-free-models)',
+};
+
+const isRetriableError = (msg) => {
+  if (!msg) return false;
+  const lower = String(msg).toLowerCase();
+  return (
+    lower.includes('429') ||
+    lower.includes('rate limit') ||
+    lower.includes('rate-limit') ||
+    lower.includes('temporarily rate-limited') ||
+    lower.includes('upstream')
+  );
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── Tool surface (mirrors parity-studio's chat agent) ──────────────────
 const TOOLS = [
@@ -143,19 +169,33 @@ function scoreCall({ result, error, expects }) {
 async function evalOne(modelSpec, query) {
   const t0 = Date.now();
   let result, error;
+  const isOpenRouter = modelSpec.provider === 'openrouter';
+  const baseOptions = {
+    maxOutputTokens: 1500,
+    ...(isOpenRouter
+      ? { headers: OPENROUTER_HEADERS, maxRetries: 3 }
+      : {}),
+  };
   try {
     // biome-ignore lint/suspicious/noExplicitAny: typed registry passthrough
     const model = (getModel)(modelSpec.provider, modelSpec.modelId);
     if (!model) throw new Error(`pi-ai catalog miss for ${modelSpec.provider}/${modelSpec.modelId}`);
-    result = await complete(
-      model,
-      {
-        systemPrompt: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: query.prompt, timestamp: Date.now() }],
-        tools: TOOLS,
-      },
-      { maxOutputTokens: 1500 },
-    );
+    const ctx = {
+      systemPrompt: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: query.prompt, timestamp: Date.now() }],
+      tools: TOOLS,
+    };
+    // Soft-error retry loop: pi-ai surfaces upstream 429s as
+    // stopReason='error' on a 200 response. Try up to 3 times.
+    const MAX_SOFT_RETRIES = isOpenRouter ? 2 : 0;
+    for (let attempt = 0; attempt <= MAX_SOFT_RETRIES; attempt += 1) {
+      result = await complete(model, ctx, baseOptions);
+      const isSoftError =
+        result.stopReason === 'error' && isRetriableError(result.errorMessage);
+      if (!isSoftError || attempt === MAX_SOFT_RETRIES) break;
+      const waitMs = 1000 * 3 ** attempt + Math.floor(Math.random() * 500);
+      await sleep(waitMs);
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
@@ -168,6 +208,8 @@ async function evalOne(modelSpec, query) {
     modelId: modelSpec.modelId,
     tier: modelSpec.tier,
     ms,
+    stopReason: result?.stopReason,
+    errorMessage: result?.errorMessage,
     ...score,
   };
 }
