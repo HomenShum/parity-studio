@@ -20,21 +20,15 @@
  *   - Added prefers-reduced-motion guard
  */
 
+/*
+ * Sprint 1 (2026-04-28): legacy block intentionally left almost-empty —
+ * --color-bg-primary, --space-md, --font-sans etc. are now declared in
+ * styles/tokens.css. Sprint 2 will rewrite the layout classes below to
+ * use the new var names directly; until then the back-compat aliases in
+ * tokens.css map them through. Do not redeclare these here.
+ */
 :root {
-  --color-bg-primary: #1a1b26;
-  --color-bg-secondary: #24253a;
-  --color-bg-tertiary: #2d2e42;
-  --color-text-primary: #e4e4e7;
-  --color-text-secondary: #9ca3af;
-  --color-accent: #c96442;
-  --color-success: #22c55e;
-  --border-radius: 8px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --font-sans:
-    'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* nothing — see styles/tokens.css */
 }
 
 * {

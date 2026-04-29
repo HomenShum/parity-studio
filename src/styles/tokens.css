@@ -1,0 +1,166 @@
+/**
+ * Parity Studio design tokens.
+ *
+ * Adopted from Open CoDesign's tokens.css (MIT, OpenCoworkAI/open-codesign,
+ * packages/ui/src/tokens.css). Anthropic Claude Design aesthetic: warm cream
+ * surfaces, serif display type, terracotta accent.
+ *
+ * All color values use oklch for perceptually-uniform lightness curves.
+ * Never hardcode hex in components — always reference these vars.
+ */
+
+:root {
+  /* Surface — warm cream */
+  --color-background: oklch(0.98 0.012 80); /* ≈ #FAF7F3 */
+  --color-background-secondary: oklch(0.96 0.015 75);
+  --color-surface: oklch(0.99 0.008 80);
+  --color-surface-hover: oklch(0.96 0.015 75);
+  --color-surface-active: oklch(0.94 0.018 72);
+  --color-surface-muted: oklch(0.96 0.015 75);
+  --color-surface-elevated: oklch(0.99 0.008 80);
+  --color-artifact-bg: #ffffff;
+
+  /* Border */
+  --color-border: oklch(0.88 0.012 70);
+  --color-border-muted: oklch(0.91 0.01 72);
+  --color-border-subtle: oklch(0.94 0.008 74);
+  --color-border-strong: oklch(0.78 0.015 65);
+
+  /* Accent — warm terracotta */
+  --color-accent: oklch(0.62 0.16 35); /* ≈ #C76D54 */
+  --color-accent-hover: oklch(0.56 0.18 35);
+  --color-accent-muted: oklch(0.91 0.04 40);
+  --color-accent-soft: oklch(0.95 0.02 40 / 0.5);
+  --color-accent-tint: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+  --color-focus-ring: oklch(0.62 0.16 35 / 0.3);
+  --color-on-accent: oklch(0.99 0 0);
+
+  /* Text */
+  --color-text-primary: oklch(0.22 0.025 50);
+  --color-text-secondary: oklch(0.5 0.02 55);
+  --color-text-muted: oklch(0.65 0.015 58);
+  --color-text-faint: oklch(0.75 0.01 60);
+
+  /* Semantic — Pass / Warn / Fail rubric */
+  --color-success: #4f7a52;
+  --color-warning: #b8862a;
+  --color-error: #b04030;
+  --color-mcp: #4a6b8a;
+
+  /* Feedback */
+  --color-toast-success: #4f7a52;
+  --color-toast-error: #b04030;
+  --color-overlay: oklch(0.22 0.025 50 / 0.45);
+
+  /* Shadow — warm-tinted */
+  --shadow-soft: 0 1px 2px oklch(0.3 0.02 45 / 0.04);
+  --shadow-card: 0 1px 2px oklch(0.3 0.02 45 / 0.04), 0 4px 16px oklch(0.3 0.02 45 / 0.06);
+  --shadow-elevated: 0 2px 4px oklch(0.3 0.02 45 / 0.05), 0 12px 32px oklch(0.3 0.02 45 / 0.1);
+  --shadow-inset-soft: inset 0 0 0 1px var(--color-border-subtle);
+
+  /* Typography stack */
+  --font-display: 'Fraunces Variable', 'Times New Roman', serif;
+  --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  /* Type scale */
+  --font-size-display-2xl: 64px;
+  --font-size-display-xl: 48px;
+  --font-size-display-lg: 36px;
+  --font-size-display-md: 28px;
+  --font-size-body-lg: 17px;
+  --font-size-body: 15px;
+  --font-size-body-sm: 13px;
+  --font-size-body-xs: 11px;
+  --font-size-mono: 13px;
+  --font-size-mono-sm: 11px;
+
+  /* Line height */
+  --leading-heading: 1.1;
+  --leading-ui: 1.4;
+  --leading-body: 1.6;
+  --leading-snug: 1.5;
+
+  /* Letter spacing */
+  --tracking-heading: -0.015em;
+  --tracking-tight: -0.005em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-label: 0.08em;
+  --tracking-eyebrow: 0.18em;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 56px;
+  --space-12: 80px;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Control sizes */
+  --size-control-xs: 28px;
+  --size-control-sm: 32px;
+  --size-control-md: 40px;
+  --size-titlebar-height: 64px;
+
+  /* Layout */
+  --layout-pipeline-width: 296px;
+  --layout-parity-width: 432px;
+
+  /* Motion */
+  --duration-fastest: 80ms;
+  --duration-faster: 120ms;
+  --duration-fast: 180ms;
+  --duration-base: 240ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.25, 1);
+
+  /* Back-compat aliases for legacy components during migration.
+     These let the old class names in styles.css read correct values
+     without a full rewrite in Sprint 1. Sprint 2 deletes these. */
+  --color-bg-primary: var(--color-background);
+  --color-bg-secondary: var(--color-background-secondary);
+  --color-bg-tertiary: var(--color-surface-active);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-4);
+  --space-lg: var(--space-6);
+  --border-radius: var(--radius-md);
+}
+
+/* Dark mode opt-in via [data-theme="dark"] on <html>. Inverts surface +
+   text scales while keeping the accent invariant. */
+[data-theme='dark'] {
+  --color-background: oklch(0.18 0.01 60);
+  --color-background-secondary: oklch(0.21 0.012 58);
+  --color-surface: oklch(0.23 0.014 56);
+  --color-surface-hover: oklch(0.27 0.016 54);
+  --color-surface-active: oklch(0.31 0.018 52);
+  --color-surface-muted: oklch(0.21 0.012 58);
+  --color-surface-elevated: oklch(0.25 0.015 55);
+  --color-artifact-bg: #1c1c1c;
+
+  --color-border: oklch(0.32 0.012 55);
+  --color-border-muted: oklch(0.28 0.01 56);
+  --color-border-subtle: oklch(0.25 0.008 58);
+  --color-border-strong: oklch(0.42 0.014 50);
+
+  --color-text-primary: oklch(0.92 0.008 80);
+  --color-text-secondary: oklch(0.74 0.01 70);
+  --color-text-muted: oklch(0.6 0.012 65);
+  --color-text-faint: oklch(0.5 0.012 62);
+
+  --color-overlay: oklch(0.1 0.01 60 / 0.6);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.3);
+}
