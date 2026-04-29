@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
 import { Breadcrumb } from './components/Breadcrumb';
 import { CanvasPanel } from './components/canvas/CanvasPanel';
@@ -19,11 +19,31 @@ import { Wordmark } from './components/Wordmark';
  *   └────────────┴─────────────┴───────────────┘
  */
 export default function App() {
-  const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(null);
+  const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const urlRun = new URLSearchParams(window.location.search).get('run');
+    return urlRun ? (urlRun as Id<'runs'>) : null;
+  });
   const [commentModeActive, setCommentModeActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
   const [starred, setStarred] = useState(false);
+
+  // Reflect currentRunId into the URL so the active session is shareable
+  // and a deep-linked screenshot/demo can boot straight into context.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (currentRunId) {
+      if (url.searchParams.get('run') !== currentRunId) {
+        url.searchParams.set('run', currentRunId);
+        window.history.replaceState(null, '', url.toString());
+      }
+    } else if (url.searchParams.has('run')) {
+      url.searchParams.delete('run');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [currentRunId]);
 
   const breadcrumbTitle = currentRunId
     ? 'Reimagine recording demo into parity UI kit'
