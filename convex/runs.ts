@@ -68,6 +68,88 @@ export const start = mutation({
   },
 });
 
+/**
+ * Drop a pre-built ui_kit directly into a run, skipping generate +
+ * decompose entirely. Used when the user drops a canonical
+ * NodeBench-skill-style ZIP onto the composer instead of starting from
+ * an image or prompt.
+ *
+ * The zip is parsed client-side by ComposerCard (JSZip), the largest
+ * `ui_kits/<slug>/` folder is selected, and its files are passed in
+ * here as a flat path → content map. We persist a synthetic artifact
+ * (the kit's index.html) and a ui_kit row with cost = 0, then trigger
+ * verifyDeterministic so the right-rail rubric populates immediately
+ * with no LLM cost.
+ *
+ * sourceImageBase64 / sourceImageMimeType are optional — populated if
+ * the zip carried an `uploads/` png/jpg/webp.
+ */
+export const startFromKit = mutation({
+  args: {
+    slug: v.string(),
+    files: v.any(), // Record<string, string>
+    sourceImageBase64: v.optional(v.string()),
+    sourceImageMimeType: v.optional(
+      v.union(v.literal('image/png'), v.literal('image/jpeg'), v.literal('image/webp')),
+    ),
+    /**
+     * Optional original prompt that produced the kit. For provenance.
+     */
+    prompt: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const files = (args.files ?? {}) as Record<string, string>;
+    if (typeof args.slug !== 'string' || args.slug.length === 0) {
+      throw new Error('runs:startFromKit requires a slug');
+    }
+    if (Object.keys(files).length === 0) {
+      throw new Error('runs:startFromKit requires at least one file');
+    }
+    const indexHtml =
+      Object.entries(files).find(([p]) => p.endsWith('/index.html') || p === 'index.html')?.[1] ??
+      '<!doctype html><html><body><!-- ui_kit imported without index.html --></body></html>';
+
+    const runId = await ctx.db.insert('runs', {
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(args.sourceImageBase64 !== undefined
+        ? { sourceImageBase64: args.sourceImageBase64 }
+        : {}),
+      ...(args.sourceImageMimeType !== undefined
+        ? { sourceImageMimeType: args.sourceImageMimeType }
+        : {}),
+      status: 'verifying',
+      costMicroUsd: 0,
+      iterationsCompleted: 0,
+    });
+
+    // Insert artifact (the index.html) at version 0 so the canvas iframe
+    // renders it immediately.
+    await ctx.db.insert('artifacts', {
+      runId,
+      version: 0,
+      html: indexHtml,
+      sizeBytes: indexHtml.length,
+    });
+
+    // Insert ui_kit row with cost = 0.
+    const fileCount = Object.keys(files).length;
+    await ctx.db.insert('ui_kits', {
+      runId,
+      artifactVersion: 0,
+      slug: args.slug,
+      schemaVersion: 1,
+      files,
+      fileCount,
+      decomposeCostMicroUsd: 0,
+    });
+
+    // Trigger verify in the background so the right-rail rubric populates.
+    await ctx.scheduler.runAfter(0, internal.workflows.verifyImportedKit, { runId });
+
+    return runId;
+  },
+});
+
 export const get = query({
   args: { runId: v.id('runs') },
   handler: async (ctx, { runId }) => {

@@ -1,12 +1,12 @@
-import { ArrowDown, Image as ImageIcon, MessageSquare, MousePointer2, Package, Pencil, Sparkles } from 'lucide-react';
+import { ArrowDown, FileArchive, MessageSquare, MousePointer2, Package, Pencil, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const STEPS: Array<{ n: string; Icon: LucideIcon; title: string; body: string }> = [
   {
     n: '01',
-    Icon: ImageIcon,
-    title: 'Drop a gpt-image-2 image',
-    body: 'Or generate one on the spot from a text prompt — sparkles ✨ in the composer.',
+    Icon: FileArchive,
+    title: 'Drop an image, a kit zip, or generate one',
+    body: 'gpt-image-2 image, a canonical ui_kit/<slug>/ zip, or sparkles ✨ to generate from a prompt. Drop-zip imports skip generate + decompose entirely.',
   },
   {
     n: '02',

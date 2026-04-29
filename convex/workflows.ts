@@ -1,6 +1,7 @@
 import { WorkflowManager } from '@convex-dev/workflow';
 import { v } from 'convex/values';
 import { components, internal } from './_generated/api';
+import { internalAction } from './_generated/server';
 
 /**
  * Durable orchestration for the parity-studio in-app pipeline:
@@ -136,6 +137,40 @@ export const iterateWithCommentsWorkflow = workflow.define({
       { runId, status: 'done', iterationsCompleted: iterationNumber },
       { inline: true },
     );
+  },
+});
+
+/**
+ * Imported-kit fast path. The user dropped a canonical ui_kit zip on the
+ * composer, so generate + decompose are skipped — we already have a
+ * usable kit. This handler just runs the deterministic verifier against
+ * the imported files and finalizes the run as 'done'. Cost stays at 0
+ * because no LLM was called.
+ */
+export const verifyImportedKit = internalAction({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }): Promise<void> => {
+    const artifact = await ctx.runQuery(internal.artifacts.getLatestInternal, { runId });
+    const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
+    if (artifact === null || uiKit === null) {
+      await ctx.runMutation(internal.runs.updateStatus, {
+        runId,
+        status: 'failed',
+        errorMessage: 'verifyImportedKit: missing artifact or ui_kit (drop did not land)',
+      });
+      return;
+    }
+    await ctx.runAction(internal.generation.verifyDeterministic, {
+      runId,
+      uiKitId: uiKit._id,
+      iterationNumber: 0,
+      sourceHtml: artifact.html,
+    });
+    await ctx.runMutation(internal.runs.updateStatus, {
+      runId,
+      status: 'done',
+      iterationsCompleted: 0,
+    });
   },
 });
 

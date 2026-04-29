@@ -4,14 +4,14 @@
 
 ## The 6-step user flow
 
-1. **Drop a gpt-image-2 image** — or generate one on the spot from a prompt.
+1. **Drop a gpt-image-2 image, drop a canonical `ui_kit` zip, or generate one on the spot** from a prompt.
 2. **Break it down** into individual UI components — exact parity, not approximations.
 3. **Select a component** in the file tree.
 4. **Comment** on it (a pinned bbox or a free-form note, scoped to that file).
 5. **Iterate / edit** that scoped slice — not the whole artifact.
-6. **Export as a ui design kit zip** — guided handoff to a coding agent that drops it into a real codebase.
+6. **Export as a `ui_kit` zip** — same shape on the way in as on the way out, guided handoff to a coding agent that drops it into a real codebase.
 
-That is the entire product. Every surface is in service of one of those six steps.
+That is the entire product. Every surface is in service of one of those six steps. The canonical zip shape (NodeBench AI Skill-pack format, see [docs/CANONICAL_KIT.md](./docs/CANONICAL_KIT.md)) is symmetric: drop one in, get one out.
 
 [**Try it live →**](https://parity-studio.vercel.app)
 
