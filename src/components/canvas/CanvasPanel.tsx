@@ -1,5 +1,7 @@
-import { Bot, Code, Eye, Folder } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { Bot, Code, Eye, Folder, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
+import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
 import { ArtifactPreview } from './ArtifactPreview';
@@ -7,6 +9,7 @@ import { ChatPanel } from './ChatPanel';
 import { FilesView } from './FilesView';
 import { LandingGuidance } from './LandingGuidance';
 import { SourceImagePopover } from './SourceImagePopover';
+import { TweakPanel } from './TweakPanel';
 
 interface CanvasPanelProps {
   runId: Id<'runs'> | null;
@@ -33,6 +36,8 @@ export function CanvasPanel({
   commentModeActive,
 }: CanvasPanelProps) {
   const [tab, setTab] = useState<Tab>('files');
+  const [tweaksOpen, setTweaksOpen] = useState(false);
+  const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
 
   return (
     <section
@@ -90,6 +95,31 @@ export function CanvasPanel({
             </button>
           );
         })}
+        <span style={{ flex: 1 }} aria-hidden />
+        {tab === 'preview' && runId !== null ? (
+          <button
+            type="button"
+            onClick={() => setTweaksOpen((v) => !v)}
+            aria-pressed={tweaksOpen}
+            aria-label="Toggle tweaks panel"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-md)',
+              background: tweaksOpen ? 'var(--color-accent-soft)' : 'transparent',
+              color: tweaksOpen ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+              border: `1px solid ${tweaksOpen ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              cursor: 'pointer',
+            }}
+          >
+            <SlidersHorizontal size={13} />
+            Tweaks
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -132,18 +162,37 @@ export function CanvasPanel({
               height: '100%',
               minWidth: 0,
               minHeight: 0,
-              padding: 'var(--space-6) var(--space-7)',
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection: 'row',
               boxSizing: 'border-box',
             }}
           >
-            <ArtifactPreview
-              runId={runId}
-              selectedFile={selectedFile}
-              zoom={zoom}
-              commentModeActive={commentModeActive}
-            />
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                minHeight: 0,
+                padding: 'var(--space-6) var(--space-7)',
+                display: 'flex',
+                flexDirection: 'column',
+                boxSizing: 'border-box',
+              }}
+            >
+              <ArtifactPreview
+                runId={runId}
+                selectedFile={selectedFile}
+                zoom={zoom}
+                commentModeActive={commentModeActive}
+              />
+            </div>
+            {tweaksOpen ? (
+              <TweakPanel
+                uiKitId={uiKit?._id ?? null}
+                slug={uiKit?.slug ?? null}
+                files={(uiKit?.files as Record<string, string>) ?? {}}
+                onClose={() => setTweaksOpen(false)}
+              />
+            ) : null}
           </div>
         ) : tab === 'code' ? (
           <div

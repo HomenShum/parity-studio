@@ -283,6 +283,24 @@ active kit.
 `;
   }
 
+  // ── tweak-schema.json — auto-derived from tokens.css ──────────────
+  // Drives the TweakPanel's UI (color picker / slider / enum / toggle / text)
+  // per token. Heuristic auto-derivation:
+  //   #hex / oklch(...) / rgb(...) / hsl(...) → color picker
+  //   plain number with px/rem/em → number slider with sensible bounds
+  //   font-* tokens → enum if comma-separated stack, else string
+  //   true/false literals → boolean toggle
+  //   anything else → text input (string)
+  // The agent can refine this via upsert_file on the same path; on next
+  // export the canonical regen only fills in NEW tokens (existing
+  // user/agent edits to tweak-schema.json survive thanks to iterate's
+  // merge policy).
+  out[`ui_kits/${slug}/tweak-schema.json`] = JSON.stringify(
+    deriveTweakSchema(tokensCss),
+    null,
+    2,
+  );
+
   // ── screenshots/ + scraps/ — README docs only; binaries injected at zip
   out['screenshots/README.md'] = `# Screenshots
 
@@ -306,6 +324,124 @@ you iterate downstream.
 `;
 
   return out;
+}
+
+// ── Tweak-schema derivation ─────────────────────────────────────────────
+
+/**
+ * TweakSchemaEntry — per-token UI control hint.
+ *
+ * Mirrors OCD's TweakSchema but lives in a standalone JSON file rather
+ * than inside an EDITMODE marker block, so the agent can edit it via
+ * upsert_file without touching tokens.css.
+ *
+ * `kind` drives which control the TweakPanel renders:
+ *   color   → native color input + hex text field
+ *   number  → range slider with min/max/step/unit + text input
+ *   enum    → segmented control over `options`
+ *   boolean → toggle switch (value is "true" | "false" string)
+ *   string  → text input with optional placeholder
+ */
+export interface TweakSchemaEntry {
+  kind: 'color' | 'number' | 'enum' | 'boolean' | 'string';
+  label?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  options?: string[];
+  placeholder?: string;
+}
+
+export interface TweakSchema {
+  version: 1;
+  /** Map of CSS custom property name (with `--` prefix) → schema hint. */
+  tokens: Record<string, TweakSchemaEntry>;
+}
+
+const COLOR_VALUE_RE =
+  /^(#[0-9a-f]{3,8}|oklch\([^)]*\)|rgba?\([^)]*\)|hsla?\([^)]*\))$/i;
+const NUMERIC_VALUE_RE = /^(-?\d+(?:\.\d+)?)(px|rem|em|%|s|ms)?$/i;
+const FONT_STACK_RE = /,/;
+
+function deriveTweakSchema(tokensCss: string): TweakSchema {
+  const tokens: Record<string, TweakSchemaEntry> = {};
+
+  // Capture every `--name: value;` (or until `}` for last in block) inside :root.
+  // We don't try to handle media queries / other selectors; tokens.css typically
+  // declares everything in :root.
+  const declRe = /--([a-z][a-z0-9-]*)\s*:\s*([^;]+);/gi;
+  for (const m of tokensCss.matchAll(declRe)) {
+    const rawName = `--${m[1]}`;
+    const value = (m[2] ?? '').trim();
+    if (rawName in tokens) continue;
+
+    const label = humanLabel(rawName);
+
+    if (COLOR_VALUE_RE.test(value)) {
+      tokens[rawName] = { kind: 'color', label };
+      continue;
+    }
+
+    const numMatch = value.match(NUMERIC_VALUE_RE);
+    if (numMatch) {
+      const n = Number(numMatch[1]);
+      const unit = numMatch[2] ?? '';
+      const entry: TweakSchemaEntry = { kind: 'number', label };
+      if (unit) entry.unit = unit;
+      // Sensible bounds per unit. Designers typically stay within these
+      // ranges; the agent can override to widen.
+      if (unit === 'px') {
+        entry.min = 0;
+        entry.max = Math.max(64, Math.ceil(n * 2));
+        entry.step = 1;
+      } else if (unit === 'rem' || unit === 'em') {
+        entry.min = 0;
+        entry.max = Math.max(4, Math.ceil(n * 2));
+        entry.step = 0.05;
+      } else if (unit === '%') {
+        entry.min = 0;
+        entry.max = 100;
+        entry.step = 1;
+      } else if (unit === 's' || unit === 'ms') {
+        entry.min = 0;
+        entry.max = unit === 's' ? Math.max(2, Math.ceil(n * 4)) : Math.max(1000, Math.ceil(n * 4));
+        entry.step = unit === 's' ? 0.05 : 10;
+      } else {
+        entry.min = 0;
+        entry.max = Math.max(100, Math.ceil(Math.abs(n) * 4));
+        entry.step = Number.isInteger(n) ? 1 : 0.1;
+      }
+      tokens[rawName] = entry;
+      continue;
+    }
+
+    if (rawName.includes('font') && FONT_STACK_RE.test(value)) {
+      const options = value
+        .split(',')
+        .map((s) => s.replace(/['"]/g, '').trim())
+        .filter(Boolean);
+      tokens[rawName] = { kind: 'enum', label, options };
+      continue;
+    }
+
+    if (value === 'true' || value === 'false') {
+      tokens[rawName] = { kind: 'boolean', label };
+      continue;
+    }
+
+    tokens[rawName] = { kind: 'string', label, placeholder: value };
+  }
+
+  return { version: 1, tokens };
+}
+
+function humanLabel(rawName: string): string {
+  return rawName
+    .replace(/^--/, '')
+    .split('-')
+    .map((w) => (w.length === 0 ? '' : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

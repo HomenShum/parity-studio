@@ -1,5 +1,6 @@
 import { useQuery } from 'convex/react';
 import { ExternalLink } from 'lucide-react';
+import { useMemo } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { CommentOverlay } from '../CommentOverlay';
@@ -25,6 +26,29 @@ export function ArtifactPreview({
 }: ArtifactPreviewProps) {
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
+  const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+
+  const liveTokensCss = useMemo(() => {
+    if (!uiKit) return null;
+    const files = (uiKit.files as Record<string, string>) ?? {};
+    const path = `ui_kits/${uiKit.slug}/tokens.css`;
+    return files[path] ?? null;
+  }, [uiKit]);
+
+  // Stitch tokens.css into the iframe srcDoc so TweakPanel edits show
+  // live. Inserts a synthetic `<style data-parity-tokens>` block right
+  // after `<head>`, OR before `</body>` if no head. The artifact's own
+  // styles still load AFTER (cascade order), so they win on conflicts —
+  // but `var(--…)` references in the artifact will pick up the live
+  // tokens.css values declared by our injected block.
+  function injectLiveTokens(html: string, tokens: string | null): string {
+    if (!tokens) return html;
+    const tag = `<style data-parity-tokens="live">\n${tokens}\n</style>\n`;
+    if (html.includes('<head>')) return html.replace('<head>', `<head>\n${tag}`);
+    if (html.toLowerCase().includes('<head>')) return html.replace(/<head>/i, `<head>\n${tag}`);
+    if (html.includes('<body')) return html.replace('<body', `${tag}<body`);
+    return tag + html;
+  }
 
   let srcDoc = PLACEHOLDER_HTML;
   let versionLabel = 'v0';
@@ -35,7 +59,7 @@ export function ArtifactPreview({
     } else if (artifact === null) {
       srcDoc = loadingHtml(run?.status ?? 'queued');
     } else {
-      srcDoc = artifact.html;
+      srcDoc = injectLiveTokens(artifact.html, liveTokensCss);
       versionLabel = `v${artifact.version}`;
       artifactVersion = artifact.version;
     }

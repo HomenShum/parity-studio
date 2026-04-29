@@ -29,6 +29,7 @@ const SYSTEM_PROMPT = `You are the Parity Studio chat agent. The user is iterati
 
 - README.md, SKILL.md, colors_and_type.css (top-level docs)
 - ui_kits/<slug>/index.html, components/*.tsx, tokens.css, manifest.json, README.md, HANDOFF.md (the active product)
+- ui_kits/<slug>/tweak-schema.json (drives the live Tweaks panel — declare per-token UI hints: { kind: 'color' | 'number' | 'enum' | 'boolean' | 'string', label?, min?, max?, step?, unit?, options?, placeholder? })
 - assets/logo-mark.svg, assets/og-<slug>.svg, assets/README.md (brand artifacts)
 - preview/_shell.css, preview/index.html, preview/component-*.html, preview/tokens-*.html (specimen pages)
 - explorations/iter-N.html, explorations/README.md (iteration history)
