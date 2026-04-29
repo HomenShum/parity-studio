@@ -332,7 +332,29 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       parity: null,
       artifacts: [],
     });
-    const iterFullShape = { ...iterCanonical, ...parsed.files };
+
+    // Merge policy: user edits made on the previous ui_kit row's
+    // canonical-shape files (preview/, assets/, explorations/, top-level
+    // docs) MUST survive an iterate. Without this, the chat agent's
+    // edits to e.g. assets/og-<slug>.svg would be silently overwritten
+    // each time the user clicks Iterate now.
+    //   1. Start with the previous map (preserves all user edits)
+    //   2. Drop ui_kits/<slug>/* paths (replaced by new decompose)
+    //   3. Overlay the new kit code from `parsed.files`
+    //   4. Add any canonical paths that didn't exist before (e.g. a
+    //      preview specimen for a NEW component this iterate produced)
+    const priorFiles = (args.previousUiKitFiles as Record<string, string>) ?? {};
+    const slugPrefix = `ui_kits/${parsed.slug}/`;
+    const iterFullShape: Record<string, string> = {};
+    for (const [k, v] of Object.entries(priorFiles)) {
+      if (!k.startsWith(slugPrefix)) iterFullShape[k] = v; // preserve user edits + non-kit paths
+    }
+    for (const [k, v] of Object.entries(parsed.files)) {
+      iterFullShape[k] = v; // new decompose wins on kit paths
+    }
+    for (const [k, v] of Object.entries(iterCanonical)) {
+      if (!(k in iterFullShape)) iterFullShape[k] = v; // backfill new canonical (e.g. new component → new specimen)
+    }
 
     await ctx.runMutation(internal.uiKits.save, {
       runId: args.runId,

@@ -29,6 +29,7 @@ function languageForPath(path: string): string {
   if (path.endsWith('.jsx') || path.endsWith('.js')) return 'javascript';
   if (path.endsWith('.css')) return 'css';
   if (path.endsWith('.html')) return 'html';
+  if (path.endsWith('.svg')) return 'xml';
   if (path.endsWith('.json')) return 'json';
   if (path.endsWith('.md')) return 'markdown';
   return 'plaintext';
