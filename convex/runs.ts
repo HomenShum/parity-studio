@@ -119,6 +119,13 @@ export const startFromKit = mutation({
      * Optional original prompt that produced the kit. For provenance.
      */
     prompt: v.optional(v.string()),
+    /**
+     * Optional source artifact HTML captured from an existing product route.
+     * When present, deterministic verify compares the generated ui_kit
+     * against this source instead of self-verifying against the imported
+     * ui_kit's own index.html.
+     */
+    sourceArtifactHtml: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const files = (args.files ?? {}) as Record<string, string>;
@@ -131,6 +138,7 @@ export const startFromKit = mutation({
     const indexHtml =
       Object.entries(files).find(([p]) => p.endsWith('/index.html') || p === 'index.html')?.[1] ??
       '<!doctype html><html><body><!-- ui_kit imported without index.html --></body></html>';
+    const artifactHtml = args.sourceArtifactHtml ?? indexHtml;
 
     const runId = await ctx.db.insert('runs', {
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
@@ -150,8 +158,8 @@ export const startFromKit = mutation({
     await ctx.db.insert('artifacts', {
       runId,
       version: 0,
-      html: indexHtml,
-      sizeBytes: indexHtml.length,
+      html: artifactHtml,
+      sizeBytes: artifactHtml.length,
     });
 
     // Expand the imported kit into the full canonical shape so the

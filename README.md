@@ -5,15 +5,15 @@
 ## The 6-step user flow
 
 1. **Drop a gpt-image-2 image, drop a canonical `ui_kit` zip, or generate one on the spot** from a prompt.
-2. **Break it down** into individual UI components — exact parity, not approximations.
+2. **Break it down** into individual UI components - exact parity, not approximations.
 3. **Select a component** in the file tree.
 4. **Comment** on it (a pinned bbox or a free-form note, scoped to that file).
-5. **Iterate / edit** that scoped slice — not the whole artifact.
-6. **Export as a `ui_kit` zip** — same shape on the way in as on the way out, guided handoff to a coding agent that drops it into a real codebase.
+5. **Iterate / edit** that scoped slice - not the whole artifact.
+6. **Export as a `ui_kit` zip** - same shape on the way in as on the way out, guided handoff to a coding agent that drops it into a real codebase.
 
 That is the entire product. Every surface is in service of one of those six steps. The canonical zip shape (NodeBench AI Skill-pack format, see [docs/CANONICAL_KIT.md](./docs/CANONICAL_KIT.md)) is symmetric: drop one in, get one out.
 
-[**Try it live →**](https://parity-studio.vercel.app)
+[**Try it live ->**](https://parity-studio.vercel.app)
 
 ---
 
@@ -27,20 +27,20 @@ From prompt/image to verified `ui_kit`, scoped comments, MCP tooling, and ZIP ex
 
 ---
 
-**Status**: v0.1.0 · LIVE
+**Status**: v0.1.0 - LIVE
 
 - **Web app**: https://parity-studio.vercel.app
-- **Release demo run**: https://parity-studio.vercel.app/?run=jh798qfj782qem79rkechhyxxs85tprk
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) · `npx parity-studio-mcp`
-- **Convex prod**: `blissful-pig-998` · HTTP routes at https://blissful-pig-998.convex.site
-- Stack: single-page web · Convex Cloud + pi-ai · stdio MCP for Claude Code / Cursor / Windsurf
+- **Release demo run**: https://parity-studio.vercel.app/-run=jh798qfj782qem79rkechhyxxs85tprk
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
+- Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package — a stdio MCP server with 4 tools: `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 11 tools, including `parity_platform_to_ui_kit` for existing apps and `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip` for direct pipeline work.
 
 ```jsonc
-// .claude/settings.json (Claude Code), settings.json (Cursor / Windsurf)
+// MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
 {
   "mcpServers": {
     "parity-studio": {
@@ -56,27 +56,30 @@ The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp
 }
 ```
 
-Then in Claude Code: *"use parity_pipeline to turn this sketch into a ui_kit"* and it returns the `ui_kit/<slug>/` files inline in the chat.
+Then in your coding agent:
 
-**The MCP server also auto-opens a local dashboard** on first invocation (port 6280 by default). Live view of the pipeline running: source ↔ rendered split, file tree as it streams, parity score with bounded enum status, cost meter, ZIP export. Set `PARITY_DASHBOARD=server-only` to disable auto-open in the env block above. See [mcp/README.md](./mcp/) for full tool docs + env flags.
+- Existing app: *"use parity_platform_to_ui_kit on http://localhost:3000/settings with projectRoot=. and write ./settings-ui-kit.zip"*
+- New sketch/prompt: *"use parity_pipeline to turn this sketch into a ui_kit"*
+
+**The MCP server also auto-opens a local dashboard** on first invocation (port 6280 by default). Live view of the pipeline running: source/rendered split, file tree as it streams, parity score with bounded enum status, cost meter, ZIP export. Set `PARITY_DASHBOARD=server-only` to disable auto-open in the env block above. See [mcp/README.md](./mcp/) for full tool docs + env flags.
 
 ## What it does
 
 ```
    sketch.png             ui_kits/saas-dashboard/
-   prompt text     -->    ├── index.html
-   image upload           ├── components/
-                          │   ├── Sidebar.tsx
-                          │   ├── MetricCard.tsx
-                          │   └── ChartPanel.tsx
-                          ├── tokens.css
-                          ├── manifest.json
-                          └── README.md   <-- handoff to Claude Code / Cursor
+   prompt text     -->    |-- index.html
+   image upload           |-- components/
+                          |   |-- Sidebar.tsx
+                          |   |-- MetricCard.tsx
+                          |   `-- ChartPanel.tsx
+                          |-- tokens.css
+                          |-- manifest.json
+                          `-- README.md   <-- handoff to Claude Code / Cursor
 ```
 
-Pipeline: **generate → decompose → verify (deterministic) → verify (visual judge) → iterate (max 2) → done**, all durable, all live-streamed to the browser.
+Pipeline: **generate -> decompose -> verify (deterministic) -> verify (visual judge) -> iterate (max 2) -> done**, all durable, all live-streamed to the browser.
 
-Verifier returns a **bounded enum** — `verified | needs_review | needs_iteration | failed | unavailable` — derived from a 16-row deterministic rubric. Each row carries its own honest verdict (`pass | warn | fail | unavailable`) plus 1–2 evidence lines. No floating-point hallucination scores; rows that the deterministic layer genuinely cannot evaluate (color delta, visual regression) are honestly marked `unavailable` rather than collapsed into a fake pass.
+Verifier returns a **bounded enum** - `verified | needs_review | needs_iteration | failed | unavailable` - derived from a 16-row deterministic rubric. Each row carries its own honest verdict (`pass | warn | fail | unavailable`) plus 1-2 evidence lines. No floating-point hallucination scores; rows that the deterministic layer genuinely cannot evaluate (color delta, visual regression) are honestly marked `unavailable` rather than collapsed into a fake pass.
 
 ## Stack
 

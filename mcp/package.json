@@ -1,9 +1,9 @@
 {
   "name": "parity-studio-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
-  "description": "MCP server for Parity Studio. Lets coding agents (Claude Code, Cursor, Windsurf) generate, decompose, and verify ui_kit/ bundles directly from a sketch or prompt — without leaving the editor.",
+  "description": "MCP server for Parity Studio. Lets coding agents capture existing app routes, decompose them into ui_kit/ bundles, and import them for iteration.",
   "license": "MIT",
   "homepage": "https://github.com/HomenShum/parity-studio",
   "repository": {
@@ -15,6 +15,7 @@
     "mcp",
     "model-context-protocol",
     "claude-code",
+    "codex",
     "cursor",
     "ui-generation",
     "design-to-code",
