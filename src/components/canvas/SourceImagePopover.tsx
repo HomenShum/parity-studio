@@ -1,43 +1,47 @@
 import { useQuery } from 'convex/react';
-import { ImageOff, Maximize2, Minimize2, X } from 'lucide-react';
-import { useState } from 'react';
+import { Image as ImageIcon, ImageOff, Maximize2, Minimize2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 
 interface SourceImagePopoverProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
- * SourceImagePopover — pins the gpt-image-2 / uploaded source image
- * alongside the scoped component, so the user can compare what they
- * intended to what the decomposer produced.
- *
- * Closes the gap from the original 6-step user flow vision: "show the
- * gpt image 2 生成的原型图 next to or as a popover for the contexts
- * referenced within the UI component display on a sidebar".
- *
- * Visibility rules:
- *   - hidden when runId is null (no run, nothing to anchor)
- *   - hidden when no selectedFile (nothing to scope to)
- *   - hidden when run has no source image stored
- *   - dismissible per session via the × button
- *   - resizable: minimized (small thumbnail) or expanded (larger preview)
- *
- * Anchored bottom-right of the canvas pane via fixed-positioned wrapper
- * supplied by the caller.
+ * Pins the uploaded/generated source image beside the active artifact so users
+ * can compare the original reference with the current ui_kit output.
  */
-export function SourceImagePopover({ runId, selectedFile }: SourceImagePopoverProps) {
+export function SourceImagePopover({
+  runId,
+  selectedFile,
+  open = false,
+  onOpenChange,
+}: SourceImagePopoverProps) {
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  if (!runId || !selectedFile || dismissed) return null;
+  useEffect(() => {
+    if (!open) return;
+    setDismissed(false);
+    setExpanded(true);
+  }, [open]);
+
+  const shouldShow = open || selectedFile !== null;
+  if (!runId || !shouldShow || dismissed) return null;
   if (!run || !run.sourceImageBase64 || !run.sourceImageMimeType) return null;
 
   const dataUrl = `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`;
-  const componentName = selectedFile.split('/').slice(-1)[0] ?? selectedFile;
+  const componentName = selectedFile ? (selectedFile.split('/').slice(-1)[0] ?? selectedFile) : 'full source';
+
+  function close() {
+    setDismissed(true);
+    onOpenChange?.(false);
+  }
 
   return (
     <div
@@ -75,9 +79,9 @@ export function SourceImagePopover({ runId, selectedFile }: SourceImagePopoverPr
         }}
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          <span aria-hidden style={{ fontSize: 12 }}>📎</span>
+          <ImageIcon size={12} aria-hidden />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            source · {componentName}
+            source - {componentName}
           </span>
         </span>
         <span style={{ display: 'inline-flex', gap: 2 }}>
@@ -89,12 +93,7 @@ export function SourceImagePopover({ runId, selectedFile }: SourceImagePopoverPr
           >
             {expanded ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
           </button>
-          <button
-            type="button"
-            onClick={() => setDismissed(true)}
-            aria-label="Dismiss source image"
-            style={iconBtnStyle}
-          >
+          <button type="button" onClick={close} aria-label="Dismiss source image" style={iconBtnStyle}>
             <X size={11} />
           </button>
         </span>
@@ -129,17 +128,15 @@ export function SourceImagePopover({ runId, selectedFile }: SourceImagePopoverPr
           lineHeight: 'var(--leading-snug)',
         }}
       >
-        Reference for the scoped component. Comments and iterate-now will
-        target this file specifically — the source above is what you’re
-        matching to.
+        Reference for the scoped component. Comments and iterate-now target this file; the source above is
+        what you are matching to.
       </div>
     </div>
   );
 }
 
 /**
- * Empty fallback used when the run is present but has no inline source.
- * Currently unused (the main component returns null instead) — kept as
+ * Empty fallback used when the run is present but has no inline source. Kept as
  * a hook point for the future "uploaded via Convex Storage" branch.
  */
 export function SourceImageMissing({ reason }: { reason: string }) {

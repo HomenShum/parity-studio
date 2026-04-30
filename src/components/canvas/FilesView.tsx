@@ -1,13 +1,16 @@
 import { useQuery } from 'convex/react';
-import { Code2, Download, FileText, Folder, Image as ImageIcon } from 'lucide-react';
+import { Download, Expand, FileText, Folder, Image as ImageIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { FileEditor } from '../FileEditor';
 
 interface FilesViewProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
+  sourceImagePreviewOpen?: boolean;
+  onPreviewSourceImage?: () => void;
 }
 
 function convexHttpBase(): string | null {
@@ -24,8 +27,15 @@ function formatSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps) {
+export function FilesView({
+  runId,
+  selectedFile,
+  onSelectFile,
+  sourceImagePreviewOpen = false,
+  onPreviewSourceImage,
+}: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+  const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const httpBase = convexHttpBase();
   const exportHref =
     runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/zip` : '#';
@@ -46,9 +56,14 @@ export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps)
     /^ui_kits\/[^/]+\/components\/.+\.(tsx|jsx|ts|js)$/i.test(path),
   ).length;
   const previewArtifactCount = visibleFilePaths.filter((path) => /^preview\//i.test(path)).length;
+  const sourceImageUrl =
+    run?.sourceImageBase64 && run.sourceImageMimeType
+      ? `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`
+      : null;
 
   return (
     <div
+      className="files-workspace-grid"
       style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(260px, 340px) 1fr',
@@ -130,16 +145,55 @@ export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps)
         </FileGroup>
 
         <FileGroup label="Source">
-          <div
+          <button
+            type="button"
+            onClick={sourceImageUrl ? onPreviewSourceImage : undefined}
+            disabled={!sourceImageUrl}
+            aria-pressed={sourceImagePreviewOpen}
+            aria-label={sourceImageUrl ? 'Preview source image' : 'No source image available'}
             style={{
-              display: 'flex',
-              alignItems: 'flex-start',
+              display: 'grid',
+              gridTemplateColumns: sourceImageUrl ? '56px 1fr auto' : 'auto 1fr',
+              alignItems: 'center',
               gap: 8,
-              padding: '6px 8px',
-              borderRadius: 'var(--radius-sm)',
+              padding: 8,
+              borderRadius: 'var(--radius-md)',
+              border: `1px solid ${sourceImagePreviewOpen ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+              background: sourceImagePreviewOpen ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+              textAlign: 'left',
+              cursor: sourceImageUrl ? 'pointer' : 'not-allowed',
+              opacity: sourceImageUrl ? 1 : 0.62,
+              boxShadow: sourceImagePreviewOpen ? 'var(--shadow-soft)' : 'none',
             }}
           >
-            <ImageIcon size={14} style={{ color: 'var(--color-text-secondary)', marginTop: 2 }} />
+            {sourceImageUrl ? (
+              <span
+                style={{
+                  width: 56,
+                  height: 42,
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border-subtle)',
+                  overflow: 'hidden',
+                  background: 'var(--color-background-secondary)',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <img
+                  src={sourceImageUrl}
+                  alt=""
+                  aria-hidden
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+              </span>
+            ) : (
+              <ImageIcon size={14} style={{ color: 'var(--color-text-secondary)', marginTop: 2 }} />
+            )}
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
@@ -151,10 +205,13 @@ export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps)
                 source image
               </div>
               <div style={{ fontSize: 10, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>
-                inline base64 - png/jpeg/webp
+                {sourceImageUrl ? 'click to compare original reference' : 'no inline source stored'}
               </div>
             </div>
-          </div>
+            {sourceImageUrl ? (
+              <Expand size={13} style={{ color: sourceImagePreviewOpen ? 'var(--color-accent)' : 'var(--color-text-faint)' }} />
+            ) : null}
+          </button>
         </FileGroup>
 
         <FileGroup label="Handoff">
@@ -264,7 +321,16 @@ export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps)
               {selectedFile ? selectedFile.split('/').slice(-1)[0] : 'Select a component to scope work'}
             </div>
           </div>
-          <Code2 size={16} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--color-text-faint)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            browse + edit
+          </span>
         </div>
 
         {selectedContent !== null && selectedFile !== null ? (
@@ -300,27 +366,20 @@ export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps)
                 fontSize: 'var(--font-size-body-sm)',
               }}
             >
-              Comments and agent edits can target this file directly. Open Preview for visual bbox comments or Code for full editing.
+              This file is now the scoped target for comments and agent edits. Use Preview for visual bbox comments; edit the actual code below.
             </div>
-            <pre
+            <div
               style={{
-                margin: 0,
+                flex: 1,
                 minHeight: 0,
-                overflow: 'auto',
-                padding: 'var(--space-4)',
+                height: '100%',
                 borderRadius: 'var(--radius-md)',
-                background: 'var(--color-background-secondary)',
                 border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                lineHeight: 1.55,
-                whiteSpace: 'pre-wrap',
+                overflow: 'hidden',
               }}
             >
-              {selectedContent.slice(0, 6000)}
-              {selectedContent.length > 6000 ? '\n\n... open Code for the full file' : ''}
-            </pre>
+              <FileEditor runId={runId} selectedFile={selectedFile} />
+            </div>
           </div>
         ) : (
           <div

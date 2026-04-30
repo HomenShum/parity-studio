@@ -1,9 +1,8 @@
 import { useQuery } from 'convex/react';
-import { Code, Eye, Folder, SlidersHorizontal } from 'lucide-react';
+import { Eye, Folder, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { FileEditor } from '../FileEditor';
 import type { Device } from '../HeaderActions';
 import { ArtifactPreview } from './ArtifactPreview';
 import { FilesView } from './FilesView';
@@ -20,12 +19,11 @@ interface CanvasPanelProps {
   commentModeActive: boolean;
 }
 
-type Tab = 'files' | 'preview' | 'code';
+type Tab = 'files' | 'preview';
 
 const TAB_META: Record<Tab, { label: string; Icon: typeof Folder }> = {
   files: { label: 'Files', Icon: Folder },
   preview: { label: 'Preview', Icon: Eye },
-  code: { label: 'Code', Icon: Code },
 };
 
 export function CanvasPanel({
@@ -38,11 +36,13 @@ export function CanvasPanel({
 }: CanvasPanelProps) {
   const [tab, setTab] = useState<Tab>('files');
   const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [sourcePreviewOpen, setSourcePreviewOpen] = useState(false);
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
 
   useEffect(() => {
     setTab(runId === null ? 'files' : 'preview');
     setTweaksOpen(false);
+    setSourcePreviewOpen(false);
   }, [runId]);
 
   return (
@@ -156,6 +156,8 @@ export function CanvasPanel({
                 runId={runId}
                 selectedFile={selectedFile}
                 onSelectFile={onSelectFile}
+                sourceImagePreviewOpen={sourcePreviewOpen}
+                onPreviewSourceImage={() => setSourcePreviewOpen(true)}
               />
             )}
           </div>
@@ -199,26 +201,16 @@ export function CanvasPanel({
               />
             ) : null}
           </div>
-        ) : tab === 'code' ? (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              minWidth: 0,
-              minHeight: 0,
-              padding: 'var(--space-6) var(--space-7)',
-              display: 'flex',
-              flexDirection: 'column',
-              boxSizing: 'border-box',
-            }}
-          >
-            <FileEditor runId={runId} selectedFile={selectedFile} />
-          </div>
         ) : null}
 
         {/* SourceImagePopover floats bottom-right of the canvas pane.
-            Self-hides when there's no run, no scoped file, or no source. */}
-        <SourceImagePopover runId={runId} selectedFile={selectedFile} />
+            It self-hides when there's no run/source, but can be opened from Files. */}
+        <SourceImagePopover
+          runId={runId}
+          selectedFile={selectedFile}
+          open={sourcePreviewOpen}
+          onOpenChange={setSourcePreviewOpen}
+        />
       </div>
     </section>
   );

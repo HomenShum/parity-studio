@@ -1,6 +1,6 @@
-import { useQuery } from 'convex/react';
-import { ShieldCheck } from 'lucide-react';
-import { useMemo } from 'react';
+import { useAction, useQuery } from 'convex/react';
+import { RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { CostTelemetry } from './CostTelemetry';
@@ -117,9 +117,87 @@ function buildCheckRows(report: {
   });
 }
 
+function buildLocalParityReadout({
+  counts,
+  totalChecks,
+  rows,
+  statusLabel,
+  hasReport,
+}: {
+  counts: { pass: number; warn: number; fail: number; unavailable: number };
+  totalChecks: number;
+  rows: CheckRow[];
+  statusLabel: string;
+  hasReport: boolean;
+}): string {
+  if (!hasReport) {
+    return [
+      'Readout: No parity report yet.',
+      'Why it matters: the app needs to generate or import a ui_kit before it can judge visual accuracy.',
+      'Fix next: run generate/decompose, then this panel will explain what passed and what needs iteration.',
+      `Confidence: waiting; current run status is ${statusLabel}.`,
+    ].join('\n');
+  }
+
+  const issues = rows
+    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
+    .slice(0, 3)
+    .map((row) => row.label);
+  const issueText = issues.length > 0 ? issues.join(', ') : 'no obvious blockers';
+  if (counts.fail > 0) {
+    return [
+      `Readout: not ready to distribute yet; ${counts.fail} checks fail and ${counts.pass}/${totalChecks} pass.`,
+      `Why it matters: the generated kit still diverges in ${issueText}, so users may not trust the output as an exact match.`,
+      'Fix next: make one visible iteration against the highest-impact failing area, then rerun verify.',
+      `Confidence: medium; ${counts.unavailable} checks still need stronger evidence.`,
+    ].join('\n');
+  }
+  if (counts.warn > 0) {
+    return [
+      `Readout: close, but still needs polish; ${counts.pass}/${totalChecks} pass with ${counts.warn} warnings.`,
+      `Why it matters: ${issueText} may look acceptable at a glance but can drift under real use or responsive sizes.`,
+      'Fix next: tune the warning areas, then do a browser pass on desktop and mobile.',
+      `Confidence: medium-high; ${counts.unavailable} checks are still unavailable.`,
+    ].join('\n');
+  }
+  if (counts.unavailable > 0) {
+    return [
+      `Readout: ${counts.pass}/${totalChecks} checks pass, but the score is incomplete.`,
+      'Why it matters: missing evidence means the app cannot honestly claim the whole surface is verified.',
+      'Fix next: rerun verify or capture the missing browser/screenshot evidence.',
+      `Confidence: limited; ${counts.unavailable} checks are unavailable.`,
+    ].join('\n');
+  }
+  return [
+    `Readout: strong match; all ${totalChecks} checks pass.`,
+    'Why it matters: the generated ui_kit is aligned enough for a final human visual review and export.',
+    'Fix next: preview the core route, test the ZIP export, then distribute.',
+    'Confidence: high, assuming the live browser route still matches this report.',
+  ].join('\n');
+}
+
+function cleanDisplayReadout(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[ \t]{2,}$/gm, '')
+    .trim();
+}
+
 export function ParityPanel({ runId }: ParityPanelProps) {
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const parity = useQuery(api.parityReports.getLatest, runId ? { runId } : 'skip');
+  const explainParity = useAction(api.chatLoop.explainParity);
+  const [agentSummary, setAgentSummary] = useState<{
+    text: string;
+    modelUsed: string;
+    provider: string;
+    costMicroUsd: number;
+  } | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [explainedReportId, setExplainedReportId] = useState<string | null>(null);
 
   const rows = useMemo(() => buildCheckRows(parity ?? null), [parity]);
 
@@ -140,6 +218,58 @@ export function ParityPanel({ runId }: ParityPanelProps) {
   const totalChecks = rows.length;
   const passCount = counts.pass;
 
+  const statusLabel = (() => {
+    if (!run) return 'Idle';
+    if (run.status === 'queued') return 'Queued';
+    if (run.status === 'generating') return 'Generating';
+    if (run.status === 'decomposing') return 'Decomposing & verifying';
+    if (run.status === 'verifying') return 'Verifying';
+    if (run.status === 'iterating') return 'Iterating';
+    if (run.status === 'failed') return 'Failed';
+    return 'Done';
+  })();
+
+  const localReadout = useMemo(
+    () =>
+      buildLocalParityReadout({
+        counts,
+        totalChecks,
+        rows,
+        statusLabel,
+        hasReport: parity !== null && parity !== undefined,
+      }),
+    [counts, parity, rows, statusLabel, totalChecks],
+  );
+
+  const parityReportId = parity?._id ? String(parity._id) : null;
+  const displayedReadout = cleanDisplayReadout(agentSummary?.text ?? localReadout);
+
+  async function refreshAgentSummary() {
+    if (!runId || !parityReportId) return;
+    setAgentLoading(true);
+    setAgentError(null);
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        window.setTimeout(() => reject(new Error('agent explanation timed out; local readout shown')), 28_000);
+      });
+      const result = await Promise.race([explainParity({ runId }), timeout]);
+      setAgentSummary(result);
+      setExplainedReportId(parityReportId);
+    } catch (err) {
+      setAgentError(err instanceof Error ? err.message : String(err));
+      setAgentSummary(null);
+      setExplainedReportId(parityReportId);
+    } finally {
+      setAgentLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!runId || !parityReportId || explainedReportId === parityReportId || agentLoading) return;
+    void refreshAgentSummary();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: run once per parity report id
+  }, [runId, parityReportId, explainedReportId]);
+
   const costs = useMemo(() => {
     const breakdown = run?.costBreakdown ?? [];
     let g = 0;
@@ -158,17 +288,6 @@ export function ParityPanel({ runId }: ParityPanelProps) {
     };
   }, [run]);
 
-  const statusLabel = (() => {
-    if (!run) return 'Idle';
-    if (run.status === 'queued') return 'Queued';
-    if (run.status === 'generating') return 'Generating';
-    if (run.status === 'decomposing') return 'Decomposing & verifying';
-    if (run.status === 'verifying') return 'Verifying';
-    if (run.status === 'iterating') return 'Iterating';
-    if (run.status === 'failed') return 'Failed';
-    return 'Done';
-  })();
-
   return (
     <aside
       style={{
@@ -181,7 +300,7 @@ export function ParityPanel({ runId }: ParityPanelProps) {
         borderLeft: '1px solid var(--color-border-subtle)',
         minWidth: 0,
       }}
-      aria-label="Deterministic parity"
+      aria-label="Parity coach and deterministic checks"
     >
       <div
         style={{
@@ -206,7 +325,7 @@ export function ParityPanel({ runId }: ParityPanelProps) {
           }}
         >
           <ShieldCheck size={12} />
-          Deterministic parity
+          Parity coach
         </div>
         <div
           style={{
@@ -266,6 +385,95 @@ export function ParityPanel({ runId }: ParityPanelProps) {
             unavailable={counts.unavailable}
             size={92}
           />
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            padding: '12px 12px 10px',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border-subtle)',
+            background: 'linear-gradient(135deg, var(--color-surface), var(--color-accent-tint))',
+            boxShadow: 'var(--shadow-soft)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--font-size-body-sm)',
+                fontWeight: 700,
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              <Sparkles size={14} style={{ color: 'var(--color-accent)' }} />
+              Plain-English readout
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshAgentSummary()}
+              disabled={!runId || !parityReportId || agentLoading}
+              title="Ask the agent to reinterpret the latest parity report"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--color-border-subtle)',
+                background: agentLoading ? 'var(--color-surface-active)' : 'var(--color-surface)',
+                color: agentLoading ? 'var(--color-text-faint)' : 'var(--color-text-secondary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                cursor: !runId || !parityReportId || agentLoading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <RefreshCw
+                size={11}
+                style={{
+                  animation: agentLoading ? 'pipeline-pulse 1s ease-in-out infinite' : 'none',
+                }}
+              />
+              {agentLoading ? 'Reading' : 'Refresh'}
+            </button>
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              lineHeight: 1.55,
+              color: 'var(--color-text-primary)',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {agentLoading && !agentSummary ? 'Agent is translating the technical checks into an actionable readout...' : displayedReadout}
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: agentError ? 'var(--color-warning)' : 'var(--color-text-faint)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <span>
+              {agentError
+                ? `Agent summary failed; showing local readout: ${agentError}`
+                : agentSummary
+                  ? `${agentSummary.provider} / ${agentSummary.modelUsed}`
+                  : 'local readout until agent summary returns'}
+            </span>
+            {agentSummary?.costMicroUsd ? (
+              <span>${(agentSummary.costMicroUsd / 1_000_000).toFixed(4)}</span>
+            ) : null}
+          </div>
         </div>
       </div>
 

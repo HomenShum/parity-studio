@@ -400,6 +400,14 @@ button.file.selected {
   flex-shrink: 0;
 }
 
+@media (max-width: 900px) {
+  .files-workspace-grid {
+    grid-template-columns: 1fr !important;
+    grid-auto-rows: auto;
+    overflow-y: auto;
+  }
+}
+
 .handoff-button {
   background: var(--color-bg-tertiary);
   border: 1px solid rgba(255, 255, 255, 0.1);

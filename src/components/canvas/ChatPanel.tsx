@@ -371,62 +371,252 @@ function RouterSelect({
   onSelect: (tier: Tier) => void;
 }) {
   const selected = MODEL_ROUTERS.find((router) => router.value === currentTier) ?? (MODEL_ROUTERS[0] as (typeof MODEL_ROUTERS)[number]);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const Icon = ROUTER_ICON[currentTier];
+  const tone = routerTone(currentTier);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const root = rootRef.current;
+      if (root && !root.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   return (
-    <label
+    <div
+      ref={rootRef}
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        padding: '3px 7px',
-        borderRadius: 'var(--radius-pill)',
-        border: '1px solid var(--color-border-subtle)',
-        background:
-          currentTier === 'free'
-            ? 'var(--color-success-soft, var(--color-surface-hover))'
-            : currentTier === 'frontier'
-              ? 'var(--color-accent-soft)'
-              : 'var(--color-surface-hover)',
-        color:
-          currentTier === 'free'
-            ? 'var(--color-success, var(--color-text-secondary))'
-            : currentTier === 'frontier'
-              ? 'var(--color-accent)'
-              : 'var(--color-text-secondary)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 10,
+        position: 'relative',
+        width: 'min(100%, 292px)',
         maxWidth: '100%',
       }}
-      title={selected.detail}
     >
-      <Icon size={11} aria-hidden />
-      <span style={{ whiteSpace: 'nowrap' }}>Router</span>
-      <select
+      <button
+        type="button"
         aria-label="Model router"
-        value={currentTier}
-        onChange={(event) => onSelect(event.target.value as Tier)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((value) => !value)}
         style={{
-          appearance: 'none',
-          border: 'none',
-          background: 'transparent',
-          color: 'inherit',
-          font: 'inherit',
-          fontWeight: 600,
+          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: '28px minmax(0, 1fr) auto',
+          alignItems: 'center',
+          gap: 8,
+          padding: '7px 9px',
+          borderRadius: 'var(--radius-lg)',
+          border: `1px solid ${tone.border}`,
+          background: tone.background,
+          color: tone.foreground,
+          boxShadow: open ? 'var(--shadow-card)' : 'var(--shadow-soft)',
           cursor: 'pointer',
-          maxWidth: 155,
-          outline: 'none',
+          textAlign: 'left',
+          transition: 'border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)',
         }}
       >
-        {MODEL_ROUTERS.map((router) => (
-          <option key={router.value} value={router.value}>
-            {router.label}
-          </option>
-        ))}
-      </select>
-      <span style={{ color: 'var(--color-text-faint)', whiteSpace: 'nowrap' }}>{selected.sublabel}</span>
-    </label>
+        <span
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 'var(--radius-md)',
+            display: 'grid',
+            placeItems: 'center',
+            background: tone.iconBackground,
+            color: tone.foreground,
+            border: `1px solid ${tone.border}`,
+          }}
+        >
+          <Icon size={14} />
+        </span>
+        <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12,
+              fontWeight: 650,
+              color: 'var(--color-text-primary)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {selected.label}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: 'var(--color-text-faint)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {selected.sublabel} - {selected.detail}
+          </span>
+        </span>
+        <ChevronDown
+          size={14}
+          style={{
+            color: 'var(--color-text-secondary)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform var(--duration-fast) var(--ease-out)',
+          }}
+        />
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          aria-label="Choose model router"
+          style={{
+            position: 'absolute',
+            left: 0,
+            bottom: 'calc(100% + 8px)',
+            width: 338,
+            maxWidth: 'calc(100vw - 48px)',
+            padding: 6,
+            borderRadius: 'var(--radius-xl)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            boxShadow: 'var(--shadow-elevated)',
+            zIndex: 60,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
+          <div
+            style={{
+              padding: '6px 8px 4px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: 'var(--color-text-faint)',
+              textTransform: 'uppercase',
+              letterSpacing: 'var(--tracking-label)',
+            }}
+          >
+            Model routing
+          </div>
+          {MODEL_ROUTERS.map((router) => {
+            const RouterIcon = ROUTER_ICON[router.value];
+            const optionTone = routerTone(router.value);
+            const active = router.value === currentTier;
+            return (
+              <button
+                key={router.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onSelect(router.value);
+                  setOpen(false);
+                }}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '30px minmax(0, 1fr) auto',
+                  alignItems: 'center',
+                  gap: 9,
+                  width: '100%',
+                  padding: '9px 10px',
+                  borderRadius: 'var(--radius-lg)',
+                  border: `1px solid ${active ? optionTone.border : 'transparent'}`,
+                  background: active ? optionTone.background : 'transparent',
+                  color: 'var(--color-text-primary)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 'var(--radius-md)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: optionTone.iconBackground,
+                    color: optionTone.foreground,
+                  }}
+                >
+                  <RouterIcon size={14} />
+                </span>
+                <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 650 }}>
+                    {router.label}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 11,
+                      color: 'var(--color-text-secondary)',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {router.detail}
+                  </span>
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: active ? optionTone.foreground : 'var(--color-text-faint)',
+                    border: `1px solid ${active ? optionTone.border : 'var(--color-border-subtle)'}`,
+                    borderRadius: 'var(--radius-pill)',
+                    padding: '2px 6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {active ? 'Active' : router.sublabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
+}
+
+function routerTone(tier: Tier): {
+  background: string;
+  iconBackground: string;
+  foreground: string;
+  border: string;
+} {
+  if (tier === 'free') {
+    return {
+      background: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))',
+      iconBackground: 'color-mix(in srgb, var(--color-success) 16%, var(--color-surface))',
+      foreground: 'var(--color-success)',
+      border: 'color-mix(in srgb, var(--color-success) 34%, var(--color-border-subtle))',
+    };
+  }
+  if (tier === 'frontier') {
+    return {
+      background: 'var(--color-accent-soft)',
+      iconBackground: 'color-mix(in srgb, var(--color-accent) 14%, var(--color-surface))',
+      foreground: 'var(--color-accent)',
+      border: 'color-mix(in srgb, var(--color-accent) 40%, var(--color-border-subtle))',
+    };
+  }
+  return {
+    background: 'linear-gradient(135deg, var(--color-surface), var(--color-surface-hover))',
+    iconBackground: 'var(--color-background-secondary)',
+    foreground: 'var(--color-text-secondary)',
+    border: 'var(--color-border-subtle)',
+  };
 }
 
 interface MessageRow {

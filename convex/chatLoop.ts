@@ -110,6 +110,113 @@ export const enhance = action({
   },
 });
 
+const PARITY_EXPLAIN_SYSTEM = `You are Parity Studio's parity coach.
+Translate a deterministic UI parity report into language a first-time builder, vibe designer, or vibe coder can act on.
+
+Rules:
+- Do not expose internal scoring jargon unless it helps the user.
+- Be honest about readiness. If failures remain, say it is not ready to distribute yet.
+- Write 4 short labeled lines: Readout, Why it matters, Fix next, Confidence.
+- Mention at most 3 concrete failing/warning areas by name.
+- No markdown table. No markdown bold/italic. No sales language.`;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+function cleanParityExplanation(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[ \t]{2,}$/gm, '')
+    .trim();
+}
+
+export const explainParity = action({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }): Promise<{ text: string; modelUsed: string; provider: string; costMicroUsd: number }> => {
+    const report = await ctx.runQuery(internal.parityReports.getLatestInternal, { runId });
+    const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+    if (report === null) {
+      return {
+        text: 'Readout: No parity report exists yet.\nWhy it matters: Parity Studio needs a generated or imported UI kit before it can explain quality.\nFix next: Run generate/decompose, then verify again.\nConfidence: Waiting for the first report.',
+        modelUsed: 'rule-based',
+        provider: 'local',
+        costMicroUsd: 0,
+      };
+    }
+
+    const checks = Array.isArray(report.checks)
+      ? report.checks.slice(0, 16).map((check: Record<string, unknown>) => ({
+          label: String(check['label'] ?? check['id'] ?? 'check'),
+          status: String(check['status'] ?? 'unavailable'),
+          evidence: Array.isArray(check['evidence']) ? check['evidence'].slice(0, 2).map(String) : [],
+        }))
+      : [];
+    const gaps = Array.isArray(report.gaps)
+      ? report.gaps.slice(0, 8).map((gap: Record<string, unknown>) => ({
+          kind: String(gap['kind'] ?? 'gap'),
+          severity: String(gap['severity'] ?? 'medium'),
+          message: String(gap['message'] ?? ''),
+        }))
+      : [];
+    const payload = {
+      runStatus: run?.status ?? 'unknown',
+      status: report.status,
+      passCount: report.passCount,
+      totalChecks: report.totalChecks,
+      summary: report.summary,
+      checks,
+      gaps,
+    };
+
+    const provider = process.env['PARITY_EXPLAIN_PROVIDER'] ?? ENHANCE_PROVIDER;
+    const modelId = process.env['PARITY_EXPLAIN_MODEL'] ?? ENHANCE_MODEL;
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+    const model = (getModel as any)(provider, modelId);
+    const result = await withTimeout(
+      piComplete(
+        model,
+        {
+          systemPrompt: PARITY_EXPLAIN_SYSTEM,
+          messages: [
+            {
+              role: 'user',
+              content: JSON.stringify(payload).slice(0, 16_000),
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        { maxOutputTokens: 700 },
+      ),
+      25_000,
+      'parity explanation',
+    );
+    const textBlocks = result.content.filter((block): block is TextContent => block.type === 'text');
+    const text = cleanParityExplanation(textBlocks.map((block) => block.text).join(''));
+    if (text.length === 0) throw new Error('parity explanation produced empty text');
+    return {
+      text,
+      modelUsed: result.model,
+      provider: result.provider,
+      costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+    };
+  },
+});
+
 const SYSTEM_PROMPT = `You are the Parity Studio chat agent. The user is iterating on a UI kit they generated or imported into parity-studio. The kit lives as a flat map of file paths under one ui_kit row in Convex; you have direct atomic edit access to every path in the canonical NodeBench skill-pack shape:
 
 - README.md, SKILL.md, colors_and_type.css (top-level docs)

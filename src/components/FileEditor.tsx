@@ -9,7 +9,7 @@ import type { Id } from '../../convex/_generated/dataModel';
  *
  * Closes the "edit a component in-app" gap from issue #225. Activated by
  * picking a file in FilesPanel; PreviewPane swaps its iframe for this
- * editor when the user clicks the "Code" tab.
+ * editor when the user selects a file in the unified Files workspace.
  *
  * Storage model: edits write to `uiKits.patchFile` which mutates the
  * latest ui_kit's `files` map in place. The next iterate run reads the
@@ -75,7 +75,7 @@ export function FileEditor({ runId, selectedFile }: FileEditorProps) {
     return (
       <div className="editor-empty">
         <div className="editor-empty-label">code editor</div>
-        <div>select a file in Files to inspect it, then use Code for full editing.</div>
+        <div>select a file in Files to inspect and edit it here.</div>
       </div>
     );
   }
