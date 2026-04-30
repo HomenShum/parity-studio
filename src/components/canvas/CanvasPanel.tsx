@@ -1,12 +1,11 @@
 import { useQuery } from 'convex/react';
-import { Bot, Code, Eye, Folder, SlidersHorizontal } from 'lucide-react';
+import { Code, Eye, Folder, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
 import type { Device } from '../HeaderActions';
 import { ArtifactPreview } from './ArtifactPreview';
-import { ChatPanel } from './ChatPanel';
 import { FilesView } from './FilesView';
 import { LandingGuidance } from './LandingGuidance';
 import { SourceImagePopover } from './SourceImagePopover';
@@ -21,13 +20,12 @@ interface CanvasPanelProps {
   commentModeActive: boolean;
 }
 
-type Tab = 'files' | 'preview' | 'code' | 'chat';
+type Tab = 'files' | 'preview' | 'code';
 
 const TAB_META: Record<Tab, { label: string; Icon: typeof Folder }> = {
   files: { label: 'Files', Icon: Folder },
   preview: { label: 'preview', Icon: Eye },
   code: { label: 'code', Icon: Code },
-  chat: { label: 'chat', Icon: Bot },
 };
 
 export function CanvasPanel({
@@ -187,7 +185,6 @@ export function CanvasPanel({
                 zoom={zoom}
                 device={device}
                 commentModeActive={commentModeActive}
-                onAutoFixKicked={() => setTab('chat')}
               />
             </div>
             {tweaksOpen ? (
@@ -214,21 +211,7 @@ export function CanvasPanel({
           >
             <FileEditor runId={runId} selectedFile={selectedFile} />
           </div>
-        ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              minWidth: 0,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              boxSizing: 'border-box',
-            }}
-          >
-            <ChatPanel runId={runId} />
-          </div>
-        )}
+        ) : null}
 
         {/* SourceImagePopover floats bottom-right of the canvas pane.
             Self-hides when there's no run, no scoped file, or no source. */}

@@ -3,7 +3,7 @@
 // Showcases the post-2026-04-29 features the long end-to-end recorder
 // doesn't cover:
 //
-//   1. Land on an existing populated run (?run=<id>) — chat tab
+//   1. Land on an existing populated run (?run=<id>) — left agent rail
 //   2. Type a deliberately rough draft prompt
 //   3. Click the ✨ enhance button — small-tier rewrites the prompt
 //   4. Cycle the tier pill: Balanced → Frontier → Free (settle on Free
@@ -13,7 +13,7 @@
 //   7. Drag a bbox on the rendered artifact, type a comment
 //   8. Click "✨ save + auto-fix" — kicks off the advisor-executor
 //      (advise → execute → verify → close)
-//   9. Watch the chat tab auto-flip on and turns stream in
+//   9. Watch the left agent rail stream turns in
 //
 // Run:
 //   RUN_ID=<convex_run_id> node scripts/record-scene-iterate.mjs
@@ -76,9 +76,9 @@ async function main() {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForTimeout(3_500);
 
-    // ── 2. switch to the chat tab inside the canvas ───────────────────
-    console.log('[iterate] 2 — open chat tab');
-    await page.getByRole('tab', { name: /^chat$/i }).first().click();
+    // ── 2. focus the persistent agent rail ────────────────────────────
+    console.log('[iterate] 2 — agent rail visible');
+    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 });
     await page.waitForTimeout(1_500);
 
     // ── 3. type a deliberately-rough draft ────────────────────────────
@@ -137,7 +137,7 @@ async function main() {
     // or until 90s elapses.
     const sendStart = Date.now();
     while (Date.now() - sendStart < 90_000) {
-      const text = (await page.locator('section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
+      const text = (await page.locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
       if (/advisor|executor|verify|close|tool|done/i.test(text) && text.length > 200) {
         console.log(`[iterate]   assistant reply detected after ${Math.round((Date.now() - sendStart) / 1000)}s`);
         break;
@@ -210,13 +210,13 @@ async function main() {
     await page.getByRole('button', { name: /save \+ auto-fix/i }).click();
     await page.waitForTimeout(2_000);
 
-    // ── 12. the canvas auto-flips to chat tab when auto-fix kicks off
+    // ── 12. the persistent agent rail streams the auto-fix
     //       — give the advisor-executor 60s to stream a few turns ────
     console.log('[iterate] 12 — watch advisor-executor stream');
     const fixStart = Date.now();
     let lastLen = 0;
     while (Date.now() - fixStart < 75_000) {
-      const text = (await page.locator('section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
+      const text = (await page.locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
       if (text.length > lastLen + 100) {
         lastLen = text.length;
         console.log(`[iterate]   chat grew to ${text.length} chars at ${Math.round((Date.now() - fixStart) / 1000)}s`);

@@ -239,7 +239,7 @@ async function waitForAgentChat(page, runId, chatBeforeLength, timeoutMs = AGENT
       .reverse()
       .find((m) => /done|complete|updated|upsert|verify|patched|changed/i.test(m.content ?? ''));
     const chatText = (await page
-      .locator('section[aria-label*="Chat" i], aside[aria-label*="Chat" i]')
+      .locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]')
       .first()
       .textContent({ timeout: 1_500 })
       .catch(() => '')) ?? '';
@@ -537,7 +537,7 @@ async function sceneStartRun() {
         page,
         'Step 1 / 6',
         'Start from a real source-image run',
-        'The left rail shows the generated run history; the same run continues through files, comments, iterate, and export.',
+        'The left agent rail stays live while the same run continues through files, comments, iterate, and export.',
       );
       evidence.runId = runId;
       evidence.checks.step1 = { ok: true, runId, mode: 'existing' };
@@ -668,7 +668,7 @@ async function sceneCommentIterate(runId) {
     );
     await page.getByRole('button', { name: /save \+ auto-fix/i }).click();
     await page.waitForTimeout(2_500);
-    await page.getByRole('tab', { name: /^chat$/i }).click().catch(() => {});
+    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     const started = Date.now();
     let sawAgent = null;
     while (Date.now() - started < 60_000) {
@@ -815,12 +815,12 @@ async function sceneContinuousSixStep() {
       page,
       'Step 5 / 6',
       'Watch the agent patch that CTA',
-      'Save + auto-fix opens the real chat tab so the advisor-executor can plan, call tools, and update the scoped file.',
+      'Save + auto-fix streams into the left agent rail while the advisor-executor plans, calls tools, and updates the scoped file.',
     );
     const chatBefore = await convexQuery('chat:list', { runId }).catch(() => []);
     await page.getByRole('button', { name: /save \+ auto-fix/i }).evaluate((el) => el.click());
     const savedComment = await waitForSavedComment(runId, previousCommentIds, selected, COMMENT_TEXT);
-    await page.getByRole('tab', { name: /^chat$/i }).waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     await page.waitForTimeout(1_200);
     const agent = await waitForAgentChat(page, runId, chatBefore.length);
     evidence.checks.step5 = {

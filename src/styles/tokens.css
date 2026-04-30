@@ -117,6 +117,7 @@
   --size-titlebar-height: 64px;
 
   /* Layout */
+  --layout-agent-width: 392px;
   --layout-pipeline-width: 296px;
   --layout-parity-width: 432px;
 

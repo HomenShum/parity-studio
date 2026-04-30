@@ -19,7 +19,7 @@ const MAX_KIT_ZIP_BYTES = 30_000_000;
 const MAX_KIT_FILE_BYTES = 200_000;
 
 /**
- * Composer — replaces the legacy InputBar at the bottom of the pipeline rail.
+ * Composer - source/new-run entry point at the bottom of the agent rail.
  *
  * - prompt textarea (auto-grow), ↵ submits
  * - paperclip → file picker (image upload)

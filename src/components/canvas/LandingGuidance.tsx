@@ -204,7 +204,7 @@ export function LandingGuidance() {
           }}
         >
           <ArrowDown size={14} />
-          Start from the composer in the bottom-left rail
+          Start from the source composer in the left agent rail
         </div>
       </div>
     </div>

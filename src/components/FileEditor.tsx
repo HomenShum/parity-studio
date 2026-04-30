@@ -75,7 +75,7 @@ export function FileEditor({ runId, selectedFile }: FileEditorProps) {
     return (
       <div className="editor-empty">
         <div className="editor-empty-label">code editor</div>
-        <div>click a file in the left rail to open it here.</div>
+        <div>click a file in the Files tab to open it here.</div>
       </div>
     );
   }

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
 import { Breadcrumb } from './components/Breadcrumb';
+import { AgentRail } from './components/agent/AgentRail';
 import { CanvasPanel } from './components/canvas/CanvasPanel';
 import { HeaderActions, type Device } from './components/HeaderActions';
 import { ParityPanel } from './components/parity/ParityPanel';
-import { PipelinePanel } from './components/pipeline/PipelinePanel';
 import { Wordmark } from './components/Wordmark';
 
 /**
@@ -13,9 +13,9 @@ import { Wordmark } from './components/Wordmark';
  *   ┌──────────────────────────────────────────┐
  *   │  TopBar (h: 64px)                        │
  *   ├────────────┬─────────────┬───────────────┤
- *   │  Pipeline  │   Canvas    │   Parity      │
- *   │   Panel    │   Panel     │   Panel       │
- *   │  (296 px)  │   (1fr)     │  (432 px)     │
+ *   │  Agent     │   Canvas    │   Parity      │
+ *   │   Rail     │   Panel     │   Panel       │
+ *   │  (392 px)  │   (1fr)     │  (432 px)     │
  *   └────────────┴─────────────┴───────────────┘
  */
 export default function App() {
@@ -65,7 +65,7 @@ export default function App() {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'var(--layout-pipeline-width) 1fr var(--layout-parity-width)',
+        gridTemplateColumns: 'var(--layout-agent-width) 1fr var(--layout-parity-width)',
         gridTemplateRows: 'var(--size-titlebar-height) 1fr',
         height: '100vh',
         background: 'var(--color-background)',
@@ -101,7 +101,7 @@ export default function App() {
       </header>
 
       <div style={{ gridColumn: 1, gridRow: 2, minHeight: 0, minWidth: 0, display: 'flex' }}>
-        <PipelinePanel
+        <AgentRail
           currentRunId={currentRunId}
           onSelectRun={setCurrentRunId}
           onRunStarted={setCurrentRunId}

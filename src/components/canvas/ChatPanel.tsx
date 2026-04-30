@@ -26,6 +26,7 @@ import type { Id } from '../../../convex/_generated/dataModel';
 
 interface ChatPanelProps {
   runId: Id<'runs'> | null;
+  variant?: 'workspace' | 'rail';
 }
 
 const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
@@ -45,7 +46,7 @@ const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
  * the canonical shape via upsert_file, so any preview/, assets/,
  * explorations/, or kit code path is editable from chat.
  */
-export function ChatPanel({ runId }: ChatPanelProps) {
+export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
   const messages = useQuery(api.chat.list, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const send = useMutation(api.chat.send);
@@ -101,7 +102,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 'var(--space-7)',
+          padding: variant === 'rail' ? 'var(--space-5)' : 'var(--space-7)',
           textAlign: 'center',
           color: 'var(--color-text-secondary)',
           fontFamily: 'var(--font-sans)',
@@ -112,7 +113,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
           <h2
             style={{
               fontFamily: 'var(--font-display)',
-              fontSize: 28,
+              fontSize: variant === 'rail' ? 22 : 28,
               fontWeight: 400,
               margin: 0,
               color: 'var(--color-text-primary)',
@@ -121,8 +122,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
             Start a run to chat.
           </h2>
           <p style={{ marginTop: 12, lineHeight: 1.5 }}>
-            The agent edits any file in the canonical shape via tool calls — drop an image, a kit
-            zip, or a prompt into the composer first, then come back here.
+            The agent edits any file in the canonical shape via tool calls. Start or import a source below.
           </p>
         </div>
       </div>
@@ -163,10 +163,10 @@ export function ChatPanel({ runId }: ChatPanelProps) {
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: 'var(--space-6) var(--space-7)',
+          padding: variant === 'rail' ? 'var(--space-4)' : 'var(--space-6) var(--space-7)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 'var(--space-4)',
+          gap: variant === 'rail' ? 'var(--space-3)' : 'var(--space-4)',
         }}
       >
         {messages === undefined ? (
@@ -207,7 +207,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
       <div
         style={{
           borderTop: '1px solid var(--color-border-subtle)',
-          padding: 'var(--space-4) var(--space-7)',
+          padding: variant === 'rail' ? 'var(--space-3) var(--space-4)' : 'var(--space-4) var(--space-7)',
           background: 'var(--color-background-secondary)',
         }}
       >
@@ -216,7 +216,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border-subtle)',
             borderRadius: 'var(--radius-lg)',
-            padding: 12,
+            padding: variant === 'rail' ? 10 : 12,
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
@@ -244,7 +244,7 @@ export function ChatPanel({ runId }: ChatPanelProps) {
               fontSize: 'var(--font-size-body)',
               color: 'var(--color-text-primary)',
               lineHeight: 'var(--leading-snug)',
-              minHeight: 60,
+              minHeight: variant === 'rail' ? 48 : 60,
             }}
           />
           <div
