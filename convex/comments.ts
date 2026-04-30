@@ -24,6 +24,12 @@ export const create = mutation({
     text: v.string(),
     bbox: v.optional(BBOX_SCHEMA),
     targetFile: v.optional(v.string()),
+    selector: v.optional(v.string()),
+    domPath: v.optional(v.string()),
+    elementLabel: v.optional(v.string()),
+    tagName: v.optional(v.string()),
+    textSnippet: v.optional(v.string()),
+    componentHint: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (args.text.trim().length === 0) {
@@ -35,12 +41,36 @@ export const create = mutation({
     if (args.targetFile !== undefined && args.targetFile.length > 200) {
       throw new Error('comments:create targetFile capped at 200 chars');
     }
+    if (args.bbox !== undefined) {
+      const { x, y, w, h } = args.bbox;
+      if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > 1.02 || y + h > 1.02) {
+        throw new Error('comments:create bbox must be normalized within the preview');
+      }
+    }
+    for (const [name, value] of Object.entries({
+      selector: args.selector,
+      domPath: args.domPath,
+      elementLabel: args.elementLabel,
+      tagName: args.tagName,
+      textSnippet: args.textSnippet,
+      componentHint: args.componentHint,
+    })) {
+      if (value !== undefined && value.length > 500) {
+        throw new Error(`comments:create ${name} capped at 500 chars`);
+      }
+    }
     return await ctx.db.insert('comments', {
       runId: args.runId,
       artifactVersion: args.artifactVersion,
       text: args.text.trim(),
       ...(args.bbox !== undefined ? { bbox: args.bbox } : {}),
       ...(args.targetFile !== undefined ? { targetFile: args.targetFile } : {}),
+      ...(args.selector !== undefined ? { selector: args.selector } : {}),
+      ...(args.domPath !== undefined ? { domPath: args.domPath } : {}),
+      ...(args.elementLabel !== undefined ? { elementLabel: args.elementLabel } : {}),
+      ...(args.tagName !== undefined ? { tagName: args.tagName } : {}),
+      ...(args.textSnippet !== undefined ? { textSnippet: args.textSnippet } : {}),
+      ...(args.componentHint !== undefined ? { componentHint: args.componentHint } : {}),
       status: 'open',
     });
   },

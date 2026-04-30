@@ -159,7 +159,9 @@ async function getPreviewCtaDragBox(page) {
   if (!iframeBox) throw new Error('Artifact iframe bbox unavailable for comment drag');
 
   const frame = page.frameLocator('iframe[title="artifact preview"]');
-  const ctaMatches = frame.getByText(/try live better free/i);
+  const ctaMatches = frame.locator('a, button, [role="button"]').filter({
+    hasText: /try live.*free/i,
+  });
   await ctaMatches.first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
   const boxes = [];
   const count = await ctaMatches.count().catch(() => 0);
@@ -191,11 +193,73 @@ async function getPreviewCtaDragBox(page) {
 }
 
 async function dragPreviewCtaBbox(page) {
+  const frame = page.frameLocator('iframe[title="artifact preview"]');
+  const ctaMatches = frame.locator('a, button, [role="button"]').filter({
+    hasText: /try live.*free/i,
+  });
+  const count = await ctaMatches.count().catch(() => 0);
+  const clickable = count > 1 ? ctaMatches.nth(count - 1) : ctaMatches.first();
+  if ((await clickable.isVisible().catch(() => false))) {
+    await clickable.click({ position: { x: 14, y: 14 }, force: true });
+    return;
+  }
   const { start, end } = await getPreviewCtaDragBox(page);
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(end.x, end.y, { steps: 16 });
-  await page.mouse.up();
+  const center = {
+    x: start.x + (end.x - start.x) / 2,
+    y: start.y + (end.y - start.y) / 2,
+  };
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.click(center.x, center.y);
+}
+
+async function spotlightSelectedFile(page, selectedFile) {
+  const selectedButton = page.getByTitle(`Scope next comment to ${selectedFile}`).first();
+  await selectedButton.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await selectedButton.boundingBox().catch(() => null);
+  if (!box) return;
+  const fileName = selectedFile.split('/').pop() ?? selectedFile;
+  await page.evaluate(
+    ({ box: rect, fileName: name }) => {
+      const prior = document.getElementById('__parity_demo_file_spotlight');
+      if (prior) prior.remove();
+      const el = document.createElement('div');
+      el.id = '__parity_demo_file_spotlight';
+      el.style.cssText = [
+        'position:fixed',
+        `left:${Math.max(0, rect.x - 5)}px`,
+        `top:${Math.max(0, rect.y - 5)}px`,
+        `width:${rect.width + 10}px`,
+        `height:${rect.height + 10}px`,
+        'border:3px solid #E24B2C',
+        'border-radius:10px',
+        'box-shadow:0 0 0 4px rgba(226,75,44,0.16),0 14px 38px rgba(30,18,10,0.18)',
+        'z-index:2147483647',
+        'pointer-events:none',
+        'animation:parityFilePulse 1100ms ease-in-out infinite',
+      ].join(';');
+      const label = document.createElement('div');
+      label.textContent = `Selected component: ${name}`;
+      label.style.cssText = [
+        'position:absolute',
+        'left:0',
+        'top:calc(100% + 7px)',
+        'white-space:nowrap',
+        'padding:7px 10px',
+        'border-radius:999px',
+        'background:#E24B2C',
+        'color:#fff',
+        'font:700 11px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace',
+        'letter-spacing:.02em',
+        'box-shadow:0 10px 24px rgba(30,18,10,0.2)',
+      ].join(';');
+      el.appendChild(label);
+      const style = document.createElement('style');
+      style.textContent = '@keyframes parityFilePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}';
+      el.appendChild(style);
+      document.body.appendChild(el);
+    },
+    { box, fileName },
+  );
 }
 
 async function installOverlay(page) {
@@ -533,9 +597,9 @@ async function sceneCommentIterate(runId) {
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
     await dragPreviewCtaBbox(page);
     await page.waitForTimeout(1_000);
-    const commentBox = page.locator('textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
+    const commentBox = page.locator('textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
-    await commentBox.click();
+    await commentBox.click({ force: true });
     await commentBox.fill('');
     await commentBox.type(COMMENT_TEXT, { delay: 14 });
     evidence.checks.step4 = { ok: true, comment: COMMENT_TEXT, selected };
@@ -657,14 +721,16 @@ async function sceneContinuousSixStep() {
       page,
       'Step 3 / 6',
       'Select a component',
-      'Scope the next action to a generated component file, not the whole artifact.',
+      'Click BackgroundMediaHero.tsx in the file tree so the next comment is scoped to that component.',
     );
     const selected = await selectComponentFile(page);
+    await spotlightSelectedFile(page, selected);
     evidence.checks.step3 = {
       ok: /component|BackgroundMediaHero|CompactNav|KitCard|KitGallery|RichFooter/i.test(selected),
       selected,
     };
-    await page.waitForTimeout(2_000);
+    await page.waitForTimeout(3_000);
+    await page.evaluate(() => document.getElementById('__parity_demo_file_spotlight')?.remove()).catch(() => {});
 
     await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
     await page.waitForTimeout(1_000);
@@ -681,9 +747,9 @@ async function sceneContinuousSixStep() {
     const commentsBefore = await convexQuery('comments:listForRun', { runId }).catch(() => []);
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
     await dragPreviewCtaBbox(page);
-    const commentBox = page.locator('textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
+    const commentBox = page.locator('textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
-    await commentBox.click();
+    await commentBox.click({ force: true });
     await commentBox.fill('');
     await commentBox.type(COMMENT_TEXT, { delay: 10 });
     evidence.checks.step4 = { ok: true, comment: COMMENT_TEXT, selected };
@@ -695,7 +761,7 @@ async function sceneContinuousSixStep() {
       'Edit only that CTA slice',
       'Save the scoped comment, then tweak the CTA color and radius tokens live so the preview changes in place.',
     );
-    await page.getByRole('button', { name: /^save$/i }).click();
+    await page.getByRole('button', { name: /^save$/i }).evaluate((el) => el.click());
     const savedComment = await waitForSavedComment(runId, previousCommentIds, selected, COMMENT_TEXT);
     const pressedAfterSave = await commentToggle.getAttribute('aria-pressed').catch(() => 'false');
     if (pressedAfterSave === 'true') await commentToggle.click();

@@ -82,10 +82,18 @@ export const iterateWithCommentsWorkflow = workflow.define({
       const bboxTag = c.bbox
         ? ` @ bbox(${c.bbox.x.toFixed(2)},${c.bbox.y.toFixed(2)} ${c.bbox.w.toFixed(2)}x${c.bbox.h.toFixed(2)})`
         : '';
+      const elementTag = [
+        c.elementLabel ? `element=${c.elementLabel}` : null,
+        c.selector ? `selector=${c.selector}` : null,
+        c.domPath ? `domPath=${c.domPath}` : null,
+        c.textSnippet ? `text=${c.textSnippet}` : null,
+      ]
+        .filter(Boolean)
+        .join(' ');
       return {
         kind: 'comment',
         severity: 'high',
-        message: `[user comment ${i + 1}${fileTag}${bboxTag}] ${c.text}`,
+        message: `[user comment ${i + 1}${fileTag}${bboxTag}${elementTag ? ` ${elementTag}` : ''}] ${c.text}`,
         ...(c.targetFile ? { targetFile: c.targetFile } : {}),
       };
     });

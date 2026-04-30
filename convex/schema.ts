@@ -119,6 +119,12 @@ export default defineSchema({
      * artifact. Coexists with bbox — both can be present.
      */
     targetFile: v.optional(v.string()),
+    selector: v.optional(v.string()),
+    domPath: v.optional(v.string()),
+    elementLabel: v.optional(v.string()),
+    tagName: v.optional(v.string()),
+    textSnippet: v.optional(v.string()),
+    componentHint: v.optional(v.string()),
     status: v.union(v.literal('open'), v.literal('addressed'), v.literal('dismissed')),
   })
     .index('by_run', ['runId'])

@@ -47,6 +47,11 @@ export function ArtifactPreview({
     return files[path] ?? null;
   }, [uiKit]);
 
+  const commentMessageToken = useMemo(
+    () => `parity-comment-${Math.random().toString(36).slice(2)}`,
+    [runId],
+  );
+
   // Stitch tokens.css into the iframe srcDoc so TweakPanel edits show
   // live. Insert at the end of <head> so edited token values override
   // generated defaults while preserving normal CSS variable behavior.
@@ -64,15 +69,16 @@ export function ArtifactPreview({
   // viewport, and posts a `parity:element-click` message to the parent.
   // CommentOverlay listens for these and shows an anchored quick-action
   // bubble. Without this, comment mode would only support drag-bbox.
-  function injectCommentHelper(html: string, on: boolean): string {
+  function injectCommentHelper(html: string, on: boolean, messageToken: string): string {
     if (!on) return html;
     const script = `<script data-parity-comment-helper="on">
 (function(){
   if (window.__parityCommentHelper) return;
   window.__parityCommentHelper = true;
+  var MESSAGE_TOKEN = ${JSON.stringify(messageToken)};
   var hover = null;
   var hoverRing = document.createElement('div');
-  hoverRing.style.cssText = 'position:fixed;pointer-events:none;border:2px dashed #C76D54;border-radius:4px;z-index:2147483647;transition:all 80ms ease;';
+  hoverRing.style.cssText = 'position:fixed;pointer-events:none;border:2px dashed #C76D54;border-radius:8px;z-index:2147483647;transition:all 80ms ease;background:rgba(199,109,84,0.08);';
   function attach() { if (document.body && !hoverRing.parentNode) document.body.appendChild(hoverRing); }
   function setHover(el) {
     if (!el || el === hover) return;
@@ -88,7 +94,12 @@ export function ArtifactPreview({
     if (!e.target || e.target === hoverRing) return;
     e.preventDefault();
     e.stopPropagation();
-    var el = e.target;
+    function closestCommentTarget(node) {
+      if (!node || !node.closest) return node;
+      var actionable = node.closest('a, button, [role="button"], input, textarea, select, [data-component], [data-testid]');
+      return actionable || node;
+    }
+    var el = closestCommentTarget(e.target);
     var r = el.getBoundingClientRect();
     var W = document.documentElement.clientWidth || window.innerWidth || 1;
     var H = document.documentElement.clientHeight || window.innerHeight || 1;
@@ -96,6 +107,8 @@ export function ArtifactPreview({
     function buildSelector(node) {
       if (!node || !node.tagName) return '';
       if (node.id) return '#' + node.id;
+      if (node.getAttribute && node.getAttribute('data-component')) return '[data-component="' + node.getAttribute('data-component') + '"]';
+      if (node.getAttribute && node.getAttribute('data-testid')) return '[data-testid="' + node.getAttribute('data-testid') + '"]';
       var sel = node.tagName.toLowerCase();
       if (node.className && typeof node.className === 'string') {
         var cls = node.className.trim().split(/\\s+/).slice(0, 2).join('.');
@@ -103,11 +116,52 @@ export function ArtifactPreview({
       }
       return sel;
     }
+    function buildDomPath(node) {
+      var parts = [];
+      var current = node;
+      while (current && current.nodeType === 1 && current !== document.body && parts.length < 8) {
+        var part = current.tagName.toLowerCase();
+        if (current.id) {
+          part += '#' + current.id;
+          parts.unshift(part);
+          break;
+        }
+        if (current.className && typeof current.className === 'string') {
+          var classes = current.className.trim().split(/\\s+/).filter(Boolean).slice(0, 2);
+          if (classes.length) part += '.' + classes.join('.');
+        }
+        var index = 1;
+        var prev = current.previousElementSibling;
+        while (prev) {
+          if (prev.tagName === current.tagName) index += 1;
+          prev = prev.previousElementSibling;
+        }
+        part += ':nth-of-type(' + index + ')';
+        parts.unshift(part);
+        current = current.parentElement;
+      }
+      return parts.join(' > ');
+    }
+    function nearestComponent(node) {
+      var current = node;
+      while (current && current.nodeType === 1) {
+        if (current.getAttribute) {
+          var value = current.getAttribute('data-component') || current.getAttribute('data-component-name') || current.getAttribute('data-file');
+          if (value) return value;
+        }
+        current = current.parentElement;
+      }
+      return '';
+    }
     window.parent.postMessage({
       type: 'parity:element-click',
+      token: MESSAGE_TOKEN,
       selector: buildSelector(el),
+      domPath: buildDomPath(el),
       tagName: el.tagName,
       text: label,
+      textSnippet: label.slice(0, 160),
+      componentHint: nearestComponent(el),
       rect: {
         x: Math.max(0, Math.min(1, r.left / W)),
         y: Math.max(0, Math.min(1, r.top / H)),
@@ -135,6 +189,7 @@ export function ArtifactPreview({
       srcDoc = injectCommentHelper(
         injectLiveTokens(artifact.html, liveTokensCss),
         commentModeActive,
+        commentMessageToken,
       );
       versionLabel = `v${artifact.version}`;
       artifactVersion = artifact.version;
@@ -216,6 +271,7 @@ export function ArtifactPreview({
                 artifactVersion={artifactVersion}
                 active={commentModeActive}
                 targetFile={selectedFile ?? null}
+                messageToken={commentMessageToken}
                 {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
               />
             </div>
@@ -229,6 +285,7 @@ export function ArtifactPreview({
             runId={runId}
             artifactVersion={artifactVersion}
             targetFile={selectedFile ?? null}
+            messageToken={commentMessageToken}
             {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
           />
         )}
@@ -252,6 +309,7 @@ function DeviceFrame({
   runId,
   artifactVersion,
   targetFile,
+  messageToken,
   onAutoFixKicked,
 }: {
   device: Device;
@@ -261,6 +319,7 @@ function DeviceFrame({
   runId: Id<'runs'> | null;
   artifactVersion: number;
   targetFile: string | null;
+  messageToken: string;
   onAutoFixKicked?: () => void;
 }) {
   const { width, height, bezel } = DEVICE_BOUNDS[device];
@@ -318,6 +377,7 @@ function DeviceFrame({
               artifactVersion={artifactVersion}
               active={commentModeActive}
               targetFile={targetFile}
+              messageToken={messageToken}
               {...(onAutoFixKicked ? { onAutoFixKicked } : {})}
             />
           </div>

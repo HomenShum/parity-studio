@@ -136,7 +136,18 @@ export const startAdviseLoop = mutation({
       const bboxNote = c.bbox
         ? ` (anchored at bbox ${(c.bbox.x * 100).toFixed(0)}%, ${(c.bbox.y * 100).toFixed(0)}%)`
         : '';
+      const elementContext = [
+        c.elementLabel ? `element label: ${c.elementLabel}` : null,
+        c.tagName ? `tag: ${c.tagName}` : null,
+        c.selector ? `selector: ${c.selector}` : null,
+        c.domPath ? `DOM path: ${c.domPath}` : null,
+        c.textSnippet ? `visible text: ${c.textSnippet}` : null,
+        c.componentHint ? `component hint: ${c.componentHint}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
       seedText = `Auto-fix triggered: user left this comment on ${target}${bboxNote}: "${c.text}".
+${elementContext ? `\nClicked element context:\n${elementContext}\n` : ''}
 
 Plan and execute as advisor-executor:
   (1) ADVISE — call set_todos with a 3–5 step plan to address the comment
@@ -144,7 +155,7 @@ Plan and execute as advisor-executor:
   (3) VERIFY — call done({ paths: [<edited paths>] }) and self-heal any errors
   (4) CLOSE — final assistant turn summarizing what changed and any open follow-ups
 
-Be concise. Only edit files needed for THIS comment — don't drift into adjacent refactors.`;
+Be concise. Only edit files needed for THIS clicked element/comment - don't drift into adjacent refactors.`;
     } else if (kind === 'file') {
       if (!filePath) throw new Error('chat:startAdviseLoop kind=file requires filePath');
       seedText = `Auto-fix triggered: user opened \`${filePath}\` for review.
