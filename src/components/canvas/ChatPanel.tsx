@@ -20,7 +20,7 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -37,6 +37,40 @@ const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
   set_todos: { Icon: ListChecks, label: 'set_todos' },
   done: { Icon: CheckCircle2, label: 'done' },
   iterate_now: { Icon: Sparkles, label: 'iterate_now' },
+};
+
+type Tier = 'frontier' | 'balanced' | 'free';
+
+const MODEL_ROUTERS: Array<{
+  value: Tier;
+  label: string;
+  sublabel: string;
+  detail: string;
+}> = [
+  {
+    value: 'balanced',
+    label: 'Balanced router',
+    sublabel: 'default',
+    detail: 'Claude + Kimi route for quality/cost balance',
+  },
+  {
+    value: 'frontier',
+    label: 'Frontier models',
+    sublabel: 'highest quality',
+    detail: 'Opus/Sonnet route for hard edits',
+  },
+  {
+    value: 'free',
+    label: 'Free model router',
+    sublabel: '$0 LLM route',
+    detail: 'OpenRouter free pool with paid fallback only if required',
+  },
+];
+
+const ROUTER_ICON: Record<Tier, LucideIcon> = {
+  balanced: Gauge,
+  frontier: Rocket,
+  free: Leaf,
 };
 
 /**
@@ -58,19 +92,10 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  type Tier = 'frontier' | 'balanced' | 'free';
-  const TIER_CYCLE: Tier[] = ['balanced', 'frontier', 'free'];
-  const TIER_META: Record<Tier, { Icon: LucideIcon; label: string; sublabel: string }> = {
-    frontier: { Icon: Rocket, label: 'Frontier', sublabel: 'opus + sonnet - best paid' },
-    balanced: { Icon: Gauge, label: 'Balanced', sublabel: 'sonnet + kimi - default' },
-    free: { Icon: Leaf, label: 'Free', sublabel: 'deepseek + qwen - $0' },
-  };
   const currentTier: Tier = ((run?.tier as Tier | undefined) ?? 'balanced');
-  async function cycleTier() {
+  async function chooseTier(tier: Tier) {
     if (!runId) return;
-    const idx = TIER_CYCLE.indexOf(currentTier);
-    const next = TIER_CYCLE[(idx + 1) % TIER_CYCLE.length] as Tier;
-    await setTier({ runId, tier: next });
+    await setTier({ runId, tier });
   }
 
   async function onEnhance() {
@@ -250,123 +275,157 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
           <div
             style={{
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-end',
               justifyContent: 'space-between',
+              gap: 8,
             }}
           >
             <span
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 4,
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
                 color: 'var(--color-text-faint)',
+                minWidth: 0,
+                flex: 1,
               }}
             >
-              {runId ? (
-                <button
-                  type="button"
-                  onClick={cycleTier}
-                  title={`Model tier: ${TIER_META[currentTier].sublabel}. Click to cycle Balanced -> Frontier -> Free.`}
-                  aria-label={`Tier: ${TIER_META[currentTier].label}. Click to cycle.`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '3px 8px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid var(--color-border-subtle)',
-                    background:
-                      currentTier === 'free'
-                        ? 'var(--color-success-soft, var(--color-surface-hover))'
-                        : currentTier === 'frontier'
-                          ? 'var(--color-accent-soft)'
-                          : 'var(--color-surface-hover)',
-                    color:
-                      currentTier === 'free'
-                        ? 'var(--color-success, var(--color-text-secondary))'
-                        : currentTier === 'frontier'
-                          ? 'var(--color-accent)'
-                          : 'var(--color-text-secondary)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {(() => {
-                    const { Icon } = TIER_META[currentTier];
-                    return <Icon size={11} />;
-                  })()}
-                  {TIER_META[currentTier].label}
-                </button>
-              ) : null}
-              <span>
+              <RouterSelect currentTier={currentTier} onSelect={(tier) => void chooseTier(tier)} />
+              <span style={{ lineHeight: 1.35 }}>
                 {error ?? 'cmd/ctrl + enter to send - sparkle rewrites the draft before sending (~$0.002)'}
               </span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <button
-              type="button"
-              onClick={onEnhance}
-              disabled={enhancing || busy || draft.trim().length === 0}
-              aria-label="Rewrite draft before sending with the small model"
-              title="Rewrite your draft into a clearer, more specific prompt before sending. Uses the small model and costs about $0.002 per call."
-              style={{
-                display: 'inline-grid',
-                placeItems: 'center',
-                width: 30,
-                height: 30,
-                borderRadius: '50%',
-                background:
-                  enhancing
-                    ? 'var(--color-accent-soft)'
-                    : draft.trim().length === 0
+              <button
+                type="button"
+                onClick={onEnhance}
+                disabled={enhancing || busy || draft.trim().length === 0}
+                aria-label="Rewrite draft before sending with the small model"
+                title="Rewrite your draft into a clearer, more specific prompt before sending. Uses the small model and costs about $0.002 per call."
+                style={{
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background:
+                    enhancing
+                      ? 'var(--color-accent-soft)'
+                      : draft.trim().length === 0
+                        ? 'var(--color-surface-active)'
+                        : 'var(--color-surface-hover)',
+                  color:
+                    enhancing
+                      ? 'var(--color-accent)'
+                      : draft.trim().length === 0
+                        ? 'var(--color-text-faint)'
+                        : 'var(--color-text-primary)',
+                  border: `1px solid ${enhancing ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+                  cursor: enhancing || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
+                  animation: enhancing ? 'pulse 1.2s ease-in-out infinite' : 'none',
+                }}
+              >
+                <Sparkles size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={busy || draft.trim().length === 0}
+                aria-label="Send to agent"
+                style={{
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background:
+                    busy || draft.trim().length === 0
                       ? 'var(--color-surface-active)'
-                      : 'var(--color-surface-hover)',
-                color:
-                  enhancing
-                    ? 'var(--color-accent)'
-                    : draft.trim().length === 0
+                      : 'var(--color-accent)',
+                  color:
+                    busy || draft.trim().length === 0
                       ? 'var(--color-text-faint)'
-                      : 'var(--color-text-primary)',
-                border: `1px solid ${enhancing ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
-                cursor: enhancing || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
-                animation: enhancing ? 'pulse 1.2s ease-in-out infinite' : 'none',
-              }}
-            >
-              <Sparkles size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={busy || draft.trim().length === 0}
-              aria-label="Send to agent"
-              style={{
-                display: 'inline-grid',
-                placeItems: 'center',
-                width: 30,
-                height: 30,
-                borderRadius: '50%',
-                background:
-                  busy || draft.trim().length === 0
-                    ? 'var(--color-surface-active)'
-                    : 'var(--color-accent)',
-                color:
-                  busy || draft.trim().length === 0
-                    ? 'var(--color-text-faint)'
-                    : 'var(--color-on-accent)',
-                border: 'none',
-                cursor: busy || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <ArrowUp size={13} />
-            </button>
+                      : 'var(--color-on-accent)',
+                  border: 'none',
+                  cursor: busy || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <ArrowUp size={13} />
+              </button>
             </span>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function RouterSelect({
+  currentTier,
+  onSelect,
+}: {
+  currentTier: Tier;
+  onSelect: (tier: Tier) => void;
+}) {
+  const selected = MODEL_ROUTERS.find((router) => router.value === currentTier) ?? (MODEL_ROUTERS[0] as (typeof MODEL_ROUTERS)[number]);
+  const Icon = ROUTER_ICON[currentTier];
+
+  return (
+    <label
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 7px',
+        borderRadius: 'var(--radius-pill)',
+        border: '1px solid var(--color-border-subtle)',
+        background:
+          currentTier === 'free'
+            ? 'var(--color-success-soft, var(--color-surface-hover))'
+            : currentTier === 'frontier'
+              ? 'var(--color-accent-soft)'
+              : 'var(--color-surface-hover)',
+        color:
+          currentTier === 'free'
+            ? 'var(--color-success, var(--color-text-secondary))'
+            : currentTier === 'frontier'
+              ? 'var(--color-accent)'
+              : 'var(--color-text-secondary)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        maxWidth: '100%',
+      }}
+      title={selected.detail}
+    >
+      <Icon size={11} aria-hidden />
+      <span style={{ whiteSpace: 'nowrap' }}>Router</span>
+      <select
+        aria-label="Model router"
+        value={currentTier}
+        onChange={(event) => onSelect(event.target.value as Tier)}
+        style={{
+          appearance: 'none',
+          border: 'none',
+          background: 'transparent',
+          color: 'inherit',
+          font: 'inherit',
+          fontWeight: 600,
+          cursor: 'pointer',
+          maxWidth: 155,
+          outline: 'none',
+        }}
+      >
+        {MODEL_ROUTERS.map((router) => (
+          <option key={router.value} value={router.value}>
+            {router.label}
+          </option>
+        ))}
+      </select>
+      <span style={{ color: 'var(--color-text-faint)', whiteSpace: 'nowrap' }}>{selected.sublabel}</span>
+    </label>
   );
 }
 
@@ -429,17 +488,7 @@ function AssistantRow({ message }: { message: MessageRow }) {
       </span>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {message.content.length > 0 ? (
-          <div
-            style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 'var(--font-size-body)',
-              color: 'var(--color-text-primary)',
-              lineHeight: 'var(--leading-snug)',
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {message.content}
-          </div>
+          <MarkdownContent text={message.content} />
         ) : null}
         {message.toolCalls && message.toolCalls.length > 0
           ? message.toolCalls.map((tc) => <ToolCallCard key={tc.id} call={tc} />)
@@ -463,6 +512,137 @@ function AssistantRow({ message }: { message: MessageRow }) {
       </div>
     </div>
   );
+}
+
+function MarkdownContent({ text }: { text: string }) {
+  const blocks = parseMarkdownBlocks(text);
+  return (
+    <div
+      style={{
+        fontFamily: 'var(--font-sans)',
+        fontSize: 'var(--font-size-body)',
+        color: 'var(--color-text-primary)',
+        lineHeight: 1.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      {blocks.map((block, index) => {
+        if (block.type === 'ul') {
+          return (
+            <ul key={index} style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${itemIndex}-${item.slice(0, 20)}`}>{renderInlineMarkdown(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === 'ol') {
+          return (
+            <ol key={index} style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${itemIndex}-${item.slice(0, 20)}`}>{renderInlineMarkdown(item)}</li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={index} style={{ margin: 0 }}>
+            {renderInlineMarkdown(block.text)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+type MarkdownBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'ul'; items: string[] }
+  | { type: 'ol'; items: string[] };
+
+function parseMarkdownBlocks(text: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  let paragraph: string[] = [];
+  let list: Extract<MarkdownBlock, { type: 'ul' | 'ol' }> | null = null;
+
+  function flushParagraph() {
+    if (paragraph.length === 0) return;
+    blocks.push({ type: 'paragraph', text: paragraph.join(' ') });
+    paragraph = [];
+  }
+
+  function flushList() {
+    if (!list) return;
+    blocks.push(list);
+    list = null;
+  }
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    if (unordered) {
+      flushParagraph();
+      if (!list || list.type !== 'ul') {
+        flushList();
+        list = { type: 'ul', items: [] };
+      }
+      list.items.push(unordered[1] as string);
+      continue;
+    }
+
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (ordered) {
+      flushParagraph();
+      if (!list || list.type !== 'ol') {
+        flushList();
+        list = { type: 'ol', items: [] };
+      }
+      list.items.push(ordered[1] as string);
+      continue;
+    }
+
+    flushList();
+    paragraph.push(line.replace(/^#{1,3}\s+/, ''));
+  }
+
+  flushParagraph();
+  flushList();
+  return blocks.length > 0 ? blocks : [{ type: 'paragraph', text }];
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code
+          key={index}
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.92em',
+            background: 'var(--color-surface-hover)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '1px 4px',
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
 }
 
 function ToolCallCard({ call }: { call: { id: string; name: string; args: string } }) {

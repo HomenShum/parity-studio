@@ -27,7 +27,7 @@ const runsDir = resolve(repoRoot, 'runs');
 const PARITY_STUDIO_URL = process.env.PARITY_STUDIO_URL ?? 'https://parity-studio.vercel.app/';
 const PARITY_CONVEX_URL = process.env.PARITY_CONVEX_URL ?? 'https://blissful-pig-998.convex.cloud';
 const INPUT_MODE = process.env.INPUT_MODE ?? 'existing';
-const EXISTING_RUN_ID = process.env.EXISTING_RUN_ID ?? 'jh73jdermm6pm6zbcfrd3mpms985v2t0';
+const EXISTING_RUN_ID = process.env.EXISTING_RUN_ID ?? 'jh798qfj782qem79rkechhyxxs85tprk';
 const SOURCE_IMAGE_PATH =
   process.env.SOURCE_IMAGE_PATH ?? resolve(repoRoot, 'runs', 'composer-dogfood', 'source.png');
 const SOURCE_ZIP_PATH =

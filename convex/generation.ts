@@ -4,6 +4,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
 import { deploymentTier, resolveModel, sessionPick, type ModelTier, type Phase } from './lib/autoRouter';
+import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
@@ -225,8 +226,8 @@ export const verifyDeterministic = internalAction({
     if (uiKit === null) throw new Error(`ui_kit ${uiKitId} not found`);
     const files = (uiKit.files as Record<string, string>) ?? {};
 
-    const indexHtml = findFileEnding(files, '/index.html') ?? null;
-    const tokensCss = findFileEnding(files, '/tokens.css') ?? null;
+    const indexHtml = findActiveKitFile(files, uiKit.slug, 'index.html') ?? null;
+    const tokensCss = findActiveKitFile(files, uiKit.slug, 'tokens.css') ?? null;
 
     const report = checkDeterministic({
       sourceHtml,
@@ -278,8 +279,9 @@ export const iterate = internalAction({
     await ctx.runMutation(internal.runs.updateStatus, { runId: args.runId, status: 'iterating' });
 
     const previousFiles = args.previousUiKitFiles as Record<string, string>;
-    const previousIndexHtml = findFileEnding(previousFiles, '/index.html') ?? '';
-    const previousTokensCss = findFileEnding(previousFiles, '/tokens.css') ?? '';
+    const previousSlug = inferActiveKitSlug(previousFiles);
+    const previousIndexHtml = findActiveKitFile(previousFiles, previousSlug, 'index.html') ?? '';
+    const previousTokensCss = findActiveKitFile(previousFiles, previousSlug, 'tokens.css') ?? '';
 
     const failedGaps = (args.failedGaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
     const gapText = failedGaps.length === 0
@@ -603,12 +605,6 @@ function stripWrappingFences(raw: string): string {
   return fenceMatch?.[1] ?? trimmed;
 }
 
-function findFileEnding(files: Record<string, string>, suffix: string): string | undefined {
-  for (const [path, content] of Object.entries(files)) {
-    if (path === suffix.replace(/^\/+/, '') || path.endsWith(suffix)) return content;
-  }
-  return undefined;
-}
 
 // Suppress unused-import warnings — VISUAL_JUDGE_SYSTEM is referenced in
 // future visual-verifier wiring; MAX_ITERATIONS is consumed by the workflow.

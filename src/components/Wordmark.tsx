@@ -2,7 +2,7 @@
  * Wordmark — brand cluster used in the TopBar.
  *
  * Layout: terracotta P-square logo + "Parity Studio" wordmark (display serif)
- * + "PRE-ALPHA" mono badge. Mirrors the reference in
+ * + version badge. Mirrors the reference in
  * docs/plans/2026-04-28-shell-revamp-from-reference.md §10.
  */
 interface WordmarkProps {
@@ -10,7 +10,7 @@ interface WordmarkProps {
   size?: 'sm' | 'md';
 }
 
-export function Wordmark({ badge = 'PRE-ALPHA', size = 'md' }: WordmarkProps) {
+export function Wordmark({ badge = 'v0.1.0', size = 'md' }: WordmarkProps) {
   const squareSize = size === 'sm' ? 28 : 36;
   const titleSize = size === 'sm' ? 17 : 19;
   return (

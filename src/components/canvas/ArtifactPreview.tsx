@@ -64,6 +64,43 @@ export function ArtifactPreview({
     return tag + html;
   }
 
+  // Generated artifacts are untrusted previews and may contain demo JS.
+  // Keep runtime errors inside the iframe so host-app QA is not polluted
+  // by a generated page's optional interactions.
+  function injectRuntimeGuard(html: string): string {
+    const script = `<script data-parity-runtime-guard="on">
+window.addEventListener('error', function(event) {
+  event.preventDefault();
+  return true;
+}, true);
+window.addEventListener('unhandledrejection', function(event) {
+  event.preventDefault();
+}, true);
+</script>
+`;
+    if (html.includes('<head>')) return html.replace('<head>', `<head>${script}`);
+    if (html.toLowerCase().includes('<head>')) return html.replace(/<head>/i, `<head>${script}`);
+    if (html.includes('<script')) return html.replace('<script', `${script}<script`);
+    return script + html;
+  }
+
+  function stripUnresolvableScriptSrcs(html: string): string {
+    return html.replace(
+      /<script\b([^>]*?)\bsrc=(["'])([^"']+)\2([^>]*)>\s*<\/script>/gi,
+      (tag, _before: string, _quote: string, src: string, _after: string) => {
+        const normalized = src.trim().toLowerCase();
+        const canLoadInSrcDoc =
+          normalized.startsWith('https://') ||
+          normalized.startsWith('http://') ||
+          normalized.startsWith('data:') ||
+          normalized.startsWith('blob:');
+        if (canLoadInSrcDoc) return tag;
+        const safeSrc = src.replace(/-->/g, '');
+        return `<!-- parity: stripped unresolved preview script ${safeSrc} -->`;
+      },
+    );
+  }
+
   // When comment mode is on, inject a tiny helper script that captures
   // clicks on any element, computes its normalized rect inside the iframe
   // viewport, and posts a `parity:element-click` message to the parent.
@@ -187,7 +224,7 @@ export function ArtifactPreview({
       srcDoc = loadingHtml(run?.status ?? 'queued');
     } else {
       srcDoc = injectCommentHelper(
-        injectLiveTokens(artifact.html, liveTokensCss),
+        injectRuntimeGuard(stripUnresolvableScriptSrcs(injectLiveTokens(artifact.html, liveTokensCss))),
         commentModeActive,
         commentMessageToken,
       );

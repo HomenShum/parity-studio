@@ -27,9 +27,10 @@ From prompt/image to verified `ui_kit`, scoped comments, MCP tooling, and ZIP ex
 
 ---
 
-**Status**: pre-alpha · LIVE
+**Status**: v0.1.0 · LIVE
 
 - **Web app**: https://parity-studio.vercel.app
+- **Release demo run**: https://parity-studio.vercel.app/?run=jh798qfj782qem79rkechhyxxs85tprk
 - **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) · `npx parity-studio-mcp`
 - **Convex prod**: `blissful-pig-998` · HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web · Convex Cloud + pi-ai · stdio MCP for Claude Code / Cursor / Windsurf

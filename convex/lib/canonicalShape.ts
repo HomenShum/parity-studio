@@ -152,7 +152,7 @@ manifest.json schemaVersion 1 contract is stable across minor versions.
   <rect x="60" y="60" width="100" height="100" rx="22" fill="#C76D54"/>
   <text x="110" y="132" font-family="Georgia, serif" font-size="64" font-weight="500" text-anchor="middle" fill="#FAF7F3">${escapeXml(initialFromSlug(slug))}</text>
   <text x="200" y="120" font-family="Georgia, serif" font-size="42" fill="#3a342f">Parity Studio</text>
-  <text x="200" y="160" font-family="ui-monospace, monospace" font-size="14" letter-spacing="0.18em" fill="#7a6f64">PRE-ALPHA</text>
+  <text x="200" y="160" font-family="ui-monospace, monospace" font-size="14" letter-spacing="0.18em" fill="#7a6f64">v0.1.0</text>
   <text x="60" y="320" font-family="Georgia, serif" font-size="84" font-weight="400" fill="#3a342f">${escapeXml(slug)}</text>
   <text x="60" y="380" font-family="ui-sans-serif, system-ui" font-size="28" fill="#7a6f64">${escapeXml((run.prompt ?? 'image to verified ui_kit').slice(0, 100))}</text>
   <text x="60" y="540" font-family="ui-monospace, monospace" font-size="20" fill="#3a342f">parity ${parityLine}</text>
