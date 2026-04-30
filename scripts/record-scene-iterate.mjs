@@ -157,36 +157,50 @@ async function main() {
     await commentToggle.click();
     await page.waitForTimeout(1_500);
 
-    // ── 9. drag a bbox on the artifact preview ────────────────────────
-    //     We pick a region in the upper-left of the canvas — visible,
-    //     not where any tooltip/menu is. Coords are absolute on the
-    //     viewport; the canvas occupies roughly x:140-1100 y:120-780.
-    console.log('[iterate] 9 — drag a bbox');
-    const dragFrom = { x: 380, y: 320 };
-    const dragTo = { x: 720, y: 510 };
-    await page.mouse.move(dragFrom.x, dragFrom.y);
-    await page.mouse.down();
-    // small staggered moves so the drag visibly tracks
-    const steps = 20;
-    for (let i = 1; i <= steps; i += 1) {
-      const x = dragFrom.x + ((dragTo.x - dragFrom.x) * i) / steps;
-      const y = dragFrom.y + ((dragTo.y - dragFrom.y) * i) / steps;
-      await page.mouse.move(x, y);
-      await page.waitForTimeout(40);
-    }
-    await page.mouse.up();
+    // ── 9. trigger a pending bubble via postMessage ───────────────────
+    //
+    // The CommentOverlay component listens for `parity:element-click`
+    // postMessage events from the artifact iframe (its helper script
+    // posts these on click). Free-form drag-bbox also works in theory
+    // but Playwright's viewport coordinates don't always land cleanly
+    // inside the overlay's container rect. postMessage is the path the
+    // app's own iframe helper uses every day — we just call it directly
+    // so the bubble appears deterministically.
+    console.log('[iterate] 9 — trigger pending bubble via postMessage');
+    await page.evaluate(() => {
+      window.postMessage(
+        {
+          type: 'parity:element-click',
+          rect: { x: 0.22, y: 0.30, w: 0.34, h: 0.18 },
+          selector: 'main > section.hero',
+          tagName: 'SECTION',
+          text: 'hero',
+        },
+        '*',
+      );
+    });
     await page.waitForTimeout(1_500);
 
     // ── 10. type the comment text in the pending bubble ──────────────
+    //
+    // The pending bubble's textarea placeholder is
+    //   "Or write your own — what should change here?"
+    // Match a few variants so we don't break on copy tweaks.
     console.log('[iterate] 10 — type comment');
-    // The pending bubble's textarea has a placeholder we can match on.
-    const commentBox = page.locator('textarea[placeholder*="What\'s wrong" i], textarea[placeholder*="describe" i], textarea[placeholder*="comment" i]').first();
+    const commentBox = page
+      .locator(
+        'textarea[placeholder*="write your own" i], ' +
+          'textarea[placeholder*="should change" i], ' +
+          'textarea[placeholder*="what\'s wrong" i]',
+      )
+      .first();
+    await commentBox.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {});
     if ((await commentBox.count()) > 0) {
       await commentBox.click();
       await commentBox.fill('');
       await commentBox.type(COMMENT_TEXT, { delay: 24 });
     } else {
-      // Fallback: type into whatever textarea has focus after the drag
+      console.log('[iterate]   pending bubble textarea not found — typing into focused element');
       await page.keyboard.type(COMMENT_TEXT, { delay: 24 });
     }
     await page.waitForTimeout(900);

@@ -189,34 +189,32 @@ async function main() {
     await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
     await page.waitForTimeout(3_000);
 
-    // ── 9. export ZIP via top-right pill (or fall back to Export ZIP card) ─
+    // ── 9. export ZIP via top-right Export button (opens menu, then ZIP) ─
+    //
+    // 2026-04-29: HeaderActions changed from <a> to <button> + menu of
+    // <a role=menuitem href=…/zip|html|markdown>. We open the menu, hover
+    // briefly so it's visible in the recording, then click ZIP. Wrap the
+    // download promise in a catch so a failed click doesn't leak an
+    // unhandled rejection on the 20s timeout.
     console.log('[record] step 9 — export zip');
-    const exportPill = page.getByRole('link', { name: /^export$/i });
-    let downloadFired = false;
     try {
-      const dlPromise = page.waitForEvent('download', { timeout: 20_000 });
-      await exportPill.first().click({ timeout: 5_000 });
+      const exportButton = page.getByRole('button', { name: /^export$/i });
+      await exportButton.first().click({ timeout: 5_000 });
+      await page.waitForTimeout(800); // menu open animation
+      const zipItem = page.getByRole('menuitem').filter({ hasText: /zip/i }).first();
+      const dlPromise = page.waitForEvent('download', { timeout: 15_000 }).catch(() => null);
+      await zipItem.click({ timeout: 5_000 });
       const dl = await dlPromise;
-      const path = join(downloadDir, dl.suggestedFilename() || 'ui_kit.zip');
-      await dl.saveAs(path);
-      const sz = (await stat(path)).size;
-      console.log(`[record] zip via top pill: ${path} (${sz} bytes)`);
-      downloadFired = true;
-    } catch (err) {
-      console.log(`[record] top export pill didn't fire — falling back to FILES card`);
-    }
-    if (!downloadFired) {
-      try {
-        const dlPromise = page.waitForEvent('download', { timeout: 20_000 });
-        await page.getByText(/^Export ZIP$/i).click({ timeout: 5_000 });
-        const dl = await dlPromise;
+      if (dl) {
         const path = join(downloadDir, dl.suggestedFilename() || 'ui_kit.zip');
         await dl.saveAs(path);
         const sz = (await stat(path)).size;
-        console.log(`[record] zip via FILES card: ${path} (${sz} bytes)`);
-      } catch (err) {
-        console.log(`[record] no zip download fired: ${(err && err.message) || err}`);
+        console.log(`[record] zip via export menu: ${path} (${sz} bytes)`);
+      } else {
+        console.log('[record] export menu opened but download didn\'t fire (export endpoint unavailable for this run)');
       }
+    } catch (err) {
+      console.log(`[record] export step skipped: ${(err && err.message) || err}`);
     }
 
     await page.waitForTimeout(2_500);

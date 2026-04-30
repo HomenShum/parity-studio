@@ -1,24 +1,33 @@
-// Stitch the 3 scenes into a single MP4.
+// Stitch the 3 scenes into a single fast-play demo (gif-style).
 //
 // Picks the most recent recording from each scene's output dir
 // (recording-shell-*, recording-iterate-*, recording-mcp-*) under
-// runs/, and concatenates them via ffmpeg with a 600ms crossfade
-// between each cut.
+// runs/, applies per-scene speed-up, and concatenates them via
+// ffmpeg with a 600ms crossfade between each cut.
 //
-// Music: if MUSIC=path is set (or MUSIC=auto picks the latest from
-// runs/music/), mixes it underneath the stitched video. Music is
-// trimmed/looped to match video duration with a 2s fade-out and
-// volume scaled to -22 dB so it sits behind UI feedback.
+// Default speed-ups (gif-like quick demo, no audio):
+//   SHELL_SPEED=6        (9:27 → 1:35)
+//   ITERATE_SPEED=2.5    (2:30 → 1:00)
+//   MCP_SPEED=1.2        (0:24 → 0:20)
+//
+// Music: if MUSIC=path or MUSIC=auto, mixes a bed underneath. Off by
+// default for sped-up output (atempo doesn't time-stretch cleanly past
+// 2x, and fast-play music sounds weird against pad ambient).
+//
+// GIF=1 also produces a .gif sibling at GIF_WIDTH (default 960) using
+// ffmpeg's palettegen+paletteuse for sharp text rendering.
 //
 // Run:
-//   node scripts/stitch-demo.mjs
-//   MUSIC=auto node scripts/stitch-demo.mjs
-//   MUSIC=runs/music/demo-bed-240s.m4a node scripts/stitch-demo.mjs
+//   node scripts/stitch-demo.mjs                   default 6x/2.5x/1.2x
+//   GIF=1 node scripts/stitch-demo.mjs             also write .gif
+//   SHELL_SPEED=8 ITERATE_SPEED=3 node scripts/stitch-demo.mjs
+//   MUSIC=auto SHELL_SPEED=1 node scripts/stitch-demo.mjs   un-sped
+//
 // Optional:
-//   SHELL_MP4=...  ITERATE_MP4=...  MCP_MP4=...   override picks
-//   OUTPUT=runs/demo-2026-04-29.mp4               output path
-//   NO_CROSSFADE=1                                hard cuts (faster)
-//   MUSIC=path|auto                               mix bed audio
+//   SHELL_MP4=…  ITERATE_MP4=…  MCP_MP4=…          override picks
+//   OUTPUT=runs/demo-2026-04-29.mp4                output path
+//   NO_CROSSFADE=1                                 hard cuts (faster)
+//   GIF=1   GIF_WIDTH=720                          also write .gif
 
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -132,28 +141,50 @@ async function main() {
   }
 
   // Crossfade: needs durations to compute offsets.
-  const dShell = await probeDuration(shell);
-  const dIter = await probeDuration(iterate);
-  const dMcp = await probeDuration(mcp);
-  if (dShell === null || dIter === null || dMcp === null) {
+  const rawShell = await probeDuration(shell);
+  const rawIter = await probeDuration(iterate);
+  const rawMcp = await probeDuration(mcp);
+  if (rawShell === null || rawIter === null || rawMcp === null) {
     console.error('error: ffprobe failed; rerun with NO_CROSSFADE=1 for hard cuts');
     process.exit(3);
   }
+
+  // Per-scene speed-up via setpts=PTS/N (gif-like fast play).
+  // Default 6x for the long pipeline scene, 2.5x for iterate, ~1x for mcp.
+  const shellSpeed = Number.parseFloat(process.env.SHELL_SPEED ?? '6');
+  const iterSpeed = Number.parseFloat(process.env.ITERATE_SPEED ?? '2.5');
+  const mcpSpeed = Number.parseFloat(process.env.MCP_SPEED ?? '1.2');
+
+  // Effective post-speed-up durations.
+  const dShell = rawShell / shellSpeed;
+  const dIter = rawIter / iterSpeed;
+  const dMcp = rawMcp / mcpSpeed;
+
   const fadeMs = 600;
   const fade = fadeMs / 1000;
   const off1 = Math.max(0, dShell - fade);
   const off2 = Math.max(0, dShell + dIter - 2 * fade);
   const totalDuration = dShell + dIter + dMcp - 2 * fade;
 
-  console.log(
-    `[stitch] shell ${dShell.toFixed(2)}s + iterate ${dIter.toFixed(2)}s + mcp ${dMcp.toFixed(2)}s ≈ ${totalDuration.toFixed(2)}s`,
-  );
-  console.log(`[stitch] xfade offsets: ${off1.toFixed(2)}s, ${off2.toFixed(2)}s · duration ${fade}s`);
+  const isSpedUp = shellSpeed !== 1 || iterSpeed !== 1 || mcpSpeed !== 1;
+  if (music && isSpedUp) {
+    console.log('[stitch] note: speed > 1, dropping music (sped-up audio sounds weird)');
+    music = null;
+  }
 
+  console.log(
+    `[stitch] shell ${rawShell.toFixed(0)}s @ ${shellSpeed}x = ${dShell.toFixed(1)}s | ` +
+      `iterate ${rawIter.toFixed(0)}s @ ${iterSpeed}x = ${dIter.toFixed(1)}s | ` +
+      `mcp ${rawMcp.toFixed(0)}s @ ${mcpSpeed}x = ${dMcp.toFixed(1)}s`,
+  );
+  console.log(`[stitch] total ≈ ${totalDuration.toFixed(1)}s · xfade ${fade}s`);
+
+  // setpts=PTS/N speeds up the stream by factor N. Apply BEFORE scale +
+  // fps so the framerate normalization sees the new pacing.
   let filter =
-    `[0:v]scale=1680:900,setsar=1,fps=30[v0];` +
-    `[1:v]scale=1680:900,setsar=1,fps=30[v1];` +
-    `[2:v]scale=1680:900,setsar=1,fps=30[v2];` +
+    `[0:v]setpts=PTS/${shellSpeed},scale=1680:900,setsar=1,fps=30[v0];` +
+    `[1:v]setpts=PTS/${iterSpeed},scale=1680:900,setsar=1,fps=30[v1];` +
+    `[2:v]setpts=PTS/${mcpSpeed},scale=1680:900,setsar=1,fps=30[v2];` +
     `[v0][v1]xfade=transition=fade:duration=${fade}:offset=${off1.toFixed(3)}[v01];` +
     `[v01][v2]xfade=transition=fade:duration=${fade}:offset=${off2.toFixed(3)}[outv]`;
 
@@ -182,6 +213,46 @@ async function main() {
     process.exit(r.status ?? 1);
   }
   console.log(`[stitch] done → ${out}`);
+
+  // Optional GIF output via palettegen+paletteuse for sharp text.
+  if (process.env.GIF) {
+    const gifWidth = Number.parseInt(process.env.GIF_WIDTH ?? '960', 10);
+    const gifPath = out.replace(/\.mp4$/i, '.gif');
+    const palettePath = out.replace(/\.mp4$/i, '.palette.png');
+    console.log(`[stitch] writing gif → ${gifPath} (width ${gifWidth}, 18 fps)`);
+    const palR = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-i', out,
+        '-vf', `fps=18,scale=${gifWidth}:-1:flags=lanczos,palettegen=stats_mode=diff`,
+        palettePath,
+      ],
+      { stdio: 'inherit' },
+    );
+    if (palR.status !== 0) {
+      console.error('[stitch] palettegen failed; skipping gif');
+    } else {
+      const gifR = spawnSync(
+        'ffmpeg',
+        [
+          '-y',
+          '-i', out,
+          '-i', palettePath,
+          '-filter_complex',
+          `fps=18,scale=${gifWidth}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
+          '-loop', '0',
+          gifPath,
+        ],
+        { stdio: 'inherit' },
+      );
+      if (gifR.status !== 0) {
+        console.error('[stitch] paletteuse failed; gif not produced');
+      } else {
+        console.log(`[stitch] gif → ${gifPath}`);
+      }
+    }
+  }
 }
 
 main().catch((err) => {
