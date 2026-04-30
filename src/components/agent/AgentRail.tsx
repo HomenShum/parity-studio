@@ -1,6 +1,6 @@
 import { useQuery } from 'convex/react';
 import { ChevronDown, ChevronRight, ExternalLink, List, Plus, Radio } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { ChatPanel } from '../canvas/ChatPanel';
@@ -55,7 +55,12 @@ function relativeTime(ts: number | undefined): string {
 
 export function AgentRail({ currentRunId, onSelectRun, onRunStarted }: AgentRailProps) {
   const [runsOpen, setRunsOpen] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(currentRunId === null);
   const runs = useQuery(api.runs.listRecent, { limit: 12 });
+
+  useEffect(() => {
+    if (currentRunId === null) setSourceOpen(true);
+  }, [currentRunId]);
 
   const rows: ActivityRow[] = useMemo(() => {
     if (!runs) return [];
@@ -176,7 +181,7 @@ export function AgentRail({ currentRunId, onSelectRun, onRunStarted }: AgentRail
           </div>
           <a
             href="https://github.com/HomenShum/parity-studio"
-            aria-label="View source on GitHub"
+            aria-label="View Parity Studio repository on GitHub"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -188,7 +193,7 @@ export function AgentRail({ currentRunId, onSelectRun, onRunStarted }: AgentRail
               flexShrink: 0,
             }}
           >
-            source
+            GitHub
             <ExternalLink size={10} aria-hidden />
           </a>
         </div>
@@ -301,22 +306,61 @@ export function AgentRail({ currentRunId, onSelectRun, onRunStarted }: AgentRail
           gap: 8,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--color-text-faint)',
-            letterSpacing: '0.02em',
-            textTransform: 'uppercase',
-          }}
-        >
-          <span>Start or import source</span>
-          <Plus size={12} aria-hidden />
-        </div>
-        <ComposerCard onRunStarted={onRunStarted} />
+        {currentRunId !== null ? (
+          <button
+            type="button"
+            onClick={() => setSourceOpen((value) => !value)}
+            aria-expanded={sourceOpen}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              height: 34,
+              padding: '0 10px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)',
+              background: sourceOpen ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+              color: sourceOpen ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              {sourceOpen ? <ChevronDown size={13} /> : <Plus size={13} />}
+              Start new run
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-text-faint)' }}>
+              prompt / image / ui_kit zip
+            </span>
+          </button>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--color-text-faint)',
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+            }}
+          >
+            <span>Start or import source</span>
+            <Plus size={12} aria-hidden />
+          </div>
+        )}
+        {sourceOpen || currentRunId === null ? (
+          <ComposerCard
+            onRunStarted={(runId) => {
+              setSourceOpen(false);
+              onRunStarted(runId);
+            }}
+          />
+        ) : null}
       </div>
     </aside>
   );

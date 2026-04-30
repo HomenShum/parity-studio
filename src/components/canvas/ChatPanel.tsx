@@ -61,9 +61,9 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
   type Tier = 'frontier' | 'balanced' | 'free';
   const TIER_CYCLE: Tier[] = ['balanced', 'frontier', 'free'];
   const TIER_META: Record<Tier, { Icon: LucideIcon; label: string; sublabel: string }> = {
-    frontier: { Icon: Rocket, label: 'Frontier', sublabel: 'opus + sonnet · best paid' },
-    balanced: { Icon: Gauge, label: 'Balanced', sublabel: 'sonnet + kimi · default' },
-    free: { Icon: Leaf, label: 'Free', sublabel: 'deepseek + qwen · $0' },
+    frontier: { Icon: Rocket, label: 'Frontier', sublabel: 'opus + sonnet - best paid' },
+    balanced: { Icon: Gauge, label: 'Balanced', sublabel: 'sonnet + kimi - default' },
+    free: { Icon: Leaf, label: 'Free', sublabel: 'deepseek + qwen - $0' },
   };
   const currentTier: Tier = ((run?.tier as Tier | undefined) ?? 'balanced');
   async function cycleTier() {
@@ -231,7 +231,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 if (!busy) void onSubmit();
               }
             }}
-            placeholder="Tell the agent what to change… 'soften the radius on Card to 12px and update the preview' / 'rewrite assets/og-foo.svg with darker text'"
+            placeholder="Tell the agent what to change... 'soften the radius on Card to 12px and update the preview' / 'rewrite assets/og-foo.svg with darker text'"
             aria-label="Chat with the parity-studio agent"
             rows={3}
             disabled={busy}
@@ -268,7 +268,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 <button
                   type="button"
                   onClick={cycleTier}
-                  title={`${TIER_META[currentTier].sublabel} — click to cycle Balanced → Frontier → Free`}
+                  title={`Model tier: ${TIER_META[currentTier].sublabel}. Click to cycle Balanced -> Frontier -> Free.`}
                   aria-label={`Tier: ${TIER_META[currentTier].label}. Click to cycle.`}
                   style={{
                     display: 'inline-flex',
@@ -302,7 +302,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 </button>
               ) : null}
               <span>
-                {error ?? 'cmd/ctrl + ⏎ to send · ✨ rewrites your draft (small-tier)'}
+                {error ?? 'cmd/ctrl + enter to send - sparkle rewrites the draft before sending (~$0.002)'}
               </span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -310,8 +310,8 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
               type="button"
               onClick={onEnhance}
               disabled={enhancing || busy || draft.trim().length === 0}
-              aria-label="Enhance draft via the small-tier model"
-              title="Rewrite your draft into a clearer, more specific prompt before sending (small-tier model, ~$0.002 per call)"
+              aria-label="Rewrite draft before sending with the small model"
+              title="Rewrite your draft into a clearer, more specific prompt before sending. Uses the small model and costs about $0.002 per call."
               style={{
                 display: 'inline-grid',
                 placeItems: 'center',

@@ -1,6 +1,6 @@
 import { useQuery } from 'convex/react';
 import { Code, Eye, Folder, SlidersHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { FileEditor } from '../FileEditor';
@@ -24,8 +24,8 @@ type Tab = 'files' | 'preview' | 'code';
 
 const TAB_META: Record<Tab, { label: string; Icon: typeof Folder }> = {
   files: { label: 'Files', Icon: Folder },
-  preview: { label: 'preview', Icon: Eye },
-  code: { label: 'code', Icon: Code },
+  preview: { label: 'Preview', Icon: Eye },
+  code: { label: 'Code', Icon: Code },
 };
 
 export function CanvasPanel({
@@ -39,6 +39,11 @@ export function CanvasPanel({
   const [tab, setTab] = useState<Tab>('files');
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+
+  useEffect(() => {
+    setTab(runId === null ? 'files' : 'preview');
+    setTweaksOpen(false);
+  }, [runId]);
 
   return (
     <section
@@ -151,8 +156,6 @@ export function CanvasPanel({
                 runId={runId}
                 selectedFile={selectedFile}
                 onSelectFile={onSelectFile}
-                zoom={zoom}
-                commentModeActive={commentModeActive}
               />
             )}
           </div>

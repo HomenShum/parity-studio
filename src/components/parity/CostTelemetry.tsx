@@ -49,7 +49,7 @@ export function CostTelemetry({
           textTransform: 'uppercase',
         }}
       >
-        <span aria-hidden style={{ fontSize: 13 }}>🪙</span>
+        <span aria-hidden style={{ fontSize: 13 }}>$</span>
         Cost telemetry
       </div>
       <div
@@ -96,7 +96,7 @@ export function CostTelemetry({
           color: 'var(--color-text-faint)',
         }}
       >
-        Est. $0.10 – $0.80 per full pipeline
+        Typical full pipeline: $0.10-$0.80; current run shown above
         <Info size={11} aria-hidden />
       </div>
     </div>

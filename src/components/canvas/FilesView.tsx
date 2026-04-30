@@ -1,15 +1,13 @@
 import { useQuery } from 'convex/react';
-import { Download, FileText, Folder, Image as ImageIcon } from 'lucide-react';
+import { Code2, Download, FileText, Folder, Image as ImageIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { ArtifactPreview } from './ArtifactPreview';
 
 interface FilesViewProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
-  zoom: number;
-  commentModeActive: boolean;
 }
 
 function convexHttpBase(): string | null {
@@ -26,13 +24,7 @@ function formatSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-export function FilesView({
-  runId,
-  selectedFile,
-  onSelectFile,
-  zoom,
-  commentModeActive,
-}: FilesViewProps) {
+export function FilesView({ runId, selectedFile, onSelectFile }: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const httpBase = convexHttpBase();
   const exportHref =
@@ -45,16 +37,21 @@ export function FilesView({
 
   const files = uiKit ? (uiKit.files as Record<string, string>) : null;
   const visibleFilePaths = files
-    ? Object.keys(files)
-        .sort((a, b) => fileDisplayPriority(a) - fileDisplayPriority(b) || a.localeCompare(b))
-        .slice(0, 10)
+    ? Object.keys(files).sort(
+        (a, b) => fileDisplayPriority(a) - fileDisplayPriority(b) || a.localeCompare(b),
+      )
     : [];
+  const selectedContent = selectedFile && files ? (files[selectedFile] ?? null) : null;
+  const componentCount = visibleFilePaths.filter((path) =>
+    /^ui_kits\/[^/]+\/components\/.+\.(tsx|jsx|ts|js)$/i.test(path),
+  ).length;
+  const previewArtifactCount = visibleFilePaths.filter((path) => /^preview\//i.test(path)).length;
 
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '240px 1fr',
+        gridTemplateColumns: 'minmax(260px, 340px) 1fr',
         gap: 'var(--space-7)',
         height: '100%',
         width: '100%',
@@ -72,9 +69,10 @@ export function FilesView({
           fontSize: 'var(--font-size-body-sm)',
           color: 'var(--color-text-secondary)',
           minWidth: 0,
+          minHeight: 0,
         }}
       >
-        <FileGroup label="Files">
+        <FileGroup label="Files" scroll>
           <div
             style={{
               display: 'flex',
@@ -97,37 +95,37 @@ export function FilesView({
 
           {files
             ? visibleFilePaths.map((path) => {
-                  const selected = path === selectedFile;
-                  return (
-                    <button
-                      key={path}
-                      type="button"
-                      onClick={() => onSelectFile(selected ? null : path)}
-                      title={`Scope next comment to ${path}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        textAlign: 'left',
-                        background: selected ? 'var(--color-accent-soft)' : 'transparent',
-                        color: selected ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '4px 8px',
-                        marginLeft: 18,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      <FileText size={11} />
-                      {path.split('/').slice(-1)[0]}
-                    </button>
-                  );
-                })
+                const selected = path === selectedFile;
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => onSelectFile(selected ? null : path)}
+                    title={`Scope next comment to ${path}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      textAlign: 'left',
+                      background: selected ? 'var(--color-accent-soft)' : 'transparent',
+                      color: selected ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '4px 8px',
+                      marginLeft: 18,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    <FileText size={11} />
+                    {path.split('/').slice(-1)[0]}
+                  </button>
+                );
+              })
             : null}
         </FileGroup>
 
@@ -153,7 +151,7 @@ export function FilesView({
                 source image
               </div>
               <div style={{ fontSize: 10, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>
-                inline base64 · png/jpeg/webp
+                inline base64 - png/jpeg/webp
               </div>
             </div>
           </div>
@@ -210,26 +208,188 @@ export function FilesView({
                 paddingLeft: 10,
               }}
             >
-              {fileCount} files · {formatSize(estimateZipSize(files))}
+              {fileCount} files - {formatSize(estimateZipSize(files))}
             </div>
           ) : null}
         </FileGroup>
       </div>
 
-      <ArtifactPreview
-        runId={runId}
-        selectedFile={selectedFile}
-        zoom={zoom}
-        device="desktop"
-        commentModeActive={commentModeActive}
-      />
+      <div
+        aria-label="File details"
+        style={{
+          minWidth: 0,
+          minHeight: 0,
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--color-surface)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div
+          style={{
+            minHeight: 54,
+            borderBottom: '1px solid var(--color-border-subtle)',
+            padding: '0 var(--space-5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 'var(--space-4)',
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: 'var(--tracking-eyebrow)',
+                color: 'var(--color-text-faint)',
+                textTransform: 'uppercase',
+              }}
+            >
+              File workspace
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--font-size-body)',
+                fontWeight: 600,
+                color: 'var(--color-text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {selectedFile ? selectedFile.split('/').slice(-1)[0] : 'Select a component to scope work'}
+            </div>
+          </div>
+          <Code2 size={16} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+        </div>
+
+        {selectedContent !== null && selectedFile !== null ? (
+          <div
+            style={{
+              padding: 'var(--space-5)',
+              minHeight: 0,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-4)',
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <Stat label="Path" value={selectedFile.replace(/^ui_kits\/[^/]+\//, '')} />
+              <Stat label="Size" value={formatSize(new Blob([selectedContent]).size)} />
+              <Stat label="Scope" value="next comment" />
+            </div>
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-accent)',
+                background: 'var(--color-accent-soft)',
+                color: 'var(--color-accent)',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--font-size-body-sm)',
+              }}
+            >
+              Comments and agent edits can target this file directly. Open Preview for visual bbox comments or Code for full editing.
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                minHeight: 0,
+                overflow: 'auto',
+                padding: 'var(--space-4)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-background-secondary)',
+                border: '1px solid var(--color-border-subtle)',
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                lineHeight: 1.55,
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {selectedContent.slice(0, 6000)}
+              {selectedContent.length > 6000 ? '\n\n... open Code for the full file' : ''}
+            </pre>
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: 'var(--space-6)',
+              minHeight: 0,
+              overflow: 'auto',
+              display: 'grid',
+              gridTemplateRows: 'auto auto 1fr',
+              gap: 'var(--space-5)',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: 22,
+                lineHeight: 1.2,
+                color: 'var(--color-text-primary)',
+                maxWidth: 560,
+              }}
+            >
+              File tree, source, and handoff stay here. Use Preview when you want the live rendered artifact.
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: 'var(--space-3)',
+                maxWidth: 720,
+              }}
+            >
+              <Stat label="Components" value={`${componentCount}`} />
+              <Stat label="Preview artifacts" value={`${previewArtifactCount}`} />
+              <Stat label="Total files" value={`${fileCount}`} />
+            </div>
+            <div
+              style={{
+                border: '1px dashed var(--color-border-strong)',
+                borderRadius: 'var(--radius-lg)',
+                display: 'grid',
+                placeItems: 'center',
+                minHeight: 220,
+                color: 'var(--color-text-faint)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                textAlign: 'center',
+                padding: 'var(--space-6)',
+              }}
+            >
+              Select a file on the left to inspect its path, size, scoped-comment target, and source excerpt.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function FileGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function FileGroup({
+  label,
+  children,
+  scroll = false,
+}: {
+  label: string;
+  children: ReactNode;
+  scroll?: boolean;
+}) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
       <div
         style={{
           fontSize: 10,
@@ -242,7 +402,59 @@ function FileGroup({ label, children }: { label: string; children: React.ReactNo
       >
         {label}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          minHeight: 0,
+          overflowY: scroll ? 'auto' : 'visible',
+          paddingRight: scroll ? 4 : 0,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--color-border-subtle)',
+        background: 'var(--color-background)',
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--color-text-faint)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          fontFamily: 'var(--font-sans)',
+          fontSize: 'var(--font-size-body-sm)',
+          fontWeight: 600,
+          color: 'var(--color-text-primary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={value}
+      >
+        {value}
+      </div>
     </div>
   );
 }
