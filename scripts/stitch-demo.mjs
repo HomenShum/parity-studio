@@ -5,12 +5,20 @@
 // runs/, and concatenates them via ffmpeg with a 600ms crossfade
 // between each cut.
 //
+// Music: if MUSIC=path is set (or MUSIC=auto picks the latest from
+// runs/music/), mixes it underneath the stitched video. Music is
+// trimmed/looped to match video duration with a 2s fade-out and
+// volume scaled to -22 dB so it sits behind UI feedback.
+//
 // Run:
 //   node scripts/stitch-demo.mjs
+//   MUSIC=auto node scripts/stitch-demo.mjs
+//   MUSIC=runs/music/demo-bed-240s.m4a node scripts/stitch-demo.mjs
 // Optional:
 //   SHELL_MP4=...  ITERATE_MP4=...  MCP_MP4=...   override picks
 //   OUTPUT=runs/demo-2026-04-29.mp4               output path
 //   NO_CROSSFADE=1                                hard cuts (faster)
+//   MUSIC=path|auto                               mix bed audio
 
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -55,10 +63,28 @@ async function probeDuration(file) {
   return Number.isFinite(v) ? v : null;
 }
 
+async function pickLatestMusic() {
+  const musicDir = join(runsDir, 'music');
+  const entries = await readdir(musicDir).catch(() => []);
+  const audios = entries.filter((e) => /\.(m4a|mp3|aac|wav)$/i.test(e));
+  if (audios.length === 0) return null;
+  const stats = await Promise.all(
+    audios.map(async (e) => {
+      const p = join(musicDir, e);
+      const s = await stat(p).catch(() => null);
+      return { path: p, mtime: s ? s.mtimeMs : 0 };
+    }),
+  );
+  stats.sort((a, b) => b.mtime - a.mtime);
+  return stats[0]?.path ?? null;
+}
+
 async function main() {
   const shell = process.env.SHELL_MP4 ?? (await pickLatest('recording-shell-'));
   const iterate = process.env.ITERATE_MP4 ?? (await pickLatest('recording-iterate-'));
   const mcp = process.env.MCP_MP4 ?? (await pickLatest('recording-mcp-'));
+  let music = process.env.MUSIC ?? null;
+  if (music === 'auto') music = await pickLatestMusic();
 
   const missing = [];
   if (!shell) missing.push('shell (record-end-to-end.mjs)');
@@ -75,30 +101,31 @@ async function main() {
   console.log(`[stitch] shell:   ${shell}`);
   console.log(`[stitch] iterate: ${iterate}`);
   console.log(`[stitch] mcp:     ${mcp}`);
+  console.log(`[stitch] music:   ${music ?? '(none)'}`);
   console.log(`[stitch] output:  ${out}`);
 
   if (process.env.NO_CROSSFADE) {
     // Simple concat. Re-encode for stream-format consistency.
-    const r = spawnSync(
-      'ffmpeg',
-      [
-        '-y',
-        '-i', shell,
-        '-i', iterate,
-        '-i', mcp,
-        '-filter_complex',
-        '[0:v]scale=1680:900,setsar=1[v0];' +
-          '[1:v]scale=1680:900,setsar=1[v1];' +
-          '[2:v]scale=1680:900,setsar=1[v2];' +
-          '[v0][v1][v2]concat=n=3:v=1[outv]',
-        '-map', '[outv]',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-        '-pix_fmt', 'yuv420p',
-        '-an',
-        out,
-      ],
-      { stdio: 'inherit' },
-    );
+    const args = [
+      '-y',
+      '-i', shell,
+      '-i', iterate,
+      '-i', mcp,
+    ];
+    let filter =
+      '[0:v]scale=1680:900,setsar=1[v0];' +
+      '[1:v]scale=1680:900,setsar=1[v1];' +
+      '[2:v]scale=1680:900,setsar=1[v2];' +
+      '[v0][v1][v2]concat=n=3:v=1[outv]';
+    if (music) {
+      args.push('-stream_loop', '-1', '-i', music);
+      filter += `;[3:a]afade=t=out:st=999:d=2,volume=1.0[outa]`;
+    }
+    args.push('-filter_complex', filter, '-map', '[outv]');
+    if (music) args.push('-map', '[outa]', '-shortest', '-c:a', 'aac', '-b:a', '128k');
+    else args.push('-an');
+    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', out);
+    const r = spawnSync('ffmpeg', args, { stdio: 'inherit' });
     if (r.status === 0) console.log(`[stitch] done → ${out}`);
     else process.exit(r.status ?? 1);
     return;
@@ -107,7 +134,8 @@ async function main() {
   // Crossfade: needs durations to compute offsets.
   const dShell = await probeDuration(shell);
   const dIter = await probeDuration(iterate);
-  if (dShell === null || dIter === null) {
+  const dMcp = await probeDuration(mcp);
+  if (dShell === null || dIter === null || dMcp === null) {
     console.error('error: ffprobe failed; rerun with NO_CROSSFADE=1 for hard cuts');
     process.exit(3);
   }
@@ -115,33 +143,40 @@ async function main() {
   const fade = fadeMs / 1000;
   const off1 = Math.max(0, dShell - fade);
   const off2 = Math.max(0, dShell + dIter - 2 * fade);
+  const totalDuration = dShell + dIter + dMcp - 2 * fade;
 
-  console.log(`[stitch] shell ${dShell.toFixed(2)}s + iterate ${dIter.toFixed(2)}s + mcp = ?`);
+  console.log(
+    `[stitch] shell ${dShell.toFixed(2)}s + iterate ${dIter.toFixed(2)}s + mcp ${dMcp.toFixed(2)}s ≈ ${totalDuration.toFixed(2)}s`,
+  );
   console.log(`[stitch] xfade offsets: ${off1.toFixed(2)}s, ${off2.toFixed(2)}s · duration ${fade}s`);
 
-  const filter =
+  let filter =
     `[0:v]scale=1680:900,setsar=1,fps=30[v0];` +
     `[1:v]scale=1680:900,setsar=1,fps=30[v1];` +
     `[2:v]scale=1680:900,setsar=1,fps=30[v2];` +
     `[v0][v1]xfade=transition=fade:duration=${fade}:offset=${off1.toFixed(3)}[v01];` +
     `[v01][v2]xfade=transition=fade:duration=${fade}:offset=${off2.toFixed(3)}[outv]`;
 
-  const r = spawnSync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i', shell,
-      '-i', iterate,
-      '-i', mcp,
-      '-filter_complex', filter,
-      '-map', '[outv]',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-      '-pix_fmt', 'yuv420p',
-      '-an',
-      out,
-    ],
-    { stdio: 'inherit' },
+  const args = ['-y', '-i', shell, '-i', iterate, '-i', mcp];
+
+  if (music) {
+    args.push('-stream_loop', '-1', '-i', music);
+    // Trim audio to total duration with 2s fade-out at the end.
+    const fadeOutStart = Math.max(0, totalDuration - 2);
+    filter +=
+      `;[3:a]atrim=duration=${totalDuration.toFixed(3)},` +
+      `afade=t=out:st=${fadeOutStart.toFixed(3)}:d=2[outa]`;
+  }
+
+  args.push('-filter_complex', filter, '-map', '[outv]');
+  if (music) args.push('-map', '[outa]', '-c:a', 'aac', '-b:a', '128k');
+  else args.push('-an');
+  args.push(
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    out,
   );
+
+  const r = spawnSync('ffmpeg', args, { stdio: 'inherit' });
   if (r.status !== 0) {
     console.error('[stitch] ffmpeg failed; try NO_CROSSFADE=1 for plain concat');
     process.exit(r.status ?? 1);
