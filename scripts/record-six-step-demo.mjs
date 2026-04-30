@@ -44,6 +44,7 @@ const COMPONENT_FILE =
   'ui_kits/ableton-live-12/components/BackgroundMediaHero.tsx';
 const HEADED = process.env.HEADED === '1';
 const WAIT_MAX_MS = Number.parseInt(process.env.WAIT_MAX_MS ?? `${12 * 60_000}`, 10);
+const AGENT_WAIT_MS = Number.parseInt(process.env.AGENT_WAIT_MS ?? `${90_000}`, 10);
 const WIDTH = Number.parseInt(process.env.VIEWPORT_WIDTH ?? '1680', 10);
 const HEIGHT = Number.parseInt(process.env.VIEWPORT_HEIGHT ?? '900', 10);
 
@@ -210,6 +211,61 @@ async function dragPreviewCtaBbox(page) {
   };
   await page.mouse.move(center.x, center.y);
   await page.mouse.click(center.x, center.y);
+}
+
+async function cleanupDemoRun(runId) {
+  try {
+    await dismissExistingComments(runId);
+  } catch (err) {
+    console.warn(`[six-step] cleanup comments failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  try {
+    await resetDemoTokens(runId);
+  } catch (err) {
+    console.warn(`[six-step] cleanup tokens failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function waitForAgentChat(page, runId, chatBeforeLength, timeoutMs = AGENT_WAIT_MS) {
+  const started = Date.now();
+  let sawAgent = null;
+  let lastChatTextLength = 0;
+  while (Date.now() - started < timeoutMs) {
+    const chat = await convexQuery('chat:list', { runId }).catch(() => []);
+    const newChat = chat.slice(chatBeforeLength);
+    const agentTurns = newChat.filter((m) => m.role !== 'user');
+    const toolTurns = newChat.filter((m) => m.role === 'tool' || m.toolName);
+    const completionTurn = [...newChat]
+      .reverse()
+      .find((m) => /done|complete|updated|upsert|verify|patched|changed/i.test(m.content ?? ''));
+    const chatText = (await page
+      .locator('section[aria-label*="Chat" i], aside[aria-label*="Chat" i]')
+      .first()
+      .textContent({ timeout: 1_500 })
+      .catch(() => '')) ?? '';
+    if (chatText.length > lastChatTextLength + 120) {
+      lastChatTextLength = chatText.length;
+      console.log(`[six-step] agent chat grew to ${chatText.length} chars at ${Math.round((Date.now() - started) / 1000)}s`);
+    }
+    if (agentTurns.length > 0 || toolTurns.length > 0) {
+      sawAgent = {
+        agentTurns: agentTurns.length,
+        toolTurns: toolTurns.length,
+        chatDelta: newChat.length,
+        latestTurn: newChat.at(-1)?.turn,
+        latestRole: newChat.at(-1)?.role,
+      };
+    }
+    if (toolTurns.length > 0 && completionTurn) {
+      return {
+        ok: true,
+        ...sawAgent,
+        completionTurn: completionTurn.turn,
+      };
+    }
+    await page.waitForTimeout(2_000);
+  }
+  return sawAgent ? { ok: true, ...sawAgent, timedOutBeforeCompletion: true } : { ok: false };
 }
 
 async function spotlightSelectedFile(page, selectedFile) {
@@ -758,40 +814,21 @@ async function sceneContinuousSixStep() {
     await setStep(
       page,
       'Step 5 / 6',
-      'Edit only that CTA slice',
-      'Save the scoped comment, then tweak the CTA color and radius tokens live so the preview changes in place.',
+      'Watch the agent patch that CTA',
+      'Save + auto-fix opens the real chat tab so the advisor-executor can plan, call tools, and update the scoped file.',
     );
-    await page.getByRole('button', { name: /^save$/i }).evaluate((el) => el.click());
+    const chatBefore = await convexQuery('chat:list', { runId }).catch(() => []);
+    await page.getByRole('button', { name: /save \+ auto-fix/i }).evaluate((el) => el.click());
     const savedComment = await waitForSavedComment(runId, previousCommentIds, selected, COMMENT_TEXT);
-    const pressedAfterSave = await commentToggle.getAttribute('aria-pressed').catch(() => 'false');
-    if (pressedAfterSave === 'true') await commentToggle.click();
-    await page.waitForTimeout(800);
-    await page.getByRole('button', { name: /toggle tweaks panel/i }).click();
-    await page.waitForTimeout(800);
-    const terracotta = page.locator('[data-token-name="--terracotta"] input[type="text"]').first();
-    const terracottaLight = page.locator('[data-token-name="--terracotta-light"] input[type="text"]').first();
-    const radiusXl = page.locator('[data-token-name="--radius-xl"] input[type="text"]').first();
-    await terracotta.waitFor({ state: 'visible', timeout: 10_000 });
-    await terracotta.fill('#FF3B1F');
-    await terracotta.press('Tab');
-    await page.waitForTimeout(900);
-    await terracottaLight.fill('#FF6A3D');
-    await terracottaLight.press('Tab');
-    await page.waitForTimeout(900);
-    await radiusXl.fill('34px');
-    await radiusXl.press('Tab');
-    await page.waitForTimeout(2_000);
+    await page.getByRole('tab', { name: /^chat$/i }).waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(1_200);
+    const agent = await waitForAgentChat(page, runId, chatBefore.length);
     evidence.checks.step5 = {
-      ok: Boolean(savedComment),
+      ok: Boolean(savedComment) && agent.ok,
       commentId: savedComment?._id,
       targetFile: savedComment?.targetFile,
       bbox: savedComment?.bbox,
-      visiblePreviewEdit: true,
-      editedTokens: {
-        '--terracotta': '#FF3B1F',
-        '--terracotta-light': '#FF6A3D',
-        '--radius-xl': '34px',
-      },
+      chat: agent,
     };
 
     await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
@@ -916,6 +953,11 @@ async function main() {
     gif: 'demo-six-step.gif',
     gif720: 'demo-six-step-720.gif',
   };
+
+  if (evidence.runId && process.env.CLEANUP_DEMO_RUN !== '0') {
+    await cleanupDemoRun(evidence.runId);
+    evidence.outputs.cleanedDemoRun = true;
+  }
 
   const evidencePath = join(outDir, 'evidence.json');
   await writeFile(evidencePath, JSON.stringify(evidence, null, 2));

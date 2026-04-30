@@ -196,7 +196,7 @@ Return only strict JSON with this schema:
 Pass only if every step is visible and the video is coherent as a README demo.
 For Step 4, the bbox/comment must be placed on a meaningful UI element, not a random blank area or generic region.
 Prefer a click-to-pin interaction on a visible element over a hand-drawn generic rectangle.
-For Step 5, the scoped edit must be clearly tied to that commented target, either through a visibly changed preview or through unambiguous component-file/code changes shown on screen.
+For Step 5, the demo must show the real chat/agent surface working on the scoped comment: an advisor/executor plan, tool calls, or visibly growing chat transcript. Do not pass a manual token tweak as a substitute for agent iteration.
 `;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
