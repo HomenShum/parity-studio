@@ -218,7 +218,7 @@ export function CommentOverlay({
       onPointerUp={onPointerUp}
     >
       {(comments ?? []).map((c) => {
-        if (c.bbox === undefined) return null;
+        if (c.bbox === undefined || c.status === 'dismissed') return null;
         const dimColor =
           c.status === 'open'
             ? 'var(--color-accent)'

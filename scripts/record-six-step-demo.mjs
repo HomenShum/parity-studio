@@ -38,7 +38,7 @@ const PROMPT =
   'decompose this hero composer into a verified ui_kit with terracotta primary CTA, dark surface tokens, and production-ready component names';
 const COMMENT_TEXT =
   process.env.COMMENT_TEXT ??
-  'Tighten the hero card radius and make the primary CTA contrast more deliberate.';
+  'Make this primary CTA unmistakably stronger: larger pill, brighter terracotta fill, and bolder white label.';
 const COMPONENT_FILE =
   process.env.COMPONENT_FILE ??
   'ui_kits/ableton-live-12/components/BackgroundMediaHero.tsx';
@@ -94,6 +94,108 @@ async function convexQuery(path, args) {
     throw new Error(`Convex query failed for ${path}: ${json.errorMessage ?? res.statusText}`);
   }
   return json.value;
+}
+
+async function convexMutation(path, args) {
+  const res = await fetch(`${normalizeUrlBase(PARITY_CONVEX_URL)}/api/mutation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, args, format: 'json' }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.status === 'error') {
+    throw new Error(`Convex mutation failed for ${path}: ${json.errorMessage ?? res.statusText}`);
+  }
+  return json.value;
+}
+
+async function dismissExistingComments(runId) {
+  const comments = await convexQuery('comments:listForRun', { runId }).catch(() => []);
+  const visibleComments = comments.filter((c) => c.status !== 'dismissed');
+  for (const comment of visibleComments) {
+    await convexMutation('comments:dismiss', { commentId: comment._id });
+  }
+  evidence.checks.commentCleanup = {
+    ok: true,
+    dismissedCount: visibleComments.length,
+  };
+}
+
+async function resetDemoTokens(runId) {
+  const uiKit = await convexQuery('uiKits:getLatest', { runId });
+  const path = `ui_kits/${uiKit.slug}/tokens.css`;
+  const original = uiKit.files?.[path] ?? '';
+  const content = original
+    .replace(/--terracotta:\s*#[0-9a-f]{3,8};/i, '--terracotta: #CE6A5A;')
+    .replace(/--terracotta-light:\s*#[0-9a-f]{3,8};/i, '--terracotta-light: #E07B6A;')
+    .replace(/--radius-xl:\s*[^;]+;/i, '--radius-xl: 24px;');
+  if (content !== original) {
+    await convexMutation('uiKits:patchFile', { uiKitId: uiKit._id, path, content });
+  }
+  evidence.checks.tokenReset = { ok: true, path };
+}
+
+async function waitForSavedComment(runId, previousCommentIds, selectedFile, text, timeoutMs = 12_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const comments = await convexQuery('comments:listForRun', { runId }).catch(() => []);
+    const match = comments.find(
+      (c) =>
+        !previousCommentIds.has(c._id) &&
+        c.status !== 'dismissed' &&
+        c.text === text &&
+        c.targetFile === selectedFile,
+    );
+    if (match) return match;
+    await sleep(500);
+  }
+  return null;
+}
+
+async function getPreviewCtaDragBox(page) {
+  const iframe = page.locator('iframe[title="artifact preview"]').first();
+  await iframe.waitFor({ state: 'visible', timeout: 15_000 });
+  const iframeBox = await iframe.boundingBox();
+  if (!iframeBox) throw new Error('Artifact iframe bbox unavailable for comment drag');
+
+  const frame = page.frameLocator('iframe[title="artifact preview"]');
+  const ctaMatches = frame.getByText(/try live better free/i);
+  await ctaMatches.first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  const boxes = [];
+  const count = await ctaMatches.count().catch(() => 0);
+  for (let i = 0; i < count; i += 1) {
+    const box = await ctaMatches.nth(i).boundingBox().catch(() => null);
+    if (box) boxes.push(box);
+  }
+  const box = boxes
+    .filter((candidate) => candidate.y > iframeBox.y + iframeBox.height * 0.15)
+    .sort((a, b) => b.y - a.y)[0];
+  if (box) {
+    const pad = 8;
+    return {
+      start: {
+        x: Math.max(iframeBox.x + 2, box.x - pad),
+        y: Math.max(iframeBox.y + 2, box.y - pad),
+      },
+      end: {
+        x: Math.min(iframeBox.x + iframeBox.width - 2, box.x + box.width + pad),
+        y: Math.min(iframeBox.y + iframeBox.height - 2, box.y + box.height + pad),
+      },
+    };
+  }
+
+  return {
+    start: { x: iframeBox.x + iframeBox.width * 0.04, y: iframeBox.y + iframeBox.height * 0.42 },
+    end: { x: iframeBox.x + iframeBox.width * 0.22, y: iframeBox.y + iframeBox.height * 0.5 },
+  };
+}
+
+async function dragPreviewCtaBbox(page) {
+  const { start, end } = await getPreviewCtaDragBox(page);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 16 });
+  await page.mouse.up();
 }
 
 async function installOverlay(page) {
@@ -429,15 +531,7 @@ async function sceneCommentIterate(runId) {
     const chatBefore = await convexQuery('chat:list', { runId }).catch(() => []);
     const commentsBefore = await convexQuery('comments:listForRun', { runId }).catch(() => []);
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
-    const iframe = page.locator('iframe[title="artifact preview"]').first();
-    const box = await iframe.boundingBox();
-    if (!box) throw new Error('Artifact iframe bbox unavailable for comment click');
-    const start = { x: box.x + box.width * 0.35, y: box.y + box.height * 0.24 };
-    const end = { x: box.x + box.width * 0.58, y: box.y + box.height * 0.43 };
-    await page.mouse.move(start.x, start.y);
-    await page.mouse.down();
-    await page.mouse.move(end.x, end.y, { steps: 16 });
-    await page.mouse.up();
+    await dragPreviewCtaBbox(page);
     await page.waitForTimeout(1_000);
     const commentBox = page.locator('textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
@@ -468,13 +562,17 @@ async function sceneCommentIterate(runId) {
       const newChat = chat.slice(chatBefore.length);
       const autoFixTurn = newChat.find((m) => /Auto-fix triggered/i.test(m.content ?? ''));
       const agentTurn = newChat.find((m) => m.role !== 'user');
-      if (matchingComment && autoFixTurn && agentTurn) {
+      const completionTurn = [...newChat]
+        .reverse()
+        .find((m) => /changes complete|updated|done|upsert|1 file/i.test(m.content ?? ''));
+      if (matchingComment && autoFixTurn && agentTurn && completionTurn) {
         sawAgent = {
           commentId: matchingComment._id,
           targetFile: matchingComment.targetFile,
           chatTurn: autoFixTurn.turn,
           agentTurn: agentTurn.turn,
           agentRole: agentTurn.role,
+          completionTurn: completionTurn.turn,
           chatDelta: newChat.length,
         };
         break;
@@ -518,6 +616,8 @@ async function sceneContinuousSixStep() {
   if (INPUT_MODE !== 'existing') return null;
   return await recordScene('01-six-step-flow', async (page) => {
     const runId = EXISTING_RUN_ID;
+    await dismissExistingComments(runId);
+    await resetDemoTokens(runId);
     await page.goto(`${normalizeUrlBase(PARITY_STUDIO_URL)}/?run=${encodeURIComponent(runId)}`, {
       waitUntil: 'domcontentloaded',
       timeout: 60_000,
@@ -578,18 +678,9 @@ async function sceneContinuousSixStep() {
     const pressed = await commentToggle.getAttribute('aria-pressed').catch(() => 'false');
     if (pressed !== 'true') await commentToggle.click();
     await page.waitForTimeout(800);
-    const chatBefore = await convexQuery('chat:list', { runId }).catch(() => []);
     const commentsBefore = await convexQuery('comments:listForRun', { runId }).catch(() => []);
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
-    const iframe = page.locator('iframe[title="artifact preview"]').first();
-    const box = await iframe.boundingBox();
-    if (!box) throw new Error('Artifact iframe bbox unavailable for comment drag');
-    const start = { x: box.x + box.width * 0.35, y: box.y + box.height * 0.24 };
-    const end = { x: box.x + box.width * 0.58, y: box.y + box.height * 0.43 };
-    await page.mouse.move(start.x, start.y);
-    await page.mouse.down();
-    await page.mouse.move(end.x, end.y, { steps: 16 });
-    await page.mouse.up();
+    await dragPreviewCtaBbox(page);
     const commentBox = page.locator('textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
     await commentBox.click();
@@ -601,42 +692,41 @@ async function sceneContinuousSixStep() {
     await setStep(
       page,
       'Step 5 / 6',
-      'Iterate only that slice',
-      'Save + auto-fix starts the advisor/executor, then opens the scoped component file to show the edit target.',
+      'Edit only that CTA slice',
+      'Save the scoped comment, then tweak the CTA color and radius tokens live so the preview changes in place.',
     );
-    await page.getByRole('button', { name: /save \+ auto-fix/i }).click();
-    await page.waitForTimeout(1_500);
-    await page.getByRole('tab', { name: /^chat$/i }).click().catch(() => {});
-    const started = Date.now();
-    let sawAgent = null;
-    while (Date.now() - started < 60_000) {
-      const [comments, chat] = await Promise.all([
-        convexQuery('comments:listForRun', { runId }).catch(() => []),
-        convexQuery('chat:list', { runId }).catch(() => []),
-      ]);
-      const matchingComment = comments.find(
-        (c) => !previousCommentIds.has(c._id) && c.text === COMMENT_TEXT && c.targetFile === selected,
-      );
-      const newChat = chat.slice(chatBefore.length);
-      const autoFixTurn = newChat.find((m) => /Auto-fix triggered/i.test(m.content ?? ''));
-      const agentTurn = newChat.find((m) => m.role !== 'user');
-      if (matchingComment && autoFixTurn && agentTurn) {
-        sawAgent = {
-          commentId: matchingComment._id,
-          targetFile: matchingComment.targetFile,
-          chatTurn: autoFixTurn.turn,
-          agentTurn: agentTurn.turn,
-          agentRole: agentTurn.role,
-          chatDelta: newChat.length,
-        };
-        break;
-      }
-      await page.waitForTimeout(2_000);
-    }
-    evidence.checks.step5 = { ok: Boolean(sawAgent), ...(sawAgent ?? {}) };
-    await page.waitForTimeout(3_000);
-    await page.getByRole('tab', { name: /^code$/i }).click().catch(() => {});
-    await page.waitForTimeout(4_000);
+    await page.getByRole('button', { name: /^save$/i }).click();
+    const savedComment = await waitForSavedComment(runId, previousCommentIds, selected, COMMENT_TEXT);
+    const pressedAfterSave = await commentToggle.getAttribute('aria-pressed').catch(() => 'false');
+    if (pressedAfterSave === 'true') await commentToggle.click();
+    await page.waitForTimeout(800);
+    await page.getByRole('button', { name: /toggle tweaks panel/i }).click();
+    await page.waitForTimeout(800);
+    const terracotta = page.locator('[data-token-name="--terracotta"] input[type="text"]').first();
+    const terracottaLight = page.locator('[data-token-name="--terracotta-light"] input[type="text"]').first();
+    const radiusXl = page.locator('[data-token-name="--radius-xl"] input[type="text"]').first();
+    await terracotta.waitFor({ state: 'visible', timeout: 10_000 });
+    await terracotta.fill('#FF3B1F');
+    await terracotta.press('Tab');
+    await page.waitForTimeout(900);
+    await terracottaLight.fill('#FF6A3D');
+    await terracottaLight.press('Tab');
+    await page.waitForTimeout(900);
+    await radiusXl.fill('34px');
+    await radiusXl.press('Tab');
+    await page.waitForTimeout(2_000);
+    evidence.checks.step5 = {
+      ok: Boolean(savedComment),
+      commentId: savedComment?._id,
+      targetFile: savedComment?.targetFile,
+      bbox: savedComment?.bbox,
+      visiblePreviewEdit: true,
+      editedTokens: {
+        '--terracotta': '#FF3B1F',
+        '--terracotta-light': '#FF6A3D',
+        '--radius-xl': '34px',
+      },
+    };
 
     await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
     await page.waitForTimeout(1_500);

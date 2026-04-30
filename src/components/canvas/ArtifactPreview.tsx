@@ -48,16 +48,13 @@ export function ArtifactPreview({
   }, [uiKit]);
 
   // Stitch tokens.css into the iframe srcDoc so TweakPanel edits show
-  // live. Inserts a synthetic `<style data-parity-tokens>` block right
-  // after `<head>`, OR before `</body>` if no head. The artifact's own
-  // styles still load AFTER (cascade order), so they win on conflicts —
-  // but `var(--…)` references in the artifact will pick up the live
-  // tokens.css values declared by our injected block.
+  // live. Insert at the end of <head> so edited token values override
+  // generated defaults while preserving normal CSS variable behavior.
   function injectLiveTokens(html: string, tokens: string | null): string {
     if (!tokens) return html;
     const tag = `<style data-parity-tokens="live">\n${tokens}\n</style>\n`;
-    if (html.includes('<head>')) return html.replace('<head>', `<head>\n${tag}`);
-    if (html.toLowerCase().includes('<head>')) return html.replace(/<head>/i, `<head>\n${tag}`);
+    if (html.includes('</head>')) return html.replace('</head>', `${tag}</head>`);
+    if (html.toLowerCase().includes('</head>')) return html.replace(/<\/head>/i, `${tag}</head>`);
     if (html.includes('<body')) return html.replace('<body', `${tag}<body`);
     return tag + html;
   }

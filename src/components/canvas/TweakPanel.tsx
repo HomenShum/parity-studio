@@ -243,6 +243,7 @@ function TokenRow({
   const label = entry.label ?? name.replace(/^--/, '');
   return (
     <div
+      data-token-name={name}
       style={{
         padding: '10px 0',
         borderBottom: '1px solid var(--color-border-subtle)',
