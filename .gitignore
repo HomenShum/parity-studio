@@ -25,6 +25,7 @@ dist
 # Local PoC artifacts
 runs/
 .cache/
+.playwright-mcp/
 tsconfig.tsbuildinfo
 mcp/dist/
 mcp/node_modules/

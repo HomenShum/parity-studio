@@ -17,6 +17,16 @@ That is the entire product. Every surface is in service of one of those six step
 
 ---
 
+## See it run
+
+From prompt/image to verified `ui_kit`, scoped comments, MCP tooling, and ZIP export:
+
+[![Parity Studio v0.1.0 demo](https://github.com/HomenShum/parity-studio/releases/download/v0.1.0/demo-2026-04-29-fast-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.1.0/demo-2026-04-29-fast.mp4)
+
+<sub>GIF preview from the `v0.1.0` release. Click it for the MP4.</sub>
+
+---
+
 **Status**: pre-alpha · LIVE
 
 - **Web app**: https://parity-studio.vercel.app
