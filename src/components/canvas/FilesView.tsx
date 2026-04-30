@@ -44,6 +44,11 @@ export function FilesView({
   const decomposeStatus = uiKit ? '(decompose complete)' : runId ? '(decompose pending)' : '(no run yet)';
 
   const files = uiKit ? (uiKit.files as Record<string, string>) : null;
+  const visibleFilePaths = files
+    ? Object.keys(files)
+        .sort((a, b) => fileDisplayPriority(a) - fileDisplayPriority(b) || a.localeCompare(b))
+        .slice(0, 10)
+    : [];
 
   return (
     <div
@@ -91,10 +96,7 @@ export function FilesView({
           </div>
 
           {files
-            ? Object.keys(files)
-                .sort()
-                .slice(0, 10)
-                .map((path) => {
+            ? visibleFilePaths.map((path) => {
                   const selected = path === selectedFile;
                   return (
                     <button
@@ -243,6 +245,14 @@ function FileGroup({ label, children }: { label: string; children: React.ReactNo
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</div>
     </div>
   );
+}
+
+function fileDisplayPriority(path: string): number {
+  if (/^ui_kits\/[^/]+\/components\/.+\.(tsx|jsx|ts|js)$/i.test(path)) return 0;
+  if (/^ui_kits\/[^/]+\/(tokens\.css|manifest\.json|tweak-schema\.json)$/i.test(path)) return 1;
+  if (/^preview\/component-/i.test(path)) return 2;
+  if (/^ui_kits\/[^/]+\/(README|HANDOFF)\.md$/i.test(path)) return 3;
+  return 4;
 }
 
 function estimateZipSize(files: Record<string, string> | null): number {

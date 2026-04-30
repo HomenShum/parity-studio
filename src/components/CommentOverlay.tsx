@@ -204,6 +204,7 @@ export function CommentOverlay({
   const overlayStyle: React.CSSProperties = {
     position: 'absolute',
     inset: 0,
+    zIndex: 10,
     pointerEvents: active || pending !== null ? 'auto' : 'none',
     cursor: active && pending === null ? 'crosshair' : 'default',
   };

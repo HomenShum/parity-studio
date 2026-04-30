@@ -151,6 +151,7 @@ export function ArtifactPreview({
       style={{
         display: 'flex',
         flexDirection: 'column',
+        flex: 1,
         minWidth: 0,
         minHeight: 0,
         gap: 'var(--space-3)',
@@ -210,7 +211,7 @@ export function ArtifactPreview({
               <iframe
                 title="artifact preview"
                 srcDoc={srcDoc}
-                sandbox={commentModeActive ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
+                sandbox="allow-scripts"
                 style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
               />
               <CommentOverlay
@@ -312,7 +313,7 @@ function DeviceFrame({
             <iframe
               title="artifact preview"
               srcDoc={srcDoc}
-              sandbox={commentModeActive ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
+              sandbox="allow-scripts"
               style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', display: 'block' }}
             />
             <CommentOverlay
