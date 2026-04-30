@@ -6,6 +6,7 @@ import { action, internalAction } from './_generated/server';
 import { deploymentTier, resolveModel, sessionPick, type ModelTier, type Phase } from './lib/autoRouter';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
 import { expandToCanonicalShape } from './lib/canonicalShape';
+import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
 import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
@@ -160,6 +161,15 @@ export const decompose = internalAction({
     if (Object.keys(parsed.files).length === 0) {
       throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
     }
+    const contractedFiles = withOperatingContract(parsed.files, {
+      slug: parsed.slug,
+      runId: String(runId),
+      prompt: (await ctx.runQuery(internal.runs.getInternal, { runId }))?.prompt,
+      sourceHtml: artifactHtml,
+      sourceType: 'generated-html',
+      importToParityStudio: true,
+      createdAtIso: new Date().toISOString(),
+    });
 
     // Expand to the full canonical shape so the chat agent can patchFile
     // any preview/, assets/, or explorations/ path atomically. Kit code
@@ -168,7 +178,7 @@ export const decompose = internalAction({
     const runRow = await ctx.runQuery(internal.runs.getInternal, { runId });
     const canonical = expandToCanonicalShape({
       slug: parsed.slug,
-      kitFiles: parsed.files,
+      kitFiles: contractedFiles,
       run: {
         runId: String(runId),
         prompt: runRow?.prompt,
@@ -180,7 +190,7 @@ export const decompose = internalAction({
       parity: null,
       artifacts: [],
     });
-    const fullShape = { ...canonical, ...parsed.files };
+    const fullShape = { ...canonical, ...contractedFiles };
 
     await ctx.runMutation(internal.uiKits.save, {
       runId,
@@ -203,7 +213,7 @@ export const decompose = internalAction({
     });
     return {
       slug: parsed.slug,
-      fileCount: Object.keys(parsed.files).length,
+      fileCount: Object.keys(contractedFiles).length,
       warnings: parsed.warnings,
     };
   },
@@ -356,12 +366,22 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       };
     }
 
+    const parsedWithContract = withOperatingContract(parsed.files, {
+      slug: parsed.slug,
+      runId: String(args.runId),
+      prompt: (await ctx.runQuery(internal.runs.getInternal, { runId: args.runId }))?.prompt,
+      sourceHtml: args.sourceHtml,
+      sourceType: 'generated-html',
+      importToParityStudio: true,
+      createdAtIso: new Date().toISOString(),
+    });
+
     // Expand to canonical shape on iterate too, so each new ui_kit row
     // is fully addressable from the chat agent.
     const iterRunRow = await ctx.runQuery(internal.runs.getInternal, { runId: args.runId });
     const iterCanonical = expandToCanonicalShape({
       slug: parsed.slug,
-      kitFiles: parsed.files,
+      kitFiles: parsedWithContract,
       run: {
         runId: String(args.runId),
         prompt: iterRunRow?.prompt,
@@ -390,7 +410,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
     for (const [k, v] of Object.entries(priorFiles)) {
       if (!k.startsWith(slugPrefix)) iterFullShape[k] = v; // preserve user edits + non-kit paths
     }
-    for (const [k, v] of Object.entries(parsed.files)) {
+    for (const [k, v] of Object.entries(parsedWithContract)) {
       iterFullShape[k] = v; // new decompose wins on kit paths
     }
     for (const [k, v] of Object.entries(iterCanonical)) {
@@ -428,7 +448,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
     return {
       iterationNumber: args.iterationNumber,
       slug: parsed.slug,
-      fileCount: Object.keys(parsed.files).length,
+      fileCount: Object.keys(parsedWithContract).length,
       costMicroUsd: result.costMicroUsd,
     };
   },

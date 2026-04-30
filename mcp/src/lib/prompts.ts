@@ -48,6 +48,43 @@ Required output shape:
   "components": ["..."], "tokens": ["..."] }
 \`\`\`
 
+\`\`\`json path=ui_kits/<slug>/parity.contract.json
+{
+  "schemaVersion": 1,
+  "generator": "parity-studio",
+  "slug": "<slug>",
+  "source": { "type": "generated-html", "htmlHash": "filled-by-runtime" },
+  "intent": { "surface": "<slug>", "mustPreserve": ["visible text", "layout hierarchy"] },
+  "agentPolicy": { "impactClasses": ["appearance", "performance", "organization", "api", "accessibility", "privacy"] }
+}
+\`\`\`
+
+\`\`\`json path=ui_kits/<slug>/performance.budget.json
+{
+  "schemaVersion": 1,
+  "budgets": {
+    "cachedDbReadMs": 50,
+    "tabSwitchMs": 75,
+    "routeTransitionPerceivedMs": 150,
+    "commandPaletteMs": 50,
+    "agentSuggestionRenderMs": 150,
+    "backgroundWork": "idle-only"
+  }
+}
+\`\`\`
+
+\`\`\`md path=ui_kits/<slug>/api-wiring.plan.md
+# <Slug> API wiring plan
+List mock data, required env vars, endpoints to wire, loading/error states,
+and side-effect approval gates.
+\`\`\`
+
+\`\`\`md path=ui_kits/<slug>/qa.plan.md
+# <Slug> QA plan
+List browser routes, stable selectors, console-error budget, screenshot
+requirements, overflow checks, and live API dogfood steps.
+\`\`\`
+
 \`\`\`md path=ui_kits/<slug>/README.md
 # <Slug> ui_kit
 How to integrate this bundle into your codebase using Claude Code or Cursor.
@@ -57,6 +94,8 @@ Hard rules:
 - Pick a kebab-case <slug> from the artifact's primary purpose
 - Preserve EVERY visible text, number, label, and copy block from the source verbatim
 - Only upgrade: component decomposition, token extraction, code structure - never the content
+- Treat parity.contract.json as the agent operating contract: intent, appearance, organization, performance, API, QA, and privacy/BYOK rules
+- Every future comment/edit must update the contract or explicitly state "no contract change"
 - If you cannot represent something faithfully, list it in README.md "Known limitations"
 - Output ONLY the fenced blocks, no commentary between them`;
 
@@ -74,6 +113,7 @@ Hard rules:
 - Preserve everything that already passes
 - Fix only what was flagged
 - Do not introduce regressions in other dimensions
+- Keep parity.contract.json, performance.budget.json, api-wiring.plan.md, and qa.plan.md aligned with any changed assumptions
 - Never fabricate content to "fill in" gaps — if source lacks the data,
   mark it as a known limitation in README.md
 - Output ONLY the fenced blocks, no commentary between them`;

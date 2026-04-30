@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.2.0 - stdio transport - 11 tools
+**Status**: v0.3.0 - stdio transport - 13 tools + agent prompt/resource rules
 
 ## Install
 
@@ -30,6 +30,8 @@ You need at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OPENROUTER_A
 
 The hosted tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `parity_export`) call the hosted Parity Studio Convex deployment at `PARITY_CONVEX_URL` by default. Override the URLs to point at your own deployment.
 
+Local MCP BYOK keeps provider keys in the local MCP process environment. The server only returns which key env vars are present; it never returns key values, writes them into kits, logs them, or uploads them to Parity Studio.
+
 ## Local Dashboard
 
 The MCP server starts a tiny local HTTP server on port `6280` (overridable via `PARITY_DASHBOARD_PORT`) and opens it in your browser the first time your agent calls a parity tool. You can watch the pipeline run live: source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.
@@ -42,6 +44,28 @@ The MCP server starts a tiny local HTTP server on port `6280` (overridable via `
 
 ## Tools
 
+### `parity_studio` - natural-language app to zip/run wrapper
+
+Use this for the simple user request:
+
+```text
+Use Parity Studio with our app, get me the zip export, upload it to Parity Studio,
+and use my own env keys.
+```
+
+What it does:
+
+- Uses `url` if provided, otherwise `PARITY_APP_URL`, otherwise probes common localhost dev ports.
+- Defaults `projectRoot` to `.` so the agent can use the current app without verbose arguments.
+- Uses local MCP BYOK env keys for model calls.
+- Redacts obvious emails/API keys/tokens from captured HTML by default.
+- Writes `./parity-<route>-ui-kit.zip` unless `outputZipPath` is provided.
+- Imports the generated kit to hosted Parity Studio by default and returns the run URL.
+
+### `parity_byok_status` - safe key presence check
+
+Returns provider env-var presence for model ids without exposing values.
+
 ### `parity_platform_to_ui_kit` - existing product route to Parity Studio
 
 Use this when you already have a built app/platform and want a coding agent to break a route down into a canonical `ui_kit` for Parity Studio iteration.
@@ -51,12 +75,12 @@ What it does:
 - Opens a running URL with Playwright, e.g. `http://localhost:3000/dashboard`.
 - Captures standalone HTML/CSS from the rendered route.
 - Optionally reads local source context from `projectRoot` so component names, tokens, and product vocabulary survive.
-- Reuses the existing decompose prompt/model pipeline to emit `ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}`.
+- Reuses the existing decompose prompt/model pipeline to emit `ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md, parity.contract.json, performance.budget.json, api-wiring.plan.md, qa.plan.md}` plus agent rules.
 - Runs deterministic parity against the captured platform HTML.
 - Writes a canonical ZIP if `outputZipPath` is provided.
 - Imports the kit into hosted Parity Studio by default and returns a `runUrl` for continued scoped iteration.
 
-Example agent request:
+Explicit agent request:
 
 ```text
 Use parity_platform_to_ui_kit on http://localhost:3000/settings with projectRoot=.,
@@ -81,7 +105,7 @@ Generate, decompose, and verify in one call. Returns the `ui_kit/<slug>/` bundle
 
 ### `parity_decompose` - HTML to ui_kit only
 
-Takes a complete HTML artifact and emits `ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}`.
+Takes a complete HTML artifact and emits `ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}` plus the operating contract/API/QA/performance files.
 
 ### `parity_verify` - score an existing ui_kit
 
@@ -101,6 +125,15 @@ These call the hosted Parity Studio deployment over HTTP. No local LLM keys are 
 - `parity_chat_history`: read the conversation for a run.
 - `parity_run_listRecent`: list recent hosted runs.
 - `parity_export`: download a hosted run as ZIP, HTML, or Markdown.
+
+## Agent Prompt / Rules
+
+The server exposes:
+
+- Prompt: `use-parity-studio`
+- Resource: `parity://agent-rules`
+
+MCP clients that support prompts/resources can load these so users do not need to know exact tool names or arguments.
 
 ## Why a Boolean Rubric?
 

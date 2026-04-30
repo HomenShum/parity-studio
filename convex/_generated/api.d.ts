@@ -17,6 +17,7 @@ import type * as http from "../http.js";
 import type * as lib_activeKitFiles from "../lib/activeKitFiles.js";
 import type * as lib_autoRouter from "../lib/autoRouter.js";
 import type * as lib_canonicalShape from "../lib/canonicalShape.js";
+import type * as lib_kitContract from "../lib/kitContract.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
 import type * as lib_prompts from "../lib/prompts.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/activeKitFiles": typeof lib_activeKitFiles;
   "lib/autoRouter": typeof lib_autoRouter;
   "lib/canonicalShape": typeof lib_canonicalShape;
+  "lib/kitContract": typeof lib_kitContract;
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;
   "lib/prompts": typeof lib_prompts;

@@ -4,6 +4,8 @@
  * to coding agents (Claude Code, Cursor, Windsurf, any MCP client).
  *
  * Tools:
+ *   - parity_studio      high-level natural-language app -> zip/run wrapper
+ *   - parity_byok_status safe local provider-key presence check, no values
  *   - parity_pipeline    end-to-end: prompt|image -> ui_kit + ParityReport
  *   - parity_platform_to_ui_kit  existing app URL/codebase -> canonical ui_kit zip/run
  *   - parity_decompose   HTML artifact -> ui_kit/<slug>/{...} files
@@ -34,7 +36,9 @@ import { z } from 'zod';
 import { eventBus, makeRunId } from './dashboard/events.js';
 import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
 import { ensureDashboard } from './dashboard/server.js';
+import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
+import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
 import {
   type ParityReport,
@@ -42,6 +46,7 @@ import {
   statusFromBooleans,
 } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
+import { redactSensitiveValues } from './lib/privacy.js';
 import {
   DECOMPOSE_SYSTEM,
   GENERATE_SYSTEM,
@@ -85,7 +90,37 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.1.0';
+const VERSION = '0.3.0';
+
+const PARITY_AGENT_RULES = `# Parity Studio agent rules
+
+Use Parity Studio when the user asks to turn an existing app route into a
+verified ui_kit, upload it to Parity Studio, export a zip, or iterate a scoped
+UI surface.
+
+Default workflow:
+
+1. Prefer the high-level parity_studio tool for natural requests like "use
+   Parity Studio with our app".
+2. If the user provides no URL, use PARITY_APP_URL or probe common localhost
+   dev ports. If nothing is running, ask the user to start the app or provide
+   a URL.
+3. Use projectRoot="." unless the user points at another repo.
+4. Keep BYOK local: provider keys come from this MCP process env and are never
+   returned, logged, written to files, or uploaded to Parity Studio.
+5. Redact obvious emails, tokens, and API keys from captured HTML by default.
+6. Generate the ui_kit, write a zip, import to Parity Studio unless disabled,
+   and return the local zip path plus run URL.
+7. In the exported kit, read parity.contract.json, performance.budget.json,
+   api-wiring.plan.md, qa.plan.md, AGENTS.md, and .claude/skills/*/SKILL.md
+   before editing.
+
+Approval gates:
+
+- Hosted upload of sensitive private route content.
+- New provider/network egress beyond configured model providers.
+- Secret changes, destructive filesystem operations, or external API writes.
+`;
 
 // ── Hosted Convex deployment endpoints (used by parity_chat_*, parity_enhance_prompt,
 // parity_run_*, parity_export). Override via env to point at a self-hosted
@@ -162,6 +197,7 @@ async function handleDecompose(args: {
   const dashboardUrl = await dashboardForTool().catch(() => null);
   void dashboardUrl;
   const model = args.decomposeModel ?? DECOMPOSE_MODEL;
+  const byok = requireLocalKeys([model]);
   const result = await callByModel({
     model,
     systemPrompt: DECOMPOSE_SYSTEM,
@@ -186,6 +222,7 @@ async function handleDecompose(args: {
             warnings: parsed.warnings,
             costUsd: result.costUsd,
             modelUsed: result.modelUsed,
+            byok,
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
           },
@@ -282,6 +319,7 @@ async function runVisualJudge(args: {
   indexHtml: string;
   judgeModel: string;
 }): Promise<VisualJudgeOutcome> {
+  requireLocalKeys([args.judgeModel]);
   const rendered = await renderHtmlToPng(args.indexHtml);
 
   // Build a single user message with both images side-by-side context.
@@ -388,6 +426,42 @@ const platformToUiKitInput = {
     .boolean()
     .optional()
     .describe('Create a hosted Parity Studio run from the generated kit (default true).'),
+  redactSensitiveValues: z
+    .boolean()
+    .optional()
+    .describe('Redact obvious emails/API keys/tokens from captured HTML before model calls or hosted import (default true).'),
+};
+
+const parityStudioInput = {
+  request: z
+    .string()
+    .optional()
+    .describe('Natural-language user request, e.g. "use Parity Studio with our app and get me the zip export"'),
+  url: z
+    .string()
+    .url()
+    .optional()
+    .describe('Optional running app URL. If omitted, uses PARITY_APP_URL or probes common localhost dev ports.'),
+  route: z
+    .string()
+    .optional()
+    .describe('Optional route/path such as /settings. Applied to the detected app origin.'),
+  selector: z.string().optional(),
+  projectRoot: z
+    .string()
+    .optional()
+    .describe('Local codebase root. Defaults to "." so agents can just say "our app".'),
+  outputZipPath: z
+    .string()
+    .optional()
+    .describe('Optional zip output path. Defaults to ./parity-<route>-ui-kit.zip under projectRoot.'),
+  importToParityStudio: z
+    .boolean()
+    .optional()
+    .describe('Upload generated kit to hosted Parity Studio. Default true. Keys are never uploaded.'),
+  decomposeModel: z.string().optional().describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
+  includeZipBase64: z.boolean().optional().describe('Return zipBase64. Default false.'),
+  redactSensitiveValues: z.boolean().optional().describe('Redact obvious sensitive values. Default true.'),
 };
 
 async function handlePlatformToUiKit(args: {
@@ -404,10 +478,12 @@ async function handlePlatformToUiKit(args: {
   outputZipPath?: string;
   includeZipBase64?: boolean;
   importToParityStudio?: boolean;
+  redactSensitiveValues?: boolean;
 }) {
   const dashboardUrl = await dashboardForTool().catch(() => null);
   const runId = makeRunId();
   const decomposeModel = args.decomposeModel ?? DECOMPOSE_MODEL;
+  const byok = requireLocalKeys([decomposeModel]);
 
   eventBus.createRun(runId, {
     status: 'queued',
@@ -425,15 +501,33 @@ async function handlePlatformToUiKit(args: {
       viewportWidth: args.viewportWidth,
       viewportHeight: args.viewportHeight,
     });
+    const htmlRedaction = redactSensitiveValues(
+      capture.artifactHtml,
+      args.redactSensitiveValues !== false,
+    );
+    const sampleRedaction = redactSensitiveValues(
+      capture.textSample,
+      args.redactSensitiveValues !== false,
+    );
+    const captureHtml = htmlRedaction.text;
+    const textSample = sampleRedaction.text;
     eventBus.setStage(runId, 'generate', 'done');
-    eventBus.updateRun(runId, { artifactHtmlFull: capture.artifactHtml });
+    eventBus.updateRun(runId, { artifactHtmlFull: captureHtml });
     eventBus.appendLog(
       runId,
       'info',
-      `captured ${capture.artifactHtml.length} bytes from ${capture.finalUrl}`,
+      `captured ${captureHtml.length} bytes from ${capture.finalUrl}`,
     );
+    if (htmlRedaction.count + sampleRedaction.count > 0) {
+      eventBus.appendLog(
+        runId,
+        'info',
+        `redacted ${htmlRedaction.count + sampleRedaction.count} sensitive value(s) before model/upload`,
+      );
+    }
 
     let codeContextText = '';
+    let codeRedactionCount = 0;
     let codeContext:
       | { root: string; filesRead: number; bytesRead: number; skipped: string[] }
       | null = null;
@@ -443,7 +537,12 @@ async function handlePlatformToUiKit(args: {
         projectRoot: args.projectRoot,
         maxBytes: args.maxCodeBytes,
       });
-      codeContextText = collected.text;
+      const codeRedaction = redactSensitiveValues(
+        collected.text,
+        args.redactSensitiveValues !== false,
+      );
+      codeRedactionCount = codeRedaction.count;
+      codeContextText = codeRedaction.text;
       codeContext = {
         root: collected.root,
         filesRead: collected.filesRead,
@@ -455,6 +554,13 @@ async function handlePlatformToUiKit(args: {
         'info',
         `included ${collected.filesRead} source files (${collected.bytesRead} bytes) as decomposition context`,
       );
+      if (codeRedaction.count > 0) {
+        eventBus.appendLog(
+          runId,
+          'info',
+          `redacted ${codeRedaction.count} sensitive value(s) from local code context`,
+        );
+      }
     }
 
     eventBus.updateRun(runId, { status: 'decomposing' });
@@ -464,10 +570,10 @@ async function handlePlatformToUiKit(args: {
       model: decomposeModel,
       systemPrompt: DECOMPOSE_SYSTEM,
       userText: buildPlatformDecomposePrompt({
-        captureHtml: capture.artifactHtml,
+        captureHtml,
         sourceUrl: capture.finalUrl,
         title: capture.title,
-        textSample: capture.textSample,
+        textSample,
         codeContextText,
       }),
       maxTokens: 24_000,
@@ -477,17 +583,32 @@ async function handlePlatformToUiKit(args: {
     if (Object.keys(parsed.files).length === 0) {
       throw new Error(`platform decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
     }
+    const filesWithContract = withOperatingContract(parsed.files, {
+      slug: parsed.slug,
+      prompt: `Captured existing platform route ${capture.finalUrl} and decomposed it into a canonical ui_kit.`,
+      sourceHtml: captureHtml,
+      sourceType: 'platform-route',
+      sourceUrl: capture.finalUrl,
+      sourceTitle: capture.title,
+      selector: args.selector,
+      viewport: capture.viewport,
+      consoleErrors: capture.consoleErrors,
+      codeContext: codeContext ?? undefined,
+      importToParityStudio: args.importToParityStudio !== false,
+      byokMode: 'local-mcp-byok',
+      createdAtIso: new Date().toISOString(),
+    });
     eventBus.setStage(runId, 'decompose', 'done', latencyMs, decomposeModel);
     eventBus.addCost(runId, result.costUsd);
-    eventBus.updateRun(runId, { uiKitFiles: parsed.files, uiKitSlug: parsed.slug });
+    eventBus.updateRun(runId, { uiKitFiles: filesWithContract, uiKitSlug: parsed.slug });
 
-    const indexHtml = findFileEnding(parsed.files, '/index.html') ?? null;
-    const tokensCss = findFileEnding(parsed.files, '/tokens.css') ?? null;
+    const indexHtml = findFileEnding(filesWithContract, '/index.html') ?? null;
+    const tokensCss = findFileEnding(filesWithContract, '/tokens.css') ?? null;
     const deterministic = checkDeterministic({
-      sourceHtml: capture.artifactHtml,
+      sourceHtml: captureHtml,
       decomposedHtml: indexHtml,
       tokensCss,
-      uiKitFiles: parsed.files,
+      uiKitFiles: filesWithContract,
     });
     eventBus.setStage(runId, 'verify', 'done');
     eventBus.updateRun(runId, {
@@ -507,7 +628,7 @@ async function handlePlatformToUiKit(args: {
       },
     });
 
-    const zipBuffer = await createUiKitZip(parsed.files, parsed.slug, true);
+    const zipBuffer = await createUiKitZip(filesWithContract, parsed.slug, true);
     let resolvedZipPath: string | null = null;
     if (args.outputZipPath) {
       resolvedZipPath = resolve(args.outputZipPath);
@@ -521,8 +642,8 @@ async function handlePlatformToUiKit(args: {
     if (args.importToParityStudio !== false) {
       parityStudioRunId = (await convexCall('mutation', 'runs:startFromKit', {
         slug: parsed.slug,
-        files: parsed.files,
-        sourceArtifactHtml: capture.artifactHtml,
+        files: filesWithContract,
+        sourceArtifactHtml: captureHtml,
         prompt: `Captured existing platform route ${capture.finalUrl} and decomposed it into a canonical ui_kit.`,
       })) as string;
       parityStudioRunUrl = `https://parity-studio.vercel.app/?run=${parityStudioRunId}`;
@@ -540,14 +661,19 @@ async function handlePlatformToUiKit(args: {
         finalUrl: capture.finalUrl,
         title: capture.title,
         selector: args.selector ?? null,
-        capturedBytes: capture.artifactHtml.length,
+        capturedBytes: captureHtml.length,
         consoleErrors: capture.consoleErrors,
+        redaction: {
+          enabled: args.redactSensitiveValues !== false,
+          count: htmlRedaction.count + sampleRedaction.count + codeRedactionCount,
+        },
       },
+      byok,
       codeContext,
       uiKit: {
         slug: parsed.slug,
-        files: parsed.files,
-        fileCount: Object.keys(parsed.files).length,
+        files: filesWithContract,
+        fileCount: Object.keys(filesWithContract).length,
         warnings: parsed.warnings,
       },
       deterministic,
@@ -577,6 +703,35 @@ async function handlePlatformToUiKit(args: {
   }
 }
 
+async function handleParityStudio(args: {
+  request?: string;
+  url?: string;
+  route?: string;
+  selector?: string;
+  projectRoot?: string;
+  outputZipPath?: string;
+  importToParityStudio?: boolean;
+  decomposeModel?: string;
+  includeZipBase64?: boolean;
+  redactSensitiveValues?: boolean;
+}) {
+  const projectRoot = args.projectRoot ?? '.';
+  const url = await resolveAppUrl({ url: args.url, route: args.route });
+  const outputZipPath =
+    args.outputZipPath ?? resolve(projectRoot, `parity-${slugHintFromUrl(url)}-ui-kit.zip`);
+
+  return await handlePlatformToUiKit({
+    url,
+    selector: args.selector,
+    projectRoot,
+    outputZipPath,
+    importToParityStudio: args.importToParityStudio ?? true,
+    decomposeModel: args.decomposeModel,
+    includeZipBase64: args.includeZipBase64,
+    redactSensitiveValues: args.redactSensitiveValues,
+  });
+}
+
 function buildPlatformDecomposePrompt(args: {
   captureHtml: string;
   sourceUrl: string;
@@ -599,10 +754,77 @@ Use the captured HTML/CSS below as the source of truth. Preserve visible copy,
 numbers, labels, hierarchy, and interaction states. Componentize the page into
 meaningful React TSX regions and extract design tokens so the resulting ZIP can
 be dropped into Parity Studio for scoped iterations.
+
+Also produce or support these native operating files:
+- ui_kits/<slug>/parity.contract.json for intent/source/performance/API/QA/privacy
+- ui_kits/<slug>/performance.budget.json for route and interaction budgets
+- ui_kits/<slug>/api-wiring.plan.md for mock/live API migration
+- ui_kits/<slug>/qa.plan.md for browser, selector, console, screenshot, and dogfood checks
+
+The runtime will normalize these files, but richer source-specific details from
+you are useful. Never include provider API keys or secrets in generated files.
 ${context}
 
 CAPTURED PLATFORM HTML:
 ${args.captureHtml}`;
+}
+
+async function resolveAppUrl(args: { url?: string; route?: string }): Promise<string> {
+  if (args.url) return withRoute(args.url, args.route);
+  if (process.env['PARITY_APP_URL']) return withRoute(process.env['PARITY_APP_URL'] as string, args.route);
+
+  const commonOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:4200',
+    'http://127.0.0.1:4200',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+  ];
+
+  for (const origin of commonOrigins) {
+    const candidate = withRoute(origin, args.route);
+    try {
+      const res = await fetch(candidate, { method: 'GET', signal: AbortSignal.timeout(900) });
+      if (res.ok || (res.status >= 300 && res.status < 500)) return candidate;
+    } catch {
+      // keep probing
+    }
+  }
+
+  throw new Error(
+    'Could not find a running local app. Start the app, set PARITY_APP_URL, or pass url. ' +
+      'Example natural request: "use Parity Studio with http://localhost:3000/settings".',
+  );
+}
+
+function withRoute(baseUrl: string, route?: string): string {
+  if (!route || route.trim().length === 0) return baseUrl;
+  if (/^https?:\/\//i.test(route)) return route;
+  const url = new URL(baseUrl);
+  const cleanRoute = route.startsWith('/') ? route : `/${route}`;
+  url.pathname = cleanRoute;
+  return url.toString();
+}
+
+function slugHintFromUrl(urlText: string): string {
+  const url = new URL(urlText);
+  const pathSlug = url.pathname
+    .split('/')
+    .filter(Boolean)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return pathSlug || 'app';
 }
 
 // ---------- Tool: parity_pipeline -----------------------------------------
@@ -635,6 +857,12 @@ async function handlePipeline(args: {
   const generateModel = args.generateModel ?? GENERATE_MODEL;
   const decomposeModel = args.decomposeModel ?? DECOMPOSE_MODEL;
   const judgeModel = args.judgeModel ?? JUDGE_MODEL;
+  const requiredModels = [
+    ...(args.skipGenerate ? [] : [generateModel]),
+    decomposeModel,
+    ...(args.sourceImageBase64 && args.sourceImageMimeType ? [judgeModel] : []),
+  ];
+  const byok = requireLocalKeys(requiredModels);
 
   // Spin up dashboard on first call. Best-effort: never blocks the run.
   const dashboardUrl = await dashboardForTool().catch(() => null);
@@ -690,6 +918,7 @@ async function handlePipeline(args: {
       runId,
       artifactHtml,
       decomposeModel,
+      prompt: args.prompt,
     });
     let decomposeLatencyMs = parsed.latencyMs;
     let decomposeCostUsd = parsed.costUsd;
@@ -843,6 +1072,7 @@ async function handlePipeline(args: {
                 decompose: decomposeModel,
                 judge: judgeModel,
               },
+              byok,
             },
             null,
             2,
@@ -877,7 +1107,13 @@ async function handleExportZip(args: {
   includeReadme?: boolean;
 }) {
   const includeReadme = args.includeReadme !== false;
-  const buf = await createUiKitZip(args.uiKitFiles, args.slug, includeReadme);
+  const files = withOperatingContract(args.uiKitFiles, {
+    slug: args.slug,
+    sourceType: 'imported-kit',
+    importToParityStudio: false,
+    byokMode: 'local-mcp-byok',
+  });
+  const buf = await createUiKitZip(files, args.slug, includeReadme);
   return {
     content: [
       {
@@ -887,7 +1123,7 @@ async function handleExportZip(args: {
             slug: args.slug,
             zipBase64: buf.toString('base64'),
             zipSizeBytes: buf.length,
-            fileCount: Object.keys(args.uiKitFiles).length + (includeReadme ? 1 : 0),
+            fileCount: Object.keys(files).length + (includeReadme ? 1 : 0),
             includesHandoffReadme: includeReadme,
             usage: 'base64-decode zipBase64 and write to disk, or pipe through `base64 -d > out.zip`',
           },
@@ -919,8 +1155,10 @@ This bundle was produced by parity-studio-mcp. To integrate:
 2. Open in Claude Code, Cursor, or Windsurf and run:
 
    > Integrate the ui_kits/${slug}/ folder into the existing app at <your route>.
+   > First read ui_kits/${slug}/parity.contract.json, performance.budget.json,
+   > api-wiring.plan.md, qa.plan.md, and AGENTS.md.
    > Use components/*.tsx as the building blocks. Wire tokens.css into your global stylesheet.
-   > Preserve all visible text and numbers verbatim — they came from the source mockup.
+   > Preserve all visible text and numbers verbatim - they came from the source mockup.
 
 3. Verify visually before merging. If parity drifted, run parity_verify with the
    integrated render to surface gaps.
@@ -947,6 +1185,7 @@ async function runDecompose(args: {
   runId: string;
   artifactHtml: string;
   decomposeModel: string;
+  prompt?: string;
 }): Promise<DecomposeOutput> {
   eventBus.updateRun(args.runId, { status: 'decomposing' });
   eventBus.setStage(args.runId, 'decompose', 'running', undefined, args.decomposeModel);
@@ -973,20 +1212,30 @@ async function runDecompose(args: {
     });
     throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
   }
+  const filesWithContract = withOperatingContract(parsed.files, {
+    slug: parsed.slug,
+    runId: args.runId,
+    prompt: args.prompt,
+    sourceHtml: args.artifactHtml,
+    sourceType: 'generated-html',
+    importToParityStudio: false,
+    byokMode: 'local-mcp-byok',
+    createdAtIso: new Date().toISOString(),
+  });
   eventBus.setStage(args.runId, 'decompose', 'done', latencyMs, args.decomposeModel);
   eventBus.addCost(args.runId, dec.costUsd);
   eventBus.updateRun(args.runId, {
-    uiKitFiles: parsed.files,
+    uiKitFiles: filesWithContract,
     uiKitSlug: parsed.slug,
   });
   eventBus.appendLog(
     args.runId,
     'info',
-    `decomposed into ui_kits/${parsed.slug}/ (${Object.keys(parsed.files).length} files) in ${(latencyMs / 1000).toFixed(1)}s, $${dec.costUsd.toFixed(4)}`,
+    `decomposed into ui_kits/${parsed.slug}/ (${Object.keys(filesWithContract).length} files) in ${(latencyMs / 1000).toFixed(1)}s, $${dec.costUsd.toFixed(4)}`,
   );
   return {
     slug: parsed.slug,
-    files: parsed.files,
+    files: filesWithContract,
     warnings: parsed.warnings,
     costUsd: dec.costUsd,
     latencyMs,
@@ -1046,14 +1295,23 @@ ${args.artifactHtml.slice(0, 8_000)}`;
   if (Object.keys(parsed.files).length === 0) {
     throw new Error(`iterate returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
   }
+  const filesWithContract = withOperatingContract(parsed.files, {
+    slug: parsed.slug,
+    runId: args.runId,
+    sourceHtml: args.artifactHtml,
+    sourceType: 'generated-html',
+    importToParityStudio: false,
+    byokMode: 'local-mcp-byok',
+    createdAtIso: new Date().toISOString(),
+  });
   eventBus.addCost(args.runId, result.costUsd);
   eventBus.updateRun(args.runId, {
-    uiKitFiles: parsed.files,
+    uiKitFiles: filesWithContract,
     uiKitSlug: parsed.slug,
   });
   return {
     slug: parsed.slug,
-    files: parsed.files,
+    files: filesWithContract,
     warnings: parsed.warnings,
     costUsd: result.costUsd,
     latencyMs,
@@ -1118,6 +1376,51 @@ async function main() {
     name: 'parity-studio',
     version: VERSION,
   });
+
+  server.registerResource(
+    'parity-studio-agent-rules',
+    'parity://agent-rules',
+    {
+      title: 'Parity Studio Agent Rules',
+      description: 'End-to-end rules for using Parity Studio safely from Claude Code, Codex, Cursor, or Windsurf.',
+      mimeType: 'text/markdown',
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: 'text/markdown', text: PARITY_AGENT_RULES }],
+    }),
+  );
+
+  server.registerPrompt(
+    'use-parity-studio',
+    {
+      title: 'Use Parity Studio With This App',
+      description:
+        'Guide an agent to capture a running app, export a ui_kit zip, import it to Parity Studio, and keep BYOK provider keys local.',
+      argsSchema: {
+        request: z.string().optional(),
+        appUrl: z.string().optional(),
+        projectRoot: z.string().optional(),
+        route: z.string().optional(),
+      },
+    },
+    async ({ request, appUrl, projectRoot, route }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text:
+              `${request ?? 'Use Parity Studio with this app, get me the zip export, and upload it to Parity Studio.'}\n\n` +
+              `Use the parity_studio MCP tool. ` +
+              `Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, ` +
+              `route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}. ` +
+              `Use local MCP BYOK env keys only; never print or upload key values. ` +
+              `Return the zip path, Parity Studio run URL, parity score, redaction count, and QA gaps.`,
+          },
+        },
+      ],
+    }),
+  );
 
   // ── New (v0.1.0) — wraps the hosted Convex web-app services so a coding
   // agent in Claude Code / Cursor / Windsurf can drive the chat, kick the
@@ -1291,11 +1594,42 @@ async function main() {
   );
 
   server.registerTool(
+    'parity_byok_status',
+    {
+      title: 'Check local BYOK model-key status without exposing keys',
+      description:
+        'Returns which provider env vars are present for requested model ids. Never returns key values. Use before local MCP generation/decomposition if the user asks to use their own keys.',
+      inputSchema: {
+        models: z.array(z.string()).optional().describe('Model ids to check. Defaults to current generate/decompose/judge models.'),
+      },
+    },
+    async ({ models }) => ({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(localByokStatus(models ?? [GENERATE_MODEL, DECOMPOSE_MODEL, JUDGE_MODEL]), null, 2),
+        },
+      ],
+    }),
+  );
+
+  server.registerTool(
+    'parity_studio',
+    {
+      title: 'Use Parity Studio with the current app',
+      description:
+        'High-level natural-language entrypoint. Use this when the user says "use Parity Studio with our app", "get me the zip export", "upload it to Parity Studio", or "use my own env keys". It auto-detects a local app URL when possible, uses projectRoot=".", keeps provider keys local in MCP env, captures the route, creates a canonical ui_kit zip, verifies it, and imports it to hosted Parity Studio by default.',
+      inputSchema: parityStudioInput,
+    },
+    handleParityStudio,
+  );
+
+  server.registerTool(
     'parity_platform_to_ui_kit',
     {
       title: 'Capture an existing platform route and decompose it into a Parity Studio ui_kit',
       description:
-        'For Claude Code, Codex, Cursor, and other coding agents working in an already-built app. Opens a running URL with Playwright, captures standalone HTML/CSS, optionally reads local source context, decomposes the route into ui_kits/<slug>/, verifies it against the captured source, writes/returns a canonical ZIP, and optionally imports it into hosted Parity Studio for iterative editing.',
+        'For Claude Code, Codex, Cursor, and other coding agents working in an already-built app. Opens a running URL with Playwright, captures standalone HTML/CSS, optionally reads local source context, decomposes the route into ui_kits/<slug>/ plus operating contract/API/QA/perf files, verifies it against the captured source, writes/returns a canonical ZIP, and optionally imports it into hosted Parity Studio for iterative editing. Uses local MCP BYOK env keys; key values are never uploaded.',
       inputSchema: platformToUiKitInput,
     },
     handlePlatformToUiKit,
@@ -1317,7 +1651,7 @@ async function main() {
     {
       title: 'Decompose an HTML artifact into a ui_kit bundle',
       description:
-        'Takes a complete HTML artifact and emits ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md}. Use when you already have a generated artifact from another source and want it shaped for coding-agent handoff.',
+        'Takes a complete HTML artifact and emits ui_kits/<slug>/{index.html, components/*.tsx, tokens.css, manifest.json, README.md, parity.contract.json, performance.budget.json, api-wiring.plan.md, qa.plan.md}. Use when you already have a generated artifact from another source and want it shaped for coding-agent handoff.',
       inputSchema: decomposeInput,
     },
     handleDecompose,

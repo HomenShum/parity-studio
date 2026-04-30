@@ -22,6 +22,7 @@ const SKIP_DIRS = new Set([
   '.nuxt',
   '.output',
   '.turbo',
+  '.vercel',
   'build',
   'coverage',
   'dist',
@@ -112,6 +113,17 @@ function shouldInclude(name: string): boolean {
   if (name === 'package.json' || name === 'tailwind.config.js' || name === 'vite.config.ts') {
     return true;
   }
-  if (basename(name).startsWith('.env')) return false;
+  const base = basename(name).toLowerCase();
+  if (base.startsWith('.env')) return false;
+  if (
+    base.endsWith('.pem') ||
+    base.endsWith('.key') ||
+    base.endsWith('.p12') ||
+    base.endsWith('.pfx') ||
+    base.includes('secret') ||
+    base.includes('credential')
+  ) {
+    return false;
+  }
   return DEFAULT_EXTENSIONS.has(extname(name).toLowerCase());
 }

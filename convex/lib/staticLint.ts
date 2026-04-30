@@ -328,6 +328,26 @@ export function lintKit(
     }
   }
 
+  if (!paths || paths.length === 0) {
+    for (const required of [
+      'parity.contract.json',
+      'performance.budget.json',
+      'api-wiring.plan.md',
+      'qa.plan.md',
+    ]) {
+      const found = Object.keys(files).some((path) => path.endsWith(`/${required}`) || path === required);
+      if (!found) {
+        findings.push({
+          rule: 'operating-contract-missing',
+          severity: 'warn',
+          path: required,
+          line: 1,
+          message: `missing ${required}; every kit should carry operating contract/API/QA/performance guidance`,
+        });
+      }
+    }
+  }
+
   const errorCount = findings.filter((f) => f.severity === 'error').length;
   const warnCount = findings.filter((f) => f.severity === 'warn').length;
   const status: LintReport['status'] =

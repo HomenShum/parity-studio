@@ -582,6 +582,22 @@ export function checkDeterministic(input: DeterministicCheckInputs): ParityRepor
       });
     }
   }
+  const expectedContractFiles = [
+    'parity.contract.json',
+    'performance.budget.json',
+    'api-wiring.plan.md',
+    'qa.plan.md',
+  ];
+  for (const f of expectedContractFiles) {
+    const found = Object.keys(files).some((k) => k.endsWith(`/${f}`) || k === f);
+    if (!found) {
+      gaps.push({
+        kind: f.endsWith('.json') ? 'manifest' : 'missing-file',
+        severity: 'medium',
+        message: `expected operating contract file missing: ${f}`,
+      });
+    }
+  }
 
   // Fold check evidence into legacy gaps shape for back-compat consumers
   for (const c of checks) {

@@ -195,6 +195,17 @@ export function checkDeterministic(input: DeterministicCheckInputs): ParityRepor
     else gaps.push({ kind: 'missing-file', severity: 'medium', message: `expected file missing: ${f}` });
   }
 
+  for (const f of ['parity.contract.json', 'performance.budget.json', 'api-wiring.plan.md', 'qa.plan.md']) {
+    const found = Object.keys(input.uiKitFiles).some((k) => k.endsWith(`/${f}`) || k === f);
+    if (!found) {
+      gaps.push({
+        kind: f.endsWith('.json') ? 'manifest' : 'missing-file',
+        severity: 'medium',
+        message: `expected operating contract file missing: ${f}`,
+      });
+    }
+  }
+
   const passCount = elemPass + textPass + tokenPass + filesPass;
   const totalChecks = 16;
   const status = statusFromBooleans(passCount, totalChecks);

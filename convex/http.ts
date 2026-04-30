@@ -124,6 +124,15 @@ http.route({
       out.push('');
     }
 
+    const contract = files[`ui_kits/${slug}/parity.contract.json`];
+    if (contract) {
+      out.push('## Operating Contract\n');
+      out.push('```json');
+      out.push(contract.length > 8000 ? `${contract.slice(0, 8000)}\n// truncated` : contract);
+      out.push('```');
+      out.push('');
+    }
+
     out.push(`## Components — \`ui_kits/${slug}/\`\n`);
     const componentEntries = Object.entries(files)
       .filter(([p]) => /\.(tsx|jsx)$/.test(p))

@@ -150,10 +150,10 @@ export const startAdviseLoop = mutation({
 ${elementContext ? `\nClicked element context:\n${elementContext}\n` : ''}
 
 Plan and execute as advisor-executor:
-  (1) ADVISE — call set_todos with a 3–5 step plan to address the comment
+  (1) ADVISE — read the operating contract, classify impact, then call set_todos with a 3–5 step plan to address the comment
   (2) EXECUTE — walk the plan with read_file/upsert_file as needed
   (3) VERIFY — call done({ paths: [<edited paths>] }) and self-heal any errors
-  (4) CLOSE — final assistant turn summarizing what changed and any open follow-ups
+  (4) CLOSE — final assistant turn summarizing what changed, any open follow-ups, and whether there was a contract change
 
 Be concise. Only edit files needed for THIS clicked element/comment - don't drift into adjacent refactors.`;
     } else if (kind === 'file') {
@@ -161,7 +161,7 @@ Be concise. Only edit files needed for THIS clicked element/comment - don't drif
       seedText = `Auto-fix triggered: user opened \`${filePath}\` for review.
 
 Plan and execute as advisor-executor:
-  (1) ADVISE — read_file the path, then set_todos a focused 2–4 step polish plan (a11y, naming, structure, consistency with tokens)
+  (1) ADVISE — read the operating contract and read_file the path, then set_todos a focused 2–4 step polish plan (a11y, naming, structure, consistency with tokens)
   (2) EXECUTE — walk the plan with upsert_file
   (3) VERIFY — call done({ paths: ['${filePath}'] }) and self-heal
   (4) CLOSE — summarize

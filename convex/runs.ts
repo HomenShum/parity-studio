@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { expandToCanonicalShape } from './lib/canonicalShape';
+import { withOperatingContract } from './lib/kitContract';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
 
@@ -139,6 +140,14 @@ export const startFromKit = mutation({
       Object.entries(files).find(([p]) => p.endsWith('/index.html') || p === 'index.html')?.[1] ??
       '<!doctype html><html><body><!-- ui_kit imported without index.html --></body></html>';
     const artifactHtml = args.sourceArtifactHtml ?? indexHtml;
+    const filesWithContract = withOperatingContract(files, {
+      slug: args.slug,
+      prompt: args.prompt,
+      sourceHtml: artifactHtml,
+      sourceType: args.sourceArtifactHtml ? 'platform-route' : 'imported-kit',
+      importToParityStudio: true,
+      createdAtIso: new Date().toISOString(),
+    });
 
     const runId = await ctx.db.insert('runs', {
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
@@ -168,7 +177,7 @@ export const startFromKit = mutation({
     // shape on conflicts (the spread below puts `files` last).
     const importCanonical = expandToCanonicalShape({
       slug: args.slug,
-      kitFiles: files,
+      kitFiles: filesWithContract,
       run: {
         runId: String(runId),
         prompt: args.prompt,
@@ -180,7 +189,7 @@ export const startFromKit = mutation({
       parity: null,
       artifacts: [],
     });
-    const importFullShape = { ...importCanonical, ...files };
+    const importFullShape = { ...importCanonical, ...filesWithContract };
 
     // Insert ui_kit row with cost = 0.
     const fileCount = Object.keys(importFullShape).length;

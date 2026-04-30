@@ -18,6 +18,8 @@
  * See docs/CANONICAL_KIT.md for the contract.
  */
 
+import { buildOperatingContractFiles } from './kitContract';
+
 export interface ExpandInput {
   slug: string;
   /**
@@ -64,6 +66,17 @@ export function expandToCanonicalShape(input: ExpandInput): Record<string, strin
   const ext = run.sourceImageMimeType ? run.sourceImageMimeType.split('/')[1] ?? 'png' : null;
   const tokensCss = kitFiles[`ui_kits/${slug}/tokens.css`] ?? '';
 
+  Object.assign(
+    out,
+    buildOperatingContractFiles({
+      slug,
+      runId: run.runId,
+      prompt: run.prompt,
+      sourceType: run.hasSourceImage ? 'image' : 'generated-html',
+      importToParityStudio: true,
+    }),
+  );
+
   // ── Top-level docs ─────────────────────────────────────────────────
   out['README.md'] = `# ${slug} — Parity Studio export
 
@@ -79,10 +92,12 @@ drop it back into parity-studio.vercel.app to import the same kit.
 
 ## What's inside
 
-- \`SKILL.md\` — Claude Skill descriptor
-- \`colors_and_type.css\` — root token entry; imports the active slug's tokens
-- \`ui_kits/${slug}/\` — the active product (index.html, components, tokens, manifest, README, HANDOFF)
-- \`assets/\` — auto-generated logo + OG card; extend with real brand artifacts
+- \`SKILL.md\` - root Claude Skill descriptor
+- \`.claude/skills/${slug}/SKILL.md\` - Claude Code project skill for this slug
+- \`AGENTS.md\` and \`.cursor/rules/${slug}-parity-studio.mdc\` - agent rules for Codex, Cursor, Windsurf, and similar coding agents
+- \`colors_and_type.css\` - root token entry; imports the active slug's tokens
+- \`ui_kits/${slug}/\` - the active product (index.html, components, tokens, manifest, README, HANDOFF, parity.contract.json, performance.budget.json, api-wiring.plan.md, qa.plan.md)
+- \`assets/\` - auto-generated logo + OG card; extend with real brand artifacts
 - \`preview/\` — one HTML specimen per component + per token group
 - \`explorations/\` — iteration history (one full index.html per artifact version)
 ${run.hasSourceImage && ext ? `- \`uploads/source.${ext}\` — original source image (round-trips back into the importer)` : ''}
