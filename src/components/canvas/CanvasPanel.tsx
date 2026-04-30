@@ -14,14 +14,16 @@ interface CanvasPanelProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
+  activeTab?: CanvasTab;
+  onTabChange?: (tab: CanvasTab) => void;
   zoom: number;
   device: Device;
   commentModeActive: boolean;
 }
 
-type Tab = 'files' | 'preview';
+export type CanvasTab = 'files' | 'preview';
 
-const TAB_META: Record<Tab, { label: string; Icon: typeof Folder }> = {
+const TAB_META: Record<CanvasTab, { label: string; Icon: typeof Folder }> = {
   files: { label: 'Files', Icon: Folder },
   preview: { label: 'Preview', Icon: Eye },
 };
@@ -30,19 +32,30 @@ export function CanvasPanel({
   runId,
   selectedFile,
   onSelectFile,
+  activeTab,
+  onTabChange,
   zoom,
   device,
   commentModeActive,
 }: CanvasPanelProps) {
-  const [tab, setTab] = useState<Tab>('files');
+  const [internalTab, setInternalTab] = useState<CanvasTab>('files');
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [sourcePreviewOpen, setSourcePreviewOpen] = useState(false);
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+  const tab = activeTab ?? internalTab;
+
+  function setTab(nextTab: CanvasTab) {
+    if (activeTab === undefined) setInternalTab(nextTab);
+    onTabChange?.(nextTab);
+  }
 
   useEffect(() => {
-    setTab(runId === null ? 'files' : 'preview');
+    const nextTab = runId === null ? 'files' : 'preview';
+    if (activeTab === undefined) setInternalTab(nextTab);
+    onTabChange?.(nextTab);
     setTweaksOpen(false);
     setSourcePreviewOpen(false);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the run changes
   }, [runId]);
 
   return (
@@ -70,7 +83,7 @@ export function CanvasPanel({
           borderBottom: '1px solid var(--color-border-subtle)',
         }}
       >
-        {(Object.keys(TAB_META) as Tab[]).map((t) => {
+        {(Object.keys(TAB_META) as CanvasTab[]).map((t) => {
           const active = t === tab;
           const Icon = TAB_META[t].Icon;
           return (

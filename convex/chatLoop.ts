@@ -116,8 +116,12 @@ Translate a deterministic UI parity report into language a first-time builder, v
 Rules:
 - Do not expose internal scoring jargon unless it helps the user.
 - Be honest about readiness. If failures remain, say it is not ready to distribute yet.
-- Write 4 short labeled lines: Readout, Why it matters, Fix next, Confidence.
+- Tie the explanation to what the user sees in the Preview tab and what they can open in the Files tab.
+- Mention the visible screen title, hero text, or CTA if provided.
+- Name 2-4 exact file paths to inspect/edit when files are provided.
+- Write 4-5 short labeled lines: Readout, What it means on screen, Open in Files, Fix next, Confidence.
 - Mention at most 3 concrete failing/warning areas by name.
+- Do not give generic advice like "make one visible iteration" unless you also name the screen area and file path.
 - No markdown table. No markdown bold/italic. No sales language.`;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -145,11 +149,127 @@ function cleanParityExplanation(text: string): string {
     .trim();
 }
 
+function decodeHtml(text: string): string {
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function stripHtml(html: string): string {
+  return decodeHtml(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTagText(html: string, tag: string, limit: number): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  for (const match of html.matchAll(re)) {
+    const text = stripHtml(String(match[1] ?? ''));
+    if (text.length > 0 && !out.includes(text)) out.push(text.slice(0, 120));
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function chooseExplainFiles(
+  files: Record<string, string>,
+  slug: string,
+  checks: Array<{ label: string; status: string }>,
+): string[] {
+  const paths = Object.keys(files).sort();
+  const issueText = checks
+    .filter((check) => check.status === 'fail' || check.status === 'warn')
+    .slice(0, 6)
+    .map((check) => check.label.toLowerCase())
+    .join(' ');
+  const chosen: string[] = [];
+  const add = (predicate: (path: string) => boolean, limit = 3) => {
+    for (const path of paths.filter(predicate).slice(0, limit)) {
+      if (!chosen.includes(path)) chosen.push(path);
+    }
+  };
+
+  add((path) => path === `ui_kits/${slug}/index.html`, 1);
+  if (issueText.includes('structure') || issueText.includes('component') || issueText.includes('layout')) {
+    add((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'), 4);
+  }
+  if (
+    issueText.includes('spacing') ||
+    issueText.includes('color') ||
+    issueText.includes('typography') ||
+    issueText.includes('font')
+  ) {
+    add((path) => path === `ui_kits/${slug}/tokens.css`, 1);
+    add((path) => path.endsWith('.css') && path.includes(slug), 2);
+  }
+  add((path) => /parity\.contract\.json|qa\.plan\.md|api-wiring\.plan\.md$/.test(path), 3);
+  add((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'), 3);
+  return chosen.slice(0, 5);
+}
+
+function buildExplainFallback(payload: {
+  runStatus: string;
+  status: unknown;
+  passCount: unknown;
+  totalChecks: unknown;
+  checks: Array<{ label: string; status: string }>;
+  context: {
+    slug: string;
+    source: string;
+    previewTitle: string;
+    headings: string[];
+    actions: string[];
+    suggestedFiles: string[];
+  };
+}): string {
+  const failCount = payload.checks.filter((check) => check.status === 'fail').length;
+  const warnCount = payload.checks.filter((check) => check.status === 'warn').length;
+  const issueLabels = payload.checks
+    .filter((check) => check.status === 'fail' || check.status === 'warn')
+    .slice(0, 3)
+    .map((check) => check.label);
+  const issues = issueLabels.length > 0 ? issueLabels.join(', ') : 'no named blockers';
+  const files =
+    payload.context.suggestedFiles.length > 0
+      ? payload.context.suggestedFiles.slice(0, 4).join(', ')
+      : 'no generated files available';
+  const headingText =
+    payload.context.headings.length > 0 ? payload.context.headings.slice(0, 3).join(' / ') : payload.context.previewTitle;
+  const actionText =
+    payload.context.actions.length > 0 ? payload.context.actions.slice(0, 3).join(' / ') : 'no CTA text detected';
+  const readiness =
+    failCount > 0
+      ? `not ready to distribute; ${failCount} checks fail`
+      : warnCount > 0
+        ? `close, but ${warnCount} warnings remain`
+        : 'ready for final human review';
+
+  return [
+    `Readout: ${readiness}. ${payload.passCount}/${payload.totalChecks} pass for ${payload.context.slug}.`,
+    `What it means on screen: Preview is judging "${payload.context.previewTitle}". Compare "${headingText}" and "${actionText}" against ${payload.context.source}; the weak areas are ${issues}.`,
+    `Open in Files: ${files}.`,
+    'Fix next: edit the highest-impact file above, rerun verify, and look for the same row to gain new evidence.',
+    `Confidence: medium; run status is ${payload.runStatus} and deterministic status is ${String(payload.status ?? 'unknown')}.`,
+  ].join('\n');
+}
+
 export const explainParity = action({
   args: { runId: v.id('runs') },
   handler: async (ctx, { runId }): Promise<{ text: string; modelUsed: string; provider: string; costMicroUsd: number }> => {
     const report = await ctx.runQuery(internal.parityReports.getLatestInternal, { runId });
     const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+    const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
+    const artifact = await ctx.runQuery(internal.artifacts.getLatestInternal, { runId });
     if (report === null) {
       return {
         text: 'Readout: No parity report exists yet.\nWhy it matters: Parity Studio needs a generated or imported UI kit before it can explain quality.\nFix next: Run generate/decompose, then verify again.\nConfidence: Waiting for the first report.',
@@ -173,6 +293,37 @@ export const explainParity = action({
           message: String(gap['message'] ?? ''),
         }))
       : [];
+    const files = ((uiKit?.files as Record<string, string> | undefined) ?? {}) as Record<string, string>;
+    const slug = String(uiKit?.slug ?? 'current-kit');
+    const html = String(artifact?.html ?? files[`ui_kits/${slug}/index.html`] ?? '');
+    const previewTitle =
+      extractTagText(html, 'title', 1)[0] ?? extractTagText(html, 'h1', 1)[0] ?? slug;
+    const headings = [
+      ...extractTagText(html, 'h1', 4),
+      ...extractTagText(html, 'h2', 4),
+      ...extractTagText(html, 'h3', 3),
+    ].filter((text, index, all) => text.length > 0 && all.indexOf(text) === index);
+    const actions = [...extractTagText(html, 'button', 4), ...extractTagText(html, 'a', 4)]
+      .filter((text, index, all) => text.length > 0 && all.indexOf(text) === index)
+      .slice(0, 4);
+    const sourceParts = [];
+    if (run?.sourceImageBase64) sourceParts.push('the stored source image');
+    if (run?.prompt) sourceParts.push(`the prompt "${String(run.prompt).slice(0, 120)}"`);
+    const context = {
+      slug,
+      fileCount: Number(uiKit?.fileCount ?? Object.keys(files).length),
+      source: sourceParts.length > 0 ? sourceParts.join(' and ') : 'the current run source context',
+      previewTitle,
+      headings: headings.slice(0, 6),
+      actions,
+      suggestedFiles: chooseExplainFiles(files, slug, checks),
+      componentFiles: Object.keys(files)
+        .filter((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'))
+        .slice(0, 8),
+      contractFiles: Object.keys(files)
+        .filter((path) => /parity\.contract\.json|performance\.budget\.json|api-wiring\.plan\.md|qa\.plan\.md$/.test(path))
+        .slice(0, 8),
+    };
     const payload = {
       runStatus: run?.status ?? 'unknown',
       status: report.status,
@@ -181,39 +332,49 @@ export const explainParity = action({
       summary: report.summary,
       checks,
       gaps,
+      context,
     };
 
     const provider = process.env['PARITY_EXPLAIN_PROVIDER'] ?? ENHANCE_PROVIDER;
     const modelId = process.env['PARITY_EXPLAIN_MODEL'] ?? ENHANCE_MODEL;
-    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
-    const model = (getModel as any)(provider, modelId);
-    const result = await withTimeout(
-      piComplete(
-        model,
-        {
-          systemPrompt: PARITY_EXPLAIN_SYSTEM,
-          messages: [
-            {
-              role: 'user',
-              content: JSON.stringify(payload).slice(0, 16_000),
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        { maxOutputTokens: 700 },
-      ),
-      25_000,
-      'parity explanation',
-    );
-    const textBlocks = result.content.filter((block): block is TextContent => block.type === 'text');
-    const text = cleanParityExplanation(textBlocks.map((block) => block.text).join(''));
-    if (text.length === 0) throw new Error('parity explanation produced empty text');
-    return {
-      text,
-      modelUsed: result.model,
-      provider: result.provider,
-      costMicroUsd: usdToMicroUsd(result.usage.cost.total),
-    };
+    try {
+      // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+      const model = (getModel as any)(provider, modelId);
+      const result = await withTimeout(
+        piComplete(
+          model,
+          {
+            systemPrompt: PARITY_EXPLAIN_SYSTEM,
+            messages: [
+              {
+                role: 'user',
+                content: JSON.stringify(payload).slice(0, 16_000),
+                timestamp: Date.now(),
+              },
+            ],
+          },
+          { maxOutputTokens: 700 },
+        ),
+        25_000,
+        'parity explanation',
+      );
+      const textBlocks = result.content.filter((block): block is TextContent => block.type === 'text');
+      const text = cleanParityExplanation(textBlocks.map((block) => block.text).join(''));
+      if (text.length === 0) throw new Error('parity explanation produced empty text');
+      return {
+        text,
+        modelUsed: result.model,
+        provider: result.provider,
+        costMicroUsd: usdToMicroUsd(result.usage?.cost?.total ?? 0),
+      };
+    } catch {
+      return {
+        text: buildExplainFallback(payload),
+        modelUsed: 'rule-based',
+        provider: 'local',
+        costMicroUsd: 0,
+      };
+    }
   },
 });
 

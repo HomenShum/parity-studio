@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Id } from '../convex/_generated/dataModel';
 import { Breadcrumb } from './components/Breadcrumb';
 import { AgentRail } from './components/agent/AgentRail';
-import { CanvasPanel } from './components/canvas/CanvasPanel';
+import { CanvasPanel, type CanvasTab } from './components/canvas/CanvasPanel';
 import { HeaderActions, type Device } from './components/HeaderActions';
 import { ParityPanel } from './components/parity/ParityPanel';
 import { Wordmark } from './components/Wordmark';
@@ -26,6 +26,7 @@ export default function App() {
   });
   const [commentModeActive, setCommentModeActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [canvasTab, setCanvasTab] = useState<CanvasTab>('files');
   const [zoom, setZoom] = useState(100);
   const [starred, setStarred] = useState(false);
   const [device, setDevice] = useState<Device>('desktop');
@@ -44,6 +45,10 @@ export default function App() {
       url.searchParams.delete('run');
       window.history.replaceState(null, '', url.toString());
     }
+  }, [currentRunId]);
+
+  useEffect(() => {
+    setCanvasTab(currentRunId === null ? 'files' : 'preview');
   }, [currentRunId]);
 
   const breadcrumbTitle = currentRunId
@@ -113,6 +118,8 @@ export default function App() {
           runId={currentRunId}
           selectedFile={selectedFile}
           onSelectFile={setSelectedFile}
+          activeTab={canvasTab}
+          onTabChange={setCanvasTab}
           zoom={zoom}
           device={device}
           commentModeActive={commentModeActive}
@@ -120,7 +127,15 @@ export default function App() {
       </div>
 
       <div style={{ gridColumn: 3, gridRow: 2, minHeight: 0, minWidth: 0, display: 'flex' }}>
-        <ParityPanel runId={currentRunId} />
+        <ParityPanel
+          runId={currentRunId}
+          selectedFile={selectedFile}
+          device={device}
+          onOpenFile={(path) => {
+            setSelectedFile(path);
+            setCanvasTab('files');
+          }}
+        />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import type { Device } from '../HeaderActions';
 import { CostTelemetry } from './CostTelemetry';
 import { ParityCheckRow } from './ParityCheckRow';
 import { ParityDonut } from './ParityDonut';
@@ -10,6 +11,9 @@ import type { Verdict } from './ParityVerdictPill';
 
 interface ParityPanelProps {
   runId: Id<'runs'> | null;
+  selectedFile: string | null;
+  device: Device;
+  onOpenFile: (path: string) => void;
 }
 
 interface CheckRow {
@@ -17,6 +21,18 @@ interface CheckRow {
   label: string;
   verdict: Verdict;
   evidence: string[];
+}
+
+interface KitContext {
+  slug: string;
+  fileCount: number;
+  device: Device;
+  selectedFile: string | null;
+  sourceLabel: string;
+  previewTitle: string;
+  previewHeadings: string[];
+  previewActions: string[];
+  suggestedFiles: string[];
 }
 
 const SIXTEEN_LABELS: string[] = [
@@ -117,61 +133,209 @@ function buildCheckRows(report: {
   });
 }
 
+function decodeHtml(text: string): string {
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function stripTags(html: string): string {
+  return decodeHtml(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTagText(html: string, tag: string, limit: number): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  for (const match of html.matchAll(re)) {
+    const text = stripTags(match[1] ?? '');
+    if (text.length > 0 && !out.includes(text)) out.push(text.slice(0, 90));
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function shortPath(path: string): string {
+  const parts = path.split('/');
+  return parts.slice(Math.max(0, parts.length - 2)).join('/');
+}
+
+function issueIntent(row: CheckRow | undefined): string {
+  if (!row) return 'polish the most visible mismatch';
+  const label = row.label.toLowerCase();
+  if (label.includes('structure')) return 'rebuild the visible page structure: header, hero, sections, and ordering';
+  if (label.includes('component')) return 'check whether the visible elements are split into the right components';
+  if (label.includes('layout') || label.includes('spacing')) return 'tighten the grid, spacing, and alignment visible in the Preview';
+  if (label.includes('typography') || label.includes('font')) return 'match the headline, body copy, weight, and font scale';
+  if (label.includes('color')) return 'match the source colors and token values';
+  if (label.includes('interaction')) return 'wire the visible hover, focus, and active states';
+  if (label.includes('accessibility') || label.includes('semantic')) return 'fix accessible names, heading order, and semantic regions';
+  return `address ${row.label} in the visible Preview`;
+}
+
+function issueFileCandidates(rows: CheckRow[], files: Record<string, string>, slug: string): string[] {
+  const paths = Object.keys(files).sort();
+  const issueText = rows
+    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
+    .slice(0, 5)
+    .map((row) => row.label.toLowerCase())
+    .join(' ');
+  const candidates: string[] = [];
+  const add = (predicate: (path: string) => boolean, limit = 4) => {
+    for (const path of paths.filter(predicate).slice(0, limit)) {
+      if (!candidates.includes(path)) candidates.push(path);
+    }
+  };
+
+  add((path) => path === `ui_kits/${slug}/index.html`, 1);
+  if (issueText.includes('structure') || issueText.includes('component') || issueText.includes('layout')) {
+    add((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'), 4);
+  }
+  if (
+    issueText.includes('spacing') ||
+    issueText.includes('layout') ||
+    issueText.includes('color') ||
+    issueText.includes('typography') ||
+    issueText.includes('font')
+  ) {
+    add((path) => path === `ui_kits/${slug}/tokens.css`, 1);
+    add((path) => path.endsWith('.css') && path.includes(slug), 2);
+  }
+  if (issueText.includes('api') || issueText.includes('organization')) {
+    add((path) => /parity\.contract\.json|api-wiring\.plan\.md|qa\.plan\.md$/.test(path), 3);
+  }
+  add((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'), 3);
+  add((path) => path.endsWith('.html') || path.endsWith('.css'), 3);
+  return candidates.slice(0, 5);
+}
+
+function buildKitContext({
+  run,
+  uiKit,
+  artifact,
+  rows,
+  selectedFile,
+  device,
+}: {
+  // biome-ignore lint/suspicious/noExplicitAny: Convex generated doc types are verbose in this UI helper.
+  run: any;
+  // biome-ignore lint/suspicious/noExplicitAny: Convex generated doc types are verbose in this UI helper.
+  uiKit: any;
+  // biome-ignore lint/suspicious/noExplicitAny: Convex generated doc types are verbose in this UI helper.
+  artifact: any;
+  rows: CheckRow[];
+  selectedFile: string | null;
+  device: Device;
+}): KitContext {
+  const slug = String(uiKit?.slug ?? 'current kit');
+  const files = ((uiKit?.files as Record<string, string> | undefined) ?? {}) as Record<string, string>;
+  const html = String(artifact?.html ?? files[`ui_kits/${slug}/index.html`] ?? '');
+  const title = extractTagText(html, 'title', 1)[0] ?? extractTagText(html, 'h1', 1)[0] ?? slug;
+  const headings = [
+    ...extractTagText(html, 'h1', 3),
+    ...extractTagText(html, 'h2', 3),
+    ...extractTagText(html, 'h3', 2),
+  ].filter((text, index, all) => text.length > 0 && all.indexOf(text) === index);
+  const actions = [...extractTagText(html, 'button', 4), ...extractTagText(html, 'a', 4)]
+    .filter((text, index, all) => text.length > 0 && all.indexOf(text) === index)
+    .slice(0, 4);
+  const sourceParts = [];
+  if (run?.sourceImageBase64) sourceParts.push('source image');
+  if (run?.prompt) sourceParts.push('prompt');
+  const sourceLabel = sourceParts.length > 0 ? sourceParts.join(' + ') : 'no source preview stored on this run';
+  return {
+    slug,
+    fileCount: Number(uiKit?.fileCount ?? Object.keys(files).length),
+    device,
+    selectedFile,
+    sourceLabel,
+    previewTitle: title,
+    previewHeadings: headings.slice(0, 5),
+    previewActions: actions,
+    suggestedFiles: issueFileCandidates(rows, files, slug),
+  };
+}
+
 function buildLocalParityReadout({
   counts,
   totalChecks,
   rows,
   statusLabel,
   hasReport,
+  kitContext,
 }: {
   counts: { pass: number; warn: number; fail: number; unavailable: number };
   totalChecks: number;
   rows: CheckRow[];
   statusLabel: string;
   hasReport: boolean;
+  kitContext: KitContext;
 }): string {
   if (!hasReport) {
     return [
       'Readout: No parity report yet.',
-      'Why it matters: the app needs to generate or import a ui_kit before it can judge visual accuracy.',
-      'Fix next: run generate/decompose, then this panel will explain what passed and what needs iteration.',
+      `What you are seeing: Preview is scoped to ${kitContext.slug} on ${kitContext.device}; ${kitContext.sourceLabel} is available for comparison.`,
+      'Fix next: run generate/decompose, then this panel will point to the exact screen areas and files to inspect.',
       `Confidence: waiting; current run status is ${statusLabel}.`,
     ].join('\n');
   }
 
-  const issues = rows
-    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
-    .slice(0, 3)
-    .map((row) => row.label);
+  const issueRows = rows.filter((row) => row.verdict === 'fail' || row.verdict === 'warn').slice(0, 3);
+  const issues = issueRows.map((row) => row.label);
   const issueText = issues.length > 0 ? issues.join(', ') : 'no obvious blockers';
+  const primary = issueRows[0];
+  const headingText = kitContext.previewHeadings.length > 0 ? kitContext.previewHeadings.join(' / ') : kitContext.previewTitle;
+  const actionText = kitContext.previewActions.length > 0 ? kitContext.previewActions.join(' / ') : 'no clear CTA text detected';
+  const fileText =
+    kitContext.suggestedFiles.length > 0
+      ? kitContext.suggestedFiles.slice(0, 4).map(shortPath).join(', ')
+      : 'no generated files loaded yet';
+  const scopedText = kitContext.selectedFile
+    ? `Scoped now: ${shortPath(kitContext.selectedFile)}.`
+    : 'No file is scoped yet; open one suggested file before asking for an edit.';
+
   if (counts.fail > 0) {
     return [
-      `Readout: not ready to distribute yet; ${counts.fail} checks fail and ${counts.pass}/${totalChecks} pass.`,
-      `Why it matters: the generated kit still diverges in ${issueText}, so users may not trust the output as an exact match.`,
-      'Fix next: make one visible iteration against the highest-impact failing area, then rerun verify.',
-      `Confidence: medium; ${counts.unavailable} checks still need stronger evidence.`,
+      `Readout: not ready to distribute. ${counts.pass}/${totalChecks} pass for ${kitContext.slug}; the Preview is judging "${kitContext.previewTitle}" on ${kitContext.device}.`,
+      `What it means on this screen: ${issueText} is failing or weak. Inspect the visible headings "${headingText}" and actions "${actionText}" against the source, not just the score.`,
+      `Open in Files: ${fileText}. ${scopedText}`,
+      `Fix next: ${issueIntent(primary)}, then rerun verify so the failing rows attach new evidence.`,
+      `Confidence: medium; ${counts.unavailable} checks still need stronger evidence and source context is ${kitContext.sourceLabel}.`,
     ].join('\n');
   }
   if (counts.warn > 0) {
     return [
-      `Readout: close, but still needs polish; ${counts.pass}/${totalChecks} pass with ${counts.warn} warnings.`,
-      `Why it matters: ${issueText} may look acceptable at a glance but can drift under real use or responsive sizes.`,
-      'Fix next: tune the warning areas, then do a browser pass on desktop and mobile.',
+      `Readout: close, but still needs polish. ${counts.pass}/${totalChecks} pass for ${kitContext.slug} with ${counts.warn} warnings.`,
+      `What it means on this screen: ${issueText} may look acceptable at a glance, but compare "${headingText}" and "${actionText}" in Preview before exporting.`,
+      `Open in Files: ${fileText}. ${scopedText}`,
+      `Fix next: ${issueIntent(primary)}, then test desktop and mobile Preview.`,
       `Confidence: medium-high; ${counts.unavailable} checks are still unavailable.`,
     ].join('\n');
   }
   if (counts.unavailable > 0) {
     return [
-      `Readout: ${counts.pass}/${totalChecks} checks pass, but the score is incomplete.`,
-      'Why it matters: missing evidence means the app cannot honestly claim the whole surface is verified.',
-      'Fix next: rerun verify or capture the missing browser/screenshot evidence.',
-      `Confidence: limited; ${counts.unavailable} checks are unavailable.`,
+      `Readout: ${counts.pass}/${totalChecks} checks pass for ${kitContext.slug}, but the score is incomplete.`,
+      `What it means on this screen: Preview shows "${kitContext.previewTitle}", but ${counts.unavailable} checks do not have enough evidence to explain the match.`,
+      `Open in Files: ${fileText}. ${scopedText}`,
+      'Fix next: rerun verify or capture the missing browser/screenshot evidence before distributing.',
+      `Confidence: limited; source context is ${kitContext.sourceLabel}.`,
     ].join('\n');
   }
   return [
-    `Readout: strong match; all ${totalChecks} checks pass.`,
-    'Why it matters: the generated ui_kit is aligned enough for a final human visual review and export.',
-    'Fix next: preview the core route, test the ZIP export, then distribute.',
+    `Readout: strong match. All ${totalChecks} checks pass for ${kitContext.slug} on ${kitContext.device}.`,
+    `What it means on this screen: Preview "${kitContext.previewTitle}" has passed the deterministic rubric, including the visible headings and CTAs.`,
+    `Open in Files: ${fileText}. ${scopedText}`,
+    'Fix next: preview the core route one more time, test the ZIP export, then distribute.',
     'Confidence: high, assuming the live browser route still matches this report.',
   ].join('\n');
 }
@@ -185,9 +349,11 @@ function cleanDisplayReadout(text: string): string {
     .trim();
 }
 
-export function ParityPanel({ runId }: ParityPanelProps) {
+export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityPanelProps) {
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const parity = useQuery(api.parityReports.getLatest, runId ? { runId } : 'skip');
+  const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+  const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const explainParity = useAction(api.chatLoop.explainParity);
   const [agentSummary, setAgentSummary] = useState<{
     text: string;
@@ -217,6 +383,18 @@ export function ParityPanel({ runId }: ParityPanelProps) {
 
   const totalChecks = rows.length;
   const passCount = counts.pass;
+  const kitContext = useMemo(
+    () =>
+      buildKitContext({
+        run,
+        uiKit,
+        artifact,
+        rows,
+        selectedFile,
+        device,
+      }),
+    [artifact, device, rows, run, selectedFile, uiKit],
+  );
 
   const statusLabel = (() => {
     if (!run) return 'Idle';
@@ -237,8 +415,9 @@ export function ParityPanel({ runId }: ParityPanelProps) {
         rows,
         statusLabel,
         hasReport: parity !== null && parity !== undefined,
+        kitContext,
       }),
-    [counts, parity, rows, statusLabel, totalChecks],
+    [counts, kitContext, parity, rows, statusLabel, totalChecks],
   );
 
   const parityReportId = parity?._id ? String(parity._id) : null;
@@ -287,6 +466,13 @@ export function ParityPanel({ runId }: ParityPanelProps) {
       verify: v,
     };
   }, [run]);
+
+  const agentStatusText = (() => {
+    if (agentLoading) return 'agent refining this with the latest run context...';
+    if (agentError) return 'agent summary unavailable; showing screen-aware local guidance';
+    if (agentSummary) return `${agentSummary.provider} / ${agentSummary.modelUsed}`;
+    return 'screen-aware local guidance until agent summary returns';
+  })();
 
   return (
     <aside
@@ -451,8 +637,55 @@ export function ParityPanel({ runId }: ParityPanelProps) {
               whiteSpace: 'pre-wrap',
             }}
           >
-            {agentLoading && !agentSummary ? 'Agent is translating the technical checks into an actionable readout...' : displayedReadout}
+            {displayedReadout}
           </div>
+          {kitContext.suggestedFiles.length > 0 ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                paddingTop: 2,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--color-text-faint)',
+                }}
+              >
+                Open the likely fix files
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {kitContext.suggestedFiles.slice(0, 4).map((path) => {
+                  const selected = selectedFile === path;
+                  return (
+                    <button
+                      key={path}
+                      type="button"
+                      onClick={() => onOpenFile(path)}
+                      title={path}
+                      style={{
+                        borderRadius: 'var(--radius-pill)',
+                        border: `1px solid ${selected ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+                        background: selected ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+                        color: selected ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                        padding: '4px 8px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {shortPath(path)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -463,13 +696,7 @@ export function ParityPanel({ runId }: ParityPanelProps) {
               gap: 8,
             }}
           >
-            <span>
-              {agentError
-                ? `Agent summary failed; showing local readout: ${agentError}`
-                : agentSummary
-                  ? `${agentSummary.provider} / ${agentSummary.modelUsed}`
-                  : 'local readout until agent summary returns'}
-            </span>
+            <span>{agentStatusText}</span>
             {agentSummary?.costMicroUsd ? (
               <span>${(agentSummary.costMicroUsd / 1_000_000).toFixed(4)}</span>
             ) : null}
