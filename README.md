@@ -19,18 +19,18 @@ That is the entire product. Every surface is in service of one of those six step
 
 ## See it run
 
-From prompt/image to verified `ui_kit`, scoped comments, MCP tooling, and ZIP export:
+Current product workflow: launch + model routing, BYOK/session privacy, run history/chat, file editing, Parity Coach, Inspiration, source sync/MCP setup, i18n, and export:
 
-[![Parity Studio v0.1.0 demo](https://github.com/HomenShum/parity-studio/releases/download/v0.1.0/demo-six-step-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.1.0/demo-six-step.mp4)
+[![Parity Studio current workflows demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows.mp4)
 
-<sub>GIF preview from the `v0.1.0` release. Click it for the MP4.</sub>
+<sub>GIF preview from the `v0.3.0` release. Click it for the MP4. The original six-step v0.1.0 demo remains in the v0.1.0 release assets.</sub>
 
 ---
 
-**Status**: v0.1.0 - LIVE
+**Status**: LIVE - current web app + MCP v0.3.0
 
 - **Web app**: https://parity-studio.vercel.app
-- **Release demo run**: https://parity-studio.vercel.app/?run=jh798qfj782qem79rkechhyxxs85tprk
+- **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
 - **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_studio` and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
