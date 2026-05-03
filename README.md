@@ -30,10 +30,41 @@ From prompt/image to verified `ui_kit`, scoped comments, MCP tooling, and ZIP ex
 **Status**: v0.1.0 - LIVE
 
 - **Web app**: https://parity-studio.vercel.app
-- **Release demo run**: https://parity-studio.vercel.app/-run=jh798qfj782qem79rkechhyxxs85tprk
+- **Release demo run**: https://parity-studio.vercel.app/?run=jh798qfj782qem79rkechhyxxs85tprk
 - **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_studio` and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
+
+## Workflows available now
+
+### Web app workflows
+
+- **Start a new run from a prompt**: describe the surface and let the pipeline generate, decompose, verify, and stream the result.
+- **Start from a source image**: attach a screenshot or generated image, then decompose it into a componentized `ui_kit`.
+- **Import an existing `ui_kit` ZIP**: drop a canonical kit back into the app, inspect it, comment on it, edit files, and export it again.
+- **Choose the model route**: use Balanced AI, Best Quality AI, Free AI route, a preset model, or a custom provider/model id from Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Cerebras, xAI, or Mistral.
+- **Session privacy + BYOK setup**: store browser-tab-only provider-key placeholders for the session, copy local MCP env setup, clear keys, or start a fresh session. Hosted Parity does not receive browser-entered BYOK secrets for model calls.
+- **Manage projects and run history**: use the left rail to start runs, revisit recent runs, see run status, and keep a session-level project list.
+- **Browse, create, edit, save, and revert kit files**: the Files view exposes the generated `ui_kits/<slug>/` files, source image preview, selected-file scope, inline editing, and ZIP export.
+- **Preview and comment on the generated UI**: use comment mode to pin a bbox to the preview or leave a free-form note scoped to the selected file.
+- **Ask the agent to make scoped edits**: chat with the agent stream, enhance prompts, or trigger an advisor/executor fix from a comment, file, or manual request.
+- **Use Parity Coach**: read the end-user impact readout, parity score, top recommendations, and quality-gate status instead of raw low-level check rows.
+- **Run the Inspiration workflow**: search curated or live references, review product patterns, apply a safe inspiration brief to the agent, and improve the kit without copying source assets.
+- **Sync stale source snapshots**: use the version-control modal to patch the current run or copy MCP recapture instructions when the original app route changed.
+- **Switch language**: use English or Simplified Chinese UI text and localized Parity Coach readouts.
+
+### Coding-agent and MCP workflows
+
+- **Natural existing-app capture**: ask Claude Code, Codex, Cursor, or Windsurf: "Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."
+- **Direct route capture**: call `parity_platform_to_ui_kit` on a running localhost or hosted route with `projectRoot=.` to capture rendered HTML/CSS, include code context, redact secrets, create a canonical ZIP, and optionally import it into hosted Parity Studio.
+- **End-to-end local pipeline**: call `parity_pipeline` to generate, decompose, verify, optionally visually judge, and export a kit from a prompt or image.
+- **Decompose-only workflow**: call `parity_decompose` to turn a complete HTML artifact into canonical `ui_kit` files plus `parity.contract.json`, `performance.budget.json`, `api-wiring.plan.md`, and `qa.plan.md`.
+- **Verify-only workflow**: call `parity_verify` to score an existing kit against source HTML and, when a source image is provided, run the visual judge.
+- **Export-only workflow**: call `parity_export_zip` or hosted `parity_export` to package a run as ZIP, HTML, or Markdown for handoff.
+- **Hosted run/chat workflow**: use `parity_chat_send`, `parity_chat_advise`, `parity_chat_history`, and `parity_run_listRecent` to keep working against a hosted run from the agent.
+- **Prompt/resource workflow**: load the MCP `use-parity-studio` prompt and `parity://agent-rules` resource so users can ask naturally instead of memorizing tool names.
+- **Local dashboard workflow**: watch MCP runs on the auto-opened local dashboard with source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.
+- **Self-dogfood workflow**: capture Parity Studio itself through the MCP path, import it as a run, then use Inspiration, comments, scoped edits, and export against the app's own UI.
 
 ## Use it from your coding agent (MCP)
 
@@ -48,8 +79,8 @@ The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp
       "args": ["-y", "parity-studio-mcp"],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
-        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
-        "PARITY_JUDGE_MODEL": "claude-sonnet-4-5"
+        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
+        "PARITY_JUDGE_MODEL": "claude-sonnet-4-6"
       }
     }
   }
