@@ -1,0 +1,31 @@
+# Keep production uploads focused on the Vite web app.
+node_modules/
+dist/
+.git/
+.convex/
+.tmp/
+.cache/
+.playwright-mcp/
+playwright-report/
+test-results/
+coverage/
+
+# Local recordings and release evidence are uploaded to GitHub Releases, not Vercel.
+runs/
+
+# MCP/server package is distributed separately from the hosted web app.
+mcp/
+
+# Local-only editor and generated files.
+.vscode/
+.idea/
+*.log
+tsconfig.tsbuildinfo
+*.tgz
+
+# Local secrets and Vercel state.
+.env
+.env.local
+.env.*.local
+.vercel/
+.vercel.env.tmp
