@@ -19,11 +19,33 @@ That is the entire product. Every surface is in service of one of those six step
 
 ## See it run
 
-Current product workflow: launch + model routing, BYOK/session privacy, run history/chat, file editing, Parity Coach, Inspiration, source sync/MCP setup, i18n, and export:
+The README uses focused proof clips instead of one overloaded tour. Each GIF links to its MP4 in the release assets.
 
-[![Parity Studio current workflows demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows.mp4)
+### Core `ui_kit` round trip
 
-<sub>GIF preview from the `v0.3.0` release. Click it for the MP4. The original six-step v0.1.0 demo remains in the v0.1.0 release assets.</sub>
+Import a canonical `ui_kit` ZIP, verify it, select a file, pin a meaningful comment on a visible preview element, trigger the agent auto-fix, and export the edited ZIP:
+
+[![Parity Studio core ui_kit round-trip demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-core-workflow-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-core-workflow.mp4)
+
+### Inspiration search -> agent brief
+
+Search for reference patterns, review the recommended plan, apply it to the current run, and watch the agent stream start working from that brief:
+
+[![Parity Studio inspiration workflow demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-inspiration-workflow-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-inspiration-workflow.mp4)
+
+### Source sync + MCP handoff
+
+Open the version-control modal, compare patch-current-run vs recapture-as-new-revision, copy MCP setup guidance, and trigger the sync agent:
+
+[![Parity Studio source sync workflow demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-sync-workflow-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-sync-workflow.mp4)
+
+### Product surface tour
+
+Launch + model routing, BYOK/session privacy, run history/chat, file editing, Parity Coach, Inspiration, source sync/MCP setup, i18n, and export:
+
+[![Parity Studio current workflows tour](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows.mp4)
+
+<sub>`v0.3.1` proof clips were recorded from the live production app and checked with Gemini video analysis. The original v0.1.0 six-step demo remains archived in the `v0.1.0` release assets.</sub>
 
 ---
 
