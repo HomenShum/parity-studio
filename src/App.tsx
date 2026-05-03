@@ -8,6 +8,7 @@ import { Wordmark } from './components/Wordmark';
 import { AgentRail } from './components/agent/AgentRail';
 import { CanvasPanel, type CanvasTab } from './components/canvas/CanvasPanel';
 import { ParityPanel } from './components/parity/ParityPanel';
+import { convexHttpUrl } from './lib/convexEndpoints';
 import { useT } from './lib/i18n';
 import { getOrCreateSessionId, resetSessionId } from './lib/sessionIdentity';
 
@@ -66,19 +67,12 @@ export default function App() {
 
   const breadcrumbTitle = currentRunId ? t('app.defaultRunTitle') : t('app.newDesignSession');
 
-  function convexHttpBase(): string | null {
-    const fromEnv = import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined;
-    if (fromEnv) return fromEnv.replace(/\/$/, '');
-    const wsUrl = (import.meta.env['VITE_CONVEX_URL'] as string | undefined) ?? '';
-    if (!wsUrl) return null;
-    return wsUrl.replace('.convex.cloud', '.convex.site').replace(/\/$/, '');
-  }
-  const httpBase = convexHttpBase();
+  const httpBase = convexHttpUrl();
   const exportHrefBase =
     currentRunId !== null && httpBase ? `${httpBase}/api/runs/${currentRunId}` : '#';
   const passCount = parity?.passCount ?? 0;
   const totalChecks = parity?.totalChecks ?? 16;
-  const exportReady = currentRunId !== null && httpBase !== null && parity?.status === 'verified';
+  const exportReady = currentRunId !== null && parity?.status === 'verified';
   const activeStep = (() => {
     if (currentRunId === null) return 1;
     if (run?.status === 'generating' || run?.status === 'decomposing' || run?.status === 'queued')
@@ -131,7 +125,7 @@ export default function App() {
           device={device}
           onDeviceChange={setDevice}
           exportHrefBase={exportHrefBase}
-          exportEnabled={currentRunId !== null && httpBase !== null}
+          exportEnabled={currentRunId !== null}
           exportReady={exportReady}
           exportWarning={
             currentRunId !== null && !exportReady

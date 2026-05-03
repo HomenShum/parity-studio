@@ -3,6 +3,7 @@ import { Download, Expand, FilePlus2, FileText, Folder, Image as ImageIcon } fro
 import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { convexHttpUrl } from '../../lib/convexEndpoints';
 import { FileEditor, starterContentForPath } from '../FileEditor';
 
 interface FilesViewProps {
@@ -11,14 +12,6 @@ interface FilesViewProps {
   onSelectFile: (path: string | null) => void;
   sourceImagePreviewOpen?: boolean;
   onPreviewSourceImage?: () => void;
-}
-
-function convexHttpBase(): string | null {
-  const fromEnv = import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
-  const wsUrl = (import.meta.env['VITE_CONVEX_URL'] as string | undefined) ?? '';
-  if (!wsUrl) return null;
-  return wsUrl.replace('.convex.cloud', '.convex.site').replace(/\/$/, '');
 }
 
 function formatSize(bytes: number): string {
@@ -37,10 +30,10 @@ export function FilesView({
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const createFile = useMutation(api.uiKits.createFile);
-  const httpBase = convexHttpBase();
+  const httpBase = convexHttpUrl();
   const exportHref =
     runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/zip` : '#';
-  const canExport = runId !== null && uiKit !== null && uiKit !== undefined && httpBase !== null;
+  const canExport = runId !== null && uiKit !== null && uiKit !== undefined;
 
   const fileCount = uiKit?.files ? Object.keys(uiKit.files as Record<string, string>).length : 0;
   const decomposeStatus = uiKit
