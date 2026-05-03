@@ -8,7 +8,7 @@
   "homepage": "https://github.com/HomenShum/parity-studio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/HomenShum/parity-studio.git",
+    "url": "git+https://github.com/HomenShum/parity-studio.git",
     "directory": "mcp"
   },
   "keywords": [
@@ -28,7 +28,7 @@
   "files": ["dist", "README.md"],
   "main": "./dist/index.js",
   "bin": {
-    "parity-studio-mcp": "./dist/index.js"
+    "parity-studio-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
