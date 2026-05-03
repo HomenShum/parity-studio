@@ -1,11 +1,21 @@
-import { useAction, useQuery } from 'convex/react';
-import { RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useAction, useMutation, useQuery } from 'convex/react';
+import {
+  ChevronDown,
+  ChevronRight,
+  PanelRightClose,
+  PanelRightOpen,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { useI18n } from '../../lib/i18n';
+import { modelDisplay } from '../../lib/modelLabels';
+import { QUALITY_GATE_MAX_REPAIRS, QUALITY_GATE_TARGET_PASS_RATIO } from '../../lib/qualityGate';
 import type { Device } from '../HeaderActions';
 import { CostTelemetry } from './CostTelemetry';
-import { ParityCheckRow } from './ParityCheckRow';
 import { ParityDonut } from './ParityDonut';
 import type { Verdict } from './ParityVerdictPill';
 
@@ -13,6 +23,8 @@ interface ParityPanelProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   device: Device;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onOpenFile: (path: string) => void;
 }
 
@@ -33,6 +45,8 @@ interface KitContext {
   previewHeadings: string[];
   previewActions: string[];
   suggestedFiles: string[];
+  repairAttempts: number;
+  repairCap: number;
 }
 
 const SIXTEEN_LABELS: string[] = [
@@ -54,6 +68,37 @@ const SIXTEEN_LABELS: string[] = [
   'Visual regression',
 ];
 
+function recommendationText(
+  label: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  return t(`parity.recommendations.${recommendationKey(label)}`);
+}
+
+function recommendationRationale(
+  label: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  return t(`parity.recommendationRationales.${recommendationKey(label)}`);
+}
+
+function recommendationKey(label: string): string {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('structure') || normalized.includes('layout')) return 'listFirst';
+  if (normalized.includes('component')) return 'componentBoundary';
+  if (normalized.includes('typography') || normalized.includes('font')) return 'hierarchy';
+  if (normalized.includes('color')) return 'colorUsage';
+  if (
+    normalized.includes('spacing') ||
+    normalized.includes('shadow') ||
+    normalized.includes('border')
+  )
+    return 'spacing';
+  if (normalized.includes('accessibility') || normalized.includes('semantic'))
+    return 'accessibility';
+  return 'visibleMismatch';
+}
+
 function statusToVerdict(status: string): Verdict {
   if (status === 'verified') return 'pass';
   if (status === 'needs_review') return 'warn';
@@ -70,14 +115,19 @@ function statusToVerdict(status: string): Verdict {
  * everything beyond the three known buckets as `unavailable`, never as a
  * fake `pass`, per the agentic_reliability HONEST_SCORES rule.
  */
-function buildCheckRows(report: {
-  status?: string;
-  passCount?: number;
-  totalChecks?: number;
-  gaps?: Array<{ kind?: string; severity?: string; message?: string }>;
-  // newer field, populated only after Sprint 3 backend lands
-  checks?: Array<{ id: string; label: string; status: Verdict; evidence?: string[] }>;
-} | null | undefined): CheckRow[] {
+function buildCheckRows(
+  report:
+    | {
+        status?: string;
+        passCount?: number;
+        totalChecks?: number;
+        gaps?: Array<{ kind?: string; severity?: string; message?: string }>;
+        // newer field, populated only after Sprint 3 backend lands
+        checks?: Array<{ id: string; label: string; status: Verdict; evidence?: string[] }>;
+      }
+    | null
+    | undefined,
+): CheckRow[] {
   if (!report) {
     return SIXTEEN_LABELS.map((label, i) => ({
       number: i + 1,
@@ -124,7 +174,15 @@ function buildCheckRows(report: {
     // Distribute warns/fails across the 16 rows roughly proportional to overall
     const cycle = num % 4;
     const verdict: Verdict =
-      overall === 'fail' ? (cycle === 0 ? 'fail' : cycle === 1 ? 'warn' : 'pass') : (cycle === 0 ? 'warn' : 'pass');
+      overall === 'fail'
+        ? cycle === 0
+          ? 'fail'
+          : cycle === 1
+            ? 'warn'
+            : 'pass'
+        : cycle === 0
+          ? 'warn'
+          : 'pass';
     const evidence =
       verdict !== 'pass' && gap
         ? [gap.message ?? `${gap.kind ?? 'check'} (${gap.severity ?? 'medium'})`]
@@ -173,17 +231,64 @@ function shortPath(path: string): string {
 function issueIntent(row: CheckRow | undefined): string {
   if (!row) return 'polish the most visible mismatch';
   const label = row.label.toLowerCase();
-  if (label.includes('structure')) return 'rebuild the visible page structure: header, hero, sections, and ordering';
-  if (label.includes('component')) return 'check whether the visible elements are split into the right components';
-  if (label.includes('layout') || label.includes('spacing')) return 'tighten the grid, spacing, and alignment visible in the Preview';
-  if (label.includes('typography') || label.includes('font')) return 'match the headline, body copy, weight, and font scale';
+  if (label.includes('structure'))
+    return 'rebuild the visible page structure: header, hero, sections, and ordering';
+  if (label.includes('component'))
+    return 'check whether the visible elements are split into the right components';
+  if (label.includes('layout') || label.includes('spacing'))
+    return 'tighten the grid, spacing, and alignment visible in the Preview';
+  if (label.includes('typography') || label.includes('font'))
+    return 'match the headline, body copy, weight, and font scale';
   if (label.includes('color')) return 'match the source colors and token values';
   if (label.includes('interaction')) return 'wire the visible hover, focus, and active states';
-  if (label.includes('accessibility') || label.includes('semantic')) return 'fix accessible names, heading order, and semantic regions';
+  if (label.includes('accessibility') || label.includes('semantic'))
+    return 'fix accessible names, heading order, and semantic regions';
   return `address ${row.label} in the visible Preview`;
 }
 
-function issueFileCandidates(rows: CheckRow[], files: Record<string, string>, slug: string): string[] {
+function endUserImpact(rows: CheckRow[], kitContext: KitContext): string {
+  const labels = rows
+    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
+    .slice(0, 3)
+    .map((row) => row.label.toLowerCase())
+    .join(' ');
+  const title = kitContext.previewTitle;
+  const action = kitContext.previewActions[0] ?? 'the primary CTA';
+  if (labels.includes('structure') || labels.includes('component') || labels.includes('layout')) {
+    return `a first-time visitor may understand the rough idea of "${title}", but the page can feel like a static mockup because the header, hero, sections, or component boundaries do not behave like a real product page. They may hesitate before clicking "${action}".`;
+  }
+  if (
+    labels.includes('typography') ||
+    labels.includes('font') ||
+    labels.includes('color') ||
+    labels.includes('shadow')
+  ) {
+    return `visitors may sense that the brand is off even if they cannot name why. Text hierarchy, color, or depth mismatches can make "${title}" feel less polished and less trustworthy.`;
+  }
+  if (
+    labels.includes('interaction') ||
+    labels.includes('accessibility') ||
+    labels.includes('semantic')
+  ) {
+    return `keyboard, screen-reader, and click behavior may be unclear. Users could miss "${action}", lose focus context, or assume parts of the page are broken.`;
+  }
+  if (labels.includes('responsive')) {
+    return 'mobile or narrow-screen users may get a degraded experience even if the desktop preview looks acceptable. Layout shifts can hide the page purpose or primary action.';
+  }
+  return 'users may notice visual or behavioral drift from the intended source, which reduces confidence that this is a real, production-ready interface.';
+}
+
+function agentReadyFixRequest(row: CheckRow | undefined, kitContext: KitContext): string {
+  const action = kitContext.previewActions[0] ?? 'the primary CTA';
+  const intent = issueIntent(row);
+  return `Ask the agent to ${intent} so a first-time visitor can understand "${kitContext.previewTitle}" and confidently use "${action}".`;
+}
+
+function issueFileCandidates(
+  rows: CheckRow[],
+  files: Record<string, string>,
+  slug: string,
+): string[] {
   const paths = Object.keys(files).sort();
   const issueText = rows
     .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
@@ -198,7 +303,11 @@ function issueFileCandidates(rows: CheckRow[], files: Record<string, string>, sl
   };
 
   add((path) => path === `ui_kits/${slug}/index.html`, 1);
-  if (issueText.includes('structure') || issueText.includes('component') || issueText.includes('layout')) {
+  if (
+    issueText.includes('structure') ||
+    issueText.includes('component') ||
+    issueText.includes('layout')
+  ) {
     add((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'), 4);
   }
   if (
@@ -238,8 +347,11 @@ function buildKitContext({
   device: Device;
 }): KitContext {
   const slug = String(uiKit?.slug ?? 'current kit');
-  const files = ((uiKit?.files as Record<string, string> | undefined) ?? {}) as Record<string, string>;
-  const html = String(artifact?.html ?? files[`ui_kits/${slug}/index.html`] ?? '');
+  const files = ((uiKit?.files as Record<string, string> | undefined) ?? {}) as Record<
+    string,
+    string
+  >;
+  const html = String(files[`ui_kits/${slug}/index.html`] ?? artifact?.html ?? '');
   const title = extractTagText(html, 'title', 1)[0] ?? extractTagText(html, 'h1', 1)[0] ?? slug;
   const headings = [
     ...extractTagText(html, 'h1', 3),
@@ -252,7 +364,8 @@ function buildKitContext({
   const sourceParts = [];
   if (run?.sourceImageBase64) sourceParts.push('source image');
   if (run?.prompt) sourceParts.push('prompt');
-  const sourceLabel = sourceParts.length > 0 ? sourceParts.join(' + ') : 'no source preview stored on this run';
+  const sourceLabel =
+    sourceParts.length > 0 ? sourceParts.join(' + ') : 'no source preview stored on this run';
   return {
     slug,
     fileCount: Number(uiKit?.fileCount ?? Object.keys(files).length),
@@ -263,6 +376,8 @@ function buildKitContext({
     previewHeadings: headings.slice(0, 5),
     previewActions: actions,
     suggestedFiles: issueFileCandidates(rows, files, slug),
+    repairAttempts: Number(run?.iterationsCompleted ?? 0),
+    repairCap: QUALITY_GATE_MAX_REPAIRS,
   };
 }
 
@@ -284,18 +399,27 @@ function buildLocalParityReadout({
   if (!hasReport) {
     return [
       'Readout: No parity report yet.',
-      `What you are seeing: Preview is scoped to ${kitContext.slug} on ${kitContext.device}; ${kitContext.sourceLabel} is available for comparison.`,
+      'End-user impact: we cannot judge whether users would trust, understand, or click through this UI until a parity report exists.',
+      `Where it shows up: Preview is scoped to ${kitContext.slug} on ${kitContext.device}; ${kitContext.sourceLabel} is available for comparison.`,
       'Fix next: run generate/decompose, then this panel will point to the exact screen areas and files to inspect.',
       `Confidence: waiting; current run status is ${statusLabel}.`,
     ].join('\n');
   }
 
-  const issueRows = rows.filter((row) => row.verdict === 'fail' || row.verdict === 'warn').slice(0, 3);
+  const issueRows = rows
+    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
+    .slice(0, 3);
   const issues = issueRows.map((row) => row.label);
   const issueText = issues.length > 0 ? issues.join(', ') : 'no obvious blockers';
   const primary = issueRows[0];
-  const headingText = kitContext.previewHeadings.length > 0 ? kitContext.previewHeadings.join(' / ') : kitContext.previewTitle;
-  const actionText = kitContext.previewActions.length > 0 ? kitContext.previewActions.join(' / ') : 'no clear CTA text detected';
+  const headingText =
+    kitContext.previewHeadings.length > 0
+      ? kitContext.previewHeadings.join(' / ')
+      : kitContext.previewTitle;
+  const actionText =
+    kitContext.previewActions.length > 0
+      ? kitContext.previewActions.join(' / ')
+      : 'no clear CTA text detected';
   const fileText =
     kitContext.suggestedFiles.length > 0
       ? kitContext.suggestedFiles.slice(0, 4).map(shortPath).join(', ')
@@ -303,38 +427,47 @@ function buildLocalParityReadout({
   const scopedText = kitContext.selectedFile
     ? `Scoped now: ${shortPath(kitContext.selectedFile)}.`
     : 'No file is scoped yet; open one suggested file before asking for an edit.';
+  const repairText = `Ambient repair used ${kitContext.repairAttempts}/${kitContext.repairCap} attempts.`;
+  const capText =
+    kitContext.repairAttempts >= kitContext.repairCap
+      ? 'The automatic quality gate has reached its cap; use a scoped comment or chat prompt for the next targeted repair.'
+      : 'The quality gate will keep repairing actionable failures in the background until it reaches the cap.';
 
   if (counts.fail > 0) {
     return [
       `Readout: not ready to distribute. ${counts.pass}/${totalChecks} pass for ${kitContext.slug}; the Preview is judging "${kitContext.previewTitle}" on ${kitContext.device}.`,
-      `What it means on this screen: ${issueText} is failing or weak. Inspect the visible headings "${headingText}" and actions "${actionText}" against the source, not just the score.`,
-      `Open in Files: ${fileText}. ${scopedText}`,
-      `Fix next: ${issueIntent(primary)}, then rerun verify so the failing rows attach new evidence.`,
+      `End-user impact: ${endUserImpact(issueRows, kitContext)}`,
+      `Where it shows up: ${issueText} is failing or weak. Inspect the visible headings "${headingText}" and actions "${actionText}" against the source.`,
+      `Files the agent may edit: ${fileText}. ${scopedText}`,
+      `Fix next: ${agentReadyFixRequest(primary, kitContext)} ${repairText} ${capText}`,
       `Confidence: medium; ${counts.unavailable} checks still need stronger evidence and source context is ${kitContext.sourceLabel}.`,
     ].join('\n');
   }
   if (counts.warn > 0) {
     return [
       `Readout: close, but still needs polish. ${counts.pass}/${totalChecks} pass for ${kitContext.slug} with ${counts.warn} warnings.`,
-      `What it means on this screen: ${issueText} may look acceptable at a glance, but compare "${headingText}" and "${actionText}" in Preview before exporting.`,
-      `Open in Files: ${fileText}. ${scopedText}`,
-      `Fix next: ${issueIntent(primary)}, then test desktop and mobile Preview.`,
+      `End-user impact: ${endUserImpact(issueRows, kitContext)}`,
+      `Where it shows up: ${issueText} may look acceptable at a glance, but compare "${headingText}" and "${actionText}" in Preview before exporting.`,
+      `Files the agent may edit: ${fileText}. ${scopedText}`,
+      `Fix next: ${agentReadyFixRequest(primary, kitContext)} ${repairText}`,
       `Confidence: medium-high; ${counts.unavailable} checks are still unavailable.`,
     ].join('\n');
   }
   if (counts.unavailable > 0) {
     return [
       `Readout: ${counts.pass}/${totalChecks} checks pass for ${kitContext.slug}, but the score is incomplete.`,
-      `What it means on this screen: Preview shows "${kitContext.previewTitle}", but ${counts.unavailable} checks do not have enough evidence to explain the match.`,
-      `Open in Files: ${fileText}. ${scopedText}`,
-      'Fix next: rerun verify or capture the missing browser/screenshot evidence before distributing.',
+      'End-user impact: users might be fine, but we do not have enough evidence yet to say whether the exported UI will feel trustworthy across real browsing conditions.',
+      `Where it shows up: Preview shows "${kitContext.previewTitle}", but ${counts.unavailable} checks do not have enough evidence to explain the match.`,
+      `Files the agent may edit: ${fileText}. ${scopedText}`,
+      `Fix next: capture the missing browser/screenshot evidence before distributing. ${repairText}`,
       `Confidence: limited; source context is ${kitContext.sourceLabel}.`,
     ].join('\n');
   }
   return [
     `Readout: strong match. All ${totalChecks} checks pass for ${kitContext.slug} on ${kitContext.device}.`,
-    `What it means on this screen: Preview "${kitContext.previewTitle}" has passed the deterministic rubric, including the visible headings and CTAs.`,
-    `Open in Files: ${fileText}. ${scopedText}`,
+    'End-user impact: visitors should see a coherent, trustworthy screen where the main message and primary action are clear.',
+    `Where it shows up: Preview "${kitContext.previewTitle}" has passed the deterministic rubric, including the visible headings and CTAs.`,
+    `Files the agent may edit: ${fileText}. ${scopedText}`,
     'Fix next: preview the core route one more time, test the ZIP export, then distribute.',
     'Confidence: high, assuming the live browser route still matches this report.',
   ].join('\n');
@@ -349,12 +482,21 @@ function cleanDisplayReadout(text: string): string {
     .trim();
 }
 
-export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityPanelProps) {
+export function ParityPanel({
+  runId,
+  selectedFile,
+  device,
+  collapsed,
+  onToggleCollapsed,
+  onOpenFile,
+}: ParityPanelProps) {
+  const { locale, t } = useI18n();
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const parity = useQuery(api.parityReports.getLatest, runId ? { runId } : 'skip');
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const explainParity = useAction(api.chatLoop.explainParity);
+  const startAdviseLoop = useMutation(api.chat.startAdviseLoop);
   const [agentSummary, setAgentSummary] = useState<{
     text: string;
     modelUsed: string;
@@ -363,7 +505,9 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
   } | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
+  const [fixStatus, setFixStatus] = useState<string | null>(null);
   const [explainedReportId, setExplainedReportId] = useState<string | null>(null);
+  const [expandedRecommendation, setExpandedRecommendation] = useState<string | null>(null);
 
   const rows = useMemo(() => buildCheckRows(parity ?? null), [parity]);
 
@@ -383,6 +527,17 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
 
   const totalChecks = rows.length;
   const passCount = counts.pass;
+  const parityScore = totalChecks > 0 ? Math.round((passCount / totalChecks) * 100) : 0;
+  const seenRecommendations = new Set<string>();
+  const recommendationRows = rows
+    .filter((row) => row.verdict === 'fail' || row.verdict === 'warn')
+    .filter((row) => {
+      const key = recommendationKey(row.label);
+      if (seenRecommendations.has(key)) return false;
+      seenRecommendations.add(key);
+      return true;
+    })
+    .slice(0, 5);
   const kitContext = useMemo(
     () =>
       buildKitContext({
@@ -397,15 +552,32 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
   );
 
   const statusLabel = (() => {
-    if (!run) return 'Idle';
-    if (run.status === 'queued') return 'Queued';
-    if (run.status === 'generating') return 'Generating';
-    if (run.status === 'decomposing') return 'Decomposing & verifying';
-    if (run.status === 'verifying') return 'Verifying';
-    if (run.status === 'iterating') return 'Iterating';
-    if (run.status === 'failed') return 'Failed';
-    return 'Done';
+    if (!run) return t('parity.status.idle');
+    if (run.status === 'queued') return t('parity.status.queued');
+    if (run.status === 'generating') return t('parity.status.generating');
+    if (run.status === 'decomposing') return t('parity.status.decomposing');
+    if (run.status === 'verifying') return t('parity.status.verifying');
+    if (run.status === 'iterating') return t('parity.status.iterating');
+    if (run.status === 'failed') return t('parity.status.failed');
+    if (parity?.status === 'verified') return t('parity.status.verified');
+    return t('parity.status.complete');
   })();
+  const qualityTargetPasses = Math.ceil(totalChecks * QUALITY_GATE_TARGET_PASS_RATIO);
+  const repairAttempts = Number(run?.iterationsCompleted ?? 0);
+  const qualityGateText =
+    parity?.status === 'verified'
+      ? t('parity.qualityVerified')
+      : run?.status === 'generating' ||
+          run?.status === 'decomposing' ||
+          run?.status === 'iterating' ||
+          run?.status === 'verifying'
+        ? t('parity.qualityRepairing', { attempts: repairAttempts, cap: QUALITY_GATE_MAX_REPAIRS })
+        : t('parity.qualityRepairs', {
+            attempts: repairAttempts,
+            cap: QUALITY_GATE_MAX_REPAIRS,
+            target: qualityTargetPasses,
+            total: totalChecks,
+          });
 
   const localReadout = useMemo(
     () =>
@@ -421,33 +593,58 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
   );
 
   const parityReportId = parity?._id ? String(parity._id) : null;
+  const parityReportKey = parityReportId ? `${parityReportId}:${locale}` : null;
   const displayedReadout = cleanDisplayReadout(agentSummary?.text ?? localReadout);
+  const primaryIssue = rows.find((row) => row.verdict === 'fail' || row.verdict === 'warn');
+  const askAgentPrompt = `Fix the highest-impact issue from the Parity Coach for ${kitContext.slug}.
 
-  async function refreshAgentSummary() {
-    if (!runId || !parityReportId) return;
-    setAgentLoading(true);
-    setAgentError(null);
+Preferred response language: ${locale === 'zh-CN' ? 'Simplified Chinese' : 'English'}.
+End-user goal: make this screen feel trustworthy and usable for a first-time visitor.
+Primary issue: ${primaryIssue?.label ?? 'largest visible mismatch'}.
+Preview title: ${kitContext.previewTitle}.
+Likely files: ${kitContext.suggestedFiles.slice(0, 4).join(', ') || 'inspect the active ui kit files'}.
+
+Please update the UI so the page purpose, primary action, layout, and accessibility are clearer, then summarize what changed.`;
+
+  async function askAgentToFix() {
+    if (!runId) return;
+    setFixStatus(t('parity.fixStarting'));
     try {
-      const timeout = new Promise<never>((_, reject) => {
-        window.setTimeout(() => reject(new Error('agent explanation timed out; local readout shown')), 28_000);
-      });
-      const result = await Promise.race([explainParity({ runId }), timeout]);
-      setAgentSummary(result);
-      setExplainedReportId(parityReportId);
+      await startAdviseLoop({ runId, kind: 'manual', prompt: askAgentPrompt });
+      setFixStatus(t('parity.fixStarted'));
     } catch (err) {
-      setAgentError(err instanceof Error ? err.message : String(err));
-      setAgentSummary(null);
-      setExplainedReportId(parityReportId);
-    } finally {
-      setAgentLoading(false);
+      setFixStatus(err instanceof Error ? err.message : String(err));
     }
   }
 
+  const refreshAgentSummary = useCallback(async () => {
+    if (!runId || !parityReportId || !parityReportKey) return;
+    setAgentLoading(true);
+    setAgentError(null);
+    setAgentSummary(null);
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        window.setTimeout(
+          () => reject(new Error('agent explanation timed out; local readout shown')),
+          28_000,
+        );
+      });
+      const result = await Promise.race([explainParity({ runId, locale }), timeout]);
+      setAgentSummary(result);
+      setExplainedReportId(parityReportKey);
+    } catch (err) {
+      setAgentError(err instanceof Error ? err.message : String(err));
+      setAgentSummary(null);
+      setExplainedReportId(parityReportKey);
+    } finally {
+      setAgentLoading(false);
+    }
+  }, [explainParity, locale, parityReportId, parityReportKey, runId]);
+
   useEffect(() => {
-    if (!runId || !parityReportId || explainedReportId === parityReportId || agentLoading) return;
+    if (!parityReportKey || explainedReportId === parityReportKey || agentLoading) return;
     void refreshAgentSummary();
-    // biome-ignore lint/correctness/useExhaustiveDependencies: run once per parity report id
-  }, [runId, parityReportId, explainedReportId]);
+  }, [agentLoading, explainedReportId, parityReportKey, refreshAgentSummary]);
 
   const costs = useMemo(() => {
     const breakdown = run?.costBreakdown ?? [];
@@ -456,7 +653,8 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
     let v = 0;
     for (const e of breakdown) {
       if (e.stage.startsWith('generate')) g += e.costMicroUsd;
-      else if (e.stage.startsWith('decompose') || e.stage.startsWith('iterate')) d += e.costMicroUsd;
+      else if (e.stage.startsWith('decompose') || e.stage.startsWith('iterate'))
+        d += e.costMicroUsd;
       else if (e.stage.startsWith('verify')) v += e.costMicroUsd;
     }
     return {
@@ -468,11 +666,64 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
   }, [run]);
 
   const agentStatusText = (() => {
-    if (agentLoading) return 'agent refining this with the latest run context...';
-    if (agentError) return 'agent summary unavailable; showing screen-aware local guidance';
-    if (agentSummary) return `${agentSummary.provider} / ${agentSummary.modelUsed}`;
-    return 'screen-aware local guidance until agent summary returns';
+    if (agentLoading) return t('parity.agentLoading');
+    if (agentError) return t('parity.agentError');
+    if (agentSummary) {
+      const model = modelDisplay(agentSummary.modelUsed);
+      return `${agentSummary.provider} / ${model?.label ?? agentSummary.modelUsed}`;
+    }
+    return t('parity.agentLocal');
   })();
+
+  if (collapsed) {
+    return (
+      <aside
+        aria-label={t('parity.collapsedLabel')}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 10,
+          padding: 'var(--space-3) 8px',
+          background: 'var(--color-background)',
+          borderLeft: '1px solid var(--color-border-subtle)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={t('parity.expand')}
+          style={collapseButtonStyle}
+        >
+          <PanelRightOpen size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={t('parity.openChecks')}
+          style={collapseButtonStyle}
+        >
+          <ShieldCheck size={16} />
+        </button>
+        <div
+          style={{
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--color-text-faint)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            marginTop: 6,
+          }}
+        >
+          {parityScore}/100
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside
@@ -486,7 +737,7 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
         borderLeft: '1px solid var(--color-border-subtle)',
         minWidth: 0,
       }}
-      aria-label="Parity coach and deterministic checks"
+      aria-label={t('parity.label')}
     >
       <div
         style={{
@@ -495,12 +746,18 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
           display: 'flex',
           flexDirection: 'column',
           gap: 6,
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
         }}
       >
         <div
           style={{
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
             gap: 6,
             fontFamily: 'var(--font-sans)',
             fontSize: 10,
@@ -510,8 +767,18 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
             textTransform: 'uppercase',
           }}
         >
-          <ShieldCheck size={12} />
-          Parity coach
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <ShieldCheck size={12} />
+            {t('parity.coach')}
+          </span>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={t('parity.collapse')}
+            style={collapseButtonStyle}
+          >
+            <PanelRightClose size={14} />
+          </button>
         </div>
         <div
           style={{
@@ -533,9 +800,11 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
                 color: 'var(--color-text-primary)',
               }}
             >
-              <span>{passCount}</span>
-              <span style={{ color: 'var(--color-text-faint)', fontSize: 36, padding: '0 4px' }}>/</span>
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: 36 }}>{totalChecks}</span>
+              <span>{parityScore}</span>
+              <span style={{ color: 'var(--color-text-faint)', fontSize: 36, padding: '0 4px' }}>
+                /
+              </span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: 36 }}>100</span>
             </div>
             <div
               style={{
@@ -545,7 +814,7 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
                 marginTop: 4,
               }}
             >
-              checks passing
+              {t('parity.parityScore')}
             </div>
             <div
               style={{
@@ -561,7 +830,24 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
                 color: 'var(--color-text-secondary)',
               }}
             >
-              Status: {statusLabel}
+              {t('parity.statusPrefix')} {statusLabel}
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 10px',
+                borderRadius: 'var(--radius-pill)',
+                background: 'var(--color-accent-soft)',
+                border: '1px solid var(--color-border-subtle)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--color-text-secondary)',
+              }}
+              title={t('parity.qualityTitle')}
+            >
+              {qualityGateText}
             </div>
           </div>
           <ParityDonut
@@ -583,9 +869,21 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
+            maxHeight: 'min(44vh, 390px)',
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            scrollbarGutter: 'stable',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
             <span
               style={{
                 display: 'inline-flex',
@@ -598,13 +896,13 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
               }}
             >
               <Sparkles size={14} style={{ color: 'var(--color-accent)' }} />
-              Plain-English readout
+              {t('parity.readoutTitle')}
             </span>
             <button
               type="button"
               onClick={() => void refreshAgentSummary()}
               disabled={!runId || !parityReportId || agentLoading}
-              title="Ask the agent to reinterpret the latest parity report"
+              title={t('parity.refreshTitle')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -625,7 +923,30 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
                   animation: agentLoading ? 'pipeline-pulse 1s ease-in-out infinite' : 'none',
                 }}
               />
-              {agentLoading ? 'Reading' : 'Refresh'}
+              {agentLoading ? t('parity.reading') : t('parity.refresh')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void askAgentToFix()}
+              disabled={!runId || agentLoading}
+              title={t('parity.askFixTitle')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--color-accent)',
+                background: 'var(--color-accent)',
+                color: 'var(--color-on-accent)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                cursor: !runId || agentLoading ? 'not-allowed' : 'pointer',
+                opacity: !runId || agentLoading ? 0.6 : 1,
+              }}
+            >
+              <Sparkles size={11} />
+              {t('parity.askFix')}
             </button>
           </div>
           <div
@@ -657,7 +978,7 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
                   color: 'var(--color-text-faint)',
                 }}
               >
-                Open the likely fix files
+                {t('parity.filesAgentMayEdit')}
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {kitContext.suggestedFiles.slice(0, 4).map((path) => {
@@ -701,26 +1022,161 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
               <span>${(agentSummary.costMicroUsd / 1_000_000).toFixed(4)}</span>
             ) : null}
           </div>
+          {fixStatus ? (
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: 'var(--color-text-faint)',
+              }}
+            >
+              {fixStatus}
+            </div>
+          ) : null}
         </div>
-      </div>
-
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          paddingBottom: 'var(--space-3)',
-        }}
-      >
-        {rows.map((r) => (
-          <ParityCheckRow
-            key={r.number}
-            number={r.number}
-            label={r.label}
-            verdict={r.verdict}
-            evidence={r.evidence}
-          />
-        ))}
+        {recommendationRows.length > 0 ? (
+          <div
+            style={{
+              marginTop: 8,
+              padding: 12,
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-surface)',
+              boxShadow: 'var(--shadow-soft)',
+              display: 'grid',
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--font-size-body-sm)',
+                fontWeight: 760,
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              {t('parity.topRecommendations')}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {recommendationRows.map((row, index) => {
+                const priority =
+                  row.verdict === 'fail' ? t('parity.priorityHigh') : t('parity.priorityMedium');
+                const id = `${row.number}-${recommendationKey(row.label)}`;
+                const expanded = expandedRecommendation === id;
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      border: `1px solid ${expanded ? 'color-mix(in srgb, var(--color-accent) 34%, var(--color-border-subtle))' : 'var(--color-border-subtle)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: expanded ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedRecommendation(expanded ? null : id)}
+                      style={{
+                        width: '100%',
+                        display: 'grid',
+                        gridTemplateColumns: '24px minmax(0, 1fr) auto 14px',
+                        alignItems: 'center',
+                        gap: 9,
+                        padding: '9px 10px',
+                        border: 'none',
+                        background: 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: 'var(--color-accent)',
+                          color: 'var(--color-on-accent)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 12,
+                          color: 'var(--color-text-primary)',
+                          fontWeight: 650,
+                        }}
+                      >
+                        {recommendationText(row.label, t)}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color:
+                            row.verdict === 'fail' ? 'var(--color-error)' : 'var(--color-warning)',
+                        }}
+                      >
+                        {priority}
+                      </span>
+                      {expanded ? (
+                        <ChevronDown size={13} style={{ color: 'var(--color-text-faint)' }} />
+                      ) : (
+                        <ChevronRight size={13} style={{ color: 'var(--color-text-faint)' }} />
+                      )}
+                    </button>
+                    {expanded ? (
+                      <div
+                        style={{
+                          padding: '0 10px 10px 43px',
+                          display: 'grid',
+                          gap: 7,
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
+                        <div>
+                          <strong style={{ color: 'var(--color-text-primary)' }}>
+                            {t('parity.whyThisMatters')}
+                          </strong>{' '}
+                          {recommendationRationale(row.label, t)}
+                        </div>
+                        <div>
+                          <strong style={{ color: 'var(--color-text-primary)' }}>
+                            {t('parity.evidenceTitle')}
+                          </strong>{' '}
+                          {row.evidence.length > 0
+                            ? row.evidence.slice(0, 2).join(' ')
+                            : t('parity.evidenceUnavailable')}
+                        </div>
+                        {kitContext.suggestedFiles.length > 0 ? (
+                          <div>
+                            <strong style={{ color: 'var(--color-text-primary)' }}>
+                              {t('parity.likelyFiles')}
+                            </strong>{' '}
+                            {kitContext.suggestedFiles.slice(0, 3).map(shortPath).join(', ')}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -740,3 +1196,15 @@ export function ParityPanel({ runId, selectedFile, device, onOpenFile }: ParityP
     </aside>
   );
 }
+
+const collapseButtonStyle: CSSProperties = {
+  width: 34,
+  height: 34,
+  border: '1px solid var(--color-border-subtle)',
+  borderRadius: 'var(--radius-md)',
+  background: 'var(--color-surface)',
+  color: 'var(--color-text-secondary)',
+  display: 'inline-grid',
+  placeItems: 'center',
+  cursor: 'pointer',
+};

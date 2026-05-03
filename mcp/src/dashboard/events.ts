@@ -122,11 +122,7 @@ class EventBus {
     return run;
   }
 
-  appendLog(
-    id: string,
-    level: 'info' | 'warn' | 'error',
-    message: string,
-  ): void {
+  appendLog(id: string, level: 'info' | 'warn' | 'error', message: string): void {
     const run = this.runs.get(id);
     if (run === undefined) return;
     run.log.push({ ts: Date.now(), level, message });
@@ -134,10 +130,16 @@ class EventBus {
       run.log.splice(0, run.log.length - MAX_LOG_LINES);
     }
     run.updatedAt = Date.now();
-    this.broadcast('run.log', { runId: id, level, message, ts: run.log[run.log.length - 1]!.ts });
+    this.broadcast('run.log', { runId: id, level, message, ts: run.log[run.log.length - 1]?.ts });
   }
 
-  setStage(id: string, stage: RunStage, state: StageState, latencyMs?: number, modelUsed?: string): void {
+  setStage(
+    id: string,
+    stage: RunStage,
+    state: StageState,
+    latencyMs?: number,
+    modelUsed?: string,
+  ): void {
     const run = this.runs.get(id);
     if (run === undefined) return;
     run.stages[stage] = state;

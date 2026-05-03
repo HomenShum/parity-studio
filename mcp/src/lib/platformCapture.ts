@@ -18,6 +18,40 @@ export interface PlatformCaptureResult {
   viewport: { width: number; height: number };
 }
 
+interface CapturedNode {
+  remove(): void;
+}
+
+interface CapturedElement extends CapturedNode {
+  firstChild: CapturedNode | null;
+  href?: string;
+  innerHTML: string;
+  innerText: string;
+  outerHTML: string;
+  parentNode: CapturedNode | null;
+  textContent: string | null;
+  appendChild(node: CapturedNode): void;
+  cloneNode(deep: boolean): CapturedElement;
+  insertBefore(node: CapturedNode, child: CapturedNode | null): void;
+  querySelector(selector: string): CapturedElement | null;
+  querySelectorAll(selector: string): Iterable<CapturedNode>;
+  setAttribute(name: string, value: string): void;
+}
+
+interface CapturedStyleSheet {
+  cssRules?: Iterable<{ cssText?: string }>;
+  href?: string | null;
+}
+
+interface CapturedDocument {
+  body: CapturedElement;
+  documentElement: CapturedElement;
+  styleSheets: Iterable<CapturedStyleSheet>;
+  title: string;
+  createElement(tagName: string): CapturedElement;
+  querySelector(selector: string): CapturedElement | null;
+}
+
 export async function capturePlatformRoute(
   options: PlatformCaptureOptions,
 ): Promise<PlatformCaptureResult> {
@@ -43,16 +77,18 @@ export async function capturePlatformRoute(
     if (waitMs > 0) await page.waitForTimeout(waitMs);
 
     const captured = await page.evaluate((selector) => {
-      const doc = (globalThis as unknown as { document: any }).document;
+      const doc = (globalThis as unknown as { document: CapturedDocument }).document;
       const win = globalThis as unknown as { location: { href: string } };
       const target = selector ? doc.querySelector(selector) : null;
       const sourceRoot = target ?? doc.body;
       const html = doc.documentElement.cloneNode(true);
 
-      html.querySelectorAll('script,noscript').forEach((node: any) => node.remove());
-      html.querySelectorAll('link[rel="preload"],link[rel="modulepreload"]').forEach((node: any) =>
-        node.remove(),
-      );
+      for (const node of html.querySelectorAll('script,noscript')) {
+        node.remove();
+      }
+      for (const node of html.querySelectorAll('link[rel="preload"],link[rel="modulepreload"]')) {
+        node.remove();
+      }
 
       if (target) {
         const body = html.querySelector('body') ?? doc.createElement('body');
@@ -63,13 +99,15 @@ export async function capturePlatformRoute(
       if (!head.parentNode) html.insertBefore(head, html.firstChild);
 
       const css: string[] = [];
-      for (const sheet of Array.from(doc.styleSheets) as any[]) {
+      for (const sheet of doc.styleSheets) {
         try {
-          const rules = Array.from(sheet.cssRules ?? []) as Array<{ cssText?: string }>;
+          const rules = Array.from(sheet.cssRules ?? []);
           css.push(...rules.map((rule) => rule.cssText ?? '').filter(Boolean));
         } catch {
           if (sheet.href) {
-            css.push(`/* parity capture: stylesheet not readable due to browser policy: ${sheet.href} */`);
+            css.push(
+              `/* parity capture: stylesheet not readable due to browser policy: ${sheet.href} */`,
+            );
           }
         }
       }

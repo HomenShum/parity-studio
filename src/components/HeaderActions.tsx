@@ -1,5 +1,17 @@
-import { ChevronDown, Download, FileCode2, FileText, MessageSquare, Monitor, Package, Smartphone, Tablet } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  FileCode2,
+  FileText,
+  Globe2,
+  MessageSquare,
+  Monitor,
+  Package,
+  Smartphone,
+  Tablet,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { availableLocales, localeLabels, useI18n, useT } from '../lib/i18n';
 
 export type Device = 'desktop' | 'tablet' | 'phone';
 
@@ -16,6 +28,8 @@ interface HeaderActionsProps {
    */
   exportHrefBase: string;
   exportEnabled: boolean;
+  exportReady?: boolean;
+  exportWarning?: string | undefined;
 }
 
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150];
@@ -39,28 +53,22 @@ const PILL: React.CSSProperties = {
 const FORMATS = [
   {
     id: 'zip' as const,
-    label: 'Canonical ZIP',
-    sublabel: 'Full skill-pack — round-trips back into Parity Studio',
     Icon: Package,
   },
   {
     id: 'html' as const,
-    label: 'Single HTML',
-    sublabel: 'index.html with tokens inlined; drop into a CMS',
     Icon: FileCode2,
   },
   {
     id: 'markdown' as const,
-    label: 'Markdown',
-    sublabel: 'Prose handoff for coding agents',
     Icon: FileText,
   },
 ];
 
 const DEVICE_META: Record<Device, { Icon: typeof Monitor; label: string }> = {
-  desktop: { Icon: Monitor, label: 'Desktop' },
-  tablet: { Icon: Tablet, label: 'Tablet' },
-  phone: { Icon: Smartphone, label: 'Phone' },
+  desktop: { Icon: Monitor, label: 'device.desktop' },
+  tablet: { Icon: Tablet, label: 'device.tablet' },
+  phone: { Icon: Smartphone, label: 'device.phone' },
 };
 
 /**
@@ -77,7 +85,11 @@ export function HeaderActions({
   onDeviceChange,
   exportHrefBase,
   exportEnabled,
+  exportReady = false,
+  exportWarning,
 }: HeaderActionsProps) {
+  const t = useT();
+  const { locale, setLocale } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,16 +123,16 @@ export function HeaderActions({
           color: commentModeActive ? 'var(--color-accent)' : PILL.color,
           borderColor: commentModeActive
             ? 'var(--color-accent)'
-            : PILL.border?.toString() ?? 'transparent',
+            : (PILL.border?.toString() ?? 'transparent'),
         }}
       >
         <MessageSquare size={13} />
-        Comment mode
+        {t('header.commentOnPreview')}
       </button>
 
       <div
         role="radiogroup"
-        aria-label="Preview device"
+        aria-label={t('header.previewDevice')}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -134,15 +146,13 @@ export function HeaderActions({
         {(Object.keys(DEVICE_META) as Device[]).map((d) => {
           const active = d === device;
           const { Icon, label } = DEVICE_META[d];
+          const displayLabel = t(label);
           return (
-            <button
+            <label
               key={d}
-              type="button"
-              role="radio"
-              aria-checked={active ? 'true' : 'false'}
-              onClick={() => onDeviceChange(d)}
-              title={label}
+              title={displayLabel}
               style={{
+                position: 'relative',
                 display: 'inline-grid',
                 placeItems: 'center',
                 width: 28,
@@ -154,8 +164,21 @@ export function HeaderActions({
                 cursor: 'pointer',
               }}
             >
+              <input
+                type="radio"
+                name="preview-device"
+                checked={active}
+                aria-label={displayLabel}
+                onChange={() => onDeviceChange(d)}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  opacity: 0,
+                  cursor: 'pointer',
+                }}
+              />
               <Icon size={13} />
-            </button>
+            </label>
           );
         })}
       </div>
@@ -164,7 +187,7 @@ export function HeaderActions({
         <select
           value={zoom}
           onChange={(e) => onZoomChange(Number(e.target.value))}
-          aria-label="Zoom level"
+          aria-label={t('header.zoomLevel')}
           style={{
             appearance: 'none',
             background: 'transparent',
@@ -176,7 +199,9 @@ export function HeaderActions({
           }}
         >
           {ZOOM_OPTIONS.map((z) => (
-            <option key={z} value={z}>{z}%</option>
+            <option key={z} value={z}>
+              {z}%
+            </option>
           ))}
         </select>
         <ChevronDown size={13} aria-hidden />
@@ -192,7 +217,7 @@ export function HeaderActions({
             style={PILL}
           >
             <Download size={13} />
-            Export
+            {exportReady ? t('header.export') : t('header.exportDraft')}
             <ChevronDown size={12} aria-hidden style={{ marginLeft: 2 }} />
           </button>
         ) : (
@@ -205,7 +230,7 @@ export function HeaderActions({
             aria-disabled
           >
             <Download size={13} />
-            Export
+            {t('header.export')}
           </span>
         )}
         {open && exportEnabled ? (
@@ -224,8 +249,27 @@ export function HeaderActions({
               zIndex: 40,
             }}
           >
+            {!exportReady && exportWarning ? (
+              <div
+                style={{
+                  margin: 4,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-warning)',
+                  background: 'color-mix(in srgb, var(--color-warning) 12%, var(--color-surface))',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 'var(--font-size-body-sm)',
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong>{t('header.notReadyYet')}</strong> {exportWarning}
+              </div>
+            ) : null}
             {FORMATS.map((f) => {
               const { Icon } = f;
+              const label = t(`header.formats.${f.id}.label`);
+              const sublabel = t(`header.formats.${f.id}.sublabel`);
               return (
                 <a
                   key={f.id}
@@ -245,7 +289,8 @@ export function HeaderActions({
                     fontSize: 'var(--font-size-body-sm)',
                   }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLAnchorElement).style.background = 'var(--color-surface-hover)';
+                    (e.currentTarget as HTMLAnchorElement).style.background =
+                      'var(--color-surface-hover)';
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
@@ -267,7 +312,7 @@ export function HeaderActions({
                     <Icon size={13} />
                   </span>
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                    <span style={{ fontWeight: 500 }}>{f.label}</span>
+                    <span style={{ fontWeight: 500 }}>{label}</span>
                     <span
                       style={{
                         fontSize: 11,
@@ -275,7 +320,7 @@ export function HeaderActions({
                         lineHeight: 1.4,
                       }}
                     >
-                      {f.sublabel}
+                      {sublabel}
                     </span>
                   </span>
                 </a>
@@ -284,6 +329,30 @@ export function HeaderActions({
           </div>
         ) : null}
       </div>
+      <label style={{ ...PILL, paddingRight: 8 }} title={t('header.language')}>
+        <Globe2 size={13} aria-hidden />
+        <select
+          value={locale}
+          onChange={(event) => setLocale(event.target.value)}
+          aria-label={t('header.language')}
+          style={{
+            appearance: 'none',
+            background: 'transparent',
+            border: 'none',
+            color: 'inherit',
+            font: 'inherit',
+            cursor: 'pointer',
+            paddingRight: 4,
+          }}
+        >
+          {availableLocales.map((item) => (
+            <option key={item} value={item}>
+              {localeLabels[item]}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={13} aria-hidden />
+      </label>
     </div>
   );
 }

@@ -18,12 +18,12 @@
 //
 // Run: node scripts/record-end-to-end.mjs
 
-import { chromium } from 'playwright';
-import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -104,17 +104,24 @@ async function main() {
 
     // ── 4. submit, watch the pipeline activity + parity rail ──────────
     console.log('[record] step 4 — submit, watch pipeline');
-    await page.getByRole('button', { name: /^generate$/i }).click().catch(async () => {
-      // Fallback: terracotta circle ↑ button has aria-label "Generate"
-      // (or "Starting run…"); submit by Cmd+Enter on the textarea.
-      await composer.press('Control+Enter');
-    });
+    await page
+      .getByRole('button', { name: /^generate$/i })
+      .click()
+      .catch(async () => {
+        // Fallback: terracotta circle ↑ button has aria-label "Generate"
+        // (or "Starting run…"); submit by Cmd+Enter on the textarea.
+        await composer.press('Control+Enter');
+      });
 
     const startedAt = Date.now();
     let lastSnapshot = '';
     while (Date.now() - startedAt < PIPELINE_MAX_MS) {
       // Read the right-rail score line "N / 16" + status pill text.
-      const score = await page.locator('aside[aria-label="Deterministic parity"] >> nth=0').first().textContent().catch(() => '');
+      const score = await page
+        .locator('aside[aria-label="Deterministic parity"] >> nth=0')
+        .first()
+        .textContent()
+        .catch(() => '');
       const norm = (score ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
       if (norm && norm !== lastSnapshot) {
         console.log(`[record] right-rail: ${norm}`);
@@ -130,17 +137,19 @@ async function main() {
         break;
       }
       // Also break when an artifact iframe is rendered with non-placeholder content
-      const hasArtifact = await page.evaluate(() => {
-        const f = document.querySelector('iframe[title="artifact preview"]');
-        if (!f) return false;
-        try {
-          const doc = f.contentDocument;
-          if (!doc) return false;
-          return (doc.body?.innerText ?? '').length > 80;
-        } catch {
-          return false;
-        }
-      }).catch(() => false);
+      const hasArtifact = await page
+        .evaluate(() => {
+          const f = document.querySelector('iframe[title="artifact preview"]');
+          if (!f) return false;
+          try {
+            const doc = f.contentDocument;
+            if (!doc) return false;
+            return (doc.body?.innerText ?? '').length > 80;
+          } catch {
+            return false;
+          }
+        })
+        .catch(() => false);
       if (hasArtifact) {
         // Pipeline completed enough to render a real artifact — keep watching for parity to stabilize, then break
         await page.waitForTimeout(8_000);
@@ -152,16 +161,22 @@ async function main() {
 
     // ── 5. switch to code tab (Monaco lazy-loads) ─────────────────────
     console.log('[record] step 5 — code tab');
-    await page.getByRole('tab', { name: /code/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /code/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(3_000);
 
     // ── 6. click a file in the FILES group ────────────────────────────
     console.log('[record] step 6 — click a file');
     // First switch back to Files tab so the tree is visible
-    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^files$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(1_000);
     const firstFile = page.locator('button.file, button[title^="Scope next comment"]').first();
-    if (await firstFile.count() > 0) {
+    if ((await firstFile.count()) > 0) {
       await firstFile.click();
       await page.waitForTimeout(1_500);
     } else {
@@ -170,7 +185,7 @@ async function main() {
         .locator('aside[aria-label="Artifact canvas"], section[aria-label="Artifact canvas"]')
         .locator('button[title^="Scope next comment"]')
         .first();
-      if (await fileBtn.count() > 0) {
+      if ((await fileBtn.count()) > 0) {
         await fileBtn.click();
         await page.waitForTimeout(1_500);
       }
@@ -179,14 +194,17 @@ async function main() {
     // ── 7. toggle comment mode ────────────────────────────────────────
     console.log('[record] step 7 — comment mode');
     const commentToggle = page.getByRole('button', { name: /comment mode/i });
-    if (await commentToggle.count() > 0) {
+    if ((await commentToggle.count()) > 0) {
       await commentToggle.first().click();
       await page.waitForTimeout(2_000);
     }
 
     // ── 8. switch to preview tab ──────────────────────────────────────
     console.log('[record] step 8 — preview tab');
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(3_000);
 
     // ── 9. export ZIP via top-right Export button (opens menu, then ZIP) ─
@@ -211,10 +229,12 @@ async function main() {
         const sz = (await stat(path)).size;
         console.log(`[record] zip via export menu: ${path} (${sz} bytes)`);
       } else {
-        console.log('[record] export menu opened but download didn\'t fire (export endpoint unavailable for this run)');
+        console.log(
+          "[record] export menu opened but download didn't fire (export endpoint unavailable for this run)",
+        );
       }
     } catch (err) {
-      console.log(`[record] export step skipped: ${(err && err.message) || err}`);
+      console.log(`[record] export step skipped: ${err?.message || err}`);
     }
 
     await page.waitForTimeout(2_500);
@@ -236,7 +256,11 @@ async function main() {
   console.log(`[record] webm: ${renamedWebm}`);
 
   const mp4Path = join(outDir, 'recording.mp4');
-  const ff = spawnSync('ffmpeg', ['-y', '-i', renamedWebm, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', mp4Path], { stdio: 'inherit' });
+  const ff = spawnSync(
+    'ffmpeg',
+    ['-y', '-i', renamedWebm, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', mp4Path],
+    { stdio: 'inherit' },
+  );
   if (ff.status === 0) {
     console.log(`[record] mp4: ${mp4Path}`);
   } else {

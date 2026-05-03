@@ -6,7 +6,7 @@
  *
  * API surface:
  *   import { getModel, complete } from '@mariozechner/pi-ai';
- *   const model = getModel('anthropic', 'claude-sonnet-4-5');
+ *   const model = getModel('anthropic', 'claude-sonnet-4-6');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
  *     messages: [{ role: 'user', content: [
@@ -36,8 +36,8 @@ import {
   type Context,
   type ImageContent,
   type TextContent,
-  complete as piComplete,
   getModel,
+  complete as piComplete,
 } from '@mariozechner/pi-ai';
 
 /**
@@ -63,7 +63,7 @@ export interface VisionInput {
 export interface CallOptions {
   /** Provider id (anthropic, openai, google, openrouter, groq, cerebras, xai, mistral). */
   provider: SupportedProvider;
-  /** Provider-specific model id (e.g. claude-sonnet-4-5, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
+  /** Provider-specific model id (e.g. claude-sonnet-4-6, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
   modelId: string;
   systemPrompt: string;
   userText: string;
@@ -105,7 +105,7 @@ export function inferProvider(modelId: string): SupportedProvider {
 
 /**
  * Strip provider prefix if present so getModel(provider, id) gets the canonical
- * id. e.g. "anthropic/claude-sonnet-4-5" + provider="anthropic" -> "claude-sonnet-4-5".
+ * id. e.g. "anthropic/claude-sonnet-4-6" + provider="anthropic" -> "claude-sonnet-4-6".
  */
 function canonicalizeModelId(provider: SupportedProvider, modelId: string): string {
   const prefix = `${provider}/`;
@@ -135,9 +135,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {
     if (!model.input.includes('image')) {
-      throw new Error(
-        `pi-ai model ${opts.provider}/${canonicalId} does not support image input`,
-      );
+      throw new Error(`pi-ai model ${opts.provider}/${canonicalId} does not support image input`);
     }
     userContent.push({
       type: 'image',

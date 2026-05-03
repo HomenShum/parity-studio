@@ -3,13 +3,18 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
-import { deploymentTier, resolveModel, sessionPick, type ModelTier, type Phase } from './lib/autoRouter';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
+import { type Phase, resolveRunModel } from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
 import { call } from './lib/piAi';
-import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM, VISUAL_JUDGE_SYSTEM } from './lib/prompts';
+import {
+  DECOMPOSE_SYSTEM,
+  GENERATE_SYSTEM,
+  ITERATE_SYSTEM,
+  VISUAL_JUDGE_SYSTEM,
+} from './lib/prompts';
 import { parseUiKitResponse } from './lib/uiKitParser';
 
 /**
@@ -22,18 +27,26 @@ import { parseUiKitResponse } from './lib/uiKitParser';
  * sessionPick spreads load across primary + fallback for free-tier slugs
  * so a single :free model doesn't get hammered.
  */
-async function tierForRun(
+async function pickPhase(
   // biome-ignore lint/suspicious/noExplicitAny: action ctx
   ctx: any,
   runId: string,
-): Promise<ModelTier> {
+  phase: Phase,
+): Promise<{
+  provider:
+    | 'anthropic'
+    | 'openai'
+    | 'google'
+    | 'openrouter'
+    | 'groq'
+    | 'cerebras'
+    | 'xai'
+    | 'mistral';
+  modelId: string;
+  isFree: boolean;
+}> {
   const run = await ctx.runQuery(internal.runs.getInternal, { runId });
-  const t = run?.tier as ModelTier | undefined;
-  return t ?? deploymentTier();
-}
-
-function pickPhase(tier: ModelTier, phase: Phase, runId: string): { provider: 'anthropic' | 'openai' | 'google' | 'openrouter' | 'groq' | 'cerebras' | 'xai' | 'mistral'; modelId: string; isFree: boolean } {
-  const resolved = sessionPick(runId, resolveModel(tier, phase));
+  const resolved = resolveRunModel(run, phase, runId);
   return { provider: resolved.provider, modelId: resolved.modelId, isFree: resolved.isFree };
 }
 
@@ -55,15 +68,8 @@ function pickPhase(tier: ModelTier, phase: Phase, runId: string): { provider: 'a
 // maps generate/decompose to openrouter/moonshotai/kimi-k2.6 — same
 // underlying model as the old hardcoded constants. Set runs.tier='free'
 // for $0 routes (qwen-coder-32b:free / deepseek-v3.1:free).
-// Judge stays on the strong tier: gemini-3.1-pro-preview is the best-available
-// vision verifier today. ~$0.02-0.05 per judge call (vs ~$0.005 for flash) but
-// the rubric quality difference matters — the judge is what catches drift the
-// deterministic checker can't see. False positives here have higher cost than
-// the small judge fee.
-const VISUAL_JUDGE_MODEL = { provider: 'openrouter' as const, modelId: 'google/gemini-3.1-pro-preview' };
-
-const MAX_ITERATIONS = 2;
-
+// Judge also resolves through the router's judge phase. Deterministic checks
+// remain local and do not consume model budget.
 /**
  * Stage 1: generate initial HTML artifact from prompt + optional image.
  * Persists the artifact and accumulates cost.
@@ -81,13 +87,11 @@ export const generateInitial = internalAction({
     const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'generating' });
 
-    const userText =
-      prompt?.trim().length
-        ? prompt
-        : 'Generate a polished, production-quality UI matching the attached image.';
+    const userText = prompt?.trim().length
+      ? prompt
+      : 'Generate a polished, production-quality UI matching the attached image.';
 
-    const tier = await tierForRun(ctx, String(runId));
-    const picked = pickPhase(tier, 'generate', String(runId));
+    const picked = await pickPhase(ctx, String(runId), 'generate');
     const result = await call({
       provider: picked.provider,
       modelId: picked.modelId,
@@ -138,8 +142,7 @@ export const decompose = internalAction({
     const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
-    const tier = await tierForRun(ctx, String(runId));
-    const picked = pickPhase(tier, 'decompose', String(runId));
+    const picked = await pickPhase(ctx, String(runId), 'decompose');
     const result = await call({
       provider: picked.provider,
       modelId: picked.modelId,
@@ -271,7 +274,7 @@ export const verifyDeterministic = internalAction({
  * explicit feedback. Produces a new ui_kit row + new artifactVersion so the
  * verify stage can run again against it.
  *
- * Bounded by MAX_ITERATIONS (set in workflow). Each iteration costs another
+ * Bounded by the quality gate cap in workflows.ts. Each iteration costs another
  * decompose call (~$0.05-0.40 depending on model). The workflow only invokes
  * iterate when verifyDeterministic returns status='needs_iteration' AND the
  * iteration count is below the cap — honest scope: never silent infinite loop.
@@ -293,12 +296,17 @@ export const iterate = internalAction({
     const previousIndexHtml = findActiveKitFile(previousFiles, previousSlug, 'index.html') ?? '';
     const previousTokensCss = findActiveKitFile(previousFiles, previousSlug, 'tokens.css') ?? '';
 
-    const failedGaps = (args.failedGaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
-    const gapText = failedGaps.length === 0
-      ? '(no specific gaps reported, but parity score was below threshold — review the previous bundle for opportunities to better match the source)'
-      : failedGaps
-          .map((g, i) => `${i + 1}. [${g.severity ?? 'medium'}/${g.kind ?? 'check'}] ${g.message ?? ''}`)
-          .join('\n');
+    const failedGaps =
+      (args.failedGaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
+    const gapText =
+      failedGaps.length === 0
+        ? '(no specific gaps reported, but parity score was below threshold — review the previous bundle for opportunities to better match the source)'
+        : failedGaps
+            .map(
+              (g, i) =>
+                `${i + 1}. [${g.severity ?? 'medium'}/${g.kind ?? 'check'}] ${g.message ?? ''}`,
+            )
+            .join('\n');
 
     const userText = `Previous decompose attempt fell below parity. Re-emit the COMPLETE
 ui_kit/<slug>/ bundle in the same fenced-block format, addressing the failed
@@ -320,8 +328,7 @@ ${previousTokensCss.slice(0, 2_000)}
 ORIGINAL SOURCE (the artifact you should be matching):
 ${args.sourceHtml.slice(0, 8_000)}`;
 
-    const tier = await tierForRun(ctx, String(args.runId));
-    const picked = pickPhase(tier, 'iterate', String(args.runId));
+    const picked = await pickPhase(ctx, String(args.runId), 'iterate');
     const result = await call({
       provider: picked.provider,
       modelId: picked.modelId,
@@ -469,6 +476,7 @@ export const verifyVisual = internalAction({
     iterationNumber: v.number(),
   },
   handler: async (ctx, { runId, uiKitId, iterationNumber }) => {
+    const picked = await pickPhase(ctx, String(runId), 'judge');
     await ctx.runMutation(internal.parityReports.save, {
       runId,
       uiKitId,
@@ -479,7 +487,7 @@ export const verifyVisual = internalAction({
       gaps: [],
       summary: 'visual judge not yet wired (v0.0.1 placeholder — needs headless render path)',
       judgeCostMicroUsd: 0,
-      judgeModel: VISUAL_JUDGE_MODEL.modelId,
+      judgeModel: picked.modelId,
     });
     return { status: 'unavailable' as const };
   },
@@ -500,8 +508,8 @@ export const verifyVisual = internalAction({
  * API ever stops emitting usage.
  */
 const GPT_IMAGE_2_PRICING_PER_MTOK = {
-  textInput: 5,    // $5 per 1M input text tokens
-  imageInput: 10,  // $10 per 1M input image tokens (e.g. for edits, not used here)
+  textInput: 5, // $5 per 1M input text tokens
+  imageInput: 10, // $10 per 1M input image tokens (e.g. for edits, not used here)
   imageOutput: 40, // $40 per 1M output image tokens
 } as const;
 const GPT_IMAGE_2_FALLBACK_MICRO_USD: Record<string, number> = {
@@ -625,8 +633,6 @@ function stripWrappingFences(raw: string): string {
   return fenceMatch?.[1] ?? trimmed;
 }
 
-
 // Suppress unused-import warnings — VISUAL_JUDGE_SYSTEM is referenced in
-// future visual-verifier wiring; MAX_ITERATIONS is consumed by the workflow.
+// future visual-verifier wiring.
 void VISUAL_JUDGE_SYSTEM;
-void MAX_ITERATIONS;

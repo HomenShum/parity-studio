@@ -1,13 +1,16 @@
 import { useQuery } from 'convex/react';
-import { Eye, Folder, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Eye, Folder, RefreshCw, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { useT } from '../../lib/i18n';
 import type { Device } from '../HeaderActions';
 import { ArtifactPreview } from './ArtifactPreview';
 import { FilesView } from './FilesView';
+import { InspirationView } from './InspirationView';
 import { LandingGuidance } from './LandingGuidance';
 import { SourceImagePopover } from './SourceImagePopover';
+import { SourceSyncModal } from './SourceSyncModal';
 import { TweakPanel } from './TweakPanel';
 
 interface CanvasPanelProps {
@@ -21,11 +24,12 @@ interface CanvasPanelProps {
   commentModeActive: boolean;
 }
 
-export type CanvasTab = 'files' | 'preview';
+export type CanvasTab = 'files' | 'preview' | 'inspiration';
 
 const TAB_META: Record<CanvasTab, { label: string; Icon: typeof Folder }> = {
-  files: { label: 'Files', Icon: Folder },
-  preview: { label: 'Preview', Icon: Eye },
+  files: { label: 'canvas.files', Icon: Folder },
+  preview: { label: 'canvas.preview', Icon: Eye },
+  inspiration: { label: 'canvas.inspiration', Icon: Sparkles },
 };
 
 export function CanvasPanel({
@@ -38,11 +42,15 @@ export function CanvasPanel({
   device,
   commentModeActive,
 }: CanvasPanelProps) {
+  const t = useT();
   const [internalTab, setInternalTab] = useState<CanvasTab>('files');
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [sourcePreviewOpen, setSourcePreviewOpen] = useState(false);
+  const [sourceSyncOpen, setSourceSyncOpen] = useState(false);
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const tab = activeTab ?? internalTab;
+  const activeTabRef = useRef(activeTab);
+  const onTabChangeRef = useRef(onTabChange);
 
   function setTab(nextTab: CanvasTab) {
     if (activeTab === undefined) setInternalTab(nextTab);
@@ -50,12 +58,16 @@ export function CanvasPanel({
   }
 
   useEffect(() => {
+    activeTabRef.current = activeTab;
+    onTabChangeRef.current = onTabChange;
+  }, [activeTab, onTabChange]);
+
+  useEffect(() => {
     const nextTab = runId === null ? 'files' : 'preview';
-    if (activeTab === undefined) setInternalTab(nextTab);
-    onTabChange?.(nextTab);
+    if (activeTabRef.current === undefined) setInternalTab(nextTab);
+    onTabChangeRef.current?.(nextTab);
     setTweaksOpen(false);
     setSourcePreviewOpen(false);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the run changes
   }, [runId]);
 
   return (
@@ -69,11 +81,11 @@ export function CanvasPanel({
         minWidth: 0,
         minHeight: 0,
       }}
-      aria-label="Artifact canvas"
+      aria-label={t('canvas.label')}
     >
       <div
         role="tablist"
-        aria-label="Canvas view mode"
+        aria-label={t('canvas.tabMode')}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -83,16 +95,16 @@ export function CanvasPanel({
           borderBottom: '1px solid var(--color-border-subtle)',
         }}
       >
-        {(Object.keys(TAB_META) as CanvasTab[]).map((t) => {
-          const active = t === tab;
-          const Icon = TAB_META[t].Icon;
+        {(Object.keys(TAB_META) as CanvasTab[]).map((tabId) => {
+          const active = tabId === tab;
+          const Icon = TAB_META[tabId].Icon;
           return (
             <button
-              key={t}
+              key={tabId}
               type="button"
               role="tab"
               aria-selected={active ? 'true' : 'false'}
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tabId)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -110,17 +122,41 @@ export function CanvasPanel({
               }}
             >
               <Icon size={14} />
-              {TAB_META[t].label}
+              {t(TAB_META[tabId].label)}
             </button>
           );
         })}
         <span style={{ flex: 1 }} aria-hidden />
+        {runId !== null ? (
+          <button
+            type="button"
+            onClick={() => setSourceSyncOpen(true)}
+            aria-label="Sync this preview from latest source"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-md)',
+              background: sourceSyncOpen ? 'var(--color-accent-soft)' : 'transparent',
+              color: sourceSyncOpen ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+              border: `1px solid ${sourceSyncOpen ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              cursor: 'pointer',
+            }}
+            title="Patch this run or recapture the source route as a new revision"
+          >
+            <RefreshCw size={13} />
+            Sync source
+          </button>
+        ) : null}
         {tab === 'preview' && runId !== null ? (
           <button
             type="button"
             onClick={() => setTweaksOpen((v) => !v)}
             aria-pressed={tweaksOpen}
-            aria-label="Toggle tweaks panel"
+            aria-label={t('canvas.toggleTweaks')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -136,7 +172,7 @@ export function CanvasPanel({
             }}
           >
             <SlidersHorizontal size={13} />
-            Tweaks
+            {t('canvas.tweaks')}
           </button>
         ) : null}
       </div>
@@ -214,6 +250,8 @@ export function CanvasPanel({
               />
             ) : null}
           </div>
+        ) : tab === 'inspiration' ? (
+          <InspirationView runId={runId} />
         ) : null}
 
         {/* SourceImagePopover floats bottom-right of the canvas pane.
@@ -223,6 +261,15 @@ export function CanvasPanel({
           selectedFile={selectedFile}
           open={sourcePreviewOpen}
           onOpenChange={setSourcePreviewOpen}
+        />
+        <SourceSyncModal
+          runId={runId}
+          open={sourceSyncOpen}
+          onClose={() => setSourceSyncOpen(false)}
+          onOpenFile={(path) => {
+            onSelectFile(path);
+            setTab('files');
+          }}
         />
       </div>
     </section>

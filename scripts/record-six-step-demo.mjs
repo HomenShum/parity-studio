@@ -13,12 +13,12 @@
 // To keep the GIF concise, backend wait time happens off-camera. The same runId
 // created in scene 1 is reopened for the subsequent scenes.
 
-import { chromium } from 'playwright';
-import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -32,7 +32,13 @@ const SOURCE_IMAGE_PATH =
   process.env.SOURCE_IMAGE_PATH ?? resolve(repoRoot, 'runs', 'composer-dogfood', 'source.png');
 const SOURCE_ZIP_PATH =
   process.env.SOURCE_ZIP_PATH ??
-  resolve(repoRoot, 'runs', 'recording-shell-2026-04-30T06-32-54-320Z', 'downloads', 'hero-composer.zip');
+  resolve(
+    repoRoot,
+    'runs',
+    'recording-shell-2026-04-30T06-32-54-320Z',
+    'downloads',
+    'hero-composer.zip',
+  );
 const PROMPT =
   process.env.PROMPT ??
   'decompose this hero composer into a verified ui_kit with terracotta primary CTA, dark surface tokens, and production-ready component names';
@@ -40,8 +46,7 @@ const COMMENT_TEXT =
   process.env.COMMENT_TEXT ??
   'Make this primary CTA unmistakably stronger: larger pill, brighter terracotta fill, and bolder white label.';
 const COMPONENT_FILE =
-  process.env.COMPONENT_FILE ??
-  'ui_kits/ableton-live-12/components/BackgroundMediaHero.tsx';
+  process.env.COMPONENT_FILE ?? 'ui_kits/ableton-live-12/components/BackgroundMediaHero.tsx';
 const HEADED = process.env.HEADED === '1';
 const WAIT_MAX_MS = Number.parseInt(process.env.WAIT_MAX_MS ?? `${12 * 60_000}`, 10);
 const AGENT_WAIT_MS = Number.parseInt(process.env.AGENT_WAIT_MS ?? `${90_000}`, 10);
@@ -136,7 +141,13 @@ async function resetDemoTokens(runId) {
   evidence.checks.tokenReset = { ok: true, path };
 }
 
-async function waitForSavedComment(runId, previousCommentIds, selectedFile, text, timeoutMs = 12_000) {
+async function waitForSavedComment(
+  runId,
+  previousCommentIds,
+  selectedFile,
+  text,
+  timeoutMs = 12_000,
+) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const comments = await convexQuery('comments:listForRun', { runId }).catch(() => []);
@@ -163,11 +174,17 @@ async function getPreviewCtaDragBox(page) {
   const ctaMatches = frame.locator('a, button, [role="button"]').filter({
     hasText: /try live.*free/i,
   });
-  await ctaMatches.first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  await ctaMatches
+    .first()
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .catch(() => {});
   const boxes = [];
   const count = await ctaMatches.count().catch(() => 0);
   for (let i = 0; i < count; i += 1) {
-    const box = await ctaMatches.nth(i).boundingBox().catch(() => null);
+    const box = await ctaMatches
+      .nth(i)
+      .boundingBox()
+      .catch(() => null);
     if (box) boxes.push(box);
   }
   const box = boxes
@@ -200,7 +217,7 @@ async function dragPreviewCtaBbox(page) {
   });
   const count = await ctaMatches.count().catch(() => 0);
   const clickable = count > 1 ? ctaMatches.nth(count - 1) : ctaMatches.first();
-  if ((await clickable.isVisible().catch(() => false))) {
+  if (await clickable.isVisible().catch(() => false)) {
     await clickable.click({ position: { x: 14, y: 14 }, force: true });
     return;
   }
@@ -217,12 +234,16 @@ async function cleanupDemoRun(runId) {
   try {
     await dismissExistingComments(runId);
   } catch (err) {
-    console.warn(`[six-step] cleanup comments failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(
+      `[six-step] cleanup comments failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   try {
     await resetDemoTokens(runId);
   } catch (err) {
-    console.warn(`[six-step] cleanup tokens failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(
+      `[six-step] cleanup tokens failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -238,14 +259,19 @@ async function waitForAgentChat(page, runId, chatBeforeLength, timeoutMs = AGENT
     const completionTurn = [...newChat]
       .reverse()
       .find((m) => /done|complete|updated|upsert|verify|patched|changed/i.test(m.content ?? ''));
-    const chatText = (await page
-      .locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]')
-      .first()
-      .textContent({ timeout: 1_500 })
-      .catch(() => '')) ?? '';
+    const chatText =
+      (await page
+        .locator(
+          'aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]',
+        )
+        .first()
+        .textContent({ timeout: 1_500 })
+        .catch(() => '')) ?? '';
     if (chatText.length > lastChatTextLength + 120) {
       lastChatTextLength = chatText.length;
-      console.log(`[six-step] agent chat grew to ${chatText.length} chars at ${Math.round((Date.now() - started) / 1000)}s`);
+      console.log(
+        `[six-step] agent chat grew to ${chatText.length} chars at ${Math.round((Date.now() - started) / 1000)}s`,
+      );
     }
     if (agentTurns.length > 0 || toolTurns.length > 0) {
       sawAgent = {
@@ -310,7 +336,8 @@ async function spotlightSelectedFile(page, selectedFile) {
       ].join(';');
       el.appendChild(label);
       const style = document.createElement('style');
-      style.textContent = '@keyframes parityFilePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}';
+      style.textContent =
+        '@keyframes parityFilePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}';
       el.appendChild(style);
       document.body.appendChild(el);
     },
@@ -424,7 +451,20 @@ async function finishRecordedPage(handle, sceneName) {
   await copyFile(webmPath, sceneWebm);
   const ff = spawnSync(
     'ffmpeg',
-    ['-y', '-i', sceneWebm, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', sceneMp4],
+    [
+      '-y',
+      '-i',
+      sceneWebm,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      '20',
+      '-pix_fmt',
+      'yuv420p',
+      sceneMp4,
+    ],
     { stdio: 'inherit' },
   );
   if (ff.status !== 0) throw new Error(`ffmpeg failed for ${sceneName}`);
@@ -483,7 +523,11 @@ async function waitForGeneratedRun(runId) {
       console.log(`[six-step] ${status}`);
       lastStatus = status;
     }
-    if (uiKit && parity && ['done', 'verified', 'needs_review', 'needs_iteration', 'failed'].includes(run?.status)) {
+    if (
+      uiKit &&
+      parity &&
+      ['done', 'verified', 'needs_review', 'needs_iteration', 'failed'].includes(run?.status)
+    ) {
       const fileCount = Object.keys(uiKit.files ?? {}).length;
       evidence.checks.generated = {
         status: run.status,
@@ -500,7 +544,10 @@ async function waitForGeneratedRun(runId) {
 }
 
 async function selectComponentFile(page) {
-  await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+  await page
+    .getByRole('tab', { name: /^files$/i })
+    .click()
+    .catch(() => {});
   const candidates = [
     COMPONENT_FILE,
     'preview/component-backgroundmediahero.html',
@@ -544,8 +591,10 @@ async function sceneStartRun() {
       await page.waitForTimeout(5_000);
     });
   }
-  if (INPUT_MODE === 'zip' && !existsSync(SOURCE_ZIP_PATH)) throw new Error(`Source ZIP not found: ${SOURCE_ZIP_PATH}`);
-  if (INPUT_MODE !== 'zip' && !existsSync(SOURCE_IMAGE_PATH)) throw new Error(`Source image not found: ${SOURCE_IMAGE_PATH}`);
+  if (INPUT_MODE === 'zip' && !existsSync(SOURCE_ZIP_PATH))
+    throw new Error(`Source ZIP not found: ${SOURCE_ZIP_PATH}`);
+  if (INPUT_MODE !== 'zip' && !existsSync(SOURCE_IMAGE_PATH))
+    throw new Error(`Source image not found: ${SOURCE_IMAGE_PATH}`);
   return await recordScene('01-start-run', async (page) => {
     await page.goto(PARITY_STUDIO_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     if (INPUT_MODE === 'zip') {
@@ -567,7 +616,10 @@ async function sceneStartRun() {
     if (INPUT_MODE === 'zip') {
       await page.locator('input[type=file]').first().setInputFiles(SOURCE_ZIP_PATH);
     } else {
-      await page.locator('input[type=file][accept*="png"]').first().setInputFiles(SOURCE_IMAGE_PATH);
+      await page
+        .locator('input[type=file][accept*="png"]')
+        .first()
+        .setInputFiles(SOURCE_IMAGE_PATH);
       await page.waitForTimeout(900);
       const composer = page.getByRole('textbox', { name: /describe the design/i });
       await composer.click();
@@ -597,11 +649,20 @@ async function sceneVerifiedRun(runId) {
       'The file tree, rendered preview, parity rows, and cost telemetry come from the generated run.',
     );
     await page.waitForTimeout(3_000);
-    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^files$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(2_500);
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(3_000);
-    const parityText = await page.locator('aside[aria-label="Deterministic parity"]').textContent().catch(() => '');
+    const parityText = await page
+      .locator('aside[aria-label="Deterministic parity"]')
+      .textContent()
+      .catch(() => '');
     evidence.checks.step2 = {
       ok: /\/\s*16|checks/i.test(parityText ?? ''),
       parityText: (parityText ?? '').replace(/\s+/g, ' ').slice(0, 280),
@@ -637,7 +698,10 @@ async function sceneCommentIterate(runId) {
       timeout: 60_000,
     });
     const selected = await selectComponentFile(page);
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(2_000);
     await setStep(
       page,
@@ -653,7 +717,11 @@ async function sceneCommentIterate(runId) {
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
     await dragPreviewCtaBbox(page);
     await page.waitForTimeout(1_000);
-    const commentBox = page.locator('textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
+    const commentBox = page
+      .locator(
+        'textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]',
+      )
+      .first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
     await commentBox.click({ force: true });
     await commentBox.fill('');
@@ -668,7 +736,11 @@ async function sceneCommentIterate(runId) {
     );
     await page.getByRole('button', { name: /save \+ auto-fix/i }).click();
     await page.waitForTimeout(2_500);
-    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    await page
+      .locator('aside[aria-label*="Agent stream" i]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => {});
     const started = Date.now();
     let sawAgent = null;
     while (Date.now() - started < 60_000) {
@@ -677,7 +749,8 @@ async function sceneCommentIterate(runId) {
         convexQuery('chat:list', { runId }).catch(() => []),
       ]);
       const matchingComment = comments.find(
-        (c) => !previousCommentIds.has(c._id) && c.text === COMMENT_TEXT && c.targetFile === selected,
+        (c) =>
+          !previousCommentIds.has(c._id) && c.text === COMMENT_TEXT && c.targetFile === selected,
       );
       const newChat = chat.slice(chatBefore.length);
       const autoFixTurn = newChat.find((m) => /Auto-fix triggered/i.test(m.content ?? ''));
@@ -717,7 +790,10 @@ async function sceneExport(runId) {
       'The same NodeBench-style kit shape comes out for coding-agent handoff.',
     );
     await page.waitForTimeout(2_000);
-    await page.getByRole('button', { name: /^export$/i }).first().click({ timeout: 10_000 });
+    await page
+      .getByRole('button', { name: /^export$/i })
+      .first()
+      .click({ timeout: 10_000 });
     await page.waitForTimeout(800);
     await mkdir(downloadDir, { recursive: true });
     const dlPromise = page.waitForEvent('download', { timeout: 20_000 }).catch(() => null);
@@ -744,8 +820,14 @@ async function sceneContinuousSixStep() {
     });
     evidence.runId = runId;
 
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
-    await page.locator('iframe[title="artifact preview"]').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
+    await page
+      .locator('iframe[title="artifact preview"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
     await page.waitForTimeout(1_500);
 
     await setStep(
@@ -763,11 +845,20 @@ async function sceneContinuousSixStep() {
       'Break it into verified ui_kit files',
       'Generated component files, rendered preview, parity rows, and cost telemetry all stay visible in one flow.',
     );
-    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^files$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(2_500);
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(2_500);
-    const parityText = await page.locator('aside[aria-label="Deterministic parity"]').textContent().catch(() => '');
+    const parityText = await page
+      .locator('aside[aria-label="Deterministic parity"]')
+      .textContent()
+      .catch(() => '');
     evidence.checks.step2 = {
       ok: /\/\s*16|checks/i.test(parityText ?? ''),
       parityText: (parityText ?? '').replace(/\s+/g, ' ').slice(0, 280),
@@ -786,9 +877,14 @@ async function sceneContinuousSixStep() {
       selected,
     };
     await page.waitForTimeout(3_000);
-    await page.evaluate(() => document.getElementById('__parity_demo_file_spotlight')?.remove()).catch(() => {});
+    await page
+      .evaluate(() => document.getElementById('__parity_demo_file_spotlight')?.remove())
+      .catch(() => {});
 
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(1_000);
     await setStep(
       page,
@@ -803,7 +899,11 @@ async function sceneContinuousSixStep() {
     const commentsBefore = await convexQuery('comments:listForRun', { runId }).catch(() => []);
     const previousCommentIds = new Set(commentsBefore.map((c) => c._id));
     await dragPreviewCtaBbox(page);
-    const commentBox = page.locator('textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]').first();
+    const commentBox = page
+      .locator(
+        'textarea[placeholder*="exact change" i], textarea[placeholder*="write your own" i], textarea[placeholder*="should change" i]',
+      )
+      .first();
     await commentBox.waitFor({ state: 'visible', timeout: 8_000 });
     await commentBox.click({ force: true });
     await commentBox.fill('');
@@ -819,8 +919,17 @@ async function sceneContinuousSixStep() {
     );
     const chatBefore = await convexQuery('chat:list', { runId }).catch(() => []);
     await page.getByRole('button', { name: /save \+ auto-fix/i }).evaluate((el) => el.click());
-    const savedComment = await waitForSavedComment(runId, previousCommentIds, selected, COMMENT_TEXT);
-    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    const savedComment = await waitForSavedComment(
+      runId,
+      previousCommentIds,
+      selected,
+      COMMENT_TEXT,
+    );
+    await page
+      .locator('aside[aria-label*="Agent stream" i]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => {});
     await page.waitForTimeout(1_200);
     const agent = await waitForAgentChat(page, runId, chatBefore.length);
     evidence.checks.step5 = {
@@ -831,7 +940,10 @@ async function sceneContinuousSixStep() {
       chat: agent,
     };
 
-    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^files$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(1_500);
     await setStep(
       page,
@@ -842,7 +954,10 @@ async function sceneContinuousSixStep() {
     await page.waitForTimeout(1_000);
     await mkdir(downloadDir, { recursive: true });
     const dlPromise = page.waitForEvent('download', { timeout: 20_000 }).catch(() => null);
-    await page.getByRole('link', { name: /Export ZIP/i }).first().click({ timeout: 10_000 });
+    await page
+      .getByRole('link', { name: /Export ZIP/i })
+      .first()
+      .click({ timeout: 10_000 });
     const dl = await dlPromise;
     if (!dl) throw new Error('ZIP export did not download');
     const zipPath = join(downloadDir, dl.suggestedFilename() || 'ui_kit.zip');
@@ -855,15 +970,16 @@ async function sceneContinuousSixStep() {
       'ZIP downloaded',
       `${dl.suggestedFilename() || 'ui_kit.zip'} exported from the same generated ui_kit shape.`,
     );
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(2_500);
   });
 }
 
 async function concatScenes(sceneFiles) {
-  const filter = sceneFiles
-    .map((_, i) => `[${i}:v]scale=${WIDTH}:${HEIGHT},setsar=1,fps=30[v${i}]`)
-    .join(';') + `;${sceneFiles.map((_, i) => `[v${i}]`).join('')}concat=n=${sceneFiles.length}:v=1[outv]`;
+  const filter = `${sceneFiles.map((_, i) => `[${i}:v]scale=${WIDTH}:${HEIGHT},setsar=1,fps=30[v${i}]`).join(';')};${sceneFiles.map((_, i) => `[v${i}]`).join('')}concat=n=${sceneFiles.length}:v=1[outv]`;
   const args = ['-y'];
   for (const file of sceneFiles) args.push('-i', file);
   args.push(
@@ -890,7 +1006,14 @@ async function writeGif(input, output, width, fps) {
   const palette = output.replace(/\.gif$/i, '.palette.png');
   const pal = spawnSync(
     'ffmpeg',
-    ['-y', '-i', input, '-vf', `fps=${fps},scale=${width}:-1:flags=lanczos,palettegen=stats_mode=diff`, palette],
+    [
+      '-y',
+      '-i',
+      input,
+      '-vf',
+      `fps=${fps},scale=${width}:-1:flags=lanczos,palettegen=stats_mode=diff`,
+      palette,
+    ],
     { stdio: 'inherit' },
   );
   if (pal.status !== 0) throw new Error(`palettegen failed for ${output}`);
@@ -920,7 +1043,9 @@ async function main() {
   console.log(`[six-step] output dir: ${outDir}`);
   console.log(`[six-step] target:     ${PARITY_STUDIO_URL}`);
   console.log(`[six-step] input mode: ${INPUT_MODE}`);
-  console.log(`[six-step] source:     ${INPUT_MODE === 'zip' ? SOURCE_ZIP_PATH : SOURCE_IMAGE_PATH}`);
+  console.log(
+    `[six-step] source:     ${INPUT_MODE === 'zip' ? SOURCE_ZIP_PATH : SOURCE_IMAGE_PATH}`,
+  );
 
   const sceneFiles = [];
   const continuous = await sceneContinuousSixStep();

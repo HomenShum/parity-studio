@@ -3,12 +3,23 @@ import { checkDeterministic } from './parityChecker';
 
 const SOURCE_HTML = `
 <html>
+  <head>
+    <style>
+      :root { --color-brand: #c96442; --space-md: 16px; }
+      body { font-family: Inter, sans-serif; color: #1f1712; }
+      main { display: flex; gap: var(--space-md); }
+      .metric { font-size: 16px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
+      button:hover, button:focus-visible, button:active { color: var(--color-brand); }
+      @media (max-width: 720px) { main { display: block; } }
+    </style>
+  </head>
   <body>
     <header><h1>Acme Analytics</h1></header>
     <main>
       <section class="metrics">
         <div class="metric"><span>MRR</span><span>$12,400</span></div>
         <div class="metric"><span>Churn</span><span>2.1%</span></div>
+        <button aria-label="Refresh metrics"><svg aria-hidden="true"></svg></button>
       </section>
     </main>
     <footer>copyright Acme</footer>
@@ -17,21 +28,32 @@ const SOURCE_HTML = `
 
 const HIGH_PARITY_DECOMP = `
 <html>
+  <head>
+    <style>
+      :root { --color-brand: #c96442; --space-md: 16px; }
+      body { font-family: Inter, sans-serif; color: #1f1712; }
+      main { display: flex; gap: var(--space-md); }
+      .metric { font-size: 16px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
+      button:hover, button:focus-visible, button:active { color: var(--color-brand); }
+      @media (max-width: 720px) { main { display: block; } }
+    </style>
+  </head>
   <body>
     <header><h1>Acme Analytics</h1></header>
     <main>
       <section>
         <div><span>MRR</span><span>$12,400</span></div>
         <div><span>Churn</span><span>2.1%</span></div>
+        <button aria-label="Refresh metrics"><svg aria-hidden="true"></svg></button>
       </section>
     </main>
     <footer>copyright Acme</footer>
   </body>
 </html>`;
 
-const LOW_PARITY_DECOMP = `<html><body><div>just one tile</div></body></html>`;
+const LOW_PARITY_DECOMP = '<html><body><div>just one tile</div></body></html>';
 
-const TOKENS_CSS = `:root { --color-brand: #c96442; --space-md: 16px; }`;
+const TOKENS_CSS = ':root { --color-brand: #c96442; --space-md: 16px; }';
 
 describe('checkDeterministic', () => {
   it('reports high parity when decomposed faithfully mirrors source', () => {
@@ -90,7 +112,7 @@ describe('checkDeterministic', () => {
         <SCRIPT>upperCaseLeakedTokenDdd()</SCRIPT>
       </body></html>
     `;
-    const cleanDecomp = `<html><body><h1>Acme Analytics</h1></body></html>`;
+    const cleanDecomp = '<html><body><h1>Acme Analytics</h1></body></html>';
     const r = checkDeterministic({
       sourceHtml: sourceWithCraftedScript,
       decomposedHtml: cleanDecomp,

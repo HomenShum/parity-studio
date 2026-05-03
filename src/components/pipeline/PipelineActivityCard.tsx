@@ -1,34 +1,21 @@
-import {
-  Box,
-  type LucideIcon,
-  RotateCw,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react';
+import { Box, type LucideIcon, RotateCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { useT } from '../../lib/i18n';
 
 export type PipelineStage = 'generate' | 'decompose' | 'verify' | 'iterate';
 export type PipelineState = 'idle' | 'running' | 'done' | 'failed';
 
-const STAGE_META: Record<PipelineStage, { label: string; Icon: LucideIcon; description: string }> = {
+const STAGE_META: Record<PipelineStage, { Icon: LucideIcon }> = {
   generate: {
-    label: 'generate',
     Icon: Sparkles,
-    description: 'Generate UI kit from source image',
   },
   decompose: {
-    label: 'decompose',
     Icon: Box,
-    description: 'Decompose checkout sketch into ui_kit components',
   },
   verify: {
-    label: 'verify-ui-kit-parity',
     Icon: ShieldCheck,
-    description: 'Deterministic parity check 16-point rubric',
   },
   iterate: {
-    label: 'iterate',
     Icon: RotateCw,
-    description: 'Refine components to close gaps',
   },
 };
 
@@ -48,6 +35,7 @@ export interface PipelineActivityCardProps {
   src?: number | undefined;
   onClick?: (() => void) | undefined;
   active?: boolean | undefined;
+  interactive?: boolean | undefined;
 }
 
 export function PipelineActivityCard({
@@ -59,13 +47,15 @@ export function PipelineActivityCard({
   src,
   onClick,
   active = false,
+  interactive = onClick !== undefined,
 }: PipelineActivityCardProps) {
+  const t = useT();
   const meta = STAGE_META[stage];
   const { Icon } = meta;
+  const Component = interactive ? 'button' : 'div';
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Component
+      {...(interactive ? { type: 'button', onClick } : {})}
       aria-current={active ? 'true' : undefined}
       style={{
         display: 'block',
@@ -75,11 +65,12 @@ export function PipelineActivityCard({
         border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
         borderRadius: 'var(--radius-md)',
         padding: '12px 14px',
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: interactive ? 'pointer' : 'default',
         fontFamily: 'var(--font-sans)',
         color: 'var(--color-text-primary)',
         boxShadow: 'var(--shadow-soft)',
-        transition: 'background var(--duration-faster) var(--ease-out), border-color var(--duration-faster) var(--ease-out)',
+        transition:
+          'background var(--duration-faster) var(--ease-out), border-color var(--duration-faster) var(--ease-out)',
       }}
     >
       <div
@@ -122,7 +113,7 @@ export function PipelineActivityCard({
             letterSpacing: '0.02em',
           }}
         >
-          {meta.label}
+          {t(`pipeline.stages.${stage}.label`)}
         </span>
       </div>
       <div
@@ -137,9 +128,9 @@ export function PipelineActivityCard({
           overflow: 'hidden',
         }}
       >
-        {description ?? meta.description}
+        {description ?? t(`pipeline.stages.${stage}.description`)}
       </div>
-      {(ageLabel || edits !== undefined || src !== undefined) ? (
+      {ageLabel || edits !== undefined || src !== undefined ? (
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -151,10 +142,12 @@ export function PipelineActivityCard({
           }}
         >
           {ageLabel ? <span>{ageLabel}</span> : null}
-          {edits !== undefined ? <span>{edits} edit{edits === 1 ? '' : 's'}</span> : null}
-          {src !== undefined ? <span>{src} src</span> : null}
+          {edits !== undefined ? (
+            <span>{t('pipeline.editCount', { count: edits, plural: edits === 1 ? '' : 's' })}</span>
+          ) : null}
+          {src !== undefined ? <span>{t('pipeline.sourceCount', { count: src })}</span> : null}
         </div>
       ) : null}
-    </button>
+    </Component>
   );
 }

@@ -4,9 +4,15 @@ import { ArrowUp, ImagePlus, Package, Paperclip, Sparkles } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { useT } from '../../lib/i18n';
+import type { ModelOverride, Tier } from '../../lib/modelRouting';
+import { getOrCreateSessionId } from '../../lib/sessionIdentity';
+import { ModelRoutePicker } from '../model/ModelRoutePicker';
 
 interface ComposerCardProps {
   onRunStarted: (runId: Id<'runs'>) => void;
+  clientSessionId?: string;
+  variant?: 'compact' | 'launch';
 }
 
 const MAX_INLINE_IMAGE_BYTES = 2_000_000;
@@ -27,18 +33,27 @@ const MAX_KIT_FILE_BYTES = 200_000;
  * - submit button (terracotta circle ↑)
  * - model picker pill below ("gpt-5.4 ▾", visual-only for now)
  */
-export function ComposerCard({ onRunStarted }: ComposerCardProps) {
+export function ComposerCard({
+  onRunStarted,
+  clientSessionId = getOrCreateSessionId(),
+  variant = 'compact',
+}: ComposerCardProps) {
+  const t = useT();
   const startRun = useMutation(api.runs.start);
   const startFromKit = useMutation(api.runs.startFromKit);
   const generateImage = useAction(api.generation.generateSourceImage);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [prompt, setPrompt] = useState('');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imageMime, setImageMime] = useState<'image/png' | 'image/jpeg' | 'image/webp' | null>(null);
+  const [imageMime, setImageMime] = useState<'image/png' | 'image/jpeg' | 'image/webp' | null>(
+    null,
+  );
   const [imageLabel, setImageLabel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tier, setTier] = useState<Tier>('balanced');
+  const [modelOverride, setModelOverride] = useState<ModelOverride | null>(null);
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -53,7 +68,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
     const isZip = f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip';
     if (isZip) {
       if (f.size > MAX_KIT_ZIP_BYTES) {
-        setError(`zip too large (${(f.size / 1_000_000).toFixed(1)} MB > 30 MB cap)`);
+        setError(t('composer.zipTooLarge', { size: (f.size / 1_000_000).toFixed(1) }));
         return;
       }
       try {
@@ -65,7 +80,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
     }
 
     if (f.size > MAX_INLINE_IMAGE_BYTES) {
-      setError(`image too large (${(f.size / 1_000_000).toFixed(1)} MB > 2 MB cap)`);
+      setError(t('composer.imageTooLarge', { size: (f.size / 1_000_000).toFixed(1) }));
       return;
     }
     const mime =
@@ -73,7 +88,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
         ? (f.type as 'image/png' | 'image/jpeg' | 'image/webp')
         : null;
     if (!mime) {
-      setError('only png / jpeg / webp / zip supported');
+      setError(t('composer.onlySupported'));
       return;
     }
     const buf = await f.arrayBuffer();
@@ -92,7 +107,11 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
       // multiple slugs in one zip (nodebench-web, nodebench-mobile, etc.);
       // we pick the largest by file count for the active run.
       const slugFiles = new Map<string, Map<string, string>>();
-      const uploads: Array<{ name: string; data: Uint8Array; mime: 'image/png' | 'image/jpeg' | 'image/webp' }> = [];
+      const uploads: Array<{
+        name: string;
+        data: Uint8Array;
+        mime: 'image/png' | 'image/jpeg' | 'image/webp';
+      }> = [];
       let prompt: string | undefined;
 
       for (const [path, entry] of Object.entries(zip.files)) {
@@ -114,10 +133,13 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
         if (upMatch) {
           const ext = (upMatch[1] as string).toLowerCase().split('.').pop() ?? '';
           const mime: 'image/png' | 'image/jpeg' | 'image/webp' | null =
-            ext === 'png' ? 'image/png'
-            : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
-            : ext === 'webp' ? 'image/webp'
-            : null;
+            ext === 'png'
+              ? 'image/png'
+              : ext === 'jpg' || ext === 'jpeg'
+                ? 'image/jpeg'
+                : ext === 'webp'
+                  ? 'image/webp'
+                  : null;
           if (mime) {
             const data = await entry.async('uint8array');
             // cap at 2 MB so the runs row stays sane
@@ -138,9 +160,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
       }
 
       if (slugFiles.size === 0) {
-        throw new Error(
-          'no ui_kits/<slug>/ folder found in zip — expected canonical NodeBench skill-pack shape',
-        );
+        throw new Error(t('composer.noUiKitFolder'));
       }
 
       // Pick the largest slug by file count
@@ -169,15 +189,24 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
       const runId = await startFromKit({
         slug: activeSlug,
         files: filesObj,
+        clientSessionId,
+        ...(modelOverride ? { modelOverride } : { tier }),
         ...(sourceImageBase64 ? { sourceImageBase64 } : {}),
         ...(sourceImageMimeType ? { sourceImageMimeType } : {}),
         ...(prompt ? { prompt } : {}),
       });
       onRunStarted(runId);
 
-      const note = otherSlugs.length > 0
-        ? `imported ${activeSlug} (${activeFiles.size} files) — ${otherSlugs.length} other slug${otherSlugs.length === 1 ? '' : 's'} preserved upstream: ${otherSlugs.join(', ')}`
-        : `imported ${activeSlug} (${activeFiles.size} files)`;
+      const note =
+        otherSlugs.length > 0
+          ? t('composer.importedWithOthers', {
+              slug: activeSlug,
+              count: activeFiles.size,
+              otherCount: otherSlugs.length,
+              plural: otherSlugs.length === 1 ? '' : 's',
+              others: otherSlugs.join(', '),
+            })
+          : t('composer.imported', { slug: activeSlug, count: activeFiles.size });
       setImageLabel(note);
     } finally {
       setBusy(false);
@@ -186,7 +215,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
 
   async function onGenImage() {
     if (prompt.trim().length === 0) {
-      setError('type a prompt first, then click sparkles to generate an image');
+      setError(t('composer.typePromptFirst'));
       return;
     }
     setError(null);
@@ -209,7 +238,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
     setError(null);
     if (busy || genBusy) return;
     if (prompt.trim().length === 0 && imageBase64 === null) {
-      setError('add a prompt or an image to generate');
+      setError(t('composer.addPromptOrImage'));
       return;
     }
     setBusy(true);
@@ -218,13 +247,17 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
         prompt?: string;
         sourceImageBase64?: string;
         sourceImageMimeType?: 'image/png' | 'image/jpeg' | 'image/webp';
+        tier?: Tier;
+        modelOverride?: ModelOverride;
       } = {};
       if (prompt.trim().length > 0) args.prompt = prompt.trim();
+      if (modelOverride) args.modelOverride = modelOverride;
+      else args.tier = tier;
       if (imageBase64 !== null && imageMime !== null) {
         args.sourceImageBase64 = imageBase64;
         args.sourceImageMimeType = imageMime;
       }
-      const runId = await startRun(args);
+      const runId = await startRun({ ...args, clientSessionId });
       onRunStarted(runId);
       setPrompt('');
       setImageBase64(null);
@@ -238,21 +271,35 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
   }
 
   const canSubmit = !busy && !genBusy && (prompt.trim().length > 0 || imageBase64 !== null);
+  const launch = variant === 'launch';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div
         style={{
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border-subtle)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-soft)',
-          padding: 12,
+          background: launch
+            ? 'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 88%, white), var(--color-surface))'
+            : 'var(--color-surface)',
+          border: `1px solid ${launch ? 'var(--color-border)' : 'var(--color-border-subtle)'}`,
+          borderRadius: launch ? '24px' : 'var(--radius-lg)',
+          boxShadow: launch ? 'var(--shadow-elevated)' : 'var(--shadow-soft)',
+          padding: launch ? 16 : 12,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: launch ? 12 : 8,
         }}
       >
+        <ModelRoutePicker
+          tier={tier}
+          modelOverride={modelOverride}
+          onRouter={(nextTier) => {
+            setTier(nextTier);
+            setModelOverride(null);
+          }}
+          onCustom={(nextOverride) => setModelOverride(nextOverride)}
+          placement="down"
+          width="100%"
+        />
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -263,18 +310,18 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
             }
           }}
           rows={3}
-          placeholder="Describe a design… try 'Pitch deck for a fintech startup'"
-          aria-label="Describe the design"
+          placeholder={launch ? t('composer.launchPlaceholder') : t('composer.placeholder')}
+          aria-label={t('composer.describeDesign')}
           style={{
             resize: 'none',
             border: 'none',
             outline: 'none',
             background: 'transparent',
             fontFamily: 'var(--font-sans)',
-            fontSize: 'var(--font-size-body)',
+            fontSize: launch ? 17 : 'var(--font-size-body)',
             color: 'var(--color-text-primary)',
             lineHeight: 'var(--leading-snug)',
-            minHeight: 60,
+            minHeight: launch ? 116 : 60,
           }}
           disabled={busy}
         />
@@ -309,8 +356,8 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach an image or import a ui_kit zip"
-              title="Attach image (png/jpeg/webp ≤ 2 MB) or import a canonical ui_kit zip (≤ 30 MB)"
+              aria-label={t('composer.attach')}
+              title={t('composer.attachTitle')}
               style={iconBtnStyle}
             >
               <Paperclip size={14} />
@@ -327,7 +374,7 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
                 paddingRight: 2,
                 fontFamily: 'var(--font-mono)',
               }}
-              title="zip drop on the paperclip imports a ui_kit"
+              title={t('composer.zipTitle')}
             >
               <Package size={12} />
             </span>
@@ -335,8 +382,8 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
               type="button"
               onClick={onGenImage}
               disabled={genBusy || prompt.trim().length === 0}
-              aria-label="Generate image with gpt-image-2"
-              title="Generate a source image from the prompt"
+              aria-label={t('composer.generateImage')}
+              title={t('composer.generateImageTitle')}
               style={{
                 ...iconBtnStyle,
                 color: genBusy ? 'var(--color-text-faint)' : 'var(--color-text-secondary)',
@@ -357,20 +404,30 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit}
-            aria-label={busy ? 'Starting run…' : 'Generate'}
+            aria-label={busy ? t('composer.startingRun') : t('composer.generate')}
             style={{
-              display: 'inline-grid',
-              placeItems: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: launch ? 'auto' : 32,
+              minWidth: launch ? 124 : 32,
+              height: launch ? 38 : 32,
+              padding: launch ? '0 15px' : 0,
+              borderRadius: launch ? 'var(--radius-pill)' : '50%',
               background: canSubmit ? 'var(--color-accent)' : 'var(--color-surface-active)',
               border: 'none',
               color: canSubmit ? 'var(--color-on-accent)' : 'var(--color-text-faint)',
               cursor: canSubmit ? 'pointer' : 'not-allowed',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              fontWeight: 820,
               transition: 'background var(--duration-faster) var(--ease-out)',
             }}
           >
+            {launch ? (
+              <span>{busy ? t('composer.startingRun') : t('composer.startRun')}</span>
+            ) : null}
             <ArrowUp size={14} />
           </button>
         </div>
@@ -385,20 +442,11 @@ export function ComposerCard({ onRunStarted }: ComposerCardProps) {
           color: 'var(--color-text-faint)',
         }}
       >
-        <span>{error ?? 'cmd/ctrl + ⏎ to run · ~$0.10–0.80 per pipeline'}</span>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '3px 8px',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border-subtle)',
-            borderRadius: 'var(--radius-pill)',
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          gpt-5.4 ▾
+        <span>{error ?? t('composer.helper')}</span>
+        <span>
+          {modelOverride
+            ? `${modelOverride.provider}/${modelOverride.modelId}`
+            : t('composer.routerSuffix', { tier })}
         </span>
       </div>
     </div>

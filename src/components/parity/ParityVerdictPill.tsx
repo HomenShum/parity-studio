@@ -1,3 +1,5 @@
+import { useT } from '../../lib/i18n';
+
 export type Verdict = 'pass' | 'warn' | 'fail' | 'unavailable';
 
 const COLOR: Record<Verdict, { bg: string; fg: string }> = {
@@ -7,14 +9,8 @@ const COLOR: Record<Verdict, { bg: string; fg: string }> = {
   unavailable: { bg: 'transparent', fg: 'var(--color-text-faint)' },
 };
 
-const LABEL: Record<Verdict, string> = {
-  pass: 'Pass',
-  warn: 'Warn',
-  fail: 'Fail',
-  unavailable: 'n/a',
-};
-
 export function ParityVerdictPill({ verdict }: { verdict: Verdict }) {
+  const t = useT();
   const c = COLOR[verdict];
   return (
     <span
@@ -28,8 +24,10 @@ export function ParityVerdictPill({ verdict }: { verdict: Verdict }) {
         fontWeight: 500,
       }}
     >
-      <span aria-hidden style={{ fontSize: 9 }}>▸</span>
-      {LABEL[verdict]}
+      <span aria-hidden style={{ fontSize: 9 }}>
+        {'>'}
+      </span>
+      {t(`parity.verdict.${verdict}`)}
     </span>
   );
 }

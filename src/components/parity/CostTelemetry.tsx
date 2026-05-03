@@ -1,4 +1,5 @@
 import { Info } from 'lucide-react';
+import { useT } from '../../lib/i18n';
 
 interface CostTelemetryProps {
   totalMicroUsd: number;
@@ -27,11 +28,12 @@ export function CostTelemetry({
   decomposeMicroUsd,
   verifyMicroUsd,
 }: CostTelemetryProps) {
+  const t = useT();
   const cells = [
-    { label: 'Total', value: fmt(totalMicroUsd), accent: true },
-    { label: 'Generate', value: fmt(generateMicroUsd) },
-    { label: 'Decompose', value: fmt(decomposeMicroUsd) },
-    { label: 'Verify', value: fmt(verifyMicroUsd) },
+    { label: t('cost.total'), value: fmt(totalMicroUsd), accent: true },
+    { label: t('cost.generate'), value: fmt(generateMicroUsd) },
+    { label: t('cost.decompose'), value: fmt(decomposeMicroUsd) },
+    { label: t('cost.verify'), value: fmt(verifyMicroUsd) },
   ];
 
   return (
@@ -49,8 +51,10 @@ export function CostTelemetry({
           textTransform: 'uppercase',
         }}
       >
-        <span aria-hidden style={{ fontSize: 13 }}>$</span>
-        Cost telemetry
+        <span aria-hidden style={{ fontSize: 13 }}>
+          $
+        </span>
+        {t('cost.telemetry')}
       </div>
       <div
         style={{
@@ -96,7 +100,7 @@ export function CostTelemetry({
           color: 'var(--color-text-faint)',
         }}
       >
-        Typical full pipeline: $0.10-$0.80; current run shown above
+        {t('cost.typical')}
         <Info size={11} aria-hidden />
       </div>
     </div>

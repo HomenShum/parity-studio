@@ -1,6 +1,12 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
-import { action, internalMutation, internalQuery, query } from './_generated/server';
+import {
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+  query,
+} from './_generated/server';
 import { PARITY_STATUSES } from './schema';
 
 const STATUS_UNION = v.union(...PARITY_STATUSES.map((s) => v.literal(s)));
@@ -62,6 +68,41 @@ export const getLatestInternal = internalQuery({
   },
 });
 
+export const reverifyLatestInternal = internalAction({
+  args: {
+    runId: v.id('runs'),
+    reason: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    { runId },
+  ): Promise<{ ok: boolean; uiKitId?: string; status?: string; iterationNumber?: number }> => {
+    const artifact = await ctx.runQuery(internal.artifacts.getLatestInternal, { runId });
+    const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
+    const previousReport = await ctx.runQuery(internal.parityReports.getLatestInternal, { runId });
+    const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+    if (artifact === null || uiKit === null) {
+      return { ok: false };
+    }
+    const iterationNumber =
+      Math.max(
+        Number(previousReport?.iterationNumber ?? 0),
+        Number(run?.iterationsCompleted ?? 0),
+      ) + 1;
+    const result = await ctx.runAction(internal.generation.verifyDeterministic, {
+      runId,
+      uiKitId: uiKit._id,
+      iterationNumber,
+      sourceHtml: artifact.html,
+    });
+    await ctx.runMutation(internal.runs.updateStatus, {
+      runId,
+      status: 'done',
+    });
+    return { ok: true, uiKitId: uiKit._id, status: result.status, iterationNumber };
+  },
+});
+
 /**
  * Sprint 3 helper: re-verify an existing finished run with the new
  * 16-row check rubric. Used to backfill the typed `checks` payload on
@@ -75,17 +116,10 @@ export const getLatestInternal = internalQuery({
 export const reverifyForRun = action({
   args: { runId: v.id('runs') },
   handler: async (ctx, { runId }): Promise<{ ok: boolean; uiKitId?: string; status?: string }> => {
-    const artifact = await ctx.runQuery(internal.artifacts.getLatestInternal, { runId });
-    const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
-    if (artifact === null || uiKit === null) {
-      return { ok: false };
-    }
-    const result = await ctx.runAction(internal.generation.verifyDeterministic, {
+    const result = await ctx.runAction(internal.parityReports.reverifyLatestInternal, {
       runId,
-      uiKitId: uiKit._id,
-      iterationNumber: 0,
-      sourceHtml: artifact.html,
+      reason: 'manual-reverify',
     });
-    return { ok: true, uiKitId: uiKit._id, status: result.status };
+    return result;
   },
 });

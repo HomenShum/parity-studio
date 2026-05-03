@@ -108,6 +108,12 @@ Hard rules:
 - Pick a kebab-case <slug> from the artifact's primary purpose (e.g. "saas-dashboard", "mobile-onboarding")
 - Preserve EVERY visible text, number, label, and copy block from the source verbatim
 - Only upgrade: component decomposition, token extraction, code structure — never the content
+- Do not collapse a full source route into a thin hero. Preserve the source's
+  semantic landmarks, section ordering, block density, navigation, footer, and
+  icon count as closely as the source allows.
+- Include real interaction states (:hover, :focus-visible, :active), responsive
+  breakpoints, accessible names, aria/alt/label coverage, and semantic
+  header/nav/main/section/footer landmarks.
 - Treat parity.contract.json as the agent operating contract: intent, appearance, organization, performance, API, QA, and privacy/BYOK rules
 - Every future comment/edit must update the contract or explicitly state "no contract change"
 - If you cannot represent something faithfully, list it in README.md "Known limitations"
@@ -164,6 +170,11 @@ Hard rules:
 - Preserve everything that already passes
 - Fix only what was flagged
 - Do not introduce regressions in other dimensions
+- If feedback mentions structure, component count, layout, semantic HTML, or
+  iconography, expand real sections/components/icons instead of only restyling
+  the hero.
+- If feedback mentions interaction states, accessibility, or breakpoints, add
+  concrete CSS selectors and semantic attributes/rules before returning.
 - Keep parity.contract.json, performance.budget.json, api-wiring.plan.md, and qa.plan.md aligned with any changed assumptions
 - Never fabricate content to "fill in" gaps — if source lacks the data,
   mark it as a known limitation in README.md`;

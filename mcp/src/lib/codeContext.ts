@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { basename, extname, join, relative, resolve } from 'node:path';
 
 const DEFAULT_EXTENSIONS = new Set([
@@ -45,9 +45,7 @@ export interface CodeContextResult {
   text: string;
 }
 
-export async function collectCodeContext(
-  options: CodeContextOptions,
-): Promise<CodeContextResult> {
+export async function collectCodeContext(options: CodeContextOptions): Promise<CodeContextResult> {
   const root = resolve(options.projectRoot);
   const maxFiles = options.maxFiles ?? 60;
   const maxBytes = options.maxBytes ?? 120_000;

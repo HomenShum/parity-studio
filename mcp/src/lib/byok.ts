@@ -1,4 +1,4 @@
-import { inferProvider, type SupportedProvider } from './llmClient.js';
+import { type SupportedProvider, inferProvider } from './llmClient.js';
 
 const PROVIDER_KEY_ENV: Record<SupportedProvider, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
@@ -50,9 +50,7 @@ export function requireLocalKeys(models: readonly string[]): ReturnType<typeof l
   const status = localByokStatus(models);
   if (status.missingEnvVars.length > 0) {
     const missing = status.missingEnvVars.join(', ');
-    const modelList = status.models
-      .map((item) => `${item.model} -> ${item.envVar}`)
-      .join('; ');
+    const modelList = status.models.map((item) => `${item.model} -> ${item.envVar}`).join('; ');
     throw new Error(
       `Local MCP BYOK is missing required provider env var(s): ${missing}. ` +
         `Set them in the MCP server env. Model key map: ${modelList}. Key values are never sent to Parity Studio.`,

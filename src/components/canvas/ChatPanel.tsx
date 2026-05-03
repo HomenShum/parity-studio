@@ -4,87 +4,52 @@ import {
   Bot,
   Check,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Circle,
   FileEdit,
   FilePlus2,
   FileText,
   FolderTree,
-  Gauge,
-  Leaf,
   ListChecks,
   type LucideIcon,
   Palette,
-  Rocket,
   Sparkles,
   Wrench,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { useT } from '../../lib/i18n';
+import type { ModelOverride, Tier } from '../../lib/modelRouting';
+import { ModelRoutePicker } from '../model/ModelRoutePicker';
 
 interface ChatPanelProps {
   runId: Id<'runs'> | null;
   variant?: 'workspace' | 'rail';
 }
 
-const TOOL_META: Record<string, { Icon: LucideIcon; label: string }> = {
-  list_files: { Icon: FolderTree, label: 'list_files' },
-  read_file: { Icon: FileText, label: 'read_file' },
-  read_design_system: { Icon: Palette, label: 'read_design_system' },
-  upsert_file: { Icon: FileEdit, label: 'upsert_file' },
-  set_todos: { Icon: ListChecks, label: 'set_todos' },
-  done: { Icon: CheckCircle2, label: 'done' },
-  iterate_now: { Icon: Sparkles, label: 'iterate_now' },
-};
-
-type Tier = 'frontier' | 'balanced' | 'free';
-
-const MODEL_ROUTERS: Array<{
-  value: Tier;
-  label: string;
-  sublabel: string;
-  detail: string;
-}> = [
-  {
-    value: 'balanced',
-    label: 'Balanced router',
-    sublabel: 'default',
-    detail: 'Claude + Kimi route for quality/cost balance',
-  },
-  {
-    value: 'frontier',
-    label: 'Frontier models',
-    sublabel: 'highest quality',
-    detail: 'Opus/Sonnet route for hard edits',
-  },
-  {
-    value: 'free',
-    label: 'Free model router',
-    sublabel: '$0 LLM route',
-    detail: 'OpenRouter free pool with paid fallback only if required',
-  },
-];
-
-const ROUTER_ICON: Record<Tier, LucideIcon> = {
-  balanced: Gauge,
-  frontier: Rocket,
-  free: Leaf,
+const TOOL_META: Record<string, { Icon: LucideIcon; labelKey: string }> = {
+  list_files: { Icon: FolderTree, labelKey: 'chat.tools.list_files' },
+  read_file: { Icon: FileText, labelKey: 'chat.tools.read_file' },
+  read_design_system: { Icon: Palette, labelKey: 'chat.tools.read_design_system' },
+  upsert_file: { Icon: FileEdit, labelKey: 'chat.tools.upsert_file' },
+  set_todos: { Icon: ListChecks, labelKey: 'chat.tools.set_todos' },
+  done: { Icon: CheckCircle2, labelKey: 'chat.tools.done' },
+  iterate_now: { Icon: Sparkles, labelKey: 'chat.tools.iterate_now' },
 };
 
 /**
- * ChatPanel — turn-taking conversation with the pi-ai agent. Backed by
+ * ChatPanel â€” turn-taking conversation with the pi-ai agent. Backed by
  * convex/chat.ts (V8 CRUD) + convex/chatLoop.ts (Node action with
  * pi-ai tool loop). The agent has atomic edit access to every file in
  * the canonical shape via upsert_file, so any preview/, assets/,
  * explorations/, or kit code path is editable from chat.
  */
 export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
+  const t = useT();
   const messages = useQuery(api.chat.list, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const send = useMutation(api.chat.send);
-  const setTier = useMutation(api.runs.setTier);
+  const setModelSelection = useMutation(api.runs.setModelSelection);
   const enhance = useAction(api.chatLoop.enhance);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -92,10 +57,15 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  const currentTier: Tier = ((run?.tier as Tier | undefined) ?? 'balanced');
+  const currentTier: Tier = (run?.tier as Tier | undefined) ?? 'balanced';
+  const currentModelOverride = run?.modelOverride as ModelOverride | undefined;
   async function chooseTier(tier: Tier) {
     if (!runId) return;
-    await setTier({ runId, tier });
+    await setModelSelection({ runId, tier });
+  }
+  async function chooseCustom(modelOverride: ModelOverride) {
+    if (!runId) return;
+    await setModelSelection({ runId, modelOverride });
   }
 
   async function onEnhance() {
@@ -103,7 +73,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
     setEnhancing(true);
     setError(null);
     try {
-      const result = await enhance({ text: draft });
+      const result = await enhance(runId ? { text: draft, runId } : { text: draft });
       setDraft(result.text);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -144,11 +114,9 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
               color: 'var(--color-text-primary)',
             }}
           >
-            Start a run to chat.
+            {t('chat.startTitle')}
           </h2>
-          <p style={{ marginTop: 12, lineHeight: 1.5 }}>
-            The agent edits any file in the canonical shape via tool calls. Start or import a source below.
-          </p>
+          <p style={{ marginTop: 12, lineHeight: 1.5 }}>{t('chat.startBody')}</p>
         </div>
       </div>
     );
@@ -195,8 +163,14 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
         }}
       >
         {messages === undefined ? (
-          <div style={{ color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-            loading conversation…
+          <div
+            style={{
+              color: 'var(--color-text-faint)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+            }}
+          >
+            {t('chat.loading')}
           </div>
         ) : turns.length === 0 ? (
           <EmptyHint />
@@ -224,7 +198,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 animation: 'pulse 1.2s ease-in-out infinite',
               }}
             />
-            sending…
+            {t('chat.sending')}
           </div>
         ) : null}
       </div>
@@ -232,7 +206,8 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
       <div
         style={{
           borderTop: '1px solid var(--color-border-subtle)',
-          padding: variant === 'rail' ? 'var(--space-3) var(--space-4)' : 'var(--space-4) var(--space-7)',
+          padding:
+            variant === 'rail' ? 'var(--space-3) var(--space-4)' : 'var(--space-4) var(--space-7)',
           background: 'var(--color-background-secondary)',
         }}
       >
@@ -256,8 +231,8 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 if (!busy) void onSubmit();
               }
             }}
-            placeholder="Tell the agent what to change... 'soften the radius on Card to 12px and update the preview' / 'rewrite assets/og-foo.svg with darker text'"
-            aria-label="Chat with the parity-studio agent"
+            placeholder={t('chat.placeholder')}
+            aria-label={t('chat.aria')}
             rows={3}
             disabled={busy}
             style={{
@@ -293,36 +268,37 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 flex: 1,
               }}
             >
-              <RouterSelect currentTier={currentTier} onSelect={(tier) => void chooseTier(tier)} />
-              <span style={{ lineHeight: 1.35 }}>
-                {error ?? 'cmd/ctrl + enter to send - sparkle rewrites the draft before sending (~$0.002)'}
-              </span>
+              <ModelRoutePicker
+                tier={currentTier}
+                modelOverride={currentModelOverride ?? null}
+                onRouter={(tier) => void chooseTier(tier)}
+                onCustom={(modelOverride) => void chooseCustom(modelOverride)}
+              />
+              <span style={{ lineHeight: 1.35 }}>{error ?? t('chat.helper')}</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <button
                 type="button"
                 onClick={onEnhance}
                 disabled={enhancing || busy || draft.trim().length === 0}
-                aria-label="Rewrite draft before sending with the small model"
-                title="Rewrite your draft into a clearer, more specific prompt before sending. Uses the small model and costs about $0.002 per call."
+                aria-label={t('chat.enhance')}
+                title={t('chat.enhanceTitle')}
                 style={{
                   display: 'inline-grid',
                   placeItems: 'center',
                   width: 30,
                   height: 30,
                   borderRadius: '50%',
-                  background:
-                    enhancing
-                      ? 'var(--color-accent-soft)'
-                      : draft.trim().length === 0
-                        ? 'var(--color-surface-active)'
-                        : 'var(--color-surface-hover)',
-                  color:
-                    enhancing
-                      ? 'var(--color-accent)'
-                      : draft.trim().length === 0
-                        ? 'var(--color-text-faint)'
-                        : 'var(--color-text-primary)',
+                  background: enhancing
+                    ? 'var(--color-accent-soft)'
+                    : draft.trim().length === 0
+                      ? 'var(--color-surface-active)'
+                      : 'var(--color-surface-hover)',
+                  color: enhancing
+                    ? 'var(--color-accent)'
+                    : draft.trim().length === 0
+                      ? 'var(--color-text-faint)'
+                      : 'var(--color-text-primary)',
                   border: `1px solid ${enhancing ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
                   cursor: enhancing || draft.trim().length === 0 ? 'not-allowed' : 'pointer',
                   animation: enhancing ? 'pulse 1.2s ease-in-out infinite' : 'none',
@@ -334,7 +310,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
                 type="button"
                 onClick={onSubmit}
                 disabled={busy || draft.trim().length === 0}
-                aria-label="Send to agent"
+                aria-label={t('chat.send')}
                 style={{
                   display: 'inline-grid',
                   placeItems: 'center',
@@ -363,262 +339,6 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
   );
 }
 
-function RouterSelect({
-  currentTier,
-  onSelect,
-}: {
-  currentTier: Tier;
-  onSelect: (tier: Tier) => void;
-}) {
-  const selected = MODEL_ROUTERS.find((router) => router.value === currentTier) ?? (MODEL_ROUTERS[0] as (typeof MODEL_ROUTERS)[number]);
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const Icon = ROUTER_ICON[currentTier];
-  const tone = routerTone(currentTier);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      const root = rootRef.current;
-      if (root && !root.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <div
-      ref={rootRef}
-      style={{
-        position: 'relative',
-        width: 'min(100%, 292px)',
-        maxWidth: '100%',
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Model router"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        onClick={() => setOpen((value) => !value)}
-        style={{
-          width: '100%',
-          display: 'grid',
-          gridTemplateColumns: '28px minmax(0, 1fr) auto',
-          alignItems: 'center',
-          gap: 8,
-          padding: '7px 9px',
-          borderRadius: 'var(--radius-lg)',
-          border: `1px solid ${tone.border}`,
-          background: tone.background,
-          color: tone.foreground,
-          boxShadow: open ? 'var(--shadow-card)' : 'var(--shadow-soft)',
-          cursor: 'pointer',
-          textAlign: 'left',
-          transition: 'border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)',
-        }}
-      >
-        <span
-          aria-hidden
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 'var(--radius-md)',
-            display: 'grid',
-            placeItems: 'center',
-            background: tone.iconBackground,
-            color: tone.foreground,
-            border: `1px solid ${tone.border}`,
-          }}
-        >
-          <Icon size={14} />
-        </span>
-        <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 12,
-              fontWeight: 650,
-              color: 'var(--color-text-primary)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {selected.label}
-          </span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: 'var(--color-text-faint)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {selected.sublabel} - {selected.detail}
-          </span>
-        </span>
-        <ChevronDown
-          size={14}
-          style={{
-            color: 'var(--color-text-secondary)',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform var(--duration-fast) var(--ease-out)',
-          }}
-        />
-      </button>
-      {open ? (
-        <div
-          role="listbox"
-          aria-label="Choose model router"
-          style={{
-            position: 'absolute',
-            left: 0,
-            bottom: 'calc(100% + 8px)',
-            width: 338,
-            maxWidth: 'calc(100vw - 48px)',
-            padding: 6,
-            borderRadius: 'var(--radius-xl)',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            boxShadow: 'var(--shadow-elevated)',
-            zIndex: 60,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-          }}
-        >
-          <div
-            style={{
-              padding: '6px 8px 4px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: 'var(--color-text-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--tracking-label)',
-            }}
-          >
-            Model routing
-          </div>
-          {MODEL_ROUTERS.map((router) => {
-            const RouterIcon = ROUTER_ICON[router.value];
-            const optionTone = routerTone(router.value);
-            const active = router.value === currentTier;
-            return (
-              <button
-                key={router.value}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  onSelect(router.value);
-                  setOpen(false);
-                }}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '30px minmax(0, 1fr) auto',
-                  alignItems: 'center',
-                  gap: 9,
-                  width: '100%',
-                  padding: '9px 10px',
-                  borderRadius: 'var(--radius-lg)',
-                  border: `1px solid ${active ? optionTone.border : 'transparent'}`,
-                  background: active ? optionTone.background : 'transparent',
-                  color: 'var(--color-text-primary)',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                }}
-              >
-                <span
-                  aria-hidden
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 'var(--radius-md)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    background: optionTone.iconBackground,
-                    color: optionTone.foreground,
-                  }}
-                >
-                  <RouterIcon size={14} />
-                </span>
-                <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 650 }}>
-                    {router.label}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-sans)',
-                      fontSize: 11,
-                      color: 'var(--color-text-secondary)',
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {router.detail}
-                  </span>
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    color: active ? optionTone.foreground : 'var(--color-text-faint)',
-                    border: `1px solid ${active ? optionTone.border : 'var(--color-border-subtle)'}`,
-                    borderRadius: 'var(--radius-pill)',
-                    padding: '2px 6px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {active ? 'Active' : router.sublabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function routerTone(tier: Tier): {
-  background: string;
-  iconBackground: string;
-  foreground: string;
-  border: string;
-} {
-  if (tier === 'free') {
-    return {
-      background: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))',
-      iconBackground: 'color-mix(in srgb, var(--color-success) 16%, var(--color-surface))',
-      foreground: 'var(--color-success)',
-      border: 'color-mix(in srgb, var(--color-success) 34%, var(--color-border-subtle))',
-    };
-  }
-  if (tier === 'frontier') {
-    return {
-      background: 'var(--color-accent-soft)',
-      iconBackground: 'color-mix(in srgb, var(--color-accent) 14%, var(--color-surface))',
-      foreground: 'var(--color-accent)',
-      border: 'color-mix(in srgb, var(--color-accent) 40%, var(--color-border-subtle))',
-    };
-  }
-  return {
-    background: 'linear-gradient(135deg, var(--color-surface), var(--color-surface-hover))',
-    iconBackground: 'var(--color-background-secondary)',
-    foreground: 'var(--color-text-secondary)',
-    border: 'var(--color-border-subtle)',
-  };
-}
-
 interface MessageRow {
   _id: string;
   role: 'user' | 'assistant' | 'tool';
@@ -630,7 +350,9 @@ interface MessageRow {
 }
 
 function Turn({ message }: { message: MessageRow }) {
+  const t = useT();
   if (message.role === 'user') {
+    const content = displayUserContent(message.content, t);
     return (
       <div
         style={{
@@ -647,7 +369,7 @@ function Turn({ message }: { message: MessageRow }) {
           whiteSpace: 'pre-wrap',
         }}
       >
-        {message.content}
+        {content}
       </div>
     );
   }
@@ -677,35 +399,41 @@ function AssistantRow({ message }: { message: MessageRow }) {
         <Bot size={14} />
       </span>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {message.content.length > 0 ? (
-          <MarkdownContent text={message.content} />
-        ) : null}
+        {message.content.length > 0 ? <MarkdownContent text={message.content} /> : null}
         {message.toolCalls && message.toolCalls.length > 0
           ? message.toolCalls.map((tc) => <ToolCallCard key={tc.id} call={tc} />)
           : null}
-        {message.modelId ? (
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--color-text-faint)',
-              display: 'inline-flex',
-              gap: 8,
-            }}
-          >
-            <span>{message.modelId}</span>
-            {message.costMicroUsd !== undefined && message.costMicroUsd > 0 ? (
-              <span>· ${(message.costMicroUsd / 1_000_000).toFixed(4)}</span>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );
 }
 
+function displayUserContent(
+  content: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (content.startsWith('Auto-fix triggered:')) {
+    const firstLine = content.split('\n')[0]?.replace('Auto-fix triggered:', '').trim();
+    return firstLine ? t('chat.askAgentToFix', { issue: firstLine }) : t('chat.askAgentDefault');
+  }
+  return content;
+}
+
 function MarkdownContent({ text }: { text: string }) {
   const blocks = parseMarkdownBlocks(text);
+  const blockKeyCounts = new Map<string, number>();
+  const nextBlockKey = (block: MarkdownBlock) => {
+    const seed =
+      block.type === 'paragraph' ? `p:${block.text}` : `${block.type}:${block.items.join('|')}`;
+    const count = blockKeyCounts.get(seed) ?? 0;
+    blockKeyCounts.set(seed, count + 1);
+    return `${seed}:${count}`;
+  };
+  const nextItemKey = (seen: Map<string, number>, item: string) => {
+    const count = seen.get(item) ?? 0;
+    seen.set(item, count + 1);
+    return `${item}:${count}`;
+  };
   return (
     <div
       style={{
@@ -718,27 +446,35 @@ function MarkdownContent({ text }: { text: string }) {
         gap: 8,
       }}
     >
-      {blocks.map((block, index) => {
+      {blocks.map((block) => {
         if (block.type === 'ul') {
+          const itemKeyCounts = new Map<string, number>();
           return (
-            <ul key={index} style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
-              {block.items.map((item, itemIndex) => (
-                <li key={`${itemIndex}-${item.slice(0, 20)}`}>{renderInlineMarkdown(item)}</li>
+            <ul
+              key={nextBlockKey(block)}
+              style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}
+            >
+              {block.items.map((item) => (
+                <li key={nextItemKey(itemKeyCounts, item)}>{renderInlineMarkdown(item)}</li>
               ))}
             </ul>
           );
         }
         if (block.type === 'ol') {
+          const itemKeyCounts = new Map<string, number>();
           return (
-            <ol key={index} style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
-              {block.items.map((item, itemIndex) => (
-                <li key={`${itemIndex}-${item.slice(0, 20)}`}>{renderInlineMarkdown(item)}</li>
+            <ol
+              key={nextBlockKey(block)}
+              style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}
+            >
+              {block.items.map((item) => (
+                <li key={nextItemKey(itemKeyCounts, item)}>{renderInlineMarkdown(item)}</li>
               ))}
             </ol>
           );
         }
         return (
-          <p key={index} style={{ margin: 0 }}>
+          <p key={nextBlockKey(block)} style={{ margin: 0 }}>
             {renderInlineMarkdown(block.text)}
           </p>
         );
@@ -810,14 +546,18 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
 
 function renderInlineMarkdown(text: string): ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
-  return parts.map((part, index) => {
+  const partKeyCounts = new Map<string, number>();
+  return parts.map((part) => {
+    const count = partKeyCounts.get(part) ?? 0;
+    partKeyCounts.set(part, count + 1);
+    const key = `${part}:${count}`;
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
         <code
-          key={index}
+          key={key}
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '0.92em',
@@ -831,13 +571,16 @@ function renderInlineMarkdown(text: string): ReactNode[] {
         </code>
       );
     }
-    return <span key={index}>{part}</span>;
+    return <span key={key}>{part}</span>;
   });
 }
 
 function ToolCallCard({ call }: { call: { id: string; name: string; args: string } }) {
-  const meta = TOOL_META[call.name] ?? { Icon: Wrench, label: call.name };
+  const t = useT();
+  const knownMeta = TOOL_META[call.name];
+  const meta = knownMeta ?? { Icon: Wrench, labelKey: 'chat.tools.tool' };
   const { Icon } = meta;
+  const label = knownMeta ? t(meta.labelKey) : call.name;
   let argsObj: Record<string, unknown> = {};
   try {
     argsObj = JSON.parse(call.args);
@@ -862,9 +605,17 @@ function ToolCallCard({ call }: { call: { id: string; name: string; args: string
       }}
     >
       <ToolIcon size={12} />
-      <span style={{ color: 'var(--color-text-primary)' }}>{meta.label}</span>
+      <span style={{ color: 'var(--color-text-primary)' }}>{label}</span>
       {path ? (
-        <span style={{ color: 'var(--color-accent)', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            color: 'var(--color-accent)',
+            maxWidth: 360,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {path}
         </span>
       ) : null}
@@ -873,6 +624,7 @@ function ToolCallCard({ call }: { call: { id: string; name: string; args: string
 }
 
 function ToolResultRow({ message }: { message: MessageRow }) {
+  const t = useT();
   // Set_todos special-case: render an inline checklist instead of plain text.
   if (message.toolName === 'set_todos' && message.content.startsWith('__todos__:')) {
     try {
@@ -885,63 +637,31 @@ function ToolResultRow({ message }: { message: MessageRow }) {
       // fall through to default text rendering
     }
   }
-  const [open, setOpen] = useState(false);
-  const meta = TOOL_META[message.toolName ?? ''] ?? { Icon: Wrench, label: message.toolName ?? 'tool' };
+  const knownMeta = TOOL_META[message.toolName ?? ''];
+  const meta = knownMeta ?? { Icon: Wrench, labelKey: 'chat.tools.tool' };
   const { Icon } = meta;
-  const preview = message.content.split('\n').slice(0, 1).join('').slice(0, 100);
-  const hasMore = message.content.length > preview.length;
+  const label = knownMeta ? t(meta.labelKey) : (message.toolName ?? t('chat.tools.tool'));
   return (
-    <div style={{ marginLeft: 38 }}>
-      <button
-        type="button"
-        onClick={() => hasMore && setOpen((v) => !v)}
-        disabled={!hasMore}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--color-text-faint)',
-          cursor: hasMore ? 'pointer' : 'default',
-        }}
-      >
-        {hasMore ? (open ? <ChevronDown size={11} /> : <ChevronRight size={11} />) : <span style={{ width: 11 }} />}
-        <Icon size={11} />
-        <span style={{ color: 'var(--color-text-secondary)' }}>{meta.label}</span>
-        <span>·</span>
-        <span style={{ maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {preview}
-        </span>
-      </button>
-      {open ? (
-        <pre
-          style={{
-            marginTop: 6,
-            padding: '10px 12px',
-            background: 'var(--color-surface-hover)',
-            border: '1px solid var(--color-border-subtle)',
-            borderRadius: 'var(--radius-sm)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--color-text-secondary)',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            maxHeight: 320,
-            overflow: 'auto',
-          }}
-        >
-          {message.content}
-        </pre>
-      ) : null}
+    <div
+      style={{
+        marginLeft: 38,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'var(--color-text-faint)',
+      }}
+    >
+      <Icon size={11} />
+      <span>{label}</span>
+      <span>{t('chat.toolComplete')}</span>
     </div>
   );
 }
 
 function TodosChecklist({ items }: { items: Array<{ text: string; checked: boolean }> }) {
+  const t = useT();
   if (items.length === 0) {
     return (
       <div
@@ -952,7 +672,7 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
           color: 'var(--color-text-faint)',
         }}
       >
-        (set_todos called with empty list)
+        {t('chat.agentMadePlan')}
       </div>
     );
   }
@@ -983,7 +703,7 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
         }}
       >
         <ListChecks size={11} />
-        Plan ({items.filter((i) => i.checked).length}/{items.length})
+        {t('chat.agentPlan')} ({items.filter((i) => i.checked).length}/{items.length})
       </div>
       {items.map((it, i) => (
         <div
@@ -1017,6 +737,7 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
 }
 
 function EmptyHint() {
+  const t = useT();
   return (
     <div
       style={{
@@ -1041,30 +762,12 @@ function EmptyHint() {
           fontWeight: 400,
         }}
       >
-        Talk to the agent.
+        {t('chat.emptyTitle')}
       </div>
-      <div>The agent has atomic edit access to every file in the canonical shape:</div>
-      <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
-        <li>
-          <code>ui_kits/&lt;slug&gt;/components/*.tsx</code> — your active product code
-        </li>
-        <li>
-          <code>preview/component-*.html</code>, <code>preview/tokens-*.html</code> — specimen
-          pages
-        </li>
-        <li>
-          <code>assets/logo-mark.svg</code>, <code>assets/og-&lt;slug&gt;.svg</code> — brand
-        </li>
-        <li>
-          <code>explorations/iter-N.html</code> — iteration history
-        </li>
-        <li>
-          <code>README.md</code>, <code>SKILL.md</code>, <code>colors_and_type.css</code> — top-level docs
-        </li>
-      </ul>
       <div>
-        Try: <em>"add a new preview page for an outlined Button variant"</em> or{' '}
-        <em>"rewrite the og card to use a darker background"</em>.
+        {t('chat.emptyBodyPrefix')} <em>&quot;{t('chat.emptyExample1')}&quot;</em>,{' '}
+        <em>&quot;{t('chat.emptyExample2')}&quot;</em>, or{' '}
+        <em>&quot;{t('chat.emptyExample3')}&quot;</em>
       </div>
     </div>
   );

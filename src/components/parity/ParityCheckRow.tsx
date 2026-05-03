@@ -12,6 +12,7 @@ export interface ParityCheckRowProps {
 export function ParityCheckRow({ number, label, verdict, evidence = [] }: ParityCheckRowProps) {
   const [expanded, setExpanded] = useState(false);
   const expandable = evidence.length > 0;
+  const evidenceKeyCounts = new Map<string, number>();
   const verdictColor =
     verdict === 'pass'
       ? 'var(--color-text-primary)'
@@ -92,9 +93,11 @@ export function ParityCheckRow({ number, label, verdict, evidence = [] }: Parity
             gap: 2,
           }}
         >
-          {evidence.map((line, i) => (
-            <span key={i}>{line}</span>
-          ))}
+          {evidence.map((line) => {
+            const count = evidenceKeyCounts.get(line) ?? 0;
+            evidenceKeyCounts.set(line, count + 1);
+            return <span key={`${line}:${count}`}>{line}</span>;
+          })}
         </div>
       ) : null}
     </div>

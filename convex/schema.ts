@@ -14,6 +14,17 @@ export const RUN_STATUSES = [
   'failed',
 ] as const;
 
+const SUPPORTED_PROVIDER_UNION = v.union(
+  v.literal('anthropic'),
+  v.literal('openai'),
+  v.literal('google'),
+  v.literal('openrouter'),
+  v.literal('groq'),
+  v.literal('cerebras'),
+  v.literal('xai'),
+  v.literal('mistral'),
+);
+
 export const PARITY_STATUSES = [
   'verified',
   'needs_review',
@@ -23,7 +34,29 @@ export const PARITY_STATUSES = [
 ] as const;
 
 export default defineSchema({
+  projects: defineTable({
+    clientSessionId: v.optional(v.string()),
+    title: v.string(),
+    sourceType: v.optional(
+      v.union(
+        v.literal('prompt'),
+        v.literal('image'),
+        v.literal('zip'),
+        v.literal('platform-route'),
+        v.literal('unknown'),
+      ),
+    ),
+    starred: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_session_updated', ['clientSessionId', 'updatedAt'])
+    .index('by_updated', ['updatedAt']),
+
   runs: defineTable({
+    projectId: v.optional(v.id('projects')),
+    clientSessionId: v.optional(v.string()),
+    title: v.optional(v.string()),
     prompt: v.optional(v.string()),
     sourceImageStorageId: v.optional(v.id('_storage')),
     /**
@@ -52,6 +85,19 @@ export default defineSchema({
       v.union(v.literal('frontier'), v.literal('balanced'), v.literal('free'), v.literal('small')),
     ),
     /**
+     * Optional explicit model override for advanced/BYOK runs. When set,
+     * text/agent/pipeline phases use this provider+model instead of the
+     * curated tier router. Deterministic checks stay local; source image
+     * generation remains a separate image-model path.
+     */
+    modelOverride: v.optional(
+      v.object({
+        provider: SUPPORTED_PROVIDER_UNION,
+        modelId: v.string(),
+        label: v.optional(v.string()),
+      }),
+    ),
+    /**
      * Per-stage cost + telemetry breakdown for the cost panel UI.
      * Append-only: each stage push appends one entry; iterate stages
      * append their own. Reads as a flat list ordered by stageStartedAt.
@@ -70,7 +116,10 @@ export default defineSchema({
         }),
       ),
     ),
-  }).index('by_status', ['status']),
+  })
+    .index('by_status', ['status'])
+    .index('by_session', ['clientSessionId'])
+    .index('by_project', ['projectId']),
 
   artifacts: defineTable({
     runId: v.id('runs'),
@@ -192,4 +241,30 @@ export default defineSchema({
   })
     .index('by_run_iter', ['runId', 'iterationNumber'])
     .index('by_uikit', ['uiKitId']),
+
+  inspiration_reports: defineTable({
+    runId: v.id('runs'),
+    query: v.string(),
+    mediaPreference: v.union(
+      v.literal('auto'),
+      v.literal('images'),
+      v.literal('videos'),
+      v.literal('mixed'),
+    ),
+    status: v.union(v.literal('ready'), v.literal('failed')),
+    tags: v.array(v.string()),
+    diagnosis: v.string(),
+    references: v.any(),
+    plan: v.any(),
+    beforeAfter: v.any(),
+    safetyNotes: v.array(v.string()),
+    providerMode: v.union(
+      v.literal('curated'),
+      v.literal('curated-plus-urls'),
+      v.literal('external-ready'),
+    ),
+    appliedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_run_created', ['runId', 'createdAt']),
 });

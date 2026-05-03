@@ -25,7 +25,14 @@
 import type { SupportedProvider } from './piAi';
 
 export type ModelTier = 'frontier' | 'balanced' | 'free' | 'small';
-export type Phase = 'enhance' | 'advise' | 'execute' | 'generate' | 'decompose' | 'iterate' | 'judge';
+export type Phase =
+  | 'enhance'
+  | 'advise'
+  | 'execute'
+  | 'generate'
+  | 'decompose'
+  | 'iterate'
+  | 'judge';
 
 export interface ResolvedModel {
   provider: SupportedProvider;
@@ -38,8 +45,21 @@ export interface ResolvedModel {
   label: string;
 }
 
+export interface RunModelOverride {
+  provider: SupportedProvider;
+  modelId: string;
+  label?: string;
+}
+
+export interface RunModelConfig {
+  tier?: string;
+  modelOverride?: RunModelOverride;
+}
+
 // ── Tier × phase mapping (curated) ──────────────────────────────────────
 
+// Anthropic paid-family IDs refreshed 2026-05-01 against official docs
+// and the installed pi-ai 0.70.2 registry: Opus 4.7, Sonnet 4.6, Haiku 4.5.
 const FRONTIER: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
@@ -49,33 +69,33 @@ const FRONTIER: Record<Phase, ResolvedModel> = {
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-opus-4-1',
+    modelId: 'claude-opus-4-7',
     isFree: false,
-    label: 'opus-4-1',
+    label: 'opus-4.7',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5',
+    modelId: 'claude-sonnet-4-6',
     isFree: false,
-    label: 'sonnet-4-5',
+    label: 'sonnet-4.6',
   },
   generate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5',
+    modelId: 'claude-sonnet-4-6',
     isFree: false,
-    label: 'sonnet-4-5',
+    label: 'sonnet-4.6',
   },
   decompose: {
     provider: 'anthropic',
-    modelId: 'claude-opus-4-1',
+    modelId: 'claude-opus-4-7',
     isFree: false,
-    label: 'opus-4-1',
+    label: 'opus-4.7',
   },
   iterate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5',
+    modelId: 'claude-sonnet-4-6',
     isFree: false,
-    label: 'sonnet-4-5',
+    label: 'sonnet-4.6',
   },
   judge: {
     provider: 'openrouter',
@@ -94,15 +114,15 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5',
+    modelId: 'claude-sonnet-4-6',
     isFree: false,
-    label: 'sonnet-4-5',
+    label: 'sonnet-4.6',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5',
+    modelId: 'claude-sonnet-4-6',
     isFree: false,
-    label: 'sonnet-4-5',
+    label: 'sonnet-4.6',
   },
   generate: {
     provider: 'openrouter',
@@ -156,7 +176,7 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 //   ------                             --  --  --  -----   ----------
 //   inclusionai/ling-2.6-1t:free       5   5   5   100%    unchanged
 //   claude-haiku-4-5            (paid) 4   5   5    80%    unchanged
-//   claude-sonnet-4-5           (paid) 4   5   5    80%    unchanged
+//   claude-sonnet-4-5 (historical paid) 4  5   5    80%    unchanged
 //   google/gemma-4-26b-a4b-it:free     3   5   3    60%    +40% pts
 //   google/gemma-4-31b-it:free         1   5   2    20%    +20% pts
 //   meta-llama/llama-3.3-70b:free      0   5   0     0%    same — but
@@ -294,6 +314,34 @@ export function resolveModel(tier: ModelTier, phase: Phase): ResolvedModel {
   return TIER_MAP[tier][phase];
 }
 
+export function tierFromRun(run: RunModelConfig | null | undefined): ModelTier {
+  const tier = run?.tier;
+  if (tier === 'frontier' || tier === 'balanced' || tier === 'free' || tier === 'small')
+    return tier;
+  return deploymentTier();
+}
+
+export function resolveRunModel(
+  run: RunModelConfig | null | undefined,
+  phase: Phase,
+  runId: string,
+  options: { allowCustomJudge?: boolean } = {},
+): ResolvedModel {
+  const override = run?.modelOverride;
+  if (override !== undefined && (phase !== 'judge' || options.allowCustomJudge === true)) {
+    const modelId = override.modelId.trim();
+    if (modelId.length > 0) {
+      return {
+        provider: override.provider,
+        modelId,
+        isFree: modelId.includes(':free'),
+        label: override.label?.trim() || modelId,
+      };
+    }
+  }
+  return sessionPick(runId, resolveModel(tierFromRun(run), phase));
+}
+
 /**
  * Determine the active tier for a deployment.
  *
@@ -327,5 +375,7 @@ export function sessionPick(runId: string, model: ResolvedModel): ResolvedModel 
   let h = 0;
   for (let i = 0; i < runId.length; i += 1) h = (h * 31 + runId.charCodeAt(i)) >>> 0;
   const r = (h % 1000) / 1000;
-  return r < 0.88 ? model : { ...model, provider: model.fallback.provider, modelId: model.fallback.modelId };
+  return r < 0.88
+    ? model
+    : { ...model, provider: model.fallback.provider, modelId: model.fallback.modelId };
 }

@@ -15,11 +15,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = path.resolve(__dirname, '..', 'dist', 'index.js');
 
 function jsonrpc(id, method, params) {
-  return JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+  return `${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`;
 }
 
 function jsonrpcNotif(method, params) {
-  return JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n';
+  return `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`;
 }
 
 async function main() {
@@ -37,8 +37,8 @@ async function main() {
 
   child.stdout.on('data', (chunk) => {
     buf += chunk.toString();
-    let nl;
-    while ((nl = buf.indexOf('\n')) !== -1) {
+    let nl = buf.indexOf('\n');
+    while (nl !== -1) {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
@@ -50,6 +50,7 @@ async function main() {
       } catch {
         console.error('non-JSON line from server:', line);
       }
+      nl = buf.indexOf('\n');
     }
   });
 

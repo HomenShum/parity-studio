@@ -15,18 +15,19 @@
 //   CANONICAL_ZIP      path to the source zip (default: NodeBench v2)
 //   HEADED             "0" to run headless (default: headed)
 
-import { chromium } from 'playwright';
-import JSZip from 'jszip';
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import JSZip from 'jszip';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 
 const PARITY_STUDIO_URL = process.env.PARITY_STUDIO_URL ?? 'https://parity-studio.vercel.app/';
-const CANONICAL_ZIP = process.env.CANONICAL_ZIP ?? 'C:\\Users\\hshum\\Downloads\\NodeBench AI Design System (2).zip';
+const CANONICAL_ZIP =
+  process.env.CANONICAL_ZIP ?? 'C:\\Users\\hshum\\Downloads\\NodeBench AI Design System (2).zip';
 const HEADED = process.env.HEADED !== '0';
 
 async function main() {
@@ -67,13 +68,14 @@ async function main() {
     let pass = '';
     for (let i = 0; i < 60; i += 1) {
       await page.waitForTimeout(2_000);
-      const txt = (await page
-        .locator('aside[aria-label="Deterministic parity"]')
-        .first()
-        .textContent()
-        .catch(() => '')) ?? '';
+      const txt =
+        (await page
+          .locator('aside[aria-label="Deterministic parity"]')
+          .first()
+          .textContent()
+          .catch(() => '')) ?? '';
       const m = txt.match(/(\d+)\s*\/\s*16\s*checks passing/);
-      if (m && m[1] && Number(m[1]) > 0) {
+      if (m?.[1] && Number(m[1]) > 0) {
         pass = m[1];
         break;
       }
@@ -84,7 +86,10 @@ async function main() {
 
     console.log('[test] 4 — click Export ZIP');
     const dlPromise = page.waitForEvent('download', { timeout: 30_000 });
-    await page.getByRole('link', { name: /^export$/i }).first().click();
+    await page
+      .getByRole('link', { name: /^export$/i })
+      .first()
+      .click();
     const dl = await dlPromise;
     const exportedZipPath = join(outDir, dl.suggestedFilename() || 'exported.zip');
     await dl.saveAs(exportedZipPath);
@@ -94,17 +99,15 @@ async function main() {
     console.log('[test] 5 — verify canonical shape of the export');
     const exportedBuf = await readFile(exportedZipPath);
     const exportedZip = await JSZip.loadAsync(exportedBuf);
-    const required = [
-      'README.md',
-      'SKILL.md',
-      'colors_and_type.css',
-    ];
+    const required = ['README.md', 'SKILL.md', 'colors_and_type.css'];
     const present = Object.keys(exportedZip.files);
     const missing = required.filter((p) => !present.includes(p));
     const hasUiKit = present.some((p) => p.match(/^ui_kits\/[^/]+\/index\.html$/));
     const hasUpload = present.some((p) => p.match(/^uploads\/source\.(png|jpeg|jpg|webp)$/));
     const skillMd = await exportedZip.file('SKILL.md')?.async('string');
-    console.log(`[test] required top-level: ${required.length - missing.length}/${required.length} present`);
+    console.log(
+      `[test] required top-level: ${required.length - missing.length}/${required.length} present`,
+    );
     if (missing.length > 0) console.log(`[test] missing: ${missing.join(', ')}`);
     console.log(`[test] ui_kits/<slug>/index.html present: ${hasUiKit}`);
     console.log(`[test] uploads/source.* present: ${hasUpload}`);
@@ -124,13 +127,14 @@ async function main() {
     let roundTrip = '';
     for (let i = 0; i < 30; i += 1) {
       await page.waitForTimeout(2_000);
-      const txt = (await page
-        .locator('aside[aria-label="Deterministic parity"]')
-        .first()
-        .textContent()
-        .catch(() => '')) ?? '';
+      const txt =
+        (await page
+          .locator('aside[aria-label="Deterministic parity"]')
+          .first()
+          .textContent()
+          .catch(() => '')) ?? '';
       const m = txt.match(/(\d+)\s*\/\s*16\s*checks passing/);
-      if (m && m[1] && Number(m[1]) > 0) {
+      if (m?.[1] && Number(m[1]) > 0) {
         roundTrip = m[1];
         break;
       }
@@ -143,16 +147,14 @@ async function main() {
     console.log(`[test] final screenshot: ${finalShot}`);
 
     // Summary
-    const ok =
-      missing.length === 0 &&
-      hasUiKit &&
-      Number(pass) > 0 &&
-      Number(roundTrip) > 0;
+    const ok = missing.length === 0 && hasUiKit && Number(pass) > 0 && Number(roundTrip) > 0;
     console.log('---');
     console.log(`[test] PASS: ${ok}`);
     console.log(`  initial parity: ${pass}/16`);
     console.log(`  exported size:  ${exportedSize} bytes`);
-    console.log(`  canonical:      ${missing.length === 0 ? 'shape ok' : `missing ${missing.join(', ')}`}`);
+    console.log(
+      `  canonical:      ${missing.length === 0 ? 'shape ok' : `missing ${missing.join(', ')}`}`,
+    );
     console.log(`  round-trip:     ${roundTrip}/16`);
 
     await writeFile(

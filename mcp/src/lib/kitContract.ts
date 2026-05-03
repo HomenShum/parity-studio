@@ -3,7 +3,13 @@ export interface KitContractInput {
   runId?: string | undefined;
   prompt?: string | undefined;
   sourceHtml?: string | undefined;
-  sourceType?: 'generated-html' | 'platform-route' | 'imported-kit' | 'image' | 'unknown' | undefined;
+  sourceType?:
+    | 'generated-html'
+    | 'platform-route'
+    | 'imported-kit'
+    | 'image'
+    | 'unknown'
+    | undefined;
   sourceUrl?: string | undefined;
   sourceTitle?: string | undefined;
   selector?: string | undefined;
@@ -222,7 +228,14 @@ export function buildOperatingContract(input: KitContractInput): KitOperatingCon
       ],
     },
     agentPolicy: {
-      impactClasses: ['appearance', 'performance', 'organization', 'api', 'accessibility', 'privacy'],
+      impactClasses: [
+        'appearance',
+        'performance',
+        'organization',
+        'api',
+        'accessibility',
+        'privacy',
+      ],
       editProtocol: [
         'Read parity.contract.json before editing.',
         'Classify the user request by impact class before choosing files.',
@@ -243,9 +256,10 @@ export function buildOperatingContract(input: KitContractInput): KitOperatingCon
       byokMode,
       localKeyPolicy:
         'Local MCP BYOK reads provider keys from the user machine environment only; keys must never be written into kit files, sent to Parity Studio, or logged.',
-      hostedUploadPolicy: input.importToParityStudio === false
-        ? 'Hosted upload disabled for this run.'
-        : 'Hosted import uploads generated kit files and captured source artifact only; provider API keys remain local.',
+      hostedUploadPolicy:
+        input.importToParityStudio === false
+          ? 'Hosted upload disabled for this run.'
+          : 'Hosted import uploads generated kit files and captured source artifact only; provider API keys remain local.',
       telemetryPolicy:
         'Telemetry may include model ids, token counts, latency, costs, verifier status, and file names; redact secrets and user data from captured artifacts before upload.',
     },

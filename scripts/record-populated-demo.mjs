@@ -8,11 +8,11 @@
 //   POPULATED_RUN_ID  the runId to deep-link into (default: known good)
 //   PARITY_STUDIO_URL  override target
 
-import { chromium } from 'playwright';
-import { mkdir, copyFile, readdir, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -51,10 +51,12 @@ async function main() {
       timeout: 60_000,
     });
     // Wait for parity report to render (16 rows visible)
-    await page.waitForFunction(
-      () => document.querySelectorAll('aside[aria-label="Deterministic parity"] *').length > 30,
-      { timeout: 30_000 },
-    ).catch(() => {});
+    await page
+      .waitForFunction(
+        () => document.querySelectorAll('aside[aria-label="Deterministic parity"] *').length > 30,
+        { timeout: 30_000 },
+      )
+      .catch(() => {});
     await page.waitForTimeout(3_000);
 
     // 2. Hover over a few parity rows to show interactivity
@@ -76,15 +78,21 @@ async function main() {
 
     // 3. Switch to code tab — Monaco loads
     console.log('[demo] 3 — code tab');
-    await page.getByRole('tab', { name: /code/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /code/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(3_500);
 
     // 4. Back to Files, click a file in the tree to scope it
     console.log('[demo] 4 — file scope');
-    await page.getByRole('tab', { name: /^files$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^files$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(1_200);
     const scopeBtn = page.locator('button[title^="Scope next comment"]').first();
-    if (await scopeBtn.count() > 0) {
+    if ((await scopeBtn.count()) > 0) {
       await scopeBtn.click();
       await page.waitForTimeout(1_500);
     }
@@ -92,14 +100,17 @@ async function main() {
     // 5. Toggle Comment mode in the top-right cluster
     console.log('[demo] 5 — comment mode toggle');
     const commentBtn = page.getByRole('button', { name: /comment mode/i });
-    if (await commentBtn.count() > 0) {
+    if ((await commentBtn.count()) > 0) {
       await commentBtn.first().click();
       await page.waitForTimeout(1_500);
     }
 
     // 6. Switch to preview tab to show the rendered ui_kit
     console.log('[demo] 6 — preview tab');
-    await page.getByRole('tab', { name: /^preview$/i }).click().catch(() => {});
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .click()
+      .catch(() => {});
     await page.waitForTimeout(3_000);
 
     // 7. Export ZIP from the top-right pill
@@ -114,7 +125,7 @@ async function main() {
       const sz = (await stat(path)).size;
       console.log(`[demo] zip saved: ${path} (${sz} bytes)`);
     } catch (err) {
-      console.log(`[demo] zip download didn't fire: ${(err && err.message) || err}`);
+      console.log(`[demo] zip download didn't fire: ${err?.message || err}`);
     }
 
     // 8. Final calm frame

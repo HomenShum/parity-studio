@@ -1,4 +1,12 @@
-import { ArrowDown, FileArchive, MessageSquare, MousePointer2, Package, Pencil, Sparkles } from 'lucide-react';
+import {
+  ArrowDown,
+  FileArchive,
+  MessageSquare,
+  MousePointer2,
+  Package,
+  Pencil,
+  Sparkles,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const STEPS: Array<{ n: string; Icon: LucideIcon; title: string; body: string }> = [
@@ -72,7 +80,14 @@ export function LandingGuidance() {
           gap: 'var(--space-7)',
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div
+          style={{
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+          }}
+        >
           <span
             style={{
               fontFamily: 'var(--font-mono)',
@@ -108,7 +123,8 @@ export function LandingGuidance() {
               margin: '0 auto',
             }}
           >
-            Drop a sketch. Watch the agent break it into real components. Comment, iterate, export — every step honest, every cost shown, every parity check named.
+            Drop a sketch. Watch the agent break it into real components. Comment, iterate, export —
+            every step honest, every cost shown, every parity check named.
           </p>
         </div>
 
@@ -136,7 +152,9 @@ export function LandingGuidance() {
                   boxShadow: 'var(--shadow-soft)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <span
                     style={{
                       display: 'inline-grid',

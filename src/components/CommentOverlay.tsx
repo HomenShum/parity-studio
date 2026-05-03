@@ -50,14 +50,47 @@ interface VisibleComment {
 }
 
 const QUICK_ACTIONS: Array<{ id: string; label: string; template: (el?: string) => string }> = [
-  { id: 'space-up', label: '+ space', template: (el) => `Increase spacing on ${el ?? 'this element'} by about 25%.` },
-  { id: 'space-down', label: '- space', template: (el) => `Decrease spacing on ${el ?? 'this element'} by about 25%.` },
-  { id: 'contrast-up', label: '+ contrast', template: (el) => `Increase the contrast on ${el ?? 'this element'} so foreground and background separate clearly.` },
-  { id: 'contrast-down', label: '- contrast', template: (el) => `Soften the contrast on ${el ?? 'this element'} without losing readability.` },
-  { id: 'text-up', label: '+ text', template: (el) => `Make the type larger on ${el ?? 'this element'} and tighten line-height.` },
-  { id: 'text-down', label: '- text', template: (el) => `Make the type smaller on ${el ?? 'this element'} by one size step.` },
-  { id: 'radius-up', label: '+ radius', template: (el) => `Round ${el ?? 'this element'} more using the next-larger radius token.` },
-  { id: 'radius-down', label: '- radius', template: (el) => `Sharpen ${el ?? 'this element'} with a smaller radius token.` },
+  {
+    id: 'space-up',
+    label: '+ space',
+    template: (el) => `Increase spacing on ${el ?? 'this element'} by about 25%.`,
+  },
+  {
+    id: 'space-down',
+    label: '- space',
+    template: (el) => `Decrease spacing on ${el ?? 'this element'} by about 25%.`,
+  },
+  {
+    id: 'contrast-up',
+    label: '+ contrast',
+    template: (el) =>
+      `Increase the contrast on ${el ?? 'this element'} so foreground and background separate clearly.`,
+  },
+  {
+    id: 'contrast-down',
+    label: '- contrast',
+    template: (el) => `Soften the contrast on ${el ?? 'this element'} without losing readability.`,
+  },
+  {
+    id: 'text-up',
+    label: '+ text',
+    template: (el) => `Make the type larger on ${el ?? 'this element'} and tighten line-height.`,
+  },
+  {
+    id: 'text-down',
+    label: '- text',
+    template: (el) => `Make the type smaller on ${el ?? 'this element'} by one size step.`,
+  },
+  {
+    id: 'radius-up',
+    label: '+ radius',
+    template: (el) => `Round ${el ?? 'this element'} more using the next-larger radius token.`,
+  },
+  {
+    id: 'radius-down',
+    label: '- radius',
+    template: (el) => `Sharpen ${el ?? 'this element'} with a smaller radius token.`,
+  },
 ];
 
 export function CommentOverlay({
@@ -397,10 +430,19 @@ function PendingBubble({
             {pending.elementLabel ?? 'SELECTED REGION'}
           </div>
           {pending.selector ? (
-            <code style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{pending.selector}</code>
+            <code style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>
+              {pending.selector}
+            </code>
           ) : null}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, marginBottom: 8 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 4,
+            marginBottom: 8,
+          }}
+        >
           {QUICK_ACTIONS.map((qa) => (
             <button
               key={qa.id}
@@ -424,7 +466,6 @@ function PendingBubble({
           ))}
         </div>
         <textarea
-          autoFocus
           value={text}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Describe the exact change for this element..."
@@ -444,15 +485,35 @@ function PendingBubble({
           }}
         />
         {error !== null ? (
-          <div style={{ color: 'var(--color-error)', fontSize: 11, marginTop: 6, fontFamily: 'var(--font-mono)' }}>
+          <div
+            style={{
+              color: 'var(--color-error)',
+              fontSize: 11,
+              marginTop: 6,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             {error}
           </div>
         ) : null}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginTop: 8,
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+          }}
+        >
           <button type="button" onClick={onCancel} style={secondaryButtonStyle}>
             cancel
           </button>
-          <button type="button" onClick={() => onSubmit(false)} disabled={text.trim().length === 0} style={secondaryButtonStyle}>
+          <button
+            type="button"
+            onClick={() => onSubmit(false)}
+            disabled={text.trim().length === 0}
+            style={secondaryButtonStyle}
+          >
             save
           </button>
           <button
@@ -463,8 +524,10 @@ function PendingBubble({
               padding: '6px 12px',
               borderRadius: 'var(--radius-sm)',
               border: 'none',
-              background: text.trim().length === 0 ? 'var(--color-surface-active)' : 'var(--color-accent)',
-              color: text.trim().length === 0 ? 'var(--color-text-faint)' : 'var(--color-on-accent)',
+              background:
+                text.trim().length === 0 ? 'var(--color-surface-active)' : 'var(--color-accent)',
+              color:
+                text.trim().length === 0 ? 'var(--color-text-faint)' : 'var(--color-on-accent)',
               fontFamily: 'var(--font-sans)',
               fontSize: 12,
               fontWeight: 600,
@@ -513,7 +576,14 @@ function CommentRail({
         fontFamily: 'var(--font-sans)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 10,
+        }}
+      >
         <strong style={{ fontSize: 13 }}>Comments {comments.length}</strong>
         <button type="button" onClick={onToggleNotes} style={tinyButtonStyle}>
           {notesVisible ? 'Hide notes' : 'Show notes'}
@@ -557,7 +627,8 @@ function CommentRail({
                 display: 'grid',
                 placeItems: 'center',
                 borderRadius: 999,
-                background: comment.status === 'open' ? 'var(--color-accent)' : 'var(--color-success)',
+                background:
+                  comment.status === 'open' ? 'var(--color-accent)' : 'var(--color-success)',
                 color: '#fff',
                 fontSize: 10,
                 fontFamily: 'var(--font-mono)',
@@ -566,12 +637,26 @@ function CommentRail({
               {index + 1}
             </span>
             <div>
-              <div style={{ fontSize: 12, lineHeight: 1.35, color: 'var(--color-text-primary)' }}>{comment.text}</div>
-              <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+              <div style={{ fontSize: 12, lineHeight: 1.35, color: 'var(--color-text-primary)' }}>
+                {comment.text}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: 'var(--color-text-faint)',
+                  marginTop: 3,
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
                 {comment.elementLabel ?? comment.selector ?? comment.targetFile ?? comment.status}
               </div>
             </div>
-            <button type="button" onClick={() => onDismiss(comment._id)} style={iconButtonStyle} title="Dismiss comment">
+            <button
+              type="button"
+              onClick={() => onDismiss(comment._id)}
+              style={iconButtonStyle}
+              title="Dismiss comment"
+            >
               x
             </button>
           </div>

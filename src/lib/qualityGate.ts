@@ -1,0 +1,2 @@
+export const QUALITY_GATE_MAX_REPAIRS = 4;
+export const QUALITY_GATE_TARGET_PASS_RATIO = 0.85;

@@ -37,8 +37,24 @@ export interface DeterministicCheckInputs {
 }
 
 const ELEMENT_TAGS = [
-  'header', 'nav', 'main', 'section', 'article', 'aside', 'footer',
-  'h1', 'h2', 'h3', 'table', 'form', 'ul', 'ol', 'button', 'input', 'select', 'textarea',
+  'header',
+  'nav',
+  'main',
+  'section',
+  'article',
+  'aside',
+  'footer',
+  'h1',
+  'h2',
+  'h3',
+  'table',
+  'form',
+  'ul',
+  'ol',
+  'button',
+  'input',
+  'select',
+  'textarea',
 ];
 
 function countTags(html: string, tag: string): number {
@@ -192,10 +208,20 @@ export function checkDeterministic(input: DeterministicCheckInputs): ParityRepor
   for (const f of expectedFiles) {
     const found = Object.keys(input.uiKitFiles).some((k) => k.endsWith(`/${f}`) || k === f);
     if (found) filesPass += 1;
-    else gaps.push({ kind: 'missing-file', severity: 'medium', message: `expected file missing: ${f}` });
+    else
+      gaps.push({
+        kind: 'missing-file',
+        severity: 'medium',
+        message: `expected file missing: ${f}`,
+      });
   }
 
-  for (const f of ['parity.contract.json', 'performance.budget.json', 'api-wiring.plan.md', 'qa.plan.md']) {
+  for (const f of [
+    'parity.contract.json',
+    'performance.budget.json',
+    'api-wiring.plan.md',
+    'qa.plan.md',
+  ]) {
     const found = Object.keys(input.uiKitFiles).some((k) => k.endsWith(`/${f}`) || k === f);
     if (!found) {
       gaps.push({

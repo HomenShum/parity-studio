@@ -1,0 +1,72 @@
+{
+  "completedAt": "2026-05-03T00:45:35.918Z",
+  "ok": true,
+  "source": {
+    "url": "http://127.0.0.1:4191/",
+    "finalUrl": "http://127.0.0.1:4191/",
+    "title": "Parity Studio — image to verified ui_kit",
+    "selector": null,
+    "capturedBytes": 114874,
+    "consoleErrors": [],
+    "redaction": {
+      "enabled": true,
+      "count": 0
+    }
+  },
+  "byok": {
+    "mode": "local-mcp-byok",
+    "models": [
+      {
+        "model": "gpt-5-mini",
+        "provider": "openai",
+        "envVar": "OPENAI_API_KEY",
+        "present": true
+      }
+    ],
+    "safeKeyPolicy": "Provider keys are read from this local MCP process env only. Values are never returned, logged, written into kit files, or uploaded to Parity Studio.",
+    "missingEnvVars": []
+  },
+  "codeContext": null,
+  "uiKit": {
+    "slug": "parity-studio-self-ui-kit",
+    "fileCount": 12,
+    "warnings": [
+      "model returned no path-fenced ui_kit files; deterministic platform capture fallback used"
+    ],
+    "fileNames": [
+      "ui_kits/parity-studio-self-ui-kit/index.html",
+      "ui_kits/parity-studio-self-ui-kit/components/AppShell.tsx",
+      "ui_kits/parity-studio-self-ui-kit/tokens.css",
+      "ui_kits/parity-studio-self-ui-kit/manifest.json",
+      "ui_kits/parity-studio-self-ui-kit/README.md",
+      "ui_kits/parity-studio-self-ui-kit/parity.contract.json",
+      "ui_kits/parity-studio-self-ui-kit/performance.budget.json",
+      "ui_kits/parity-studio-self-ui-kit/api-wiring.plan.md",
+      "ui_kits/parity-studio-self-ui-kit/qa.plan.md",
+      ".claude/skills/parity-studio-self-ui-kit/SKILL.md",
+      ".cursor/rules/parity-studio-self-ui-kit-parity-studio.mdc",
+      "AGENTS.md"
+    ]
+  },
+  "deterministic": {
+    "passCount": 16,
+    "totalChecks": 16,
+    "parityScore": 1,
+    "status": "verified",
+    "summary": "Parity OK",
+    "gaps": []
+  },
+  "zip": {
+    "outputZipPath": "D:\\VSCode Projects\\parity-studio\\docs\\dogfood\\parity-studio-self-ui-kit.zip",
+    "zipSizeBytes": 28276
+  },
+  "parityStudio": {
+    "imported": true,
+    "runId": "jh721fbd9rnvckyxz3p5annjjd8602x7",
+    "runUrl": "https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7"
+  },
+  "modelUsed": "gpt-5-mini",
+  "costUsd": 0,
+  "latencyMs": 1096,
+  "dashboardUrl": "http://127.0.0.1:6280"
+}

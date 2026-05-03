@@ -1,17 +1,21 @@
+import { mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 // Quick visual check — boots dev server, screenshots the current shell
 // at 1680x900 so we can compare to docs reference image.
 //
 // Usage: pnpm exec tsx scripts/screenshot-shell.mjs
 import { chromium } from 'playwright';
-import { mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 
 const URL = process.env.SHELL_URL ?? 'http://localhost:5174/';
-const OUT = resolve(repoRoot, 'runs', `shell-${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
+const OUT = resolve(
+  repoRoot,
+  'runs',
+  `shell-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
+);
 
 const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1680, height: 900 } });

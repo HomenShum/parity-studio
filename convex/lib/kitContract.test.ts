@@ -18,7 +18,9 @@ describe('kit operating contract', () => {
     );
 
     expect(files['ui_kits/settings/parity.contract.json']).toContain('"slug": "settings"');
-    expect(files['ui_kits/settings/performance.budget.json']).toContain('routeTransitionPerceivedMs');
+    expect(files['ui_kits/settings/performance.budget.json']).toContain(
+      'routeTransitionPerceivedMs',
+    );
     expect(files['ui_kits/settings/api-wiring.plan.md']).toContain('API wiring plan');
     expect(files['ui_kits/settings/qa.plan.md']).toContain('http://localhost:3000/settings');
     expect(files['.claude/skills/settings/SKILL.md']).toContain('name: parity-settings');

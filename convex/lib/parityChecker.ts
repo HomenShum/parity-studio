@@ -171,21 +171,20 @@ function checkStructureParity(source: string, decomposed: string): ParityCheck {
 }
 
 function checkComponentCount(source: string, decomposed: string): ParityCheck {
-  const s =
-    countTags(source, 'section') + countTags(source, 'article') + countTags(source, 'div');
+  const s = countTags(source, 'section') + countTags(source, 'article') + countTags(source, 'div');
   const d =
-    countTags(decomposed, 'section') + countTags(decomposed, 'article') + countTags(decomposed, 'div');
-  if (s === 0) return { id: 'componentCount', label: 'Component count', status: 'pass', evidence: [] };
+    countTags(decomposed, 'section') +
+    countTags(decomposed, 'article') +
+    countTags(decomposed, 'div');
+  if (s === 0)
+    return { id: 'componentCount', label: 'Component count', status: 'pass', evidence: [] };
   const ratio = 1 - Math.min(1, Math.abs(s - d) / s);
   const status = bucketPctToVerdict(ratio);
   return {
     id: 'componentCount',
     label: 'Component count',
     status,
-    evidence:
-      status === 'pass'
-        ? []
-        : [`${s} block-level elements in source, ${d} in decomposed`],
+    evidence: status === 'pass' ? [] : [`${s} block-level elements in source, ${d} in decomposed`],
   };
 }
 
@@ -263,7 +262,11 @@ function checkTypographyScale(decomposed: string, tokensCss: string | null): Par
   return { id: 'typography', label: 'Typography scale', status: 'pass', evidence: [] };
 }
 
-function checkFontFidelity(source: string, decomposed: string, tokensCss: string | null): ParityCheck {
+function checkFontFidelity(
+  source: string,
+  decomposed: string,
+  tokensCss: string | null,
+): ParityCheck {
   const re = /font-family\s*:\s*([^;}]+)/gi;
   const srcFonts = new Set(
     Array.from(source.matchAll(re)).map((m) => (m[1] ?? '').toLowerCase().trim()),
@@ -305,7 +308,11 @@ function checkFontFidelity(source: string, decomposed: string, tokensCss: string
   };
 }
 
-function checkColorTokens(source: string, decomposed: string, tokensCss: string | null): ParityCheck {
+function checkColorTokens(
+  source: string,
+  decomposed: string,
+  tokensCss: string | null,
+): ParityCheck {
   const srcColors = uniqueColors(source);
   const tokenColors = uniqueColors(tokensCss ?? '');
   const decColors = uniqueColors(decomposed);
@@ -449,8 +456,7 @@ function checkAccessibility(decomposed: string): ParityCheck {
   const inputs = countTags(decomposed, 'input');
   const issues: string[] = [];
   if (imgs > 0 && alts < imgs) issues.push(`${imgs - alts}/${imgs} <img> missing alt`);
-  if (inputs > 0 && labels === 0)
-    issues.push(`${inputs} <input> with no <label>`);
+  if (inputs > 0 && labels === 0) issues.push(`${inputs} <input> with no <label>`);
   if (aria + alts + labels === 0)
     return {
       id: 'a11y',
@@ -548,22 +554,22 @@ export function checkDeterministic(input: DeterministicCheckInputs): ParityRepor
   const files = input.uiKitFiles;
 
   const checks: ParityCheck[] = [
-    checkStructureParity(src, dec),                          // 1
-    checkComponentCount(src, dec),                           // 2
-    checkLayoutGrid(dec, tok),                               // 3
-    checkSpacingSystem(dec, tok),                            // 4
-    checkTypographyScale(dec, tok),                          // 5
-    checkFontFidelity(src, dec, tok),                        // 6
-    checkColorTokens(src, dec, tok),                         // 7
-    checkColorDelta(),                                       // 8 (honest unavailable)
-    checkBorderRadius(dec, tok),                             // 9
-    checkShadows(dec, tok),                                  // 10
-    checkIconography(src, dec),                              // 11
-    checkResponsiveBreakpoints(dec, tok),                    // 12
-    checkInteractionStates(dec, tok),                        // 13
-    checkAccessibility(dec),                                 // 14
-    checkSemanticHtml(dec),                                  // 15
-    checkVisualRegression(),                                 // 16 (honest unavailable)
+    checkStructureParity(src, dec), // 1
+    checkComponentCount(src, dec), // 2
+    checkLayoutGrid(dec, tok), // 3
+    checkSpacingSystem(dec, tok), // 4
+    checkTypographyScale(dec, tok), // 5
+    checkFontFidelity(src, dec, tok), // 6
+    checkColorTokens(src, dec, tok), // 7
+    checkColorDelta(), // 8 (honest unavailable)
+    checkBorderRadius(dec, tok), // 9
+    checkShadows(dec, tok), // 10
+    checkIconography(src, dec), // 11
+    checkResponsiveBreakpoints(dec, tok), // 12
+    checkInteractionStates(dec, tok), // 13
+    checkAccessibility(dec), // 14
+    checkSemanticHtml(dec), // 15
+    checkVisualRegression(), // 16 (honest unavailable)
   ];
 
   // File presence shows up as gaps, not as standalone checks (the 16

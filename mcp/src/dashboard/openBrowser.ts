@@ -15,7 +15,7 @@ import open from 'open';
 export type DashboardMode = 'auto-open' | 'server-only' | 'disabled';
 
 export function dashboardMode(): DashboardMode {
-  const v = (process.env['PARITY_DASHBOARD'] ?? 'auto-open').toLowerCase().trim();
+  const v = (process.env.PARITY_DASHBOARD ?? 'auto-open').toLowerCase().trim();
   if (v === 'server-only') return 'server-only';
   if (v === 'disabled' || v === 'off' || v === 'false' || v === '0') return 'disabled';
   return 'auto-open';

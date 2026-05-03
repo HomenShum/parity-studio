@@ -63,7 +63,7 @@ export function expandToCanonicalShape(input: ExpandInput): Record<string, strin
     parity && parity.totalChecks > 0
       ? `${parity.passCount}/${parity.totalChecks} ${parity.status}`
       : 'n/a';
-  const ext = run.sourceImageMimeType ? run.sourceImageMimeType.split('/')[1] ?? 'png' : null;
+  const ext = run.sourceImageMimeType ? (run.sourceImageMimeType.split('/')[1] ?? 'png') : null;
   const tokensCss = kitFiles[`ui_kits/${slug}/tokens.css`] ?? '';
 
   Object.assign(
@@ -122,7 +122,8 @@ If you need to verify or iterate further, drop this same zip back into
 https://parity-studio.vercel.app — it round-trips.
 `;
 
-  out['colors_and_type.css'] = `/* ==========================================================================
+  out['colors_and_type.css'] =
+    `/* ==========================================================================
    ${slug} — Colors & Type
    Root token entry. Imports the active slug's per-kit tokens.css so a
    consumer can include this single file and get the full token surface.
@@ -156,13 +157,15 @@ manifest.json schemaVersion 1 contract is stable across minor versions.
 `;
 
   // ── assets/ ────────────────────────────────────────────────────────
-  out['assets/logo-mark.svg'] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  out['assets/logo-mark.svg'] =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="14" fill="#C76D54"/>
   <text x="32" y="44" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="500" text-anchor="middle" fill="#FAF7F3">${escapeXml(initialFromSlug(slug))}</text>
 </svg>
 `;
 
-  out[`assets/og-${slug}.svg`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  out[`assets/og-${slug}.svg`] =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <rect width="1200" height="630" fill="#FAF7F3"/>
   <rect x="60" y="60" width="100" height="100" rx="22" fill="#C76D54"/>
   <text x="110" y="132" font-family="Georgia, serif" font-size="64" font-weight="500" text-anchor="middle" fill="#FAF7F3">${escapeXml(initialFromSlug(slug))}</text>
@@ -210,8 +213,8 @@ h1 { font-family: var(--font-display, Georgia, serif); font-size: 36px; font-wei
 pre { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; line-height: 1.5; background: rgba(0,0,0,0.04); padding: 12px; border-radius: 8px; overflow-x: auto; }
 `;
 
-  const componentEntries = Object.entries(kitFiles).filter(([p]) =>
-    /\.(tsx|jsx)$/.test(p) && !p.endsWith('/HANDOFF.md'),
+  const componentEntries = Object.entries(kitFiles).filter(
+    ([p]) => /\.(tsx|jsx)$/.test(p) && !p.endsWith('/HANDOFF.md'),
   );
   const componentSpecimens = componentEntries.map(([p]) => {
     const base = (p.split('/').slice(-1)[0] ?? '').replace(/\.(tsx|jsx)$/, '');
@@ -244,9 +247,10 @@ pre { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; l
 
   for (const c of componentSpecimens) {
     const content = kitFiles[c.path] ?? '';
-    const truncated = content.length > 8000
-      ? `${content.slice(0, 8000)}\n\n/* …truncated at 8 KB; see ${c.path} for full source */`
-      : content;
+    const truncated =
+      content.length > 8000
+        ? `${content.slice(0, 8000)}\n\n/* …truncated at 8 KB; see ${c.path} for full source */`
+        : content;
     out[`preview/component-${c.slug}.html`] = `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"/>
@@ -264,7 +268,9 @@ pre { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; l
   }
 
   const colorMatches = Array.from(
-    tokensCss.matchAll(/--([a-z][a-z0-9-]*color[a-z0-9-]*|color-[a-z0-9-]+|accent[a-z0-9-]*|brand-[a-z0-9-]+)\s*:\s*([^;]+);/gi),
+    tokensCss.matchAll(
+      /--([a-z][a-z0-9-]*color[a-z0-9-]*|color-[a-z0-9-]+|accent[a-z0-9-]*|brand-[a-z0-9-]+)\s*:\s*([^;]+);/gi,
+    ),
   ).slice(0, 40);
   out['preview/tokens-color.html'] = tokenPage('Color tokens', slug, swatches(colorMatches));
   const spacingMatches = Array.from(
@@ -276,7 +282,9 @@ pre { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; l
   ).slice(0, 20);
   out['preview/tokens-radius.html'] = tokenPage('Radius tokens', slug, kvList(radiusMatches));
   const typeMatches = Array.from(
-    tokensCss.matchAll(/--(font-[a-z0-9-]+|tracking-[a-z0-9-]+|leading-[a-z0-9-]+|text-[a-z0-9-]+)\s*:\s*([^;]+);/gi),
+    tokensCss.matchAll(
+      /--(font-[a-z0-9-]+|tracking-[a-z0-9-]+|leading-[a-z0-9-]+|text-[a-z0-9-]+)\s*:\s*([^;]+);/gi,
+    ),
   ).slice(0, 40);
   out['preview/tokens-typography.html'] = tokenPage('Typography tokens', slug, kvList(typeMatches));
 
@@ -310,11 +318,7 @@ active kit.
   // export the canonical regen only fills in NEW tokens (existing
   // user/agent edits to tweak-schema.json survive thanks to iterate's
   // merge policy).
-  out[`ui_kits/${slug}/tweak-schema.json`] = JSON.stringify(
-    deriveTweakSchema(tokensCss),
-    null,
-    2,
-  );
+  out[`ui_kits/${slug}/tweak-schema.json`] = JSON.stringify(deriveTweakSchema(tokensCss), null, 2);
 
   // ── screenshots/ + scraps/ — README docs only; binaries injected at zip
   out['screenshots/README.md'] = `# Screenshots
@@ -374,8 +378,7 @@ export interface TweakSchema {
   tokens: Record<string, TweakSchemaEntry>;
 }
 
-const COLOR_VALUE_RE =
-  /^(#[0-9a-f]{3,8}|oklch\([^)]*\)|rgba?\([^)]*\)|hsla?\([^)]*\))$/i;
+const COLOR_VALUE_RE = /^(#[0-9a-f]{3,8}|oklch\([^)]*\)|rgba?\([^)]*\)|hsla?\([^)]*\))$/i;
 const NUMERIC_VALUE_RE = /^(-?\d+(?:\.\d+)?)(px|rem|em|%|s|ms)?$/i;
 const FONT_STACK_RE = /,/;
 

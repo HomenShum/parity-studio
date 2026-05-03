@@ -53,11 +53,7 @@ function relativeTime(ts: number | undefined): string {
   return `${d}d ago`;
 }
 
-export function PipelinePanel({
-  currentRunId,
-  onSelectRun,
-  onRunStarted,
-}: PipelinePanelProps) {
+export function PipelinePanel({ currentRunId, onSelectRun, onRunStarted }: PipelinePanelProps) {
   const runs = useQuery(api.runs.listRecent, { limit: 12 });
 
   const rows: ActivityRow[] = useMemo(() => {
@@ -96,7 +92,8 @@ export function PipelinePanel({
         out.push({
           key: `${run._id}-iterate`,
           stage: 'iterate',
-          state: run.status === 'iterating' ? 'running' : run.status === 'failed' ? 'failed' : 'done',
+          state:
+            run.status === 'iterating' ? 'running' : run.status === 'failed' ? 'failed' : 'done',
           ageLabel: relativeTime(run.finishedAt ?? run._creationTime),
           description: undefined,
           edits: run.iterationsCompleted,

@@ -36,8 +36,8 @@ import {
   type Context,
   type ImageContent,
   type TextContent,
-  complete as piComplete,
   getModel,
+  complete as piComplete,
 } from '@mariozechner/pi-ai';
 
 /**
@@ -132,9 +132,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {
     if (!model.input.includes('image')) {
-      throw new Error(
-        `pi-ai model ${opts.provider}/${opts.modelId} does not support image input`,
-      );
+      throw new Error(`pi-ai model ${opts.provider}/${opts.modelId} does not support image input`);
     }
     userContent.push({
       type: 'image',
@@ -160,9 +158,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxOutputTokens: opts.maxTokens } : {}),
-    ...(isOpenRouter
-      ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 }
-      : {}),
+    ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };
 
   // Retry loop for soft errors (stopReason='error' with retriable message).
@@ -180,7 +176,10 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     const waitMs = 1000 * 3 ** attempt + Math.floor(Math.random() * 500);
     await sleep(waitMs);
   }
-  const result = lastResult!;
+  if (lastResult === undefined) {
+    throw new Error('piComplete returned no result');
+  }
+  const result = lastResult;
 
   const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
   const text = textBlocks.map((b) => b.text).join('');

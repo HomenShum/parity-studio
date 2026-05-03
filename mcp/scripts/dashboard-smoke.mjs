@@ -20,25 +20,29 @@ const SERVER_ENTRY = path.resolve(__dirname, '..', 'dist', 'index.js');
 const SKIP_LLM = process.env.SKIP_LLM === '1';
 
 function jsonrpc(id, method, params) {
-  return JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+  return `${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`;
 }
 function jsonrpcNotif(method, params) {
-  return JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n';
+  return `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`;
 }
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
-      let body = '';
-      res.on('data', (d) => (body += d));
-      res.on('end', () => {
-        try {
-          resolve({ status: res.statusCode, body: JSON.parse(body) });
-        } catch {
-          resolve({ status: res.statusCode, body });
-        }
-      });
-    }).on('error', reject);
+    http
+      .get(url, (res) => {
+        let body = '';
+        res.on('data', (d) => {
+          body += d;
+        });
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, body: JSON.parse(body) });
+          } catch {
+            resolve({ status: res.statusCode, body });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -89,8 +93,8 @@ async function main() {
   const messages = [];
   child.stdout.on('data', (chunk) => {
     buf += chunk.toString();
-    let nl;
-    while ((nl = buf.indexOf('\n')) !== -1) {
+    let nl = buf.indexOf('\n');
+    while (nl !== -1) {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
@@ -99,15 +103,18 @@ async function main() {
       } catch {
         // ignore non-JSON
       }
+      nl = buf.indexOf('\n');
     }
   });
 
   // Initialize handshake
-  child.stdin.write(jsonrpc(1, 'initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'dashboard-smoke', version: '0.0.1' },
-  }));
+  child.stdin.write(
+    jsonrpc(1, 'initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'dashboard-smoke', version: '0.0.1' },
+    }),
+  );
   await new Promise((r) => setTimeout(r, 300));
   child.stdin.write(jsonrpcNotif('notifications/initialized', {}));
   await new Promise((r) => setTimeout(r, 200));
@@ -115,13 +122,16 @@ async function main() {
   // Trigger dashboard init by calling parity_decompose
   if (!SKIP_LLM) {
     console.log('triggering dashboard init via parity_decompose tool call...');
-    child.stdin.write(jsonrpc(2, 'tools/call', {
-      name: 'parity_decompose',
-      arguments: {
-        artifactHtml: '<html><body><header><h1>Smoke Test</h1></header><main><p>Tiny artifact for dashboard smoke test.</p></main></body></html>',
-        decomposeModel: 'claude-haiku-4-5', // cheapest available
-      },
-    }));
+    child.stdin.write(
+      jsonrpc(2, 'tools/call', {
+        name: 'parity_decompose',
+        arguments: {
+          artifactHtml:
+            '<html><body><header><h1>Smoke Test</h1></header><main><p>Tiny artifact for dashboard smoke test.</p></main></body></html>',
+          decomposeModel: 'claude-haiku-4-5', // cheapest available
+        },
+      }),
+    );
     // Wait for the tool result
     const tStart = Date.now();
     while (!messages.some((m) => m.id === 2) && Date.now() - tStart < 60_000) {
@@ -129,7 +139,10 @@ async function main() {
     }
     const decompResp = messages.find((m) => m.id === 2);
     if (decompResp?.error) {
-      console.warn('parity_decompose returned error (continuing dashboard test):', decompResp.error.message);
+      console.warn(
+        'parity_decompose returned error (continuing dashboard test):',
+        decompResp.error.message,
+      );
     } else if (decompResp?.result) {
       console.log('parity_decompose ok (took', ((Date.now() - tStart) / 1000).toFixed(1), 's)');
     }

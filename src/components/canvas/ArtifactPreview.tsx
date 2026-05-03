@@ -47,10 +47,13 @@ export function ArtifactPreview({
     return files[path] ?? null;
   }, [uiKit]);
 
-  const commentMessageToken = useMemo(
-    () => `parity-comment-${Math.random().toString(36).slice(2)}`,
-    [runId],
-  );
+  const liveKitHtml = useMemo(() => {
+    if (!uiKit) return null;
+    const files = (uiKit.files as Record<string, string>) ?? {};
+    return files[`ui_kits/${uiKit.slug}/index.html`] ?? files['preview/index.html'] ?? null;
+  }, [uiKit]);
+
+  const commentMessageToken = runId ? `parity-comment-${runId}` : 'parity-comment-empty';
 
   // Stitch tokens.css into the iframe srcDoc so TweakPanel edits show
   // live. Insert at the end of <head> so edited token values override
@@ -218,13 +221,26 @@ window.addEventListener('unhandledrejection', function(event) {
   let versionLabel = 'v0';
   let artifactVersion = 0;
   if (runId !== null) {
-    if (artifact === undefined || run === undefined) {
+    if (liveKitHtml !== null) {
+      srcDoc = injectCommentHelper(
+        injectRuntimeGuard(
+          stripUnresolvableScriptSrcs(injectLiveTokens(liveKitHtml, liveTokensCss)),
+        ),
+        commentModeActive,
+        commentMessageToken,
+      );
+      const baseVersion = uiKit?.artifactVersion ?? artifact?.version ?? 0;
+      versionLabel = `kit v${baseVersion}`;
+      artifactVersion = baseVersion;
+    } else if (artifact === undefined || run === undefined || uiKit === undefined) {
       srcDoc = loadingHtml('loading');
     } else if (artifact === null) {
       srcDoc = loadingHtml(run?.status ?? 'queued');
     } else {
       srcDoc = injectCommentHelper(
-        injectRuntimeGuard(stripUnresolvableScriptSrcs(injectLiveTokens(artifact.html, liveTokensCss))),
+        injectRuntimeGuard(
+          stripUnresolvableScriptSrcs(injectLiveTokens(artifact.html, liveTokensCss)),
+        ),
         commentModeActive,
         commentMessageToken,
       );
@@ -234,6 +250,7 @@ window.addEventListener('unhandledrejection', function(event) {
   }
 
   const semverLabel = run ? `v2.${artifactVersion}.${run.iterationsCompleted ?? 0}` : 'v—';
+  const previewKindLabel = versionLabel.startsWith('kit') ? 'Kit preview' : 'Artifact preview';
 
   return (
     <div
@@ -260,7 +277,7 @@ window.addEventListener('unhandledrejection', function(event) {
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <ExternalLink size={11} aria-hidden />
-          Artifact preview {versionLabel}
+          {previewKindLabel} {versionLabel}
         </span>
         <span style={{ color: 'var(--color-text-faint)', textTransform: 'none', letterSpacing: 0 }}>
           {semverLabel}
@@ -407,7 +424,13 @@ function DeviceFrame({
               title="artifact preview"
               srcDoc={srcDoc}
               sandbox="allow-scripts"
-              style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', display: 'block' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                background: 'transparent',
+                display: 'block',
+              }}
             />
             <CommentOverlay
               runId={runId}

@@ -20,17 +20,17 @@
  *     "env": {
  *       "ANTHROPIC_API_KEY": "sk-ant-...",
  *       "OPENAI_API_KEY": "sk-...",
- *       "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
- *       "PARITY_JUDGE_MODEL": "claude-sonnet-4-5"
+ *       "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
+ *       "PARITY_JUDGE_MODEL": "claude-sonnet-4-6"
  *     }
  *   }
  */
 
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import JSZip from 'jszip';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
 import { eventBus, makeRunId } from './dashboard/events.js';
@@ -40,11 +40,7 @@ import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
-import {
-  type ParityReport,
-  checkDeterministic,
-  statusFromBooleans,
-} from './lib/parityChecker.js';
+import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
 import { redactSensitiveValues } from './lib/privacy.js';
 import {
@@ -126,10 +122,9 @@ Approval gates:
 // parity_run_*, parity_export). Override via env to point at a self-hosted
 // or staging deployment. Public mutations / queries / actions accept POST
 // requests at these URLs without auth.
-const CONVEX_CLOUD_URL =
-  process.env['PARITY_CONVEX_URL'] ?? 'https://blissful-pig-998.convex.cloud';
+const CONVEX_CLOUD_URL = process.env.PARITY_CONVEX_URL ?? 'https://blissful-pig-998.convex.cloud';
 const CONVEX_SITE_URL =
-  process.env['PARITY_CONVEX_HTTP_URL'] ?? 'https://blissful-pig-998.convex.site';
+  process.env.PARITY_CONVEX_HTTP_URL ?? 'https://blissful-pig-998.convex.site';
 
 /**
  * Thin Convex HTTP API client. Public functions (no `internal` prefix) are
@@ -163,12 +158,12 @@ async function convexCall(
 
 // Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
 // for vision judge). Override via env for any tier you prefer:
-//   PARITY_GENERATE_MODEL=claude-sonnet-4-5
-//   PARITY_DECOMPOSE_MODEL=claude-opus-4-1
+//   PARITY_GENERATE_MODEL=claude-sonnet-4-6
+//   PARITY_DECOMPOSE_MODEL=claude-opus-4-7
 //   PARITY_JUDGE_MODEL=gpt-4o
-const GENERATE_MODEL = process.env['PARITY_GENERATE_MODEL'] ?? 'moonshotai/kimi-k2.6';
-const DECOMPOSE_MODEL = process.env['PARITY_DECOMPOSE_MODEL'] ?? 'moonshotai/kimi-k2.6';
-const JUDGE_MODEL = process.env['PARITY_JUDGE_MODEL'] ?? 'google/gemini-3.1-pro-preview';
+const GENERATE_MODEL = process.env.PARITY_GENERATE_MODEL ?? 'moonshotai/kimi-k2.6';
+const DECOMPOSE_MODEL = process.env.PARITY_DECOMPOSE_MODEL ?? 'moonshotai/kimi-k2.6';
+const JUDGE_MODEL = process.env.PARITY_JUDGE_MODEL ?? 'google/gemini-3.1-pro-preview';
 
 // Image mime type, must match what most providers accept
 const IMG_MIME_SCHEMA = z.enum(['image/png', 'image/jpeg', 'image/webp']);
@@ -240,19 +235,15 @@ const verifyInput = {
   uiKitFiles: z
     .record(z.string())
     .describe('Map of relative file paths to file contents (the parsed ui_kit/<slug>/ tree)'),
-  sourceHtml: z
-    .string()
-    .min(20)
-    .describe('Original HTML the ui_kit was decomposed from'),
+  sourceHtml: z.string().min(20).describe('Original HTML the ui_kit was decomposed from'),
   sourceImageBase64: z
     .string()
     .optional()
-    .describe('Optional source mockup image. If provided, runs the visual judge in addition to deterministic checks.'),
+    .describe(
+      'Optional source mockup image. If provided, runs the visual judge in addition to deterministic checks.',
+    ),
   sourceImageMimeType: IMG_MIME_SCHEMA.optional(),
-  judgeModel: z
-    .string()
-    .optional()
-    .describe(`override judge model (default ${JUDGE_MODEL})`),
+  judgeModel: z.string().optional().describe(`override judge model (default ${JUDGE_MODEL})`),
 };
 
 async function handleVerify(args: {
@@ -338,8 +329,8 @@ async function runVisualJudge(args: {
 
   // Parse JSON loosely — providers sometimes wrap in fences
   const parsed = parseLooseJson(judge.text);
-  const checks: VisualJudgeOutcome['checks'] = Array.isArray(parsed?.['checks'])
-    ? (parsed['checks'] as VisualJudgeOutcome['checks'])
+  const checks: VisualJudgeOutcome['checks'] = Array.isArray(parsed?.checks)
+    ? (parsed.checks as VisualJudgeOutcome['checks'])
     : [];
   const passCount = checks.filter((c) => c.passed === true).length;
   const totalChecks = checks.length || 12;
@@ -352,8 +343,8 @@ async function runVisualJudge(args: {
     parityScore,
     status,
     summary:
-      typeof parsed?.['summary'] === 'string'
-        ? (parsed['summary'] as string)
+      typeof parsed?.summary === 'string'
+        ? (parsed.summary as string)
         : `${passCount}/${totalChecks} visual checks passed`,
     checks,
     judgeCostUsd: judge.costUsd,
@@ -401,7 +392,9 @@ const platformToUiKitInput = {
   projectRoot: z
     .string()
     .optional()
-    .describe('Optional local codebase root. If provided, selected source files are included as context.'),
+    .describe(
+      'Optional local codebase root. If provided, selected source files are included as context.',
+    ),
   includeCodeContext: z
     .boolean()
     .optional()
@@ -417,7 +410,9 @@ const platformToUiKitInput = {
   outputZipPath: z
     .string()
     .optional()
-    .describe('Optional filesystem path where the MCP server should write the canonical ui_kit ZIP'),
+    .describe(
+      'Optional filesystem path where the MCP server should write the canonical ui_kit ZIP',
+    ),
   includeZipBase64: z
     .boolean()
     .optional()
@@ -429,19 +424,25 @@ const platformToUiKitInput = {
   redactSensitiveValues: z
     .boolean()
     .optional()
-    .describe('Redact obvious emails/API keys/tokens from captured HTML before model calls or hosted import (default true).'),
+    .describe(
+      'Redact obvious emails/API keys/tokens from captured HTML before model calls or hosted import (default true).',
+    ),
 };
 
 const parityStudioInput = {
   request: z
     .string()
     .optional()
-    .describe('Natural-language user request, e.g. "use Parity Studio with our app and get me the zip export"'),
+    .describe(
+      'Natural-language user request, e.g. "use Parity Studio with our app and get me the zip export"',
+    ),
   url: z
     .string()
     .url()
     .optional()
-    .describe('Optional running app URL. If omitted, uses PARITY_APP_URL or probes common localhost dev ports.'),
+    .describe(
+      'Optional running app URL. If omitted, uses PARITY_APP_URL or probes common localhost dev ports.',
+    ),
   route: z
     .string()
     .optional()
@@ -454,14 +455,24 @@ const parityStudioInput = {
   outputZipPath: z
     .string()
     .optional()
-    .describe('Optional zip output path. Defaults to ./parity-<route>-ui-kit.zip under projectRoot.'),
+    .describe(
+      'Optional zip output path. Defaults to ./parity-<route>-ui-kit.zip under projectRoot.',
+    ),
   importToParityStudio: z
     .boolean()
     .optional()
-    .describe('Upload generated kit to hosted Parity Studio. Default true. Keys are never uploaded.'),
-  decomposeModel: z.string().optional().describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
+    .describe(
+      'Upload generated kit to hosted Parity Studio. Default true. Keys are never uploaded.',
+    ),
+  decomposeModel: z
+    .string()
+    .optional()
+    .describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
   includeZipBase64: z.boolean().optional().describe('Return zipBase64. Default false.'),
-  redactSensitiveValues: z.boolean().optional().describe('Redact obvious sensitive values. Default true.'),
+  redactSensitiveValues: z
+    .boolean()
+    .optional()
+    .describe('Redact obvious sensitive values. Default true.'),
 };
 
 async function handlePlatformToUiKit(args: {
@@ -528,9 +539,12 @@ async function handlePlatformToUiKit(args: {
 
     let codeContextText = '';
     let codeRedactionCount = 0;
-    let codeContext:
-      | { root: string; filesRead: number; bytesRead: number; skipped: string[] }
-      | null = null;
+    let codeContext: {
+      root: string;
+      filesRead: number;
+      bytesRead: number;
+      skipped: string[];
+    } | null = null;
     const shouldReadCode = Boolean(args.projectRoot) && args.includeCodeContext !== false;
     if (args.projectRoot && shouldReadCode) {
       const collected = await collectCodeContext({
@@ -578,10 +592,22 @@ async function handlePlatformToUiKit(args: {
       }),
       maxTokens: 24_000,
     });
-    const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
+    let parsed = parseUiKitResponse(result.text, args.fallbackSlug);
     const latencyMs = Date.now() - t0;
     if (Object.keys(parsed.files).length === 0) {
-      throw new Error(`platform decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+      eventBus.appendLog(
+        runId,
+        'warn',
+        `model returned no parseable path-fenced ui_kit files; using deterministic platform capture fallback (${parsed.warnings.join('; ')})`,
+      );
+      parsed = buildPlatformCaptureFallback({
+        captureHtml,
+        fallbackSlug: args.fallbackSlug,
+        sourceUrl: capture.finalUrl,
+        title: capture.title,
+        textSample,
+        modelUsed: result.modelUsed,
+      });
     }
     const filesWithContract = withOperatingContract(parsed.files, {
       slug: parsed.slug,
@@ -771,7 +797,8 @@ ${args.captureHtml}`;
 
 async function resolveAppUrl(args: { url?: string; route?: string }): Promise<string> {
   if (args.url) return withRoute(args.url, args.route);
-  if (process.env['PARITY_APP_URL']) return withRoute(process.env['PARITY_APP_URL'] as string, args.route);
+  if (process.env.PARITY_APP_URL)
+    return withRoute(process.env.PARITY_APP_URL as string, args.route);
 
   const commonOrigins = [
     'http://localhost:3000',
@@ -827,11 +854,136 @@ function slugHintFromUrl(urlText: string): string {
   return pathSlug || 'app';
 }
 
+function buildPlatformCaptureFallback(args: {
+  captureHtml: string;
+  fallbackSlug?: string;
+  sourceUrl: string;
+  title: string;
+  textSample: string;
+  modelUsed: string;
+}): { slug: string; files: Record<string, string>; warnings: string[] } {
+  const slug = sanitizeSlug(args.fallbackSlug ?? slugHintFromUrl(args.sourceUrl));
+  const title = args.title || 'Captured platform route';
+  const visibleSample = args.textSample || '(no visible text sample captured)';
+  const files: Record<string, string> = {
+    [`ui_kits/${slug}/index.html`]: args.captureHtml,
+    [`ui_kits/${slug}/components/AppShell.tsx`]: `export interface AppShellProps {
+  title?: string;
+}
+
+export function AppShell({ title = ${JSON.stringify(title)} }: AppShellProps) {
+  return (
+    <main className="parity-platform-capture" aria-label={title}>
+      <header className="parity-platform-capture__notice">
+        <p>Platform capture fallback</p>
+        <h1>{title}</h1>
+        <p>
+          The visual source is preserved in ui_kits/${slug}/index.html. Use this
+          component as the integration anchor when replacing fallback markup with
+          hand-authored React regions.
+        </p>
+      </header>
+    </main>
+  );
+}
+`,
+    [`ui_kits/${slug}/tokens.css`]: `:root {
+  --parity-capture-bg: #fbf4eb;
+  --parity-capture-ink: #241812;
+  --parity-capture-muted: #8a7669;
+  --parity-capture-brand: #dd5d3f;
+  --parity-capture-border: rgba(36, 24, 18, 0.12);
+  --parity-capture-radius: 18px;
+  --parity-capture-shadow: 0 24px 80px rgba(36, 24, 18, 0.12);
+}
+`,
+    [`ui_kits/${slug}/manifest.json`]: JSON.stringify(
+      {
+        schemaVersion: 1,
+        generator: 'parity-studio-mcp',
+        slug,
+        sourceType: 'platform-route',
+        sourceUrl: args.sourceUrl,
+        fallback: true,
+        components: ['AppShell'],
+        tokens: [
+          '--parity-capture-bg',
+          '--parity-capture-ink',
+          '--parity-capture-muted',
+          '--parity-capture-brand',
+          '--parity-capture-border',
+          '--parity-capture-radius',
+          '--parity-capture-shadow',
+        ],
+      },
+      null,
+      2,
+    ),
+    [`ui_kits/${slug}/README.md`]: `# ${slug} ui_kit
+
+This kit was created from an existing platform route:
+
+- Source URL: ${args.sourceUrl}
+- Source title: ${title}
+- Decompose model attempted: ${args.modelUsed}
+- Fallback mode: deterministic platform capture
+
+## What happened
+
+The model call did not return parseable path-fenced ui_kit files, so the MCP
+server preserved the captured route HTML as the canonical visual source in
+\`index.html\` instead of failing the workflow. This lets the kit import into
+Parity Studio immediately for inspiration, comments, scoped edits, and export.
+
+## Visible text sample
+
+${visibleSample}
+
+## Next edit recommendation
+
+Use Parity Studio comments to mark the first area to componentize. Replace the
+fallback AppShell anchor with meaningful React regions only after checking
+Preview against the preserved \`index.html\` source.
+
+## Known limitations
+
+- Component decomposition is intentionally minimal because this was a fallback.
+- \`index.html\` is the source of visual truth for the imported run.
+- Run a follow-up decompose with a stricter model when you want full component
+  decomposition from the preserved capture.
+`,
+  };
+  return {
+    slug,
+    files,
+    warnings: [
+      'model returned no path-fenced ui_kit files; deterministic platform capture fallback used',
+    ],
+  };
+}
+
+function sanitizeSlug(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'platform-route'
+  );
+}
+
 // ---------- Tool: parity_pipeline -----------------------------------------
 
 const pipelineInput = {
-  prompt: z.string().optional().describe('Brief describing the desired UI. Either prompt or sourceImageBase64 (or both) required.'),
-  sourceImageBase64: z.string().optional().describe('Optional source mockup. Required if generating from a sketch/screenshot.'),
+  prompt: z
+    .string()
+    .optional()
+    .describe(
+      'Brief describing the desired UI. Either prompt or sourceImageBase64 (or both) required.',
+    ),
+  sourceImageBase64: z
+    .string()
+    .optional()
+    .describe('Optional source mockup. Required if generating from a sketch/screenshot.'),
   sourceImageMimeType: IMG_MIME_SCHEMA.optional(),
   generateModel: z.string().optional(),
   decomposeModel: z.string().optional(),
@@ -839,7 +991,9 @@ const pipelineInput = {
   skipGenerate: z
     .boolean()
     .optional()
-    .describe('If true, treat sourceImageBase64 as the rendered artifact — skip stage 1 generation. Useful when the image is already a polished mockup.'),
+    .describe(
+      'If true, treat sourceImageBase64 as the rendered artifact — skip stage 1 generation. Useful when the image is already a polished mockup.',
+    ),
 };
 
 async function handlePipeline(args: {
@@ -874,9 +1028,15 @@ async function handlePipeline(args: {
     status: 'queued',
     ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
     ...(args.sourceImageBase64 !== undefined ? { sourceImageBase64: args.sourceImageBase64 } : {}),
-    ...(args.sourceImageMimeType !== undefined ? { sourceImageMimeType: args.sourceImageMimeType } : {}),
+    ...(args.sourceImageMimeType !== undefined
+      ? { sourceImageMimeType: args.sourceImageMimeType }
+      : {}),
   });
-  eventBus.appendLog(runId, 'info', `parity_pipeline started (decompose=${decomposeModel}, judge=${judgeModel})`);
+  eventBus.appendLog(
+    runId,
+    'info',
+    `parity_pipeline started (decompose=${decomposeModel}, judge=${judgeModel})`,
+  );
 
   try {
     let totalCostUsd = 0;
@@ -885,7 +1045,7 @@ async function handlePipeline(args: {
 
     // Stage 1: generate (or skip if image provided + skipGenerate flag)
     if (args.skipGenerate && args.sourceImageBase64) {
-      artifactHtml = `<!-- skipGenerate: source image used directly -->`;
+      artifactHtml = '<!-- skipGenerate: source image used directly -->';
       eventBus.setStage(runId, 'generate', 'unavailable');
       eventBus.appendLog(runId, 'info', 'generate stage skipped (skipGenerate=true)');
     } else {
@@ -907,7 +1067,11 @@ async function handlePipeline(args: {
       eventBus.setStage(runId, 'generate', 'done', generateLatencyMs, generateModel);
       eventBus.addCost(runId, gen.costUsd);
       eventBus.updateRun(runId, { artifactHtmlFull: artifactHtml });
-      eventBus.appendLog(runId, 'info', `generated ${artifactHtml.length} bytes in ${(generateLatencyMs / 1000).toFixed(1)}s, $${gen.costUsd.toFixed(4)}`);
+      eventBus.appendLog(
+        runId,
+        'info',
+        `generated ${artifactHtml.length} bytes in ${(generateLatencyMs / 1000).toFixed(1)}s, $${gen.costUsd.toFixed(4)}`,
+      );
     }
 
     // Stage 2: decompose -> verify -> iterate loop. Bounded by MAX_ITERATIONS.
@@ -920,8 +1084,8 @@ async function handlePipeline(args: {
       decomposeModel,
       prompt: args.prompt,
     });
-    let decomposeLatencyMs = parsed.latencyMs;
-    let decomposeCostUsd = parsed.costUsd;
+    const decomposeLatencyMs = parsed.latencyMs;
+    const decomposeCostUsd = parsed.costUsd;
     totalCostUsd += parsed.costUsd;
 
     // Verify-iterate loop. We always at least run verify once. We only
@@ -1093,7 +1257,9 @@ async function handlePipeline(args: {
 const exportZipInput = {
   uiKitFiles: z
     .record(z.string())
-    .describe('Map of relative file paths to file contents (from parity_decompose or parity_pipeline output)'),
+    .describe(
+      'Map of relative file paths to file contents (from parity_decompose or parity_pipeline output)',
+    ),
   slug: z.string().describe('ui_kit slug to use as the root folder name'),
   includeReadme: z
     .boolean()
@@ -1125,7 +1291,8 @@ async function handleExportZip(args: {
             zipSizeBytes: buf.length,
             fileCount: Object.keys(files).length + (includeReadme ? 1 : 0),
             includesHandoffReadme: includeReadme,
-            usage: 'base64-decode zipBase64 and write to disk, or pipe through `base64 -d > out.zip`',
+            usage:
+              'base64-decode zipBase64 and write to disk, or pipe through `base64 -d > out.zip`',
           },
           null,
           2,
@@ -1382,7 +1549,8 @@ async function main() {
     'parity://agent-rules',
     {
       title: 'Parity Studio Agent Rules',
-      description: 'End-to-end rules for using Parity Studio safely from Claude Code, Codex, Cursor, or Windsurf.',
+      description:
+        'End-to-end rules for using Parity Studio safely from Claude Code, Codex, Cursor, or Windsurf.',
       mimeType: 'text/markdown',
     },
     async (uri) => ({
@@ -1409,13 +1577,7 @@ async function main() {
           role: 'user',
           content: {
             type: 'text',
-            text:
-              `${request ?? 'Use Parity Studio with this app, get me the zip export, and upload it to Parity Studio.'}\n\n` +
-              `Use the parity_studio MCP tool. ` +
-              `Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, ` +
-              `route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}. ` +
-              `Use local MCP BYOK env keys only; never print or upload key values. ` +
-              `Return the zip path, Parity Studio run URL, parity score, redaction count, and QA gaps.`,
+            text: `${request ?? 'Use Parity Studio with this app, get me the zip export, and upload it to Parity Studio.'}\n\nUse the parity_studio MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}. Use local MCP BYOK env keys only; never print or upload key values. Return the zip path, Parity Studio run URL, parity score, redaction count, and QA gaps.`,
           },
         },
       ],
@@ -1432,7 +1594,7 @@ async function main() {
     {
       title: 'Rewrite a draft prompt for clarity (Kilo-style)',
       description:
-        'Stateless. Calls the hosted enhance action which uses a small/cheap model to rewrite a rough prompt into a clearer, more specific version. Returns { text, modelUsed, provider }. Mirrors Kilo Code\'s ✨ enhance feature.',
+        "Stateless. Calls the hosted enhance action which uses a small/cheap model to rewrite a rough prompt into a clearer, more specific version. Returns { text, modelUsed, provider }. Mirrors Kilo Code's ✨ enhance feature.",
       inputSchema: { text: z.string().min(1).max(8000) },
     },
     async ({ text }) => {
@@ -1502,7 +1664,10 @@ async function main() {
       title: 'Read the chat conversation for a run',
       description:
         'Returns the chat_messages array (user / assistant / tool turns) for a runId, sorted by turn. Use after parity_chat_send / parity_chat_advise to see what the agent did.',
-      inputSchema: { runId: z.string().min(20), limit: z.number().int().min(1).max(200).optional() },
+      inputSchema: {
+        runId: z.string().min(20),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
     },
     async ({ runId, limit }) => {
       const turns = (await convexCall('query', 'chat:list', { runId })) as Array<{
@@ -1600,14 +1765,21 @@ async function main() {
       description:
         'Returns which provider env vars are present for requested model ids. Never returns key values. Use before local MCP generation/decomposition if the user asks to use their own keys.',
       inputSchema: {
-        models: z.array(z.string()).optional().describe('Model ids to check. Defaults to current generate/decompose/judge models.'),
+        models: z
+          .array(z.string())
+          .optional()
+          .describe('Model ids to check. Defaults to current generate/decompose/judge models.'),
       },
     },
     async ({ models }) => ({
       content: [
         {
           type: 'text',
-          text: JSON.stringify(localByokStatus(models ?? [GENERATE_MODEL, DECOMPOSE_MODEL, JUDGE_MODEL]), null, 2),
+          text: JSON.stringify(
+            localByokStatus(models ?? [GENERATE_MODEL, DECOMPOSE_MODEL, JUDGE_MODEL]),
+            null,
+            2,
+          ),
         },
       ],
     }),

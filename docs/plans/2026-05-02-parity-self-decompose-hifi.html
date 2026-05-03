@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parity Studio Self-Decompose Hifi Plan</title>
+  <style>
+    :root {
+      --bg: #080706;
+      --panel: #15110f;
+      --panel2: #1d1713;
+      --cream: #fff8ec;
+      --muted: #aa9a8c;
+      --line: rgba(255, 248, 236, 0.14);
+      --brand: #dd5d3f;
+      --amber: #e0a341;
+      --green: #75a77b;
+      --red: #d9573f;
+      --mono: "SFMono-Regular", Consolas, monospace;
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--cream);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(221, 93, 63, 0.26), transparent 35%),
+        radial-gradient(circle at 85% 15%, rgba(117, 167, 123, 0.16), transparent 30%),
+        linear-gradient(135deg, #070605 0%, #130e0c 45%, #090807 100%);
+    }
+
+    code { font-family: var(--mono); }
+
+    .page {
+      width: min(1540px, calc(100vw - 52px));
+      margin: 0 auto;
+      padding: 44px 0 72px;
+    }
+
+    .hero, .grid-2, .target {
+      display: grid;
+      gap: 22px;
+    }
+
+    .hero { grid-template-columns: minmax(0, 1.35fr) 430px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .target { grid-template-columns: 285px minmax(0, 1fr) 330px; }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: linear-gradient(180deg, rgba(255,248,236,0.08), rgba(255,248,236,0.035));
+      box-shadow: 0 30px 110px rgba(0,0,0,0.42);
+      overflow: hidden;
+    }
+
+    .pad { padding: 26px; }
+    .hero .pad { padding: 34px; }
+
+    .eyebrow {
+      color: var(--amber);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      letter-spacing: -0.04em;
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(48px, 6.5vw, 88px);
+      line-height: 0.92;
+      max-width: 950px;
+    }
+
+    h2 {
+      font-family: var(--serif);
+      font-size: clamp(34px, 3vw, 50px);
+      margin: 54px 0 14px;
+    }
+
+    h3 { font-size: 22px; margin-bottom: 10px; }
+
+    p {
+      color: #d9c7b6;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .lead {
+      font-size: 19px;
+      margin-top: 20px;
+      max-width: 930px;
+    }
+
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .pill, .tag {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,248,236,0.06);
+      color: var(--cream);
+      font-size: 13px;
+      font-weight: 800;
+      padding: 9px 13px;
+    }
+
+    .pill.primary {
+      background: linear-gradient(135deg, var(--brand), #bd432e);
+      border-color: rgba(255,255,255,0.18);
+    }
+
+    .score {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .score-num {
+      font-family: var(--serif);
+      font-size: 76px;
+      letter-spacing: -0.06em;
+      line-height: 0.9;
+    }
+
+    .score-num span { color: var(--muted); font-size: 30px; }
+
+    .ring {
+      width: 96px;
+      height: 96px;
+      border-radius: 999px;
+      background: conic-gradient(var(--red) 0 32%, var(--amber) 32% 54%, var(--green) 54% 72%, rgba(255,255,255,0.14) 72%);
+      position: relative;
+    }
+
+    .ring:after {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border-radius: inherit;
+      background: var(--panel);
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 13px;
+      background: rgba(255,255,255,0.04);
+      min-height: 82px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+
+    .metric b { font-size: 22px; }
+
+    .section-lead {
+      max-width: 880px;
+      margin-bottom: 18px;
+    }
+
+    .shot-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,248,236,0.04);
+    }
+
+    .label {
+      color: var(--amber);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    .desc { color: var(--muted); font-size: 13px; }
+
+    .browser {
+      padding: 12px;
+      background: #0d0b0a;
+    }
+
+    .chrome {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 0;
+      border-radius: 14px 14px 0 0;
+      background: #1d1713;
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #6f6157; }
+    .dot.red { background: var(--red); }
+    .dot.amber { background: var(--amber); }
+    .dot.green { background: var(--green); }
+
+    .url {
+      flex: 1;
+      margin-left: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      color: #84756a;
+      font-family: var(--mono);
+      font-size: 11px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    img.shot {
+      width: 100%;
+      display: block;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0 0 16px 16px;
+      background: #fbf4eb;
+    }
+
+    .callout {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(221,93,63,0.42);
+      background: rgba(221,93,63,0.13);
+      color: #ffd8cd;
+      line-height: 1.55;
+    }
+
+    .callout.good {
+      border-color: rgba(117,167,123,0.44);
+      background: rgba(117,167,123,0.12);
+      color: #e0f1df;
+    }
+
+    .target-panel {
+      min-height: 550px;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: #fbf4eb;
+      color: #211913;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .target-panel.dark {
+      display: flex;
+      flex-direction: column;
+      background: #0f0d0c;
+      color: var(--cream);
+    }
+
+    .button {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: white;
+      border: 1px solid rgba(0,0,0,0.08);
+      font-weight: 900;
+    }
+
+    .button.primary { background: linear-gradient(135deg, var(--brand), #c94731); color: white; border: 0; }
+
+    .side-label {
+      margin: 18px 0 9px;
+      color: #8c7b70;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .item {
+      display: flex;
+      justify-content: space-between;
+      padding: 11px 12px;
+      border-radius: 14px;
+      color: #50443b;
+      font-size: 13px;
+    }
+
+    .item.active { background: #f1ded4; color: #c34730; font-weight: 900; }
+
+    .stage-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      color: #cdbdad;
+    }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tabs span { padding: 7px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); font-size: 12px; }
+    .tabs .active { background: var(--brand); color: white; }
+
+    .stage-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 15px;
+    }
+
+    .mini-card {
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.06);
+      padding: 14px;
+    }
+
+    .mini-preview {
+      height: 280px;
+      margin-top: 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(135deg, #211815, #050505);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mini-preview:before {
+      content: "Parity Studio captured as source";
+      position: absolute;
+      top: 24px;
+      left: 22px;
+      max-width: 330px;
+      font-family: var(--serif);
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .mini-preview:after {
+      content: "Files + Preview + Inspiration + Parity Coach";
+      position: absolute;
+      bottom: 22px;
+      left: 22px;
+      color: #b7a79a;
+      font-size: 13px;
+    }
+
+    .rec {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 9px 0;
+      padding: 12px;
+      border-radius: 14px;
+      background: white;
+      border: 1px solid rgba(0,0,0,0.08);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .step {
+      min-height: 210px;
+      position: relative;
+      padding: 18px;
+    }
+
+    .step:after {
+      content: attr(data-step);
+      position: absolute;
+      right: 14px;
+      top: 10px;
+      color: rgba(255,255,255,0.1);
+      font-family: var(--serif);
+      font-size: 58px;
+      line-height: 1;
+    }
+
+    .step h3, .step p { position: relative; z-index: 1; }
+    .step h3 { font-size: 18px; }
+    .step p { font-size: 14px; }
+
+    .list { display: grid; gap: 12px; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.035);
+    }
+
+    .num {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--brand), #c94731);
+      color: white;
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .priority {
+      padding-top: 5px;
+      color: var(--amber);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      border: 1px solid rgba(255,248,236,0.22);
+      border-radius: 20px;
+      background: #0a0908;
+      color: #f6dcc0;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+
+    details {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.035);
+    }
+
+    details + details { margin-top: 10px; }
+    summary { cursor: pointer; font-weight: 900; }
+    details p { margin-top: 12px; }
+
+    .foot {
+      margin-top: 34px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1200px) {
+      .hero, .grid-2, .target { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      .page { width: min(100vw - 24px, 1540px); padding-top: 24px; }
+      .metric-row, .stage-body, .flow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="card pad">
+        <div class="eyebrow">Parity Studio dogfood plan / 2026-05-02</div>
+        <h1>Decompose Parity Studio inside Parity Studio.</h1>
+        <p class="lead">A high-fidelity planning artifact using live screenshots from the current local app. The target workflow: capture the running Parity Studio route, use the local MCP server to create a canonical ui_kit ZIP, import it back into Parity Studio, then improve it through Inspiration, scoped comments, agent edits, Parity Coach, verify, and export.</p>
+        <div class="pills">
+          <span class="pill primary">One prompt to self-dogfood</span>
+          <span class="pill">Local app URL + repo root</span>
+          <span class="pill">Imported run + ZIP</span>
+          <span class="pill">Local MCP BYOK, redacted source</span>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><span>Captured screens</span><b>6</b></div>
+          <div class="metric"><span>MCP entry</span><b>parity_studio</b></div>
+          <div class="metric"><span>User setup</span><b>Prompt</b></div>
+          <div class="metric"><span>Upload</span><b>Gated</b></div>
+        </div>
+      </div>
+      <aside class="card pad">
+        <div class="score">
+          <div><div class="score-num">25<span>/100</span></div><p>Observed current run score in the live screenshot. The product should not make users parse raw rubric rows. It should explain end-user impact, top recommendations, likely fix files, and one next action.</p></div>
+          <div class="ring"></div>
+        </div>
+        <div class="callout good">Use this artifact format for design planning: screenshots first, target behavior second, exact implementation workflow third.</div>
+      </aside>
+    </section>
+
+    <h2>Live App Captures</h2>
+    <p class="section-lead">Captured from <code>http://127.0.0.1:4191/?run=jh73jdermm6pm6zbcfrd3mpms985v2t0</code>. These are the baseline screens the self-decompose workflow must improve.</p>
+    <section class="grid-2">
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 1 / Current preview</div><div class="desc">Left project rail, agent stream, generated preview, and Parity Coach.</div></div><span class="tag">Current</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">127.0.0.1:4191/?run=...</span></div><img class="shot" src="assets/parity-self-decompose/04-parity-coach.png" alt="Current Parity Studio preview" /></div>
+      </article>
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 2 / Inspiration</div><div class="desc">Inspiration exists, but needs source-seeded search, real image/video provenance, and apply-to-agent flow.</div></div><span class="tag">Improve</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">Preview tab -> Inspiration tab</span></div><img class="shot" src="assets/parity-self-decompose/02-inspiration-workflow.png" alt="Inspiration workflow" /></div>
+      </article>
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 3 / Files</div><div class="desc">Files are visible, but the source image area says no inline source is stored. Platform capture must make source preview visible.</div></div><span class="tag">Gap</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">Files -> source + handoff</span></div><img class="shot" src="assets/parity-self-decompose/03-files-workspace.png" alt="Files workspace" /></div>
+      </article>
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 4 / New run</div><div class="desc">The modal handles prompts, but does not yet make \"decompose this app/repo\" a clear first-class path.</div></div><span class="tag">Entry</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">New run modal</span></div><img class="shot" src="assets/parity-self-decompose/05-new-run-modal.png" alt="Start new run modal" /></div>
+      </article>
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 5 / BYOK</div><div class="desc">The privacy copy is good. The workflow needs to steer users toward local MCP BYOK when they want provider keys to stay on their machine.</div></div><span class="tag">Privacy</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">Keys and BYOK modal</span></div><img class="shot" src="assets/parity-self-decompose/06-byok-modal.png" alt="BYOK modal" /></div>
+      </article>
+      <article class="card">
+        <div class="shot-head"><div><div class="label">Screen 6 / Initial load</div><div class="desc">The first capture shows loading and no report yet. A dogfood run should show visible capture, decompose, verify, and import stages instead of blank waiting.</div></div><span class="tag">State</span></div>
+        <div class="browser"><div class="chrome"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="url">Initial local load</span></div><img class="shot" src="assets/parity-self-decompose/01-current-preview.png" alt="Initial app loading state" /></div>
+      </article>
+    </section>
+
+    <h2>Target Product Shape</h2>
+    <p class="section-lead">Make self-decomposition a visible product workflow, not a hidden CLI trick. The user should say what they want; the MCP tool should handle capture, repo context, source redaction, decomposition, import, and verification.</p>
+    <section class="target">
+      <aside class="target-panel">
+        <div class="button primary">+ New run <span>prompt</span></div>
+        <div class="button">Keys + BYOK <span>local</span></div>
+        <div class="button">Decompose this app <span>MCP</span></div>
+        <div class="side-label">Projects</div>
+        <div class="item active">Parity Studio self-ui-kit <span>live</span></div>
+        <div class="item">Ableton demo kit <span>done</span></div>
+        <div class="item">Marketing website <span>draft</span></div>
+        <div class="side-label">Recent runs</div>
+        <div class="item active">Self-decompose: app shell <span>now</span></div>
+        <div class="item">Inspiration workflow <span>2h</span></div>
+        <div class="item">Coach cleanup <span>1d</span></div>
+      </aside>
+      <section class="target-panel dark">
+        <div class="stage-head"><strong>Parity Studio self-ui-kit</strong><div class="tabs"><span>Files</span><span class="active">Preview</span><span>Inspiration</span><span>Coach</span></div></div>
+        <div class="stage-body">
+          <div class="mini-card"><div class="label">Source</div><p>Captured from the real app route and redacted before model calls.</p><div class="mini-preview"></div></div>
+          <div class="mini-card"><div class="label">Generated ui_kit</div><p>Imported back with canonical files, contract, QA plan, and export.</p><div class="mini-preview"></div></div>
+        </div>
+      </section>
+      <aside class="target-panel">
+        <div class="side-label">Parity Coach</div>
+        <div class="score"><div class="score-num" style="font-size:58px;color:#211913;">82<span>/100</span></div><div class="ring" style="width:78px;height:78px;"></div></div>
+        <p style="color:#604f44;">End-user impact stays first. Raw rubric rows are hidden behind rationales. The coach explains trust, comprehension, and click-through impact.</p>
+        <div class="side-label">Top recommendations</div>
+        <div class="rec"><span>1. Compare source and generated views</span><span>High</span></div>
+        <div class="rec"><span>2. Preserve app shell structure</span><span>High</span></div>
+        <div class="rec"><span>3. Clarify agent stream actions</span><span>Med</span></div>
+        <div class="rec"><span>4. Verify export path</span><span>Med</span></div>
+      </aside>
+    </section>
+
+    <h2>Self-Decompose Flow</h2>
+    <section class="flow">
+      <article class="card step" data-step="01"><h3>User asks normally</h3><p>\"Use Parity Studio with our app. Get me the zip export. Upload it to Parity Studio. Use my own env keys.\"</p></article>
+      <article class="card step" data-step="02"><h3>MCP captures app</h3><p><code>parity_studio</code> resolves the URL, reads projectRoot, launches Playwright, captures route HTML/CSS, screenshots, console errors, and source context.</p></article>
+      <article class="card step" data-step="03"><h3>Decompose to ui_kit</h3><p>The pipeline emits components, tokens, manifest, parity contract, performance budget, API plan, QA plan, AGENTS.md, and skill docs.</p></article>
+      <article class="card step" data-step="04"><h3>Import and verify</h3><p>The ZIP is imported as a real Parity Studio run with Preview, Files, Inspiration, Coach, and Export ready.</p></article>
+      <article class="card step" data-step="05"><h3>Search inspiration</h3><p>Seed searches from source screenshot, page diagnosis, visible UI labels, parity contract, and user intent. Save reference provenance.</p></article>
+      <article class="card step" data-step="06"><h3>Comment and iterate</h3><p>The user selects a meaningful region, comments in plain English, and the agent edits the scoped component.</p></article>
+      <article class="card step" data-step="07"><h3>Coach impact</h3><p>Coach shows end-user impact, top recommendations, likely files, expandable rationale, and one action button.</p></article>
+      <article class="card step" data-step="08"><h3>Export handoff</h3><p>Export returns the canonical ZIP with README, HANDOFF, contract, QA, API, AGENTS.md, and skill instructions.</p></article>
+    </section>
+
+    <h2>MCP Recipe Behind The UI</h2>
+    <section class="grid-2">
+      <div class="card pad">
+        <h3>Natural user request</h3>
+        <pre>Use Parity Studio with our own app.
+Capture the running Parity Studio route.
+Decompose it into a ui_kit.
+Write the ZIP locally.
+Import it back into Parity Studio.
+Use my own env keys through local MCP.</pre>
+        <div class="callout">Before a real run imports local source-derived artifacts to hosted Parity Studio, ask for action-time confirmation. Provider key values stay in the local MCP process and must never be printed, logged, written into the kit, or uploaded.</div>
+      </div>
+      <div class="card pad">
+        <h3>Resolved tool call</h3>
+        <pre>Tool: parity_studio
+url: http://127.0.0.1:4191/?run=jh73jdermm6pm6zbcfrd3mpms985v2t0
+projectRoot: D:/VSCode Projects/parity-studio
+outputZipPath: docs/dogfood/parity-studio-self-ui-kit.zip
+importToParityStudio: true
+redactSensitiveValues: true
+includeZipBase64: false
+model source: local MCP env / selected router</pre>
+      </div>
+    </section>
+
+    <h2>Product Changes To Build</h2>
+    <section class="grid-2">
+      <div class="card pad">
+        <div class="list">
+          <div class="row"><span class="num">1</span><p><strong>Add a first-class self-decompose entry.</strong><br />In New Run and left rail, expose \"Decompose this app\". It should call the high-level MCP prompt/resource when available and fall back to copyable setup instructions.</p><span class="priority">High</span></div>
+          <div class="row"><span class="num">2</span><p><strong>Show source screenshots and source preview.</strong><br />After platform capture, Files must show source preview, generated preview, and diff context.</p><span class="priority">High</span></div>
+          <div class="row"><span class="num">3</span><p><strong>Make Inspiration consume the current run.</strong><br />Search queries should be seeded from route title, visible UI diagnosis, source screenshots, and user intent.</p><span class="priority">High</span></div>
+          <div class="row"><span class="num">4</span><p><strong>Keep Coach beginner-safe.</strong><br />Hide raw 16-check rows by default. Keep end-user impact, top recommendations, likely files, and collapsible rationales.</p><span class="priority">High</span></div>
+          <div class="row"><span class="num">5</span><p><strong>Make agent stream prove progress.</strong><br />Capture, decompose, verify, inspiration search, comment edit, and export should emit visible stage cards.</p><span class="priority">Med</span></div>
+        </div>
+      </div>
+      <div class="card pad">
+        <h3>Acceptance criteria</h3>
+        <details open><summary>A non-technical user can start</summary><p>They see New run, Keys + BYOK, and Decompose this app at the top of the left rail. They do not need to know a tool name, port, route arg, or ZIP path.</p></details>
+        <details><summary>A user can trust privacy</summary><p>BYOK copy separates hosted default, browser session key storage, and local MCP BYOK. It says exactly what is uploaded and what stays local.</p></details>
+        <details><summary>A user can understand quality</summary><p>Parity Coach explains how mismatches affect end users, not only which rubric item failed.</p></details>
+        <details><summary>A user can continue editing</summary><p>Files, Preview, Inspiration, and Coach agree on the same scoped file/region. Comments target meaningful regions and agent edits show visible before/after changes.</p></details>
+        <details><summary>A coding agent can finish handoff</summary><p>The exported ZIP contains the canonical kit plus parity.contract.json, performance.budget.json, api-wiring.plan.md, qa.plan.md, AGENTS.md, and skill instructions.</p></details>
+      </div>
+    </section>
+
+    <h2>Real Dogfood Run Checklist</h2>
+    <section class="grid-2">
+      <div class="card pad">
+        <pre>1. Start Parity Studio locally.
+2. Start MCP server with local provider env keys.
+3. Run parity_studio against the local Parity Studio URL.
+4. Confirm upload of redacted generated ui_kit to hosted Parity Studio.
+5. Verify returned run URL opens in browser.
+6. Open Inspiration and run reference search.
+7. Apply one recommendation through agent stream.
+8. Select one meaningful preview region and comment.
+9. Verify score and end-user impact update.
+10. Export ZIP and inspect canonical files.</pre>
+      </div>
+      <div class="card pad">
+        <h3>What this artifact did not do</h3>
+        <p>It did not execute the model-backed MCP decomposition or upload a new self-decompose run. That real run will transmit redacted source-derived artifacts to the configured LLM provider and, if import is enabled, to hosted Parity Studio. It should be run as the next confirmed dogfood step.</p>
+        <div class="callout good">The product plan is ready to guide that run: screenshots, UX target, MCP recipe, and acceptance criteria are all in one file.</div>
+      </div>
+    </section>
+
+    <p class="foot">No API keys or secret values are embedded in this file. Screenshots are local browser captures of the app UI only.</p>
+  </main>
+</body>
+</html>

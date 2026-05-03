@@ -35,8 +35,20 @@ export interface LintReport {
 }
 
 const VOID_TAGS = new Set([
-  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
-  'param', 'source', 'track', 'wbr',
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
 ]);
 
 interface RuleCtx {
@@ -86,35 +98,37 @@ function ruleStructuralBalance({ path, content, findings }: RuleCtx) {
     .replace(/\/\/[^\n]*/g, ' ');
   const stack: Array<{ tag: string; idx: number }> = [];
   const tagRe = /<\/?([A-Za-z][A-Za-z0-9.-]*)([^>]*?)\/?>/g;
-  let m: RegExpExecArray | null;
-  while ((m = tagRe.exec(stripped)) !== null) {
+  let m = tagRe.exec(stripped);
+  while (m !== null) {
     const full = m[0];
     const tag = (m[1] ?? '').toLowerCase();
     const isClose = full.startsWith('</');
     const selfClose = full.endsWith('/>');
-    if (selfClose || VOID_TAGS.has(tag)) continue;
-    if (isClose) {
-      const top = stack.pop();
-      if (!top) {
-        findings.push({
-          rule: 'structural-balance',
-          severity: 'error',
-          path,
-          line: lineOf(content, m.index),
-          message: `closing </${tag}> with no matching opener`,
-        });
-      } else if (top.tag !== tag) {
-        findings.push({
-          rule: 'structural-balance',
-          severity: 'error',
-          path,
-          line: lineOf(content, m.index),
-          message: `closing </${tag}> does not match opener <${top.tag}> (line ${lineOf(content, top.idx)})`,
-        });
+    if (!selfClose && !VOID_TAGS.has(tag)) {
+      if (isClose) {
+        const top = stack.pop();
+        if (!top) {
+          findings.push({
+            rule: 'structural-balance',
+            severity: 'error',
+            path,
+            line: lineOf(content, m.index),
+            message: `closing </${tag}> with no matching opener`,
+          });
+        } else if (top.tag !== tag) {
+          findings.push({
+            rule: 'structural-balance',
+            severity: 'error',
+            path,
+            line: lineOf(content, m.index),
+            message: `closing </${tag}> does not match opener <${top.tag}> (line ${lineOf(content, top.idx)})`,
+          });
+        }
+      } else {
+        stack.push({ tag, idx: m.index });
       }
-    } else {
-      stack.push({ tag, idx: m.index });
     }
+    m = tagRe.exec(stripped);
   }
   for (const remaining of stack) {
     findings.push({
@@ -131,8 +145,8 @@ function ruleDuplicateIds({ path, content, findings }: RuleCtx) {
   if (!isHtml(path) && !isJsxOrTsx(path) && !isSvg(path)) return;
   const seen = new Map<string, number>();
   const re = /\bid\s*=\s*["']([^"']+)["']/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  let m = re.exec(content);
+  while (m !== null) {
     const id = m[1] ?? '';
     if (seen.has(id)) {
       findings.push({
@@ -145,14 +159,15 @@ function ruleDuplicateIds({ path, content, findings }: RuleCtx) {
     } else {
       seen.set(id, m.index);
     }
+    m = re.exec(content);
   }
 }
 
 function ruleImgAlt({ path, content, findings }: RuleCtx) {
   if (!isHtml(path) && !isJsxOrTsx(path)) return;
   const re = /<img\b([^>]*?)\/?>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  let m = re.exec(content);
+  while (m !== null) {
     const attrs = m[1] ?? '';
     if (!/\balt\s*=/.test(attrs)) {
       findings.push({
@@ -163,6 +178,7 @@ function ruleImgAlt({ path, content, findings }: RuleCtx) {
         message: '<img> missing alt attribute (a11y)',
       });
     }
+    m = re.exec(content);
   }
 }
 
@@ -171,8 +187,8 @@ function ruleButtonAccessibleName({ path, content, findings }: RuleCtx) {
   // Match <button …>…</button> blocks; flag those with empty/whitespace
   // content AND no aria-label/aria-labelledby/title.
   const re = /<button\b([^>]*)>([\s\S]*?)<\/button>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  let m = re.exec(content);
+  while (m !== null) {
     const attrs = m[1] ?? '';
     const inner = (m[2] ?? '').replace(/<[^>]+>/g, '').trim();
     const hasAriaName = /\b(aria-label|aria-labelledby|title)\s*=/.test(attrs);
@@ -185,14 +201,15 @@ function ruleButtonAccessibleName({ path, content, findings }: RuleCtx) {
         message: '<button> has no text content and no aria-label/aria-labelledby/title',
       });
     }
+    m = re.exec(content);
   }
 }
 
 function ruleAnchorHref({ path, content, findings }: RuleCtx) {
   if (!isHtml(path) && !isJsxOrTsx(path)) return;
   const re = /<a\b([^>]*?)>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  let m = re.exec(content);
+  while (m !== null) {
     const attrs = m[1] ?? '';
     if (!/\bhref\s*=/.test(attrs) && !/\bto\s*=/.test(attrs)) {
       findings.push({
@@ -203,6 +220,7 @@ function ruleAnchorHref({ path, content, findings }: RuleCtx) {
         message: '<a> without href (or `to` for routers)',
       });
     }
+    m = re.exec(content);
   }
 }
 
@@ -250,8 +268,8 @@ function ruleBraceBalance({ path, content, findings }: RuleCtx) {
 function ruleConsoleLeftover({ path, content, findings }: RuleCtx) {
   if (!isJsxOrTsx(path)) return;
   const re = /(console\.(log|debug|warn|error|info)|debugger)\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
+  let m = re.exec(content);
+  while (m !== null) {
     findings.push({
       rule: 'leftover-debug',
       severity: 'warn',
@@ -259,6 +277,7 @@ function ruleConsoleLeftover({ path, content, findings }: RuleCtx) {
       line: lineOf(content, m.index),
       message: `${m[0]} left in shipped code`,
     });
+    m = re.exec(content);
   }
 }
 
@@ -307,10 +326,7 @@ const ALL_RULES = [
  * Lint a subset of the kit's files (or all of them when paths is empty).
  * Returns a structured report the chat agent can act on.
  */
-export function lintKit(
-  files: Record<string, string>,
-  paths?: readonly string[],
-): LintReport {
+export function lintKit(files: Record<string, string>, paths?: readonly string[]): LintReport {
   const findings: LintFinding[] = [];
   const targets =
     paths && paths.length > 0
@@ -335,7 +351,9 @@ export function lintKit(
       'api-wiring.plan.md',
       'qa.plan.md',
     ]) {
-      const found = Object.keys(files).some((path) => path.endsWith(`/${required}`) || path === required);
+      const found = Object.keys(files).some(
+        (path) => path.endsWith(`/${required}`) || path === required,
+      );
       if (!found) {
         findings.push({
           rule: 'operating-contract-missing',

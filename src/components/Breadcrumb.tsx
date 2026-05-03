@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react';
+import { useT } from '../lib/i18n';
 
 interface BreadcrumbProps {
   project?: string;
@@ -11,12 +12,9 @@ interface BreadcrumbProps {
  * Top-bar breadcrumb cluster: 📁 Projects / Title ▾ ⭐
  * Matches the reference's middle column.
  */
-export function Breadcrumb({
-  project = 'Projects',
-  title,
-  starred = false,
-  onToggleStar,
-}: BreadcrumbProps) {
+export function Breadcrumb({ project, title, starred = false, onToggleStar }: BreadcrumbProps) {
+  const t = useT();
+  const projectLabel = project ?? t('breadcrumb.projects');
   return (
     <div
       style={{
@@ -39,10 +37,14 @@ export function Breadcrumb({
           color: 'var(--color-text-secondary)',
         }}
       >
-        <span aria-hidden style={{ fontSize: 14 }}>📁</span>
-        <span>{project}</span>
+        <span aria-hidden style={{ fontSize: 14 }}>
+          📁
+        </span>
+        <span>{projectLabel}</span>
       </span>
-      <span aria-hidden style={{ color: 'var(--color-text-faint)' }}>/</span>
+      <span aria-hidden style={{ color: 'var(--color-text-faint)' }}>
+        /
+      </span>
       <span
         style={{
           color: 'var(--color-text-primary)',
@@ -59,7 +61,7 @@ export function Breadcrumb({
       <button
         type="button"
         onClick={onToggleStar}
-        aria-label={starred ? 'Unstar this design' : 'Star this design'}
+        aria-label={starred ? t('breadcrumb.unstar') : t('breadcrumb.star')}
         aria-pressed={starred}
         style={{
           display: 'inline-grid',

@@ -29,9 +29,9 @@
 //   NO_CROSSFADE=1                                 hard cuts (faster)
 //   GIF=1   GIF_WIDTH=720                          also write .gif
 
-import { readdir, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -68,7 +68,7 @@ async function probeDuration(file) {
     { encoding: 'utf8' },
   );
   if (r.status !== 0) return null;
-  const v = parseFloat((r.stdout || '').trim());
+  const v = Number.parseFloat((r.stdout || '').trim());
   return Number.isFinite(v) ? v : null;
 }
 
@@ -115,12 +115,7 @@ async function main() {
 
   if (process.env.NO_CROSSFADE) {
     // Simple concat. Re-encode for stream-format consistency.
-    const args = [
-      '-y',
-      '-i', shell,
-      '-i', iterate,
-      '-i', mcp,
-    ];
+    const args = ['-y', '-i', shell, '-i', iterate, '-i', mcp];
     let filter =
       '[0:v]scale=1680:900,setsar=1[v0];' +
       '[1:v]scale=1680:900,setsar=1[v1];' +
@@ -128,7 +123,7 @@ async function main() {
       '[v0][v1][v2]concat=n=3:v=1[outv]';
     if (music) {
       args.push('-stream_loop', '-1', '-i', music);
-      filter += `;[3:a]afade=t=out:st=999:d=2,volume=1.0[outa]`;
+      filter += ';[3:a]afade=t=out:st=999:d=2,volume=1.0[outa]';
     }
     args.push('-filter_complex', filter, '-map', '[outv]');
     if (music) args.push('-map', '[outa]', '-shortest', '-c:a', 'aac', '-b:a', '128k');
@@ -202,10 +197,7 @@ async function main() {
   args.push('-filter_complex', filter, '-map', '[outv]');
   if (music) args.push('-map', '[outa]', '-c:a', 'aac', '-b:a', '128k');
   else args.push('-an');
-  args.push(
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-    out,
-  );
+  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', out);
 
   const r = spawnSync('ffmpeg', args, { stdio: 'inherit' });
   if (r.status !== 0) {
@@ -224,8 +216,10 @@ async function main() {
       'ffmpeg',
       [
         '-y',
-        '-i', out,
-        '-vf', `fps=18,scale=${gifWidth}:-1:flags=lanczos,palettegen=stats_mode=diff`,
+        '-i',
+        out,
+        '-vf',
+        `fps=18,scale=${gifWidth}:-1:flags=lanczos,palettegen=stats_mode=diff`,
         palettePath,
       ],
       { stdio: 'inherit' },
@@ -237,11 +231,14 @@ async function main() {
         'ffmpeg',
         [
           '-y',
-          '-i', out,
-          '-i', palettePath,
+          '-i',
+          out,
+          '-i',
+          palettePath,
           '-filter_complex',
           `fps=18,scale=${gifWidth}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`,
-          '-loop', '0',
+          '-loop',
+          '0',
           gifPath,
         ],
         { stdio: 'inherit' },

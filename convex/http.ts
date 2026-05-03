@@ -50,7 +50,7 @@ http.route({
       }
       const sourceB64 = run?.sourceImageBase64;
       const sourceMime = run?.sourceImageMimeType;
-      const sourceExt = sourceMime ? sourceMime.split('/')[1] ?? 'png' : null;
+      const sourceExt = sourceMime ? (sourceMime.split('/')[1] ?? 'png') : null;
       if (sourceB64 && sourceExt) {
         zip.file(`uploads/source.${sourceExt}`, sourceB64, { base64: true });
         zip.file(`screenshots/source.${sourceExt}`, sourceB64, { base64: true });

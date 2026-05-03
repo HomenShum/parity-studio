@@ -5,9 +5,9 @@
 // analyzes the composed MP4 and returns strict JSON. This uses the Gemini Files
 // API so large README videos are handled correctly.
 
-import { readFile, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,7 +30,10 @@ function parseDotEnv(raw) {
     const idx = trimmed.indexOf('=');
     const key = trimmed.slice(0, idx).trim();
     let value = trimmed.slice(idx + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     out[key] = value;
@@ -99,7 +102,8 @@ async function localChecks() {
       if (!evidence.checks?.[key]?.ok) checks.evidenceFailures.push(key);
     }
     if (!evidence.runId) checks.evidenceFailures.push('runId');
-    if ((evidence.checks?.generated?.fileCount ?? 0) < 2) checks.evidenceFailures.push('generated.fileCount');
+    if ((evidence.checks?.generated?.fileCount ?? 0) < 2)
+      checks.evidenceFailures.push('generated.fileCount');
     checks.evidenceOk = checks.evidenceFailures.length === 0;
     checks.runId = evidence.runId;
   }
@@ -198,36 +202,40 @@ For Step 4, the bbox/comment must be placed on a meaningful UI element, not a ra
 Prefer a click-to-pin interaction on a visible element over a hand-drawn generic rectangle.
 For Step 5, the demo must show the real chat/agent surface working on the scoped comment: an advisor/executor plan, tool calls, or visibly growing chat transcript. Do not pass a manual token tweak as a substitute for agent iteration.
 `;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: {
-      'x-goog-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              file_data: {
-                mime_type: file.mimeType ?? 'video/mp4',
-                file_uri: file.uri,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0,
-        responseMimeType: 'application/json',
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': apiKey,
+        'Content-Type': 'application/json',
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                file_data: {
+                  mime_type: file.mimeType ?? 'video/mp4',
+                  file_uri: file.uri,
+                },
+              },
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+        },
+      }),
+    },
+  );
   if (!res.ok) throw new Error(`Gemini analysis failed: ${res.status} ${await res.text()}`);
   const json = await res.json();
   const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('\n') ?? '';
-  if (!text.trim()) throw new Error(`Gemini response missing text: ${JSON.stringify(json).slice(0, 1000)}`);
+  if (!text.trim())
+    throw new Error(`Gemini response missing text: ${JSON.stringify(json).slice(0, 1000)}`);
   return extractJson(text);
 }
 

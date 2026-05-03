@@ -13,6 +13,23 @@ const TIER_UNION = v.union(
   v.literal('small'),
 );
 
+const SUPPORTED_PROVIDER_UNION = v.union(
+  v.literal('anthropic'),
+  v.literal('openai'),
+  v.literal('google'),
+  v.literal('openrouter'),
+  v.literal('groq'),
+  v.literal('cerebras'),
+  v.literal('xai'),
+  v.literal('mistral'),
+);
+
+const MODEL_OVERRIDE_VALIDATOR = v.object({
+  provider: SUPPORTED_PROVIDER_UNION,
+  modelId: v.string(),
+  label: v.optional(v.string()),
+});
+
 /**
  * Set or clear the tier on an existing run. Used by the ModelPicker
  * pill in the chat composer.
@@ -22,16 +39,84 @@ export const setTier = mutation({
   handler: async (ctx, { runId, tier }) => {
     const run = await ctx.db.get(runId);
     if (run === null) throw new Error('runs:setTier — run not found');
-    if (tier) await ctx.db.patch(runId, { tier });
-    else await ctx.db.patch(runId, { tier: undefined });
+    if (tier) await ctx.db.patch(runId, { tier, modelOverride: undefined });
+    else await ctx.db.patch(runId, { tier: undefined, modelOverride: undefined });
+    return { ok: true };
+  },
+});
+
+export const setModelSelection = mutation({
+  args: {
+    runId: v.id('runs'),
+    tier: v.optional(TIER_UNION),
+    modelOverride: v.optional(MODEL_OVERRIDE_VALIDATOR),
+  },
+  handler: async (ctx, { runId, tier, modelOverride }) => {
+    const run = await ctx.db.get(runId);
+    if (run === null) throw new Error('runs:setModelSelection — run not found');
+    if (modelOverride !== undefined) {
+      const modelId = modelOverride.modelId.trim();
+      if (modelId.length === 0) throw new Error('runs:setModelSelection requires a model id');
+      await ctx.db.patch(runId, {
+        tier: undefined,
+        modelOverride: {
+          provider: modelOverride.provider,
+          modelId,
+          ...(modelOverride.label?.trim()
+            ? { label: modelOverride.label.trim().slice(0, 96) }
+            : {}),
+        },
+      });
+      return { ok: true };
+    }
+    if (tier) await ctx.db.patch(runId, { tier, modelOverride: undefined });
+    else await ctx.db.patch(runId, { tier: undefined, modelOverride: undefined });
     return { ok: true };
   },
 });
 
 const STATUS_UNION = v.union(...RUN_STATUSES.map((s) => v.literal(s)));
 
+function inferTitle(prompt: string | undefined, fallback: string): string {
+  const trimmed = prompt?.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return fallback;
+  return trimmed.length > 72 ? `${trimmed.slice(0, 69)}...` : trimmed;
+}
+
+function normalizeModelOverride(
+  modelOverride:
+    | {
+        provider:
+          | 'anthropic'
+          | 'openai'
+          | 'google'
+          | 'openrouter'
+          | 'groq'
+          | 'cerebras'
+          | 'xai'
+          | 'mistral';
+        modelId: string;
+        label?: string;
+      }
+    | undefined,
+) {
+  if (modelOverride === undefined) return undefined;
+  const modelId = modelOverride.modelId.trim();
+  if (modelId.length === 0) throw new Error('model override requires a model id');
+  return {
+    provider: modelOverride.provider,
+    modelId,
+    ...(modelOverride.label?.trim() ? { label: modelOverride.label.trim().slice(0, 96) } : {}),
+  };
+}
+
 export const start = mutation({
   args: {
+    projectId: v.optional(v.id('projects')),
+    clientSessionId: v.optional(v.string()),
+    title: v.optional(v.string()),
+    tier: v.optional(TIER_UNION),
+    modelOverride: v.optional(MODEL_OVERRIDE_VALIDATOR),
     prompt: v.optional(v.string()),
     sourceImageStorageId: v.optional(v.id('_storage')),
     /**
@@ -52,7 +137,29 @@ export const start = mutation({
     if (!hasPrompt && !hasImage) {
       throw new Error('runs:start requires either prompt or sourceImageBase64/StorageId');
     }
+    const now = Date.now();
+    const title = inferTitle(
+      args.title ?? args.prompt,
+      hasImage ? 'Image to UI kit' : 'Prompt to UI kit',
+    );
+    const modelOverride = normalizeModelOverride(args.modelOverride);
+    const projectId =
+      args.projectId ??
+      (await ctx.db.insert('projects', {
+        ...(args.clientSessionId !== undefined ? { clientSessionId: args.clientSessionId } : {}),
+        title,
+        sourceType: hasImage ? 'image' : 'prompt',
+        starred: false,
+        createdAt: now,
+        updatedAt: now,
+      }));
+    if (args.projectId !== undefined) {
+      await ctx.db.patch(args.projectId, { updatedAt: now });
+    }
     const runId = await ctx.db.insert('runs', {
+      projectId,
+      ...(args.clientSessionId !== undefined ? { clientSessionId: args.clientSessionId } : {}),
+      title,
       ...(hasPrompt ? { prompt: args.prompt } : {}),
       ...(args.sourceImageStorageId !== undefined
         ? { sourceImageStorageId: args.sourceImageStorageId }
@@ -68,25 +175,23 @@ export const start = mutation({
       status: 'queued',
       costMicroUsd: 0,
       iterationsCompleted: 0,
+      ...(args.tier !== undefined ? { tier: args.tier } : {}),
+      ...(modelOverride !== undefined ? { modelOverride } : {}),
     });
 
     // Kick off the durable workflow. Returns a workflow id we persist on
     // the run row so the dashboard / status query can deep-link to the
     // workflow record if it ever needs to.
-    const workflowId = await workflow.start(
-      ctx,
-      internal.workflows.parityStudioWorkflow,
-      {
-        runId,
-        ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-        ...(args.sourceImageBase64 !== undefined
-          ? { sourceImageBase64: args.sourceImageBase64 }
-          : {}),
-        ...(args.sourceImageMimeType !== undefined
-          ? { sourceImageMimeType: args.sourceImageMimeType }
-          : {}),
-      },
-    );
+    const workflowId = await workflow.start(ctx, internal.workflows.parityStudioWorkflow, {
+      runId,
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(args.sourceImageBase64 !== undefined
+        ? { sourceImageBase64: args.sourceImageBase64 }
+        : {}),
+      ...(args.sourceImageMimeType !== undefined
+        ? { sourceImageMimeType: args.sourceImageMimeType }
+        : {}),
+    });
     await ctx.db.patch(runId, { workflowId: workflowId.toString() });
     return runId;
   },
@@ -110,6 +215,10 @@ export const start = mutation({
  */
 export const startFromKit = mutation({
   args: {
+    projectId: v.optional(v.id('projects')),
+    clientSessionId: v.optional(v.string()),
+    tier: v.optional(TIER_UNION),
+    modelOverride: v.optional(MODEL_OVERRIDE_VALIDATOR),
     slug: v.string(),
     files: v.any(), // Record<string, string>
     sourceImageBase64: v.optional(v.string()),
@@ -149,7 +258,27 @@ export const startFromKit = mutation({
       createdAtIso: new Date().toISOString(),
     });
 
+    const now = Date.now();
+    const title = inferTitle(args.prompt, `Imported ${args.slug}`);
+    const modelOverride = normalizeModelOverride(args.modelOverride);
+    const projectId =
+      args.projectId ??
+      (await ctx.db.insert('projects', {
+        ...(args.clientSessionId !== undefined ? { clientSessionId: args.clientSessionId } : {}),
+        title,
+        sourceType: args.sourceArtifactHtml ? 'platform-route' : 'zip',
+        starred: false,
+        createdAt: now,
+        updatedAt: now,
+      }));
+    if (args.projectId !== undefined) {
+      await ctx.db.patch(args.projectId, { updatedAt: now });
+    }
+
     const runId = await ctx.db.insert('runs', {
+      projectId,
+      ...(args.clientSessionId !== undefined ? { clientSessionId: args.clientSessionId } : {}),
+      title,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
       ...(args.sourceImageBase64 !== undefined
         ? { sourceImageBase64: args.sourceImageBase64 }
@@ -160,6 +289,8 @@ export const startFromKit = mutation({
       status: 'verifying',
       costMicroUsd: 0,
       iterationsCompleted: 0,
+      ...(args.tier !== undefined ? { tier: args.tier } : {}),
+      ...(modelOverride !== undefined ? { modelOverride } : {}),
     });
 
     // Insert artifact (the index.html) at version 0 so the canvas iframe
@@ -226,11 +357,43 @@ export const getInternal = internalQuery({
 });
 
 export const listRecent = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: {
+    limit: v.optional(v.number()),
+    clientSessionId: v.optional(v.string()),
+    projectId: v.optional(v.id('projects')),
+  },
+  handler: async (ctx, { limit, clientSessionId, projectId }) => {
     const cap = Math.min(Math.max(limit ?? 20, 1), 100);
-    // _creationTime is the implicit default ordering on any query without
-    // an explicit index, so .order('desc') alone gives us the most recent.
+    if (projectId !== undefined) {
+      try {
+        return await ctx.db
+          .query('runs')
+          .withIndex('by_project', (q) => q.eq('projectId', projectId))
+          .order('desc')
+          .take(cap);
+      } catch {
+        const rows = await ctx.db
+          .query('runs')
+          .order('desc')
+          .take(cap * 10);
+        return rows.filter((run) => run.projectId === projectId).slice(0, cap);
+      }
+    }
+    if (clientSessionId !== undefined) {
+      try {
+        return await ctx.db
+          .query('runs')
+          .withIndex('by_session', (q) => q.eq('clientSessionId', clientSessionId))
+          .order('desc')
+          .take(cap);
+      } catch {
+        const rows = await ctx.db
+          .query('runs')
+          .order('desc')
+          .take(cap * 10);
+        return rows.filter((run) => run.clientSessionId === clientSessionId).slice(0, cap);
+      }
+    }
     return await ctx.db.query('runs').order('desc').take(cap);
   },
 });

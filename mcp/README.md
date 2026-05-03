@@ -16,8 +16,11 @@ In Claude Code, Codex, Cursor, Windsurf, or any MCP client config:
       "args": ["-y", "parity-studio-mcp"],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
-        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-1",
-        "PARITY_JUDGE_MODEL": "claude-sonnet-4-5",
+        "OPENAI_API_KEY": "sk-...",
+        "OPENROUTER_API_KEY": "sk-or-...",
+        "GEMINI_API_KEY": "AI...",
+        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
+        "PARITY_JUDGE_MODEL": "claude-sonnet-4-6",
         "PARITY_CONVEX_URL": "https://blissful-pig-998.convex.cloud",
         "PARITY_CONVEX_HTTP_URL": "https://blissful-pig-998.convex.site"
       }
@@ -26,7 +29,7 @@ In Claude Code, Codex, Cursor, Windsurf, or any MCP client config:
 }
 ```
 
-You need at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OPENROUTER_API_KEY` depending on the model ids you use for local tools such as `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, and `parity_verify`.
+You need at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or `GEMINI_API_KEY` depending on the model ids you use for local tools such as `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, and `parity_verify`.
 
 The hosted tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `parity_export`) call the hosted Parity Studio Convex deployment at `PARITY_CONVEX_URL` by default. Override the URLs to point at your own deployment.
 

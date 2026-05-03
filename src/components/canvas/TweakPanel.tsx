@@ -44,8 +44,8 @@ export function TweakPanel({ uiKitId, slug, files, onClose }: TweakPanelProps) {
 
   const tokensPath = slug ? `ui_kits/${slug}/tokens.css` : null;
   const schemaPath = slug ? `ui_kits/${slug}/tweak-schema.json` : null;
-  const tokensCss = tokensPath ? files[tokensPath] ?? '' : '';
-  const schemaJson = schemaPath ? files[schemaPath] ?? null : null;
+  const tokensCss = tokensPath ? (files[tokensPath] ?? '') : '';
+  const schemaJson = schemaPath ? (files[schemaPath] ?? null) : null;
 
   const schema: TweakSchema = useMemo(() => {
     if (schemaJson !== null) {
@@ -109,9 +109,7 @@ export function TweakPanel({ uiKitId, slug, files, onClose }: TweakPanelProps) {
   if (entries.length === 0) {
     return (
       <PanelShell onClose={onClose}>
-        <EmptyState
-          text="No tokens declared in tokens.css yet. Ask the chat agent to add some, or generate/import a kit."
-        />
+        <EmptyState text="No tokens declared in tokens.css yet. Ask the chat agent to add some, or generate/import a kit." />
       </PanelShell>
     );
   }
@@ -199,12 +197,7 @@ function PanelShell({
           <SlidersHorizontal size={12} />
           Tweaks
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close tweak panel"
-          style={iconBtnStyle}
-        >
+        <button type="button" onClick={onClose} aria-label="Close tweak panel" style={iconBtnStyle}>
           <X size={12} />
         </button>
       </div>
@@ -547,7 +540,8 @@ function deriveSchemaFromCss(css: string): Record<string, TweakSchemaEntry> {
       const entry: TweakSchemaEntry = { kind: 'number', label: humanLabel(name) };
       if (unit) entry.unit = unit;
       entry.min = 0;
-      entry.max = unit === 'px' ? Math.max(64, Math.ceil(n * 2)) : Math.max(100, Math.ceil(Math.abs(n) * 4));
+      entry.max =
+        unit === 'px' ? Math.max(64, Math.ceil(n * 2)) : Math.max(100, Math.ceil(Math.abs(n) * 4));
       entry.step = unit === 'rem' || unit === 'em' ? 0.05 : 1;
       out[name] = entry;
       continue;

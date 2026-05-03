@@ -2,6 +2,7 @@ import { WorkflowManager } from '@convex-dev/workflow';
 import { v } from 'convex/values';
 import { components, internal } from './_generated/api';
 import { internalAction } from './_generated/server';
+import { shouldContinueQualityGate } from './lib/qualityGate';
 
 /**
  * Durable orchestration for the parity-studio in-app pipeline:
@@ -77,27 +78,41 @@ export const iterateWithCommentsWorkflow = workflow.define({
     // Fold comments into the gap feedback list. Each comment becomes a
     // high-severity 'comment' kind so the iterate prompt prioritizes them
     // alongside any verifier-flagged gaps from the previous parity report.
-    const commentGaps = openComments.map((c, i) => {
-      const fileTag = c.targetFile ? ` on ${c.targetFile}` : '';
-      const bboxTag = c.bbox
-        ? ` @ bbox(${c.bbox.x.toFixed(2)},${c.bbox.y.toFixed(2)} ${c.bbox.w.toFixed(2)}x${c.bbox.h.toFixed(2)})`
-        : '';
-      const elementTag = [
-        c.elementLabel ? `element=${c.elementLabel}` : null,
-        c.selector ? `selector=${c.selector}` : null,
-        c.domPath ? `domPath=${c.domPath}` : null,
-        c.textSnippet ? `text=${c.textSnippet}` : null,
-      ]
-        .filter(Boolean)
-        .join(' ');
-      return {
-        kind: 'comment',
-        severity: 'high',
-        message: `[user comment ${i + 1}${fileTag}${bboxTag}${elementTag ? ` ${elementTag}` : ''}] ${c.text}`,
-        ...(c.targetFile ? { targetFile: c.targetFile } : {}),
-      };
-    });
-    const verifierGaps = (previousReport?.gaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
+    const commentGaps = openComments.map(
+      (
+        c: {
+          targetFile?: string;
+          bbox?: { x: number; y: number; w: number; h: number };
+          elementLabel?: string;
+          selector?: string;
+          domPath?: string;
+          textSnippet?: string;
+          text: string;
+        },
+        i: number,
+      ) => {
+        const fileTag = c.targetFile ? ` on ${c.targetFile}` : '';
+        const bboxTag = c.bbox
+          ? ` @ bbox(${c.bbox.x.toFixed(2)},${c.bbox.y.toFixed(2)} ${c.bbox.w.toFixed(2)}x${c.bbox.h.toFixed(2)})`
+          : '';
+        const elementTag = [
+          c.elementLabel ? `element=${c.elementLabel}` : null,
+          c.selector ? `selector=${c.selector}` : null,
+          c.domPath ? `domPath=${c.domPath}` : null,
+          c.textSnippet ? `text=${c.textSnippet}` : null,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return {
+          kind: 'comment',
+          severity: 'high',
+          message: `[user comment ${i + 1}${fileTag}${bboxTag}${elementTag ? ` ${elementTag}` : ''}] ${c.text}`,
+          ...(c.targetFile ? { targetFile: c.targetFile } : {}),
+        };
+      },
+    );
+    const verifierGaps =
+      (previousReport?.gaps as Array<{ kind?: string; severity?: string; message?: string }>) ?? [];
     const allGaps = [...commentGaps, ...verifierGaps];
 
     const iterationNumber = (previousReport?.iterationNumber ?? 0) + 1;
@@ -134,11 +149,7 @@ export const iterateWithCommentsWorkflow = workflow.define({
     }
 
     // Mark the comments addressed (only if the iterate didn't crash)
-    await step.runMutation(
-      internal.comments.markAddressedInternal,
-      { runId },
-      { inline: true },
-    );
+    await step.runMutation(internal.comments.markAddressedInternal, { runId }, { inline: true });
 
     await step.runMutation(
       internal.runs.updateStatus,
@@ -258,10 +269,10 @@ export const parityStudioWorkflow = workflow.define({
       return;
     }
 
-    // Stage 3: deterministic verify -> iterate loop. Bounded by MAX_ITERATIONS
-    // so we never infinite-loop. Each iterate adds ~1 LLM call cost; the
-    // workflow journals every step so a mid-loop crash resumes cleanly.
-    const MAX_ITERATIONS = 2;
+    // Stage 3: deterministic verify -> quality-gate repair loop. Bounded so
+    // the ambient agent can fix obvious gaps without spending unbounded model
+    // calls. The gate ignores visual-only rows that still need the future
+    // headless visual verifier.
     let iterationNumber = 0;
     let currentUiKitId = uiKit._id;
     let currentUiKitFiles = uiKit.files as Record<string, string>;
@@ -286,15 +297,10 @@ export const parityStudioWorkflow = workflow.define({
         { inline: true },
       );
 
-      const status = report?.status ?? 'unavailable';
-      // 'needs_iteration' and 'failed' are both "parity below threshold,
-      // re-decompose with gaps as feedback" — iterate is exactly the tool
-      // for this. Don't conflate parity_reports.status ('failed' = low
-      // quality) with runs.status ('failed' = pipeline crashed). The
-      // pipeline DID succeed; the score is just low.
-      const shouldIterate =
-        (status === 'needs_iteration' || status === 'failed') &&
-        iterationNumber < MAX_ITERATIONS;
+      // Do not conflate parity_reports.status (low quality) with runs.status
+      // (pipeline health). The pipeline succeeded; the quality gate can
+      // re-decompose with verifier gaps as feedback until the cap is reached.
+      const shouldIterate = shouldContinueQualityGate(report, iterationNumber);
 
       if (!shouldIterate) {
         // Either parity is good enough, OR we've hit the iteration cap.

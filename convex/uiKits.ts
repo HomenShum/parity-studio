@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { internal } from './_generated/api';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 
 export const save = internalMutation({
@@ -80,7 +81,93 @@ export const patchFile = mutation({
     }
     files[path] = content;
     await ctx.db.patch(uiKitId, { files });
+    await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
+      runId: kit.runId,
+      reason: 'manual-file-save',
+    });
+    return { path, sizeBytes: content.length, reverifyScheduled: true };
+  },
+});
+
+export const createFile = mutation({
+  args: {
+    uiKitId: v.id('ui_kits'),
+    path: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, { uiKitId, path, content }) => {
+    if (path.length === 0 || path.length > 200) {
+      throw new Error('uiKits:createFile path must be 1..200 chars');
+    }
+    if (content.length > 200_000) {
+      throw new Error('uiKits:createFile content capped at 200000 chars');
+    }
+    const kit = await ctx.db.get(uiKitId);
+    if (kit === null) throw new Error(`ui_kit ${uiKitId} not found`);
+    const files = { ...((kit.files as Record<string, string>) ?? {}) };
+    if (path in files) throw new Error(`uiKits:createFile path "${path}" already exists`);
+    files[path] = content;
+    await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
+      runId: kit.runId,
+      reason: 'file-create',
+    });
     return { path, sizeBytes: content.length };
+  },
+});
+
+export const renameFile = mutation({
+  args: {
+    uiKitId: v.id('ui_kits'),
+    fromPath: v.string(),
+    toPath: v.string(),
+  },
+  handler: async (ctx, { uiKitId, fromPath, toPath }) => {
+    if (
+      fromPath.length === 0 ||
+      fromPath.length > 200 ||
+      toPath.length === 0 ||
+      toPath.length > 200
+    ) {
+      throw new Error('uiKits:renameFile paths must be 1..200 chars');
+    }
+    const kit = await ctx.db.get(uiKitId);
+    if (kit === null) throw new Error(`ui_kit ${uiKitId} not found`);
+    const files = { ...((kit.files as Record<string, string>) ?? {}) };
+    if (!(fromPath in files)) throw new Error(`uiKits:renameFile path "${fromPath}" not in ui_kit`);
+    if (toPath in files)
+      throw new Error(`uiKits:renameFile destination "${toPath}" already exists`);
+    files[toPath] = files[fromPath] ?? '';
+    delete files[fromPath];
+    await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
+      runId: kit.runId,
+      reason: 'file-rename',
+    });
+    return { fromPath, toPath };
+  },
+});
+
+export const deleteFile = mutation({
+  args: {
+    uiKitId: v.id('ui_kits'),
+    path: v.string(),
+  },
+  handler: async (ctx, { uiKitId, path }) => {
+    if (path.length === 0 || path.length > 200) {
+      throw new Error('uiKits:deleteFile path must be 1..200 chars');
+    }
+    const kit = await ctx.db.get(uiKitId);
+    if (kit === null) throw new Error(`ui_kit ${uiKitId} not found`);
+    const files = { ...((kit.files as Record<string, string>) ?? {}) };
+    if (!(path in files)) throw new Error(`uiKits:deleteFile path "${path}" not in ui_kit`);
+    delete files[path];
+    await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
+      runId: kit.runId,
+      reason: 'file-delete',
+    });
+    return { path };
   },
 });
 
@@ -128,6 +215,10 @@ export const upsertFile = mutation({
     await ctx.db.patch(uiKitId, {
       files,
       fileCount: Object.keys(files).length,
+    });
+    await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
+      runId: kit.runId,
+      reason: created ? 'file-create' : 'file-upsert',
     });
     return { path, sizeBytes: content.length, created };
   },

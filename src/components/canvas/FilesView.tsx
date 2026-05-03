@@ -1,9 +1,9 @@
-import { useQuery } from 'convex/react';
-import { Download, Expand, FileText, Folder, Image as ImageIcon } from 'lucide-react';
+import { useMutation, useQuery } from 'convex/react';
+import { Download, Expand, FilePlus2, FileText, Folder, Image as ImageIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { FileEditor } from '../FileEditor';
+import { FileEditor, starterContentForPath } from '../FileEditor';
 
 interface FilesViewProps {
   runId: Id<'runs'> | null;
@@ -36,14 +36,18 @@ export function FilesView({
 }: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
+  const createFile = useMutation(api.uiKits.createFile);
   const httpBase = convexHttpBase();
   const exportHref =
     runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/zip` : '#';
   const canExport = runId !== null && uiKit !== null && uiKit !== undefined && httpBase !== null;
 
-  const fileCount =
-    uiKit && uiKit.files ? Object.keys(uiKit.files as Record<string, string>).length : 0;
-  const decomposeStatus = uiKit ? '(decompose complete)' : runId ? '(decompose pending)' : '(no run yet)';
+  const fileCount = uiKit?.files ? Object.keys(uiKit.files as Record<string, string>).length : 0;
+  const decomposeStatus = uiKit
+    ? '(decompose complete)'
+    : runId
+      ? '(decompose pending)'
+      : '(no run yet)';
 
   const files = uiKit ? (uiKit.files as Record<string, string>) : null;
   const visibleFilePaths = files
@@ -60,6 +64,23 @@ export function FilesView({
     run?.sourceImageBase64 && run.sourceImageMimeType
       ? `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`
       : null;
+
+  async function onCreateFile() {
+    if (!uiKit) return;
+    const defaultPath = `ui_kits/${uiKit.slug}/components/NewComponent.tsx`;
+    const path = window.prompt('New file path inside this ui_kit:', defaultPath)?.trim();
+    if (!path) return;
+    try {
+      await createFile({
+        uiKitId: uiKit._id,
+        path,
+        content: starterContentForPath(path),
+      });
+      onSelectFile(path);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return (
     <div
@@ -88,6 +109,31 @@ export function FilesView({
         }}
       >
         <FileGroup label="Files" scroll>
+          <button
+            type="button"
+            onClick={() => void onCreateFile()}
+            disabled={!uiKit}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              minHeight: 30,
+              marginBottom: 4,
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-surface)',
+              color: uiKit ? 'var(--color-text-primary)' : 'var(--color-text-faint)',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              fontWeight: 600,
+              cursor: uiKit ? 'pointer' : 'not-allowed',
+            }}
+            title="Create a new file in the live ui_kit"
+          >
+            <FilePlus2 size={13} />
+            New file
+          </button>
           <div
             style={{
               display: 'flex',
@@ -101,7 +147,9 @@ export function FilesView({
             <Folder size={14} style={{ color: 'var(--color-warning)', marginTop: 2 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>ui_kits/</div>
-              <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{decomposeStatus}</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>
+                {decomposeStatus}
+              </div>
               <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>
                 {fileCount} component{fileCount === 1 ? '' : 's'}
               </div>
@@ -159,7 +207,9 @@ export function FilesView({
               padding: 8,
               borderRadius: 'var(--radius-md)',
               border: `1px solid ${sourceImagePreviewOpen ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
-              background: sourceImagePreviewOpen ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+              background: sourceImagePreviewOpen
+                ? 'var(--color-accent-soft)'
+                : 'var(--color-surface)',
               textAlign: 'left',
               cursor: sourceImageUrl ? 'pointer' : 'not-allowed',
               opacity: sourceImageUrl ? 1 : 0.62,
@@ -204,12 +254,23 @@ export function FilesView({
               >
                 source image
               </div>
-              <div style={{ fontSize: 10, color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: 'var(--color-text-faint)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
                 {sourceImageUrl ? 'click to compare original reference' : 'no inline source stored'}
               </div>
             </div>
             {sourceImageUrl ? (
-              <Expand size={13} style={{ color: sourceImagePreviewOpen ? 'var(--color-accent)' : 'var(--color-text-faint)' }} />
+              <Expand
+                size={13}
+                style={{
+                  color: sourceImagePreviewOpen ? 'var(--color-accent)' : 'var(--color-text-faint)',
+                }}
+              />
             ) : null}
           </button>
         </FileGroup>
@@ -318,7 +379,9 @@ export function FilesView({
                 whiteSpace: 'nowrap',
               }}
             >
-              {selectedFile ? selectedFile.split('/').slice(-1)[0] : 'Select a component to scope work'}
+              {selectedFile
+                ? selectedFile.split('/').slice(-1)[0]
+                : 'Select a component to scope work'}
             </div>
           </div>
           <span
@@ -337,6 +400,7 @@ export function FilesView({
           <div
             style={{
               padding: 'var(--space-5)',
+              flex: 1,
               minHeight: 0,
               overflow: 'auto',
               display: 'flex',
@@ -366,7 +430,8 @@ export function FilesView({
                 fontSize: 'var(--font-size-body-sm)',
               }}
             >
-              This file is now the scoped target for comments and agent edits. Use Preview for visual bbox comments; edit the actual code below.
+              This file is now the scoped target for comments and agent edits. Use Preview for
+              visual bbox comments; edit the actual code below.
             </div>
             <div
               style={{
@@ -378,7 +443,7 @@ export function FilesView({
                 overflow: 'hidden',
               }}
             >
-              <FileEditor runId={runId} selectedFile={selectedFile} />
+              <FileEditor runId={runId} selectedFile={selectedFile} onSelectFile={onSelectFile} />
             </div>
           </div>
         ) : (
@@ -401,7 +466,8 @@ export function FilesView({
                 maxWidth: 560,
               }}
             >
-              File tree, source, and handoff stay here. Use Preview when you want the live rendered artifact.
+              File tree, source, and handoff stay here. Use Preview when you want the live rendered
+              artifact.
             </div>
             <div
               style={{
@@ -429,7 +495,8 @@ export function FilesView({
                 padding: 'var(--space-6)',
               }}
             >
-              Select a file on the left to inspect its path, size, scoped-comment target, and source excerpt.
+              Select a file on the left to inspect its path, size, scoped-comment target, and source
+              excerpt.
             </div>
           </div>
         )}

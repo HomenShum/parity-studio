@@ -24,11 +24,11 @@
 //   COMMENT_TEXT       default 'darker on-surface tokens, please'
 //   HEADED             '0' to run headless (default headed for debugging)
 
-import { chromium } from 'playwright';
-import { mkdir, copyFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { copyFile, mkdir, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -78,7 +78,10 @@ async function main() {
 
     // ── 2. focus the persistent agent rail ────────────────────────────
     console.log('[iterate] 2 — agent rail visible');
-    await page.locator('aside[aria-label*="Agent stream" i]').first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page
+      .locator('aside[aria-label*="Agent stream" i]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 });
     await page.waitForTimeout(1_500);
 
     // ── 3. type a deliberately-rough draft ────────────────────────────
@@ -108,7 +111,8 @@ async function main() {
       }
       await page.waitForTimeout(400);
     }
-    if (rewroteAt === 0) console.log('[iterate]   ✨ did not rewrite within 30s — proceeding anyway');
+    if (rewroteAt === 0)
+      console.log('[iterate]   ✨ did not rewrite within 30s — proceeding anyway');
     await page.waitForTimeout(1_500);
 
     // ── 5. cycle the tier pill: Balanced → Frontier → Free ────────────
@@ -137,9 +141,18 @@ async function main() {
     // or until 90s elapses.
     const sendStart = Date.now();
     while (Date.now() - sendStart < 90_000) {
-      const text = (await page.locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
+      const text =
+        (await page
+          .locator(
+            'aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]',
+          )
+          .first()
+          .textContent({ timeout: 2_000 })
+          .catch(() => '')) ?? '';
       if (/advisor|executor|verify|close|tool|done/i.test(text) && text.length > 200) {
-        console.log(`[iterate]   assistant reply detected after ${Math.round((Date.now() - sendStart) / 1000)}s`);
+        console.log(
+          `[iterate]   assistant reply detected after ${Math.round((Date.now() - sendStart) / 1000)}s`,
+        );
         break;
       }
       await page.waitForTimeout(2_000);
@@ -148,7 +161,10 @@ async function main() {
 
     // ── 7. switch to preview tab ──────────────────────────────────────
     console.log('[iterate] 7 — preview tab');
-    await page.getByRole('tab', { name: /^preview$/i }).first().click();
+    await page
+      .getByRole('tab', { name: /^preview$/i })
+      .first()
+      .click();
     await page.waitForTimeout(2_500);
 
     // ── 8. toggle Comment mode (top-right pill) ───────────────────────
@@ -171,7 +187,7 @@ async function main() {
       window.postMessage(
         {
           type: 'parity:element-click',
-          rect: { x: 0.22, y: 0.30, w: 0.34, h: 0.18 },
+          rect: { x: 0.22, y: 0.3, w: 0.34, h: 0.18 },
           selector: 'main > section.hero',
           tagName: 'SECTION',
           text: 'hero',
@@ -216,10 +232,19 @@ async function main() {
     const fixStart = Date.now();
     let lastLen = 0;
     while (Date.now() - fixStart < 75_000) {
-      const text = (await page.locator('aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]').first().textContent({ timeout: 2_000 }).catch(() => '')) ?? '';
+      const text =
+        (await page
+          .locator(
+            'aside[aria-label*="Agent stream" i], section[aria-label*="Chat" i], aside[aria-label*="Chat" i]',
+          )
+          .first()
+          .textContent({ timeout: 2_000 })
+          .catch(() => '')) ?? '';
       if (text.length > lastLen + 100) {
         lastLen = text.length;
-        console.log(`[iterate]   chat grew to ${text.length} chars at ${Math.round((Date.now() - fixStart) / 1000)}s`);
+        console.log(
+          `[iterate]   chat grew to ${text.length} chars at ${Math.round((Date.now() - fixStart) / 1000)}s`,
+        );
       }
       // stop early once we see the executor verify/close stage
       if (/verified|verify|complete|close/i.test(text.slice(-1500)) && text.length > 800) {
@@ -228,7 +253,9 @@ async function main() {
       }
       await page.waitForTimeout(3_000);
     }
-    console.log(`[iterate] auto-fix loop captured after ${Math.round((Date.now() - fixStart) / 1000)}s`);
+    console.log(
+      `[iterate] auto-fix loop captured after ${Math.round((Date.now() - fixStart) / 1000)}s`,
+    );
 
     await page.waitForTimeout(2_500);
   } catch (err) {

@@ -3,9 +3,9 @@
  *
  * Dogfood provenance:
  *   1. gpt-image-1 generated source.png from inputs/prompts/parity-studio-shell.txt
- *   2. claude-opus-4-1 decomposed source.png into ui_kits/parity-studio/{index.html, ...}
+ *   2. legacy claude-opus-4-1 decomposed source.png into ui_kits/parity-studio/{index.html, ...}
  *   3. Playwright rendered the decomposed bundle into rendered.png
- *   4. claude-sonnet-4-5 visual judge scored parityScore=1.00 status=verified
+ *   4. legacy claude-sonnet-4-5 visual judge scored parityScore=1.00 status=verified
  *   5. The CSS below is the inline <style> block from step 2's index.html, copied
  *      verbatim. The React components in src/components/* use these class names.
  *
@@ -137,7 +137,7 @@ body {
   background: var(--color-bg-tertiary);
 }
 
-.source-button input[type='file'] {
+.source-button input[type="file"] {
   display: none;
 }
 
@@ -564,8 +564,13 @@ button.file.selected {
 }
 
 @keyframes pipeline-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .parity-section {
@@ -604,7 +609,9 @@ button.file.selected {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

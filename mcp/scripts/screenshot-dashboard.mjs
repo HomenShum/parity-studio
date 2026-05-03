@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { chromium } from 'playwright';
 import path from 'node:path';
+import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:6285';
 const out = process.argv[3] ?? path.resolve('dashboard.png');

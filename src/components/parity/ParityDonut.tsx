@@ -1,3 +1,5 @@
+import { useT } from '../../lib/i18n';
+
 interface ParityDonutProps {
   pass: number;
   warn: number;
@@ -26,6 +28,7 @@ export function ParityDonut({
   size = 92,
   thickness = 12,
 }: ParityDonutProps) {
+  const t = useT();
   const total = Math.max(1, pass + warn + fail + unavailable);
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
@@ -33,7 +36,12 @@ export function ParityDonut({
   const counts = { pass, warn, fail, unavailable };
   let acc = 0;
   return (
-    <svg width={size} height={size} role="img" aria-label={`Parity ${pass} pass, ${warn} warn, ${fail} fail`}>
+    <svg
+      width={size}
+      height={size}
+      role="img"
+      aria-label={t('parity.donutLabel', { pass, warn, fail })}
+    >
       <circle
         cx={size / 2}
         cy={size / 2}

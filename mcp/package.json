@@ -25,10 +25,7 @@
     "anthropic",
     "openai"
   ],
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "main": "./dist/index.js",
   "bin": {
     "parity-studio-mcp": "./dist/index.js"

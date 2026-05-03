@@ -59,9 +59,9 @@
   --shadow-inset-soft: inset 0 0 0 1px var(--color-border-subtle);
 
   /* Typography stack */
-  --font-display: 'Fraunces Variable', 'Times New Roman', serif;
-  --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --font-display: "Fraunces Variable", "Times New Roman", serif;
+  --font-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 
   /* Type scale */
   --font-size-display-2xl: 64px;
@@ -142,7 +142,7 @@
 
 /* Dark mode opt-in via [data-theme="dark"] on <html>. Inverts surface +
    text scales while keeping the accent invariant. */
-[data-theme='dark'] {
+[data-theme="dark"] {
   --color-background: oklch(0.18 0.01 60);
   --color-background-secondary: oklch(0.21 0.012 58);
   --color-surface: oklch(0.23 0.014 56);

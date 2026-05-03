@@ -24,12 +24,12 @@
 // Optional:
 //   FETCH_LIVE=1 RUN_ID=<id> node scripts/record-scene-mcp.mjs
 
-import { chromium } from 'playwright';
-import { mkdir, copyFile, readdir, writeFile, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -108,7 +108,8 @@ async function loadSnapshots() {
 async function fetchLive() {
   // Optional: hit the hosted Convex deployment to refresh snapshots.
   // Reuses the same URL the MCP server uses by default.
-  const PARITY_CONVEX_URL = process.env.PARITY_CONVEX_URL ?? 'https://blissful-pig-998.convex.cloud';
+  const PARITY_CONVEX_URL =
+    process.env.PARITY_CONVEX_URL ?? 'https://blissful-pig-998.convex.cloud';
   const RUN_ID = process.env.RUN_ID;
   if (!RUN_ID) {
     console.log('[mcp] FETCH_LIVE set but RUN_ID missing — skipping');
@@ -232,7 +233,9 @@ async function main() {
     page.evaluate(({ html, klass }) => window.__appendLine(html, klass), { html, klass });
   const printPrompt = () =>
     page.evaluate(() =>
-      window.__appendLine('<span class="prompt">claude-code &gt;</span>&nbsp;<span class="cmd"></span><span class="cursor"></span>'),
+      window.__appendLine(
+        '<span class="prompt">claude-code &gt;</span>&nbsp;<span class="cmd"></span><span class="cursor"></span>',
+      ),
     );
   const typeIntoLastCmd = async (text, delay = 18) => {
     // Type into the last .cmd span
@@ -303,9 +306,7 @@ async function main() {
   await removeCursorOnLast();
   await appendHtml('<span class="head">→ scheduled · agent loop running</span>');
   await appendHtml(
-    '  <span class="dim">runId:</span> <span class="key">' +
-      runId.slice(0, 16) +
-      '…</span> <span class="dim">·</span> <span class="ok">turn 4 created</span>',
+    `  <span class="dim">runId:</span> <span class="key">${runId.slice(0, 16)}…</span> <span class="dim">·</span> <span class="ok">turn 4 created</span>`,
   );
   await page.waitForTimeout(1_600);
 
@@ -317,26 +318,30 @@ async function main() {
   await appendHtml('<span class="head">→ last 6 turns</span>');
   for (const m of snapshots.parity_chat_history.messages) {
     const colorClass =
-      m.role === 'user' ? 'arg' : m.role === 'tool' ? 'tool' : m.role === 'assistant' ? 'str' : 'dim';
+      m.role === 'user'
+        ? 'arg'
+        : m.role === 'tool'
+          ? 'tool'
+          : m.role === 'assistant'
+            ? 'str'
+            : 'dim';
     const head =
       m.role === 'tool'
         ? `<span class="${colorClass}">tool · ${m.name ?? '?'}</span>`
         : `<span class="${colorClass}">${m.role}</span>`;
-    await appendHtml(`  <span class="dim">[${m.turn}]</span> ${head} <span class="dim">→</span> ${m.content ?? m.result ?? ''}`);
+    await appendHtml(
+      `  <span class="dim">[${m.turn}]</span> ${head} <span class="dim">→</span> ${m.content ?? m.result ?? ''}`,
+    );
     await page.waitForTimeout(280);
   }
   await page.waitForTimeout(1_500);
 
   // ── 5. parity_export ─────────────────────────────────────────────────
   await printPrompt();
-  await typeIntoLastCmd(
-    `parity_export { runId: '${runId.slice(0, 12)}…', format: 'markdown' }`,
-  );
+  await typeIntoLastCmd(`parity_export { runId: '${runId.slice(0, 12)}…', format: 'markdown' }`);
   await page.waitForTimeout(500);
   await removeCursorOnLast();
-  await appendHtml(
-    `<span class="head">→ markdown · ${snapshots.parity_export.bytes} bytes</span>`,
-  );
+  await appendHtml(`<span class="head">→ markdown · ${snapshots.parity_export.bytes} bytes</span>`);
   await appendHtml(
     `<pre class="dim">${snapshots.parity_export.sample.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
   );

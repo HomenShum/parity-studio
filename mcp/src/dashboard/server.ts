@@ -22,7 +22,7 @@ import JSZip from 'jszip';
 import { eventBus } from './events.js';
 import { renderDashboardHtml } from './staticHtml.js';
 
-const DEFAULT_PORT = Number(process.env['PARITY_DASHBOARD_PORT'] ?? 6280);
+const DEFAULT_PORT = Number(process.env.PARITY_DASHBOARD_PORT ?? 6280);
 const MAX_SUBSCRIBERS = 64;
 
 interface DashboardServerHandle {

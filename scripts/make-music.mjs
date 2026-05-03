@@ -14,8 +14,8 @@
 //   DURATION_SEC=180 node scripts/make-music.mjs   shorter
 //   OUTPUT=runs/music/foo.m4a node scripts/make-music.mjs
 
-import { mkdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,8 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 
 const DURATION = Number.parseInt(process.env.DURATION_SEC ?? '240', 10);
-const OUTPUT =
-  process.env.OUTPUT ?? join(repoRoot, 'runs', 'music', `demo-bed-${DURATION}s.m4a`);
+const OUTPUT = process.env.OUTPUT ?? join(repoRoot, 'runs', 'music', `demo-bed-${DURATION}s.m4a`);
 
 async function main() {
   await mkdir(dirname(OUTPUT), { recursive: true });
@@ -58,21 +57,23 @@ async function main() {
     '[e4][g4][c5]amix=inputs=3:weights=0.4 0.4 0.5:duration=longest,tremolo=f=2:d=0.08[high]',
 
     // Sum, soften with lowpass + slight reverb-style high-shelf cut
-    '[low][mid][high]amix=inputs=3:weights=2.0 1.2 0.8:duration=longest,' +
-      'lowpass=f=1400,' +
-      'highshelf=f=2000:g=-6,' +
-      'volume=-22dB,' +
-      `afade=t=in:st=0:d=3,afade=t=out:st=${fadeOutStart}:d=4[out]`,
+    `[low][mid][high]amix=inputs=3:weights=2.0 1.2 0.8:duration=longest,lowpass=f=1400,highshelf=f=2000:g=-6,volume=-22dB,afade=t=in:st=0:d=3,afade=t=out:st=${fadeOutStart}:d=4[out]`,
   ].join(';');
 
   const r = spawnSync(
     'ffmpeg',
     [
       '-y',
-      '-filter_complex', filter,
-      '-map', '[out]',
-      '-c:a', 'aac', '-b:a', '128k',
-      '-t', String(DURATION),
+      '-filter_complex',
+      filter,
+      '-map',
+      '[out]',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '128k',
+      '-t',
+      String(DURATION),
       OUTPUT,
     ],
     { stdio: 'inherit' },

@@ -36,7 +36,9 @@ export function SourceImagePopover({
   if (!run || !run.sourceImageBase64 || !run.sourceImageMimeType) return null;
 
   const dataUrl = `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`;
-  const componentName = selectedFile ? (selectedFile.split('/').slice(-1)[0] ?? selectedFile) : 'full source';
+  const componentName = selectedFile
+    ? (selectedFile.split('/').slice(-1)[0] ?? selectedFile)
+    : 'full source';
 
   function close() {
     setDismissed(true);
@@ -93,7 +95,12 @@ export function SourceImagePopover({
           >
             {expanded ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
           </button>
-          <button type="button" onClick={close} aria-label="Dismiss source image" style={iconBtnStyle}>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Dismiss source image"
+            style={iconBtnStyle}
+          >
             <X size={11} />
           </button>
         </span>
@@ -128,8 +135,8 @@ export function SourceImagePopover({
           lineHeight: 'var(--leading-snug)',
         }}
       >
-        Reference for the scoped component. Comments and iterate-now target this file; the source above is
-        what you are matching to.
+        Reference for the scoped component. Comments and iterate-now target this file; the source
+        above is what you are matching to.
       </div>
     </div>
   );

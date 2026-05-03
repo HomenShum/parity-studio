@@ -6,6 +6,7 @@ import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { I18nProvider } from './lib/i18n';
 import './styles/tokens.css';
 import './styles.css';
 
@@ -17,8 +18,10 @@ if (!rootEl) throw new Error('#root not found');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <ConvexProvider client={convex}>
-      <App />
-    </ConvexProvider>
+    <I18nProvider>
+      <ConvexProvider client={convex}>
+        <App />
+      </ConvexProvider>
+    </I18nProvider>
   </StrictMode>,
 );
