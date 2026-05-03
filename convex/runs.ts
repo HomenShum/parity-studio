@@ -83,6 +83,49 @@ function inferTitle(prompt: string | undefined, fallback: string): string {
   return trimmed.length > 72 ? `${trimmed.slice(0, 69)}...` : trimmed;
 }
 
+function importedUiKitSlugs(files: Record<string, string>): Set<string> {
+  const slugs = new Set<string>();
+  for (const path of Object.keys(files)) {
+    const match = path.match(/^ui_kits\/([^/]+)\//);
+    if (match?.[1]) slugs.add(match[1]);
+  }
+  return slugs;
+}
+
+function selectImportedEntryHtml(files: Record<string, string>, slug: string): string {
+  const exactIndex = files[`ui_kits/${slug}/index.html`];
+  if (exactIndex !== undefined) return exactIndex;
+  const manifestEntry = entryFromProjectManifest(files, slug);
+  if (manifestEntry && files[manifestEntry] !== undefined) return files[manifestEntry] as string;
+  const root = `ui_kits/${slug}/`;
+  const slugHtml = Object.entries(files)
+    .filter(([path]) => path.startsWith(root) && path.endsWith('.html'))
+    .sort(([a], [b]) => a.localeCompare(b));
+  const firstSlugHtml = slugHtml[0]?.[1];
+  if (firstSlugHtml !== undefined) return firstSlugHtml;
+  const firstIndex = Object.entries(files).find(
+    ([path]) => path.endsWith('/index.html') || path === 'index.html',
+  )?.[1];
+  return (
+    firstIndex ??
+    '<!doctype html><html><body><!-- ui_kit imported without index.html --></body></html>'
+  );
+}
+
+function entryFromProjectManifest(files: Record<string, string>, slug: string): string | null {
+  const raw = files['parity.project.json'];
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      surfaces?: Array<{ slug?: string; entry?: string | null }>;
+    };
+    const surface = parsed.surfaces?.find((item) => item.slug === slug);
+    return typeof surface?.entry === 'string' && surface.entry.length > 0 ? surface.entry : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeModelOverride(
   modelOverride:
     | {
@@ -245,9 +288,7 @@ export const startFromKit = mutation({
     if (Object.keys(files).length === 0) {
       throw new Error('runs:startFromKit requires at least one file');
     }
-    const indexHtml =
-      Object.entries(files).find(([p]) => p.endsWith('/index.html') || p === 'index.html')?.[1] ??
-      '<!doctype html><html><body><!-- ui_kit imported without index.html --></body></html>';
+    const indexHtml = selectImportedEntryHtml(files, args.slug);
     const artifactHtml = args.sourceArtifactHtml ?? indexHtml;
     const filesWithContract = withOperatingContract(files, {
       slug: args.slug,
@@ -302,25 +343,33 @@ export const startFromKit = mutation({
       sizeBytes: artifactHtml.length,
     });
 
-    // Expand the imported kit into the full canonical shape so the
-    // chat agent can patch any preview/, assets/, or explorations/
-    // file from day one. Imported kit files override regenerated
-    // shape on conflicts (the spread below puts `files` last).
-    const importCanonical = expandToCanonicalShape({
-      slug: args.slug,
-      kitFiles: filesWithContract,
-      run: {
-        runId: String(runId),
-        prompt: args.prompt,
-        costMicroUsd: 0,
-        iterationsCompleted: 0,
-        sourceImageMimeType: args.sourceImageMimeType,
-        hasSourceImage: Boolean(args.sourceImageBase64),
-      },
-      parity: null,
-      artifacts: [],
-    });
-    const importFullShape = { ...importCanonical, ...filesWithContract };
+    const importedSlugs = importedUiKitSlugs(filesWithContract);
+    const isProjectPack =
+      importedSlugs.size > 1 || filesWithContract['parity.project.json'] !== undefined;
+
+    // Single-kit imports get the full canonical scaffold. Multi-surface
+    // project packs already carry their own files and can exceed Convex's
+    // document size limit if we duplicate preview/assets/explorations for
+    // every surface, so preserve them as-is plus the operating contract.
+    const importFullShape = isProjectPack
+      ? filesWithContract
+      : {
+          ...expandToCanonicalShape({
+            slug: args.slug,
+            kitFiles: filesWithContract,
+            run: {
+              runId: String(runId),
+              prompt: args.prompt,
+              costMicroUsd: 0,
+              iterationsCompleted: 0,
+              sourceImageMimeType: args.sourceImageMimeType,
+              hasSourceImage: Boolean(args.sourceImageBase64),
+            },
+            parity: null,
+            artifacts: [],
+          }),
+          ...filesWithContract,
+        };
 
     // Insert ui_kit row with cost = 0.
     const fileCount = Object.keys(importFullShape).length;

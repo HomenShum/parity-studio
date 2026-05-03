@@ -14,6 +14,7 @@ A canonical zip looks like this:
 ├── AGENTS.md                    # Codex/Cursor/Windsurf agent rules
 ├── .claude/skills/<slug>/SKILL.md
 ├── .cursor/rules/<slug>-parity-studio.mdc
+├── parity.project.json          # project-level surface manifest (multi-slug imports)
 ├── colors_and_type.css          # shared brand tokens (source of truth)
 ├── assets/                      # SVG logos, webp hero/og, mask icons
 ├── preview/                     # one HTML specimen per token / component
@@ -46,8 +47,9 @@ A canonical zip looks like this:
 | `AGENTS.md` | optional on import, **emitted** on export | Ignored | Shared instructions for Codex, Cursor, Windsurf, and other coding agents |
 | `.claude/skills/<slug>/SKILL.md` | optional on import, **emitted** on export | Ignored | Project-local Claude Skill for integrating/iterating this slug |
 | `.cursor/rules/<slug>-parity-studio.mdc` | optional on import, **emitted** on export | Ignored | Cursor rule that points agents at the operating contract |
-| `colors_and_type.css` | optional, **emitted** on export | Read but not yet merged into the active run | Stub that imports `ui_kits/<slug>/tokens.css` so consumers have a single root token entry |
-| `ui_kits/<slug>/...` | **required on import** | Parsed, the largest slug becomes the active run; other slugs are noted but not run | One slug per run (the latest ui_kit produced) |
+| `parity.project.json` | optional on import, **emitted for multi-surface imports** | Read as the project-level surface manifest; backfilled when missing | Carries active surface, all `ui_kits/<slug>` entries, kind (`web`, `mobile`, `workspace`, `cli`, etc.), default device, and source metadata |
+| `colors_and_type.css` | optional, **emitted** on export | Used as shared fallback tokens when a surface has no local `tokens.css`/`shared.css`/`styles.css` | Stub that imports `ui_kits/<slug>/tokens.css` so consumers have a single root token entry |
+| `ui_kits/<slug>/...` | **required for canonical import**; fallback importer can wrap root HTML handoff zips into `ui_kits/imported-design/` | All slugs are preserved in one run; a default active surface is selected and the user can switch surfaces in the canvas | One active slug per generated run today; imported project packs retain all imported slugs in the exported ZIP |
 | `ui_kits/<slug>/parity.contract.json` | optional on import, **emitted** on export | Backfilled if missing | Versioned operating contract: source, intent, appearance, organization, performance, API, QA, agent policy, BYOK/privacy |
 | `ui_kits/<slug>/performance.budget.json` | optional on import, **emitted** on export | Backfilled if missing | Route/interaction budgets derived from the product performance principles |
 | `ui_kits/<slug>/api-wiring.plan.md` | optional on import, **emitted** on export | Backfilled if missing | Plan-first live API wiring checklist and side-effect policy |
@@ -66,18 +68,20 @@ A canonical zip looks like this:
 | `scraps/README.md` | optional, **emitted** on export | Ignored | Documents the working-PNGs convention (future intermediate-state capture) |
 | `uploads/<*.png\|jpg\|webp>` | optional | First image ≤ 2 MB becomes the run's `sourceImageBase64` for the source-image popover | The original source image is exported back here |
 
-## Multi-slug zips
+## Multi-surface zips
 
 The canonical NodeBench zip ships **multiple slugs** in `ui_kits/`
 (`nodebench-web`, `nodebench-mobile`, `nodebench-workspace`,
-`nodebench-mcp`). The importer:
+`nodebench-mcp`). Parity Studio treats these as one project pack:
 
-1. Picks the slug with the **most files** as the active run.
-2. Notes the remaining slugs in the composer status line — they are
-   preserved upstream (in the user's filesystem) but parity-studio
-   only carries one slug per run today.
-3. Future work: a follow-up could let the user pick which slug to
-   activate, or split a multi-slug zip into N runs. Not done yet.
+1. Preserves every `ui_kits/<slug>/...` file inside the same imported run.
+2. Adds or updates `parity.project.json` with each surface's slug, label, kind, entry HTML, and default device.
+3. Picks an initial active surface with a product-oriented score (`web` first, then workspace/mobile/CLI when no web surface exists).
+4. Backfills `ui_kits/<slug>/index.html` when a surface has a root HTML file with another name, such as `AI Workspace.html`.
+5. Lets the user switch surfaces from the canvas header. Preview, Files, Tweaks, selected-file scope, and Parity Coach follow the selected surface.
+6. Skips canonical scaffold expansion for multi-surface project packs to avoid duplicating files and exceeding Convex document limits.
+
+If a ZIP has no `ui_kits/` folder but does contain a root HTML/CSS/JS handoff, the fallback importer wraps the text files into `ui_kits/imported-design/` so Claude Design/Open CoDesign-style handoffs can still land as an editable Parity run.
 
 ## Why symmetric?
 

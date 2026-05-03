@@ -13,6 +13,7 @@ import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { useI18n } from '../../lib/i18n';
 import { modelDisplay } from '../../lib/modelLabels';
+import { activeSurfaceFor } from '../../lib/projectSurfaces';
 import { QUALITY_GATE_MAX_REPAIRS, QUALITY_GATE_TARGET_PASS_RATIO } from '../../lib/qualityGate';
 import type { Device } from '../HeaderActions';
 import { CostTelemetry } from './CostTelemetry';
@@ -23,6 +24,7 @@ interface ParityPanelProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   device: Device;
+  activeSurfaceSlug?: string | null;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onOpenFile: (path: string) => void;
@@ -335,6 +337,7 @@ function buildKitContext({
   rows,
   selectedFile,
   device,
+  activeSurfaceSlug,
 }: {
   // biome-ignore lint/suspicious/noExplicitAny: Convex generated doc types are verbose in this UI helper.
   run: any;
@@ -345,13 +348,24 @@ function buildKitContext({
   rows: CheckRow[];
   selectedFile: string | null;
   device: Device;
+  activeSurfaceSlug: string | null | undefined;
 }): KitContext {
-  const slug = String(uiKit?.slug ?? 'current kit');
   const files = ((uiKit?.files as Record<string, string> | undefined) ?? {}) as Record<
     string,
     string
   >;
-  const html = String(files[`ui_kits/${slug}/index.html`] ?? artifact?.html ?? '');
+  const surface = activeSurfaceFor(
+    files,
+    uiKit?.slug ? String(uiKit.slug) : null,
+    activeSurfaceSlug,
+  );
+  const slug = surface?.slug ?? String(uiKit?.slug ?? 'current kit');
+  const html = String(
+    (surface?.entry ? files[surface.entry] : undefined) ??
+      files[`ui_kits/${slug}/index.html`] ??
+      artifact?.html ??
+      '',
+  );
   const title = extractTagText(html, 'title', 1)[0] ?? extractTagText(html, 'h1', 1)[0] ?? slug;
   const headings = [
     ...extractTagText(html, 'h1', 3),
@@ -486,6 +500,7 @@ export function ParityPanel({
   runId,
   selectedFile,
   device,
+  activeSurfaceSlug,
   collapsed,
   onToggleCollapsed,
   onOpenFile,
@@ -547,8 +562,9 @@ export function ParityPanel({
         rows,
         selectedFile,
         device,
+        activeSurfaceSlug,
       }),
-    [artifact, device, rows, run, selectedFile, uiKit],
+    [activeSurfaceSlug, artifact, device, rows, run, selectedFile, uiKit],
   );
 
   const statusLabel = (() => {

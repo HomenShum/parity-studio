@@ -3,6 +3,8 @@ import { ExternalLink } from 'lucide-react';
 import { useMemo } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { buildSurfacePreviewHtml, stripUnresolvedRelativeScripts } from '../../lib/previewSrcDoc';
+import { activeSurfaceFor, surfaceTokenPath } from '../../lib/projectSurfaces';
 import { CommentOverlay } from '../CommentOverlay';
 import type { Device } from '../HeaderActions';
 
@@ -12,6 +14,7 @@ interface ArtifactPreviewProps {
   zoom: number;
   device: Device;
   commentModeActive: boolean;
+  activeSurfaceSlug?: string | null;
   onAutoFixKicked?: () => void;
 }
 
@@ -34,38 +37,30 @@ export function ArtifactPreview({
   zoom,
   device,
   commentModeActive,
+  activeSurfaceSlug,
   onAutoFixKicked,
 }: ArtifactPreviewProps) {
   const artifact = useQuery(api.artifacts.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
 
-  const liveTokensCss = useMemo(() => {
+  const livePreview = useMemo(() => {
     if (!uiKit) return null;
     const files = (uiKit.files as Record<string, string>) ?? {};
-    const path = `ui_kits/${uiKit.slug}/tokens.css`;
-    return files[path] ?? null;
-  }, [uiKit]);
-
-  const liveKitHtml = useMemo(() => {
-    if (!uiKit) return null;
-    const files = (uiKit.files as Record<string, string>) ?? {};
-    return files[`ui_kits/${uiKit.slug}/index.html`] ?? files['preview/index.html'] ?? null;
-  }, [uiKit]);
+    const surface = activeSurfaceFor(files, uiKit.slug, activeSurfaceSlug);
+    const entryHtml = surface?.entry ? (files[surface.entry] ?? null) : null;
+    const html =
+      entryHtml ?? files[`ui_kits/${uiKit.slug}/index.html`] ?? files['preview/index.html'] ?? null;
+    const tokenPath = surfaceTokenPath(files, surface);
+    return {
+      surface,
+      html,
+      tokensCss: tokenPath ? (files[tokenPath] ?? null) : null,
+      files,
+    };
+  }, [activeSurfaceSlug, uiKit]);
 
   const commentMessageToken = runId ? `parity-comment-${runId}` : 'parity-comment-empty';
-
-  // Stitch tokens.css into the iframe srcDoc so TweakPanel edits show
-  // live. Insert at the end of <head> so edited token values override
-  // generated defaults while preserving normal CSS variable behavior.
-  function injectLiveTokens(html: string, tokens: string | null): string {
-    if (!tokens) return html;
-    const tag = `<style data-parity-tokens="live">\n${tokens}\n</style>\n`;
-    if (html.includes('</head>')) return html.replace('</head>', `${tag}</head>`);
-    if (html.toLowerCase().includes('</head>')) return html.replace(/<\/head>/i, `${tag}</head>`);
-    if (html.includes('<body')) return html.replace('<body', `${tag}<body`);
-    return tag + html;
-  }
 
   // Generated artifacts are untrusted previews and may contain demo JS.
   // Keep runtime errors inside the iframe so host-app QA is not polluted
@@ -85,23 +80,6 @@ window.addEventListener('unhandledrejection', function(event) {
     if (html.toLowerCase().includes('<head>')) return html.replace(/<head>/i, `<head>${script}`);
     if (html.includes('<script')) return html.replace('<script', `${script}<script`);
     return script + html;
-  }
-
-  function stripUnresolvableScriptSrcs(html: string): string {
-    return html.replace(
-      /<script\b([^>]*?)\bsrc=(["'])([^"']+)\2([^>]*)>\s*<\/script>/gi,
-      (tag, _before: string, _quote: string, src: string, _after: string) => {
-        const normalized = src.trim().toLowerCase();
-        const canLoadInSrcDoc =
-          normalized.startsWith('https://') ||
-          normalized.startsWith('http://') ||
-          normalized.startsWith('data:') ||
-          normalized.startsWith('blob:');
-        if (canLoadInSrcDoc) return tag;
-        const safeSrc = src.replace(/-->/g, '');
-        return `<!-- parity: stripped unresolved preview script ${safeSrc} -->`;
-      },
-    );
   }
 
   // When comment mode is on, inject a tiny helper script that captures
@@ -221,16 +199,22 @@ window.addEventListener('unhandledrejection', function(event) {
   let versionLabel = 'v0';
   let artifactVersion = 0;
   if (runId !== null) {
-    if (liveKitHtml !== null) {
+    if (livePreview?.html !== null && livePreview?.html !== undefined) {
+      const surfaceHtml = buildSurfacePreviewHtml({
+        html: livePreview.html,
+        files: livePreview.files,
+        surface: livePreview.surface,
+        tokensCss: livePreview.tokensCss,
+      });
       srcDoc = injectCommentHelper(
-        injectRuntimeGuard(
-          stripUnresolvableScriptSrcs(injectLiveTokens(liveKitHtml, liveTokensCss)),
-        ),
+        injectRuntimeGuard(stripUnresolvedRelativeScripts(surfaceHtml)),
         commentModeActive,
         commentMessageToken,
       );
       const baseVersion = uiKit?.artifactVersion ?? artifact?.version ?? 0;
-      versionLabel = `kit v${baseVersion}`;
+      versionLabel = livePreview.surface
+        ? `${livePreview.surface.label} kit v${baseVersion}`
+        : `kit v${baseVersion}`;
       artifactVersion = baseVersion;
     } else if (artifact === undefined || run === undefined || uiKit === undefined) {
       srcDoc = loadingHtml('loading');
@@ -238,9 +222,7 @@ window.addEventListener('unhandledrejection', function(event) {
       srcDoc = loadingHtml(run?.status ?? 'queued');
     } else {
       srcDoc = injectCommentHelper(
-        injectRuntimeGuard(
-          stripUnresolvableScriptSrcs(injectLiveTokens(artifact.html, liveTokensCss)),
-        ),
+        injectRuntimeGuard(stripUnresolvedRelativeScripts(artifact.html)),
         commentModeActive,
         commentMessageToken,
       );
@@ -250,7 +232,7 @@ window.addEventListener('unhandledrejection', function(event) {
   }
 
   const semverLabel = run ? `v2.${artifactVersion}.${run.iterationsCompleted ?? 0}` : 'v—';
-  const previewKindLabel = versionLabel.startsWith('kit') ? 'Kit preview' : 'Artifact preview';
+  const previewKindLabel = versionLabel.includes('kit') ? 'Kit preview' : 'Artifact preview';
 
   return (
     <div

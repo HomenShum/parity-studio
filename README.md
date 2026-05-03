@@ -63,7 +63,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 - **Start a new run from a prompt**: describe the surface and let the pipeline generate, decompose, verify, and stream the result.
 - **Start from a source image**: attach a screenshot or generated image, then decompose it into a componentized `ui_kit`.
-- **Import an existing `ui_kit` ZIP**: drop a canonical kit back into the app, inspect it, comment on it, edit files, and export it again.
+- **Import an existing `ui_kit` ZIP or design handoff**: drop a canonical kit, Claude Design-style skill pack, Open CoDesign-style export, or plain HTML handoff ZIP into the app. Parity preserves every `ui_kits/<slug>/` surface, creates `parity.project.json`, lets you switch web/mobile/workspace/CLI surfaces, then comment, edit, verify, and export again.
 - **Choose the model route**: use Balanced AI, Best Quality AI, Free AI route, a preset model, or a custom provider/model id from Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Cerebras, xAI, or Mistral.
 - **Session privacy + BYOK setup**: store browser-tab-only provider-key placeholders for the session, copy local MCP env setup, clear keys, or start a fresh session. Hosted Parity does not receive browser-entered BYOK secrets for model calls.
 - **Manage projects and run history**: use the left rail to start runs, revisit recent runs, see run status, and keep a session-level project list.

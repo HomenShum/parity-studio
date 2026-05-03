@@ -4,12 +4,15 @@ import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { convexHttpUrl } from '../../lib/convexEndpoints';
+import { activeSurfaceFor, discoverProjectSurfaces, slugFromPath } from '../../lib/projectSurfaces';
 import { FileEditor, starterContentForPath } from '../FileEditor';
 
 interface FilesViewProps {
   runId: Id<'runs'> | null;
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
+  activeSurfaceSlug?: string | null;
+  onSurfaceChange?: (slug: string | null) => void;
   sourceImagePreviewOpen?: boolean;
   onPreviewSourceImage?: () => void;
 }
@@ -24,6 +27,8 @@ export function FilesView({
   runId,
   selectedFile,
   onSelectFile,
+  activeSurfaceSlug,
+  onSurfaceChange,
   sourceImagePreviewOpen = false,
   onPreviewSourceImage,
 }: FilesViewProps) {
@@ -43,9 +48,16 @@ export function FilesView({
       : '(no run yet)';
 
   const files = uiKit ? (uiKit.files as Record<string, string>) : null;
+  const surfaces = files && uiKit ? discoverProjectSurfaces(files, uiKit.slug) : [];
+  const activeSurface =
+    files && uiKit ? activeSurfaceFor(files, uiKit.slug, activeSurfaceSlug) : null;
   const visibleFilePaths = files
     ? Object.keys(files).sort(
-        (a, b) => fileDisplayPriority(a) - fileDisplayPriority(b) || a.localeCompare(b),
+        (a, b) =>
+          surfaceDisplayPriority(a, activeSurface?.slug ?? null) -
+            surfaceDisplayPriority(b, activeSurface?.slug ?? null) ||
+          fileDisplayPriority(a) - fileDisplayPriority(b) ||
+          a.localeCompare(b),
       )
     : [];
   const selectedContent = selectedFile && files ? (files[selectedFile] ?? null) : null;
@@ -60,7 +72,8 @@ export function FilesView({
 
   async function onCreateFile() {
     if (!uiKit) return;
-    const defaultPath = `ui_kits/${uiKit.slug}/components/NewComponent.tsx`;
+    const defaultSlug = activeSurface?.slug ?? uiKit.slug;
+    const defaultPath = `ui_kits/${defaultSlug}/components/NewComponent.tsx`;
     const path = window.prompt('New file path inside this ui_kit:', defaultPath)?.trim();
     if (!path) return;
     try {
@@ -141,7 +154,7 @@ export function FilesView({
             <div style={{ minWidth: 0 }}>
               <div style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>ui_kits/</div>
               <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>
-                {decomposeStatus}
+                {surfaces.length > 1 ? `${surfaces.length} surfaces imported` : decomposeStatus}
               </div>
               <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>
                 {fileCount} component{fileCount === 1 ? '' : 's'}
@@ -149,14 +162,86 @@ export function FilesView({
             </div>
           </div>
 
+          {surfaces.length > 1 ? (
+            <div style={{ display: 'grid', gap: 4, marginLeft: 18, marginBottom: 4 }}>
+              {surfaces.map((surface) => {
+                const selected = activeSurface?.slug === surface.slug;
+                return (
+                  <button
+                    key={surface.slug}
+                    type="button"
+                    onClick={() => {
+                      onSurfaceChange?.(surface.slug);
+                      if (surface.entry) onSelectFile(surface.entry);
+                    }}
+                    title={`${surface.slug} - ${surface.kind}`}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      alignItems: 'center',
+                      gap: 8,
+                      textAlign: 'left',
+                      background: selected ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+                      color: selected ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px 8px',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: selected ? 'var(--color-accent)' : 'var(--color-text-primary)',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {surface.label}
+                      </span>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          color: 'var(--color-text-faint)',
+                        }}
+                      >
+                        {surface.kind} / {surface.fileCount} files
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        color: 'var(--color-text-faint)',
+                      }}
+                    >
+                      {surface.hasIndex ? 'index' : 'html'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {files
             ? visibleFilePaths.map((path) => {
                 const selected = path === selectedFile;
+                const surfaceSlug = slugFromPath(path);
                 return (
                   <button
                     key={path}
                     type="button"
-                    onClick={() => onSelectFile(selected ? null : path)}
+                    onClick={() => {
+                      if (surfaceSlug) onSurfaceChange?.(surfaceSlug);
+                      onSelectFile(selected ? null : path);
+                    }}
                     title={`Scope next comment to ${path}`}
                     style={{
                       display: 'flex',
@@ -178,7 +263,7 @@ export function FilesView({
                     }}
                   >
                     <FileText size={11} />
-                    {path.split('/').slice(-1)[0]}
+                    {displayFilePath(path)}
                   </button>
                 );
               })
@@ -372,9 +457,7 @@ export function FilesView({
                 whiteSpace: 'nowrap',
               }}
             >
-              {selectedFile
-                ? selectedFile.split('/').slice(-1)[0]
-                : 'Select a component to scope work'}
+              {selectedFile ? displayFilePath(selectedFile) : 'Select a component to scope work'}
             </div>
           </div>
           <span
@@ -408,7 +491,7 @@ export function FilesView({
                 gap: 'var(--space-3)',
               }}
             >
-              <Stat label="Path" value={selectedFile.replace(/^ui_kits\/[^/]+\//, '')} />
+              <Stat label="Path" value={displayFilePath(selectedFile)} />
               <Stat label="Size" value={formatSize(new Blob([selectedContent]).size)} />
               <Stat label="Scope" value="next comment" />
             </div>
@@ -584,6 +667,18 @@ function fileDisplayPriority(path: string): number {
   if (/^preview\/component-/i.test(path)) return 2;
   if (/^ui_kits\/[^/]+\/(README|HANDOFF)\.md$/i.test(path)) return 3;
   return 4;
+}
+
+function surfaceDisplayPriority(path: string, activeSlug: string | null): number {
+  const slug = slugFromPath(path);
+  if (!slug) return 2;
+  if (slug === activeSlug) return 0;
+  return 1;
+}
+
+function displayFilePath(path: string): string {
+  if (path.startsWith('ui_kits/')) return path.replace(/^ui_kits\//, '');
+  return path;
 }
 
 function estimateZipSize(files: Record<string, string> | null): number {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { useT } from '../../lib/i18n';
+import { activeSurfaceFor, discoverProjectSurfaces, slugFromPath } from '../../lib/projectSurfaces';
 import type { Device } from '../HeaderActions';
 import { ArtifactPreview } from './ArtifactPreview';
 import { FilesView } from './FilesView';
@@ -22,6 +23,8 @@ interface CanvasPanelProps {
   zoom: number;
   device: Device;
   commentModeActive: boolean;
+  activeSurfaceSlug: string | null;
+  onSurfaceChange: (slug: string | null) => void;
 }
 
 export type CanvasTab = 'files' | 'preview' | 'inspiration';
@@ -41,6 +44,8 @@ export function CanvasPanel({
   zoom,
   device,
   commentModeActive,
+  activeSurfaceSlug,
+  onSurfaceChange,
 }: CanvasPanelProps) {
   const t = useT();
   const [internalTab, setInternalTab] = useState<CanvasTab>('files');
@@ -48,6 +53,9 @@ export function CanvasPanel({
   const [sourcePreviewOpen, setSourcePreviewOpen] = useState(false);
   const [sourceSyncOpen, setSourceSyncOpen] = useState(false);
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
+  const files = (uiKit?.files as Record<string, string> | undefined) ?? {};
+  const surfaces = uiKit ? discoverProjectSurfaces(files, uiKit.slug) : [];
+  const activeSurface = uiKit ? activeSurfaceFor(files, uiKit.slug, activeSurfaceSlug) : null;
   const tab = activeTab ?? internalTab;
   const activeTabRef = useRef(activeTab);
   const onTabChangeRef = useRef(onTabChange);
@@ -69,6 +77,11 @@ export function CanvasPanel({
     setTweaksOpen(false);
     setSourcePreviewOpen(false);
   }, [runId]);
+
+  useEffect(() => {
+    const slug = selectedFile ? slugFromPath(selectedFile) : null;
+    if (slug && slug !== activeSurfaceSlug) onSurfaceChange(slug);
+  }, [activeSurfaceSlug, onSurfaceChange, selectedFile]);
 
   return (
     <section
@@ -127,6 +140,63 @@ export function CanvasPanel({
           );
         })}
         <span style={{ flex: 1 }} aria-hidden />
+        {surfaces.length > 1 ? (
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              minWidth: 220,
+              padding: '5px 8px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-surface)',
+              boxShadow: 'var(--shadow-soft)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--color-text-faint)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Surface
+            </span>
+            <select
+              aria-label="Active project surface"
+              data-testid="surface-select"
+              value={activeSurface?.slug ?? ''}
+              onChange={(event) => {
+                const surface = surfaces.find((item) => item.slug === event.target.value);
+                if (!surface) return;
+                onSurfaceChange(surface.slug);
+                if (surface.entry) onSelectFile(surface.entry);
+              }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 12,
+                fontWeight: 760,
+                cursor: 'pointer',
+              }}
+            >
+              {surfaces.map((surface) => (
+                <option key={surface.slug} value={surface.slug}>
+                  {surface.label} - {surface.kind}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {runId !== null ? (
           <button
             type="button"
@@ -205,6 +275,8 @@ export function CanvasPanel({
                 runId={runId}
                 selectedFile={selectedFile}
                 onSelectFile={onSelectFile}
+                activeSurfaceSlug={activeSurface?.slug ?? activeSurfaceSlug}
+                onSurfaceChange={onSurfaceChange}
                 sourceImagePreviewOpen={sourcePreviewOpen}
                 onPreviewSourceImage={() => setSourcePreviewOpen(true)}
               />
@@ -239,12 +311,14 @@ export function CanvasPanel({
                 zoom={zoom}
                 device={device}
                 commentModeActive={commentModeActive}
+                activeSurfaceSlug={activeSurface?.slug ?? activeSurfaceSlug}
               />
             </div>
             {tweaksOpen ? (
               <TweakPanel
                 uiKitId={uiKit?._id ?? null}
                 slug={uiKit?.slug ?? null}
+                activeSurfaceSlug={activeSurface?.slug ?? activeSurfaceSlug}
                 files={(uiKit?.files as Record<string, string>) ?? {}}
                 onClose={() => setTweaksOpen(false)}
               />

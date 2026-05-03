@@ -33,6 +33,7 @@ export default function App() {
   const [clientSessionId, setClientSessionId] = useState(() => getOrCreateSessionId());
   const [commentModeActive, setCommentModeActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [activeSurfaceSlug, setActiveSurfaceSlug] = useState<string | null>(null);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>('files');
   const [zoom, setZoom] = useState(100);
   const [starred, setStarred] = useState(false);
@@ -63,6 +64,7 @@ export default function App() {
 
   useEffect(() => {
     setCanvasTab(currentRunId === null ? 'files' : 'preview');
+    setActiveSurfaceSlug(null);
   }, [currentRunId]);
 
   const breadcrumbTitle = currentRunId ? t('app.defaultRunTitle') : t('app.newDesignSession');
@@ -172,6 +174,8 @@ export default function App() {
           zoom={zoom}
           device={device}
           commentModeActive={commentModeActive}
+          activeSurfaceSlug={activeSurfaceSlug}
+          onSurfaceChange={setActiveSurfaceSlug}
         />
       </div>
 
@@ -180,6 +184,7 @@ export default function App() {
           runId={currentRunId}
           selectedFile={selectedFile}
           device={device}
+          activeSurfaceSlug={activeSurfaceSlug}
           collapsed={parityCollapsed}
           onToggleCollapsed={() => setParityCollapsed((value) => !value)}
           onOpenFile={(path) => {

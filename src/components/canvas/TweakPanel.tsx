@@ -3,10 +3,12 @@ import { RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import { activeSurfaceFor, surfaceTokenPath } from '../../lib/projectSurfaces';
 
 interface TweakPanelProps {
   uiKitId: Id<'ui_kits'> | null;
   slug: string | null;
+  activeSurfaceSlug?: string | null;
   files: Record<string, string>;
   onClose: () => void;
 }
@@ -39,11 +41,13 @@ interface TweakSchema {
  * refined by the chat agent via upsert_file. If the schema file is
  * missing, falls back to a heuristic on tokens.css.
  */
-export function TweakPanel({ uiKitId, slug, files, onClose }: TweakPanelProps) {
+export function TweakPanel({ uiKitId, slug, activeSurfaceSlug, files, onClose }: TweakPanelProps) {
   const patchFile = useMutation(api.uiKits.patchFile);
 
-  const tokensPath = slug ? `ui_kits/${slug}/tokens.css` : null;
-  const schemaPath = slug ? `ui_kits/${slug}/tweak-schema.json` : null;
+  const surface = activeSurfaceFor(files, slug, activeSurfaceSlug ?? slug);
+  const activeSlug = surface?.slug ?? slug;
+  const tokensPath = surfaceTokenPath(files, surface);
+  const schemaPath = activeSlug ? `ui_kits/${activeSlug}/tweak-schema.json` : null;
   const tokensCss = tokensPath ? (files[tokensPath] ?? '') : '';
   const schemaJson = schemaPath ? (files[schemaPath] ?? null) : null;
 
@@ -99,7 +103,7 @@ export function TweakPanel({ uiKitId, slug, files, onClose }: TweakPanelProps) {
 
   const entries = Object.entries(schema.tokens).filter(([name]) => name in draft);
 
-  if (!slug || !uiKitId) {
+  if (!activeSlug || !uiKitId) {
     return (
       <PanelShell onClose={onClose}>
         <EmptyState text="Run a pipeline to start tweaking tokens." />

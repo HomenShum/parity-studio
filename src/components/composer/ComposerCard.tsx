@@ -6,6 +6,11 @@ import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { useT } from '../../lib/i18n';
 import type { ModelOverride, Tier } from '../../lib/modelRouting';
+import {
+  buildProjectManifest,
+  discoverProjectSurfaces,
+  entryForSurface,
+} from '../../lib/projectSurfaces';
 import { getOrCreateSessionId } from '../../lib/sessionIdentity';
 import { ModelRoutePicker } from '../model/ModelRoutePicker';
 
@@ -23,6 +28,68 @@ const MAX_KIT_ZIP_BYTES = 30_000_000;
 // Per-file content cap inside the kit. Files above this get rejected so
 // the run row's `files` map stays manageable. 200 KB matches patchFile.
 const MAX_KIT_FILE_BYTES = 200_000;
+
+const TEXT_IMPORT_EXTENSIONS = new Set([
+  'css',
+  'html',
+  'htm',
+  'js',
+  'jsx',
+  'json',
+  'md',
+  'mjs',
+  'svg',
+  'ts',
+  'tsx',
+  'txt',
+  'xml',
+  'yml',
+  'yaml',
+]);
+
+function normalizedZipPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\/+/, '');
+}
+
+function fileExtension(path: string): string {
+  const cleanPath = path.split('?')[0] ?? path;
+  return cleanPath.includes('.') ? (cleanPath.split('.').pop() ?? '').toLowerCase() : '';
+}
+
+function shouldPreserveProjectTextFile(path: string): boolean {
+  if (path.startsWith('__MACOSX/')) return false;
+  if (/^(README|SKILL|AGENTS|HANDOFF|DESIGN)\.md$/i.test(path)) return true;
+  if (path === 'colors_and_type.css' || path === 'parity.project.json') return true;
+  if (/^(\.claude|\.cursor|\.codex|\.windsurf)\//.test(path)) return true;
+  if (/^(preview|explorations|scraps|assets)\//.test(path)) {
+    return TEXT_IMPORT_EXTENSIONS.has(fileExtension(path));
+  }
+  return false;
+}
+
+function shouldUseAsFallbackDesignFile(path: string): boolean {
+  if (
+    path.startsWith('__MACOSX/') ||
+    path.startsWith('node_modules/') ||
+    path.startsWith('.git/')
+  ) {
+    return false;
+  }
+  if (!TEXT_IMPORT_EXTENSIONS.has(fileExtension(path))) return false;
+  if (/^(index|preview|artifact|design|handoff|readme|skill)\.(html|htm|md)$/i.test(path)) {
+    return true;
+  }
+  return /^(src|app|components|styles|assets|public|design_files)\//i.test(path);
+}
+
+function slugScore(slug: string, fileCount: number): number {
+  const normalized = slug.toLowerCase();
+  let score = fileCount;
+  if (/(web|site|marketing|dashboard)/.test(normalized)) score += 10_000;
+  if (/(workspace|editor|canvas)/.test(normalized)) score += 5_000;
+  if (/(mobile|phone)/.test(normalized)) score += 2_000;
+  return score;
+}
 
 /**
  * Composer - source/new-run entry point at the bottom of the agent rail.
@@ -60,11 +127,9 @@ export function ComposerCard({
     const f = e.target.files?.[0];
     if (!f) return;
 
-    // ZIP path — drop a canonical NodeBench-skill-style ui_kit zip and
+    // ZIP path - drop a canonical NodeBench-skill-style ui_kit zip and
     // skip generate + decompose entirely. The kit is parsed client-side
-    // and the largest ui_kits/<slug>/ folder is selected as the active
-    // run. Other slugs are noted in error if present so the user knows
-    // they were preserved upstream.
+    // and every ui_kits/<slug>/ surface is preserved in the imported run.
     const isZip = f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip';
     if (isZip) {
       if (f.size > MAX_KIT_ZIP_BYTES) {
@@ -103,10 +168,12 @@ export function ComposerCard({
     try {
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
 
-      // Group entries by ui_kits/<slug>/ prefix. The canonical shape ships
-      // multiple slugs in one zip (nodebench-web, nodebench-mobile, etc.);
-      // we pick the largest by file count for the active run.
+      // Preserve every ui_kits/<slug> surface in one run. This lets users
+      // drop Claude Design/Open CoDesign-style packs that include web,
+      // mobile, workspace, and CLI variants instead of forcing one winner.
       const slugFiles = new Map<string, Map<string, string>>();
+      const importedFiles: Record<string, string> = {};
+      const fallbackDesignFiles = new Map<string, string>();
       const uploads: Array<{
         name: string;
         data: Uint8Array;
@@ -114,21 +181,40 @@ export function ComposerCard({
       }> = [];
       let prompt: string | undefined;
 
-      for (const [path, entry] of Object.entries(zip.files)) {
+      for (const [rawPath, entry] of Object.entries(zip.files)) {
         if (entry.dir) continue;
-        // ui_kits/<slug>/...
+        const path = normalizedZipPath(rawPath);
         const kitMatch = path.match(/^ui_kits\/([^/]+)\/(.+)$/);
         if (kitMatch) {
           const slug = kitMatch[1] as string;
           const rel = kitMatch[2] as string;
-          // skip oversized files but don't fail the whole import
           const text = await entry.async('string').catch(() => '');
           if (text.length === 0 || text.length > MAX_KIT_FILE_BYTES) continue;
           if (!slugFiles.has(slug)) slugFiles.set(slug, new Map());
-          (slugFiles.get(slug) as Map<string, string>).set(`ui_kits/${slug}/${rel}`, text);
+          const fullPath = `ui_kits/${slug}/${rel}`;
+          (slugFiles.get(slug) as Map<string, string>).set(fullPath, text);
+          importedFiles[fullPath] = text;
           continue;
         }
-        // uploads/ — capture first png/jpg/webp as the source image
+        if (shouldPreserveProjectTextFile(path)) {
+          const text = await entry.async('string').catch(() => '');
+          if (text.length > 0 && text.length <= MAX_KIT_FILE_BYTES) {
+            importedFiles[path] = text;
+            if (shouldUseAsFallbackDesignFile(path)) fallbackDesignFiles.set(path, text);
+            if (path === 'SKILL.md') {
+              const desc = text.match(/description:\s*([^\n]+)/i)?.[1];
+              if (desc && !prompt) prompt = desc.trim();
+            }
+          }
+          continue;
+        }
+        if (shouldUseAsFallbackDesignFile(path)) {
+          const text = await entry.async('string').catch(() => '');
+          if (text.length > 0 && text.length <= MAX_KIT_FILE_BYTES) {
+            fallbackDesignFiles.set(path, text);
+          }
+          continue;
+        }
         const upMatch = path.match(/^uploads?\/(.+)$/);
         if (upMatch) {
           const ext = (upMatch[1] as string).toLowerCase().split('.').pop() ?? '';
@@ -142,53 +228,85 @@ export function ComposerCard({
                   : null;
           if (mime) {
             const data = await entry.async('uint8array');
-            // cap at 2 MB so the runs row stays sane
             if (data.length <= MAX_INLINE_IMAGE_BYTES) {
               uploads.push({ name: upMatch[1] as string, data, mime });
             }
           }
-          continue;
         }
-        // SKILL.md description — pull as the run's prompt for provenance
-        if (path === 'SKILL.md' || path === 'README.md') {
-          const text = await entry.async('string').catch(() => '');
-          if (path === 'SKILL.md') {
-            const desc = text.match(/description:\s*([^\n]+)/i)?.[1];
-            if (desc && !prompt) prompt = desc.trim();
-          }
+      }
+
+      if (slugFiles.size === 0 && fallbackDesignFiles.size > 0) {
+        const fallbackSlug = 'imported-design';
+        const fileMap = new Map<string, string>();
+        for (const [path, text] of fallbackDesignFiles.entries()) {
+          const targetPath = `ui_kits/${fallbackSlug}/${path}`;
+          fileMap.set(targetPath, text);
+          importedFiles[targetPath] = text;
         }
+        const rootIndex = fallbackDesignFiles.get('index.html');
+        const firstHtml = [...fallbackDesignFiles.entries()].find(([path]) =>
+          /\.(html|htm)$/i.test(path),
+        );
+        const indexHtml = rootIndex ?? firstHtml?.[1];
+        if (indexHtml) {
+          const indexPath = `ui_kits/${fallbackSlug}/index.html`;
+          fileMap.set(indexPath, indexHtml);
+          importedFiles[indexPath] = indexHtml;
+        }
+        slugFiles.set(fallbackSlug, fileMap);
       }
 
       if (slugFiles.size === 0) {
         throw new Error(t('composer.noUiKitFolder'));
       }
 
-      // Pick the largest slug by file count
-      const ranked = [...slugFiles.entries()].sort((a, b) => b[1].size - a[1].size);
-      const [activeSlug, activeFiles] = ranked[0] as [string, Map<string, string>];
-      const otherSlugs = ranked.slice(1).map(([s]) => s);
-
-      // Encode first usable upload as base64 for the popover
-      let sourceImageBase64: string | undefined;
-      let sourceImageMimeType: 'image/png' | 'image/jpeg' | 'image/webp' | undefined;
-      if (uploads.length > 0) {
-        const first = uploads[0];
-        if (first) {
-          let bin = '';
-          for (let i = 0; i < first.data.length; i += 1) {
-            bin += String.fromCharCode(first.data[i] as number);
-          }
-          sourceImageBase64 = btoa(bin);
-          sourceImageMimeType = first.mime;
+      for (const [slug, fileMap] of slugFiles.entries()) {
+        const indexPath = `ui_kits/${slug}/index.html`;
+        if (fileMap.has(indexPath)) continue;
+        const entryPath = entryForSurface(importedFiles, slug);
+        const entryHtml = entryPath ? importedFiles[entryPath] : undefined;
+        if (entryHtml !== undefined) {
+          fileMap.set(indexPath, entryHtml);
+          importedFiles[indexPath] = entryHtml;
         }
       }
 
-      const filesObj: Record<string, string> = {};
-      for (const [k, v] of activeFiles.entries()) filesObj[k] = v;
+      const ranked = [...slugFiles.entries()].sort((a, b) => {
+        const delta = slugScore(b[0], b[1].size) - slugScore(a[0], a[1].size);
+        return delta || a[0].localeCompare(b[0]);
+      });
+      const first = ranked[0];
+      if (!first) throw new Error(t('composer.noUiKitFolder'));
+      const [activeSlug] = first;
+      const surfaces = discoverProjectSurfaces(importedFiles, activeSlug);
+      importedFiles['parity.project.json'] = JSON.stringify(
+        buildProjectManifest(
+          surfaces,
+          activeSlug,
+          new Date().toISOString(),
+          surfaces.length > 1 ? 'project-pack' : 'canonical-ui-kit-zip',
+        ),
+        null,
+        2,
+      );
+
+      let sourceImageBase64: string | undefined;
+      let sourceImageMimeType: 'image/png' | 'image/jpeg' | 'image/webp' | undefined;
+      if (uploads.length > 0) {
+        const firstUpload = uploads[0];
+        if (firstUpload) {
+          let bin = '';
+          for (let i = 0; i < firstUpload.data.length; i += 1) {
+            bin += String.fromCharCode(firstUpload.data[i] as number);
+          }
+          sourceImageBase64 = btoa(bin);
+          sourceImageMimeType = firstUpload.mime;
+        }
+      }
 
       const runId = await startFromKit({
         slug: activeSlug,
-        files: filesObj,
+        files: importedFiles,
         clientSessionId,
         ...(modelOverride ? { modelOverride } : { tier }),
         ...(sourceImageBase64 ? { sourceImageBase64 } : {}),
@@ -197,22 +315,25 @@ export function ComposerCard({
       });
       onRunStarted(runId);
 
+      const importedCount = Object.keys(importedFiles).length;
       const note =
-        otherSlugs.length > 0
+        surfaces.length > 1
           ? t('composer.importedWithOthers', {
               slug: activeSlug,
-              count: activeFiles.size,
-              otherCount: otherSlugs.length,
-              plural: otherSlugs.length === 1 ? '' : 's',
-              others: otherSlugs.join(', '),
+              count: importedCount,
+              otherCount: surfaces.length - 1,
+              plural: surfaces.length - 1 === 1 ? '' : 's',
+              others: surfaces
+                .filter((surface) => surface.slug !== activeSlug)
+                .map((surface) => surface.slug)
+                .join(', '),
             })
-          : t('composer.imported', { slug: activeSlug, count: activeFiles.size });
+          : t('composer.imported', { slug: activeSlug, count: importedCount });
       setImageLabel(note);
     } finally {
       setBusy(false);
     }
   }
-
   async function onGenImage() {
     if (prompt.trim().length === 0) {
       setError(t('composer.typePromptFirst'));
