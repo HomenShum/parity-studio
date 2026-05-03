@@ -11,7 +11,9 @@ export function convexWsUrl(): string {
 }
 
 export function convexHttpUrl(): string {
-  const fromEnv = import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined;
+  const fromEnv =
+    (import.meta.env['VITE_CONVEX_HTTP_URL'] as string | undefined) ||
+    (import.meta.env['VITE_CONVEX_SITE_URL'] as string | undefined);
   if (fromEnv) return trimTrailingSlash(fromEnv);
   const wsUrl = convexWsUrl();
   return (
