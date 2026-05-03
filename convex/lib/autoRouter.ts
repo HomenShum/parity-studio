@@ -13,9 +13,9 @@
  *   - Phase-aware (advise / execute / decompose / iterate / judge / enhance)
  *     in addition to tier so the same tier picks different models for
  *     different jobs (matches Kilo's mode-aware Frontier).
- *   - Session-deterministic free picks via runId hash (so a single
- *     conversation doesn't whiplash across free models).
- *   - Fallback chain per (tier, phase) cell: primary → secondary.
+ *   - Stable primary pick per (tier, phase); fallback is reserved for
+ *     actual failed/invalid calls, never random pre-selection.
+ *   - Fallback chain per (tier, phase) cell: primary -> secondary.
  *
  * Honesty note: free-tier slugs marked with VERIFIED-DATE comments;
  * OpenRouter rotates these on promotional periods. If a slug 404s,
@@ -127,18 +127,21 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
     isFree: false,
     label: 'kimi-k2.6',
   },
@@ -200,49 +203,49 @@ const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   advise: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   execute: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
   judge: {
     provider: 'openrouter',
     modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'anthropic', modelId: 'claude-haiku-4-5' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
     isFree: true,
     label: 'ling-2.6-1t :free',
   },
@@ -362,20 +365,13 @@ export function deploymentTier(): ModelTier {
 /**
  * Session-deterministic helper — given a runId, pick the same primary OR
  * fallback consistently across turns. We hash the runId to a [0,1) float
- * and use it to pick within the (primary, fallback) pair, BIASED toward
- * primary so the fallback only kicks in for ~12% of sessions
- * (mitigating the "primary unavailable" failure mode).
- *
- * For small + balanced + frontier this is a no-op (no fallback in normal
- * flow). For free, it spreads load across the curated pool so a single
- * promotional model doesn't get hammered.
+ * and use it to pick stable variants. Fallbacks are not selected here:
+ * they are true recovery models, invoked only by the pipeline after the
+ * primary returns an error or invalid artifact. This keeps "Free" free
+ * during healthy runs and avoids quietly swapping providers before work
+ * actually fails.
  */
 export function sessionPick(runId: string, model: ResolvedModel): ResolvedModel {
-  if (!model.fallback) return model;
-  let h = 0;
-  for (let i = 0; i < runId.length; i += 1) h = (h * 31 + runId.charCodeAt(i)) >>> 0;
-  const r = (h % 1000) / 1000;
-  return r < 0.88
-    ? model
-    : { ...model, provider: model.fallback.provider, modelId: model.fallback.modelId };
+  void runId;
+  return model;
 }

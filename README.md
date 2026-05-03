@@ -43,9 +43,9 @@ Open the version-control modal, compare patch-current-run vs recapture-as-new-re
 
 Launch + model routing, BYOK/session privacy, run history/chat, file editing, Parity Coach, Inspiration, source sync/MCP setup, i18n, and export:
 
-[![Parity Studio current workflows tour](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.0/demo-current-workflows.mp4)
+[![Parity Studio current workflows tour](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows.mp4)
 
-<sub>`v0.3.1` proof clips were recorded from the live production app and checked with Gemini video analysis. The original v0.1.0 six-step demo remains archived in the `v0.1.0` release assets.</sub>
+<sub>`v0.3.1` proof clips and the product tour were recorded from the live production app and checked with Gemini video analysis. The original v0.1.0 six-step demo remains archived in the `v0.1.0` release assets.</sub>
 
 ---
 

@@ -22,6 +22,7 @@ import type * as lib_canonicalShape from "../lib/canonicalShape.js";
 import type * as lib_kitContract from "../lib/kitContract.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
+import type * as lib_pipelineValidation from "../lib/pipelineValidation.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_qualityGate from "../lib/qualityGate.js";
 import type * as lib_staticLint from "../lib/staticLint.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/kitContract": typeof lib_kitContract;
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;
+  "lib/pipelineValidation": typeof lib_pipelineValidation;
   "lib/prompts": typeof lib_prompts;
   "lib/qualityGate": typeof lib_qualityGate;
   "lib/staticLint": typeof lib_staticLint;

@@ -117,7 +117,7 @@ export const iterateWithCommentsWorkflow = workflow.define({
 
     const iterationNumber = (previousReport?.iterationNumber ?? 0) + 1;
 
-    await step.runAction(
+    const iterateResult = await step.runAction(
       internal.generation.iterate,
       {
         runId,
@@ -135,6 +135,19 @@ export const iterateWithCommentsWorkflow = workflow.define({
       { runId },
       { inline: true },
     );
+    if (
+      nextUiKit === null ||
+      nextUiKit._id === previousUiKit._id ||
+      iterateResult.fileCount === 0
+    ) {
+      await step.runMutation(
+        internal.runs.updateStatus,
+        { runId, status: 'done', iterationsCompleted: Math.max(0, iterationNumber - 1) },
+        { inline: true },
+      );
+      return;
+    }
+
     if (nextUiKit !== null) {
       await step.runAction(
         internal.generation.verifyDeterministic,

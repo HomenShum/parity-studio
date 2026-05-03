@@ -4,11 +4,16 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
-import { type Phase, resolveRunModel } from './lib/autoRouter';
+import { type Phase, type ResolvedModel, resolveRunModel } from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
-import { call } from './lib/piAi';
+import { type CallResult, call } from './lib/piAi';
+import {
+  normalizeHtmlArtifact,
+  validateGeneratedHtml,
+  validateParsedUiKit,
+} from './lib/pipelineValidation';
 import {
   DECOMPOSE_SYSTEM,
   GENERATE_SYSTEM,
@@ -17,6 +22,12 @@ import {
 } from './lib/prompts';
 import { parseUiKitResponse } from './lib/uiKitParser';
 
+const PIPELINE_MODEL_TIMEOUT_MS = {
+  generate: 180_000,
+  decompose: 240_000,
+  iterate: 90_000,
+} as const;
+
 /**
  * Resolve the (provider, modelId) for a pipeline phase given the run's
  * tier. Reads runs.tier first; falls back to PARITY_TIER env (set on
@@ -24,30 +35,180 @@ import { parseUiKitResponse } from './lib/uiKitParser';
  * for generate/decompose/iterate — same behavior as the legacy hardcoded
  * GENERATE_MODEL/DECOMPOSE_MODEL constants below).
  *
- * sessionPick spreads load across primary + fallback for free-tier slugs
- * so a single :free model doesn't get hammered.
+ * Fallback models stay attached to the resolved model and are only used
+ * when the primary returns an error, truncates, or emits invalid output.
  */
 async function pickPhase(
   // biome-ignore lint/suspicious/noExplicitAny: action ctx
   ctx: any,
   runId: string,
   phase: Phase,
-): Promise<{
-  provider:
-    | 'anthropic'
-    | 'openai'
-    | 'google'
-    | 'openrouter'
-    | 'groq'
-    | 'cerebras'
-    | 'xai'
-    | 'mistral';
-  modelId: string;
-  isFree: boolean;
-}> {
+): Promise<ResolvedModel> {
   const run = await ctx.runQuery(internal.runs.getInternal, { runId });
-  const resolved = resolveRunModel(run, phase, runId);
-  return { provider: resolved.provider, modelId: resolved.modelId, isFree: resolved.isFree };
+  return resolveRunModel(run, phase, runId);
+}
+
+function candidateModels(primary: ResolvedModel): ResolvedModel[] {
+  if (!primary.fallback) return [primary];
+  if (
+    primary.fallback.provider === primary.provider &&
+    primary.fallback.modelId === primary.modelId
+  ) {
+    return [primary];
+  }
+  return [
+    primary,
+    {
+      provider: primary.fallback.provider,
+      modelId: primary.fallback.modelId,
+      isFree: primary.fallback.modelId.includes(':free'),
+      label: primary.fallback.modelId,
+    },
+  ];
+}
+
+function invalidStopReason(result: CallResult): string | null {
+  if (result.stopReason === 'error')
+    return result.errorMessage ?? 'model returned stopReason=error';
+  if (result.stopReason === 'length') return 'model output was truncated before completion';
+  return null;
+}
+
+function ensureRequiredKitScaffold(
+  files: Record<string, string>,
+  slug: string,
+): Record<string, string> {
+  const out = { ...files };
+  const tokenPath = `ui_kits/${slug}/tokens.css`;
+  if (!out[tokenPath]) {
+    const existingTokens = Object.entries(out).find(([path]) => path.endsWith('/tokens.css'))?.[1];
+    out[tokenPath] =
+      existingTokens ??
+      `:root {
+  --color-background: #faf7f3;
+  --color-surface: #ffffff;
+  --color-text-primary: #2f261f;
+  --color-accent: #c76d54;
+  --space-md: 16px;
+  --radius-md: 12px;
+}`;
+  }
+
+  const manifestPath = `ui_kits/${slug}/manifest.json`;
+  if (!out[manifestPath]) {
+    const components = Object.keys(out)
+      .filter((path) => path.startsWith(`ui_kits/${slug}/components/`) && path.endsWith('.tsx'))
+      .map(
+        (path) =>
+          path
+            .split('/')
+            .pop()
+            ?.replace(/\.tsx$/, '') ?? 'Component',
+      )
+      .sort();
+    out[manifestPath] = JSON.stringify(
+      {
+        schemaVersion: 1,
+        generator: 'parity-studio',
+        slug,
+        components,
+        tokens: ['--color-background', '--color-surface', '--color-text-primary', '--color-accent'],
+      },
+      null,
+      2,
+    );
+  }
+  return out;
+}
+
+async function recordStageAttempt(
+  // biome-ignore lint/suspicious/noExplicitAny: Convex action ctx
+  ctx: any,
+  args: {
+    runId: string;
+    stage: string;
+    result: CallResult;
+    latencyMs: number;
+    startedAt: number;
+    isRetryTelemetry: boolean;
+  },
+) {
+  await ctx.runMutation(internal.runs.recordStageTelemetry, {
+    runId: args.runId,
+    stage: args.isRetryTelemetry ? `${args.stage}-retry` : args.stage,
+    modelId: args.result.modelUsed,
+    provider: args.result.provider,
+    costMicroUsd: args.result.costMicroUsd,
+    inputTokens: args.result.inputTokens,
+    outputTokens: args.result.outputTokens,
+    latencyMs: args.latencyMs,
+    stageStartedAt: args.startedAt,
+  });
+}
+
+async function callValidatedPipelineModel(
+  // biome-ignore lint/suspicious/noExplicitAny: Convex action ctx
+  ctx: any,
+  args: {
+    runId: string;
+    stage: string;
+    picked: ResolvedModel;
+    systemPrompt: string;
+    userText: string;
+    maxTokens: number;
+    userImage?: { base64: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp' };
+    validate: (text: string) => { ok: boolean; reason?: string; text?: string };
+  },
+): Promise<{ result: CallResult; text: string }> {
+  const failures: string[] = [];
+  const candidates = candidateModels(args.picked);
+  const timeoutMs = args.stage.startsWith('iterate')
+    ? PIPELINE_MODEL_TIMEOUT_MS.iterate
+    : PIPELINE_MODEL_TIMEOUT_MS[args.stage as 'generate' | 'decompose'];
+  for (let i = 0; i < candidates.length; i += 1) {
+    const model = candidates[i] as ResolvedModel;
+    const startedAt = Date.now();
+    try {
+      const result = await call({
+        provider: model.provider,
+        modelId: model.modelId,
+        systemPrompt: args.systemPrompt,
+        userText: args.userText,
+        maxTokens: args.maxTokens,
+        signal: AbortSignal.timeout(timeoutMs),
+        ...(args.userImage !== undefined ? { userImage: args.userImage } : {}),
+      });
+      const latencyMs = Date.now() - startedAt;
+      const stopFailure = invalidStopReason(result);
+      const validation = stopFailure === null ? args.validate(result.text) : { ok: false };
+      const reason = stopFailure ?? validation.reason ?? 'output failed validation';
+      if (stopFailure === null && validation.ok) {
+        await recordStageAttempt(ctx, {
+          runId: args.runId,
+          stage: args.stage,
+          result,
+          latencyMs,
+          startedAt,
+          isRetryTelemetry: false,
+        });
+        return { result, text: validation.text ?? result.text };
+      }
+      failures.push(`${model.provider}/${model.modelId}: ${reason}`);
+      await recordStageAttempt(ctx, {
+        runId: args.runId,
+        stage: args.stage,
+        result,
+        latencyMs,
+        startedAt,
+        isRetryTelemetry: true,
+      });
+    } catch (err) {
+      failures.push(
+        `${model.provider}/${model.modelId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  throw new Error(`${args.stage} produced no valid output. Attempts: ${failures.join(' | ')}`);
 }
 
 // Cheap-tier defaults. Per user request: Kimi K2.6 via OpenRouter for the
@@ -84,7 +245,6 @@ export const generateInitial = internalAction({
     ),
   },
   handler: async (ctx, { runId, prompt, sourceImageBase64, sourceImageMimeType }) => {
-    const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'generating' });
 
     const userText = prompt?.trim().length
@@ -92,40 +252,37 @@ export const generateInitial = internalAction({
       : 'Generate a polished, production-quality UI matching the attached image.';
 
     const picked = await pickPhase(ctx, String(runId), 'generate');
-    const result = await call({
-      provider: picked.provider,
-      modelId: picked.modelId,
-      systemPrompt: GENERATE_SYSTEM,
-      userText,
-      maxTokens: 16_000,
-      ...(sourceImageBase64 !== undefined && sourceImageMimeType !== undefined
-        ? { userImage: { base64: sourceImageBase64, mimeType: sourceImageMimeType } }
-        : {}),
-    });
-
-    if (result.stopReason === 'error') {
+    let generated: { result: CallResult; text: string };
+    try {
+      generated = await callValidatedPipelineModel(ctx, {
+        runId: String(runId),
+        stage: 'generate',
+        picked,
+        systemPrompt: GENERATE_SYSTEM,
+        userText,
+        maxTokens: 16_000,
+        ...(sourceImageBase64 !== undefined && sourceImageMimeType !== undefined
+          ? { userImage: { base64: sourceImageBase64, mimeType: sourceImageMimeType } }
+          : {}),
+        validate: (text) => {
+          const normalized = normalizeHtmlArtifact(text);
+          const validation = validateGeneratedHtml(normalized);
+          return { ...validation, text: normalized };
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       await ctx.runMutation(internal.runs.updateStatus, {
         runId,
         status: 'failed',
-        errorMessage: `generate stage error: ${result.errorMessage ?? 'unknown'}`,
+        errorMessage: `generate stage error: ${message}`,
       });
-      throw new Error(`generate stage error: ${result.errorMessage ?? 'unknown'}`);
+      throw new Error(`generate stage error: ${message}`);
     }
 
-    const html = stripWrappingFences(result.text);
+    const html = generated.text;
     await ctx.runMutation(internal.artifacts.append, { runId, version: 0, html });
-    await ctx.runMutation(internal.runs.recordStageTelemetry, {
-      runId,
-      stage: 'generate',
-      modelId: result.modelUsed,
-      provider: result.provider,
-      costMicroUsd: result.costMicroUsd,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      latencyMs: Date.now() - stageStartedAt,
-      stageStartedAt,
-    });
-    return { version: 0, costMicroUsd: result.costMicroUsd };
+    return { version: 0, costMicroUsd: generated.result.costMicroUsd };
   },
 });
 
@@ -139,32 +296,48 @@ export const decompose = internalAction({
     artifactHtml: v.string(),
   },
   handler: async (ctx, { runId, artifactVersion, artifactHtml }) => {
-    const stageStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
     const picked = await pickPhase(ctx, String(runId), 'decompose');
-    const result = await call({
-      provider: picked.provider,
-      modelId: picked.modelId,
-      systemPrompt: DECOMPOSE_SYSTEM,
-      userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
-      maxTokens: 24_000,
-    });
-
-    if (result.stopReason === 'error') {
+    let decomposeResult: { result: CallResult; text: string };
+    try {
+      decomposeResult = await callValidatedPipelineModel(ctx, {
+        runId: String(runId),
+        stage: 'decompose',
+        picked,
+        systemPrompt: DECOMPOSE_SYSTEM,
+        userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
+        maxTokens: 24_000,
+        validate: (text) => {
+          const parsed = parseUiKitResponse(text);
+          const validation = validateParsedUiKit(parsed);
+          return validation.ok
+            ? { ok: true, text }
+            : {
+                ok: false,
+                reason: `${validation.reason}; warnings: ${parsed.warnings.join('; ')}`,
+              };
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       await ctx.runMutation(internal.runs.updateStatus, {
         runId,
         status: 'failed',
-        errorMessage: `decompose stage error: ${result.errorMessage ?? 'unknown'}`,
+        errorMessage: `decompose stage error: ${message}`,
       });
-      throw new Error(`decompose stage error: ${result.errorMessage ?? 'unknown'}`);
+      throw new Error(`decompose stage error: ${message}`);
     }
 
-    const parsed = parseUiKitResponse(result.text);
-    if (Object.keys(parsed.files).length === 0) {
-      throw new Error(`decompose returned 0 files; warnings: ${parsed.warnings.join('; ')}`);
+    const parsed = parseUiKitResponse(decomposeResult.text);
+    const parsedValidation = validateParsedUiKit(parsed);
+    if (!parsedValidation.ok) {
+      throw new Error(
+        `decompose returned invalid ui_kit: ${parsedValidation.reason}; warnings: ${parsed.warnings.join('; ')}`,
+      );
     }
-    const contractedFiles = withOperatingContract(parsed.files, {
+    const scaffoldedFiles = ensureRequiredKitScaffold(parsed.files, parsed.slug);
+    const contractedFiles = withOperatingContract(scaffoldedFiles, {
       slug: parsed.slug,
       runId: String(runId),
       prompt: (await ctx.runQuery(internal.runs.getInternal, { runId }))?.prompt,
@@ -201,18 +374,7 @@ export const decompose = internalAction({
       slug: parsed.slug,
       schemaVersion: 1,
       files: fullShape,
-      decomposeCostMicroUsd: result.costMicroUsd,
-    });
-    await ctx.runMutation(internal.runs.recordStageTelemetry, {
-      runId,
-      stage: 'decompose',
-      modelId: result.modelUsed,
-      provider: result.provider,
-      costMicroUsd: result.costMicroUsd,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      latencyMs: Date.now() - stageStartedAt,
-      stageStartedAt,
+      decomposeCostMicroUsd: decomposeResult.result.costMicroUsd,
     });
     return {
       slug: parsed.slug,
@@ -288,7 +450,6 @@ export const iterate = internalAction({
     failedGaps: v.any(), // ParityGap[]
   },
   handler: async (ctx, args) => {
-    const iterateStartedAt = Date.now();
     await ctx.runMutation(internal.runs.updateStatus, { runId: args.runId, status: 'iterating' });
 
     const previousFiles = args.previousUiKitFiles as Record<string, string>;
@@ -329,51 +490,39 @@ ORIGINAL SOURCE (the artifact you should be matching):
 ${args.sourceHtml.slice(0, 8_000)}`;
 
     const picked = await pickPhase(ctx, String(args.runId), 'iterate');
-    const result = await call({
-      provider: picked.provider,
-      modelId: picked.modelId,
-      systemPrompt: ITERATE_SYSTEM,
-      userText,
-      maxTokens: 24_000,
-    });
-
-    if (result.stopReason === 'error') {
-      await ctx.runMutation(internal.runs.updateStatus, {
-        runId: args.runId,
-        status: 'failed',
-        errorMessage: `iterate stage error: ${result.errorMessage ?? 'unknown'}`,
+    let iterateResult: { result: CallResult; text: string };
+    try {
+      iterateResult = await callValidatedPipelineModel(ctx, {
+        runId: String(args.runId),
+        stage: `iterate-${args.iterationNumber}`,
+        picked,
+        systemPrompt: ITERATE_SYSTEM,
+        userText,
+        maxTokens: 24_000,
+        validate: (text) => {
+          const parsed = parseUiKitResponse(text);
+          const validation = validateParsedUiKit(parsed);
+          return validation.ok
+            ? { ok: true, text }
+            : {
+                ok: false,
+                reason: `${validation.reason}; warnings: ${parsed.warnings.join('; ')}`,
+              };
+        },
       });
-      throw new Error(`iterate stage error: ${result.errorMessage ?? 'unknown'}`);
-    }
-
-    const parsed = parseUiKitResponse(result.text);
-    if (Object.keys(parsed.files).length === 0) {
-      // Soft-fail: the LLM emitted fenced blocks without path annotations
-      // (a known kimi-k2.6 quirk on iterate prompts). The previous ui_kit
-      // is still intact, so don't throw — record the wasted-call telemetry
-      // and let the workflow detect "no new ui_kit" and exit the loop
-      // gracefully with status='done'. Previous behavior conflated this
-      // recoverable LLM-format glitch with a pipeline crash.
-      await ctx.runMutation(internal.runs.recordStageTelemetry, {
-        runId: args.runId,
-        stage: `iterate-${args.iterationNumber}-noop`,
-        modelId: result.modelUsed,
-        provider: result.provider,
-        costMicroUsd: result.costMicroUsd,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        latencyMs: Date.now() - iterateStartedAt,
-        stageStartedAt: iterateStartedAt,
-      });
+    } catch {
       return {
         iterationNumber: args.iterationNumber,
         slug: '',
         fileCount: 0,
-        costMicroUsd: result.costMicroUsd,
+        costMicroUsd: 0,
       };
     }
 
-    const parsedWithContract = withOperatingContract(parsed.files, {
+    const parsed = parseUiKitResponse(iterateResult.text);
+
+    const scaffoldedFiles = ensureRequiredKitScaffold(parsed.files, parsed.slug);
+    const parsedWithContract = withOperatingContract(scaffoldedFiles, {
       slug: parsed.slug,
       runId: String(args.runId),
       prompt: (await ctx.runQuery(internal.runs.getInternal, { runId: args.runId }))?.prompt,
@@ -433,18 +582,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       slug: parsed.slug,
       schemaVersion: 1,
       files: iterFullShape,
-      decomposeCostMicroUsd: result.costMicroUsd,
-    });
-    await ctx.runMutation(internal.runs.recordStageTelemetry, {
-      runId: args.runId,
-      stage: `iterate-${args.iterationNumber}`,
-      modelId: result.modelUsed,
-      provider: result.provider,
-      costMicroUsd: result.costMicroUsd,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      latencyMs: Date.now() - iterateStartedAt,
-      stageStartedAt: iterateStartedAt,
+      decomposeCostMicroUsd: iterateResult.result.costMicroUsd,
     });
     await ctx.runMutation(internal.runs.updateStatus, {
       runId: args.runId,
@@ -456,7 +594,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
       iterationNumber: args.iterationNumber,
       slug: parsed.slug,
       fileCount: Object.keys(parsedWithContract).length,
-      costMicroUsd: result.costMicroUsd,
+      costMicroUsd: iterateResult.result.costMicroUsd,
     };
   },
 });
@@ -623,15 +761,6 @@ export const generateSourceImage = action({
     };
   },
 });
-
-/**
- * Helpers
- */
-function stripWrappingFences(raw: string): string {
-  const trimmed = raw.trim();
-  const fenceMatch = trimmed.match(/^```(?:html)?\s*\n([\s\S]*?)\n```$/);
-  return fenceMatch?.[1] ?? trimmed;
-}
 
 // Suppress unused-import warnings — VISUAL_JUDGE_SYSTEM is referenced in
 // future visual-verifier wiring.
