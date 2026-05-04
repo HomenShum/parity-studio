@@ -59,83 +59,90 @@ runtime-architecture.json
 10. Verification plan
 ```
 
-## Example: Current vs Proposed Runtime
+## Example: Current Runtime
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Browser: Vite + React                                                      │
-│                                                                             │
-│  Home        Reports        Chat        Inbox        Me        Workspace     │
-│   │             │            │           │          │            │          │
-│   └─────────────┴────────────┴───────────┴──────────┴────────────┘          │
-│                         Existing app components                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Backend/API layer                                                           │
-│                                                                             │
-│  queries                mutations                actions/workflows           │
-└─────────────────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------------------+
+| Browser: Vite + React                                                       |
+|                                                                             |
+|  Home        Reports        Chat        Inbox        Me        Workspace     |
+|   |             |            |           |          |            |           |
+|   +-------------+------------+-----------+----------+------------+           |
+|                         Existing app components                             |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+| Backend/API layer                                                           |
+|                                                                             |
+|  queries                mutations                actions/workflows           |
++-----------------------------------------------------------------------------+
 ```
 
-Proposed layer:
+## Example: Proposed Layer
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Existing locked UI slugs                                                    │
-│                                                                             │
-│ nb.chat.thread-shell             nb.reports.composer                        │
-│ nb.chat.reasoning-pill           nb.reports.segmented-filter                │
-│ nb.chat.composer                 nb.reports.activity-card                   │
-│                                  nb.public-memory.claim-card                │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      │ render small additive state only
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Frontend feature state                                                      │
-│                                                                             │
-│ styleContext     rubricContext       sourcePolicyContext                    │
-│ batchIntent      entityUniverseRef   qaSummary                              │
-│ reviewStatus     exportStatus        monitoringSignals                      │
-└─────────────────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------------------+
+| Existing locked UI slugs                                                    |
+|                                                                             |
+| nb.chat.thread-shell             nb.reports.composer                        |
+| nb.chat.reasoning-pill           nb.reports.segmented-filter                |
+| nb.chat.composer                 nb.reports.activity-card                   |
+|                                  nb.public-memory.claim-card                |
++-----------------------------------------------------------------------------+
+                                      |
+                                      | render small additive state only
+                                      v
++-----------------------------------------------------------------------------+
+| Frontend feature state                                                      |
+|                                                                             |
+| styleContext     rubricContext       sourcePolicyContext                    |
+| batchIntent      entityUniverseRef   qaSummary                              |
+| reviewStatus     exportStatus        monitoringSignals                      |
++-----------------------------------------------------------------------------+
 ```
 
 ## Example: Agent Pipeline
 
 ```text
-┌────────────────────┐
-│ Intent Router       │  simple answer | single report | batch workflow
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Entity Resolver     │  names → entities | URLs → entities | ambiguity flags
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Style/Rubric Select │  public style | private style | permission gate
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Research Planner    │  required sources | section outline | claims to verify
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Source + Claim Lane │  search/fetch | public memory | source hashes
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Draft Lane          │  sections | voice/style pass | recommendation | risks
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ QA Lane             │  citations | rubric completion | style match | unsupported claims
-└─────────┬──────────┘
-          ▼
-┌────────────────────┐
-│ Materialize         │  report card | review status | evidence drawer | export row
-└────────────────────┘
++--------------------+  simple answer | single report | batch workflow
+| Intent Router      |
++---------+----------+
+          |
+          v
++--------------------+  names -> entities | URLs -> entities | ambiguity flags
+| Entity Resolver    |
++---------+----------+
+          |
+          v
++--------------------+  public style | private style | permission gate
+| Style/Rubric Select|
++---------+----------+
+          |
+          v
++--------------------+  required sources | section outline | claims to verify
+| Research Planner   |
++---------+----------+
+          |
+          v
++--------------------+  search/fetch | public memory | source hashes
+| Source + Claim Lane|
++---------+----------+
+          |
+          v
++--------------------+  sections | voice/style pass | recommendation | risks
+| Draft Lane         |
++---------+----------+
+          |
+          v
++--------------------+  citations | rubric completion | style match | unsupported claims
+| QA Lane            |
++---------+----------+
+          |
+          v
++--------------------+  report card | review status | evidence drawer | export row
+| Materialize        |
++--------------------+
 ```
 
 ## Example JSON Shape
@@ -182,11 +189,11 @@ Proposed layer:
 Parity should support runtime handoff as a first-class export concern:
 
 ```text
-Preview → Runtime Architecture
-Files → runtime-architecture.md/html/json
-Parity Coach → runtime implications and missing handoff sections
-Export ZIP → include runtime architecture artifacts
-MCP → optional flag to generate runtime architecture handoff
+Preview -> Runtime Architecture
+Files -> runtime-architecture.md/html/json
+Parity Coach -> runtime implications and missing handoff sections
+Export ZIP -> include runtime architecture artifacts
+MCP -> optional flag to generate runtime architecture handoff
 ```
 
 Suggested MCP flags:
