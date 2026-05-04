@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "surface": "nodebench-locked-memo-layer",
+  "lockedSlugs": [
+    {
+      "slug": "nb.chat.thread-shell",
+      "status": "locked",
+      "preserve": [
+        "thread title header",
+        "entity/source/turn metadata",
+        "open report/share/grid actions",
+        "saved report row",
+        "scrollable message body",
+        "large bottom composer"
+      ],
+      "allowedDelta": [
+        "style metadata token",
+        "batch sample action",
+        "source/QA reasoning pill"
+      ]
+    },
+    {
+      "slug": "nb.chat.reasoning-pill",
+      "status": "locked",
+      "preserve": [
+        "small rounded pill",
+        "monospace metadata rhythm",
+        "subtle border",
+        "terracotta active state"
+      ],
+      "allowedDelta": [
+        "coverage memo signal",
+        "source policy selected",
+        "QA check complete"
+      ]
+    },
+    {
+      "slug": "nb.chat.composer",
+      "status": "locked",
+      "preserve": [
+        "large rounded composer",
+        "context tags",
+        "attach/link/voice controls",
+        "auto balanced selector",
+        "memory-first auto route text"
+      ],
+      "allowedDelta": [
+        "memo style auto chip",
+        "batch sample on/off chip",
+        "selected public preset chip"
+      ]
+    },
+    {
+      "slug": "nb.reports.composer",
+      "status": "locked",
+      "preserve": [
+        "REPORT tag",
+        "Add context chip",
+        "large empty input area",
+        "memory-first auto route",
+        "quick action chips"
+      ],
+      "allowedDelta": [
+        "style banking coverage chip",
+        "run across a list action",
+        "source policy chip"
+      ]
+    },
+    {
+      "slug": "nb.reports.segmented-filter",
+      "status": "locked",
+      "preserve": [
+        "starter memory pill",
+        "All/Verified/Review/Watching segmented control",
+        "Grid/List toggle"
+      ],
+      "allowedDelta": [
+        "Batch filter",
+        "Needs review count",
+        "Export ready count"
+      ]
+    },
+    {
+      "slug": "nb.reports.activity-card",
+      "status": "locked",
+      "preserve": [
+        "gradient art block",
+        "category/status pills",
+        "large initials",
+        "title and summary",
+        "source/time footer",
+        "watching/watch button"
+      ],
+      "allowedDelta": [
+        "QA percent",
+        "style match percent",
+        "batch status",
+        "needs review"
+      ]
+    },
+    {
+      "slug": "nb.public-memory.claim-card",
+      "status": "locked",
+      "preserve": [
+        "Latest Public Research kicker",
+        "plain heading",
+        "Public claims only pill",
+        "compact card grid",
+        "claim/source/confidence pills"
+      ],
+      "allowedDelta": [
+        "memo seed",
+        "rubric fit",
+        "review"
+      ]
+    }
+  ],
+  "forbiddenPatterns": [
+    "new memo top-level nav",
+    "dashboard shell replacement",
+    "wizard replacing Chat",
+    "table-only Reports replacement",
+    "large style gallery above current composer",
+    "purple SaaS dashboard visual language"
+  ]
+}
