@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
+import type { Doc } from './_generated/dataModel';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
@@ -151,6 +152,21 @@ function normalizeModelOverride(
     modelId,
     ...(modelOverride.label?.trim() ? { label: modelOverride.label.trim().slice(0, 96) } : {}),
   };
+}
+
+function publicRunFromDoc(run: Doc<'runs'>) {
+  const { sourceImageBase64: _sourceImageBase64, ...rest } = run;
+  return {
+    ...rest,
+    hasSourceImage: Boolean(run.sourceImageBase64 || run.sourceImageStorageId),
+    ...(run.sourceImageBase64
+      ? { sourceImageByteLength: Math.ceil((run.sourceImageBase64.length * 3) / 4) }
+      : {}),
+  };
+}
+
+function publicRun(run: Doc<'runs'> | null) {
+  return run === null ? null : publicRunFromDoc(run);
 }
 
 export const start = mutation({
@@ -393,7 +409,20 @@ export const startFromKit = mutation({
 export const get = query({
   args: { runId: v.id('runs') },
   handler: async (ctx, { runId }) => {
-    return await ctx.db.get(runId);
+    return publicRun(await ctx.db.get(runId));
+  },
+});
+
+export const getSourceImage = query({
+  args: { runId: v.id('runs') },
+  handler: async (ctx, { runId }) => {
+    const run = await ctx.db.get(runId);
+    if (run === null || !run.sourceImageBase64 || !run.sourceImageMimeType) return null;
+    return {
+      base64: run.sourceImageBase64,
+      mimeType: run.sourceImageMimeType,
+      byteLength: Math.ceil((run.sourceImageBase64.length * 3) / 4),
+    };
   },
 });
 
@@ -415,35 +444,44 @@ export const listRecent = query({
     const cap = Math.min(Math.max(limit ?? 20, 1), 100);
     if (projectId !== undefined) {
       try {
-        return await ctx.db
+        const rows = await ctx.db
           .query('runs')
           .withIndex('by_project', (q) => q.eq('projectId', projectId))
           .order('desc')
           .take(cap);
+        return rows.map((run) => publicRunFromDoc(run));
       } catch {
         const rows = await ctx.db
           .query('runs')
           .order('desc')
           .take(cap * 10);
-        return rows.filter((run) => run.projectId === projectId).slice(0, cap);
+        return rows
+          .filter((run) => run.projectId === projectId)
+          .slice(0, cap)
+          .map((run) => publicRunFromDoc(run));
       }
     }
     if (clientSessionId !== undefined) {
       try {
-        return await ctx.db
+        const rows = await ctx.db
           .query('runs')
           .withIndex('by_session', (q) => q.eq('clientSessionId', clientSessionId))
           .order('desc')
           .take(cap);
+        return rows.map((run) => publicRunFromDoc(run));
       } catch {
         const rows = await ctx.db
           .query('runs')
           .order('desc')
           .take(cap * 10);
-        return rows.filter((run) => run.clientSessionId === clientSessionId).slice(0, cap);
+        return rows
+          .filter((run) => run.clientSessionId === clientSessionId)
+          .slice(0, cap)
+          .map((run) => publicRunFromDoc(run));
       }
     }
-    return await ctx.db.query('runs').order('desc').take(cap);
+    const rows = await ctx.db.query('runs').order('desc').take(cap);
+    return rows.map((run) => publicRunFromDoc(run));
   },
 });
 

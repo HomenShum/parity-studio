@@ -376,7 +376,7 @@ function buildKitContext({
     .filter((text, index, all) => text.length > 0 && all.indexOf(text) === index)
     .slice(0, 4);
   const sourceParts = [];
-  if (run?.sourceImageBase64) sourceParts.push('source image');
+  if (run?.hasSourceImage) sourceParts.push('source image');
   if (run?.prompt) sourceParts.push('prompt');
   const sourceLabel =
     sourceParts.length > 0 ? sourceParts.join(' + ') : 'no source preview stored on this run';

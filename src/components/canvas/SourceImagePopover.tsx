@@ -21,9 +21,13 @@ export function SourceImagePopover({
   open = false,
   onOpenChange,
 }: SourceImagePopoverProps) {
-  const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const shouldShow = open || selectedFile !== null;
+  const sourceImage = useQuery(
+    api.runs.getSourceImage,
+    runId && shouldShow && !dismissed ? { runId } : 'skip',
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -31,11 +35,11 @@ export function SourceImagePopover({
     setExpanded(true);
   }, [open]);
 
-  const shouldShow = open || selectedFile !== null;
   if (!runId || !shouldShow || dismissed) return null;
-  if (!run || !run.sourceImageBase64 || !run.sourceImageMimeType) return null;
+  if (sourceImage === undefined) return <SourceImageMissing reason="loading source image..." />;
+  if (sourceImage === null) return <SourceImageMissing reason="no inline source stored" />;
 
-  const dataUrl = `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`;
+  const dataUrl = `data:${sourceImage.mimeType};base64,${sourceImage.base64}`;
   const componentName = selectedFile
     ? (selectedFile.split('/').slice(-1)[0] ?? selectedFile)
     : 'full source';

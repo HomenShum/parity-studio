@@ -44,6 +44,10 @@ export function FilesView({
 }: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
+  const sourceImage = useQuery(
+    api.runs.getSourceImage,
+    runId && sourceImagePreviewOpen ? { runId } : 'skip',
+  );
   const createFile = useMutation(api.uiKits.createFile);
   const httpBase = convexHttpUrl();
   const exportHref =
@@ -75,9 +79,10 @@ export function FilesView({
     /^ui_kits\/[^/]+\/components\/.+\.(tsx|jsx|ts|js)$/i.test(path),
   ).length;
   const previewArtifactCount = visibleFilePaths.filter((path) => /^preview\//i.test(path)).length;
+  const hasSourceImage = Boolean(run?.hasSourceImage);
   const sourceImageUrl =
-    run?.sourceImageBase64 && run.sourceImageMimeType
-      ? `data:${run.sourceImageMimeType};base64,${run.sourceImageBase64}`
+    sourceImage?.base64 && sourceImage.mimeType
+      ? `data:${sourceImage.mimeType};base64,${sourceImage.base64}`
       : null;
 
   async function onCreateFile() {
@@ -286,13 +291,13 @@ export function FilesView({
         <FileGroup label="Source">
           <button
             type="button"
-            onClick={sourceImageUrl ? onPreviewSourceImage : undefined}
-            disabled={!sourceImageUrl}
+            onClick={hasSourceImage ? onPreviewSourceImage : undefined}
+            disabled={!hasSourceImage}
             aria-pressed={sourceImagePreviewOpen}
-            aria-label={sourceImageUrl ? 'Preview source image' : 'No source image available'}
+            aria-label={hasSourceImage ? 'Preview source image' : 'No source image available'}
             style={{
               display: 'grid',
-              gridTemplateColumns: sourceImageUrl ? '56px 1fr auto' : 'auto 1fr',
+              gridTemplateColumns: sourceImageUrl ? '56px 1fr auto' : 'auto 1fr auto',
               alignItems: 'center',
               gap: 8,
               padding: 8,
@@ -302,8 +307,8 @@ export function FilesView({
                 ? 'var(--color-accent-soft)'
                 : 'var(--color-surface)',
               textAlign: 'left',
-              cursor: sourceImageUrl ? 'pointer' : 'not-allowed',
-              opacity: sourceImageUrl ? 1 : 0.62,
+              cursor: hasSourceImage ? 'pointer' : 'not-allowed',
+              opacity: hasSourceImage ? 1 : 0.62,
               boxShadow: sourceImagePreviewOpen ? 'var(--shadow-soft)' : 'none',
             }}
           >
@@ -352,10 +357,14 @@ export function FilesView({
                   fontFamily: 'var(--font-mono)',
                 }}
               >
-                {sourceImageUrl ? 'click to compare original reference' : 'no inline source stored'}
+                {hasSourceImage
+                  ? sourceImagePreviewOpen && !sourceImageUrl
+                    ? 'loading original reference...'
+                    : 'click to compare original reference'
+                  : 'no inline source stored'}
               </div>
             </div>
-            {sourceImageUrl ? (
+            {hasSourceImage ? (
               <Expand
                 size={13}
                 style={{
