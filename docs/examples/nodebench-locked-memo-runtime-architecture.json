@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "surface": "nodebench-locked-memo-layer",
+  "implementationRule": [
+    "No new app shell",
+    "No new memo nav",
+    "Memo and batch state must render as additive metadata/actions inside existing NodeBench surfaces"
+  ],
+  "frontend": [
+    {
+      "area": "src/features/chat",
+      "change": "Add batch proposal card using existing message and action-chip components",
+      "lockedSlugs": [
+        "nb.chat.thread-shell",
+        "nb.chat.reasoning-pill",
+        "nb.chat.composer"
+      ]
+    },
+    {
+      "area": "src/features/reports",
+      "change": "Add memo QA/source/style metadata and filters while keeping existing composer and card grid",
+      "lockedSlugs": [
+        "nb.reports.composer",
+        "nb.reports.segmented-filter",
+        "nb.reports.activity-card"
+      ]
+    },
+    {
+      "area": "src/features/publicResearch",
+      "change": "Reuse public claim cards as memo seeds and rubric-fit indicators",
+      "lockedSlugs": [
+        "nb.public-memory.claim-card"
+      ]
+    }
+  ],
+  "backend": [
+    {
+      "area": "convex/domains/product",
+      "change": "Memo style profile CRUD and permission settings"
+    },
+    {
+      "area": "convex/domains/research",
+      "change": "Memo rubric templates, batch run creation, sample/full run state, and report materialization"
+    },
+    {
+      "area": "convex/domains/entities",
+      "change": "Entity universe creation, member resolution, and disambiguation"
+    },
+    {
+      "area": "convex/domains/verification",
+      "change": "Rubric completion, citation coverage, style match, and unsupported claim checks"
+    }
+  ],
+  "database": [
+    {
+      "object": "memoStyleProfiles",
+      "purpose": "Public or private memo style profile",
+      "keyFields": [
+        "ownerId",
+        "displayName",
+        "source",
+        "permissionLevel",
+        "toneProfile",
+        "sectionPattern",
+        "evidenceCadence",
+        "recommendationPattern"
+      ]
+    },
+    {
+      "object": "memoRubrics",
+      "purpose": "Reusable section, evidence, and scoring rules",
+      "keyFields": [
+        "ownerId",
+        "displayName",
+        "sections",
+        "requiredFields",
+        "citationRequirements",
+        "scoringDimensions"
+      ]
+    },
+    {
+      "object": "entityUniverses",
+      "purpose": "Saved list of companies, people, markets, accounts, or other entities to analyze",
+      "keyFields": [
+        "ownerId",
+        "name",
+        "entityType",
+        "defaultStyleProfileId",
+        "defaultRubricId",
+        "monitoringEnabled"
+      ]
+    },
+    {
+      "object": "memoBatchRuns",
+      "purpose": "Sample or full batch research job",
+      "keyFields": [
+        "ownerId",
+        "universeId",
+        "styleProfileId",
+        "rubricId",
+        "sourcePolicyId",
+        "mode",
+        "requestedCount",
+        "status",
+        "createdFromThreadId"
+      ]
+    },
+    {
+      "object": "memoBatchItems",
+      "purpose": "One entity result inside a batch run",
+      "keyFields": [
+        "batchRunId",
+        "entityId",
+        "reportId",
+        "status",
+        "qaStatus",
+        "sourceCoverage",
+        "styleMatch",
+        "reviewReason"
+      ]
+    },
+    {
+      "object": "memoClaimEvidence",
+      "purpose": "Claim-level source mapping",
+      "keyFields": [
+        "reportId",
+        "claimId",
+        "sourceRefId",
+        "sourceType",
+        "quoteOrExtractHash",
+        "confidence",
+        "accessedAt"
+      ]
+    },
+    {
+      "object": "memoQaResults",
+      "purpose": "Quality gates for report review and export readiness",
+      "keyFields": [
+        "reportId",
+        "rubricCompletion",
+        "citationCoverage",
+        "styleMatch",
+        "entityConfidence",
+        "unsupportedClaims",
+        "needsReview"
+      ]
+    }
+  ],
+  "agentPipeline": [
+    "Intent Router",
+    "Entity Resolver",
+    "Style/Rubric Selector",
+    "Research Planner",
+    "Source Gatherer",
+    "Claim Extractor",
+    "Memo Drafter",
+    "Evidence Mapper",
+    "QA/Style Judge",
+    "Report Saver",
+    "Review Queue",
+    "Export"
+  ],
+  "permissions": [
+    {
+      "input": "public style pack",
+      "default": "allowed",
+      "constraint": "use for structure, rubric, and evidence standards only"
+    },
+    {
+      "input": "uploaded user memo",
+      "default": "current report only",
+      "constraint": "persistent style profile requires explicit user approval"
+    },
+    {
+      "input": "conversation history",
+      "default": "no persistent inference",
+      "constraint": "team style profile requires separate team-level approval"
+    }
+  ],
+  "phases": [
+    "Design-only locked slug manifest and comparison",
+    "Static metadata MVP",
+    "Sample batch MVP",
+    "Review/export MVP",
+    "Private style profile",
+    "Monitoring"
+  ]
+}
