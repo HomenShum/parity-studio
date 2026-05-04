@@ -1,9 +1,13 @@
 import { useQuery } from 'convex/react';
 import { ExternalLink } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
-import { buildSurfacePreviewHtml, stripUnresolvedRelativeScripts } from '../../lib/previewSrcDoc';
+import {
+  buildSurfacePreviewHtml,
+  shouldUseUrlLoadedPreview,
+  stripUnresolvedRelativeScripts,
+} from '../../lib/previewSrcDoc';
 import { activeSurfaceFor, surfaceTokenPath } from '../../lib/projectSurfaces';
 import { CommentOverlay } from '../CommentOverlay';
 import type { Device } from '../HeaderActions';
@@ -233,6 +237,12 @@ window.addEventListener('unhandledrejection', function(event) {
 
   const semverLabel = run ? `v2.${artifactVersion}.${run.iterationsCompleted ?? 0}` : 'v—';
   const previewKindLabel = versionLabel.includes('kit') ? 'Kit preview' : 'Artifact preview';
+  const urlPreviewEnabled = shouldUseUrlLoadedPreview({
+    commentModeActive,
+    hasLiveKitHtml: Boolean(livePreview?.html),
+    liveKitFileCount: livePreview?.files ? Object.keys(livePreview.files).length : 0,
+  });
+  const previewUrl = usePreviewObjectUrl(srcDoc, urlPreviewEnabled);
 
   return (
     <div
@@ -298,7 +308,8 @@ window.addEventListener('unhandledrejection', function(event) {
             >
               <iframe
                 title="artifact preview"
-                srcDoc={srcDoc}
+                src={previewUrl ?? undefined}
+                srcDoc={previewUrl ? undefined : srcDoc}
                 sandbox="allow-scripts"
                 style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
               />
@@ -318,6 +329,7 @@ window.addEventListener('unhandledrejection', function(event) {
             zoom={zoom}
             commentModeActive={commentModeActive}
             srcDoc={srcDoc}
+            previewUrl={previewUrl}
             runId={runId}
             artifactVersion={artifactVersion}
             targetFile={selectedFile ?? null}
@@ -328,6 +340,24 @@ window.addEventListener('unhandledrejection', function(event) {
       </div>
     </div>
   );
+}
+
+function usePreviewObjectUrl(html: string, enabled: boolean): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || typeof URL === 'undefined' || typeof Blob === 'undefined') {
+      setUrl(null);
+      return;
+    }
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    setUrl(blobUrl);
+    return () => {
+      URL.revokeObjectURL(blobUrl);
+    };
+  }, [enabled, html]);
+
+  return url;
 }
 
 /**
@@ -341,6 +371,7 @@ function DeviceFrame({
   device,
   zoom,
   srcDoc,
+  previewUrl,
   commentModeActive,
   runId,
   artifactVersion,
@@ -351,6 +382,7 @@ function DeviceFrame({
   device: Device;
   zoom: number;
   srcDoc: string;
+  previewUrl: string | null;
   commentModeActive: boolean;
   runId: Id<'runs'> | null;
   artifactVersion: number;
@@ -404,7 +436,8 @@ function DeviceFrame({
           >
             <iframe
               title="artifact preview"
-              srcDoc={srcDoc}
+              src={previewUrl ?? undefined}
+              srcDoc={previewUrl ? undefined : srcDoc}
               sandbox="allow-scripts"
               style={{
                 width: '100%',

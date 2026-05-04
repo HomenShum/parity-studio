@@ -18,6 +18,7 @@
  * See docs/CANONICAL_KIT.md for the contract.
  */
 
+import { buildDesignSystemShowcaseFiles } from './designSystemShowcase';
 import { buildFigmaBridgeFiles } from './figmaBridge';
 import { buildOperatingContractFiles } from './kitContract';
 
@@ -342,6 +343,13 @@ pixels), so this folder is a documented hook point for future work
 rather than populated content. Drop your own working PNGs here when
 you iterate downstream.
 `;
+
+  Object.assign(
+    out,
+    buildDesignSystemShowcaseFiles({ ...kitFiles, ...out }, slug, {
+      exportedAt: new Date().toISOString(),
+    }),
+  );
 
   Object.assign(
     out,

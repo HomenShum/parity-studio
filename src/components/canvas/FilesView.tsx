@@ -5,6 +5,7 @@ import {
   FilePlus2,
   FileText,
   Folder,
+  History,
   Image as ImageIcon,
   PenTool,
   RefreshCw,
@@ -45,6 +46,7 @@ export function FilesView({
 }: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
+  const designRevisions = useQuery(api.designRevisions.list, runId ? { runId, limit: 6 } : 'skip');
   const sourceImage = useQuery(
     api.runs.getSourceImage,
     runId && sourceImagePreviewOpen ? { runId } : 'skip',
@@ -410,6 +412,102 @@ export function FilesView({
               patch / recapture
             </span>
           </button>
+        </FileGroup>
+
+        <FileGroup label="Design revisions">
+          {designRevisions === undefined ? (
+            <div
+              style={{
+                padding: '8px 10px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--color-text-faint)',
+              }}
+            >
+              loading revisions...
+            </div>
+          ) : designRevisions.length > 0 ? (
+            designRevisions.map((revision) => (
+              <button
+                key={revision._id}
+                type="button"
+                onClick={() => {
+                  const firstPath = revision.changedPaths[0];
+                  if (!firstPath) return;
+                  const surfaceSlug = slugFromPath(firstPath);
+                  if (surfaceSlug) onSurfaceChange?.(surfaceSlug);
+                  if (files?.[firstPath] !== undefined) onSelectFile(firstPath);
+                }}
+                title={revision.summary}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  alignItems: 'center',
+                  gap: 8,
+                  minHeight: 38,
+                  padding: '7px 9px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-border-subtle)',
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-text-secondary)',
+                  textAlign: 'left',
+                  cursor: revision.changedPaths.length > 0 ? 'pointer' : 'default',
+                }}
+              >
+                <History size={13} style={{ color: 'var(--color-accent)' }} />
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    r{revision.revisionNumber} - {revision.label}
+                  </span>
+                  <span
+                    style={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--color-text-faint)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                    }}
+                  >
+                    {revision.kind} / {formatRelativeTime(revision.createdAt)}
+                  </span>
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--color-text-faint)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {revision.changedPaths.length} files
+                </span>
+              </button>
+            ))
+          ) : (
+            <div
+              style={{
+                padding: '8px 10px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--color-text-faint)',
+              }}
+            >
+              edits will appear here after this kit changes
+            </div>
+          )}
         </FileGroup>
 
         <FileGroup label="Handoff">
@@ -780,6 +878,17 @@ function surfaceDisplayPriority(path: string, activeSlug: string | null): number
 function displayFilePath(path: string): string {
   if (path.startsWith('ui_kits/')) return path.replace(/^ui_kits\//, '');
   return path;
+}
+
+function formatRelativeTime(value: number): string {
+  const diffMs = Math.max(0, Date.now() - value);
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 function estimateZipSize(files: Record<string, string> | null): number {

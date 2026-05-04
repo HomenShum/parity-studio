@@ -10,10 +10,10 @@
  *   node scripts/smoke-test.mjs
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = path.resolve(__dirname, '..', 'dist', 'index.js');
@@ -41,7 +41,13 @@ async function main() {
     console.log(`      ${t.description?.split('\n')[0]?.slice(0, 90)}...`);
   }
 
-  const required = ['parity_design_mission', 'parity_figma_export', 'parity_figma_import'];
+  const required = [
+    'parity_design_mission',
+    'parity_agent_runtime_metadata',
+    'parity_apply_approved_design',
+    'parity_figma_export',
+    'parity_figma_import',
+  ];
   const names = new Set(tools.map((tool) => tool.name));
   const missing = required.filter((name) => !names.has(name));
   if (missing.length > 0) {

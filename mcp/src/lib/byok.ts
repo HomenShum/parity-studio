@@ -1,6 +1,6 @@
 import { type SupportedProvider, inferProvider } from './llmClient.js';
 
-const PROVIDER_KEY_ENV: Record<SupportedProvider, string> = {
+export const PROVIDER_KEY_ENV: Record<SupportedProvider, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   google: 'GEMINI_API_KEY',

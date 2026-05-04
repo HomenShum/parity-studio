@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.3 - stdio transport - 16 tools + agent prompts/resource rules
+**Status**: v0.3.4 - stdio transport - 18 tools + agent prompts/resource rules
 
 ## Install
 
@@ -34,6 +34,8 @@ You need at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_
 The hosted tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `parity_export`) call the hosted Parity Studio Convex deployment at `PARITY_CONVEX_URL` by default. Override the URLs to point at your own deployment.
 
 Local MCP BYOK keeps provider keys in the local MCP process environment. The server only returns which key env vars are present; it never returns key values, writes them into kits, logs them, or uploads them to Parity Studio.
+
+Use `parity_agent_runtime_metadata` before child-agent work to get the Claude Code, Codex, Cursor, Windsurf, and generic MCP capability profiles plus a model-specific provider env allowlist. This prevents agents from forwarding unrelated provider keys to subprocesses.
 
 ## Local Dashboard
 
@@ -100,6 +102,17 @@ What it does:
 
 Returns provider env-var presence for model ids without exposing values.
 
+### `parity_agent_runtime_metadata` - safe agent runtime profiles
+
+Returns:
+
+- Claude Code, Codex, Cursor, Windsurf, and generic MCP runtime profiles.
+- Recommended Parity tools per runtime.
+- Safe approval gates for design-first staging and production apply.
+- A provider env allowlist derived from the exact model ids the agent intends to call.
+
+Use this before spawning helper agents or copying environment variables. It is designed to keep BYOK local while preventing accidental leakage of unrelated keys.
+
 ### `parity_platform_to_ui_kit` - existing product route to Parity Studio
 
 Use this when you already have a built app/platform and want a coding agent to break a route down into a canonical `ui_kit` for Parity Studio iteration.
@@ -147,7 +160,34 @@ Runs deterministic parity checks. If `sourceImageBase64` is provided, additional
 
 ### `parity_export_zip` - pack for handoff
 
-Bundles the `ui_kit` files into a ZIP and returns it as base64. Optionally appends a `HANDOFF.md` with integration instructions.
+Bundles the `ui_kit` files into a ZIP and returns it as base64. Optionally appends a `HANDOFF.md` with integration instructions. The ZIP now includes:
+
+- `design-system/showcase.html`
+- `design-system/tokens.json`
+- `ui_kits/<slug>/design-system-showcase.html`
+- Figma bridge files under `figma/`
+
+### `parity_apply_approved_design` - approved ui_kit deltas to repo files
+
+Approval-gated bridge from design-first Parity work to production code.
+
+Default behavior is `dryRun=true`. If no mappings are supplied, the tool stages files under `.parity/approved-design/<slug>/` so the user can inspect them without touching production source. To apply real deltas, pass explicit mappings:
+
+```jsonc
+{
+  "projectRoot": ".",
+  "slug": "reports-flow",
+  "dryRun": true,
+  "mappings": [
+    {
+      "fromPath": "ui_kits/reports-flow/components/ReportCard.tsx",
+      "toPath": "src/components/reports/ReportCard.tsx"
+    }
+  ]
+}
+```
+
+It rejects writes outside `projectRoot`, `.env*`, `.git`, `node_modules`, and package manager lockfiles.
 
 ### `parity_figma_export` - ui_kit to Figma bridge
 
@@ -159,6 +199,7 @@ Builds a native Figma development-plugin bundle from `ui_kit` files:
 - `figma/parity-figma-bridge.json`
 - `figma/tokens.json`
 - `ui_kits/<slug>/figma.bridge.json`
+- `design-system/tokens.json` in full ZIP exports
 
 The plugin creates editable Figma pages/frames, paint styles from color tokens, text layers from the kit copy, and component guide cards. Use it when a coding agent needs to show the design-first result inside Figma before production implementation.
 

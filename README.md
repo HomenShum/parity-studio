@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.3
+**Status**: LIVE - current web app + MCP v0.3.4
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, locked-component comparison, runtime architecture handoff, Figma bridge handoff, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
@@ -68,7 +68,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 - **Choose the model route**: use Balanced AI, Best Quality AI, Free AI route, a preset model, or a custom provider/model id from Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Cerebras, xAI, or Mistral.
 - **Session privacy + BYOK setup**: store browser-tab-only provider-key placeholders for the session, copy local MCP env setup, clear keys, or start a fresh session. Hosted Parity does not receive browser-entered BYOK secrets for model calls.
 - **Manage projects and run history**: use the left rail to start runs, revisit recent runs, see run status, and keep a session-level project list.
-- **Browse, create, edit, save, and revert kit files**: the Files view exposes the generated `ui_kits/<slug>/` files, source image preview, selected-file scope, inline editing, and ZIP export.
+- **Browse, create, edit, save, and revert kit files**: the Files view exposes the generated `ui_kits/<slug>/` files, design revision history, source image preview, selected-file scope, inline editing, and ZIP export.
 - **Preview and comment on the generated UI**: use comment mode to pin a bbox to the preview or leave a free-form note scoped to the selected file.
 - **Ask the agent to make scoped edits**: chat with the agent stream, enhance prompts, or trigger an advisor/executor fix from a comment, file, or manual request.
 - **Use Parity Coach**: read the end-user impact readout, parity score, top recommendations, and quality-gate status instead of raw low-level check rows.
@@ -84,8 +84,10 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 - **End-to-end local pipeline**: call `parity_pipeline` to generate, decompose, verify, optionally visually judge, and export a kit from a prompt or image.
 - **Decompose-only workflow**: call `parity_decompose` to turn a complete HTML artifact into canonical `ui_kit` files plus `parity.contract.json`, `performance.budget.json`, `api-wiring.plan.md`, and `qa.plan.md`.
 - **Verify-only workflow**: call `parity_verify` to score an existing kit against source HTML and, when a source image is provided, run the visual judge.
-- **Export-only workflow**: call `parity_export_zip` or hosted `parity_export` to package a run as ZIP, HTML, or Markdown for handoff.
+- **Export-only workflow**: call `parity_export_zip` or hosted `parity_export` to package a run as ZIP, HTML, or Markdown for handoff. ZIP exports include the design-system showcase and Figma bridge files.
 - **Figma bridge workflow**: call `parity_figma_export` to turn a `ui_kit` into a Figma development-plugin bundle, or `parity_figma_import` to turn Parity bridge / Figma REST JSON into editable `ui_kits/<slug>/` files.
+- **Approved design apply workflow**: call `parity_apply_approved_design` to dry-run exact `ui_kit` path to repo path mappings, then write only after user approval. Without explicit mappings it stages under `.parity/approved-design/<slug>/`.
+- **Safe agent runtime workflow**: call `parity_agent_runtime_metadata` before child-agent work to get Claude Code/Codex/Cursor/Windsurf profiles and a model-specific provider env allowlist.
 - **Hosted run/chat workflow**: use `parity_chat_send`, `parity_chat_advise`, `parity_chat_history`, and `parity_run_listRecent` to keep working against a hosted run from the agent.
 - **Prompt/resource workflow**: load the MCP `use-parity-studio` prompt and `parity://agent-rules` resource so users can ask naturally instead of memorizing tool names.
 - **Local dashboard workflow**: watch MCP runs on the auto-opened local dashboard with source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.
@@ -93,7 +95,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 16 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 18 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
@@ -117,6 +119,7 @@ Then in your coding agent:
 - Design-first staging: *"Use Parity Studio to iterate the design and UI slugs first for our reports flow. Preserve the existing chat thread shell and report cards. Do not edit production code until I approve the Parity Studio run."*
 - Existing app, recommended: *"Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."*
 - Existing app, explicit: *"use parity_platform_to_ui_kit on http://localhost:3000/settings with projectRoot=. and write ./settings-ui-kit.zip"*
+- Apply after approval: *"Dry-run applying the approved Parity design to these production files, show me the mappings, then wait for approval before writing."*
 - New sketch/prompt: *"use parity_pipeline to turn this sketch into a ui_kit"*
 
 Local MCP BYOK keeps provider keys in the local agent/MCP env. Keys are never returned, written into kit files, logged, or uploaded to hosted Parity Studio.
@@ -126,21 +129,24 @@ Local MCP BYOK keeps provider keys in the local agent/MCP env. Keys are never re
 ## What it does
 
 ```
-   sketch.png             ui_kits/saas-dashboard/
-   prompt text     -->    |-- index.html
-   image upload           |-- components/
-                          |   |-- Sidebar.tsx
-                          |   |-- MetricCard.tsx
-                          |   `-- ChartPanel.tsx
-                          |-- tokens.css
-                          |-- manifest.json
-                          |-- parity.contract.json
-                          |-- performance.budget.json
-                          |-- api-wiring.plan.md
-                          |-- qa.plan.md
-                          |-- figma.bridge.json
-                          |-- figma/              <-- plugin import bundle
-                          `-- README.md   <-- handoff to Claude Code / Cursor
+   sketch.png             export bundle/
+   prompt text     -->    |-- ui_kits/saas-dashboard/
+   image upload           |   |-- index.html
+                          |   |-- components/
+                          |   |   |-- Sidebar.tsx
+                          |   |   |-- MetricCard.tsx
+                          |   |   `-- ChartPanel.tsx
+                          |   |-- tokens.css
+                          |   |-- manifest.json
+                          |   |-- parity.contract.json
+                          |   |-- performance.budget.json
+                          |   |-- api-wiring.plan.md
+                          |   |-- qa.plan.md
+                          |   |-- design-system-showcase.html
+                          |   |-- figma.bridge.json
+                          |   `-- README.md
+                          |-- design-system/     <-- showcase + token payload
+                          `-- figma/              <-- plugin import bundle
 ```
 
 Pipeline: **generate -> decompose -> verify (deterministic) -> verify (visual judge) -> iterate (max 2) -> done**, all durable, all live-streamed to the browser.

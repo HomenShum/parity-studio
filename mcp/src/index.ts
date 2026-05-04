@@ -5,6 +5,7 @@
  *
  * Tools:
  *   - parity_design_mission design-first slug board before production edits
+ *   - parity_agent_runtime_metadata safe agent profiles/env allowlist
  *   - parity_studio      high-level natural-language app -> zip/run wrapper
  *   - parity_byok_status safe local provider-key presence check, no values
  *   - parity_pipeline    end-to-end: prompt|image -> ui_kit + ParityReport
@@ -12,6 +13,7 @@
  *   - parity_decompose   HTML artifact -> ui_kit/<slug>/{...} files
  *   - parity_verify      ui_kit + sourceHtml -> ParityReport (deterministic + visual)
  *   - parity_export_zip  ui_kit files -> base64-encoded ZIP for handoff
+ *   - parity_apply_approved_design approved ui_kit deltas -> local repo files
  *   - parity_figma_export ui_kit files -> Figma plugin bridge ZIP/JSON
  *   - parity_figma_import Figma bridge/REST JSON -> ui_kit files
  *
@@ -39,6 +41,8 @@ import { z } from 'zod';
 import { eventBus, makeRunId } from './dashboard/events.js';
 import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
 import { ensureDashboard } from './dashboard/server.js';
+import { buildAgentRuntimeMetadata } from './lib/agentRuntime.js';
+import { applyApprovedDesign } from './lib/applyApprovedDesign.js';
 import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
 import {
@@ -46,6 +50,7 @@ import {
   designMissionPromptBlock,
   withDesignMissionFiles,
 } from './lib/designMission.js';
+import { buildDesignSystemShowcaseFiles } from './lib/designSystemShowcase.js';
 import {
   buildFigmaBridgeFiles,
   filesFromFigmaPayload,
@@ -99,7 +104,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.3.3';
+const VERSION = '0.3.4';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 
@@ -123,6 +128,8 @@ Default workflow:
 7. In the exported kit, read parity.contract.json, performance.budget.json,
    api-wiring.plan.md, qa.plan.md, AGENTS.md, and .claude/skills/*/SKILL.md
    before editing.
+8. Before spawning helper agents, call parity_agent_runtime_metadata with the
+   model ids you intend to use and copy only the returned provider env names.
 
 Design-first workflow:
 
@@ -132,6 +139,8 @@ Design-first workflow:
 - Treat Parity Studio as the staging layer before production code changes.
 - Keep locked slugs/components non-negotiable until the user approves a change.
 - Return the Parity Studio run URL and ZIP path before applying any repo deltas.
+- Use parity_apply_approved_design in dryRun mode to show exact ui_kit -> repo
+  file mappings; only call dryRun=false after the user approves those mappings.
 
 Approval gates:
 
@@ -756,7 +765,11 @@ async function handlePlatformToUiKit(args: {
       },
     });
 
-    const zipBuffer = await createUiKitZip(filesWithContract, parsed.slug, true);
+    const portableFiles = withPortableExportFiles(filesWithContract, parsed.slug, {
+      runId,
+      activeSurface: parsed.slug,
+    });
+    const zipBuffer = await createUiKitZip(portableFiles, parsed.slug, true);
     let resolvedZipPath: string | null = null;
     if (args.outputZipPath) {
       resolvedZipPath = resolve(args.outputZipPath);
@@ -800,8 +813,8 @@ async function handlePlatformToUiKit(args: {
       codeContext,
       uiKit: {
         slug: parsed.slug,
-        files: filesWithContract,
-        fileCount: Object.keys(filesWithContract).length,
+        files: portableFiles,
+        fileCount: Object.keys(portableFiles).length,
         warnings: parsed.warnings,
       },
       deterministic,
@@ -1439,7 +1452,8 @@ async function handleExportZip(args: {
     importToParityStudio: false,
     byokMode: 'local-mcp-byok',
   });
-  const buf = await createUiKitZip(files, args.slug, includeReadme);
+  const portableFiles = withPortableExportFiles(files, args.slug, { activeSurface: args.slug });
+  const buf = await createUiKitZip(portableFiles, args.slug, includeReadme);
   return {
     content: [
       {
@@ -1449,10 +1463,90 @@ async function handleExportZip(args: {
             slug: args.slug,
             zipBase64: buf.toString('base64'),
             zipSizeBytes: buf.length,
-            fileCount: Object.keys(files).length + (includeReadme ? 1 : 0),
+            fileCount: Object.keys(portableFiles).length + (includeReadme ? 1 : 0),
             includesHandoffReadme: includeReadme,
+            includesDesignSystemShowcase: true,
+            includesFigmaBridge: true,
             usage:
               'base64-decode zipBase64 and write to disk, or pipe through `base64 -d > out.zip`',
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+function withPortableExportFiles(
+  uiKitFiles: Record<string, string>,
+  slug: string,
+  figmaOptions: { runId?: string; activeSurface?: string | null } = {},
+): Record<string, string> {
+  const withShowcase = {
+    ...uiKitFiles,
+    ...buildDesignSystemShowcaseFiles(uiKitFiles, slug),
+  };
+  return {
+    ...withShowcase,
+    ...buildFigmaBridgeFiles(withShowcase, slug, figmaOptions),
+  };
+}
+
+// ---------- Tool: parity_apply_approved_design ----------------------------
+
+const applyApprovedDesignInput = {
+  uiKitFiles: z
+    .record(z.string())
+    .describe('Map of relative Parity ui_kit file paths to file contents.'),
+  projectRoot: z
+    .string()
+    .default('.')
+    .describe('Local repo root where approved design files may be staged/applied.'),
+  slug: z.string().optional().describe('Active ui_kit slug. Inferred from file paths if omitted.'),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe('Default true. Set false only after the user approves the exact mappings.'),
+  mappings: z
+    .array(
+      z.object({
+        fromPath: z.string().describe('Source path inside uiKitFiles.'),
+        toPath: z.string().describe('Target path under projectRoot.'),
+        mode: z.enum(['write', 'append']).optional().describe('Default write.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Explicit approved source->repo mappings. If omitted, files are safely staged into .parity/approved-design/<slug>/ instead of production source.',
+    ),
+};
+
+async function handleApplyApprovedDesign(args: {
+  uiKitFiles: Record<string, string>;
+  projectRoot?: string;
+  slug?: string;
+  dryRun?: boolean;
+  mappings?: Array<{ fromPath: string; toPath: string; mode?: 'write' | 'append' }>;
+}) {
+  const result = await applyApprovedDesign({
+    uiKitFiles: args.uiKitFiles,
+    projectRoot: args.projectRoot ?? '.',
+    ...(args.slug ? { slug: args.slug } : {}),
+    ...(args.dryRun !== undefined ? { dryRun: args.dryRun } : {}),
+    ...(args.mappings ? { mappings: args.mappings } : {}),
+  });
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            ...result,
+            next:
+              result.dryRun === true
+                ? 'Review operations. If correct, call again with dryRun=false after user approval.'
+                : 'Run your repo tests and browser QA before committing production changes.',
           },
           null,
           2,
@@ -1837,6 +1931,29 @@ async function main() {
   // advisor-executor auto-fix, list recent runs, fetch any export format,
   // and rewrite a draft prompt without leaving the editor.
 
+  server.registerTool(
+    'parity_agent_runtime_metadata',
+    {
+      title: 'Get Parity Studio agent runtime metadata',
+      description:
+        'Returns Claude Code, Codex, Cursor, Windsurf, and generic MCP runtime profiles plus a model-specific env allowlist. Use this before spawning child agents or copying env so unrelated provider keys are not forwarded.',
+      inputSchema: {
+        models: z
+          .array(z.string())
+          .optional()
+          .describe('Models this agent intends to call; used to compute provider env allowlist.'),
+      },
+    },
+    async ({ models }) => ({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(buildAgentRuntimeMetadata(models ?? []), null, 2),
+        },
+      ],
+    }),
+  );
+
   server.registerPrompt(
     'use-parity-design-mission',
     {
@@ -1859,7 +1976,7 @@ async function main() {
             type: 'text',
             text: `${request ?? 'Use Parity Studio to iterate the design and UI slugs first before production implementation.'}
 
-Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, include locked-component comparison and runtime architecture handoff artifacts, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, runtime handoff, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run.`,
+Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, include locked-component comparison and runtime architecture handoff artifacts, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, runtime handoff, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run; after approval, dry-run parity_apply_approved_design before writing repo files.`,
           },
         },
       ],
@@ -2137,6 +2254,17 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
       inputSchema: exportZipInput,
     },
     handleExportZip,
+  );
+
+  server.registerTool(
+    'parity_apply_approved_design',
+    {
+      title: 'Apply approved Parity ui_kit deltas to a local repo',
+      description:
+        'Approval-gated bridge from design-first ui_kit work to production code. Defaults to dryRun and safe staging under .parity/approved-design/<slug>; explicit mappings are required for production files. Blocks .env, .git, node_modules, lockfiles, and paths outside projectRoot.',
+      inputSchema: applyApprovedDesignInput,
+    },
+    handleApplyApprovedDesign,
   );
 
   server.registerTool(

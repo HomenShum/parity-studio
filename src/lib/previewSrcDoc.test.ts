@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildSurfacePreviewHtml, stripUnresolvedRelativeScripts } from './previewSrcDoc';
+import {
+  buildSurfacePreviewHtml,
+  shouldUseUrlLoadedPreview,
+  stripUnresolvedRelativeScripts,
+} from './previewSrcDoc';
 import type { ProjectSurface } from './projectSurfaces';
 
 describe('previewSrcDoc', () => {
@@ -63,5 +67,29 @@ describe('previewSrcDoc', () => {
     );
     expect(out).toContain('https://cdn.example/a.js');
     expect(out).toContain('stripped unresolved preview script ./missing.js');
+  });
+
+  it('uses URL-loaded previews only for substantial non-comment kit previews', () => {
+    expect(
+      shouldUseUrlLoadedPreview({
+        commentModeActive: false,
+        hasLiveKitHtml: true,
+        liveKitFileCount: 9,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUseUrlLoadedPreview({
+        commentModeActive: true,
+        hasLiveKitHtml: true,
+        liveKitFileCount: 9,
+      }),
+    ).toBe(false);
+    expect(
+      shouldUseUrlLoadedPreview({
+        commentModeActive: false,
+        hasLiveKitHtml: true,
+        liveKitFileCount: 2,
+      }),
+    ).toBe(false);
   });
 });

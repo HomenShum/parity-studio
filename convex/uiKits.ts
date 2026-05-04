@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
+import { recordDesignRevision } from './lib/designRevisions';
 
 export const save = internalMutation({
   args: {
@@ -13,7 +14,22 @@ export const save = internalMutation({
   },
   handler: async (ctx, args) => {
     const fileCount = Object.keys((args.files as Record<string, string>) ?? {}).length;
-    return await ctx.db.insert('ui_kits', { ...args, fileCount });
+    const uiKitId = await ctx.db.insert('ui_kits', { ...args, fileCount });
+    await recordDesignRevision(ctx, {
+      runId: args.runId,
+      uiKitId,
+      kind: args.artifactVersion === 0 ? 'initial' : 'sync',
+      label:
+        args.artifactVersion === 0 ? 'Initial ui_kit snapshot' : `ui_kit v${args.artifactVersion}`,
+      summary:
+        args.artifactVersion === 0
+          ? `Created ${args.slug} with ${fileCount} files.`
+          : `Saved ${args.slug} for artifact version ${args.artifactVersion}.`,
+      changedPaths: Object.keys((args.files as Record<string, string>) ?? {}).slice(0, 20),
+      files: (args.files as Record<string, string>) ?? {},
+      source: 'app',
+    });
+    return uiKitId;
   },
 });
 
@@ -81,6 +97,16 @@ export const patchFile = mutation({
     }
     files[path] = content;
     await ctx.db.patch(uiKitId, { files });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: 'manual-edit',
+      label: `Saved ${path}`,
+      summary: `Manual code edit saved ${path}.`,
+      changedPaths: [path],
+      files,
+      source: 'app',
+    });
     await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
       runId: kit.runId,
       reason: 'manual-file-save',
@@ -108,6 +134,16 @@ export const createFile = mutation({
     if (path in files) throw new Error(`uiKits:createFile path "${path}" already exists`);
     files[path] = content;
     await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: 'file-create',
+      label: `Created ${path}`,
+      summary: `Created a new ui_kit file at ${path}.`,
+      changedPaths: [path],
+      files,
+      source: 'app',
+    });
     await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
       runId: kit.runId,
       reason: 'file-create',
@@ -140,6 +176,16 @@ export const renameFile = mutation({
     files[toPath] = files[fromPath] ?? '';
     delete files[fromPath];
     await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: 'file-rename',
+      label: `Renamed ${fromPath}`,
+      summary: `Renamed ${fromPath} to ${toPath}.`,
+      changedPaths: [fromPath, toPath],
+      files,
+      source: 'app',
+    });
     await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
       runId: kit.runId,
       reason: 'file-rename',
@@ -163,6 +209,16 @@ export const deleteFile = mutation({
     if (!(path in files)) throw new Error(`uiKits:deleteFile path "${path}" not in ui_kit`);
     delete files[path];
     await ctx.db.patch(uiKitId, { files, fileCount: Object.keys(files).length });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: 'file-delete',
+      label: `Deleted ${path}`,
+      summary: `Deleted ${path} from the ui_kit.`,
+      changedPaths: [path],
+      files,
+      source: 'app',
+    });
     await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
       runId: kit.runId,
       reason: 'file-delete',
@@ -216,6 +272,16 @@ export const upsertFile = mutation({
       files,
       fileCount: Object.keys(files).length,
     });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: created ? 'file-create' : 'manual-edit',
+      label: `${created ? 'Created' : 'Updated'} ${path}`,
+      summary: `${created ? 'Created' : 'Updated'} ${path} from the app editor.`,
+      changedPaths: [path],
+      files,
+      source: 'app',
+    });
     await ctx.scheduler.runAfter(0, internal.parityReports.reverifyLatestInternal, {
       runId: kit.runId,
       reason: created ? 'file-create' : 'file-upsert',
@@ -249,6 +315,16 @@ export const upsertFileInternal = internalMutation({
     await ctx.db.patch(uiKitId, {
       files,
       fileCount: Object.keys(files).length,
+    });
+    await recordDesignRevision(ctx, {
+      runId: kit.runId,
+      uiKitId,
+      kind: 'agent-edit',
+      label: `${created ? 'Agent created' : 'Agent updated'} ${path}`,
+      summary: `${created ? 'Created' : 'Updated'} ${path} through the agent tool loop.`,
+      changedPaths: [path],
+      files,
+      source: 'agent',
     });
     return { path, sizeBytes: content.length, created };
   },

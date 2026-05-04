@@ -140,6 +140,33 @@ export default defineSchema({
     .index('by_run', ['runId'])
     .index('by_run_version', ['runId', 'artifactVersion']),
 
+  design_revisions: defineTable({
+    runId: v.id('runs'),
+    uiKitId: v.id('ui_kits'),
+    revisionNumber: v.number(),
+    kind: v.union(
+      v.literal('initial'),
+      v.literal('manual-edit'),
+      v.literal('agent-edit'),
+      v.literal('file-create'),
+      v.literal('file-rename'),
+      v.literal('file-delete'),
+      v.literal('import'),
+      v.literal('sync'),
+      v.literal('export'),
+    ),
+    label: v.string(),
+    summary: v.string(),
+    changedPaths: v.array(v.string()),
+    fileCount: v.number(),
+    filesDigest: v.string(),
+    source: v.optional(v.union(v.literal('app'), v.literal('agent'), v.literal('mcp'))),
+    createdAt: v.number(),
+  })
+    .index('by_run_revision', ['runId', 'revisionNumber'])
+    .index('by_run_created', ['runId', 'createdAt'])
+    .index('by_uikit', ['uiKitId']),
+
   /**
    * User comments pinned to a region of the rendered artifact. Used by the
    * "iterate with comments" path: the agent receives the bbox + text and

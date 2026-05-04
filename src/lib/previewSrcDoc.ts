@@ -40,6 +40,21 @@ export function stripUnresolvedRelativeScripts(html: string): string {
   );
 }
 
+export function shouldUseUrlLoadedPreview({
+  commentModeActive,
+  hasLiveKitHtml,
+  liveKitFileCount,
+}: {
+  commentModeActive: boolean;
+  hasLiveKitHtml: boolean;
+  liveKitFileCount: number;
+}): boolean {
+  // Large imported handoffs behave more like real apps when the iframe has
+  // a URL origin (`blob:`) instead of `srcdoc`; comment mode stays on srcDoc
+  // because it injects the click-to-comment bridge.
+  return hasLiveKitHtml && !commentModeActive && liveKitFileCount >= 6;
+}
+
 function injectLiveTokens(html: string, tokens: string | null): string {
   if (!tokens) return html;
   const tag = `<style data-parity-tokens="live">\n${tokens}\n</style>\n`;

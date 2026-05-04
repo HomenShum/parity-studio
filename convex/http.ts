@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
+import { buildDesignSystemShowcaseFiles } from './lib/designSystemShowcase';
 import { buildFigmaBridgeFiles } from './lib/figmaBridge';
 
 const http = httpRouter();
@@ -43,10 +44,29 @@ http.route({
       });
     }
     const run = await ctx.runQuery(internal.runs.getInternal, { runId });
+    await ctx.runMutation(internal.designRevisions.recordInternal, {
+      runId,
+      uiKitId: uiKit._id,
+      kind: 'export',
+      label: `Exported ${format}`,
+      summary: `Downloaded ${format} export for ${uiKit.slug}.`,
+      changedPaths: [],
+      files: uiKit.files,
+      source: 'app',
+    });
 
     if (format === 'zip') {
       const zip = new JSZip();
-      const files = uiKit.files as Record<string, string>;
+      const baseFiles = uiKit.files as Record<string, string>;
+      const showcaseFiles = buildDesignSystemShowcaseFiles(baseFiles, uiKit.slug);
+      const files = {
+        ...baseFiles,
+        ...showcaseFiles,
+        ...buildFigmaBridgeFiles({ ...baseFiles, ...showcaseFiles }, uiKit.slug, {
+          runId: String(runId),
+          activeSurface: uiKit.slug,
+        }),
+      };
       for (const [path, content] of Object.entries(files)) {
         zip.file(path, content);
       }
@@ -70,7 +90,11 @@ http.route({
 
     if (format === 'figma') {
       const zip = new JSZip();
-      const files = uiKit.files as Record<string, string>;
+      const baseFiles = uiKit.files as Record<string, string>;
+      const files = {
+        ...baseFiles,
+        ...buildDesignSystemShowcaseFiles(baseFiles, uiKit.slug),
+      };
       const bridgeFiles = buildFigmaBridgeFiles(files, uiKit.slug, {
         runId: String(runId),
         activeSurface: uiKit.slug,
