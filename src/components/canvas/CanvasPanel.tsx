@@ -106,9 +106,10 @@ export function CanvasPanel({
         style={{
           display: 'flex',
           alignItems: 'center',
+          flexWrap: 'wrap',
           gap: 'var(--space-7)',
-          height: 48,
-          padding: '0 var(--space-7)',
+          minHeight: 48,
+          padding: '6px var(--space-7)',
           borderBottom: '1px solid var(--color-border-subtle)',
         }}
       >
@@ -144,15 +145,15 @@ export function CanvasPanel({
             </button>
           );
         })}
-        <span style={{ flex: 1 }} aria-hidden />
+        <span style={{ flex: '1 1 16px', minWidth: 0 }} aria-hidden />
         {surfaces.length > 1 ? (
           <label
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 7,
-              minWidth: 168,
-              maxWidth: 230,
+              minWidth: 132,
+              maxWidth: 210,
               flexShrink: 1,
               padding: '5px 8px',
               borderRadius: 'var(--radius-md)',
