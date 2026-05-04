@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.0
+**Status**: LIVE - current web app + MCP v0.3.1
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_studio` and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to stage design/UI slug changes before production edits, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
@@ -78,6 +78,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 ### Coding-agent and MCP workflows
 
 - **Natural existing-app capture**: ask Claude Code, Codex, Cursor, or Windsurf: "Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."
+- **Design/UI slugs before production edits**: call `parity_design_mission` or ask: "Use Parity Studio to iterate the design and UI slugs first, preserve these locked components, and show me the hosted design board before touching production code."
 - **Direct route capture**: call `parity_platform_to_ui_kit` on a running localhost or hosted route with `projectRoot=.` to capture rendered HTML/CSS, include code context, redact secrets, create a canonical ZIP, and optionally import it into hosted Parity Studio.
 - **End-to-end local pipeline**: call `parity_pipeline` to generate, decompose, verify, optionally visually judge, and export a kit from a prompt or image.
 - **Decompose-only workflow**: call `parity_decompose` to turn a complete HTML artifact into canonical `ui_kit` files plus `parity.contract.json`, `performance.budget.json`, `api-wiring.plan.md`, and `qa.plan.md`.
@@ -90,7 +91,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 13 tools, a `use-parity-studio` prompt, and `parity://agent-rules`. It includes a high-level `parity_studio` wrapper for natural requests, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, and `parity_export_zip` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 14 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, and `parity_export_zip` for direct pipeline work.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
@@ -111,6 +112,7 @@ The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp
 
 Then in your coding agent:
 
+- Design-first staging: *"Use Parity Studio to iterate the design and UI slugs first for our reports flow. Preserve the existing chat thread shell and report cards. Do not edit production code until I approve the Parity Studio run."*
 - Existing app, recommended: *"Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."*
 - Existing app, explicit: *"use parity_platform_to_ui_kit on http://localhost:3000/settings with projectRoot=. and write ./settings-ui-kit.zip"*
 - New sketch/prompt: *"use parity_pipeline to turn this sketch into a ui_kit"*

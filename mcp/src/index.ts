@@ -4,6 +4,7 @@
  * to coding agents (Claude Code, Cursor, Windsurf, any MCP client).
  *
  * Tools:
+ *   - parity_design_mission design-first slug board before production edits
  *   - parity_studio      high-level natural-language app -> zip/run wrapper
  *   - parity_byok_status safe local provider-key presence check, no values
  *   - parity_pipeline    end-to-end: prompt|image -> ui_kit + ParityReport
@@ -38,6 +39,11 @@ import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
 import { ensureDashboard } from './dashboard/server.js';
 import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
+import {
+  type DesignMissionOptions,
+  designMissionPromptBlock,
+  withDesignMissionFiles,
+} from './lib/designMission.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
@@ -86,7 +92,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 
@@ -110,6 +116,15 @@ Default workflow:
 7. In the exported kit, read parity.contract.json, performance.budget.json,
    api-wiring.plan.md, qa.plan.md, AGENTS.md, and .claude/skills/*/SKILL.md
    before editing.
+
+Design-first workflow:
+
+- If the user asks to "iterate the design/UI slugs first", "make a design board",
+  "preserve locked components", or "show side-by-side before implementation",
+  prefer parity_design_mission over parity_studio.
+- Treat Parity Studio as the staging layer before production code changes.
+- Keep locked slugs/components non-negotiable until the user approves a change.
+- Return the Parity Studio run URL and ZIP path before applying any repo deltas.
 
 Approval gates:
 
@@ -475,6 +490,55 @@ const parityStudioInput = {
     .describe('Redact obvious sensitive values. Default true.'),
 };
 
+const designMissionInput = {
+  request: z
+    .string()
+    .optional()
+    .describe(
+      'Natural request, e.g. "iterate the design and UI slugs first before production implementation"',
+    ),
+  url: z
+    .string()
+    .url()
+    .optional()
+    .describe('Running app URL. If omitted, uses PARITY_APP_URL or localhost probing.'),
+  route: z.string().optional().describe('Optional route/path such as /reports.'),
+  selector: z.string().optional(),
+  projectRoot: z.string().optional().describe('Local codebase root. Defaults to ".".'),
+  targetFlow: z
+    .string()
+    .optional()
+    .describe('Specific product flow to stage, e.g. "Composer -> Chat trace -> Reports".'),
+  lockedSlugs: z
+    .array(z.string())
+    .optional()
+    .describe('Stable UI slugs that must be preserved, e.g. nb.chat.composer.'),
+  lockedComponents: z
+    .array(z.string())
+    .optional()
+    .describe('Plain-English component names that must not be replaced.'),
+  allowedChangeScope: z
+    .enum(['design-only', 'approved-deltas', 'production-ready'])
+    .optional()
+    .describe('Default design-only; production changes still require user approval.'),
+  proofMedia: z
+    .boolean()
+    .optional()
+    .describe('Whether to scaffold media proof requirements in the kit. Default false.'),
+  figmaBridge: z
+    .boolean()
+    .optional()
+    .describe('Whether to scaffold Figma bridge metadata. Default false.'),
+  outputZipPath: z
+    .string()
+    .optional()
+    .describe('Optional zip output path. Defaults to ./parity-<route>-design-mission.zip.'),
+  importToParityStudio: z.boolean().optional().describe('Default true.'),
+  decomposeModel: z.string().optional().describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
+  includeZipBase64: z.boolean().optional().describe('Return zipBase64. Default false.'),
+  redactSensitiveValues: z.boolean().optional().describe('Redact sensitive values. Default true.'),
+};
+
 async function handlePlatformToUiKit(args: {
   url: string;
   selector?: string;
@@ -490,6 +554,7 @@ async function handlePlatformToUiKit(args: {
   includeZipBase64?: boolean;
   importToParityStudio?: boolean;
   redactSensitiveValues?: boolean;
+  designMission?: DesignMissionOptions;
 }) {
   const dashboardUrl = await dashboardForTool().catch(() => null);
   const runId = makeRunId();
@@ -589,6 +654,7 @@ async function handlePlatformToUiKit(args: {
         title: capture.title,
         textSample,
         codeContextText,
+        designMission: args.designMission,
       }),
       maxTokens: 24_000,
     });
@@ -609,21 +675,27 @@ async function handlePlatformToUiKit(args: {
         modelUsed: result.modelUsed,
       });
     }
-    const filesWithContract = withOperatingContract(parsed.files, {
-      slug: parsed.slug,
-      prompt: `Captured existing platform route ${capture.finalUrl} and decomposed it into a canonical ui_kit.`,
-      sourceHtml: captureHtml,
-      sourceType: 'platform-route',
-      sourceUrl: capture.finalUrl,
-      sourceTitle: capture.title,
-      selector: args.selector,
-      viewport: capture.viewport,
-      consoleErrors: capture.consoleErrors,
-      codeContext: codeContext ?? undefined,
-      importToParityStudio: args.importToParityStudio !== false,
-      byokMode: 'local-mcp-byok',
-      createdAtIso: new Date().toISOString(),
-    });
+    const filesWithContract = withDesignMissionFiles(
+      withOperatingContract(parsed.files, {
+        slug: parsed.slug,
+        prompt: args.designMission?.request
+          ? `Design mission from ${capture.finalUrl}: ${args.designMission.request}`
+          : `Captured existing platform route ${capture.finalUrl} and decomposed it into a canonical ui_kit.`,
+        sourceHtml: captureHtml,
+        sourceType: 'platform-route',
+        sourceUrl: capture.finalUrl,
+        sourceTitle: capture.title,
+        selector: args.selector,
+        viewport: capture.viewport,
+        consoleErrors: capture.consoleErrors,
+        codeContext: codeContext ?? undefined,
+        importToParityStudio: args.importToParityStudio !== false,
+        byokMode: 'local-mcp-byok',
+        createdAtIso: new Date().toISOString(),
+      }),
+      parsed.slug,
+      args.designMission,
+    );
     eventBus.setStage(runId, 'decompose', 'done', latencyMs, decomposeModel);
     eventBus.addCost(runId, result.costUsd);
     eventBus.updateRun(runId, { uiKitFiles: filesWithContract, uiKitSlug: parsed.slug });
@@ -713,6 +785,7 @@ async function handlePlatformToUiKit(args: {
         runId: parityStudioRunId,
         runUrl: parityStudioRunUrl,
       },
+      designMission: args.designMission ?? null,
       modelUsed: result.modelUsed,
       costUsd: result.costUsd,
       latencyMs,
@@ -758,12 +831,58 @@ async function handleParityStudio(args: {
   });
 }
 
+async function handleDesignMission(args: {
+  request?: string;
+  url?: string;
+  route?: string;
+  selector?: string;
+  projectRoot?: string;
+  targetFlow?: string;
+  lockedSlugs?: string[];
+  lockedComponents?: string[];
+  allowedChangeScope?: 'design-only' | 'approved-deltas' | 'production-ready';
+  proofMedia?: boolean;
+  figmaBridge?: boolean;
+  outputZipPath?: string;
+  importToParityStudio?: boolean;
+  decomposeModel?: string;
+  includeZipBase64?: boolean;
+  redactSensitiveValues?: boolean;
+}) {
+  const projectRoot = args.projectRoot ?? '.';
+  const url = await resolveAppUrl({ url: args.url, route: args.route });
+  const outputZipPath =
+    args.outputZipPath ?? resolve(projectRoot, `parity-${slugHintFromUrl(url)}-design-mission.zip`);
+  return await handlePlatformToUiKit({
+    url,
+    selector: args.selector,
+    projectRoot,
+    outputZipPath,
+    importToParityStudio: args.importToParityStudio ?? true,
+    decomposeModel: args.decomposeModel,
+    includeZipBase64: args.includeZipBase64,
+    redactSensitiveValues: args.redactSensitiveValues,
+    designMission: {
+      request:
+        args.request ??
+        'Use Parity Studio as a design-first slug board before production implementation.',
+      targetFlow: args.targetFlow,
+      lockedSlugs: args.lockedSlugs,
+      lockedComponents: args.lockedComponents,
+      allowedChangeScope: args.allowedChangeScope ?? 'design-only',
+      proofMedia: args.proofMedia ?? false,
+      figmaBridge: args.figmaBridge ?? false,
+    },
+  });
+}
+
 function buildPlatformDecomposePrompt(args: {
   captureHtml: string;
   sourceUrl: string;
   title: string;
   textSample: string;
   codeContextText: string;
+  designMission?: DesignMissionOptions;
 }): string {
   const context =
     args.codeContextText.trim().length > 0
@@ -786,6 +905,7 @@ Also produce or support these native operating files:
 - ui_kits/<slug>/performance.budget.json for route and interaction budgets
 - ui_kits/<slug>/api-wiring.plan.md for mock/live API migration
 - ui_kits/<slug>/qa.plan.md for browser, selector, console, screenshot, and dogfood checks
+${designMissionPromptBlock(args.designMission)}
 
 The runtime will normalize these files, but richer source-specific details from
 you are useful. Never include provider API keys or secrets in generated files.
@@ -1589,6 +1709,35 @@ async function main() {
   // advisor-executor auto-fix, list recent runs, fetch any export format,
   // and rewrite a draft prompt without leaving the editor.
 
+  server.registerPrompt(
+    'use-parity-design-mission',
+    {
+      title: 'Use Parity Studio As A Design-First Slug Board',
+      description:
+        'Guide an agent to stage UI/design changes in Parity Studio before editing production code.',
+      argsSchema: {
+        request: z.string().optional(),
+        appUrl: z.string().optional(),
+        projectRoot: z.string().optional(),
+        route: z.string().optional(),
+        targetFlow: z.string().optional(),
+      },
+    },
+    async ({ request, appUrl, projectRoot, route, targetFlow }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `${request ?? 'Use Parity Studio to iterate the design and UI slugs first before production implementation.'}
+
+Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run.`,
+          },
+        },
+      ],
+    }),
+  );
+
   server.registerTool(
     'parity_enhance_prompt',
     {
@@ -1783,6 +1932,17 @@ async function main() {
         },
       ],
     }),
+  );
+
+  server.registerTool(
+    'parity_design_mission',
+    {
+      title: 'Stage design/UI slug changes in Parity Studio before production edits',
+      description:
+        'High-level design-first workflow for Claude Code, Codex, Cursor, and other agents. Use when the user says "iterate the design and UI slugs first", "preserve locked components", "show me the Parity Studio design board before implementation", or "use Parity Studio like a Figma redesign staging layer". Captures a running route, creates locked slug/component mission files, verifies, writes a ZIP, and imports to hosted Parity Studio by default. Provider keys stay local in MCP env.',
+      inputSchema: designMissionInput,
+    },
+    handleDesignMission,
   );
 
   server.registerTool(

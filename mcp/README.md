@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.0 - stdio transport - 13 tools + agent prompt/resource rules
+**Status**: v0.3.1 - stdio transport - 14 tools + agent prompts/resource rules
 
 ## Install
 
@@ -46,6 +46,30 @@ The MCP server starts a tiny local HTTP server on port `6280` (overridable via `
 - `disabled`: do not start the dashboard
 
 ## Tools
+
+### `parity_design_mission` - design/UI slugs first, production code later
+
+Use this when the user asks to iterate design/UI slugs first, preserve locked components, or show a Parity Studio design board before implementation.
+
+```text
+Use Parity Studio to iterate the design and UI slugs first for our reports flow.
+Preserve the existing chat thread shell, report cards, and public research cards.
+Do not edit production code until I approve the Parity Studio run.
+```
+
+What it does:
+
+- Captures a running route using the same local BYOK-safe path as `parity_platform_to_ui_kit`.
+- Creates a hosted Parity Studio run and canonical ZIP.
+- Adds durable design-first files:
+  - `design-slug-manifest.json`
+  - `design.plan.md`
+  - `proof.checklist.md`
+  - `browser-qa.proof.json`
+  - `media.plan.json`
+  - `figma.bridge.json`
+- Locks named slugs/components so the agent can iterate within the existing product grammar.
+- Returns the ZIP path, hosted run URL, parity report, and next approval steps.
 
 ### `parity_studio` - natural-language app to zip/run wrapper
 
@@ -134,6 +158,7 @@ These call the hosted Parity Studio deployment over HTTP. No local LLM keys are 
 The server exposes:
 
 - Prompt: `use-parity-studio`
+- Prompt: `use-parity-design-mission`
 - Resource: `parity://agent-rules`
 
 MCP clients that support prompts/resources can load these so users do not need to know exact tool names or arguments.
