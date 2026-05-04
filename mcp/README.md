@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.1 - stdio transport - 14 tools + agent prompts/resource rules
+**Status**: v0.3.2 - stdio transport - 14 tools + agent prompts/resource rules
 
 ## Install
 
@@ -63,6 +63,12 @@ What it does:
 - Creates a hosted Parity Studio run and canonical ZIP.
 - Adds durable design-first files:
   - `design-slug-manifest.json`
+  - `ui-slugs.json`
+  - `locked-components.md`
+  - `decomposed-comparison.html`
+  - `runtime-architecture.md`
+  - `runtime-architecture.html`
+  - `runtime-architecture.json`
   - `design.plan.md`
   - `proof.checklist.md`
   - `browser-qa.proof.json`

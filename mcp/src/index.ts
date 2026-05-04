@@ -517,10 +517,30 @@ const designMissionInput = {
     .array(z.string())
     .optional()
     .describe('Plain-English component names that must not be replaced.'),
+  allowedDeltas: z
+    .array(z.string())
+    .optional()
+    .describe('Additive changes allowed inside locked components.'),
+  forbiddenPatterns: z
+    .array(z.string())
+    .optional()
+    .describe('Patterns the agent must not introduce, such as a new shell or top-level nav.'),
   allowedChangeScope: z
     .enum(['design-only', 'approved-deltas', 'production-ready'])
     .optional()
     .describe('Default design-only; production changes still require user approval.'),
+  includeRuntimeArchitecture: z
+    .boolean()
+    .optional()
+    .describe('Include runtime-architecture.md/html/json. Default true.'),
+  includeLockedSlugComparison: z
+    .boolean()
+    .optional()
+    .describe('Include decomposed-comparison.html. Default true.'),
+  includeImplementationMap: z
+    .boolean()
+    .optional()
+    .describe('Include frontend/backend/database/agent implementation maps. Default true.'),
   proofMedia: z
     .boolean()
     .optional()
@@ -534,7 +554,10 @@ const designMissionInput = {
     .optional()
     .describe('Optional zip output path. Defaults to ./parity-<route>-design-mission.zip.'),
   importToParityStudio: z.boolean().optional().describe('Default true.'),
-  decomposeModel: z.string().optional().describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
+  decomposeModel: z
+    .string()
+    .optional()
+    .describe(`override decompose model (default ${DECOMPOSE_MODEL})`),
   includeZipBase64: z.boolean().optional().describe('Return zipBase64. Default false.'),
   redactSensitiveValues: z.boolean().optional().describe('Redact sensitive values. Default true.'),
 };
@@ -840,7 +863,12 @@ async function handleDesignMission(args: {
   targetFlow?: string;
   lockedSlugs?: string[];
   lockedComponents?: string[];
+  allowedDeltas?: string[];
+  forbiddenPatterns?: string[];
   allowedChangeScope?: 'design-only' | 'approved-deltas' | 'production-ready';
+  includeRuntimeArchitecture?: boolean;
+  includeLockedSlugComparison?: boolean;
+  includeImplementationMap?: boolean;
   proofMedia?: boolean;
   figmaBridge?: boolean;
   outputZipPath?: string;
@@ -869,7 +897,12 @@ async function handleDesignMission(args: {
       targetFlow: args.targetFlow,
       lockedSlugs: args.lockedSlugs,
       lockedComponents: args.lockedComponents,
+      allowedDeltas: args.allowedDeltas,
+      forbiddenPatterns: args.forbiddenPatterns,
       allowedChangeScope: args.allowedChangeScope ?? 'design-only',
+      includeRuntimeArchitecture: args.includeRuntimeArchitecture ?? true,
+      includeLockedSlugComparison: args.includeLockedSlugComparison ?? true,
+      includeImplementationMap: args.includeImplementationMap ?? true,
       proofMedia: args.proofMedia ?? false,
       figmaBridge: args.figmaBridge ?? false,
     },
@@ -1731,7 +1764,7 @@ async function main() {
             type: 'text',
             text: `${request ?? 'Use Parity Studio to iterate the design and UI slugs first before production implementation.'}
 
-Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run.`,
+Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, include locked-component comparison and runtime architecture handoff artifacts, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, runtime handoff, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run.`,
           },
         },
       ],
@@ -1939,7 +1972,7 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
     {
       title: 'Stage design/UI slug changes in Parity Studio before production edits',
       description:
-        'High-level design-first workflow for Claude Code, Codex, Cursor, and other agents. Use when the user says "iterate the design and UI slugs first", "preserve locked components", "show me the Parity Studio design board before implementation", or "use Parity Studio like a Figma redesign staging layer". Captures a running route, creates locked slug/component mission files, verifies, writes a ZIP, and imports to hosted Parity Studio by default. Provider keys stay local in MCP env.',
+        'High-level design-first workflow for Claude Code, Codex, Cursor, and other agents. Use when the user says "iterate the design and UI slugs first", "preserve locked components", "show me the Parity Studio design board before implementation", or "use Parity Studio like a Figma redesign staging layer". Captures a running route, creates locked slug/component mission files, current-vs-proposed comparison, runtime architecture handoff, verifies, writes a ZIP, and imports to hosted Parity Studio by default. Provider keys stay local in MCP env.',
       inputSchema: designMissionInput,
     },
     handleDesignMission,

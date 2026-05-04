@@ -13,11 +13,7 @@
         "scrollable message body",
         "large bottom composer"
       ],
-      "allowedDelta": [
-        "style metadata token",
-        "batch sample action",
-        "source/QA reasoning pill"
-      ]
+      "allowedDelta": ["style metadata token", "batch sample action", "source/QA reasoning pill"]
     },
     {
       "slug": "nb.chat.reasoning-pill",
@@ -28,11 +24,7 @@
         "subtle border",
         "terracotta active state"
       ],
-      "allowedDelta": [
-        "coverage memo signal",
-        "source policy selected",
-        "QA check complete"
-      ]
+      "allowedDelta": ["coverage memo signal", "source policy selected", "QA check complete"]
     },
     {
       "slug": "nb.chat.composer",
@@ -74,11 +66,7 @@
         "All/Verified/Review/Watching segmented control",
         "Grid/List toggle"
       ],
-      "allowedDelta": [
-        "Batch filter",
-        "Needs review count",
-        "Export ready count"
-      ]
+      "allowedDelta": ["Batch filter", "Needs review count", "Export ready count"]
     },
     {
       "slug": "nb.reports.activity-card",
@@ -91,12 +79,7 @@
         "source/time footer",
         "watching/watch button"
       ],
-      "allowedDelta": [
-        "QA percent",
-        "style match percent",
-        "batch status",
-        "needs review"
-      ]
+      "allowedDelta": ["QA percent", "style match percent", "batch status", "needs review"]
     },
     {
       "slug": "nb.public-memory.claim-card",
@@ -108,11 +91,7 @@
         "compact card grid",
         "claim/source/confidence pills"
       ],
-      "allowedDelta": [
-        "memo seed",
-        "rubric fit",
-        "review"
-      ]
+      "allowedDelta": ["memo seed", "rubric fit", "review"]
     }
   ],
   "forbiddenPatterns": [

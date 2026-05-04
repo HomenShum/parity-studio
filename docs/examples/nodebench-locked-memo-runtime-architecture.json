@@ -10,11 +10,7 @@
     {
       "area": "src/features/chat",
       "change": "Add batch proposal card using existing message and action-chip components",
-      "lockedSlugs": [
-        "nb.chat.thread-shell",
-        "nb.chat.reasoning-pill",
-        "nb.chat.composer"
-      ]
+      "lockedSlugs": ["nb.chat.thread-shell", "nb.chat.reasoning-pill", "nb.chat.composer"]
     },
     {
       "area": "src/features/reports",
@@ -28,9 +24,7 @@
     {
       "area": "src/features/publicResearch",
       "change": "Reuse public claim cards as memo seeds and rubric-fit indicators",
-      "lockedSlugs": [
-        "nb.public-memory.claim-card"
-      ]
+      "lockedSlugs": ["nb.public-memory.claim-card"]
     }
   ],
   "backend": [

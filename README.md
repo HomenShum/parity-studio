@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.1
+**Status**: LIVE - current web app + MCP v0.3.2
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to stage design/UI slug changes before production edits, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to stage design/UI slug changes, locked-component comparison, and runtime architecture handoff before production edits, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 

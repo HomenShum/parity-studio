@@ -14,11 +14,24 @@ describe('designMission', () => {
         allowedChangeScope: 'design-only',
         proofMedia: true,
         figmaBridge: true,
+        includeRuntimeArchitecture: true,
+        includeLockedSlugComparison: true,
+        includeImplementationMap: true,
       },
     );
 
-    expect(files['ui_kits/nodebench-web/design-slug-manifest.json']).toContain(
-      'nb.chat.composer',
+    expect(files['ui_kits/nodebench-web/design-slug-manifest.json']).toContain('nb.chat.composer');
+    expect(files['ui_kits/nodebench-web/ui-slugs.json']).toContain('locked');
+    expect(files['ui_kits/nodebench-web/locked-components.md']).toContain('Chat thread shell');
+    expect(files['ui_kits/nodebench-web/decomposed-comparison.html']).toContain(
+      'Current decomposition',
+    );
+    expect(files['ui_kits/nodebench-web/runtime-architecture.md']).toContain('Frontend Change Map');
+    expect(files['ui_kits/nodebench-web/runtime-architecture.json']).toContain(
+      'local MCP environment only',
+    );
+    expect(files['ui_kits/nodebench-web/runtime-architecture.html']).toContain(
+      'Runtime Architecture Handoff',
     );
     expect(files['ui_kits/nodebench-web/design.plan.md']).toContain('Composer -> Reports');
     expect(files['ui_kits/nodebench-web/proof.checklist.md']).toContain('MP4/GIF proof');
