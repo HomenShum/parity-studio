@@ -228,7 +228,7 @@ export function CanvasPanel({
             title="Version control: patch this saved kit or recapture the source route as a new revision"
           >
             <RefreshCw size={13} />
-            Sync source
+            Sync
           </button>
         ) : null}
         {tab === 'preview' && runId !== null ? (
@@ -255,7 +255,7 @@ export function CanvasPanel({
             }}
           >
             <SlidersHorizontal size={13} />
-            Design tokens
+            Tokens
           </button>
         ) : null}
       </div>
