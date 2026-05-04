@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.6
+**Status**: LIVE - current web app + MCP v0.3.7
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` (`npx.cmd` for Windows stdio clients) - includes `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` (`npx.cmd` for Windows stdio clients) - includes `parity_design_workflow_catalog`, `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to choose the right design workflow, stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
@@ -79,7 +79,8 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 ### Coding-agent and MCP workflows
 
 - **Natural existing-app capture**: ask Claude Code, Codex, Cursor, or Windsurf: "Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."
-- **Design/UI slugs before production edits**: call `parity_design_mission` or ask: "Use Parity Studio to iterate the design and UI slugs first, preserve these locked components, and show me the hosted design board before touching production code."
+- **Design workflow selection**: call `parity_design_workflow_catalog` when the user asks broadly and the agent needs to choose between existing-app capture, design mission, inspiration, comment repair, QA dogfood, Figma bridge, or approved production apply.
+- **Design/UI slugs before production edits**: call `parity_design_mission` or ask: "Use Parity Studio to iterate the design and UI slugs first, preserve these locked components, and show me the hosted design board before touching production code." Design missions emit `design-workflow.catalog.json`, `discovery.questions.json`, and `open-design-takeaways.md` so the agent locks source of truth, target flow, locked components, proof requirements, and BYOK/privacy assumptions before patching code.
 - **QA dogfood relay before merge**: design missions now emit `qa-dogfood.packet.json`, `qa-dogfood.plan.md`, `snapshot-snippets.json`, `gmail-magic-resend.html`, `remotion.storyboard.json`, and `easier-to-read-submission.md` so an agent can resend a readable proof packet with test links, GIF/MP4 plan, before/after snippets, workflow/persona/user-state lanes, and correction prompts.
 - **Readable submission handoff**: use the companion [`easier-to-read-submissions`](https://github.com/HomenShum/easier-to-read-submissions) skill to turn the Parity packet into a repo-local `QA_DOGFOOD/<feature-id>/` folder and per-surface changelog lane updates. See [docs/QA_DOGFOOD_RELAY.md](./docs/QA_DOGFOOD_RELAY.md).
 - **Direct route capture**: call `parity_platform_to_ui_kit` on a running localhost or hosted route with `projectRoot=.` to capture rendered HTML/CSS, include code context, redact secrets, create a canonical ZIP, and optionally import it into hosted Parity Studio.
@@ -97,7 +98,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 18 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards and QA dogfood relay packets, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 19 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes `parity_design_workflow_catalog` for Open Design-style workflow/discovery selection, a high-level `parity_design_mission` wrapper for design-first slug boards and QA dogfood relay packets, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
@@ -144,6 +145,9 @@ Local MCP BYOK keeps provider keys in the local agent/MCP env. Keys are never re
                           |   |-- performance.budget.json
                           |   |-- api-wiring.plan.md
                           |   |-- qa.plan.md
+                          |   |-- design-workflow.catalog.json
+                          |   |-- discovery.questions.json
+                          |   |-- open-design-takeaways.md
                           |   |-- design-system-showcase.html
                           |   |-- figma.bridge.json
                           |   `-- README.md

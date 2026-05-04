@@ -1,3 +1,8 @@
+import {
+  buildDesignWorkflowCatalogPayload,
+  buildDiscoveryQuestionsPayload,
+  buildOpenDesignTakeawaysDoc,
+} from './designWorkflowCatalog.js';
 import { buildFigmaBridgeFiles } from './figmaBridge.js';
 import { buildQaDogfoodRelayFiles } from './qaDogfoodRelay.js';
 
@@ -63,8 +68,10 @@ Design mission rules:
 - Preserve locked components and slugs as non-negotiable unless the user explicitly says otherwise.
 - Add memo/batch/inspiration/iteration features as layers inside existing component patterns.
 - Do not create a new top-level dashboard/nav if the captured product already has a working shell.
+- Before generating pixels or repo patches, use the discovery questions to lock source of truth, target flow, locked components, allowed scope, reference policy, proof requirements, and BYOK/privacy mode.
+- Pick the smallest workflow from design-workflow.catalog.json that proves the user request; if this is an existing app, capture/decompose before free-form generation.
 - Emit files that let a coding agent view, comment, verify, approve, and only then apply deltas to the repo.
-- Include design.plan.md, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, figma.bridge.json, qa-dogfood.packet.json, qa-dogfood.plan.md, snapshot-snippets.json, gmail-magic-resend.html, remotion.storyboard.json, and easier-to-read-submission.md in the ui_kit.
+- Include design.plan.md, design-workflow.catalog.json, discovery.questions.json, open-design-takeaways.md, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, figma.bridge.json, qa-dogfood.packet.json, qa-dogfood.plan.md, snapshot-snippets.json, gmail-magic-resend.html, remotion.storyboard.json, and easier-to-read-submission.md in the ui_kit.
 - If requested or useful for a larger product change, include decomposed-comparison.html and runtime-architecture.md/html/json with implementation maps and QA gates.`;
 }
 
@@ -116,6 +123,22 @@ export function withDesignMissionFiles(
       null,
       2,
     )}\n`,
+    [`ui_kits/${slug}/design-workflow.catalog.json`]: `${JSON.stringify(
+      buildDesignWorkflowCatalogPayload(),
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/discovery.questions.json`]: `${JSON.stringify(
+      buildDiscoveryQuestionsPayload({
+        request: mission.request,
+        targetFlow: mission.targetFlow,
+        lockedComponents,
+        allowedChangeScope: scope,
+      }),
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/open-design-takeaways.md`]: buildOpenDesignTakeawaysDoc(),
     [`ui_kits/${slug}/design.plan.md`]: buildDesignPlan({
       slug,
       mission,

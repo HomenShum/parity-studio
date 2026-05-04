@@ -5,6 +5,7 @@
  *
  * Tools:
  *   - parity_design_mission design-first slug board before production edits
+ *   - parity_design_workflow_catalog design workflow/discovery catalog
  *   - parity_agent_runtime_metadata safe agent profiles/env allowlist
  *   - parity_studio      high-level natural-language app -> zip/run wrapper
  *   - parity_byok_status safe local provider-key presence check, no values
@@ -51,6 +52,10 @@ import {
   withDesignMissionFiles,
 } from './lib/designMission.js';
 import { buildDesignSystemShowcaseFiles } from './lib/designSystemShowcase.js';
+import {
+  buildDesignWorkflowCatalogPayload,
+  buildDiscoveryQuestionsPayload,
+} from './lib/designWorkflowCatalog.js';
 import {
   buildFigmaBridgeFiles,
   filesFromFigmaPayload,
@@ -1978,6 +1983,43 @@ async function main() {
         {
           type: 'text',
           text: JSON.stringify(buildAgentRuntimeMetadata(models ?? []), null, 2),
+        },
+      ],
+    }),
+  );
+
+  server.registerTool(
+    'parity_design_workflow_catalog',
+    {
+      title: 'Get Parity Studio design workflow catalog and discovery questions',
+      description:
+        'Returns the native workflow catalog and preflight discovery-question contract adapted from Open Design lessons. Use this before design missions when the user asks broadly, does not know which workflow to use, or needs the agent to choose between existing-app capture, inspiration, comment repair, Figma bridge, QA dogfood, and approved production apply.',
+      inputSchema: {
+        request: z.string().optional(),
+        targetFlow: z.string().optional(),
+        lockedComponents: z.array(z.string()).optional(),
+        allowedChangeScope: z
+          .enum(['design-only', 'approved-deltas', 'production-ready'])
+          .optional(),
+      },
+    },
+    async ({ request, targetFlow, lockedComponents, allowedChangeScope }) => ({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              catalog: buildDesignWorkflowCatalogPayload(),
+              discovery: buildDiscoveryQuestionsPayload({
+                request,
+                targetFlow,
+                lockedComponents,
+                allowedChangeScope,
+              }),
+            },
+            null,
+            2,
+          ),
         },
       ],
     }),

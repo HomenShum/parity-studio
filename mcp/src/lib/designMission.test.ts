@@ -24,6 +24,15 @@ describe('designMission', () => {
     );
 
     expect(files['ui_kits/nodebench-web/design-slug-manifest.json']).toContain('nb.chat.composer');
+    expect(files['ui_kits/nodebench-web/design-workflow.catalog.json']).toContain(
+      'existing-app-to-ui-kit',
+    );
+    expect(files['ui_kits/nodebench-web/discovery.questions.json']).toContain(
+      'Composer -> Reports',
+    );
+    expect(files['ui_kits/nodebench-web/open-design-takeaways.md']).toContain(
+      'What Parity Studio Deliberately Does Differently',
+    );
     expect(files['ui_kits/nodebench-web/ui-slugs.json']).toContain('locked');
     expect(files['ui_kits/nodebench-web/locked-components.md']).toContain('Chat thread shell');
     expect(files['ui_kits/nodebench-web/decomposed-comparison.html']).toContain(
@@ -77,5 +86,6 @@ describe('designMission', () => {
     expect(block).toContain('DESIGN-FIRST PARITY MISSION');
     expect(block).toContain('Latest Public Research cards');
     expect(block).toContain('approved-deltas');
+    expect(block).toContain('design-workflow.catalog.json');
   });
 });

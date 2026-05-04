@@ -34,6 +34,9 @@ A canonical zip looks like this:
     |   |-- performance.budget.json
     |   |-- api-wiring.plan.md
     |   |-- qa.plan.md
+    |   |-- design-workflow.catalog.json
+    |   |-- discovery.questions.json
+    |   |-- open-design-takeaways.md
     |   |-- design-system-showcase.html
     |   |-- figma.bridge.json    # round-trip Figma bridge metadata
     |   |-- README.md            # per-kit handoff instructions
@@ -60,6 +63,9 @@ A canonical zip looks like this:
 | `ui_kits/<slug>/performance.budget.json` | optional on import, **emitted** on export | Backfilled if missing | Route/interaction budgets derived from the product performance principles |
 | `ui_kits/<slug>/api-wiring.plan.md` | optional on import, **emitted** on export | Backfilled if missing | Plan-first live API wiring checklist and side-effect policy |
 | `ui_kits/<slug>/qa.plan.md` | optional on import, **emitted** on export | Backfilled if missing | Browser routes, selectors, screenshots, console budget, overflow, and dogfood checks |
+| `ui_kits/<slug>/design-workflow.catalog.json` | optional, **emitted by MCP design missions** | Preserved | Agent-readable workflow catalog for capture, design mission, inspiration, comment repair, QA dogfood, Figma bridge, and approved apply |
+| `ui_kits/<slug>/discovery.questions.json` | optional, **emitted by MCP design missions** | Preserved | Open Design-style preflight answers/questions that block production apply when source of truth, target flow, locked components, or scope are missing |
+| `ui_kits/<slug>/open-design-takeaways.md` | optional, **emitted by MCP design missions** | Preserved | Human-readable distinction between Open Design's broad artifact generation and Parity Studio's existing-product decomposition/verification wedge |
 | `ui_kits/<slug>/design-system-showcase.html` | optional, **emitted** on export | Preserved | Same showcase colocated with the active slug for design-system-first handoff |
 | `ui_kits/<slug>/figma.bridge.json` | optional on import, **emitted** on export | A dropped JSON or ZIP bridge becomes an editable `ui_kits/<slug>/` run | Round-trip bridge payload for Figma plugin import/export |
 | `figma/manifest.json` | optional on import, **emitted** on export and Figma export | Used when a dropped ZIP only contains the Figma bridge bundle | Figma development plugin manifest |

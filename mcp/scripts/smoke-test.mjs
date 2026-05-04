@@ -42,6 +42,7 @@ async function main() {
   }
 
   const required = [
+    'parity_design_workflow_catalog',
     'parity_design_mission',
     'parity_agent_runtime_metadata',
     'parity_apply_approved_design',

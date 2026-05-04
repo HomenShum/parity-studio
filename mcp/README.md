@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.6 - stdio transport - 18 tools + agent prompts/resource rules
+**Status**: v0.3.7 - stdio transport - 19 tools + agent prompts/resource rules
 
 ## Install
 
@@ -37,6 +37,8 @@ Local MCP BYOK keeps provider keys in the local MCP process environment. The ser
 
 Use `parity_agent_runtime_metadata` before child-agent work to get the Claude Code, Codex, Cursor, Windsurf, and generic MCP capability profiles plus OS-specific stdio launch commands and a model-specific provider env allowlist. This prevents agents from forwarding unrelated provider keys to subprocesses and avoids Windows `npx` path failures.
 
+Use `parity_design_workflow_catalog` before a broad design request when the user has not specified the workflow. It returns the native workflow catalog and discovery questions adapted from Open Design lessons, so the agent can choose existing-app capture, design-first slug board, inspiration, comment repair, QA dogfood, Figma bridge, or approved production apply before it runs a full tool.
+
 ## Local Dashboard
 
 The MCP server starts a tiny local HTTP server on port `6280` (overridable via `PARITY_DASHBOARD_PORT`) and opens it in your browser the first time your agent calls a parity tool. You can watch the pipeline run live: source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.
@@ -64,6 +66,9 @@ What it does:
 - Captures a running route using the same local BYOK-safe path as `parity_platform_to_ui_kit`.
 - Creates a hosted Parity Studio run and canonical ZIP.
 - Adds durable design-first files:
+  - `design-workflow.catalog.json`
+  - `discovery.questions.json`
+  - `open-design-takeaways.md`
   - `design-slug-manifest.json`
   - `ui-slugs.json`
   - `locked-components.md`
@@ -86,6 +91,18 @@ What it does:
 - Locks named slugs/components so the agent can iterate within the existing product grammar.
 - Packages the same proof into a QA relay format that can be resent by Gmail, rendered as Remotion storyboards, and copied into the `easier-to-read-submissions` protocol.
 - Returns the ZIP path, hosted run URL, parity report, and next approval steps.
+
+### `parity_design_workflow_catalog` - choose the right design workflow first
+
+Use this before `parity_design_mission` when the user asks broadly, e.g. "use Parity Studio to redesign this", "take inspiration", or "make the agent handle the whole design proof first."
+
+It returns:
+
+- Workflow catalog: existing-app capture, design-first slug board, inspiration apply, comment-scoped repair, QA dogfood relay, Figma bridge, and approved-delta apply.
+- Discovery questions: source of truth, target flow, locked components, allowed scope, reference policy, proof requirements, BYOK/privacy mode.
+- Production-apply blocker status: whether required answers are still missing before any repo write.
+
+This keeps Open Design's strong preflight discipline while preserving Parity Studio's narrower wedge: decompose existing product surfaces, verify parity, prove changes, then apply approved deltas.
 
 ### `parity_studio` - natural-language app to zip/run wrapper
 

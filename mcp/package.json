@@ -1,6 +1,6 @@
 {
   "name": "parity-studio-mcp",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": false,
   "type": "module",
   "description": "MCP server for Parity Studio. Lets coding agents capture existing app routes, decompose them into ui_kit/ bundles, and import them for iteration.",
