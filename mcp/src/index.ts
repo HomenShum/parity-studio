@@ -104,7 +104,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.3.4';
+const VERSION = '0.3.6';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 
@@ -565,6 +565,25 @@ const designMissionInput = {
     .boolean()
     .optional()
     .describe('Whether to scaffold Figma bridge metadata. Default false.'),
+  qaDogfoodRelay: z
+    .boolean()
+    .optional()
+    .describe(
+      'Include QA dogfood relay packet files for links, GIF/MP4 plan, before/after snippets, Gmail resend, and easier-to-read submissions. Default true.',
+    ),
+  qaFeatureId: z
+    .string()
+    .optional()
+    .describe('Stable feature id for the QA packet, e.g. nodebench.chat.declutter.v1.'),
+  qaPersonas: z.array(z.string()).optional().describe('Personas to cover in the QA packet lanes.'),
+  qaUserStates: z
+    .array(z.string())
+    .optional()
+    .describe('User states to cover in the QA packet lanes.'),
+  qaWorkflowLanes: z
+    .array(z.string())
+    .optional()
+    .describe('Workflow lanes to cover in the QA packet, e.g. new run, comment edit, export.'),
   outputZipPath: z
     .string()
     .optional()
@@ -891,6 +910,11 @@ async function handleDesignMission(args: {
   includeImplementationMap?: boolean;
   proofMedia?: boolean;
   figmaBridge?: boolean;
+  qaDogfoodRelay?: boolean;
+  qaFeatureId?: string;
+  qaPersonas?: string[];
+  qaUserStates?: string[];
+  qaWorkflowLanes?: string[];
   outputZipPath?: string;
   importToParityStudio?: boolean;
   decomposeModel?: string;
@@ -925,6 +949,11 @@ async function handleDesignMission(args: {
       includeImplementationMap: args.includeImplementationMap ?? true,
       proofMedia: args.proofMedia ?? false,
       figmaBridge: args.figmaBridge ?? false,
+      qaDogfoodRelay: args.qaDogfoodRelay ?? true,
+      qaFeatureId: args.qaFeatureId,
+      qaPersonas: args.qaPersonas,
+      qaUserStates: args.qaUserStates,
+      qaWorkflowLanes: args.qaWorkflowLanes,
     },
   });
 }
@@ -1976,7 +2005,7 @@ async function main() {
             type: 'text',
             text: `${request ?? 'Use Parity Studio to iterate the design and UI slugs first before production implementation.'}
 
-Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, include locked-component comparison and runtime architecture handoff artifacts, keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, runtime handoff, parity score, and next approval steps. Do not edit production app code until the user approves the Parity Studio run; after approval, dry-run parity_apply_approved_design before writing repo files.`,
+Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PARITY_APP_URL or localhost probe'}, route=${route ?? '(none)'}, projectRoot=${projectRoot ?? '.'}, targetFlow=${targetFlow ?? '(infer from route)'}. Preserve existing components as locked slugs, include locked-component comparison, runtime architecture handoff artifacts, QA dogfood relay packet, Gmail resend HTML, Remotion storyboard, and easier-to-read submission stub. Keep provider keys local, import the generated design board into Parity Studio, and return the zip path, hosted run URL, slug manifest, runtime handoff, parity score, QA packet paths, and next approval steps. Do not edit production app code until the user approves the Parity Studio run; after approval, dry-run parity_apply_approved_design before writing repo files.`,
           },
         },
       ],

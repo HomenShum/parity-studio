@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.5 - stdio transport - 18 tools + agent prompts/resource rules
+**Status**: v0.3.6 - stdio transport - 18 tools + agent prompts/resource rules
 
 ## Install
 
@@ -76,8 +76,15 @@ What it does:
   - `browser-qa.proof.json`
   - `media.plan.json`
   - `figma.bridge.json`
+  - `qa-dogfood.packet.json`
+  - `qa-dogfood.plan.md`
+  - `snapshot-snippets.json`
+  - `gmail-magic-resend.html`
+  - `remotion.storyboard.json`
+  - `easier-to-read-submission.md`
   - `figma/manifest.json`, `figma/code.js`, `figma/ui.html` when Figma bridge export is requested
 - Locks named slugs/components so the agent can iterate within the existing product grammar.
+- Packages the same proof into a QA relay format that can be resent by Gmail, rendered as Remotion storyboards, and copied into the `easier-to-read-submissions` protocol.
 - Returns the ZIP path, hosted run URL, parity report, and next approval steps.
 
 ### `parity_studio` - natural-language app to zip/run wrapper

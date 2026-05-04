@@ -1,4 +1,5 @@
 import { buildFigmaBridgeFiles } from './figmaBridge.js';
+import { buildQaDogfoodRelayFiles } from './qaDogfoodRelay.js';
 
 export interface DesignMissionOptions {
   request?: string;
@@ -13,6 +14,11 @@ export interface DesignMissionOptions {
   includeImplementationMap?: boolean;
   proofMedia?: boolean;
   figmaBridge?: boolean;
+  qaDogfoodRelay?: boolean;
+  qaFeatureId?: string;
+  qaPersonas?: string[];
+  qaUserStates?: string[];
+  qaWorkflowLanes?: string[];
 }
 
 const DEFAULT_ALLOWED_DELTAS = [
@@ -58,7 +64,7 @@ Design mission rules:
 - Add memo/batch/inspiration/iteration features as layers inside existing component patterns.
 - Do not create a new top-level dashboard/nav if the captured product already has a working shell.
 - Emit files that let a coding agent view, comment, verify, approve, and only then apply deltas to the repo.
-- Include design.plan.md, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, and figma.bridge.json in the ui_kit.
+- Include design.plan.md, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, figma.bridge.json, qa-dogfood.packet.json, qa-dogfood.plan.md, snapshot-snippets.json, gmail-magic-resend.html, remotion.storyboard.json, and easier-to-read-submission.md in the ui_kit.
 - If requested or useful for a larger product change, include decomposed-comparison.html and runtime-architecture.md/html/json with implementation maps and QA gates.`;
 }
 
@@ -85,6 +91,7 @@ export function withDesignMissionFiles(
   const includeRuntimeArchitecture = mission.includeRuntimeArchitecture !== false;
   const includeLockedSlugComparison = mission.includeLockedSlugComparison !== false;
   const includeImplementationMap = mission.includeImplementationMap !== false;
+  const includeQaDogfoodRelay = mission.qaDogfoodRelay !== false;
   const baseFiles = {
     ...files,
     [`ui_kits/${slug}/design-slug-manifest.json`]: `${JSON.stringify(
@@ -139,6 +146,7 @@ export function withDesignMissionFiles(
       includeRuntimeArchitecture,
       includeLockedSlugComparison,
       includeImplementationMap,
+      includeQaDogfoodRelay,
     }),
     [`ui_kits/${slug}/browser-qa.proof.json`]: `${JSON.stringify(
       {
@@ -215,12 +223,16 @@ export function withDesignMissionFiles(
       })
     : {};
   const figmaFiles = mission.figmaBridge === true ? buildFigmaBridgeFiles(baseFiles, slug) : {};
+  const qaDogfoodFiles = includeQaDogfoodRelay
+    ? buildQaDogfoodRelayFiles({ slug, mission, lockedSlugEntries })
+    : {};
 
   return {
     ...baseFiles,
     ...comparisonFiles,
     ...runtimeFiles,
     ...figmaFiles,
+    ...qaDogfoodFiles,
   };
 }
 
@@ -274,11 +286,13 @@ function buildProofChecklist({
   includeRuntimeArchitecture,
   includeLockedSlugComparison,
   includeImplementationMap,
+  includeQaDogfoodRelay,
 }: {
   proofMedia: boolean;
   includeRuntimeArchitecture: boolean;
   includeLockedSlugComparison: boolean;
   includeImplementationMap: boolean;
+  includeQaDogfoodRelay: boolean;
 }): string {
   return `# Proof Checklist
 
@@ -296,13 +310,14 @@ ${includeImplementationMap ? '- [ ] Frontend/backend/database/agent implementati
 - [ ] Parity Coach reviewed for end-user impact.
 - [ ] Browser QA screenshots captured for desktop/tablet/phone.
 - [ ] Console errors and overflow issues reviewed.
+${includeQaDogfoodRelay ? '- [ ] QA dogfood packet includes links, GIF/MP4 plan, before/after snippets, lanes, and correction prompts.' : '- [ ] QA dogfood relay intentionally skipped.'}
 - [ ] Export ZIP generated for approved kit.
 ${proofMedia ? '- [ ] MP4/GIF proof recorded and video-verified.' : '- [ ] Proof media intentionally skipped for this mission.'}
 - [ ] Production repo changes are blocked until user approves the design board.
 `;
 }
 
-interface LockedSlugEntry {
+export interface LockedSlugEntry {
   slug: string;
   status: 'locked';
   preserve: string[];

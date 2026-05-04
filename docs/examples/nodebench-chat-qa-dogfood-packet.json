@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "parity.qa-dogfood-relay",
+  "featureId": "nodebench.chat.declutter.v1",
+  "title": "NodeBench chat declutter and memo-layer proof",
+  "surface": "nodebench-web",
+  "targetFlow": "Composer -> Chat trace -> Reports review -> Public memory reuse",
+  "source": {
+    "parityRunUrl": "",
+    "previewUrl": "",
+    "branch": "",
+    "commitSha": ""
+  },
+  "lanes": {
+    "workflows": [
+      {
+        "id": "new-user-chat",
+        "label": "New user asks first research question",
+        "testUrl": "",
+        "status": "pending"
+      },
+      {
+        "id": "returning-user-event",
+        "label": "Returning user continues an event-pinned chat",
+        "testUrl": "",
+        "status": "pending"
+      },
+      {
+        "id": "comment-edit-correction",
+        "label": "Reviewer comments a UI issue and agent fixes it",
+        "testUrl": "",
+        "status": "pending"
+      },
+      {
+        "id": "report-review",
+        "label": "User opens the saved report review queue",
+        "testUrl": "",
+        "status": "pending"
+      }
+    ],
+    "personas": ["first-time non-technical user", "startup banker", "coding agent maintainer"],
+    "userStates": [
+      "empty state",
+      "returning user",
+      "batch sample suggested",
+      "needs fix",
+      "approved"
+    ]
+  },
+  "requiredArtifacts": {
+    "testLink": "",
+    "gif": "",
+    "mp4": "",
+    "beforeScreenshots": [],
+    "afterScreenshots": [],
+    "visualDiffs": [],
+    "sideBySideReviewUrl": "",
+    "remotionVideo": "",
+    "gmailPacketHtml": "ui_kits/nodebench-web/gmail-magic-resend.html"
+  },
+  "snippets": [
+    {
+      "componentSlug": "nb.chat.thread-shell",
+      "expectedChange": "Reduce visible metadata while preserving the current chat rhythm.",
+      "before": "",
+      "after": "",
+      "diff": "",
+      "verdict": "pending",
+      "correctionPrompt": "Fix only the chat thread shell. Keep the existing header, saved-report row, message rhythm, reasoning pills, action chips, and large composer recognizable."
+    },
+    {
+      "componentSlug": "nb.reports.activity-card",
+      "expectedChange": "Show QA/source/status badges without replacing the existing visual report cards.",
+      "before": "",
+      "after": "",
+      "diff": "",
+      "verdict": "pending",
+      "correctionPrompt": "Layer memo/batch metadata onto the existing report card grid. Do not create a new dashboard shell."
+    }
+  ]
+}

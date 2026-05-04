@@ -14,6 +14,9 @@ describe('designMission', () => {
         allowedChangeScope: 'design-only',
         proofMedia: true,
         figmaBridge: true,
+        qaDogfoodRelay: true,
+        qaFeatureId: 'nodebench.chat.declutter.v1',
+        qaWorkflowLanes: ['new run', 'comment edit', 'export handoff'],
         includeRuntimeArchitecture: true,
         includeLockedSlugComparison: true,
         includeImplementationMap: true,
@@ -35,9 +38,35 @@ describe('designMission', () => {
     );
     expect(files['ui_kits/nodebench-web/design.plan.md']).toContain('Composer -> Reports');
     expect(files['ui_kits/nodebench-web/proof.checklist.md']).toContain('MP4/GIF proof');
+    expect(files['ui_kits/nodebench-web/proof.checklist.md']).toContain('QA dogfood packet');
+    expect(files['ui_kits/nodebench-web/qa-dogfood.packet.json']).toContain(
+      'nodebench.chat.declutter.v1',
+    );
+    expect(files['ui_kits/nodebench-web/snapshot-snippets.json']).toContain('nb.chat.composer');
+    expect(files['ui_kits/nodebench-web/gmail-magic-resend.html']).toContain('Magic resend');
+    expect(files['ui_kits/nodebench-web/remotion.storyboard.json']).toContain('comment edit');
+    expect(files['ui_kits/nodebench-web/easier-to-read-submission.md']).toContain(
+      'Workflow lanes covered',
+    );
     expect(files['ui_kits/nodebench-web/figma.bridge.json']).toContain('figma-bridge');
     expect(files['figma/manifest.json']).toContain('Parity Studio Import');
     expect(files['figma/code.js']).toContain('figma.createPage');
+  });
+
+  it('can omit QA dogfood relay files for minimal missions', () => {
+    const files = withDesignMissionFiles(
+      { 'ui_kits/minimal/index.html': '<main>Minimal</main>' },
+      'minimal',
+      {
+        request: 'minimal mission',
+        qaDogfoodRelay: false,
+      },
+    );
+
+    expect(files['ui_kits/minimal/qa-dogfood.packet.json']).toBeUndefined();
+    expect(files['ui_kits/minimal/proof.checklist.md']).toContain(
+      'QA dogfood relay intentionally skipped',
+    );
   });
 
   it('renders prompt constraints for locked component workflows', () => {

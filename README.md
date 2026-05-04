@@ -49,7 +49,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.5
+**Status**: LIVE - current web app + MCP v0.3.6
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
@@ -80,6 +80,8 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 - **Natural existing-app capture**: ask Claude Code, Codex, Cursor, or Windsurf: "Use Parity Studio with our app, get me the zip export, upload it to Parity Studio, and use my own env keys."
 - **Design/UI slugs before production edits**: call `parity_design_mission` or ask: "Use Parity Studio to iterate the design and UI slugs first, preserve these locked components, and show me the hosted design board before touching production code."
+- **QA dogfood relay before merge**: design missions now emit `qa-dogfood.packet.json`, `qa-dogfood.plan.md`, `snapshot-snippets.json`, `gmail-magic-resend.html`, `remotion.storyboard.json`, and `easier-to-read-submission.md` so an agent can resend a readable proof packet with test links, GIF/MP4 plan, before/after snippets, workflow/persona/user-state lanes, and correction prompts.
+- **Readable submission handoff**: use the companion [`easier-to-read-submissions`](https://github.com/HomenShum/easier-to-read-submissions) skill to turn the Parity packet into a repo-local `QA_DOGFOOD/<feature-id>/` folder and per-surface changelog lane updates. See [docs/QA_DOGFOOD_RELAY.md](./docs/QA_DOGFOOD_RELAY.md).
 - **Direct route capture**: call `parity_platform_to_ui_kit` on a running localhost or hosted route with `projectRoot=.` to capture rendered HTML/CSS, include code context, redact secrets, create a canonical ZIP, and optionally import it into hosted Parity Studio.
 - **End-to-end local pipeline**: call `parity_pipeline` to generate, decompose, verify, optionally visually judge, and export a kit from a prompt or image.
 - **Decompose-only workflow**: call `parity_decompose` to turn a complete HTML artifact into canonical `ui_kit` files plus `parity.contract.json`, `performance.budget.json`, `api-wiring.plan.md`, and `qa.plan.md`.
@@ -95,7 +97,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 18 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 18 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards and QA dogfood relay packets, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
