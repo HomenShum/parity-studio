@@ -151,6 +151,7 @@ const en: TranslationTree = {
     collapse: 'Collapse agent stream',
     launchSubtitle: 'Start, import, switch history, and chat in one place.',
     chatHistory: 'Chat history',
+    closeStartRun: 'Close start new run dialog',
     startRunTitle: 'Start with an idea, image, or ui_kit.',
     startRunCopy:
       'Choose a model route, describe what you want, attach a source image, or import a canonical ui_kit ZIP. The agent stream will stay attached to the new run.',
@@ -518,6 +519,7 @@ const zhCN: TranslationTree = {
     collapse: '折叠 Agent 流',
     launchSubtitle: '在同一处开始、导入、切换历史并继续聊天。',
     chatHistory: '聊天历史',
+    closeStartRun: '关闭新运行对话框',
     startRunTitle: '从想法、图片或 ui_kit 开始。',
     startRunCopy:
       '选择模型路由，描述你想要的界面，附加来源图片，或导入标准 ui_kit ZIP。Agent 流会自动绑定到新运行。',

@@ -115,6 +115,7 @@ export function SourceSyncModal({ runId, open, onClose, onOpenFile }: SourceSync
       role="dialog"
       aria-modal="true"
       aria-label="Sync from latest source"
+      data-testid="source-sync-modal"
       style={{
         position: 'fixed',
         inset: 0,
@@ -179,7 +180,13 @@ export function SourceSyncModal({ runId, open, onClose, onOpenFile }: SourceSync
               run revision.
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" style={iconButtonStyle}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close source sync dialog"
+            data-testid="source-sync-close"
+            style={iconButtonStyle}
+          >
             <X size={15} />
           </button>
         </div>
@@ -297,6 +304,7 @@ export function SourceSyncModal({ runId, open, onClose, onOpenFile }: SourceSync
             <button
               type="button"
               onClick={() => void onCopyMcpSetup()}
+              data-testid="copy-mcp-setup-button"
               style={{
                 ...secondaryButtonStyle,
                 minWidth: 164,

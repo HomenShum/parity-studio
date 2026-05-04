@@ -180,6 +180,7 @@ function PanelShell({
         minHeight: 0,
       }}
       aria-label="Tweak panel"
+      data-testid="design-tokens-panel"
     >
       <div
         style={{
@@ -201,7 +202,13 @@ function PanelShell({
           <SlidersHorizontal size={12} />
           Design tokens
         </span>
-        <button type="button" onClick={onClose} aria-label="Close tweak panel" style={iconBtnStyle}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close design token editor"
+          data-testid="design-tokens-close"
+          style={iconBtnStyle}
+        >
           <X size={12} />
         </button>
       </div>

@@ -121,6 +121,7 @@ export function CanvasPanel({
               type="button"
               role="tab"
               aria-selected={active ? 'true' : 'false'}
+              data-testid={`canvas-tab-${tabId}`}
               onClick={() => setTab(tabId)}
               style={{
                 display: 'inline-flex',
@@ -207,7 +208,8 @@ export function CanvasPanel({
           <button
             type="button"
             onClick={() => setSourceSyncOpen(true)}
-            aria-label="Open version sync and source recapture"
+            aria-label="Open source sync and version control"
+            data-testid="source-sync-button"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -226,7 +228,7 @@ export function CanvasPanel({
             title="Version control: patch this saved kit or recapture the source route as a new revision"
           >
             <RefreshCw size={13} />
-            Sync
+            Sync source
           </button>
         ) : null}
         {tab === 'preview' && runId !== null ? (
@@ -234,7 +236,8 @@ export function CanvasPanel({
             type="button"
             onClick={() => setTweaksOpen((v) => !v)}
             aria-pressed={tweaksOpen}
-            aria-label="Toggle design token tweaks panel"
+            aria-label="Open design token editor"
+            data-testid="design-tokens-button"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -252,7 +255,7 @@ export function CanvasPanel({
             }}
           >
             <SlidersHorizontal size={13} />
-            Tokens
+            Design tokens
           </button>
         ) : null}
       </div>

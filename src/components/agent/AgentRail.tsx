@@ -338,6 +338,7 @@ function LaunchModal({
       role="dialog"
       aria-modal="true"
       aria-label={t('history.startNewRun')}
+      data-testid="start-run-modal"
       style={{
         position: 'fixed',
         inset: 0,
@@ -408,7 +409,13 @@ function LaunchModal({
               {t('agent.startRunCopy')}
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" style={iconButtonStyle}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('agent.closeStartRun')}
+            data-testid="start-run-close"
+            style={iconButtonStyle}
+          >
             <X size={14} />
           </button>
         </div>
