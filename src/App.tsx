@@ -40,6 +40,7 @@ export default function App() {
   const [device, setDevice] = useState<Device>('desktop');
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [parityCollapsed, setParityCollapsed] = useState(false);
+  const [missingRunId, setMissingRunId] = useState<string | null>(null);
   const run = useQuery(api.runs.get, currentRunId ? { runId: currentRunId } : 'skip');
   const parity = useQuery(
     api.parityReports.getLatest,
@@ -66,6 +67,21 @@ export default function App() {
     setCanvasTab(currentRunId === null ? 'files' : 'preview');
     setActiveSurfaceSlug(null);
   }, [currentRunId]);
+
+  useEffect(() => {
+    if (currentRunId && run === null) {
+      setMissingRunId(String(currentRunId));
+      setCurrentRunId(null);
+      setSelectedFile(null);
+      setCanvasTab('files');
+      setCommentModeActive(false);
+    }
+  }, [currentRunId, run]);
+
+  function activateRun(runId: Id<'runs'>) {
+    setMissingRunId(null);
+    setCurrentRunId(runId);
+  }
 
   const breadcrumbTitle = currentRunId ? t('app.defaultRunTitle') : t('app.newDesignSession');
 
@@ -152,11 +168,12 @@ export default function App() {
       <div style={{ gridColumn: 1, gridRow: 3, minHeight: 0, minWidth: 0, display: 'flex' }}>
         <AgentRail
           currentRunId={currentRunId}
-          onSelectRun={setCurrentRunId}
-          onRunStarted={setCurrentRunId}
+          onSelectRun={activateRun}
+          onRunStarted={activateRun}
           clientSessionId={clientSessionId}
           onResetSession={() => {
             setCurrentRunId(null);
+            setMissingRunId(null);
             setClientSessionId(resetSessionId());
           }}
           collapsed={agentCollapsed}
@@ -176,6 +193,8 @@ export default function App() {
           commentModeActive={commentModeActive}
           activeSurfaceSlug={activeSurfaceSlug}
           onSurfaceChange={setActiveSurfaceSlug}
+          missingRunId={missingRunId}
+          onDismissMissingRun={() => setMissingRunId(null)}
         />
       </div>
 

@@ -25,6 +25,8 @@ interface CanvasPanelProps {
   commentModeActive: boolean;
   activeSurfaceSlug: string | null;
   onSurfaceChange: (slug: string | null) => void;
+  missingRunId?: string | null;
+  onDismissMissingRun?: () => void;
 }
 
 export type CanvasTab = 'files' | 'preview' | 'inspiration';
@@ -46,6 +48,8 @@ export function CanvasPanel({
   commentModeActive,
   activeSurfaceSlug,
   onSurfaceChange,
+  missingRunId = null,
+  onDismissMissingRun,
 }: CanvasPanelProps) {
   const t = useT();
   const [internalTab, setInternalTab] = useState<CanvasTab>('files');
@@ -269,7 +273,10 @@ export function CanvasPanel({
             }}
           >
             {runId === null ? (
-              <LandingGuidance />
+              <LandingGuidance
+                missingRunId={missingRunId}
+                {...(onDismissMissingRun ? { onDismissMissingRun } : {})}
+              />
             ) : (
               <FilesView
                 runId={runId}

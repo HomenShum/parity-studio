@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowDown,
   FileArchive,
   MessageSquare,
@@ -56,7 +57,13 @@ const STEPS: Array<{ n: string; Icon: LucideIcon; title: string; body: string }>
  * points at the surface that fulfills it (composer, file tree, top-right
  * cluster, etc.) so the layout is self-documenting.
  */
-export function LandingGuidance() {
+export function LandingGuidance({
+  missingRunId = null,
+  onDismissMissingRun,
+}: {
+  missingRunId?: string | null;
+  onDismissMissingRun?: () => void;
+}) {
   return (
     <div
       style={{
@@ -80,6 +87,77 @@ export function LandingGuidance() {
           gap: 'var(--space-7)',
         }}
       >
+        {missingRunId ? (
+          <div
+            style={{
+              width: '100%',
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr auto',
+              gap: 'var(--space-3)',
+              alignItems: 'start',
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid color-mix(in srgb, var(--color-warning) 55%, var(--color-border))',
+              background:
+                'linear-gradient(135deg, color-mix(in srgb, var(--color-warning) 12%, var(--color-surface)), var(--color-surface))',
+              boxShadow: 'var(--shadow-soft)',
+            }}
+          >
+            <span
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--radius-sm)',
+                display: 'inline-grid',
+                placeItems: 'center',
+                color: 'var(--color-warning)',
+                background: 'color-mix(in srgb, var(--color-warning) 14%, white)',
+              }}
+              aria-hidden
+            >
+              <AlertTriangle size={16} />
+            </span>
+            <div style={{ display: 'grid', gap: 5 }}>
+              <strong
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 'var(--font-size-body)',
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                This run does not exist in this environment
+              </strong>
+              <span
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 'var(--font-size-body-sm)',
+                  color: 'var(--color-text-secondary)',
+                  lineHeight: 'var(--leading-snug)',
+                }}
+              >
+                The URL pointed to <code>{missingRunId}</code>, but this deployment could not find
+                that run. Import the ZIP again, start a new run, or use a run link from this same
+                hosted environment.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onDismissMissingRun}
+              style={{
+                border: '1px solid var(--color-border-subtle)',
+                background: 'var(--color-surface)',
+                borderRadius: 'var(--radius-pill)',
+                padding: '6px 10px',
+                color: 'var(--color-text-secondary)',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 'var(--font-size-body-sm)',
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         <div
           style={{
             textAlign: 'center',
