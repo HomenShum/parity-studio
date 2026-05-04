@@ -103,8 +103,12 @@ function rewriteRelativeImages(
 
 function resolveRelativePath(raw: string, baseDir: string): string | null {
   const withoutQuery = raw.split('?')[0]?.split('#')[0] ?? raw;
-  const value = withoutQuery.trim();
-  if (!value || EXTERNAL_URL_RE.test(value) || value.startsWith('/')) return null;
+  let value = withoutQuery.trim();
+  if (!value || EXTERNAL_URL_RE.test(value) || value.startsWith('//')) return null;
+  // Imported app captures often preserve root-relative asset URLs such as
+  // `/nodebench.css?v=12`. Inside an iframe srcDoc those would incorrectly
+  // resolve against parity-studio.vercel.app, so treat them as surface-local.
+  if (value.startsWith('/')) value = value.replace(/^\/+/, '');
   const parts = `${baseDir}/${value}`.split('/');
   const out: string[] = [];
   for (const part of parts) {

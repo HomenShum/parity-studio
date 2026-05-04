@@ -36,6 +36,20 @@ describe('previewSrcDoc', () => {
     expect(out).toContain('data-parity-tokens="live"');
   });
 
+  it('inlines root-relative assets against the active surface', () => {
+    const out = buildSurfacePreviewHtml({
+      html: '<!doctype html><html><head><link rel="stylesheet" href="/nodebench.css?v=12"></head><body></body></html>',
+      surface,
+      tokensCss: null,
+      files: {
+        'ui_kits/nodebench-web/nodebench.css': 'body{background:#faf7f3;}',
+      },
+    });
+    expect(out).toContain('data-parity-inlined="ui_kits/nodebench-web/nodebench.css"');
+    expect(out).toContain('body{background:#faf7f3;}');
+    expect(out).not.toContain('href="/nodebench.css');
+  });
+
   it('strips only unresolved relative scripts', () => {
     const out = stripUnresolvedRelativeScripts(
       '<script src="https://cdn.example/a.js"></script><script src="./missing.js"></script>',
