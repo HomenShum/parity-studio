@@ -44,9 +44,9 @@ Parity should generate a side-by-side comparison:
 
 ```text
 Locked slug
-→ decomposed current UI
-→ proposed allowed delta
-→ implementation hook
+-> decomposed current UI
+-> proposed allowed delta
+-> implementation hook
 ```
 
 The proposed side should highlight only the changed affordances.
@@ -104,6 +104,14 @@ Add only style/source/QA chips to existing components.
     }
   ]
 }
+```
+
+Concrete example artifacts live in:
+
+```text
+docs/examples/nodebench-locked-memo-ui-slugs.json
+docs/examples/nodebench-locked-memo-runtime-architecture.md
+docs/examples/nodebench-locked-memo-runtime-architecture.json
 ```
 
 ## Proposed UI Changes To Parity Studio
