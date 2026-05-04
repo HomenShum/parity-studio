@@ -2,28 +2,30 @@
 
 Parity Studio already supports import, decomposition, comments, scoped edits, verification, and export. The missing workflow is a stricter mode for products where the current UI components are non-negotiable and the user wants only small deltas layered into them.
 
-This came from the NodeBench memo/batch design pass, where the user explicitly wanted the current main-branch Chat, Reports, and Latest Public Research components to remain the design source of truth.
+This came from the NodeBench memo and batch design pass, where the current main-branch Chat, Reports, and Latest Public Research components had to remain the visual source of truth.
 
 ## Problem
 
-A normal design iteration request can drift into a new shell:
+A normal design iteration can drift into a new shell:
 
 ```text
 current screen
-→ agent redesign
-→ nicer but no longer the product
+-> agent redesign
+-> nicer but no longer the product
 ```
 
-For production UI work, especially inside an existing app, this is wrong. The desired loop is:
+For production UI work, the desired loop is tighter:
 
 ```text
 current component slug
-→ decomposed current UI
-→ proposed small delta
-→ side-by-side comparison
-→ approved slug delta
-→ implementation handoff
+-> decomposed current UI
+-> proposed small delta
+-> side-by-side comparison
+-> approved slug delta
+-> implementation handoff
 ```
+
+The question is not only "is this better?" It is also "does this still look and behave like the product we already committed to?"
 
 ## Locked Component Mode
 
@@ -71,12 +73,12 @@ qa.plan.md
 Parity should support a first-class comparison surface:
 
 ```text
-┌──────────────────────────────┬──────────────────────────────┐
-│ Decomposed current UI         │ Proposed locked delta         │
-│                              │                              │
-│ exact current component       │ same component + highlighted  │
-│ structure                     │ allowed additions only        │
-└──────────────────────────────┴──────────────────────────────┘
++------------------------------+------------------------------+
+| Decomposed current UI        | Proposed locked delta        |
+|                              |                              |
+| Exact current component      | Same component plus          |
+| structure                    | highlighted allowed deltas   |
++------------------------------+------------------------------+
 ```
 
 The page should show:
@@ -142,11 +144,11 @@ Preserve locked components. Show current-vs-proposed by slug.
 This can live in the app as:
 
 ```text
-Run settings → Component lock mode
-Files → ui-slugs.json
-Preview → Current vs proposed
-Parity Coach → Locked component drift checks
-Export → locked-component handoff files
+Run settings -> Component lock mode
+Files -> ui-slugs.json
+Preview -> Current vs proposed
+Parity Coach -> Locked component drift checks
+Export -> locked-component handoff files
 ```
 
 ## Verification Additions
@@ -171,7 +173,7 @@ pass | warn | fail | unavailable
 
 ## Why This Matters
 
-This mode lets Parity Studio become safer for real app iteration. It supports the common founder/builder workflow:
+This mode lets Parity Studio become safer for real app iteration. It supports the common founder and builder workflow:
 
 ```text
 I like the current app.
