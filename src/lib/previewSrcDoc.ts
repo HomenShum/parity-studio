@@ -16,7 +16,11 @@ export function buildSurfacePreviewHtml({
   const baseDir = dirname(surface?.entry ?? (surface ? `ui_kits/${surface.slug}/index.html` : ''));
   return injectLiveTokens(
     rewriteRelativeImages(
-      inlineRelativeScripts(inlineRelativeStyles(html, files, baseDir), files, baseDir),
+      inlineRelativeScripts(
+        inlineRelativeStyleImports(inlineRelativeStyles(html, files, baseDir), files, baseDir),
+        files,
+        baseDir,
+      ),
       files,
       baseDir,
     ),
@@ -60,6 +64,23 @@ function inlineRelativeStyles(
       const media = mediaAttribute(`${before} ${after}`);
       const mediaPrefix = media ? ` media="${escapeAttribute(media)}"` : '';
       return `<style data-parity-inlined="${escapeAttribute(path)}"${mediaPrefix}>\n${css}\n</style>`;
+    },
+  );
+}
+
+function inlineRelativeStyleImports(
+  html: string,
+  files: Record<string, string>,
+  baseDir: string,
+): string {
+  return html.replace(
+    /@import\s+(?:url\()?["']?([^"')]+\.css(?:\?[^"')]+)?)["']?\)?\s*;/gi,
+    (statement: string, href: string) => {
+      const path = resolveRelativePath(href, baseDir);
+      if (!path) return statement;
+      const css = files[path];
+      if (css === undefined) return statement;
+      return `/* parity: inlined @import ${path} */\n${css}`;
     },
   );
 }

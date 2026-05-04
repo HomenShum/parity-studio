@@ -56,6 +56,10 @@ const ENHANCE_PROVIDER = (process.env['CHAT_ENHANCE_PROVIDER'] ?? ADVISOR_PROVID
   | 'anthropic'
   | 'openrouter';
 const ENHANCE_MODEL = process.env['CHAT_ENHANCE_MODEL'] ?? ADVISOR_MODEL;
+const CHAT_AUTO_CONTINUE_MAX = Math.max(
+  0,
+  Number.parseInt(process.env['CHAT_AUTO_CONTINUE_MAX'] ?? '3', 10) || 0,
+);
 
 const SUPPORTED_PROVIDER_VALUES: SupportedProvider[] = [
   'anthropic',
@@ -631,8 +635,11 @@ function emptyUsage() {
 }
 
 export const runAgentLoop = internalAction({
-  args: { runId: v.id('runs') },
-  handler: async (ctx, { runId }): Promise<void> => {
+  args: {
+    runId: v.id('runs'),
+    autoContinueDepth: v.optional(v.number()),
+  },
+  handler: async (ctx, { runId, autoContinueDepth = 0 }): Promise<void> => {
     const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
     if (uiKit === null) {
       await ctx.runMutation(internal.chat.insertTurn, {
@@ -685,6 +692,14 @@ export const runAgentLoop = internalAction({
         });
       }
     }
+    if (autoContinueDepth > 0) {
+      messages.push({
+        role: 'user',
+        content:
+          'System auto-continue: keep working from the previous tool results. Finish the requested change end-to-end, call done({ paths }) after edits, self-heal errors, and close with a concise completion summary. Do not ask the user to type continue unless the remaining work is blocked by missing information or approval.',
+        timestamp: Date.now(),
+      });
+    }
 
     // Detect advisor-executor mode by inspecting the most recent user
     // turn. If it begins with "Auto-fix triggered:", route hop 0 (the
@@ -706,7 +721,7 @@ export const runAgentLoop = internalAction({
     const MAX_HOPS = 12;
     const mutatedPaths = new Set<string>();
     for (let hop = 0; hop < MAX_HOPS; hop += 1) {
-      const useAdvisor = adviseMode && hop === 0;
+      const useAdvisor = adviseMode && hop === 0 && autoContinueDepth === 0;
       // Tier-aware resolution. The autoRouter lives in convex/lib/autoRouter.ts
       // and curates which underlying model serves each (tier, phase) cell.
       // Direct env overrides (CHAT_ADVISOR_MODEL / CHAT_EXECUTOR_MODEL) win
@@ -815,14 +830,22 @@ export const runAgentLoop = internalAction({
       }
     }
 
+    const canAutoContinue = autoContinueDepth < CHAT_AUTO_CONTINUE_MAX;
     await ctx.runMutation(internal.chat.insertTurn, {
       runId,
       role: 'assistant',
-      content:
-        '(agent reached its step budget before finishing — send "continue" or click Ask agent to continue)',
+      content: canAutoContinue
+        ? `(agent reached its step budget before finishing - continuing automatically ${autoContinueDepth + 1}/${CHAT_AUTO_CONTINUE_MAX})`
+        : '(agent reached its auto-continue safety cap before finishing - review the latest changes, then send a more specific follow-up if more work is needed)',
       turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
     });
     await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);
+    if (canAutoContinue) {
+      await ctx.scheduler.runAfter(0, internal.chatLoop.runAgentLoop, {
+        runId,
+        autoContinueDepth: autoContinueDepth + 1,
+      });
+    }
   },
 });
 

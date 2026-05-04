@@ -38,7 +38,12 @@ describe('previewSrcDoc', () => {
 
   it('inlines root-relative assets against the active surface', () => {
     const out = buildSurfacePreviewHtml({
-      html: '<!doctype html><html><head><link rel="stylesheet" href="/nodebench.css?v=12"></head><body></body></html>',
+      html: [
+        '<!doctype html><html><head>',
+        '<link rel="stylesheet" href="/nodebench.css?v=12">',
+        '<style>@import url("/nodebench.css?v=12");</style>',
+        '</head><body></body></html>',
+      ].join(''),
       surface,
       tokensCss: null,
       files: {
@@ -46,8 +51,10 @@ describe('previewSrcDoc', () => {
       },
     });
     expect(out).toContain('data-parity-inlined="ui_kits/nodebench-web/nodebench.css"');
+    expect(out).toContain('parity: inlined @import ui_kits/nodebench-web/nodebench.css');
     expect(out).toContain('body{background:#faf7f3;}');
     expect(out).not.toContain('href="/nodebench.css');
+    expect(out).not.toContain('@import url("/nodebench.css');
   });
 
   it('strips only unresolved relative scripts', () => {
