@@ -201,7 +201,7 @@ export function CanvasPanel({
           <button
             type="button"
             onClick={() => setSourceSyncOpen(true)}
-            aria-label="Sync this preview from latest source"
+            aria-label="Open version sync and source recapture"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -215,10 +215,10 @@ export function CanvasPanel({
               fontSize: 'var(--font-size-body-sm)',
               cursor: 'pointer',
             }}
-            title="Patch this run or recapture the source route as a new revision"
+            title="Version control: patch this saved kit or recapture the source route as a new revision"
           >
             <RefreshCw size={13} />
-            Sync source
+            Version sync
           </button>
         ) : null}
         {tab === 'preview' && runId !== null ? (
@@ -226,7 +226,7 @@ export function CanvasPanel({
             type="button"
             onClick={() => setTweaksOpen((v) => !v)}
             aria-pressed={tweaksOpen}
-            aria-label={t('canvas.toggleTweaks')}
+            aria-label="Toggle design token tweaks panel"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -242,7 +242,7 @@ export function CanvasPanel({
             }}
           >
             <SlidersHorizontal size={13} />
-            {t('canvas.tweaks')}
+            Design tokens
           </button>
         ) : null}
       </div>
@@ -279,6 +279,7 @@ export function CanvasPanel({
                 onSurfaceChange={onSurfaceChange}
                 sourceImagePreviewOpen={sourcePreviewOpen}
                 onPreviewSourceImage={() => setSourcePreviewOpen(true)}
+                onOpenSourceSync={() => setSourceSyncOpen(true)}
               />
             )}
           </div>

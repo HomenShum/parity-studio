@@ -199,7 +199,7 @@ function PanelShell({
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <SlidersHorizontal size={12} />
-          Tweaks
+          Design tokens
         </span>
         <button type="button" onClick={onClose} aria-label="Close tweak panel" style={iconBtnStyle}>
           <X size={12} />

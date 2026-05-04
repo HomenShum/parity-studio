@@ -261,6 +261,9 @@ export function CommentOverlay({
     .filter((c) => c.artifactVersion === artifactVersion);
   const orderedComments = visibleComments.slice().reverse();
 
+  const showAnnotationBoxes = active && notesVisible;
+  const showCommentRail = active && pending === null;
+
   const overlayStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -277,7 +280,7 @@ export function CommentOverlay({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {notesVisible
+      {showAnnotationBoxes
         ? orderedComments.map((c, index) => {
             if (c.bbox === undefined) return null;
             const color = c.status === 'open' ? 'var(--color-accent)' : 'var(--color-success)';
@@ -290,12 +293,12 @@ export function CommentOverlay({
                   top: `${c.bbox.y * 100}%`,
                   width: `${c.bbox.w * 100}%`,
                   height: `${c.bbox.h * 100}%`,
-                  border: `2px solid ${color}`,
+                  border: `2px dashed ${color}`,
                   borderRadius: 8,
-                  background: c.status === 'open' ? 'rgba(199, 109, 84, 0.08)' : 'transparent',
+                  background: c.status === 'open' ? 'rgba(199, 109, 84, 0.035)' : 'transparent',
                   pointerEvents: 'auto',
                   cursor: 'pointer',
-                  opacity: c.status === 'open' ? 0.9 : 0.55,
+                  opacity: c.status === 'open' ? 0.72 : 0.45,
                 }}
                 title={`${c.status}: ${c.text}`}
                 onDoubleClick={() => void dismiss({ commentId: c._id })}
@@ -351,7 +354,7 @@ export function CommentOverlay({
         />
       ) : null}
 
-      {pending === null && (active || orderedComments.length > 0) ? (
+      {showCommentRail ? (
         <CommentRail
           comments={orderedComments}
           notesVisible={notesVisible}
@@ -584,9 +587,9 @@ function CommentRail({
           marginBottom: 10,
         }}
       >
-        <strong style={{ fontSize: 13 }}>Comments {comments.length}</strong>
+        <strong style={{ fontSize: 13 }}>Review comments {comments.length}</strong>
         <button type="button" onClick={onToggleNotes} style={tinyButtonStyle}>
-          {notesVisible ? 'Hide notes' : 'Show notes'}
+          {notesVisible ? 'Hide boxes' : 'Show boxes'}
         </button>
       </div>
       <button
@@ -607,7 +610,12 @@ function CommentRail({
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
             Click an element in the preview to leave a scoped note.
           </div>
-        ) : null}
+        ) : (
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: 11, lineHeight: 1.35 }}>
+            Boxes are annotations, not generated UI. Turn off Comment mode or hide boxes for a clean
+            preview.
+          </div>
+        )}
         {comments.map((comment, index) => (
           <div
             key={comment._id}

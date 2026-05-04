@@ -1,5 +1,13 @@
 import { useMutation, useQuery } from 'convex/react';
-import { Download, Expand, FilePlus2, FileText, Folder, Image as ImageIcon } from 'lucide-react';
+import {
+  Download,
+  Expand,
+  FilePlus2,
+  FileText,
+  Folder,
+  Image as ImageIcon,
+  RefreshCw,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -15,6 +23,7 @@ interface FilesViewProps {
   onSurfaceChange?: (slug: string | null) => void;
   sourceImagePreviewOpen?: boolean;
   onPreviewSourceImage?: () => void;
+  onOpenSourceSync?: () => void;
 }
 
 function formatSize(bytes: number): string {
@@ -31,6 +40,7 @@ export function FilesView({
   onSurfaceChange,
   sourceImagePreviewOpen = false,
   onPreviewSourceImage,
+  onOpenSourceSync,
 }: FilesViewProps) {
   const uiKit = useQuery(api.uiKits.getLatest, runId ? { runId } : 'skip');
   const run = useQuery(api.runs.get, runId ? { runId } : 'skip');
@@ -112,6 +122,7 @@ export function FilesView({
           color: 'var(--color-text-secondary)',
           minWidth: 0,
           minHeight: 0,
+          overflow: 'hidden',
         }}
       >
         <FileGroup label="Files" scroll>
@@ -253,9 +264,11 @@ export function FilesView({
                       border: 'none',
                       borderRadius: 'var(--radius-sm)',
                       padding: '4px 8px',
+                      minHeight: 22,
                       marginLeft: 18,
                       fontFamily: 'var(--font-mono)',
                       fontSize: 11,
+                      lineHeight: 1.25,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -350,6 +363,40 @@ export function FilesView({
                 }}
               />
             ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSourceSync}
+            disabled={!runId}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '8px 10px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)',
+              background: 'var(--color-surface)',
+              color: runId ? 'var(--color-text-primary)' : 'var(--color-text-faint)',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--font-size-body-sm)',
+              cursor: runId ? 'pointer' : 'not-allowed',
+            }}
+            title="Patch this saved kit or recapture the source app as a new run revision"
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <RefreshCw size={13} />
+              Version sync
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--color-text-faint)',
+              }}
+            >
+              patch / recapture
+            </span>
           </button>
         </FileGroup>
 
@@ -591,7 +638,17 @@ function FileGroup({
   scroll?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, minHeight: 0 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        minWidth: 0,
+        minHeight: scroll ? 0 : undefined,
+        flex: scroll ? '1 1 0' : '0 0 auto',
+        overflow: scroll ? 'hidden' : 'visible',
+      }}
+    >
       <div
         style={{
           fontSize: 10,
@@ -610,6 +667,7 @@ function FileGroup({
           flexDirection: 'column',
           gap: 2,
           minHeight: 0,
+          flex: scroll ? '1 1 auto' : undefined,
           overflowY: scroll ? 'auto' : 'visible',
           paddingRight: scroll ? 4 : 0,
         }}
