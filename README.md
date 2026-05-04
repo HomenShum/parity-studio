@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.4
+**Status**: LIVE - current web app + MCP v0.3.5
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` (`npx.cmd` for Windows stdio clients) - includes `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
@@ -87,7 +87,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 - **Export-only workflow**: call `parity_export_zip` or hosted `parity_export` to package a run as ZIP, HTML, or Markdown for handoff. ZIP exports include the design-system showcase and Figma bridge files.
 - **Figma bridge workflow**: call `parity_figma_export` to turn a `ui_kit` into a Figma development-plugin bundle, or `parity_figma_import` to turn Parity bridge / Figma REST JSON into editable `ui_kits/<slug>/` files.
 - **Approved design apply workflow**: call `parity_apply_approved_design` to dry-run exact `ui_kit` path to repo path mappings, then write only after user approval. Without explicit mappings it stages under `.parity/approved-design/<slug>/`.
-- **Safe agent runtime workflow**: call `parity_agent_runtime_metadata` before child-agent work to get Claude Code/Codex/Cursor/Windsurf profiles and a model-specific provider env allowlist.
+- **Safe agent runtime workflow**: call `parity_agent_runtime_metadata` before child-agent work to get Claude Code/Codex/Cursor/Windsurf profiles, model-specific provider env allowlist, and OS-specific stdio launch commands.
 - **Hosted run/chat workflow**: use `parity_chat_send`, `parity_chat_advise`, `parity_chat_history`, and `parity_run_listRecent` to keep working against a hosted run from the agent.
 - **Prompt/resource workflow**: load the MCP `use-parity-studio` prompt and `parity://agent-rules` resource so users can ask naturally instead of memorizing tool names.
 - **Local dashboard workflow**: watch MCP runs on the auto-opened local dashboard with source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.

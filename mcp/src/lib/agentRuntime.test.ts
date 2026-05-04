@@ -5,6 +5,9 @@ describe('agentRuntime', () => {
   it('returns runtime profiles and model-specific provider env allowlist', () => {
     const metadata = buildAgentRuntimeMetadata(['claude-sonnet-4-6', 'moonshotai/kimi-k2.6']);
     expect(metadata.profiles.some((profile) => profile.id === 'claude-code')).toBe(true);
+    expect(metadata.launchCommands).toContainEqual(
+      expect.objectContaining({ platform: 'windows', command: 'npx.cmd' }),
+    );
     expect(metadata.providerEnvAllowlist).toContain('ANTHROPIC_API_KEY');
     expect(metadata.providerEnvAllowlist).toContain('OPENROUTER_API_KEY');
   });

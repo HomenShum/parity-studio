@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.4 - stdio transport - 18 tools + agent prompts/resource rules
+**Status**: v0.3.5 - stdio transport - 18 tools + agent prompts/resource rules
 
 ## Install
 
@@ -35,7 +35,7 @@ The hosted tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `par
 
 Local MCP BYOK keeps provider keys in the local MCP process environment. The server only returns which key env vars are present; it never returns key values, writes them into kits, logs them, or uploads them to Parity Studio.
 
-Use `parity_agent_runtime_metadata` before child-agent work to get the Claude Code, Codex, Cursor, Windsurf, and generic MCP capability profiles plus a model-specific provider env allowlist. This prevents agents from forwarding unrelated provider keys to subprocesses.
+Use `parity_agent_runtime_metadata` before child-agent work to get the Claude Code, Codex, Cursor, Windsurf, and generic MCP capability profiles plus OS-specific stdio launch commands and a model-specific provider env allowlist. This prevents agents from forwarding unrelated provider keys to subprocesses and avoids Windows `npx` path failures.
 
 ## Local Dashboard
 
@@ -109,9 +109,21 @@ Returns:
 - Claude Code, Codex, Cursor, Windsurf, and generic MCP runtime profiles.
 - Recommended Parity tools per runtime.
 - Safe approval gates for design-first staging and production apply.
+- Launch commands for POSIX, Windows `npx.cmd`, and locally installed package shims.
 - A provider env allowlist derived from the exact model ids the agent intends to call.
 
 Use this before spawning helper agents or copying environment variables. It is designed to keep BYOK local while preventing accidental leakage of unrelated keys.
+
+Windows stdio clients should use:
+
+```jsonc
+{
+  "command": "npx.cmd",
+  "args": ["-y", "parity-studio-mcp@latest"]
+}
+```
+
+If the package is installed in the agent workspace, use `./node_modules/.bin/parity-studio-mcp` on POSIX or `.\\node_modules\\.bin\\parity-studio-mcp.cmd` on Windows.
 
 ### `parity_platform_to_ui_kit` - existing product route to Parity Studio
 

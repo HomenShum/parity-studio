@@ -10,6 +10,13 @@ export interface AgentRuntimeProfile {
   recommendedTools: string[];
 }
 
+export interface AgentLaunchCommand {
+  platform: 'posix' | 'windows' | 'installed-posix' | 'installed-windows';
+  command: string;
+  args: string[];
+  note: string;
+}
+
 export const AGENT_RUNTIME_PROFILES: AgentRuntimeProfile[] = [
   {
     id: 'claude-code',
@@ -67,6 +74,7 @@ export const AGENT_RUNTIME_PROFILES: AgentRuntimeProfile[] = [
 
 export function buildAgentRuntimeMetadata(models: readonly string[] = []): {
   profiles: AgentRuntimeProfile[];
+  launchCommands: AgentLaunchCommand[];
   providerEnvAllowlist: string[];
   safeEnvPolicy: string[];
   modelProviders: Array<{ model: string; provider: SupportedProvider; envVar: string }>;
@@ -77,6 +85,32 @@ export function buildAgentRuntimeMetadata(models: readonly string[] = []): {
   });
   return {
     profiles: AGENT_RUNTIME_PROFILES,
+    launchCommands: [
+      {
+        platform: 'posix',
+        command: 'npx',
+        args: ['-y', 'parity-studio-mcp@latest'],
+        note: 'Use for macOS/Linux stdio MCP clients when the package is not installed locally.',
+      },
+      {
+        platform: 'windows',
+        command: 'npx.cmd',
+        args: ['-y', 'parity-studio-mcp@latest'],
+        note: 'Use npx.cmd on Windows stdio clients; bare npx may not resolve from child processes.',
+      },
+      {
+        platform: 'installed-posix',
+        command: './node_modules/.bin/parity-studio-mcp',
+        args: [],
+        note: 'Use after npm installing parity-studio-mcp in the project or agent workspace.',
+      },
+      {
+        platform: 'installed-windows',
+        command: '.\\node_modules\\.bin\\parity-studio-mcp.cmd',
+        args: [],
+        note: 'Use after npm installing parity-studio-mcp on Windows.',
+      },
+    ],
     providerEnvAllowlist: allowedProviderEnv(modelProviders.map((item) => item.provider)),
     safeEnvPolicy: [
       'Pass only provider keys required by the selected models.',
