@@ -3,6 +3,7 @@ import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { expandToCanonicalShape } from './lib/canonicalShape';
+import { recordDesignRevision } from './lib/designRevisions';
 import { withOperatingContract } from './lib/kitContract';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
@@ -389,7 +390,7 @@ export const startFromKit = mutation({
 
     // Insert ui_kit row with cost = 0.
     const fileCount = Object.keys(importFullShape).length;
-    await ctx.db.insert('ui_kits', {
+    const uiKitId = await ctx.db.insert('ui_kits', {
       runId,
       artifactVersion: 0,
       slug: args.slug,
@@ -397,6 +398,16 @@ export const startFromKit = mutation({
       files: importFullShape,
       fileCount,
       decomposeCostMicroUsd: 0,
+    });
+    await recordDesignRevision(ctx, {
+      runId,
+      uiKitId,
+      kind: 'initial',
+      label: 'Imported ui_kit snapshot',
+      summary: `Imported ${args.slug} with ${fileCount} files.`,
+      changedPaths: Object.keys(importFullShape).slice(0, 20),
+      files: importFullShape,
+      source: 'app',
     });
 
     // Trigger verify in the background so the right-rail rubric populates.
