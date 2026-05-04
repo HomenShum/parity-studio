@@ -150,7 +150,9 @@ export function CanvasPanel({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 7,
-              minWidth: 220,
+              minWidth: 168,
+              maxWidth: 230,
+              flexShrink: 1,
               padding: '5px 8px',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--color-border-subtle)',
@@ -210,6 +212,8 @@ export function CanvasPanel({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
               padding: '5px 10px',
               borderRadius: 'var(--radius-md)',
               background: sourceSyncOpen ? 'var(--color-accent-soft)' : 'transparent',
@@ -222,7 +226,7 @@ export function CanvasPanel({
             title="Version control: patch this saved kit or recapture the source route as a new revision"
           >
             <RefreshCw size={13} />
-            Version sync
+            Sync
           </button>
         ) : null}
         {tab === 'preview' && runId !== null ? (
@@ -235,6 +239,8 @@ export function CanvasPanel({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
               padding: '5px 10px',
               borderRadius: 'var(--radius-md)',
               background: tweaksOpen ? 'var(--color-accent-soft)' : 'transparent',
@@ -246,7 +252,7 @@ export function CanvasPanel({
             }}
           >
             <SlidersHorizontal size={13} />
-            Design tokens
+            Tokens
           </button>
         ) : null}
       </div>
