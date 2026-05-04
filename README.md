@@ -4,12 +4,12 @@
 
 ## The 6-step user flow
 
-1. **Drop a gpt-image-2 image, drop a canonical `ui_kit` zip, or generate one on the spot** from a prompt.
+1. **Drop a gpt-image-2 image, drop a canonical `ui_kit` zip, drop a Figma bridge JSON/ZIP, or generate one on the spot** from a prompt.
 2. **Break it down** into individual UI components - exact parity, not approximations.
 3. **Select a component** in the file tree.
 4. **Comment** on it (a pinned bbox or a free-form note, scoped to that file).
 5. **Iterate / edit** that scoped slice - not the whole artifact.
-6. **Export as a `ui_kit` zip** - same shape on the way in as on the way out, guided handoff to a coding agent that drops it into a real codebase.
+6. **Export as a `ui_kit` zip or Figma bridge** - same shape on the way in as on the way out, guided handoff to a coding agent or plugin-importable Figma frames.
 
 That is the entire product. Every surface is in service of one of those six steps. The canonical zip shape (NodeBench AI Skill-pack format, see [docs/CANONICAL_KIT.md](./docs/CANONICAL_KIT.md)) is symmetric: drop one in, get one out.
 
@@ -49,11 +49,11 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.2
+**Status**: LIVE - current web app + MCP v0.3.3
 
 - **Web app**: https://parity-studio.vercel.app
 - **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
-- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, and `parity_platform_to_ui_kit` for Claude Code / Codex / Cursor to stage design/UI slug changes, locked-component comparison, and runtime architecture handoff before production edits, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
+- **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` - includes `parity_design_mission`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to stage design/UI slug changes, locked-component comparison, runtime architecture handoff, Figma bridge handoff, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
@@ -64,6 +64,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 - **Start a new run from a prompt**: describe the surface and let the pipeline generate, decompose, verify, and stream the result.
 - **Start from a source image**: attach a screenshot or generated image, then decompose it into a componentized `ui_kit`.
 - **Import an existing `ui_kit` ZIP or design handoff**: drop a canonical kit, Claude Design-style skill pack, Open CoDesign-style export, or plain HTML handoff ZIP into the app. Parity preserves every `ui_kits/<slug>/` surface, creates `parity.project.json`, lets you switch web/mobile/workspace/CLI surfaces, then comment, edit, verify, and export again.
+- **Import and export Figma bridge files**: drop a Parity Figma bridge JSON/ZIP or Figma REST file JSON into the composer. Export a Figma bridge ZIP from the header or Files handoff panel; the bundle contains `figma/manifest.json`, `code.js`, `ui.html`, token metadata, and `parity-figma-bridge.json` for round-trip import.
 - **Choose the model route**: use Balanced AI, Best Quality AI, Free AI route, a preset model, or a custom provider/model id from Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Cerebras, xAI, or Mistral.
 - **Session privacy + BYOK setup**: store browser-tab-only provider-key placeholders for the session, copy local MCP env setup, clear keys, or start a fresh session. Hosted Parity does not receive browser-entered BYOK secrets for model calls.
 - **Manage projects and run history**: use the left rail to start runs, revisit recent runs, see run status, and keep a session-level project list.
@@ -84,6 +85,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 - **Decompose-only workflow**: call `parity_decompose` to turn a complete HTML artifact into canonical `ui_kit` files plus `parity.contract.json`, `performance.budget.json`, `api-wiring.plan.md`, and `qa.plan.md`.
 - **Verify-only workflow**: call `parity_verify` to score an existing kit against source HTML and, when a source image is provided, run the visual judge.
 - **Export-only workflow**: call `parity_export_zip` or hosted `parity_export` to package a run as ZIP, HTML, or Markdown for handoff.
+- **Figma bridge workflow**: call `parity_figma_export` to turn a `ui_kit` into a Figma development-plugin bundle, or `parity_figma_import` to turn Parity bridge / Figma REST JSON into editable `ui_kits/<slug>/` files.
 - **Hosted run/chat workflow**: use `parity_chat_send`, `parity_chat_advise`, `parity_chat_history`, and `parity_run_listRecent` to keep working against a hosted run from the agent.
 - **Prompt/resource workflow**: load the MCP `use-parity-studio` prompt and `parity://agent-rules` resource so users can ask naturally instead of memorizing tool names.
 - **Local dashboard workflow**: watch MCP runs on the auto-opened local dashboard with source/rendered split, file tree, parity score, cost meter, log feed, and ZIP export.
@@ -91,7 +93,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 14 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, and `parity_export_zip` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 16 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes a high-level `parity_design_mission` wrapper for design-first slug boards, a `parity_studio` wrapper for natural requests, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.
@@ -136,6 +138,8 @@ Local MCP BYOK keeps provider keys in the local agent/MCP env. Keys are never re
                           |-- performance.budget.json
                           |-- api-wiring.plan.md
                           |-- qa.plan.md
+                          |-- figma.bridge.json
+                          |-- figma/              <-- plugin import bundle
                           `-- README.md   <-- handoff to Claude Code / Cursor
 ```
 
@@ -170,7 +174,7 @@ The shell on this repo is itself decomposable. See [docs/plans/2026-04-28-shell-
 
 ## Honest non-claims
 
-- This is not a Figma replacement. It does not produce vector designs, component variants, or design system documentation.
+- Figma bridge export is plugin-importable interoperability, not a claim of perfect vector reconstruction for arbitrary HTML/CSS. The bridge creates editable Figma frames, paint styles, token guides, and component guide cards; `ui_kits/<slug>/` remains the implementation source of truth.
 - The 16-row rubric is opinionated. Other rubrics exist; we picked this one because every row is individually auditable and every cell is either real evidence or honestly marked `unavailable`.
 - Source HTML matters. Garbage in, garbage out. The deterministic verifier catches text-coverage drops; the visual judge catches semantic misses; nothing catches "the input itself was bad."
 

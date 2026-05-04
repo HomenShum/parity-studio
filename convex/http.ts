@@ -3,17 +3,19 @@ import JSZip from 'jszip';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
+import { buildFigmaBridgeFiles } from './lib/figmaBridge';
 
 const http = httpRouter();
 
 /**
- * GET /api/runs/:id/{zip|html|markdown}
+ * GET /api/runs/:id/{zip|html|markdown|figma}
  *
  * Multi-format export. ui_kits.files holds the full canonical shape;
  * each format projects from there:
  *   - zip      → JSZip bundle (canonical NodeBench skill-pack shape)
  *   - html     → single-file HTML with tokens.css inlined
  *   - markdown → prose handoff for coding agents
+ *   - figma    → Figma development-plugin bridge bundle
  *
  * Convex requires a single pathPrefix per registration, so all three
  * formats live under one handler that dispatches by URL suffix.
@@ -23,7 +25,7 @@ http.route({
   method: 'GET',
   handler: httpAction(async (ctx, req) => {
     const url = new URL(req.url);
-    const m = url.pathname.match(/^\/api\/runs\/([a-z0-9_]+)\/(zip|html|markdown)$/i);
+    const m = url.pathname.match(/^\/api\/runs\/([a-z0-9_]+)\/(zip|html|markdown|figma)$/i);
     if (m === null || m[1] === undefined || m[2] === undefined) {
       return new Response(JSON.stringify({ error: 'not_found' }), {
         status: 404,
@@ -31,7 +33,7 @@ http.route({
       });
     }
     const runId = m[1] as Id<'runs'>;
-    const format = m[2].toLowerCase() as 'zip' | 'html' | 'markdown';
+    const format = m[2].toLowerCase() as 'zip' | 'html' | 'markdown' | 'figma';
 
     const uiKit = await ctx.runQuery(internal.uiKits.getLatestInternal, { runId });
     if (uiKit === null) {
@@ -61,6 +63,27 @@ http.route({
         headers: {
           'content-type': 'application/zip',
           'content-disposition': `attachment; filename="${uiKit.slug}.zip"`,
+          'cache-control': 'private, no-store',
+        },
+      });
+    }
+
+    if (format === 'figma') {
+      const zip = new JSZip();
+      const files = uiKit.files as Record<string, string>;
+      const bridgeFiles = buildFigmaBridgeFiles(files, uiKit.slug, {
+        runId: String(runId),
+        activeSurface: uiKit.slug,
+      });
+      for (const [path, content] of Object.entries(bridgeFiles)) {
+        zip.file(path, content);
+      }
+      const buf = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+      return new Response(buf, {
+        status: 200,
+        headers: {
+          'content-type': 'application/zip',
+          'content-disposition': `attachment; filename="${uiKit.slug}-figma-bridge.zip"`,
           'cache-control': 'private, no-store',
         },
       });

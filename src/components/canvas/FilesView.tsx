@@ -6,6 +6,7 @@ import {
   FileText,
   Folder,
   Image as ImageIcon,
+  PenTool,
   RefreshCw,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -52,6 +53,8 @@ export function FilesView({
   const httpBase = convexHttpUrl();
   const exportHref =
     runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/zip` : '#';
+  const figmaExportHref =
+    runId !== null && uiKit && httpBase ? `${httpBase}/api/runs/${runId}/figma` : '#';
   const canExport = runId !== null && uiKit !== null && uiKit !== undefined;
 
   const fileCount = uiKit?.files ? Object.keys(uiKit.files as Record<string, string>).length : 0;
@@ -411,35 +414,66 @@ export function FilesView({
 
         <FileGroup label="Handoff">
           {canExport ? (
-            <a
-              href={exportHref}
-              download
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 10px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)',
-                textDecoration: 'none',
-                fontSize: 'var(--font-size-body-sm)',
-              }}
-            >
-              <Download size={13} />
-              Export ZIP
-              <span
+            <>
+              <a
+                href={exportHref}
+                download
                 style={{
-                  marginLeft: 'auto',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  color: 'var(--color-text-faint)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border-subtle)',
+                  color: 'var(--color-text-primary)',
+                  textDecoration: 'none',
+                  fontSize: 'var(--font-size-body-sm)',
                 }}
               >
-                ui_kits_bundle.zip
-              </span>
-            </a>
+                <Download size={13} />
+                Export ZIP
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    color: 'var(--color-text-faint)',
+                  }}
+                >
+                  ui_kits_bundle.zip
+                </span>
+              </a>
+              <a
+                href={figmaExportHref}
+                download
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border-subtle)',
+                  color: 'var(--color-text-primary)',
+                  textDecoration: 'none',
+                  fontSize: 'var(--font-size-body-sm)',
+                }}
+              >
+                <PenTool size={13} />
+                Export Figma bridge
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    color: 'var(--color-text-faint)',
+                  }}
+                >
+                  plugin ZIP
+                </span>
+              </a>
+            </>
           ) : (
             <div
               style={{

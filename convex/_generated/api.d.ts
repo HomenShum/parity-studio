@@ -19,6 +19,7 @@ import type * as inspirationSearch from "../inspirationSearch.js";
 import type * as lib_activeKitFiles from "../lib/activeKitFiles.js";
 import type * as lib_autoRouter from "../lib/autoRouter.js";
 import type * as lib_canonicalShape from "../lib/canonicalShape.js";
+import type * as lib_figmaBridge from "../lib/figmaBridge.js";
 import type * as lib_kitContract from "../lib/kitContract.js";
 import type * as lib_parityChecker from "../lib/parityChecker.js";
 import type * as lib_piAi from "../lib/piAi.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   "lib/activeKitFiles": typeof lib_activeKitFiles;
   "lib/autoRouter": typeof lib_autoRouter;
   "lib/canonicalShape": typeof lib_canonicalShape;
+  "lib/figmaBridge": typeof lib_figmaBridge;
   "lib/kitContract": typeof lib_kitContract;
   "lib/parityChecker": typeof lib_parityChecker;
   "lib/piAi": typeof lib_piAi;

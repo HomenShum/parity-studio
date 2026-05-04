@@ -18,6 +18,7 @@
  * See docs/CANONICAL_KIT.md for the contract.
  */
 
+import { buildFigmaBridgeFiles } from './figmaBridge';
 import { buildOperatingContractFiles } from './kitContract';
 
 export interface ExpandInput {
@@ -341,6 +342,14 @@ pixels), so this folder is a documented hook point for future work
 rather than populated content. Drop your own working PNGs here when
 you iterate downstream.
 `;
+
+  Object.assign(
+    out,
+    buildFigmaBridgeFiles({ ...kitFiles, ...out }, slug, {
+      runId: run.runId,
+      activeSurface: slug,
+    }),
+  );
 
   return out;
 }

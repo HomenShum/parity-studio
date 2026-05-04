@@ -63,6 +63,10 @@ const en: TranslationTree = {
         label: 'Markdown',
         sublabel: 'Prose handoff for coding agents',
       },
+      figma: {
+        label: 'Figma bridge',
+        sublabel: 'Figma plugin import frames, tokens, and component guide',
+      },
     },
   },
   device: {
@@ -203,9 +207,10 @@ const en: TranslationTree = {
     launchPlaceholder:
       "Describe the product surface, drop an image, or import a ui_kit ZIP... e.g. 'dashboard settings page with Stripe-like docs clarity'",
     describeDesign: 'Describe the design',
-    attach: 'Attach an image or import a ui_kit zip',
-    attachTitle: 'Attach image (png/jpeg/webp <= 2 MB) or import a canonical ui_kit zip (<= 30 MB)',
-    zipTitle: 'zip drop on the paperclip imports a ui_kit',
+    attach: 'Attach an image, ui_kit ZIP, or Figma bridge JSON',
+    attachTitle:
+      'Attach image (png/jpeg/webp <= 2 MB), canonical ui_kit zip (<= 30 MB), or Figma bridge JSON',
+    zipTitle: 'zip drop imports a ui_kit; JSON drop imports a Figma bridge',
     generateImage: 'Generate image with gpt-image-2',
     generateImageTitle: 'Generate a source image from the prompt',
     generate: 'Generate',
@@ -214,7 +219,7 @@ const en: TranslationTree = {
     helper: 'cmd/ctrl + enter to run - ~$0.10-0.80 per pipeline',
     typePromptFirst: 'type a prompt first, then click sparkles to generate an image',
     addPromptOrImage: 'add a prompt or an image to generate',
-    onlySupported: 'only png / jpeg / webp / zip supported',
+    onlySupported: 'only png / jpeg / webp / zip / Figma JSON supported',
     zipTooLarge: 'zip too large ({{size}} MB > 30 MB cap)',
     imageTooLarge: 'image too large ({{size}} MB > 2 MB cap)',
     noUiKitFolder:
@@ -430,6 +435,10 @@ const zhCN: TranslationTree = {
       markdown: {
         label: 'Markdown',
         sublabel: '给编码代理使用的文字交接说明',
+      },
+      figma: {
+        label: 'Figma bridge',
+        sublabel: 'Figma plugin import frames, tokens, and component guide',
       },
     },
   },

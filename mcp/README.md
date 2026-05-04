@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.2 - stdio transport - 14 tools + agent prompts/resource rules
+**Status**: v0.3.3 - stdio transport - 16 tools + agent prompts/resource rules
 
 ## Install
 
@@ -74,6 +74,7 @@ What it does:
   - `browser-qa.proof.json`
   - `media.plan.json`
   - `figma.bridge.json`
+  - `figma/manifest.json`, `figma/code.js`, `figma/ui.html` when Figma bridge export is requested
 - Locks named slugs/components so the agent can iterate within the existing product grammar.
 - Returns the ZIP path, hosted run URL, parity report, and next approval steps.
 
@@ -148,6 +149,23 @@ Runs deterministic parity checks. If `sourceImageBase64` is provided, additional
 
 Bundles the `ui_kit` files into a ZIP and returns it as base64. Optionally appends a `HANDOFF.md` with integration instructions.
 
+### `parity_figma_export` - ui_kit to Figma bridge
+
+Builds a native Figma development-plugin bundle from `ui_kit` files:
+
+- `figma/manifest.json`
+- `figma/code.js`
+- `figma/ui.html`
+- `figma/parity-figma-bridge.json`
+- `figma/tokens.json`
+- `ui_kits/<slug>/figma.bridge.json`
+
+The plugin creates editable Figma pages/frames, paint styles from color tokens, text layers from the kit copy, and component guide cards. Use it when a coding agent needs to show the design-first result inside Figma before production implementation.
+
+### `parity_figma_import` - Figma JSON to ui_kit
+
+Accepts either a Parity Figma bridge JSON or a Figma REST file JSON with `document.children`. It converts the payload into `ui_kits/<slug>/index.html`, `tokens.css`, `manifest.json`, `figma.bridge.json`, and handoff metadata so the user can continue comments, inspiration edits, verification, and export inside Parity Studio.
+
 ### Hosted Convex tools
 
 These call the hosted Parity Studio deployment over HTTP. No local LLM keys are required for these tools.
@@ -157,7 +175,7 @@ These call the hosted Parity Studio deployment over HTTP. No local LLM keys are 
 - `parity_chat_advise`: trigger advisor-executor auto-fix.
 - `parity_chat_history`: read the conversation for a run.
 - `parity_run_listRecent`: list recent hosted runs.
-- `parity_export`: download a hosted run as ZIP, HTML, or Markdown.
+- `parity_export`: download a hosted run as ZIP, HTML, Markdown, or Figma bridge ZIP.
 
 ## Agent Prompt / Rules
 

@@ -12,6 +12,8 @@
  *   - parity_decompose   HTML artifact -> ui_kit/<slug>/{...} files
  *   - parity_verify      ui_kit + sourceHtml -> ParityReport (deterministic + visual)
  *   - parity_export_zip  ui_kit files -> base64-encoded ZIP for handoff
+ *   - parity_figma_export ui_kit files -> Figma plugin bridge ZIP/JSON
+ *   - parity_figma_import Figma bridge/REST JSON -> ui_kit files
  *
  * Stdio transport. Designed for `command + args` configs in MCP clients:
  *
@@ -44,6 +46,11 @@ import {
   designMissionPromptBlock,
   withDesignMissionFiles,
 } from './lib/designMission.js';
+import {
+  buildFigmaBridgeFiles,
+  filesFromFigmaPayload,
+  parseFigmaBridgeJson,
+} from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
@@ -92,7 +99,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.3';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 
@@ -1455,6 +1462,94 @@ async function handleExportZip(args: {
   };
 }
 
+// ---------- Tool: parity_figma_export -------------------------------------
+
+const figmaExportInput = {
+  uiKitFiles: z
+    .record(z.string())
+    .describe('Map of relative Parity ui_kit file paths to file contents.'),
+  slug: z.string().describe('Active ui_kit slug to export to Figma.'),
+  runId: z.string().optional().describe('Optional hosted Parity run id for provenance.'),
+  includeZipBase64: z
+    .boolean()
+    .optional()
+    .describe('Return a Figma plugin ZIP as base64. Defaults true.'),
+};
+
+async function handleFigmaExport(args: {
+  uiKitFiles: Record<string, string>;
+  slug: string;
+  runId?: string;
+  includeZipBase64?: boolean;
+}) {
+  const bridgeFiles = buildFigmaBridgeFiles(args.uiKitFiles, args.slug, {
+    ...(args.runId ? { runId: args.runId } : {}),
+    activeSurface: args.slug,
+  });
+  const zip = new JSZip();
+  for (const [path, content] of Object.entries(bridgeFiles)) zip.file(path, content);
+  const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            slug: args.slug,
+            files: bridgeFiles,
+            fileCount: Object.keys(bridgeFiles).length,
+            zipBase64: args.includeZipBase64 === false ? undefined : buf.toString('base64'),
+            zipSizeBytes: buf.length,
+            usage:
+              'Write zipBase64 to <slug>-figma-bridge.zip, unzip it, then import figma/manifest.json from Figma Plugins > Development.',
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+// ---------- Tool: parity_figma_import -------------------------------------
+
+const figmaImportInput = {
+  figmaJson: z
+    .string()
+    .min(20)
+    .describe('Parity Figma bridge JSON or Figma REST file JSON with document.children.'),
+  fallbackSlug: z.string().optional().describe('Slug to use if the payload has no name.'),
+};
+
+async function handleFigmaImport(args: { figmaJson: string; fallbackSlug?: string }) {
+  const parsed = parseFigmaBridgeJson(args.figmaJson);
+  const result = filesFromFigmaPayload(parsed, args.fallbackSlug ?? 'figma-import');
+  const files = withOperatingContract(result.files, {
+    slug: result.slug,
+    sourceType: 'imported-kit',
+    importToParityStudio: false,
+    byokMode: 'local-mcp-byok',
+  });
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            slug: result.slug,
+            files,
+            fileCount: Object.keys(files).length,
+            warnings: result.warnings,
+            next: 'Pass files to parity_export_zip or import them into hosted Parity Studio with runs.startFromKit.',
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
 async function createUiKitZip(
   uiKitFiles: Record<string, string>,
   slug: string,
@@ -1910,10 +2005,10 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
     {
       title: 'Download a run in canonical zip / single HTML / markdown form',
       description:
-        'Fetches the export at the chosen format. ZIP = full canonical NodeBench skill-pack (round-trips back into the importer). HTML = single index.html with tokens.css inlined. Markdown = prose handoff for coding agents. Returns the content as text (or base64 for zip).',
+        'Fetches the export at the chosen format. ZIP = full canonical NodeBench skill-pack (round-trips back into the importer). HTML = single index.html with tokens.css inlined. Markdown = prose handoff for coding agents. Figma = plugin-importable Figma bridge ZIP. Returns the content as text (or base64 for zip/figma).',
       inputSchema: {
         runId: z.string().min(20),
-        format: z.enum(['zip', 'html', 'markdown']),
+        format: z.enum(['zip', 'html', 'markdown', 'figma']),
       },
     },
     async ({ runId, format }) => {
@@ -1925,12 +2020,12 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
           isError: true,
         };
       }
-      if (format === 'zip') {
+      if (format === 'zip' || format === 'figma') {
         const buf = await res.arrayBuffer();
         const b64 = Buffer.from(buf).toString('base64');
         return {
           content: [
-            { type: 'text', text: `[zip · ${buf.byteLength} bytes · base64 below]` },
+            { type: 'text', text: `[${format} · ${buf.byteLength} bytes · base64 below]` },
             { type: 'text', text: b64 },
           ],
         };
@@ -2042,6 +2137,28 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
       inputSchema: exportZipInput,
     },
     handleExportZip,
+  );
+
+  server.registerTool(
+    'parity_figma_export',
+    {
+      title: 'Export a Parity ui_kit as a Figma plugin bridge',
+      description:
+        'Builds figma/manifest.json, code.js, ui.html, parity-figma-bridge.json, and token metadata so a coding agent can hand a Parity kit to Figma as editable frames, paint styles, and component guide cards.',
+      inputSchema: figmaExportInput,
+    },
+    handleFigmaExport,
+  );
+
+  server.registerTool(
+    'parity_figma_import',
+    {
+      title: 'Import Figma bridge or Figma REST JSON into a Parity ui_kit',
+      description:
+        'Turns a Parity Figma bridge JSON or Figma REST document JSON into ui_kits/<slug>/ files so users can continue comments, inspiration edits, parity checks, and coding-agent handoff in Parity Studio.',
+      inputSchema: figmaImportInput,
+    },
+    handleFigmaImport,
   );
 
   const transport = new StdioServerTransport();

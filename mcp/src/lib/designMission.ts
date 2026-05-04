@@ -1,3 +1,5 @@
+import { buildFigmaBridgeFiles } from './figmaBridge.js';
+
 export interface DesignMissionOptions {
   request?: string;
   targetFlow?: string;
@@ -212,11 +214,13 @@ export function withDesignMissionFiles(
         includeImplementationMap,
       })
     : {};
+  const figmaFiles = mission.figmaBridge === true ? buildFigmaBridgeFiles(baseFiles, slug) : {};
 
   return {
     ...baseFiles,
     ...comparisonFiles,
     ...runtimeFiles,
+    ...figmaFiles,
   };
 }
 

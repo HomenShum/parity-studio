@@ -4,6 +4,11 @@ import { ArrowUp, ImagePlus, Package, Paperclip, Sparkles } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import {
+  filesFromFigmaPayload,
+  isLikelyFigmaBridgePath,
+  parseFigmaBridgeJson,
+} from '../../lib/figmaBridge';
 import { useT } from '../../lib/i18n';
 import type { ModelOverride, Tier } from '../../lib/modelRouting';
 import {
@@ -28,6 +33,7 @@ const MAX_KIT_ZIP_BYTES = 30_000_000;
 // Per-file content cap inside the kit. Files above this get rejected so
 // the run row's `files` map stays manageable. 200 KB matches patchFile.
 const MAX_KIT_FILE_BYTES = 200_000;
+const MAX_FIGMA_JSON_BYTES = 2_000_000;
 
 const TEXT_IMPORT_EXTENSIONS = new Set([
   'css',
@@ -127,6 +133,20 @@ export function ComposerCard({
     const f = e.target.files?.[0];
     if (!f) return;
 
+    const isJson = f.name.toLowerCase().endsWith('.json') || f.type === 'application/json';
+    if (isJson) {
+      if (f.size > MAX_FIGMA_JSON_BYTES) {
+        setError(`Figma JSON too large (${(f.size / 1_000_000).toFixed(1)} MB > 2 MB cap)`);
+        return;
+      }
+      try {
+        await importFigmaJson(await f.text(), f.name);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
     // ZIP path - drop a canonical NodeBench-skill-style ui_kit zip and
     // skip generate + decompose entirely. The kit is parsed client-side
     // and every ui_kits/<slug>/ surface is preserved in the imported run.
@@ -174,6 +194,7 @@ export function ComposerCard({
       const slugFiles = new Map<string, Map<string, string>>();
       const importedFiles: Record<string, string> = {};
       const fallbackDesignFiles = new Map<string, string>();
+      let figmaBridgeRaw: string | null = null;
       const uploads: Array<{
         name: string;
         data: Uint8Array;
@@ -184,6 +205,14 @@ export function ComposerCard({
       for (const [rawPath, entry] of Object.entries(zip.files)) {
         if (entry.dir) continue;
         const path = normalizedZipPath(rawPath);
+        if (isLikelyFigmaBridgePath(path)) {
+          const text = await entry.async('string').catch(() => '');
+          if (text.length > 0 && text.length <= MAX_FIGMA_JSON_BYTES) {
+            figmaBridgeRaw = text;
+            importedFiles[path] = text;
+          }
+          continue;
+        }
         const kitMatch = path.match(/^ui_kits\/([^/]+)\/(.+)$/);
         if (kitMatch) {
           const slug = kitMatch[1] as string;
@@ -233,6 +262,23 @@ export function ComposerCard({
             }
           }
         }
+      }
+
+      if (slugFiles.size === 0 && figmaBridgeRaw) {
+        const parsed = parseFigmaBridgeJson(figmaBridgeRaw);
+        const result = filesFromFigmaPayload(parsed, file.name.replace(/\.zip$/i, ''));
+        Object.assign(importedFiles, result.files);
+        for (const [path, text] of Object.entries(result.files)) {
+          const kitMatch = path.match(/^ui_kits\/([^/]+)\/(.+)$/);
+          if (!kitMatch) continue;
+          const slug = kitMatch[1] as string;
+          if (!slugFiles.has(slug)) slugFiles.set(slug, new Map());
+          (slugFiles.get(slug) as Map<string, string>).set(path, text);
+        }
+        prompt =
+          result.warnings.length > 0
+            ? `Imported Figma bridge: ${result.slug}. ${result.warnings[0]}`
+            : `Imported Figma bridge: ${result.slug}`;
       }
 
       if (slugFiles.size === 0 && fallbackDesignFiles.size > 0) {
@@ -330,6 +376,34 @@ export function ComposerCard({
             })
           : t('composer.imported', { slug: activeSlug, count: importedCount });
       setImageLabel(note);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importFigmaJson(raw: string, filename: string) {
+    setBusy(true);
+    try {
+      const parsed = parseFigmaBridgeJson(raw);
+      const result = filesFromFigmaPayload(parsed, filename.replace(/\.json$/i, ''));
+      const surfaces = discoverProjectSurfaces(result.files, result.slug);
+      result.files['parity.project.json'] = JSON.stringify(
+        buildProjectManifest(surfaces, result.slug, new Date().toISOString(), 'project-pack'),
+        null,
+        2,
+      );
+      const runId = await startFromKit({
+        slug: result.slug,
+        files: result.files,
+        clientSessionId,
+        ...(modelOverride ? { modelOverride } : { tier }),
+        prompt:
+          result.warnings.length > 0
+            ? `Imported Figma bridge: ${result.slug}. ${result.warnings[0]}`
+            : `Imported Figma bridge: ${result.slug}`,
+      });
+      onRunStarted(runId);
+      setImageLabel(`imported Figma bridge ${result.slug}`);
     } finally {
       setBusy(false);
     }
@@ -516,7 +590,7 @@ export function ComposerCard({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,application/zip,.zip"
+              accept="image/png,image/jpeg,image/webp,application/zip,application/json,.zip,.json"
               hidden
               onChange={onPickFile}
             />

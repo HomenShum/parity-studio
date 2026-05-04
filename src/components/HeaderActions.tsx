@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Monitor,
   Package,
+  PenTool,
   Smartphone,
   Tablet,
 } from 'lucide-react';
@@ -24,7 +25,7 @@ interface HeaderActionsProps {
   onDeviceChange: (next: Device) => void;
   /**
    * Base path of the run's HTTP routes — e.g. https://blissful-pig-998.convex.site/api/runs/<runId>
-   * The dropdown appends `/zip`, `/html`, `/markdown` per format.
+   * The dropdown appends `/zip`, `/html`, `/markdown`, `/figma` per format.
    */
   exportHrefBase: string;
   exportEnabled: boolean;
@@ -63,6 +64,10 @@ const FORMATS = [
     id: 'markdown' as const,
     Icon: FileText,
   },
+  {
+    id: 'figma' as const,
+    Icon: PenTool,
+  },
 ];
 
 const DEVICE_META: Record<Device, { Icon: typeof Monitor; label: string }> = {
@@ -73,7 +78,7 @@ const DEVICE_META: Record<Device, { Icon: typeof Monitor; label: string }> = {
 
 /**
  * Top-bar right cluster: Comment mode · device · zoom · Export.
- * Export is a dropdown with 3 formats: ZIP / HTML / Markdown.
+ * Export is a dropdown with ZIP / HTML / Markdown / Figma bridge.
  * Device is a segmented control: Desktop / Tablet / Phone.
  */
 export function HeaderActions({

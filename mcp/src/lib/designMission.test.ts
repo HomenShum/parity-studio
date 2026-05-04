@@ -35,7 +35,9 @@ describe('designMission', () => {
     );
     expect(files['ui_kits/nodebench-web/design.plan.md']).toContain('Composer -> Reports');
     expect(files['ui_kits/nodebench-web/proof.checklist.md']).toContain('MP4/GIF proof');
-    expect(files['ui_kits/nodebench-web/figma.bridge.json']).toContain('bridge-ready');
+    expect(files['ui_kits/nodebench-web/figma.bridge.json']).toContain('figma-bridge');
+    expect(files['figma/manifest.json']).toContain('Parity Studio Import');
+    expect(files['figma/code.js']).toContain('figma.createPage');
   });
 
   it('renders prompt constraints for locked component workflows', () => {
