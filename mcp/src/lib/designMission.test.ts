@@ -33,6 +33,22 @@ describe('designMission', () => {
     expect(files['ui_kits/nodebench-web/open-design-takeaways.md']).toContain(
       'What Parity Studio Deliberately Does Differently',
     );
+    expect(files['ui_kits/nodebench-web/DESIGN.md']).toContain('Source-First Design System');
+    expect(files['ui_kits/nodebench-web/design-system.rules.json']).toContain(
+      'parity.design-system-skills',
+    );
+    expect(files['ui_kits/nodebench-web/design-system.method.md']).toContain(
+      'Design System And Skill Routing',
+    );
+    expect(files['ui_kits/nodebench-web/skill-routing.json']).toContain('locked-component-repair');
+    expect(files['ui_kits/nodebench-web/skills.parity.md']).toContain('Approved Production Apply');
+    expect(files['ui_kits/nodebench-web/post-decompose.process.json']).toContain('direction-cards');
+    expect(files['ui_kits/nodebench-web/post-decompose.method.md']).toContain(
+      'Post-Decompose Design Method',
+    );
+    expect(files['ui_kits/nodebench-web/direction-cards.json']).toContain('tech-utility-core');
+    expect(files['ui_kits/nodebench-web/p0-checklist.md']).toContain('Every P0 must pass');
+    expect(files['ui_kits/nodebench-web/five-d-critique.json']).toContain('delivery');
     expect(files['ui_kits/nodebench-web/ui-slugs.json']).toContain('locked');
     expect(files['ui_kits/nodebench-web/locked-components.md']).toContain('Chat thread shell');
     expect(files['ui_kits/nodebench-web/decomposed-comparison.html']).toContain(
@@ -87,5 +103,7 @@ describe('designMission', () => {
     expect(block).toContain('Latest Public Research cards');
     expect(block).toContain('approved-deltas');
     expect(block).toContain('design-workflow.catalog.json');
+    expect(block).toContain('post-decompose.process.json');
+    expect(block).toContain('skill-routing.json');
   });
 });

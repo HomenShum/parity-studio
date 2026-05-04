@@ -1,7 +1,14 @@
 import {
+  DIRECTION_CARDS,
+  FIVE_D_CRITIQUE,
+  P0_CHECKLIST,
+  buildDesignSystemMethodDoc,
+  buildDesignSystemSkillsPayload,
   buildDesignWorkflowCatalogPayload,
   buildDiscoveryQuestionsPayload,
   buildOpenDesignTakeawaysDoc,
+  buildPostDecomposeMethodDoc,
+  buildPostDecomposeProcessPayload,
 } from './designWorkflowCatalog.js';
 import { buildFigmaBridgeFiles } from './figmaBridge.js';
 import { buildQaDogfoodRelayFiles } from './qaDogfoodRelay.js';
@@ -69,9 +76,13 @@ Design mission rules:
 - Add memo/batch/inspiration/iteration features as layers inside existing component patterns.
 - Do not create a new top-level dashboard/nav if the captured product already has a working shell.
 - Before generating pixels or repo patches, use the discovery questions to lock source of truth, target flow, locked components, allowed scope, reference policy, proof requirements, and BYOK/privacy mode.
+- After decomposition, run the post-decompose method: discovery lock, direction card, exact capture baseline, P0 checklist, 5D critique, and approval handoff.
+- Treat design-system work as source-first: extract the captured product rules into DESIGN.md and design-system.rules.json before applying references.
 - Pick the smallest workflow from design-workflow.catalog.json that proves the user request; if this is an existing app, capture/decompose before free-form generation.
+- Route agent work through skill-routing.json so capture, scoped repair, inspiration, QA proof, Figma bridge, and production apply do not blur together.
+- Do not generate fresh mock screens until post-decompose.process.json has a selected direction and exact baseline proof.
 - Emit files that let a coding agent view, comment, verify, approve, and only then apply deltas to the repo.
-- Include design.plan.md, design-workflow.catalog.json, discovery.questions.json, open-design-takeaways.md, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, figma.bridge.json, qa-dogfood.packet.json, qa-dogfood.plan.md, snapshot-snippets.json, gmail-magic-resend.html, remotion.storyboard.json, and easier-to-read-submission.md in the ui_kit.
+- Include design.plan.md, DESIGN.md, design-system.rules.json, design-system.method.md, skill-routing.json, skills.parity.md, design-workflow.catalog.json, discovery.questions.json, open-design-takeaways.md, post-decompose.process.json, post-decompose.method.md, direction-cards.json, p0-checklist.md, five-d-critique.json, design-slug-manifest.json, ui-slugs.json, locked-components.md, proof.checklist.md, browser-qa.proof.json, media.plan.json, figma.bridge.json, qa-dogfood.packet.json, qa-dogfood.plan.md, snapshot-snippets.json, gmail-magic-resend.html, remotion.storyboard.json, and easier-to-read-submission.md in the ui_kit.
 - If requested or useful for a larger product change, include decomposed-comparison.html and runtime-architecture.md/html/json with implementation maps and QA gates.`;
 }
 
@@ -139,6 +150,71 @@ export function withDesignMissionFiles(
       2,
     )}\n`,
     [`ui_kits/${slug}/open-design-takeaways.md`]: buildOpenDesignTakeawaysDoc(),
+    [`ui_kits/${slug}/DESIGN.md`]: buildDesignSystemDoc({
+      slug,
+      mission,
+      lockedComponents,
+      lockedSlugs,
+      scope,
+    }),
+    [`ui_kits/${slug}/design-system.rules.json`]: `${JSON.stringify(
+      buildDesignSystemSkillsPayload({
+        slug,
+        targetFlow: mission.targetFlow,
+      }),
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/design-system.method.md`]: buildDesignSystemMethodDoc({
+      slug,
+      targetFlow: mission.targetFlow,
+    }),
+    [`ui_kits/${slug}/skill-routing.json`]: `${JSON.stringify(
+      buildDesignSystemSkillsPayload({
+        slug,
+        targetFlow: mission.targetFlow,
+      }).skillRoutes,
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/skills.parity.md`]: buildParitySkillsDoc({
+      slug,
+      mission,
+    }),
+    [`ui_kits/${slug}/post-decompose.process.json`]: `${JSON.stringify(
+      buildPostDecomposeProcessPayload({
+        slug,
+        targetFlow: mission.targetFlow,
+        lockedComponents,
+      }),
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/post-decompose.method.md`]: buildPostDecomposeMethodDoc({
+      slug,
+      targetFlow: mission.targetFlow,
+      lockedComponents,
+    }),
+    [`ui_kits/${slug}/direction-cards.json`]: `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        cards: DIRECTION_CARDS,
+        rule: 'Select one card before major design work. A card constrains the delta; it does not replace locked product grammar.',
+      },
+      null,
+      2,
+    )}\n`,
+    [`ui_kits/${slug}/p0-checklist.md`]: buildP0ChecklistDoc(),
+    [`ui_kits/${slug}/five-d-critique.json`]: `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        axes: FIVE_D_CRITIQUE,
+        passRule:
+          'Any axis below pass threshold requires a concrete repair or a written reason it is outside scope.',
+      },
+      null,
+      2,
+    )}\n`,
     [`ui_kits/${slug}/design.plan.md`]: buildDesignPlan({
       slug,
       mission,
@@ -297,10 +373,125 @@ ${lockedComponents.length > 0 ? lockedComponents.map((name) => `- ${name}`).join
 ## Workflow
 
 1. Use this kit as the design board before production implementation.
-2. Iterate only the scoped slugs/components requested by the user.
-3. Verify with browser screenshots, parity checks, and end-user impact readout.
-4. Export approved deltas for the coding agent to implement in the real repo.
-5. Do not apply production code changes until the user approves the Parity Studio result.
+2. Run post-decompose.process.json before drawing or rewriting screens.
+3. Read DESIGN.md, design-system.rules.json, and skill-routing.json.
+4. Select a direction card and keep the exact capture as the baseline.
+5. Iterate only the scoped slugs/components requested by the user.
+6. Verify with browser screenshots, parity checks, P0 checklist, 5D critique, and end-user impact readout.
+7. Export approved deltas for the coding agent to implement in the real repo.
+8. Do not apply production code changes until the user approves the Parity Studio result.
+`;
+}
+
+function buildDesignSystemDoc({
+  slug,
+  mission,
+  lockedComponents,
+  lockedSlugs,
+  scope,
+}: {
+  slug: string;
+  mission: DesignMissionOptions;
+  lockedComponents: string[];
+  lockedSlugs: string[];
+  scope: string;
+}): string {
+  return `# ${slug} Source-First Design System
+
+> Category: Parity Source-First
+> Extracted from the captured/imported product surface. References may guide direction, but source parity and locked components win.
+
+## 1. Visual Theme & Atmosphere
+
+Preserve the captured product posture before applying inspiration. Target flow: ${mission.targetFlow ?? 'infer from source route'}.
+
+## 2. Color Palette & Roles
+
+Use \`tokens.css\`, \`colors_and_type.css\`, and captured CSS as the first source of color truth. Map any reference colors into semantic roles instead of copying brand palettes directly.
+
+## 3. Typography Rules
+
+Keep the source heading/body/mono hierarchy recognizable unless the user approves a typography re-direction with before/after proof.
+
+## 4. Component Stylings
+
+Locked components: ${lockedComponents.length ? lockedComponents.join(', ') : 'infer shell, nav, composer/CTA, cards/lists, comments, coach, and export controls'}.
+
+Locked slugs: ${lockedSlugs.length ? lockedSlugs.join(', ') : 'infer stable slugs before production apply'}.
+
+## 5. Layout Principles
+
+Allowed scope: ${scope}. Preserve the app shell, navigation model, primary work surface, secondary panels, and responsive intent unless explicit reimagination is approved.
+
+## 6. Depth & Elevation
+
+Use radius, borders, shadows, and annotation overlays to clarify state. Persistent comments or selection boxes must read as review annotations, not broken UI.
+
+## 7. Do's and Don'ts
+
+- Do preserve exact source text, data, and workflow orientation.
+- Do make deltas visible, scoped, and explainable to end users.
+- Do use references as abstract patterns.
+- Do not copy proprietary assets, invent metrics, or replace the shell without approval.
+- Do not mark production-ready until browser QA and approval proof exist.
+
+## 8. Responsive Behavior
+
+Verify desktop plus requested tablet/mobile states. Multi-surface imports must keep each surface's role explicit.
+
+## 9. Agent Prompt Guide
+
+Read \`design-system.rules.json\`, \`skill-routing.json\`, \`post-decompose.process.json\`, and \`proof.checklist.md\` before editing. Use the smallest skill route that fits the user's request.
+`;
+}
+
+function buildParitySkillsDoc({
+  slug,
+  mission,
+}: {
+  slug: string;
+  mission: DesignMissionOptions;
+}): string {
+  return `# ${slug} Parity Skill Routing
+
+Use these routes to keep design work separate from production code edits.
+
+## Route Capture And Decompose
+
+Use when the source is a running app route, hosted URL, screenshot, Figma bridge, Claude Design/Open CoDesign export, or ui_kit ZIP.
+
+## Locked Component Repair
+
+Use when the user comments on a preview region or asks for a scoped UI fix.
+
+## Inspiration Director
+
+Use when the user wants references or a more premium direction. Convert references into patterns; do not copy assets.
+
+## QA Dogfood Relay
+
+Use when the user needs proof, release assets, GIF/MP4, readable submissions, or tester packets.
+
+## Figma Bridge
+
+Use when the approved kit needs to move to or from Figma.
+
+## Approved Production Apply
+
+Use only after the Parity design board is approved. Dry-run mappings before writing files.
+
+## Mission Context
+
+${mission.request ?? 'Design-first Parity Studio mission.'}
+`;
+}
+
+function buildP0ChecklistDoc(): string {
+  return `# P0 Checklist
+
+Every P0 must pass before export or production apply.
+
+${P0_CHECKLIST.map((item) => `- [ ] ${item}`).join('\n')}
 `;
 }
 

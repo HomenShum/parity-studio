@@ -66,9 +66,19 @@ What it does:
 - Captures a running route using the same local BYOK-safe path as `parity_platform_to_ui_kit`.
 - Creates a hosted Parity Studio run and canonical ZIP.
 - Adds durable design-first files:
+  - `DESIGN.md`
+  - `design-system.rules.json`
+  - `design-system.method.md`
+  - `skill-routing.json`
+  - `skills.parity.md`
   - `design-workflow.catalog.json`
   - `discovery.questions.json`
   - `open-design-takeaways.md`
+  - `post-decompose.process.json`
+  - `post-decompose.method.md`
+  - `direction-cards.json`
+  - `p0-checklist.md`
+  - `five-d-critique.json`
   - `design-slug-manifest.json`
   - `ui-slugs.json`
   - `locked-components.md`
@@ -89,6 +99,9 @@ What it does:
   - `easier-to-read-submission.md`
   - `figma/manifest.json`, `figma/code.js`, `figma/ui.html` when Figma bridge export is requested
 - Locks named slugs/components so the agent can iterate within the existing product grammar.
+- Extracts a source-first design system before inspiration is applied, so references never override the captured product.
+- Adds skill routing for route capture, locked repair, inspiration, QA dogfood, Figma bridge, and approved production apply.
+- Runs the post-decomposition process layer adapted from Open Design: discovery lock, deterministic direction card, exact-capture baseline, P0 checklist, 5D critique, and approval handoff.
 - Packages the same proof into a QA relay format that can be resent by Gmail, rendered as Remotion storyboards, and copied into the `easier-to-read-submissions` protocol.
 - Returns the ZIP path, hosted run URL, parity report, and next approval steps.
 
@@ -100,6 +113,8 @@ It returns:
 
 - Workflow catalog: existing-app capture, design-first slug board, inspiration apply, comment-scoped repair, QA dogfood relay, Figma bridge, and approved-delta apply.
 - Discovery questions: source of truth, target flow, locked components, allowed scope, reference policy, proof requirements, BYOK/privacy mode.
+- Design system and skill routing: source-first `DESIGN.md` sections plus explicit skill routes that keep design proof separate from production apply.
+- Post-decomposition process: direction cards, exact baseline rules, P0 checklist, 5D critique axes, and approval handoff gates.
 - Production-apply blocker status: whether required answers are still missing before any repo write.
 
 This keeps Open Design's strong preflight discipline while preserving Parity Studio's narrower wedge: decompose existing product surfaces, verify parity, prove changes, then apply approved deltas.

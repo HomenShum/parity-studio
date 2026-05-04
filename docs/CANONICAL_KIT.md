@@ -34,9 +34,19 @@ A canonical zip looks like this:
     |   |-- performance.budget.json
     |   |-- api-wiring.plan.md
     |   |-- qa.plan.md
+    |   |-- DESIGN.md
+    |   |-- design-system.rules.json
+    |   |-- design-system.method.md
+    |   |-- skill-routing.json
+    |   |-- skills.parity.md
     |   |-- design-workflow.catalog.json
     |   |-- discovery.questions.json
     |   |-- open-design-takeaways.md
+    |   |-- post-decompose.process.json
+    |   |-- post-decompose.method.md
+    |   |-- direction-cards.json
+    |   |-- p0-checklist.md
+    |   |-- five-d-critique.json
     |   |-- design-system-showcase.html
     |   |-- figma.bridge.json    # round-trip Figma bridge metadata
     |   |-- README.md            # per-kit handoff instructions
@@ -63,9 +73,19 @@ A canonical zip looks like this:
 | `ui_kits/<slug>/performance.budget.json` | optional on import, **emitted** on export | Backfilled if missing | Route/interaction budgets derived from the product performance principles |
 | `ui_kits/<slug>/api-wiring.plan.md` | optional on import, **emitted** on export | Backfilled if missing | Plan-first live API wiring checklist and side-effect policy |
 | `ui_kits/<slug>/qa.plan.md` | optional on import, **emitted** on export | Backfilled if missing | Browser routes, selectors, screenshots, console budget, overflow, and dogfood checks |
+| `ui_kits/<slug>/DESIGN.md` | optional, **emitted by MCP design missions** | Preserved | Source-first design-system document extracted from the current product before references are applied |
+| `ui_kits/<slug>/design-system.rules.json` | optional, **emitted by MCP design missions** | Preserved | Machine-readable design-system policy, sections, skill routes, and Open Design adaptation boundaries |
+| `ui_kits/<slug>/design-system.method.md` | optional, **emitted by MCP design missions** | Preserved | Human-readable guide for source-first design-system extraction and skill routing |
+| `ui_kits/<slug>/skill-routing.json` | optional, **emitted by MCP design missions** | Preserved | Explicit skill routes for capture/decompose, locked repair, inspiration, QA dogfood, Figma bridge, and approved apply |
+| `ui_kits/<slug>/skills.parity.md` | optional, **emitted by MCP design missions** | Preserved | Agent-readable skill routing guide scoped to the active slug |
 | `ui_kits/<slug>/design-workflow.catalog.json` | optional, **emitted by MCP design missions** | Preserved | Agent-readable workflow catalog for capture, design mission, inspiration, comment repair, QA dogfood, Figma bridge, and approved apply |
 | `ui_kits/<slug>/discovery.questions.json` | optional, **emitted by MCP design missions** | Preserved | Open Design-style preflight answers/questions that block production apply when source of truth, target flow, locked components, or scope are missing |
 | `ui_kits/<slug>/open-design-takeaways.md` | optional, **emitted by MCP design missions** | Preserved | Human-readable distinction between Open Design's broad artifact generation and Parity Studio's existing-product decomposition/verification wedge |
+| `ui_kits/<slug>/post-decompose.process.json` | optional, **emitted by MCP design missions** | Preserved | Post-decomposition process contract: discovery lock, direction cards, exact baseline, P0 checklist, 5D critique, and approval handoff |
+| `ui_kits/<slug>/post-decompose.method.md` | optional, **emitted by MCP design missions** | Preserved | Human-readable method for what the agent should do after decomposition before redesigning or applying production deltas |
+| `ui_kits/<slug>/direction-cards.json` | optional, **emitted by MCP design missions** | Preserved | Deterministic direction choices such as tech utility core, card memory, report editorial, and calm command surface |
+| `ui_kits/<slug>/p0-checklist.md` | optional, **emitted by MCP design missions** | Preserved | Approval-blocking checklist for source exactness, locked slugs, honest data, browser QA, end-user impact, and production apply gates |
+| `ui_kits/<slug>/five-d-critique.json` | optional, **emitted by MCP design missions** | Preserved | Critique axes for desirability, density, direction, data, and delivery before export/apply |
 | `ui_kits/<slug>/design-system-showcase.html` | optional, **emitted** on export | Preserved | Same showcase colocated with the active slug for design-system-first handoff |
 | `ui_kits/<slug>/figma.bridge.json` | optional on import, **emitted** on export | A dropped JSON or ZIP bridge becomes an editable `ui_kits/<slug>/` run | Round-trip bridge payload for Figma plugin import/export |
 | `figma/manifest.json` | optional on import, **emitted** on export and Figma export | Used when a dropped ZIP only contains the Figma bridge bundle | Figma development plugin manifest |

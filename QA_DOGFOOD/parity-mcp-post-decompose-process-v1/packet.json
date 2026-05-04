@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "easier-to-read-submission",
+  "featureId": "parity-mcp-post-decompose-process-v1",
+  "title": "MCP post-decomposition process, design-system, and skill-routing artifacts",
+  "surface": "parity-studio-mcp",
+  "targetFlow": "Existing source -> ui_kit -> design-system lock -> skill route -> post-decompose proof -> approved apply",
+  "visualAid": {
+    "gif": "https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows-720.gif",
+    "mp4": "https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows.mp4",
+    "purpose": "PR body visual context for reviewers and future readers"
+  },
+  "lanes": {
+    "workflows": [
+      {
+        "id": "mcp-design-mission-output",
+        "label": "parity_design_mission emits source-first design-system and skill-routing files",
+        "status": "verified"
+      },
+      {
+        "id": "post-decompose-method",
+        "label": "Agent receives discovery lock, direction cards, exact baseline, P0 checklist, and 5D critique",
+        "status": "verified"
+      },
+      {
+        "id": "approved-production-apply",
+        "label": "Production writes remain blocked behind proof and explicit approval",
+        "status": "verified"
+      }
+    ],
+    "personas": [
+      "coding agent maintainer",
+      "product reviewer",
+      "future contributor reading the PR"
+    ],
+    "userStates": [
+      "existing app has been decomposed",
+      "agent is deciding what to do next",
+      "reviewer needs visual context",
+      "production apply is pending approval"
+    ]
+  },
+  "changedSurfaces": [
+    "mcp/src/lib/designWorkflowCatalog.ts",
+    "mcp/src/lib/designMission.ts",
+    "README.md",
+    "mcp/README.md",
+    "docs/CANONICAL_KIT.md",
+    "docs/OPEN_DESIGN_TAKEAWAYS.md"
+  ],
+  "verification": [
+    "npm run lint",
+    "npm run typecheck",
+    "npm run build",
+    "cd mcp && npm run build",
+    "cd mcp && npm run test",
+    "cd mcp && node scripts/smoke-test.mjs"
+  ],
+  "security": {
+    "providerKeys": "No provider key values are read, printed, committed, or uploaded.",
+    "uploadedData": "This PR changes generated text/JSON artifacts and docs only.",
+    "approvalGate": "Production repo writes remain dry-run/approval-gated."
+  }
+}

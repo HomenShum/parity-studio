@@ -13,6 +13,19 @@ describe('designWorkflowCatalog', () => {
     expect(catalog.positioning.parityStudio).toContain('capture/decompose');
     expect(catalog.workflows.map((workflow) => workflow.id)).toContain('existing-app-to-ui-kit');
     expect(catalog.workflows.map((workflow) => workflow.id)).toContain('qa-dogfood-relay');
+    expect(catalog.postDecomposeProcess.stages.map((stage) => stage.id)).toContain(
+      'direction-cards',
+    );
+    expect(catalog.postDecomposeProcess.directionCards.map((card) => card.id)).toContain(
+      'tech-utility-core',
+    );
+    expect(catalog.postDecomposeProcess.fiveDCritique.map((axis) => axis.id)).toContain('data');
+    expect(catalog.designSystemSkills.designSystemSections.map((section) => section.id)).toContain(
+      'agent-prompt-guide',
+    );
+    expect(catalog.designSystemSkills.skillRoutes.map((route) => route.id)).toContain(
+      'locked-component-repair',
+    );
     expect(catalog.agentRule).toContain('capture/decompose/design-mission');
   });
 
@@ -34,5 +47,9 @@ describe('designWorkflowCatalog', () => {
     expect(doc).toContain('What Open Design Does Well');
     expect(doc).toContain('What Parity Studio Deliberately Does Differently');
     expect(doc).toContain('Contribution Candidates Upstream');
+    expect(doc).toContain('What Happens After Decomposition');
+    expect(doc).toContain('5D critique');
+    expect(doc).toContain('Design Systems And Skills');
+    expect(doc).toContain('source-first DESIGN.md');
   });
 });
