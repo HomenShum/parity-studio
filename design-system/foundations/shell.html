@@ -1,0 +1,55 @@
+<!-- @dsCard group="Foundations" -->
+<style>
+  .ds-shell { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 32px; border-radius: 14px; }
+  .ds-shell * { box-sizing: border-box; margin: 0; }
+  .ds-shell .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .ds-shell h1 { font-family: "Manrope", "Inter", sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 4px; }
+  .ds-shell .lede { font-size: 14px; color: #C6CCD4; max-width: 64ch; line-height: 1.55; }
+  .ds-shell .frame { margin-top: 24px; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: #09090B; overflow: hidden; }
+  .ds-shell .top { height: 34px; border-bottom: 1px solid rgba(255,255,255,.10); background: #111418; display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 11px; color: #99A3AE; }
+  .ds-shell .top .sw { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 2px 8px; }
+  .ds-shell .cols { display: flex; gap: 6px; padding: 6px; height: 240px; }
+  .ds-shell .pane { border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: #111418; padding: 10px; font-size: 11px; color: #99A3AE; }
+  .ds-shell .pane b { display: block; color: #F2F4F7; font-size: 12px; margin-bottom: 4px; }
+  .ds-shell .pane .w { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; }
+  .ds-shell .binder { width: 132px; flex: none; }
+  .ds-shell .stage { flex: 1; background: #FBF8F2; color: #6B7280; }
+  .ds-shell .stage b { color: #1F2937; }
+  .ds-shell .stage .paper { margin-top: 8px; height: 110px; background: #FFFFFF; border: 1px solid rgba(0,0,0,.08); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .ds-shell .copilot { width: 168px; flex: none; display: flex; flex-direction: column; gap: 6px; }
+  .ds-shell .msg { border: 1px solid rgba(255,255,255,.10); border-radius: 6px; padding: 6px 8px; font-size: 10px; line-height: 1.5; color: #C6CCD4; }
+  .ds-shell .msg.agent { border-left: 2px solid #5E6AD2; }
+  .ds-shell .msg.user { border-left: 2px solid #D97757; }
+  .ds-shell .bridge { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .ds-shell .bridge span { border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 1px 7px; font-size: 9px; color: #C6CCD4; }
+  .ds-shell .bridge span.go { border-color: rgba(217,119,87,.4); color: #E59579; }
+  .ds-shell .rules { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .ds-shell .rule { font-size: 13px; color: #C6CCD4; line-height: 1.55; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; }
+  .ds-shell .rule strong { color: #F2F4F7; }
+  .ds-shell .rule code { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #99A3AE; }
+</style>
+<div class="ds-shell">
+  <div class="kicker">NodeSlide · Foundations</div>
+  <h1>Shell — binder, stage, copilot</h1>
+  <p class="lede">Adapted from NodeRoom's june-2026 RoomShell. Three resizable flex panels under a 52px top bar: the binder holds the deck's structure, the stage holds the artifact, and the agent lives on the <strong style="color:#F2F4F7">right</strong> — a copilot beside your work, never an author over it.</p>
+
+  <div class="frame">
+    <div class="top">Q3 Portfolio Review · deck v41 <span class="sw">review-gate: on</span></div>
+    <div class="cols">
+      <div class="pane binder"><b>SlideNavigator</b><span class="w">232px · min 176</span><br><br>1 · Cover<br>2 · Thesis<br>3 · Market<br><span style="color:#E59579">4 · Wedge ●</span><br>5 · Proof</div>
+      <div class="pane stage"><b>Stage — slide 4</b><span class="w">flex:1 · paper, not chrome</span><div class="paper"></div></div>
+      <div class="pane copilot"><b style="font-size:12px">Copilot</b><span class="w">340px · min 280</span>
+        <div class="msg user">Tighten the wedge headline.</div>
+        <div class="msg agent">Proposed rewrite on slide 4 · <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8A94A0">p_9a41 · 2 ops</span>
+          <div class="bridge"><span class="go">Accept</span><span>Modify</span><span>Decline</span><span>Receipt</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><strong>Chat drives the stage.</strong> Agent messages carry slide reference cards; opening one focuses the exact element on the canvas (<code>openArtifact(id, {elementId})</code> pattern). Conversation and artifact stay one gesture apart.</div>
+    <div class="rule"><strong>Sidecar, never overwrite.</strong> Agent output arrives as proposal cards with an action bridge — Accept / Modify / Decline / Receipt. The voice is "NodeSlide noticed…", never "NodeSlide edited your work." Room-level auto-allow vs review gate sits in the top bar.</div>
+    <div class="rule"><strong>Split view = variation compare.</strong> At <code>≥1200px</code> the stage can hold two artifacts side by side — repurposed as A/B slide variation review. Compact <code>≤980px</code> shows one panel at a time.</div>
+  </div>
+</div>

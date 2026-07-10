@@ -1,0 +1,62 @@
+<!-- @dsCard group="Foundations" -->
+<style>
+  .ds-tok { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 32px; border-radius: 14px; }
+  .ds-tok * { box-sizing: border-box; margin: 0; }
+  .ds-tok .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .ds-tok h1 { font-family: "Manrope", "Inter", sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 4px; }
+  .ds-tok .lede { font-size: 14px; color: #C6CCD4; max-width: 64ch; line-height: 1.55; }
+  .ds-tok .split { display: flex; gap: 16px; margin-top: 24px; flex-wrap: wrap; }
+  .ds-tok .ns { flex: 1 1 260px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: #111418; padding: 16px 18px; }
+  .ds-tok .ns h2 { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; margin-bottom: 8px; }
+  .ds-tok .ns p { font-size: 13px; color: #C6CCD4; line-height: 1.6; }
+  .ds-tok .ns ul { padding-left: 16px; font-size: 13px; color: #99A3AE; line-height: 1.8; margin-top: 8px; }
+  .ds-tok .flow { margin-top: 24px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: #111418; padding: 16px 18px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; line-height: 2; color: #C6CCD4; overflow-x: auto; }
+  .ds-tok .flow .t { color: #D97757; }
+  .ds-tok .flow .a { color: #5E6AD2; }
+  .ds-tok .flow .g { color: #2E9E6B; }
+  .ds-tok .note { font-size: 13px; color: #C6CCD4; line-height: 1.6; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 16px; max-width: 70ch; }
+  .ds-tok .note strong { color: #F2F4F7; }
+  .ds-tok .motion { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .ds-tok .m { border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #C6CCD4; }
+  .ds-tok .m .v { font-family: "JetBrains Mono", ui-monospace, monospace; color: #F2F4F7; display: block; margin-top: 2px; }
+</style>
+<div class="ds-tok">
+  <div class="kicker">NodeSlide · Foundations</div>
+  <h1>Token architecture — the app is themed by the system it sells</h1>
+  <p class="lede">One W3C token format serves two namespaces. <span style="font-family:'JetBrains Mono',monospace;color:#F2F4F7">app.*</span> is the studio's own identity and never changes. <span style="font-family:'JetBrains Mono',monospace;color:#F2F4F7">slide.*</span> is only a default — a customer's SignatureProfile, extracted from their own decks, replaces it wholesale. Identity preservation is not a feature bolted on; it is where the theme system starts.</p>
+
+  <div class="split">
+    <div class="ns">
+      <h2 style="color:#D97757">app.*</h2>
+      <p>Studio chrome. Fixed, versioned with the product.</p>
+      <ul>
+        <li>surface ladder #09090B → #1B2027</li>
+        <li>authorship inks: user / agent</li>
+        <li>receipt semantics: verified / warning / danger</li>
+        <li>type: Manrope · Inter · JetBrains Mono</li>
+        <li>4px space scale · panel radius 14px</li>
+      </ul>
+    </div>
+    <div class="ns">
+      <h2 style="color:#2E9E6B">slide.*</h2>
+      <p>Deck surface defaults. Overridable per deck, per team.</p>
+      <ul>
+        <li>paper #FBF8F2 · terracotta rule lines</li>
+        <li>slide display + body families</li>
+        <li>replaced at render time by SignatureProfile</li>
+        <li>never leaks into app chrome</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flow">customer.pptx ─▶ extractSignature() ─▶ <span class="t">SignatureProfile</span> (same token format)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─▶ overrides <span class="g">slide.*</span> ─▶ validator ─▶ <span class="g">▮ ok ▮ publish ▮ clean</span><br>app.* stays fixed ─▶ chrome recedes · <span class="a">agent ink</span> + <span class="t">user ink</span> stay legible on any brand</div>
+
+  <div class="motion">
+    <div class="m">fast<span class="v">120ms</span></div>
+    <div class="m">base<span class="v">180ms</span></div>
+    <div class="m">slow · panel-in<span class="v">340ms · cubic-bezier(.16,1,.3,1)</span></div>
+    <div class="m">focus ring<span class="v">0 0 0 3px rgba(217,119,87,.42)</span></div>
+  </div>
+
+  <p class="note"><strong>Rules that gate review:</strong> no hex value in any component that isn't a token reference · green only from the validator · agents never write in terracotta · motion explains state, never decorates · all decorative motion behind <span style="font-family:'JetBrains Mono',monospace">prefers-reduced-motion</span>. Canonical file: <span style="font-family:'JetBrains Mono',monospace">src/domains/nodeslide/theme/app-tokens.json</span>.</p>
+</div>

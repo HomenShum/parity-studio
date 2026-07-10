@@ -1,0 +1,59 @@
+<!-- @dsCard group="Components" -->
+<style>
+  .c-sig { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 28px; border-radius: 14px; }
+  .c-sig * { box-sizing: border-box; margin: 0; }
+  .c-sig .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .c-sig h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 16px; }
+  .c-sig h2 { font-size: 12px; font-weight: 600; color: #99A3AE; margin: 20px 0 8px; }
+  .c-sig .cols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .c-sig .pop { width: 300px; border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 10px; overflow: hidden; }
+  .c-sig .sec { padding: 8px 12px 4px; font-size: 10px; color: #8A94A0; text-transform: uppercase; letter-spacing: .12em; font-weight: 600; }
+  .c-sig .row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; }
+  .c-sig .row.on { background: #171B20; }
+  .c-sig .sws { display: flex; gap: 2px; flex: none; }
+  .c-sig .sws i { width: 10px; height: 10px; border-radius: 2px; display: block; }
+  .c-sig .nm { flex: 1; }
+  .c-sig .nm .src { font-size: 10px; color: #8A94A0; font-family: "JetBrains Mono", monospace; }
+  .c-sig .conf { font-size: 9px; border-radius: 9999px; padding: 1px 7px; }
+  .c-sig .conf.hi { color: #2E9E6B; border: 1px solid rgba(46,158,107,.35); }
+  .c-sig .conf.lo { color: #EFB785; border: 1px solid rgba(239,183,133,.35); }
+  .c-sig .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(217,119,87,.10); border-top: 1px solid rgba(217,119,87,.24); font-size: 11px; color: #E59579; }
+  .c-sig .bar span { border: 1px solid rgba(217,119,87,.5); border-radius: 9999px; padding: 1px 9px; font-size: 10px; }
+  .c-sig .detail { width: 300px; border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 10px; padding: 14px; }
+  .c-sig .detail .t { font-size: 13px; font-weight: 600; }
+  .c-sig .detail .warn { margin-top: 8px; font-size: 11px; color: #EFB785; line-height: 1.5; }
+  .c-sig .detail .tok { display: flex; justify-content: space-between; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #99A3AE; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,.08); }
+  .c-sig .empty { width: 300px; border: 1px dashed rgba(255,255,255,.14); border-radius: 10px; padding: 20px 16px; font-size: 12px; color: #99A3AE; line-height: 1.6; text-align: center; }
+  .c-sig .empty b { color: #F2F4F7; display: block; margin-bottom: 4px; }
+</style>
+<div class="c-sig">
+  <div class="kicker">NodeSlide · Components · Pillar 1</div>
+  <h1>SignatureSwitcher</h1>
+
+  <div class="cols">
+    <div>
+      <h2 style="margin-top:0">list + previewing</h2>
+      <div class="pop">
+        <div class="sec">Yours</div>
+        <div class="row on"><span class="sws"><i style="background:#0B3D5C"></i><i style="background:#E8B23A"></i><i style="background:#F5F1E8"></i></span><span class="nm">Meridian Capital<br><span class="src">pptx · 41 slides</span></span><span class="conf hi">high</span></div>
+        <div class="row"><span class="sws"><i style="background:#1E1E24"></i><i style="background:#7C5CFF"></i><i style="background:#EDEDF2"></i></span><span class="nm">Homen — keynote<br><span class="src">screenshot</span></span><span class="conf lo">low · 3 warnings</span></div>
+        <div class="sec">Sector packs</div>
+        <div class="row"><span class="sws"><i style="background:#0F2A43"></i><i style="background:#2E9E6B"></i><i style="background:#F7F7F4"></i></span><span class="nm">Finance / IBCS<br><span class="src">taste_pack</span></span><span class="conf hi">authored</span></div>
+        <div class="row"><span class="sws"><i style="background:#111"></i><i style="background:#D97757"></i><i style="background:#FFF"></i></span><span class="nm">Startup pitch<br><span class="src">taste_pack</span></span><span class="conf hi">authored</span></div>
+        <div class="bar">Previewing — not applied <span>Apply</span><span>Revert</span></div>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">low-confidence detail — uncertainty stays visible</h2>
+      <div class="detail">
+        <div class="t">Homen — keynote <span class="conf lo" style="margin-left:6px">low</span></div>
+        <div class="tok"><span>color.accent</span><span>#7C5CFF · vision · 0.54</span></div>
+        <div class="tok"><span>font.display</span><span>"Satoshi?" · vision · 0.41</span></div>
+        <div class="tok"><span>font.body</span><span>Inter · vision · 0.78</span></div>
+        <div class="warn">⚠ display font inferred from 2 screenshots only<br>⚠ no source file digest — re-extract from PPTX for high confidence<br>⚠ spacing tendencies unavailable</div>
+      </div>
+      <h2>empty</h2>
+      <div class="empty"><b>No signatures yet</b>Upload a past deck — NodeSlide learns your look and keeps it yours.<br><br><span style="border:1px solid rgba(217,119,87,.5);color:#E59579;border-radius:9999px;padding:2px 10px;font-size:11px">Upload PPTX</span></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,76 @@
+<!-- @dsCard group="Components" -->
+<style>
+  .c-prc { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 28px; border-radius: 14px; }
+  .c-prc * { box-sizing: border-box; margin: 0; }
+  .c-prc .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .c-prc h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 16px; }
+  .c-prc h2 { font-size: 12px; font-weight: 600; color: #99A3AE; margin: 20px 0 8px; }
+  .c-prc .grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .c-prc .card { width: 290px; border: 1px solid rgba(255,255,255,.10); border-left: 2px solid #5E6AD2; background: #111418; border-radius: 8px; padding: 10px 12px; }
+  .c-prc .card.user { border-left-color: #D97757; }
+  .c-prc .who { font-size: 10px; color: #8A94A0; }
+  .c-prc .who b { color: #8E97E8; font-weight: 600; }
+  .c-prc .sum { font-size: 13px; margin: 4px 0 6px; }
+  .c-prc .op { display: flex; justify-content: space-between; font-size: 11px; color: #99A3AE; padding: 4px 0; border-top: 1px dashed rgba(255,255,255,.08); }
+  .c-prc .op a { color: #C6CCD4; text-decoration: underline dotted; cursor: pointer; }
+  .c-prc .op .k { font-family: "JetBrains Mono", monospace; font-size: 10px; }
+  .c-prc .rec { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; margin-top: 6px; }
+  .c-prc .rec .ok { color: #2E9E6B; }
+  .c-prc .bridge { display: flex; gap: 5px; margin-top: 8px; }
+  .c-prc .bridge span { border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 2px 10px; font-size: 10px; color: #C6CCD4; }
+  .c-prc .bridge .go { border-color: rgba(217,119,87,.5); color: #E59579; }
+  .c-prc .card.done { border-left-color: #D97757; }
+  .c-prc .card.done .state { color: #E59579; font-size: 11px; margin-top: 6px; }
+  .c-prc .card.dim { opacity: .55; }
+  .c-prc .stale-n { font-size: 10px; color: #EFB785; margin-top: 6px; line-height: 1.5; }
+  .c-prc .lock { color: #EFB785; }
+  .c-prc .voice { font-size: 12px; color: #C6CCD4; line-height: 1.6; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 18px; max-width: 66ch; }
+  .c-prc .voice strong { color: #F2F4F7; }
+</style>
+<div class="c-prc">
+  <div class="kicker">NodeSlide · Components · Approval boundary</div>
+  <h1>PatchReviewCard</h1>
+
+  <div class="grid">
+    <div>
+      <h2 style="margin-top:0">proposed</h2>
+      <div class="card">
+        <div class="who"><b>■ agent</b> · p_9a41 · 2 ops · <span style="text-decoration:underline dotted">trace</span></div>
+        <div class="sum">NodeSlide noticed the wedge headline runs long — proposed a tighter version.</div>
+        <div class="op"><a>slide 4 · headline</a><span class="k">replace_text</span></div>
+        <div class="op"><a>slide 4 · subhead</a><span class="k">update_style</span></div>
+        <div class="rec">candidate: <span class="ok">▮ ok</span> · base v41</div>
+        <div class="bridge"><span class="go">Accept</span><span>Modify</span><span>Decline</span><span>Receipt</span></div>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">accepted / declined</h2>
+      <div class="card done">
+        <div class="who"><b style="color:#E59579">■ you</b> accepted · p_9a41</div>
+        <div class="sum">Tighter wedge headline.</div>
+        <div class="state">✓ committed as v42 · <span style="text-decoration:underline dotted">Receipt</span></div>
+      </div>
+      <div class="card dim" style="margin-top:8px">
+        <div class="who"><b>■ agent</b> · p_8d12 · declined</div>
+        <div class="sum">Swap chart to comparison layout.</div>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">stale / locked-target</h2>
+      <div class="card">
+        <div class="who"><b>■ agent</b> · p_7c88 · 3 ops</div>
+        <div class="sum">Restyle proof slide.</div>
+        <div class="stale-n">Deck changed since this proposal (base v39, now v42) — could not rebase.</div>
+        <div class="bridge"><span>Decline</span><span>Re-propose</span></div>
+      </div>
+      <div class="card" style="margin-top:8px">
+        <div class="who"><b>■ agent</b> · p_6b02 · 1 op</div>
+        <div class="sum">Move logo mark.</div>
+        <div class="op"><a>slide 1 · logo</a><span class="k lock">move · 🔒 locked</span></div>
+        <div class="bridge"><span style="opacity:.5">Accept — target locked</span><span>Decline</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="voice"><strong>Voice rule:</strong> "NodeSlide noticed… — proposed…" never "NodeSlide edited your work." Agent rail is always indigo; the moment of acceptance is always terracotta. Declined cards stay in the stream — history is evidence, not clutter.</p>
+</div>
