@@ -1,0 +1,133 @@
+<!-- @dsCard group="Prototypes" -->
+<style>
+  .st { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,.10); font-size: 13px; }
+  .st * { box-sizing: border-box; margin: 0; }
+  .st button { font: inherit; cursor: pointer; }
+  .st .top { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #111418; border-bottom: 1px solid rgba(255,255,255,.10); }
+  .st .top .t { font-family: "Manrope", sans-serif; font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+  .st .top .v { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; }
+  .st .top .gate { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #99A3AE; border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 3px 10px; }
+  .st .top .sig-btn { background: rgba(217,119,87,.12); border: 1px solid rgba(217,119,87,.3); color: #E59579; border-radius: 9999px; padding: 3px 12px; font-size: 11px; }
+  .st .work { display: flex; gap: 8px; padding: 8px; height: 560px; }
+  .st .panel { background: #111418; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; }
+  .st .binder { width: 150px; flex: none; padding: 10px; font-size: 11px; color: #99A3AE; }
+  .st .binder .s { padding: 5px 8px; border-radius: 6px; margin-bottom: 2px; }
+  .st .binder .s.on { background: rgba(217,119,87,.12); color: #E59579; }
+  .st .stagecol { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .st .stage { flex: 1; padding: 18px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .st .slide { width: 92%; aspect-ratio: 16/9; background: var(--sl-paper, #FBF8F2); color: var(--sl-text, #1F2937); border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 5% 6%; position: relative; transition: all .34s cubic-bezier(.16,1,.3,1); }
+  .st .slide .kick { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--sl-accent, #B0562F); font-weight: 700; }
+  .st .slide h3 { font-family: var(--sl-display, "Manrope"), sans-serif; font-size: clamp(16px, 2.6vw, 26px); letter-spacing: -0.02em; margin: 8px 0 10px; }
+  .st .slide .bars { display: flex; gap: 8px; align-items: flex-end; height: 38%; margin-top: 4%; }
+  .st .slide .bars i { display: block; flex: 1; background: var(--sl-accent, #B0562F); opacity: .85; border-radius: 3px 3px 0 0; }
+  .st .slide .src { position: absolute; bottom: 4%; right: 6%; font-family: "JetBrains Mono", monospace; font-size: 8px; color: var(--sl-muted, #9CA3AF); }
+  .st .receipt { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; padding: 7px 12px; border-top: 1px dashed rgba(217,119,87,.24); display: flex; gap: 14px; }
+  .st .receipt .ok { color: #2E9E6B; }
+  .st .vstrip { padding: 8px; display: flex; gap: 8px; }
+  .st .vstrip .vh { width: 74px; flex: none; font-family: "JetBrains Mono", monospace; font-size: 9px; color: #8A94A0; line-height: 1.7; }
+  .st .vstrip .vc { flex: 1; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: #171B20; padding: 7px 9px; font-size: 10px; color: #99A3AE; text-align: left; transition: border-color .18s; }
+  .st .vstrip .vc:hover { border-color: rgba(217,119,87,.4); }
+  .st .vstrip .vc.sel { border-color: #D97757; }
+  .st .vstrip .vc b { display: block; color: #C6CCD4; font-size: 10px; margin-bottom: 2px; }
+  .st .vstrip .vc .ok { color: #2E9E6B; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+  .st .copilot { width: 270px; flex: none; display: flex; flex-direction: column; padding: 10px; gap: 8px; overflow-y: auto; }
+  .st .copilot .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: #8A94A0; font-weight: 600; }
+  .st .msg { border: 1px solid rgba(255,255,255,.10); border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #C6CCD4; line-height: 1.5; }
+  .st .msg.user { border-left: 2px solid #D97757; }
+  .st .prc { border: 1px solid rgba(255,255,255,.10); border-left: 2px solid #5E6AD2; border-radius: 8px; padding: 8px 10px; }
+  .st .prc .who { font-size: 9px; color: #8E97E8; font-weight: 600; }
+  .st .prc .sum { font-size: 11px; color: #C6CCD4; margin: 3px 0 5px; line-height: 1.45; }
+  .st .prc .op { font-family: "JetBrains Mono", monospace; font-size: 9px; color: #8A94A0; padding: 2px 0; border-top: 1px dashed rgba(255,255,255,.08); }
+  .st .prc .acts { display: flex; gap: 4px; margin-top: 6px; }
+  .st .prc .acts button { border: 1px solid rgba(255,255,255,.14); background: none; color: #C6CCD4; border-radius: 9999px; padding: 2px 9px; font-size: 9px; }
+  .st .prc .acts button.go { border-color: rgba(217,119,87,.5); color: #E59579; }
+  .st .prc.ok2 { border-left-color: #D97757; }
+  .st .prc.ok2 .done { color: #E59579; font-size: 10px; margin-top: 4px; }
+  .st .sigpop { position: absolute; top: 6px; right: 10px; width: 220px; background: #171B20; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 8px; z-index: 3; box-shadow: 0 14px 34px rgba(0,0,0,.6); display: none; }
+  .st .sigpop.open { display: block; }
+  .st .sigpop .r { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; background: none; border: 0; color: #C6CCD4; padding: 6px 8px; border-radius: 6px; font-size: 11px; }
+  .st .sigpop .r:hover { background: #1B2027; }
+  .st .sigpop .r.on { background: rgba(217,119,87,.12); }
+  .st .sigpop .sw { display: flex; gap: 2px; } .st .sigpop .sw i { width: 9px; height: 9px; border-radius: 2px; }
+  .st .hint { font-size: 10px; color: #8A94A0; padding: 6px 14px 10px; }
+</style>
+<div class="st" id="studio">
+  <div class="top">
+    <span class="t">Q3 Portfolio Review</span><span class="v" id="ver">deck v41</span>
+    <span class="gate">review-gate: on</span>
+    <button class="sig-btn" onclick="document.getElementById('sigpop').classList.toggle('open')">Signature: <span id="signame">Default</span> ▾</button>
+  </div>
+  <div class="work">
+    <div class="panel binder">
+      <div class="s">1 · Cover</div><div class="s">2 · Thesis</div><div class="s">3 · Market</div>
+      <div class="s on">4 · Wedge</div><div class="s">5 · Proof</div>
+    </div>
+    <div class="stagecol">
+      <div class="panel stage" id="stage" style="position:relative">
+        <div class="sigpop" id="sigpop">
+          <button class="r on" onclick="setSig('default', this)"><span class="sw"><i style="background:#B0562F"></i><i style="background:#FBF8F2"></i></span>Default paper</button>
+          <button class="r" onclick="setSig('meridian', this)"><span class="sw"><i style="background:#0B3D5C"></i><i style="background:#E8B23A"></i></span>Meridian Capital <span style="font-size:9px;color:#2E9E6B;margin-left:auto">high</span></button>
+          <button class="r" onclick="setSig('ibcs', this)"><span class="sw"><i style="background:#0F2A43"></i><i style="background:#F7F7F4"></i></span>Finance / IBCS pack</button>
+        </div>
+        <div class="slide" id="slide">
+          <div class="kick">The wedge</div>
+          <h3 id="headline">One buyer. One pain. Decks that stay on-brand.</h3>
+          <div class="bars"><i style="height:34%"></i><i style="height:52%"></i><i style="height:71%"></i><i style="height:100%"></i></div>
+          <div class="src">source: q3-pipeline.xlsx · provenance ✓</div>
+        </div>
+      </div>
+      <div class="panel vstrip" id="vstrip">
+        <div class="vh">slide 4<br>batch b_31<br>2.4s</div>
+        <button class="vc" onclick="pick(this,'38% CAGR against a flat market.')"><b>data_led · executive · evidence</b><span class="ok">▮ ok</span></button>
+        <button class="vc sel" onclick="pick(this,'One buyer. One pain. Decks that stay on-brand.')"><b>narrative_led · executive · headline</b><span class="ok">▮ ok</span> · selected</button>
+        <button class="vc" onclick="pick(this,'Before NodeSlide vs after: 6 hours to 40 minutes.')"><b>balanced · detail · comparison</b><span class="ok">▮ ok</span> · fallback</button>
+      </div>
+      <div class="panel receipt"><span>validation · <span id="rver">v41</span></span><span class="ok">▮ ok</span><span class="ok">▮ publish</span><span class="ok">▮ clean</span><span>contrast 4.6:1 · 0 collisions</span></div>
+    </div>
+    <div class="panel copilot">
+      <span class="lbl">Copilot</span>
+      <div class="msg user">Tighten the wedge headline, keep it buyer-first.</div>
+      <div class="prc" id="prc">
+        <div class="who">■ agent · p_9a41 · trace</div>
+        <div class="sum">NodeSlide noticed the headline runs long — proposed a tighter, buyer-first version.</div>
+        <div class="op">slide 4 · headline — replace_text</div>
+        <div class="op">candidate: <span style="color:#2E9E6B">▮ ok</span> · base v41</div>
+        <div class="acts"><button class="go" onclick="acceptPatch()">Accept</button><button>Modify</button><button>Decline</button><button>Receipt</button></div>
+      </div>
+      <div class="msg" style="font-size:10px;color:#8A94A0">Selecting a variant or accepting a patch records a preference signal — evaluator-gated, tenant-scoped.</div>
+    </div>
+  </div>
+  <div class="hint">Interactive: pick a variant · accept the agent patch · swap signatures (top right) — same slide, different identity, chrome untouched.</div>
+</div>
+<script>
+  (function(){
+    var sigs = {
+      'default': { paper:'#FBF8F2', text:'#1F2937', accent:'#B0562F', display:'"Manrope"', muted:'#9CA3AF', name:'Default' },
+      'meridian': { paper:'#0B3D5C', text:'#F5F1E8', accent:'#E8B23A', display:'Georgia', muted:'#8FA6B8', name:'Meridian Capital' },
+      'ibcs': { paper:'#F7F7F4', text:'#111827', accent:'#0F2A43', display:'"Inter"', muted:'#6B7280', name:'Finance / IBCS' }
+    };
+    window.setSig = function(key, el){
+      var s = sigs[key], sl = document.getElementById('slide');
+      sl.style.setProperty('--sl-paper', s.paper); sl.style.setProperty('--sl-text', s.text);
+      sl.style.setProperty('--sl-accent', s.accent); sl.style.setProperty('--sl-display', s.display);
+      sl.style.setProperty('--sl-muted', s.muted);
+      document.getElementById('signame').textContent = s.name;
+      var rows = document.querySelectorAll('#sigpop .r'); rows.forEach(function(r){ r.classList.remove('on'); });
+      if (el) el.classList.add('on');
+      document.getElementById('sigpop').classList.remove('open');
+    };
+    window.pick = function(el, text){
+      document.querySelectorAll('#vstrip .vc').forEach(function(v){ v.classList.remove('sel'); });
+      el.classList.add('sel');
+      document.getElementById('headline').textContent = text;
+    };
+    window.acceptPatch = function(){
+      var c = document.getElementById('prc');
+      c.classList.add('ok2');
+      c.innerHTML = '<div class="who" style="color:#E59579">■ you accepted · p_9a41</div><div class="sum">Tighter, buyer-first headline.</div><div class="done">✓ committed as v42 · receipt</div>';
+      document.getElementById('headline').textContent = 'Your deck. Your brand. Forty minutes.';
+      document.getElementById('ver').textContent = 'deck v42';
+      document.getElementById('rver').textContent = 'v42';
+    };
+  })();
+</script>
