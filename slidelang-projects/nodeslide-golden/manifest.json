@@ -1,0 +1,32 @@
+{
+  "id": "nodeslide-golden",
+  "title": "Living decks, built together",
+  "outputs": {
+    "publish": "publish"
+  },
+  "defaults": {
+    "publish": "slidemaker"
+  },
+  "workflows": {
+    "slidemaker": {
+      "type": "publish_presenter",
+      "out": "publish/slidemaker",
+      "title": "Living decks, built together",
+      "fail_on_error": true,
+      "compile": {
+        "resolve_passes": 4,
+        "finalize_passes": 1
+      },
+      "slides": [
+        { "spec": "decks/main/slide_00.sl.json" },
+        { "spec": "decks/main/slide_01.sl.json" },
+        { "spec": "decks/main/slide_02.sl.json" },
+        { "spec": "decks/main/slide_03.sl.json" },
+        { "spec": "decks/main/slide_04.sl.json" },
+        { "spec": "decks/main/slide_05.sl.json" },
+        { "spec": "decks/main/slide_06.sl.json" },
+        { "spec": "decks/main/slide_07.sl.json" }
+      ]
+    }
+  }
+}

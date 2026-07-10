@@ -1,5 +1,23 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
+import {
+  nodeslideBoundingBoxValidator,
+  nodeslideBriefValidator,
+  nodeslideChartDataValidator,
+  nodeslideCommentAnchorValidator,
+  nodeslideCursorValidator,
+  nodeslideElementStyleValidator,
+  nodeslideExportCapabilityValidator,
+  nodeslidePatchOperationValidator,
+  nodeslidePatchScopeValidator,
+  nodeslidePatchSourceValidator,
+  nodeslidePatchStatusValidator,
+  nodeslideSnapshotValidator,
+  nodeslideThemeValidator,
+  nodeslideValidationIssueValidator,
+  nodeslideValidationResultValidator,
+  nodeslideVersionClockValidator,
+} from './lib/nodeslideValidators';
 
 // All cost fields stored as integer micro-cents (1 USD = 1_000_000 micro-cents)
 // to dodge floating-point drift on summation. UI converts back to USD on read.
@@ -37,6 +55,8 @@ export default defineSchema({
   projects: defineTable({
     clientSessionId: v.optional(v.string()),
     title: v.string(),
+    domain: v.optional(v.union(v.literal('parity'), v.literal('nodeslide'))),
+    brief: v.optional(nodeslideBriefValidator),
     sourceType: v.optional(
       v.union(
         v.literal('prompt'),
@@ -294,4 +314,239 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_run_created', ['runId', 'createdAt']),
+
+  nodeslide_decks: defineTable({
+    id: v.string(),
+    projectId: v.string(),
+    projectRowId: v.id('projects'),
+    clientSessionId: v.string(),
+    schemaVersion: v.literal('nodeslide.slidelang/v1'),
+    toolchainVersion: v.string(),
+    title: v.string(),
+    brief: nodeslideBriefValidator,
+    theme: nodeslideThemeValidator,
+    slideOrder: v.array(v.string()),
+    version: v.number(),
+    status: v.union(
+      v.literal('draft'),
+      v.literal('validating'),
+      v.literal('ready'),
+      v.literal('published'),
+    ),
+    // Optional so deployed anonymous-session rows can be claimed lazily.
+    ownerAccessKey: v.optional(v.string()),
+    shareSlug: v.optional(v.string()),
+    plan: v.array(v.string()),
+    spec: v.any(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_session_updated', ['clientSessionId', 'updatedAt'])
+    .index('by_share_slug', ['shareSlug']),
+
+  nodeslide_slides: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    title: v.string(),
+    section: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    background: v.string(),
+    elementOrder: v.array(v.string()),
+    version: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck', ['deckId'])
+    .index('by_deck_id', ['deckId', 'id']),
+
+  nodeslide_elements: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    slideId: v.string(),
+    name: v.string(),
+    kind: v.union(
+      v.literal('text'),
+      v.literal('shape'),
+      v.literal('image'),
+      v.literal('chart'),
+      v.literal('connector'),
+    ),
+    role: v.optional(v.string()),
+    bbox: nodeslideBoundingBoxValidator,
+    rotation: v.number(),
+    content: v.optional(v.string()),
+    style: nodeslideElementStyleValidator,
+    chart: v.optional(nodeslideChartDataValidator),
+    imageUrl: v.optional(v.string()),
+    altText: v.optional(v.string()),
+    sourceIds: v.array(v.string()),
+    locked: v.boolean(),
+    exportCapabilities: v.array(nodeslideExportCapabilityValidator),
+    version: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck', ['deckId'])
+    .index('by_deck_id', ['deckId', 'id'])
+    .index('by_slide', ['slideId']),
+
+  nodeslide_patches: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    baseDeckVersion: v.number(),
+    baseSlideVersions: nodeslideVersionClockValidator,
+    baseElementVersions: nodeslideVersionClockValidator,
+    resultingDeckVersion: v.optional(v.number()),
+    scope: nodeslidePatchScopeValidator,
+    operations: v.array(nodeslidePatchOperationValidator),
+    source: nodeslidePatchSourceValidator,
+    status: nodeslidePatchStatusValidator,
+    summary: v.string(),
+    linkedCommentId: v.optional(v.string()),
+    traceId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_status', ['deckId', 'status']),
+
+  nodeslide_comments: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    parentId: v.optional(v.string()),
+    anchor: nodeslideCommentAnchorValidator,
+    authorId: v.string(),
+    authorName: v.string(),
+    text: v.string(),
+    status: v.union(v.literal('open'), v.literal('resolved'), v.literal('dismissed')),
+    linkedPatchId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_parent', ['parentId']),
+
+  nodeslide_versions: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    version: v.number(),
+    label: v.string(),
+    source: nodeslidePatchSourceValidator,
+    patchId: v.optional(v.string()),
+    snapshot: nodeslideSnapshotValidator,
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_version', ['deckId', 'version']),
+
+  nodeslide_sources: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    title: v.string(),
+    url: v.optional(v.string()),
+    sourceType: v.union(
+      v.literal('internal'),
+      v.literal('url'),
+      v.literal('document'),
+      v.literal('spreadsheet'),
+      v.literal('note'),
+    ),
+    retrievedAt: v.number(),
+    citation: v.string(),
+    license: v.optional(v.string()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck', ['deckId']),
+
+  nodeslide_validations: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    deckVersion: v.number(),
+    ok: v.boolean(),
+    publishOk: v.boolean(),
+    cleanOk: v.boolean(),
+    issues: v.array(nodeslideValidationIssueValidator),
+    checkedAt: v.number(),
+    toolchainVersion: v.string(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_checked', ['deckId', 'checkedAt'])
+    .index('by_deck_version', ['deckId', 'deckVersion']),
+
+  nodeslide_traces: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    patchId: v.optional(v.string()),
+    status: v.union(
+      v.literal('planning'),
+      v.literal('working'),
+      v.literal('awaiting_review'),
+      v.literal('completed'),
+      v.literal('failed'),
+      v.literal('cancelled'),
+    ),
+    summary: v.string(),
+    plan: v.array(v.string()),
+    context: v.array(v.string()),
+    toolCalls: v.array(v.string()),
+    guardrails: v.array(v.string()),
+    validation: v.optional(nodeslideValidationResultValidator),
+    provider: v.optional(v.string()),
+    model: v.optional(v.string()),
+    costMicroUsd: v.optional(v.number()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_patch', ['patchId']),
+
+  nodeslide_exports: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    deckVersion: v.number(),
+    kind: v.union(v.literal('html'), v.literal('pptx'), v.literal('pdf'), v.literal('png')),
+    status: v.union(
+      v.literal('queued'),
+      v.literal('rendering'),
+      v.literal('ready'),
+      v.literal('failed'),
+    ),
+    capabilityWarnings: v.array(v.string()),
+    fileName: v.optional(v.string()),
+    url: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_rate_limits: defineTable({
+    key: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index('by_key_window', ['key', 'windowStart']),
+
+  nodeslide_presence: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    sessionId: v.string(),
+    displayName: v.string(),
+    color: v.string(),
+    slideId: v.optional(v.string()),
+    elementIds: v.array(v.string()),
+    cursor: v.optional(nodeslideCursorValidator),
+    lastSeenAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_session', ['deckId', 'sessionId'])
+    .index('by_deck_expiry', ['deckId', 'expiresAt']),
 });

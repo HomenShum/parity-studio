@@ -1,0 +1,300 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_04", "title": "Concurrent writes stay safe—and stale work stays visible" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    ["b", "S04_BASE_V12", 72, 338, 180, 112, "kdb", null, { "cp": 22, "td": 0.58, "ov": "fail" }],
+    [
+      "b",
+      "S04_PROP_A",
+      400,
+      205,
+      300,
+      125,
+      "pnb",
+      null,
+      { "cp": 24, "fill": "paper", "stroke": "cool", "stroke_width": 2, "td": 0.58, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S04_PROP_B",
+      400,
+      382,
+      300,
+      125,
+      "pnb",
+      null,
+      { "cp": 24, "fill": "paper", "stroke": "cool", "stroke_width": 2, "td": 0.58, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S04_PROP_C",
+      400,
+      555,
+      300,
+      110,
+      "pnb",
+      null,
+      {
+        "cp": 24,
+        "fill": "panel",
+        "stroke": "muted",
+        "stroke_width": 1.5,
+        "stroke_dash": "7 5",
+        "td": 0.58,
+        "ov": "fail"
+      }
+    ],
+    [
+      "b",
+      "S04_ACCEPTED_V13",
+      980,
+      295,
+      280,
+      180,
+      "sqb",
+      null,
+      { "cp": 28, "fill": "cool", "stroke": "none", "td": 0.58, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S04_STALE",
+      980,
+      545,
+      280,
+      120,
+      "pn",
+      null,
+      { "cp": 24, "fill": "neutral", "stroke": "none", "td": 0.58, "ov": "fail" }
+    ],
+    ["b", "S04_TRACE_STRIP", 72, 704, 1288, 54, "kd", null, { "cp": 14, "td": 0.7, "ov": "fail" }]
+  ],
+  "tx": [
+    [
+      "s04_eyebrow",
+      72,
+      34,
+      300,
+      22,
+      "lab",
+      "04 / COLLABORATION MODEL",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s04_title",
+      72,
+      72,
+      1290,
+      58,
+      "ttc",
+      "Concurrent writes stay safe—and stale work stays visible",
+      null,
+      { "fs": 42, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s04_dek",
+      74,
+      138,
+      1210,
+      42,
+      "mic",
+      "Every proposal names its base revision and target IDs, so disjoint work can rebase while overlap remains explicit.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s04_base_h",
+      98,
+      366,
+      130,
+      34,
+      "ttc",
+      "v12",
+      "S04_BASE_V12",
+      { "fs": 30, "ta": "l", "c": "#F6F0E5", "ml": 1 }
+    ],
+    [
+      "s04_base_b",
+      98,
+      404,
+      130,
+      24,
+      "lab",
+      "ACCEPTED BASE",
+      "S04_BASE_V12",
+      { "fs": 14, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s04_a_h",
+      426,
+      228,
+      250,
+      28,
+      "sec",
+      "PROPOSAL A",
+      "S04_PROP_A",
+      { "fs": 18, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s04_a_b",
+      426,
+      270,
+      250,
+      38,
+      "mic",
+      "slide_02 · title",
+      "S04_PROP_A",
+      { "fs": 20, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s04_b_h",
+      426,
+      405,
+      250,
+      28,
+      "sec",
+      "PROPOSAL B",
+      "S04_PROP_B",
+      { "fs": 18, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s04_b_b",
+      426,
+      447,
+      250,
+      38,
+      "mic",
+      "slide_06 · caption",
+      "S04_PROP_B",
+      { "fs": 20, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s04_c_h",
+      426,
+      577,
+      250,
+      24,
+      "sec",
+      "PROPOSAL C",
+      "S04_PROP_C",
+      { "fs": 17, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s04_c_b",
+      426,
+      616,
+      250,
+      28,
+      "mic",
+      "slide_02 · body",
+      "S04_PROP_C",
+      { "fs": 19, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s04_merge_label",
+      750,
+      540,
+      170,
+      44,
+      "lab",
+      "NON-OVERLAP\nREBASE",
+      null,
+      { "fs": 14, "ta": "center", "c": "#536850", "ml": 2, "lh": 1.15 }
+    ],
+    [
+      "s04_accept_h",
+      1010,
+      326,
+      220,
+      28,
+      "lab",
+      "ACCEPTED REVISION",
+      "S04_ACCEPTED_V13",
+      { "fs": 15, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s04_accept_v",
+      1010,
+      370,
+      220,
+      48,
+      "ttc",
+      "v13",
+      "S04_ACCEPTED_V13",
+      { "fs": 40, "ta": "l", "c": "#FFFFFF", "ml": 1 }
+    ],
+    [
+      "s04_accept_b",
+      1010,
+      427,
+      220,
+      28,
+      "mic",
+      "A + B land cleanly",
+      "S04_ACCEPTED_V13",
+      { "fs": 18, "ta": "l", "c": "#F6F0E5", "ml": 1 }
+    ],
+    [
+      "s04_stale_h",
+      1008,
+      570,
+      230,
+      26,
+      "sec",
+      "STALE PROPOSAL",
+      "S04_STALE",
+      { "fs": 18, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s04_stale_b",
+      1008,
+      612,
+      230,
+      38,
+      "mic",
+      "The base moved on the same scope.",
+      "S04_STALE",
+      { "fs": 18, "ta": "l", "c": "#14213D", "ml": 2 }
+    ],
+    [
+      "s04_trace",
+      100,
+      718,
+      1230,
+      28,
+      "mic",
+      "VERSIONED WRITE  ·  BASE + TARGET IDS  ·  REBASE DISJOINT WORK  ·  PRESERVE STALE PROPOSALS",
+      "S04_TRACE_STRIP",
+      { "fs": 16, "ta": "center", "c": "#F6F0E5", "ml": 1 }
+    ]
+  ],
+  "cn": [
+    [
+      "go",
+      "S04_BRANCH_PROPOSALS",
+      "S04_BASE_V12:r",
+      ["S04_PROP_A:l", "S04_PROP_B:l", "S04_PROP_C:l"],
+      "cb",
+      330,
+      { "th": 3.2 }
+    ],
+    [
+      "gi",
+      "S04_MERGE_NON_OVERLAP",
+      ["S04_PROP_A:r", "S04_PROP_B:r"],
+      "S04_ACCEPTED_V13:l",
+      "cb",
+      840,
+      { "th": 3.2 }
+    ],
+    [
+      "pl",
+      "S04_ROUTE_STALE",
+      ["S04_PROP_C:r", "S04_STALE:l"],
+      "ca1",
+      { "th": 2.8, "dash": "7 5", "op": 0.72 }
+    ]
+  ]
+}

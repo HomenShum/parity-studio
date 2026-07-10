@@ -1,0 +1,252 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_05", "title": "One canonical deck connects every surface" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "b",
+      "S05_SOURCE_RESEARCH",
+      72,
+      225,
+      220,
+      86,
+      "pn",
+      null,
+      { "cp": 22, "fill": "neutral", "stroke": "none" }
+    ],
+    [
+      "b",
+      "S05_SOURCE_DATA",
+      72,
+      365,
+      220,
+      86,
+      "pn",
+      null,
+      { "cp": 22, "fill": "neutral", "stroke": "none" }
+    ],
+    [
+      "b",
+      "S05_SOURCE_COMMENTS",
+      72,
+      505,
+      220,
+      86,
+      "pn",
+      null,
+      { "cp": 22, "fill": "neutral", "stroke": "none" }
+    ],
+    [
+      "b",
+      "S05_ROOM_OS",
+      430,
+      300,
+      270,
+      230,
+      "sqb",
+      null,
+      { "cp": 28, "fill": "cool", "stroke": "none", "td": 0.8, "ov": "fail" }
+    ],
+    ["b", "S05_CANONICAL", 810, 280, 290, 270, "kd", null, { "cp": 30, "td": 0.76, "ov": "fail" }],
+    [
+      "b",
+      "S05_OUTPUT_HTML",
+      1210,
+      235,
+      150,
+      120,
+      "pnb",
+      null,
+      { "cp": 22, "fill": "paper", "stroke": "cool", "stroke_width": 2 }
+    ],
+    [
+      "b",
+      "S05_OUTPUT_PPTX",
+      1210,
+      475,
+      150,
+      120,
+      "pnb",
+      null,
+      { "cp": 22, "fill": "paper", "stroke": "cool", "stroke_width": 2 }
+    ]
+  ],
+  "tx": [
+    [
+      "s05_eyebrow",
+      72,
+      34,
+      260,
+      22,
+      "lab",
+      "05 / ARCHITECTURE",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s05_title",
+      72,
+      72,
+      1280,
+      60,
+      "ttc",
+      "One canonical deck connects every surface",
+      null,
+      { "fs": 46, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s05_dek",
+      74,
+      140,
+      1210,
+      42,
+      "mic",
+      "Sources enter a shared room, writes resolve against one structured deck, and deterministic compilers serve each format.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s05_research",
+      96,
+      254,
+      170,
+      28,
+      "sec",
+      "Research",
+      "S05_SOURCE_RESEARCH",
+      { "fs": 21, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s05_data",
+      96,
+      394,
+      170,
+      28,
+      "sec",
+      "Data",
+      "S05_SOURCE_DATA",
+      { "fs": 21, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s05_comments",
+      96,
+      534,
+      170,
+      28,
+      "sec",
+      "Comments",
+      "S05_SOURCE_COMMENTS",
+      { "fs": 21, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s05_room_h",
+      460,
+      330,
+      210,
+      54,
+      "ttc",
+      "Room OS /\nConvex",
+      "S05_ROOM_OS",
+      { "fs": 30, "ta": "l", "c": "#FFFFFF", "ml": 2, "lh": 1.0 }
+    ],
+    [
+      "s05_room_b",
+      460,
+      424,
+      210,
+      74,
+      "mic",
+      "Shared room state\nVersion graph\nProposal queue",
+      "S05_ROOM_OS",
+      { "fs": 18, "ta": "l", "c": "#F6F0E5", "ml": 3, "lh": 1.28 }
+    ],
+    [
+      "s05_canon_h",
+      842,
+      315,
+      226,
+      58,
+      "ttc",
+      "SlideLang\ncanonical",
+      "S05_CANONICAL",
+      { "fs": 31, "ta": "l", "c": "#F6F0E5", "ml": 2, "lh": 1.0 }
+    ],
+    [
+      "s05_canon_b",
+      842,
+      420,
+      226,
+      92,
+      "mic",
+      "Stable IDs\nStructured JSON\nDeterministic compile",
+      "S05_CANONICAL",
+      { "fs": 19, "ta": "l", "c": "#D8E0FF", "ml": 3, "lh": 1.3 }
+    ],
+    [
+      "s05_html",
+      1232,
+      277,
+      106,
+      34,
+      "sec",
+      "HTML",
+      "S05_OUTPUT_HTML",
+      { "fs": 25, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s05_pptx",
+      1232,
+      517,
+      106,
+      34,
+      "sec",
+      "PPTX",
+      "S05_OUTPUT_PPTX",
+      { "fs": 25, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s05_flow_labels",
+      72,
+      670,
+      1288,
+      36,
+      "sec",
+      "INGEST                         COORDINATE                         AUTHOR                         RENDER",
+      null,
+      { "fs": 16, "ta": "center", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s05_rule",
+      250,
+      728,
+      940,
+      30,
+      "sec",
+      "One source of deck truth; multiple audience-ready surfaces.",
+      null,
+      { "fs": 22, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ]
+  ],
+  "cn": [
+    [
+      "gi",
+      "S05_SOURCES_TO_ROOM",
+      ["S05_SOURCE_RESEARCH:r", "S05_SOURCE_DATA:r", "S05_SOURCE_COMMENTS:r"],
+      "S05_ROOM_OS:l",
+      "cb",
+      360,
+      { "th": 3.2 }
+    ],
+    ["pl", "S05_ROOM_TO_CANONICAL", ["S05_ROOM_OS:r", "S05_CANONICAL:l"], "cb", { "th": 3.4 }],
+    [
+      "go",
+      "S05_CANONICAL_TO_OUTPUTS",
+      "S05_CANONICAL:r",
+      ["S05_OUTPUT_HTML:l", "S05_OUTPUT_PPTX:l"],
+      "cb",
+      1160,
+      { "th": 3.2 }
+    ]
+  ]
+}

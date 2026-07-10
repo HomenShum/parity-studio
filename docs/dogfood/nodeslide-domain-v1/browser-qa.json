@@ -1,0 +1,60 @@
+{
+  "testedAt": "2026-07-10T11:57:00.000Z",
+  "localUrl": "http://localhost:5180/?domain=nodeslide&deck=deck_golden_0gcn1z4",
+  "viewport": {
+    "width": 1280,
+    "layout": "three-column",
+    "initialZoomPercent": 55,
+    "horizontalCanvasCrop": false
+  },
+  "validationText": "Deck checks passed",
+  "projectFlow": {
+    "briefTitle": "NodeSlide creation proof",
+    "audience": "Product and engineering leads",
+    "purpose": "P0 acceptance briefing",
+    "designProfile": "Quiet precision",
+    "route": "free",
+    "createdDeckId": "deck_mrewixm5_0rzm8fr",
+    "createdSlideCount": 7,
+    "createdValidation": "Deck checks passed",
+    "createToast": "Deck created from your brief.",
+    "openedDeckId": "deck_golden_0gcn1z4",
+    "openedTitle": "NodeSlide — stories with structure",
+    "openValidation": "Deck checks passed"
+  },
+  "guardedEdit": {
+    "elementId": "element_0rzpoh7",
+    "scope": "selection",
+    "operationMode": "copy",
+    "route": "openrouter/free",
+    "providerOutcome": "invalid response",
+    "fallback": "deterministic bounded operation",
+    "proposalStatus": "ready",
+    "operationCount": 1,
+    "accepted": true,
+    "before": "Build the story. Keep every decision editable.",
+    "after": "Build the story. Keep every decision reviewable.",
+    "validationAfterAccept": "Deck checks passed"
+  },
+  "comments": {
+    "anchor": "element",
+    "posted": true,
+    "replied": true,
+    "resolved": true,
+    "reopened": true
+  },
+  "presenter": {
+    "slideCount": 7,
+    "advancedFrom": 1,
+    "advancedTo": 2,
+    "speakerNotesVisible": true
+  },
+  "share": {
+    "clipboardUrl": "http://localhost:5180/?domain=nodeslide&deck=deck_golden_0gcn1z4",
+    "toast": "Share link copied."
+  },
+  "exports": {
+    "htmlToast": "HTML export prepared.",
+    "pptxToast": "PowerPoint export prepared."
+  }
+}

@@ -3,6 +3,7 @@
   "files": {
     "ignore": [
       ".convex",
+      ".claude",
       ".playwright-mcp",
       ".tmp",
       ".vercel",

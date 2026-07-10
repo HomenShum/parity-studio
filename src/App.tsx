@@ -8,6 +8,7 @@ import { Wordmark } from './components/Wordmark';
 import { AgentRail } from './components/agent/AgentRail';
 import { CanvasPanel, type CanvasTab } from './components/canvas/CanvasPanel';
 import { ParityPanel } from './components/parity/ParityPanel';
+import { NodeSlideStudio } from './domains/nodeslide/NodeSlideStudio';
 import { convexHttpUrl } from './lib/convexEndpoints';
 import { useT } from './lib/i18n';
 import { getOrCreateSessionId, resetSessionId } from './lib/sessionIdentity';
@@ -24,6 +25,17 @@ import { getOrCreateSessionId, resetSessionId } from './lib/sessionIdentity';
  *   └────────────┴─────────────┴───────────────┘
  */
 export default function App() {
+  const urlDomain =
+    typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('domain');
+  const configuredDomain = import.meta.env['VITE_STUDIO_DOMAIN'] ?? 'nodeslide';
+  const domain =
+    urlDomain === 'parity' ? 'parity' : urlDomain === 'nodeslide' ? 'nodeslide' : configuredDomain;
+  return domain === 'parity' ? <ParityApp /> : <NodeSlideStudio />;
+}
+
+function ParityApp() {
   const t = useT();
   const [currentRunId, setCurrentRunId] = useState<Id<'runs'> | null>(() => {
     if (typeof window === 'undefined') return null;

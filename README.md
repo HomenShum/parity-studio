@@ -4,6 +4,36 @@
 
 Parity Studio also works as a design-staging layer for real codebases. Before a coding agent rewrites your app, capture the current UI, decompose it into editable slugs, prove what changed, then apply only the approved deltas back to production.
 
+## NodeSlide domain
+
+This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain; open the original Parity Studio surface with `?domain=parity`.
+
+**Launch posture (2026-07-10): GO for a controlled anonymous private preview; NO-GO for a public multi-tenant launch.** Editor access is protected by a 256-bit owner capability stored in the creating browser, and read-only presentation links use separate unguessable capabilities. This is a materially safer preview boundary than raw deck IDs, but it is not account authentication, tenant isolation, share revocation, or an enterprise access-control system.
+
+NodeSlide's P0 proof includes:
+
+- a responsive three-column studio with a storyboard, fitted slide canvas, and AI/Design/Comments/Versions/Data/Trace inspector tabs;
+- canonical deck, slide, element, source, comment, patch, version, validation, trace, export, and presence records in Convex;
+- fine-grained compare-and-set writes: stale non-overlapping edits can rebase, while overlapping stale work remains a visible proposal and never mutates the deck;
+- direct text and speaker-note editing, slide add/duplicate/delete/reorder, element copy/duplicate, session undo/redo, and selected-element drag/resize;
+- scoped copy/style/layout patches with review-before-accept AI edits, including an honest deterministic bounded fallback when `openrouter/free` is unavailable or invalid;
+- anchored comment threads, revision restore as a new monotonic write, presenter mode, capability-safe read-only sharing, semantic HTML, and editable PowerPoint export;
+- deterministic structure, readability, contrast, source-disclosure, capability, and export gates that inspect the exact snapshot before presenting or export;
+- responsive desktop, tablet-drawer, and phone-storyboard layouts with modal focus containment, keyboard escape, named controls, and focus-visible canvas objects;
+- per-session and global preview quotas plus production dependency audits with zero known vulnerabilities.
+
+The separately hosted upstream SlideLang proof is an eight-slide historical integration artifact published at [slidelang.ai/present/nodeslide-golden/slidemaker](https://slidelang.ai/present/nodeslide-golden/slidemaker/). The repository proof script creates its own isolated seven-slide capability-owned sample; do not treat the hosted deck and the current browser dogfood deck as the same revision.
+
+The local proof packet is in [`docs/dogfood/nodeslide-domain-v1`](./docs/dogfood/nodeslide-domain-v1/README.md). Reproduce the live HTML/PPTX and two-client CAS receipts against an isolated capability-owned sample with:
+
+```bash
+pnpm proof:nodeslide
+```
+
+To prove an existing deck, pass both `--deck <live-deck-id>` and `--owner-key <capability>` (or set `NODESLIDE_OWNER_ACCESS_KEY`). A raw deck ID never grants editor access.
+
+NodeSlide reports export behavior per element (`web_native`, `pptx_editable`, `pptx_static_fallback`, `google_importable`, or `web_only`). It does not claim universal animation support, arbitrary PPTX round-trip fidelity, or a native Google Slides editor.
+
 ## The 6-step user flow
 
 1. **Drop a gpt-image-2 image, drop a canonical `ui_kit` zip, drop a Figma bridge JSON/ZIP, capture a running app route, or generate one on the spot** from a prompt.

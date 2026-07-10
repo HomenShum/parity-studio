@@ -1,0 +1,343 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_03", "title": "Every change is a scoped, inspectable proposal" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "b",
+      "S03_SELECT_SCOPE",
+      72,
+      225,
+      300,
+      420,
+      "pnb",
+      null,
+      { "cp": 24, "fill": "paper", "stroke": "cool", "stroke_width": 2, "td": 0.62, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S03_SELECTION_FRAME",
+      112,
+      344,
+      220,
+      132,
+      "pnb",
+      "S03_SELECT_SCOPE",
+      {
+        "cp": 18,
+        "fill": "paper",
+        "stroke": "cool",
+        "stroke_width": 2,
+        "stroke_dash": "7 5",
+        "td": 0.76,
+        "ov": "fail"
+      }
+    ],
+    [
+      "b",
+      "S03_PATCH_TRACE",
+      445,
+      205,
+      350,
+      460,
+      "kd",
+      null,
+      { "cp": 30, "td": 0.62, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S03_VALIDATE_GATE",
+      870,
+      265,
+      225,
+      340,
+      "pn",
+      null,
+      { "cp": 26, "fill": "neutral", "stroke": "none", "td": 0.62, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S03_ACCEPTED_DECK",
+      1170,
+      205,
+      190,
+      460,
+      "sqb",
+      null,
+      { "cp": 24, "fill": "cool", "stroke": "none", "td": 0.62, "ov": "fail" }
+    ]
+  ],
+  "tx": [
+    [
+      "s03_eyebrow",
+      72,
+      34,
+      280,
+      22,
+      "lab",
+      "03 / INTERACTION CONTRACT",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s03_title",
+      72,
+      72,
+      1280,
+      60,
+      "ttc",
+      "Every change is a scoped, inspectable proposal",
+      null,
+      { "fs": 45, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s03_dek",
+      74,
+      140,
+      1200,
+      42,
+      "mic",
+      "The core loop is deliberately narrow: select, patch, validate, accept. Scope never widens silently.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s03_select_n",
+      98,
+      250,
+      240,
+      24,
+      "lab",
+      "01 / SELECT",
+      "S03_SELECT_SCOPE",
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s03_select_h",
+      98,
+      287,
+      240,
+      34,
+      "sec",
+      "Name the exact target",
+      "S03_SELECT_SCOPE",
+      { "fs": 23, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s03_frame_id",
+      130,
+      372,
+      184,
+      24,
+      "lab",
+      "slide_04 / S04_PROP_C",
+      "S03_SELECTION_FRAME",
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s03_frame_body",
+      130,
+      408,
+      176,
+      48,
+      "mic",
+      "Selection is structure, not a screenshot.",
+      "S03_SELECTION_FRAME",
+      { "fs": 17, "ta": "l", "c": "#14213D", "ml": 2 }
+    ],
+    [
+      "s03_select_b",
+      98,
+      520,
+      240,
+      76,
+      "mic",
+      "A slide, node, field, or bounded group becomes the proposal scope.",
+      "S03_SELECT_SCOPE",
+      { "fs": 18, "ta": "l", "c": "#536850", "ml": 3, "lh": 1.22 }
+    ],
+    [
+      "s03_patch_n",
+      477,
+      235,
+      280,
+      24,
+      "lab",
+      "02 / SCOPED PATCH",
+      "S03_PATCH_TRACE",
+      { "fs": 15, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s03_patch_h",
+      477,
+      282,
+      280,
+      34,
+      "sec",
+      "The write explains itself",
+      "S03_PATCH_TRACE",
+      { "fs": 23, "ta": "l", "c": "#F6F0E5", "ml": 1 }
+    ],
+    [
+      "s03_patch_l1",
+      477,
+      360,
+      270,
+      26,
+      "mic",
+      "target   slide_04",
+      "S03_PATCH_TRACE",
+      { "fs": 18, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s03_patch_l2",
+      477,
+      408,
+      270,
+      26,
+      "mic",
+      "replace  title",
+      "S03_PATCH_TRACE",
+      { "fs": 18, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s03_patch_l3",
+      477,
+      456,
+      270,
+      26,
+      "mic",
+      "base     v12",
+      "S03_PATCH_TRACE",
+      { "fs": 18, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s03_patch_b",
+      477,
+      548,
+      270,
+      72,
+      "mic",
+      "The proposal carries intent, target IDs, and its base revision.",
+      "S03_PATCH_TRACE",
+      { "fs": 18, "ta": "l", "c": "#F6F0E5", "ml": 3, "lh": 1.22 }
+    ],
+    [
+      "s03_validate_n",
+      898,
+      293,
+      170,
+      24,
+      "lab",
+      "03 / VALIDATE",
+      "S03_VALIDATE_GATE",
+      { "fs": 15, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s03_validate_h",
+      898,
+      342,
+      170,
+      36,
+      "sec",
+      "PASS",
+      "S03_VALIDATE_GATE",
+      { "fs": 28, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s03_validate_l1",
+      898,
+      416,
+      170,
+      28,
+      "mic",
+      "Schema",
+      "S03_VALIDATE_GATE",
+      { "fs": 19, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s03_validate_l2",
+      898,
+      458,
+      170,
+      28,
+      "mic",
+      "Bounds",
+      "S03_VALIDATE_GATE",
+      { "fs": 19, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s03_validate_l3",
+      898,
+      500,
+      170,
+      28,
+      "mic",
+      "Collisions",
+      "S03_VALIDATE_GATE",
+      { "fs": 19, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s03_accept_n",
+      1194,
+      235,
+      142,
+      24,
+      "lab",
+      "04 / ACCEPT",
+      "S03_ACCEPTED_DECK",
+      { "fs": 15, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s03_accept_h",
+      1194,
+      292,
+      142,
+      78,
+      "ttc",
+      "NEW\nVERSION",
+      "S03_ACCEPTED_DECK",
+      { "fs": 30, "ta": "l", "c": "#FFFFFF", "ml": 2, "lh": 1.0 }
+    ],
+    [
+      "s03_accept_b",
+      1194,
+      512,
+      142,
+      102,
+      "mic",
+      "Commit the validated write—or leave the proposal untouched.",
+      "S03_ACCEPTED_DECK",
+      { "fs": 17, "ta": "l", "c": "#F6F0E5", "ml": 4, "lh": 1.22 }
+    ],
+    [
+      "s03_rule",
+      72,
+      710,
+      1288,
+      34,
+      "sec",
+      "The interface makes agency visible: what changed, where, why, and against which version.",
+      null,
+      { "fs": 21, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ]
+  ],
+  "cn": [
+    ["pl", "S03_SELECT_TO_PATCH", ["S03_SELECT_SCOPE:r", "S03_PATCH_TRACE:l"], "cb", { "th": 3.2 }],
+    [
+      "pl",
+      "S03_PATCH_TO_VALIDATE",
+      ["S03_PATCH_TRACE:r", "S03_VALIDATE_GATE:l"],
+      "cb",
+      { "th": 3.2 }
+    ],
+    [
+      "pl",
+      "S03_VALIDATE_TO_ACCEPT",
+      ["S03_VALIDATE_GATE:r", "S03_ACCEPTED_DECK:l"],
+      "cb",
+      { "th": 3.2 }
+    ]
+  ]
+}

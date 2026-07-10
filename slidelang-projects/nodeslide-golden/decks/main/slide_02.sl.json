@@ -1,0 +1,153 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_02", "title": "Keep people in control; let agents carry change" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "b",
+      "S02_HUMAN_CONTROL",
+      130,
+      220,
+      1180,
+      112,
+      "pnb",
+      null,
+      { "cp": 28, "fill": "paper", "stroke": "cool", "stroke_width": 2.5, "td": 0.8, "ov": "fail" }
+    ],
+    ["b", "S02_CANONICAL", 190, 370, 1060, 150, "kd", null, { "cp": 30, "td": 0.64, "ov": "fail" }],
+    [
+      "b",
+      "S02_AGENT_PLANE",
+      260,
+      558,
+      920,
+      112,
+      "pn",
+      null,
+      { "cp": 28, "fill": "neutral", "stroke": "none", "td": 0.76, "ov": "fail" }
+    ]
+  ],
+  "tx": [
+    [
+      "s02_eyebrow",
+      72,
+      34,
+      260,
+      22,
+      "lab",
+      "02 / PRODUCT THESIS",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s02_title",
+      72,
+      72,
+      1290,
+      60,
+      "ttc",
+      "Keep people in control; let agents carry change",
+      null,
+      { "fs": 44, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s02_dek",
+      74,
+      140,
+      1200,
+      42,
+      "mic",
+      "NodeSlide separates authority from effort: people define intent and acceptance; agents perform bounded, inspectable work.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2, "lh": 1.25 }
+    ],
+    [
+      "s02_human_h",
+      160,
+      245,
+      300,
+      28,
+      "sec",
+      "HUMAN CONTROL PLANE",
+      "S02_HUMAN_CONTROL",
+      { "fs": 18, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s02_human_b",
+      500,
+      244,
+      760,
+      54,
+      "mic",
+      "Select scope · set intent · inspect the proposal · accept or reject",
+      "S02_HUMAN_CONTROL",
+      { "fs": 22, "ta": "l", "c": "#14213D", "ml": 2 }
+    ],
+    [
+      "s02_canonical_h",
+      225,
+      400,
+      360,
+      30,
+      "sec",
+      "SLIDELANG CANONICAL",
+      "S02_CANONICAL",
+      { "fs": 19, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s02_canonical_b",
+      225,
+      446,
+      950,
+      48,
+      "mic",
+      "Stable IDs keep structure addressable, editable, diffable, and deterministic across outputs.",
+      "S02_CANONICAL",
+      { "fs": 24, "ta": "l", "c": "#F6F0E5", "ml": 2, "lh": 1.2 }
+    ],
+    [
+      "s02_agent_h",
+      292,
+      583,
+      300,
+      28,
+      "sec",
+      "AGENT EXECUTION PLANE",
+      "S02_AGENT_PLANE",
+      { "fs": 18, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s02_agent_b",
+      622,
+      582,
+      510,
+      54,
+      "mic",
+      "Read context · author a scoped patch · validate consequences",
+      "S02_AGENT_PLANE",
+      { "fs": 21, "ta": "l", "c": "#14213D", "ml": 2 }
+    ],
+    [
+      "s02_rule",
+      360,
+      720,
+      720,
+      30,
+      "sec",
+      "Agents propose. People commit. Structure persists.",
+      null,
+      { "fs": 22, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ]
+  ],
+  "cn": [
+    [
+      "pl",
+      "S02_CONTROL_TO_CANONICAL",
+      ["S02_HUMAN_CONTROL:b", "S02_CANONICAL:t"],
+      "cb",
+      { "th": 3.2 }
+    ],
+    ["pl", "S02_AGENT_TO_CANONICAL", ["S02_AGENT_PLANE:t", "S02_CANONICAL:b"], "cb", { "th": 3.2 }]
+  ]
+}

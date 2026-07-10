@@ -1,0 +1,213 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_07", "title": "Prove the loop before scaling it" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    ["c", "S07_GATE_GOLDEN", 150, 260, 13, "cb"],
+    ["c", "S07_GATE_QUALITY", 150, 430, 13, "cb"],
+    ["c", "S07_GATE_DOGFOOD", 150, 600, 13, "cb"],
+    ["b", "S07_SHIP_PANEL", 910, 188, 430, 502, "kd", null, { "cp": 36, "td": 0.73, "ov": "fail" }]
+  ],
+  "tx": [
+    [
+      "s07_eyebrow",
+      72,
+      34,
+      260,
+      22,
+      "lab",
+      "07 / PROOF PLAN",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s07_title",
+      72,
+      72,
+      1280,
+      60,
+      "ttc",
+      "Prove the loop before scaling it",
+      null,
+      { "fs": 48, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s07_dek",
+      74,
+      140,
+      1210,
+      42,
+      "mic",
+      "The first release is evidence of a controlled loop—not breadth. Each proof gate earns the next layer of ambition.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s07_golden_n",
+      205,
+      220,
+      620,
+      24,
+      "lab",
+      "01 / GOLDEN PATH",
+      null,
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s07_golden_h",
+      205,
+      252,
+      620,
+      32,
+      "sec",
+      "One end-to-end controlled write",
+      null,
+      { "fs": 24, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s07_golden_b",
+      205,
+      298,
+      620,
+      56,
+      "mic",
+      "Select a node, propose a scoped patch, validate it, accept it, and render the new version with lineage intact.",
+      null,
+      { "fs": 19, "ta": "l", "c": "#536850", "ml": 2, "lh": 1.22 }
+    ],
+    [
+      "s07_quality_n",
+      205,
+      390,
+      620,
+      24,
+      "lab",
+      "02 / QUALITY GATES",
+      null,
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s07_quality_h",
+      205,
+      422,
+      620,
+      32,
+      "sec",
+      "No silent corruption, drift, or broken output",
+      null,
+      { "fs": 24, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s07_quality_b",
+      205,
+      468,
+      620,
+      58,
+      "mic",
+      "JSON parses · manifest resolves · scope holds · connectors attach · HTML and PPTX render cleanly.",
+      null,
+      { "fs": 19, "ta": "l", "c": "#536850", "ml": 2, "lh": 1.22 }
+    ],
+    [
+      "s07_dogfood_n",
+      205,
+      560,
+      620,
+      24,
+      "lab",
+      "03 / DOGFOOD METRICS",
+      null,
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s07_dogfood_h",
+      205,
+      592,
+      620,
+      32,
+      "sec",
+      "Measure the collaboration loop, not vanity",
+      null,
+      { "fs": 24, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s07_dogfood_b",
+      205,
+      638,
+      620,
+      58,
+      "mic",
+      "Proposal acceptance rate · time from comment to accepted write · rework after accept · stale proposal frequency.",
+      null,
+      { "fs": 19, "ta": "l", "c": "#536850", "ml": 2, "lh": 1.22 }
+    ],
+    [
+      "s07_ship_label",
+      948,
+      226,
+      340,
+      24,
+      "lab",
+      "SHIP WHEN",
+      "S07_SHIP_PANEL",
+      { "fs": 15, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s07_ship_h",
+      948,
+      274,
+      340,
+      90,
+      "ttc",
+      "The loop is\ntrustworthy enough\nto repeat.",
+      "S07_SHIP_PANEL",
+      { "fs": 34, "ta": "l", "c": "#F6F0E5", "ml": 3, "lh": 1.0 }
+    ],
+    [
+      "s07_ship_1",
+      948,
+      410,
+      340,
+      52,
+      "mic",
+      "01  The golden path survives concurrent edits.",
+      "S07_SHIP_PANEL",
+      { "fs": 19, "ta": "l", "c": "#FFFFFF", "ml": 2 }
+    ],
+    [
+      "s07_ship_2",
+      948,
+      490,
+      340,
+      68,
+      "mic",
+      "02  Every accepted write traces to scope, base, and actor.",
+      "S07_SHIP_PANEL",
+      { "fs": 19, "ta": "l", "c": "#FFFFFF", "ml": 3 }
+    ],
+    [
+      "s07_ship_3",
+      948,
+      584,
+      340,
+      68,
+      "mic",
+      "03  Dogfood establishes baselines for iteration time and rework.",
+      "S07_SHIP_PANEL",
+      { "fs": 19, "ta": "l", "c": "#FFFFFF", "ml": 3 }
+    ],
+    [
+      "s07_close",
+      72,
+      742,
+      1288,
+      28,
+      "sec",
+      "Start with one living deck. Earn the system around it.",
+      null,
+      { "fs": 22, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ]
+  ],
+  "cn": []
+}

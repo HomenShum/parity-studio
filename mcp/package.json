@@ -39,17 +39,28 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@mariozechner/pi-ai": "^0.70.2",
+    "@mariozechner/pi-ai": "^0.73.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "hono": "^4.6.0",
+    "hono": "^4.12.29",
     "jszip": "^3.10.1",
     "open": "^10.1.0",
-    "playwright": "^1.59.0",
+    "playwright": "^1.61.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@protobufjs/utf8": "^1.1.2",
+      "dompurify": "^3.4.11",
+      "fast-uri": "^3.1.2",
+      "ip-address": "^10.1.1",
+      "protobufjs": "7.6.3",
+      "qs": "^6.15.2",
+      "ws": "^8.21.0"
+    }
   }
 }

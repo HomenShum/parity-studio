@@ -1,0 +1,333 @@
+import JSZip from 'jszip';
+import { describe, expect, it } from 'vitest';
+import {
+  type DeckSnapshot,
+  NODESLIDE_SCHEMA_VERSION,
+  NODESLIDE_TOOLCHAIN_VERSION,
+} from '../../../../shared/nodeslide';
+import { createHostedSlideLangAdapter } from './hosted';
+import { createLocalSlideLangAdapter } from './localAdapter';
+
+function cleanSnapshot(): DeckSnapshot {
+  const deckId = 'deck:golden';
+  const slideId = 'slide:overview';
+  return {
+    deck: {
+      schemaVersion: NODESLIDE_SCHEMA_VERSION,
+      toolchainVersion: NODESLIDE_TOOLCHAIN_VERSION,
+      id: deckId,
+      projectId: 'project:golden',
+      title: 'Native export overview',
+      brief: {
+        prompt: 'Explain the native export path.',
+        audience: 'Product and engineering',
+        purpose: 'Show editable output without hidden rasterization.',
+        successCriteria: ['Clean validation', 'Editable PowerPoint objects'],
+      },
+      theme: {
+        id: 'theme:night',
+        name: 'Night signal',
+        mode: 'dark',
+        colors: {
+          canvas: '#10131a',
+          ink: '#f7f4ec',
+          muted: '#b9c0cb',
+          accent: '#f6b94a',
+          accentSoft: '#3b3222',
+          insight: '#d9f99d',
+          insightInk: '#17210b',
+          trace: '#7dd3fc',
+          border: '#3a4351',
+        },
+        typography: { display: 'Aptos Display', body: 'Aptos', data: 'Aptos Mono' },
+        defaultRadius: 16,
+        spacingUnit: 8,
+      },
+      slideOrder: [slideId],
+      version: 3,
+      status: 'ready',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_123,
+    },
+    slides: [
+      {
+        id: slideId,
+        deckId,
+        title: 'Overview',
+        notes: 'Advance after explaining that every object remains editable.',
+        background: '#10131a',
+        elementOrder: ['element:headline', 'element:body', 'element:accent', 'element:chart'],
+        version: 2,
+      },
+    ],
+    elements: [
+      {
+        id: 'element:headline',
+        slideId,
+        name: 'Headline',
+        kind: 'text',
+        role: 'title',
+        bbox: { x: 0.06, y: 0.07, width: 0.62, height: 0.14 },
+        rotation: 0,
+        content: 'Editable native headline',
+        style: {
+          color: '#f7f4ec',
+          fontFamily: 'Aptos Display',
+          fontSize: 40,
+          fontWeight: 700,
+          lineHeight: 1.05,
+        },
+        sourceIds: ['source:adoption'],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+      {
+        id: 'element:body',
+        slideId,
+        name: 'Summary',
+        kind: 'text',
+        role: 'body',
+        bbox: { x: 0.06, y: 0.23, width: 0.58, height: 0.1 },
+        rotation: 0,
+        content: 'Semantic HTML and native Office objects share one canonical snapshot.',
+        style: {
+          color: '#b9c0cb',
+          fontFamily: 'Aptos',
+          fontSize: 20,
+          lineHeight: 1.2,
+        },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+      {
+        id: 'element:accent',
+        slideId,
+        name: 'Accent block',
+        kind: 'shape',
+        role: 'decoration',
+        bbox: { x: 0.72, y: 0.08, width: 0.2, height: 0.22 },
+        rotation: 0,
+        style: { fill: '#f6b94a', radius: 18 },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+      {
+        id: 'element:chart',
+        slideId,
+        name: 'Adoption chart',
+        kind: 'chart',
+        role: 'data',
+        bbox: { x: 0.06, y: 0.4, width: 0.86, height: 0.45 },
+        rotation: 0,
+        style: {},
+        chart: {
+          chartType: 'bar',
+          labels: ['Alpha', 'Beta', 'GA'],
+          series: [{ name: 'Teams', values: [12, 28, 47], color: '#7dd3fc' }],
+          unit: 'teams',
+          sourceId: 'source:adoption',
+        },
+        sourceIds: ['source:adoption'],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+    ],
+    sources: [
+      {
+        id: 'source:adoption',
+        deckId,
+        title: 'Internal adoption snapshot',
+        sourceType: 'internal',
+        retrievedAt: 1_700_000_000_000,
+        citation: 'Internal adoption snapshot, Q4.',
+        url: 'https://sources.example.test/adoption',
+        license: 'Internal planning data; not independently audited.',
+      },
+      {
+        id: 'source:unused',
+        deckId,
+        title: 'Unused research note',
+        sourceType: 'note',
+        retrievedAt: 1_700_000_000_001,
+        citation: 'This source is not referenced by the overview slide.',
+      },
+    ],
+  };
+}
+
+describe('local SlideLangAdapter', () => {
+  const adapter = createLocalSlideLangAdapter();
+
+  it('returns a clean, deterministic success contract for a golden-ish snapshot', () => {
+    const snapshot = cleanSnapshot();
+    const first = adapter.validate(snapshot);
+    const second = adapter.check(snapshot);
+
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({ ok: true, publishOk: true, cleanOk: true, issues: [] });
+    expect(first.checkedAt).toBe(snapshot.deck.updatedAt);
+  });
+
+  it('matches server readability policy for footer and page-number chrome', () => {
+    const snapshot = cleanSnapshot();
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Missing slide fixture.');
+    snapshot.elements.push(
+      {
+        id: 'element:footer',
+        slideId: slide.id,
+        name: 'Deck footer',
+        kind: 'text',
+        role: 'footer',
+        bbox: { x: 0.06, y: 0.93, width: 0.7, height: 0.035 },
+        rotation: 0,
+        content: 'INTERNAL PREVIEW',
+        style: { color: '#b9c0cb', fontFamily: 'Aptos Mono', fontSize: 10 },
+        sourceIds: [],
+        locked: true,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+      {
+        id: 'element:page-number',
+        slideId: slide.id,
+        name: 'Page number',
+        kind: 'text',
+        role: 'page_number',
+        bbox: { x: 0.88, y: 0.92, width: 0.06, height: 0.05 },
+        rotation: 0,
+        content: '01',
+        style: { color: '#f6b94a', fontFamily: 'Aptos Mono', fontSize: 13 },
+        sourceIds: [],
+        locked: true,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
+    );
+    slide.elementOrder.push('element:footer', 'element:page-number');
+
+    const validation = adapter.validate(snapshot);
+    expect(validation.issues.filter((issue) => issue.code === 'font_size')).toEqual([]);
+    expect(validation.publishOk).toBe(true);
+  });
+
+  it('blocks publish for important collisions and estimated text overflow', () => {
+    const snapshot = cleanSnapshot();
+    const body = snapshot.elements.find((element) => element.id === 'element:body');
+    if (!body) throw new Error('Missing body fixture.');
+    body.bbox = { x: 0.06, y: 0.07, width: 0.28, height: 0.07 };
+    body.content =
+      'This intentionally overlong copy cannot fit in the tiny box and also overlaps the headline.';
+    body.style.fontSize = 30;
+
+    const validation = adapter.validate(snapshot);
+    expect(validation.ok).toBe(true);
+    expect(validation.publishOk).toBe(false);
+    expect(validation.cleanOk).toBe(false);
+    expect(validation.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['collision', 'overflow']),
+    );
+    expect(adapter.getRepairPlan(validation)).toEqual(adapter.getRepairPlan(validation));
+    expect(adapter.getRepairPlan(validation).actions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'fit_text' })]),
+    );
+  });
+
+  it('preserves provenance and parallel semantic slide content in HTML exports', () => {
+    const snapshot = cleanSnapshot();
+    const body = snapshot.elements.find((element) => element.id === 'element:body');
+    if (!body) throw new Error('Missing body fixture.');
+    body.content =
+      'Semantic HTML and native Office objects share one canonical snapshot.\n\u2022 Stable source IDs\n\u2022 Deduplicated citations';
+
+    const html = adapter.renderSlideHtml(snapshot, 'slide:overview');
+    expect(html).toContain('data-slide-id="slide:overview"');
+    expect(html).toContain('data-source-ids="source:adoption"');
+    expect(html).toContain('data-element-id="element:headline"');
+    expect(html).toContain('data-element-kind="text"');
+    expect(html).toContain('data-slide-semantics');
+    expect(html).toContain('Slide 1 of 1: Overview</h2>');
+    expect(html).toContain('>Editable native headline</h3>');
+    expect(html).toContain(
+      '<p>Semantic HTML and native Office objects share one canonical snapshot.</p>',
+    );
+    expect(html).toContain('<ul><li>Stable source IDs</li><li>Deduplicated citations</li></ul>');
+    expect(html).toContain('<table><caption>Adoption chart data</caption>');
+    expect(html).toContain('<th scope="col">Teams (teams)</th>');
+    expect(html).toContain('<th scope="row">Beta</th><td>28</td>');
+    expect(html).toContain('data-source-record data-source-id="source:adoption"');
+    expect(html).toContain('<cite data-source-citation>Internal adoption snapshot, Q4.</cite>');
+    expect(html).toContain(
+      '<dd data-source-disclaimer>Internal planning data; not independently audited.</dd>',
+    );
+    expect(html).toContain('data-slide-visual aria-hidden="true" focusable="false"');
+    expect(html).toContain(
+      'data-element-id="element:accent" data-element-kind="shape" aria-hidden="true"',
+    );
+
+    const deckHtml = adapter.renderDeckHtml(snapshot);
+    expect(deckHtml).toContain('Presenter navigation');
+    expect(deckHtml).toContain('data-nodeslide-source-records');
+    expect(deckHtml).toContain('data-source-count="2"');
+    expect(deckHtml).toContain('"id":"source:adoption"');
+    expect(deckHtml).toContain('"id":"source:unused"');
+  });
+
+  it('writes native objects and deduplicated source notes into the PPTX ZIP', async () => {
+    const binary = await adapter.buildPptx(cleanSnapshot());
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = await zip.file('ppt/slides/slide1.xml')?.async('string');
+    const notesXml = await zip.file('ppt/notesSlides/notesSlide1.xml')?.async('string');
+
+    expect(slideXml).toContain('<a:t>Editable native headline</a:t>');
+    expect(slideXml).toContain('<p:sp>');
+    expect(Object.keys(zip.files).some((path) => /^ppt\/charts\/chart\d+\.xml$/.test(path))).toBe(
+      true,
+    );
+    expect(notesXml).toContain('<a:t>Advance after explaining that every object remains editable.');
+    expect(notesXml).toContain('NodeSlide sources');
+    expect(notesXml).toContain('Citation: Internal adoption snapshot, Q4.');
+    expect(notesXml).toContain('Disclaimer: Internal planning data; not independently audited.');
+    expect(notesXml).not.toContain('This source is not referenced by the overview slide.');
+    expect(notesXml?.match(/Citation: Internal adoption snapshot, Q4\./g)).toHaveLength(1);
+  });
+});
+
+describe('hosted SlideLang seam', () => {
+  it('uses the documented check route without auth and maps official summary fields', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchMock = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), ...(init ? { init } : {}) });
+      return new Response(JSON.stringify({ ok: true, publish_ok: true, clean_ok: false }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    const hosted = createHostedSlideLangAdapter({
+      environment: { SLIDELANG_API_BASE_URL: 'https://slides.example.test/' },
+      fetch: fetchMock,
+    });
+
+    const response = await hosted.check({ project: 'demo', workflow: 'slidemaker', files: [] });
+    const call = calls[0];
+    expect(call?.url).toBe('https://slides.example.test/api/projects/check');
+    expect(new Headers(call?.init?.headers).has('authorization')).toBe(false);
+    expect(JSON.parse(String(call?.init?.body))).toEqual({
+      project: 'demo',
+      workflow: 'slidemaker',
+      files: [],
+    });
+    expect(hosted.mapValidationSummary(response, { deckId: 'demo', deckVersion: 1 })).toMatchObject(
+      { ok: true, publishOk: true, cleanOk: false },
+    );
+    expect(hosted.presenterUrl('demo', 'slidemaker')).toBe(
+      'https://slides.example.test/present/demo/slidemaker/',
+    );
+  });
+});
