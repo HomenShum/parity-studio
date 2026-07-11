@@ -433,12 +433,14 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       deckId: workspace.deck.id,
       ownerAccessKey,
       profileId: profile.id,
+      profileDigest: profile.source.digest,
+      baseDeckVersion: restoreReceipt.snapshot.deck.version,
     }),
   );
   assert(activatedWorkspace, 'Already-applied durable profile activation returned no workspace.');
   assert(
-    activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version,
-    'Profile activation created an unexpected content version.',
+    activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version + 1,
+    'Profile activation did not create an auditable policy version.',
   );
 
   const freshClient = new ConvexHttpClient(convexUrl);

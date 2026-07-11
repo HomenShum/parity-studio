@@ -1,3 +1,4 @@
+import type { Deck } from '../../shared/nodeslide';
 import type { SignatureProfile } from '../../shared/nodeslideSignature';
 import { resolveSignatureTheme } from '../../shared/nodeslideSignatureApply';
 import type { Doc } from '../_generated/dataModel';
@@ -60,31 +61,93 @@ export async function findSignatureProfile(
   ctx: ReadCtx,
   tenantId: string,
   profileId: string,
+  sourceDigest?: string,
 ): Promise<Doc<'nodeslide_signature_profiles'> | null> {
-  return await ctx.db
+  if (sourceDigest !== undefined) {
+    const rowId = signatureProfileRowId(tenantId, profileId, sourceDigest);
+    const addressed = await ctx.db
+      .query('nodeslide_signature_profiles')
+      .withIndex('by_stable_id', (index) => index.eq('id', rowId))
+      .take(2);
+    if (addressed.length > 1) {
+      throw new Error('Conflicting signature profile content-address rows are stored.');
+    }
+    const addressedRevision = addressed[0];
+    if (addressedRevision) {
+      if (
+        addressedRevision.tenantId !== tenantId ||
+        addressedRevision.profileId !== profileId ||
+        addressedRevision.sourceDigest !== sourceDigest
+      ) {
+        throw new Error('Signature profile content address conflicts with another revision.');
+      }
+      return addressedRevision;
+    }
+  }
+
+  const revisions = await ctx.db
     .query('nodeslide_signature_profiles')
     .withIndex('by_tenant_profile', (index) =>
       index.eq('tenantId', tenantId).eq('profileId', profileId),
     )
-    .unique();
+    .take(2);
+  if (sourceDigest === undefined) {
+    if (revisions.length > 1) {
+      throw new Error('Signature profile digest is required to select an immutable revision.');
+    }
+    return revisions[0] ?? null;
+  }
+  const matches = revisions.filter((revision) => revision.sourceDigest === sourceDigest);
+  if (matches.length > 1) {
+    throw new Error('Conflicting signature profile revisions are stored for this identity/digest.');
+  }
+  return matches[0] ?? null;
 }
 
 export async function requireSignatureProfile(
   ctx: ReadCtx,
   tenantId: string,
   profileId: string,
+  sourceDigest?: string,
 ): Promise<SignatureProfile> {
-  const row = await findSignatureProfile(ctx, tenantId, profileId);
+  const row = await findSignatureProfile(ctx, tenantId, profileId, sourceDigest);
   if (!row) throw new Error('Signature profile unavailable.');
-  return parseSignatureProfileFromStorage(row.profileJson);
+  return signatureProfileFromRow(row);
 }
 
-export function signatureProfileRowId(tenantId: string, profileId: string): string {
-  return nodeslideStableId('signature_profile', tenantId, profileId);
+export async function requireDeckSignatureProfile(
+  ctx: ReadCtx,
+  tenantId: string,
+  deck: Pick<Deck, 'activeSignatureProfileId' | 'activeSignatureProfileDigest'>,
+): Promise<SignatureProfile | undefined> {
+  const profileId = deck.activeSignatureProfileId;
+  const sourceDigest = deck.activeSignatureProfileDigest;
+  if (profileId === undefined && sourceDigest === undefined) return undefined;
+  if (profileId === undefined || sourceDigest === undefined) {
+    throw new Error('Deck signature profile identity/digest is incomplete.');
+  }
+  return await requireSignatureProfile(ctx, tenantId, profileId, sourceDigest);
+}
+
+export function signatureProfileRowId(
+  tenantId: string,
+  profileId: string,
+  sourceDigest: string,
+): string {
+  if (!/^sha256:[0-9a-f]{64}$/.test(sourceDigest)) {
+    throw new Error('Signature profile digest is invalid.');
+  }
+  return `${nodeslideStableId('signature_profile', tenantId, profileId)}_${sourceDigest.slice(7)}`;
 }
 
 export function signatureProfileFromRow(
   row: Doc<'nodeslide_signature_profiles'>,
 ): SignatureProfile {
-  return parseSignatureProfileFromStorage(row.profileJson);
+  const profile = parseSignatureProfileFromStorage(row.profileJson);
+  if (row.profileId !== profile.id || row.sourceDigest !== profile.source.digest) {
+    throw new Error(
+      'Stored signature profile identity/digest conflicts with its immutable content.',
+    );
+  }
+  return profile;
 }

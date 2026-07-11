@@ -326,11 +326,18 @@ export const getGenerationContext = internalQuery({
         row && row.deckId === args.deckId ? [sourceFromRow(row)] : [],
       ),
     };
-    if (!deck.activeSignatureProfileId) return { snapshot };
+    if (!deck.activeSignatureProfileId && !deck.activeSignatureProfileDigest) return { snapshot };
+    if (!deck.activeSignatureProfileId || !deck.activeSignatureProfileDigest) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The active signature profile identity is incomplete.',
+      );
+    }
     const profileRow = await findSignatureProfile(
       ctx,
       deck.projectId,
       deck.activeSignatureProfileId,
+      deck.activeSignatureProfileDigest,
     );
     if (
       !profileRow ||

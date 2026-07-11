@@ -34,11 +34,47 @@ describe('NodeSlide durable signature profiles', () => {
   });
 
   it('derives tenant-scoped row IDs and receipt-time-independent validation IDs', () => {
-    expect(signatureProfileRowId('tenant:a', financeIbcsTastePack.id)).toBe(
-      signatureProfileRowId('tenant:a', financeIbcsTastePack.id),
+    expect(
+      signatureProfileRowId(
+        'tenant:a',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
+    ).toMatch(new RegExp(`${financeIbcsTastePack.source.digest.slice(7)}$`));
+    expect(
+      signatureProfileRowId(
+        'tenant:a',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
+    ).toBe(
+      signatureProfileRowId(
+        'tenant:a',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
     );
-    expect(signatureProfileRowId('tenant:a', financeIbcsTastePack.id)).not.toBe(
-      signatureProfileRowId('tenant:b', financeIbcsTastePack.id),
+    expect(
+      signatureProfileRowId(
+        'tenant:a',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
+    ).not.toBe(
+      signatureProfileRowId(
+        'tenant:b',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
+    );
+    expect(
+      signatureProfileRowId(
+        'tenant:a',
+        financeIbcsTastePack.id,
+        financeIbcsTastePack.source.digest,
+      ),
+    ).not.toBe(
+      signatureProfileRowId('tenant:a', financeIbcsTastePack.id, `sha256:${'f'.repeat(64)}`),
     );
 
     const source = buildGoldenNodeSlide('signature-profile-test', 1_000).snapshot;
