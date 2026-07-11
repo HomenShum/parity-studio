@@ -7,6 +7,7 @@ import {
   nodeslideCommentAnchorValidator,
   nodeslideCursorValidator,
   nodeslideElementStyleValidator,
+  nodeslideElementValidator,
   nodeslideExportCapabilityValidator,
   nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
@@ -181,6 +182,47 @@ export const PARITY_STATUSES = [
   'failed',
   'unavailable',
 ] as const;
+
+const nodeslidePublishedDeckValidator = v.object({
+  schemaVersion: v.literal('nodeslide.slidelang/v1'),
+  toolchainVersion: v.string(),
+  id: v.string(),
+  title: v.string(),
+  theme: nodeslideThemeValidator,
+  slideOrder: v.array(v.string()),
+  version: v.number(),
+  status: v.literal('published'),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
+
+const nodeslidePublishedSlideValidator = v.object({
+  id: v.string(),
+  deckId: v.string(),
+  title: v.string(),
+  section: v.optional(v.string()),
+  background: v.string(),
+  elementOrder: v.array(v.string()),
+  version: v.number(),
+});
+
+const nodeslidePublishedSourceValidator = v.object({
+  id: v.string(),
+  deckId: v.string(),
+  title: v.string(),
+  url: v.optional(v.string()),
+  sourceType: v.literal('url'),
+  retrievedAt: v.number(),
+  citation: v.string(),
+  license: v.optional(v.string()),
+});
+
+const nodeslidePublishedSnapshotValidator = v.object({
+  deck: nodeslidePublishedDeckValidator,
+  slides: v.array(nodeslidePublishedSlideValidator),
+  elements: v.array(nodeslideElementValidator),
+  sources: v.array(nodeslidePublishedSourceValidator),
+});
 
 export default defineSchema({
   projects: defineTable({
@@ -541,12 +583,14 @@ export default defineSchema({
     linkedCommentId: v.optional(v.string()),
     traceId: v.optional(v.string()),
     profileId: v.optional(v.string()),
+    profileDigest: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
-    .index('by_deck_status', ['deckId', 'status']),
+    .index('by_deck_status', ['deckId', 'status'])
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
 
   nodeslide_variation_batches: defineTable({
     id: v.string(),
@@ -627,6 +671,7 @@ export default defineSchema({
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
     .index('by_parent', ['parentId']),
 
   nodeslide_versions: defineTable({
@@ -674,7 +719,8 @@ export default defineSchema({
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_checked', ['deckId', 'checkedAt'])
-    .index('by_deck_version', ['deckId', 'deckVersion']),
+    .index('by_deck_version', ['deckId', 'deckVersion'])
+    .index('by_deck_version_checked', ['deckId', 'deckVersion', 'checkedAt']),
 
   nodeslide_traces: defineTable({
     id: v.string(),
@@ -704,7 +750,9 @@ export default defineSchema({
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
-    .index('by_patch', ['patchId']),
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
+    .index('by_patch', ['patchId'])
+    .index('by_stable_deck_patch', ['id', 'deckId', 'patchId']),
 
   nodeslide_exports: defineTable({
     id: v.string(),
@@ -723,7 +771,26 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_stable_id', ['id'])
-    .index('by_deck_created', ['deckId', 'createdAt']),
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
+
+  nodeslide_publications: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    shareSlug: v.string(),
+    revision: v.number(),
+    deckVersion: v.number(),
+    validationId: v.string(),
+    status: v.union(v.literal('active'), v.literal('superseded'), v.literal('revoked')),
+    snapshot: nodeslidePublishedSnapshotValidator,
+    publishedAt: v.number(),
+    supersededAt: v.optional(v.number()),
+    supersededById: v.optional(v.string()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_revision', ['deckId', 'revision'])
+    .index('by_share_slug_revision', ['shareSlug', 'revision']),
 
   nodeslide_preference_events: defineTable({
     schemaVersion: v.literal('nodeslide.preference/v1'),

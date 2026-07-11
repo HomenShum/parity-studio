@@ -24,11 +24,14 @@ import {
   requireShareSlug,
 } from './lib/nodeslideAccess';
 import {
+  NODESLIDE_WORKSPACE_LIMITS,
   commentFromRow,
   deckFromRow,
   findCommentRow,
+  findCurrentValidationRow,
   findDeckRow,
-  findDeckRowByShareSlug,
+  findLatestPublicationByShareSlug,
+  findLatestPublicationForDeck,
   findPatchRow,
   findVersionRow,
   insertNodeSlideSnapshot,
@@ -36,6 +39,9 @@ import {
   loadNodeSlideWorkspace,
   patchFromRow,
   presenceFromRow,
+  publicationFromRow,
+  publishedNodeSlideFromRow,
+  sanitizeNodeSlideSnapshot,
   writeNodeSlideSnapshot,
 } from './lib/nodeslideData';
 import { nodeslideEventId, nodeslideHash, nodeslideStableId } from './lib/nodeslideIds';
@@ -51,7 +57,10 @@ import {
   buildGoldenNodeSlide,
   repairLegacyGoldenSnapshot,
 } from './lib/nodeslideSeed';
-import { requireSignatureProfile } from './lib/nodeslideSignatureProfiles';
+import {
+  requireDeckSignatureProfile,
+  requireSignatureProfile,
+} from './lib/nodeslideSignatureProfiles';
 import { isNormalizedBoundingBox, validateNodeSlideSnapshot } from './lib/nodeslideValidation';
 import {
   nodeslideBriefValidator,
@@ -59,7 +68,6 @@ import {
   nodeslideCursorValidator,
   nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
-  nodeslidePatchSourceValidator,
   nodeslideVersionClockValidator,
 } from './lib/nodeslideValidators';
 import {
@@ -76,7 +84,7 @@ const PRESENCE_TTL_MS = 45_000;
 const MAX_PATCH_OPERATIONS = NODESLIDE_PATCH_OPERATION_LIMIT;
 const MAX_PRESENCE_ELEMENTS = 64;
 const MAX_LISTED_DECKS = 32;
-const patchArgs = {
+const patchCoreArgs = {
   id: v.optional(v.string()),
   deckId: v.string(),
   ownerAccessKey: v.string(),
@@ -85,11 +93,34 @@ const patchArgs = {
   baseElementVersions: nodeslideVersionClockValidator,
   scope: nodeslidePatchScopeValidator,
   operations: v.array(nodeslidePatchOperationValidator),
-  source: v.optional(nodeslidePatchSourceValidator),
   summary: v.optional(v.string()),
   linkedCommentId: v.optional(v.string()),
-  traceId: v.optional(v.string()),
   profileId: v.optional(v.string()),
+  profileDigest: v.optional(v.string()),
+};
+const publicPatchArgs = patchCoreArgs;
+const internalAgentPatchArgs = {
+  ...patchCoreArgs,
+  id: v.string(),
+  traceId: v.string(),
+  // Kept temporarily for the existing internal action caller; the handler
+  // ignores it and always records agent provenance.
+  source: v.optional(v.literal('agent')),
+};
+
+type HumanPatchMutationArgs = {
+  id?: string;
+  deckId: string;
+  ownerAccessKey: string;
+  baseDeckVersion: number;
+  baseSlideVersions: Record<string, number>;
+  baseElementVersions: Record<string, number>;
+  scope: PatchScope;
+  operations: PatchOperation[];
+  summary?: string;
+  linkedCommentId?: string;
+  profileId?: string;
+  profileDigest?: string;
 };
 
 type PatchMutationArgs = {
@@ -106,6 +137,7 @@ type PatchMutationArgs = {
   linkedCommentId?: string;
   traceId?: string;
   profileId?: string;
+  profileDigest?: string;
 };
 
 export const ensureWorkspace = mutation({
@@ -195,20 +227,107 @@ export const getPresenterSnapshot = query({
   args: { shareSlug: v.string() },
   handler: async (ctx, { shareSlug }) => {
     const slug = requireShareSlug(shareSlug);
-    const row = await findDeckRowByShareSlug(ctx, slug);
-    if (!row || row.shareSlug !== slug) return null;
-    return await loadNodeSlideSnapshot(ctx, row.id);
+    const publication = await findLatestPublicationByShareSlug(ctx, slug);
+    if (
+      !publication ||
+      publication.shareSlug !== slug ||
+      publication.status !== 'active' ||
+      publication.snapshot.deck.id !== publication.deckId ||
+      publication.snapshot.deck.version !== publication.deckVersion
+    ) {
+      return null;
+    }
+    return publishedNodeSlideFromRow(publication);
+  },
+});
+
+export const publishDeck = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, { deckId, ownerAccessKey }) => {
+    const deckRow = await requireOwnerAccess(ctx, deckId, ownerAccessKey);
+    const snapshot = await requireSnapshot(ctx, deckId);
+    const validation = await findCurrentValidationRow(ctx, deckId, snapshot.deck.version);
+    if (!validationAllowsPublication(snapshot, validation)) {
+      throw new Error('The current deck version must pass publish validation before sharing.');
+    }
+
+    const now = Date.now();
+    const shareSlug = isSecureShareSlug(deckRow.shareSlug) ? deckRow.shareSlug : createShareSlug();
+    const previous = await findLatestPublicationForDeck(ctx, deckId);
+    const revision = (previous?.revision ?? 0) + 1;
+    const id = nodeslideStableId('publication', deckId, String(revision));
+    if (previous?.status === 'active') {
+      await ctx.db.patch(previous._id, {
+        status: 'superseded',
+        supersededAt: now,
+        supersededById: id,
+      });
+    }
+    const publishedSnapshot = sanitizeNodeSlideSnapshot(snapshot);
+    await ctx.db.insert('nodeslide_publications', {
+      id,
+      deckId,
+      shareSlug,
+      revision,
+      deckVersion: snapshot.deck.version,
+      validationId: validation.id,
+      status: 'active',
+      snapshot: publishedSnapshot,
+      publishedAt: now,
+    });
+    await ctx.db.patch(deckRow._id, {
+      shareSlug,
+      status: 'published',
+      updatedAt: now,
+    });
+    await prunePublicationHistory(ctx, deckId);
+    return {
+      publication: {
+        id,
+        deckId,
+        shareSlug,
+        revision,
+        deckVersion: snapshot.deck.version,
+        validationId: validation.id,
+        status: 'active' as const,
+        publishedAt: now,
+      },
+      snapshot: publishedSnapshot,
+    };
+  },
+});
+
+export const revokePublication = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, { deckId, ownerAccessKey }) => {
+    const deckRow = await requireOwnerAccess(ctx, deckId, ownerAccessKey);
+    const publication = await findLatestPublicationForDeck(ctx, deckId);
+    if (!publication) return null;
+    if (publication.status !== 'active') return publicationFromRow(publication);
+    const now = Date.now();
+    await ctx.db.patch(publication._id, { status: 'revoked', revokedAt: now });
+    // A revoked capability is never reactivated by a later publish.
+    await ctx.db.patch(deckRow._id, {
+      shareSlug: createShareSlug(),
+      status: 'ready',
+      updatedAt: now,
+    });
+    return {
+      ...publicationFromRow(publication),
+      status: 'revoked' as const,
+      revokedAt: now,
+    };
   },
 });
 
 export const applyPatch = mutation({
-  args: patchArgs,
-  handler: async (ctx, args) => await commitPatch(ctx, normalizePatchArgs(args), null),
+  args: publicPatchArgs,
+  handler: async (ctx, args) => await commitPatch(ctx, normalizeHumanPatchArgs(args), null),
 });
 
 export const proposePatch = mutation({
-  args: patchArgs,
-  handler: async (ctx, args) => await persistProposal(ctx, normalizePatchArgs(args)),
+  args: publicPatchArgs,
+  handler: async (ctx, args) => await persistProposal(ctx, normalizeHumanPatchArgs(args)),
 });
 
 export const acceptPatch = mutation({
@@ -245,7 +364,7 @@ export const acceptVariationPatch = internalMutation({
     const siblingRows = await ctx.db
       .query('nodeslide_variations')
       .withIndex('by_batch', (index) => index.eq('batchId', selectedRow.batchId))
-      .collect();
+      .take(4);
     if (
       siblingRows.length !== 3 ||
       siblingRows.some((variation) => variation.deckId !== args.deckId)
@@ -449,13 +568,7 @@ export const rejectPatch = mutation({
     if (row.status !== 'rejected') {
       const now = Date.now();
       await ctx.db.patch(row._id, { status: 'rejected', updatedAt: now });
-      if (row.traceId) {
-        const trace = await ctx.db
-          .query('nodeslide_traces')
-          .withIndex('by_stable_id', (index) => index.eq('id', row.traceId as string))
-          .first();
-        if (trace) await ctx.db.patch(trace._id, { status: 'cancelled', completedAt: now });
-      }
+      await finishPatchTrace(ctx, row, now, 'cancelled');
     }
     const updated = await findPatchRow(ctx, patchId);
     return updated ? patchFromRow(updated) : null;
@@ -538,7 +651,10 @@ export const addComment = mutation({
     const now = Date.now();
     const id = args.id ?? nodeslideEventId('comment', now, args.deckId, args.authorId, args.text);
     const existing = await findCommentRow(ctx, id);
-    if (existing) return commentFromRow(existing);
+    if (existing) {
+      if (existing.deckId !== args.deckId) throw new Error('Comment id is unavailable.');
+      return commentFromRow(existing);
+    }
     const comment = {
       id,
       deckId: args.deckId,
@@ -574,7 +690,10 @@ export const replyComment = mutation({
     const id =
       args.id ?? nodeslideEventId('comment_reply', now, args.parentId, args.authorId, args.text);
     const existing = await findCommentRow(ctx, id);
-    if (existing) return commentFromRow(existing);
+    if (existing) {
+      if (existing.deckId !== args.deckId) throw new Error('Comment id is unavailable.');
+      return commentFromRow(existing);
+    }
     const comment = {
       id,
       deckId: parent.deckId,
@@ -684,8 +803,11 @@ export const touchPresence = mutation({
     const active = await ctx.db
       .query('nodeslide_presence')
       .withIndex('by_deck_expiry', (index) => index.eq('deckId', args.deckId).gt('expiresAt', now))
-      .collect();
-    return active.map(presenceFromRow);
+      .order('desc')
+      .take(NODESLIDE_WORKSPACE_LIMITS.presence);
+    return active
+      .map(presenceFromRow)
+      .sort((left, right) => right.lastSeenAt - left.lastSeenAt || right.id.localeCompare(left.id));
   },
 });
 
@@ -802,9 +924,7 @@ export const createFromBriefInternal = internalMutation({
 
 export const proposeAgentPatchInternal = internalMutation({
   args: {
-    ...patchArgs,
-    id: v.string(),
-    traceId: v.string(),
+    ...internalAgentPatchArgs,
     instruction: v.string(),
     traceSummary: v.string(),
     toolCalls: v.array(v.string()),
@@ -869,7 +989,7 @@ async function requireAtomicVariationRow(
   const rows = await ctx.db
     .query('nodeslide_variations')
     .withIndex('by_stable_id', (index) => index.eq('id', variationId))
-    .collect();
+    .take(2);
   const row = rows.find((candidate) => candidate.deckId === deckId);
   if (!row) throw new NodeSlideVariationError('invalid_request', 'Variation is unavailable.');
   return row;
@@ -883,7 +1003,7 @@ async function requireAtomicVariationBatch(
   const rows = await ctx.db
     .query('nodeslide_variation_batches')
     .withIndex('by_stable_id', (index) => index.eq('id', batchId))
-    .collect();
+    .take(2);
   const row = rows.find((candidate) => candidate.deckId === deckId);
   if (!row) throw new NodeSlideVariationError('invalid_request', 'Variation batch is unavailable.');
   return row;
@@ -902,13 +1022,16 @@ async function findAtomicVariationPatch(
   variation: Doc<'nodeslide_variations'>,
 ): Promise<Doc<'nodeslide_patches'> | null> {
   for (const patchId of atomicVariationPatchIds(variation)) {
-    const rows = await ctx.db
+    const linked = await ctx.db
       .query('nodeslide_patches')
       .withIndex('by_stable_id', (index) => index.eq('id', patchId))
-      .collect();
-    const linked = rows.find(
-      (patch) => patch.deckId === variation.deckId && patch.traceId === variation.id,
-    );
+      .filter((query) =>
+        query.and(
+          query.eq(query.field('deckId'), variation.deckId),
+          query.eq(query.field('traceId'), variation.id),
+        ),
+      )
+      .first();
     if (linked) return linked;
   }
   return null;
@@ -925,11 +1048,11 @@ async function allocateAtomicVariationPatchId(
     nodeslideStableId('patch_variation_scoped', variation.deckId, variation.id),
   ];
   for (const patchId of candidates) {
-    const rows = await ctx.db
+    const existing = await ctx.db
       .query('nodeslide_patches')
       .withIndex('by_stable_id', (index) => index.eq('id', patchId))
-      .collect();
-    if (rows.length === 0) return patchId;
+      .first();
+    if (!existing) return patchId;
   }
   throw new NodeSlideVariationError(
     'generation_failed',
@@ -1074,7 +1197,7 @@ async function insertAtomicVariationDecision(
   const existingRows = await ctx.db
     .query('nodeslide_variation_decisions')
     .withIndex('by_stable_id', (index) => index.eq('id', trace.id))
-    .collect();
+    .take(2);
   const matching = existingRows.find(
     (row) =>
       row.deckId === trace.deckId &&
@@ -1090,7 +1213,7 @@ async function insertAtomicVariationDecision(
     const scopedRows = await ctx.db
       .query('nodeslide_variation_decisions')
       .withIndex('by_stable_id', (index) => index.eq('id', candidate.id))
-      .collect();
+      .take(2);
     if (
       scopedRows.some(
         (row) =>
@@ -1159,8 +1282,9 @@ function stableJson(value: unknown): string {
 }
 
 async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
-  await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+  const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
+  assertPatchProfileReference(args);
   const snapshot = await requireSnapshot(ctx, args.deckId);
   const existing = args.id ? await findPatchRow(ctx, args.id) : null;
   if (existing) {
@@ -1172,6 +1296,7 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
     };
   }
+  await resolvePatchSignatureProfile(ctx, deckRow.projectId, args, snapshot);
   const scopedComment = await commentForScope(ctx, args.scope);
   const input = patchInput(args);
   const errors = validateNodeSlidePatch(snapshot, input, scopedComment);
@@ -1195,7 +1320,14 @@ async function commitPatch(
 ) {
   const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
+  assertPatchProfileReference(args);
   const snapshot = await requireSnapshot(ctx, args.deckId);
+  const signatureProfile = await resolvePatchSignatureProfile(
+    ctx,
+    deckRow.projectId,
+    args,
+    snapshot,
+  );
   const scopedComment = await commentForScope(ctx, args.scope);
   const input = patchInput(args);
   const errors = validateNodeSlidePatch(snapshot, input, scopedComment);
@@ -1208,7 +1340,7 @@ async function commitPatch(
     const stale = patchRow({ ...args, id }, now, 'stale', existing?.createdAt);
     if (existing) await ctx.db.patch(existing._id, { status: 'stale', updatedAt: now });
     else await ctx.db.insert('nodeslide_patches', stale);
-    if (existing?.traceId) await finishTrace(ctx, existing.traceId, now, 'failed');
+    if (existing) await finishPatchTrace(ctx, existing, now, 'failed');
     return {
       patch: stale,
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
@@ -1221,10 +1353,6 @@ async function commitPatch(
     { baseDeckVersion: snapshot.deck.version, scope: args.scope, operations: args.operations },
     now,
   );
-  const activeProfileId = args.profileId ?? snapshot.deck.activeSignatureProfileId;
-  const signatureProfile = activeProfileId
-    ? await requireSignatureProfile(ctx, deckRow.projectId, activeProfileId)
-    : undefined;
   const appliedSnapshot: DeckSnapshot = signatureProfile
     ? {
         ...applied.snapshot,
@@ -1253,7 +1381,8 @@ async function commitPatch(
     await ctx.db.patch(existing._id, {
       status: 'accepted',
       resultingDeckVersion: appliedSnapshot.deck.version,
-      ...(args.profileId ? { profileId: args.profileId } : {}),
+      ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
+      ...(args.profileDigest !== undefined ? { profileDigest: args.profileDigest } : {}),
       updatedAt: now,
     });
   } else await ctx.db.insert('nodeslide_patches', accepted);
@@ -1268,23 +1397,65 @@ async function commitPatch(
   await ctx.db.insert('nodeslide_validations', validation);
   if (args.linkedCommentId)
     await resolveLinkedComment(ctx, args.linkedCommentId, args.deckId, id, now);
-  if (args.traceId) await finishTrace(ctx, args.traceId, now, 'completed', validation, id);
+  await finishPatchTrace(ctx, accepted, now, 'completed', validation);
   return { patch: accepted, snapshot: appliedSnapshot, validation, rebased: cas.rebased };
 }
 
-function normalizePatchArgs<T extends PatchMutationArgs>(args: T): PatchMutationArgs {
+function normalizeHumanPatchArgs(args: HumanPatchMutationArgs): PatchMutationArgs {
   assertPatchOperationCount(args.operations);
-  return {
-    ...args,
-    source: args.source ?? 'human',
+  assertPatchProfileReference(args);
+  const normalized: PatchMutationArgs = {
+    ...(args.id !== undefined ? { id: args.id } : {}),
+    deckId: args.deckId,
+    ownerAccessKey: args.ownerAccessKey,
+    baseDeckVersion: args.baseDeckVersion,
+    baseSlideVersions: args.baseSlideVersions,
+    baseElementVersions: args.baseElementVersions,
+    scope: args.scope,
+    operations: args.operations,
+    source: 'human',
     summary: args.summary?.trim() || 'Applied scoped NodeSlide change.',
+    ...(args.linkedCommentId !== undefined ? { linkedCommentId: args.linkedCommentId } : {}),
+    ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
+    ...(args.profileDigest !== undefined ? { profileDigest: args.profileDigest } : {}),
   };
+  return normalized;
 }
 
 function assertPatchOperationCount(operations: readonly PatchOperation[]) {
   if (operations.length > MAX_PATCH_OPERATIONS) {
     throw new Error(`NodeSlide patches support at most ${MAX_PATCH_OPERATIONS} operations.`);
   }
+}
+
+function assertPatchProfileReference(
+  args: Pick<PatchMutationArgs, 'profileId' | 'profileDigest'>,
+): void {
+  const hasProfileId = args.profileId !== undefined;
+  const hasProfileDigest = args.profileDigest !== undefined;
+  if (hasProfileId !== hasProfileDigest) {
+    throw new Error('Patch signature profileId and profileDigest must appear together.');
+  }
+  if (!hasProfileId || !hasProfileDigest) return;
+  if (!args.profileId || args.profileId.length > 240) {
+    throw new Error('Patch signature profileId is invalid.');
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(args.profileDigest as string)) {
+    throw new Error('Patch signature profileDigest is invalid.');
+  }
+}
+
+async function resolvePatchSignatureProfile(
+  ctx: { db: MutationCtx['db'] },
+  tenantId: string,
+  args: Pick<PatchMutationArgs, 'profileId' | 'profileDigest'>,
+  snapshot: DeckSnapshot,
+) {
+  assertPatchProfileReference(args);
+  if (args.profileId !== undefined && args.profileDigest !== undefined) {
+    return await requireSignatureProfile(ctx, tenantId, args.profileId, args.profileDigest);
+  }
+  return await requireDeckSignatureProfile(ctx, tenantId, snapshot.deck);
 }
 
 function patchInput(args: PatchMutationArgs): NodeSlidePatchInput {
@@ -1305,6 +1476,7 @@ function patchRow(
   createdAt = now,
   resultingDeckVersion?: number,
 ): DeckPatch {
+  assertPatchProfileReference(args);
   return {
     id: args.id ?? nodeslideEventId('patch', now, args.deckId, args.summary ?? 'patch'),
     deckId: args.deckId,
@@ -1319,7 +1491,8 @@ function patchRow(
     summary: args.summary?.trim() || 'Scoped NodeSlide change.',
     ...(args.linkedCommentId ? { linkedCommentId: args.linkedCommentId } : {}),
     ...(args.traceId ? { traceId: args.traceId } : {}),
-    ...(args.profileId ? { profileId: args.profileId } : {}),
+    ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
+    ...(args.profileDigest !== undefined ? { profileDigest: args.profileDigest } : {}),
     createdAt,
     updatedAt: now,
   };
@@ -1483,13 +1656,14 @@ async function validateWithActiveSignature(
   checkedAt: number,
 ): Promise<ValidationResult> {
   const profileId = snapshot.deck.activeSignatureProfileId;
-  if (!profileId) return validateNodeSlideSnapshot(snapshot, checkedAt);
+  const profileDigest = snapshot.deck.activeSignatureProfileDigest;
+  if (profileId === undefined && profileDigest === undefined) {
+    return validateNodeSlideSnapshot(snapshot, checkedAt);
+  }
   const deckRow = await findDeckRow(ctx, snapshot.deck.id);
   if (!deckRow) throw new Error(`Deck ${snapshot.deck.id} not found.`);
-  const signatureProfile = await requireSignatureProfile(ctx, deckRow.projectId, profileId);
-  if (snapshot.deck.activeSignatureProfileDigest !== signatureProfile.source.digest) {
-    throw new Error('Active signature profile digest does not match the stored profile.');
-  }
+  const signatureProfile = await requireDeckSignatureProfile(ctx, deckRow.projectId, snapshot.deck);
+  if (!signatureProfile) throw new Error('Active signature profile identity/digest is incomplete.');
   return validateNodeSlideSnapshot(snapshot, checkedAt, undefined, { signatureProfile });
 }
 
@@ -1508,8 +1682,8 @@ async function ownerWorkspaceResponse(
   };
 }
 
-function isSecureShareSlug(value: string | undefined): boolean {
-  return Boolean(value && /^share-[a-f0-9]{36}$/.test(value));
+function isSecureShareSlug(value: string | undefined): value is string {
+  return value !== undefined && /^share-[a-f0-9]{36}$/.test(value);
 }
 
 async function commentForScope(ctx: MutationCtx, scope: PatchScope): Promise<DeckComment | null> {
@@ -1531,25 +1705,53 @@ async function resolveLinkedComment(
   await ctx.db.patch(comment._id, { status: 'resolved', linkedPatchId: patchId, updatedAt: now });
 }
 
-async function finishTrace(
+async function finishPatchTrace(
   ctx: MutationCtx,
-  traceId: string,
+  patch: Pick<DeckPatch, 'id' | 'deckId' | 'traceId'>,
   now: number,
-  status: 'completed' | 'failed',
+  status: 'completed' | 'failed' | 'cancelled',
   validation?: ValidationResult,
-  patchId?: string,
-) {
+): Promise<boolean> {
+  if (!patch.traceId) return false;
   const trace = await ctx.db
     .query('nodeslide_traces')
-    .withIndex('by_stable_id', (index) => index.eq('id', traceId))
+    .withIndex('by_stable_deck_patch', (index) =>
+      index
+        .eq('id', patch.traceId as string)
+        .eq('deckId', patch.deckId)
+        .eq('patchId', patch.id),
+    )
     .first();
-  if (trace) {
-    await ctx.db.patch(trace._id, {
-      status,
-      ...(validation ? { validation } : {}),
-      ...(patchId ? { patchId } : {}),
-      completedAt: now,
-    });
+  if (!trace || trace.deckId !== patch.deckId || trace.patchId !== patch.id) return false;
+  await ctx.db.patch(trace._id, {
+    status,
+    ...(validation ? { validation } : {}),
+    completedAt: now,
+  });
+  return true;
+}
+
+function validationAllowsPublication(
+  snapshot: DeckSnapshot,
+  validation: Doc<'nodeslide_validations'> | null,
+): validation is Doc<'nodeslide_validations'> {
+  return Boolean(
+    validation &&
+      validation.deckId === snapshot.deck.id &&
+      validation.deckVersion === snapshot.deck.version &&
+      validation.toolchainVersion === snapshot.deck.toolchainVersion &&
+      validation.publishOk,
+  );
+}
+
+async function prunePublicationHistory(ctx: MutationCtx, deckId: string): Promise<void> {
+  const rows = await ctx.db
+    .query('nodeslide_publications')
+    .withIndex('by_deck_revision', (index) => index.eq('deckId', deckId))
+    .order('desc')
+    .take(NODESLIDE_WORKSPACE_LIMITS.publications + 1);
+  for (const row of rows.slice(NODESLIDE_WORKSPACE_LIMITS.publications)) {
+    await ctx.db.delete(row._id);
   }
 }
 

@@ -229,7 +229,9 @@ export interface DeckPatch {
   summary: string;
   linkedCommentId?: string;
   traceId?: string;
+  /** Immutable signature revision; profileId and profileDigest always appear together. */
   profileId?: string;
+  profileDigest?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -341,6 +343,62 @@ export interface DeckSnapshot {
   sources: SourceRecord[];
 }
 
+/**
+ * The deliberately narrow deck shape exposed by a public presentation link.
+ * Owner-only creation context, signature configuration, and the mutable share
+ * capability are not part of the published contract.
+ */
+export interface PublishedDeck {
+  schemaVersion: typeof NODESLIDE_SCHEMA_VERSION;
+  toolchainVersion: string;
+  id: string;
+  title: string;
+  theme: ThemeSpec;
+  slideOrder: string[];
+  version: number;
+  status: 'published';
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Speaker notes are intentionally absent from public slides. */
+export type PublishedSlide = Omit<Slide, 'notes'>;
+
+/** Only explicitly public URL citations are included in a published snapshot. */
+export type PublishedSourceRecord = Omit<SourceRecord, 'sourceType'> & {
+  sourceType: 'url';
+};
+
+export interface PublishedDeckSnapshot {
+  deck: PublishedDeck;
+  slides: PublishedSlide[];
+  elements: SlideElement[];
+  sources: PublishedSourceRecord[];
+}
+
+export type NodeSlidePublicationStatus = 'active' | 'superseded' | 'revoked';
+
+/** Bounded lifecycle metadata; the immutable snapshot is stored separately. */
+export interface NodeSlidePublication {
+  id: string;
+  deckId: string;
+  shareSlug: string;
+  revision: number;
+  deckVersion: number;
+  validationId: string;
+  status: NodeSlidePublicationStatus;
+  publishedAt: number;
+  supersededAt?: number;
+  supersededById?: string;
+  revokedAt?: number;
+}
+
+/** Explicit public presenter response. */
+export interface PublishedNodeSlide {
+  publication: NodeSlidePublication;
+  snapshot: PublishedDeckSnapshot;
+}
+
 export interface NodeSlideWorkspace extends DeckSnapshot {
   comments: DeckComment[];
   patches: DeckPatch[];
@@ -349,6 +407,7 @@ export interface NodeSlideWorkspace extends DeckSnapshot {
   validations: ValidationResult[];
   exports: ExportArtifact[];
   presence: Presence[];
+  publication: NodeSlidePublication | null;
 }
 
 export interface AgentEditRequest {
