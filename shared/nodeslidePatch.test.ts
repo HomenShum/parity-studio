@@ -865,6 +865,45 @@ describe('NodeSlide deck-level operations and clocks', () => {
         ]),
       ),
     ).toContain('update_style must change element headline.');
+
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(current, [
+          {
+            op: 'replace_text',
+            slideId: 'slide-1',
+            elementId: 'headline',
+            text: 'After',
+          },
+          {
+            op: 'replace_text',
+            slideId: 'slide-1',
+            elementId: 'headline',
+            text: 'After',
+          },
+        ]),
+      ),
+    ).toContain('replace_text must change element headline.');
+
+    const canonical = snapshot();
+    const canonicalHeadline = canonical.elements.find((element) => element.id === 'headline');
+    if (!canonicalHeadline) throw new Error('Missing headline fixture');
+    canonicalHeadline.bbox.width = 0.01;
+    expect(
+      validateNodeSlidePatch(
+        canonical,
+        serverPatch(canonical, [
+          {
+            op: 'resize',
+            slideId: 'slide-1',
+            elementId: 'headline',
+            width: 0.001,
+            height: canonicalHeadline.bbox.height,
+          },
+        ]),
+      ),
+    ).toContain('resize must change element headline.');
   });
 
   it('targets semantic copy instead of auxiliary labels in deterministic fallback', () => {
@@ -919,5 +958,26 @@ describe('NodeSlide deck-level operations and clocks', () => {
         },
       ),
     ).toThrow('could not safely infer a copy, style, or layout operation');
+  });
+
+  it('uses the new value in an old/new quoted replacement and rejects mismatches', () => {
+    const current = snapshot();
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: current.deck.id,
+      slideIds: ['slide-1'],
+      operationMode: 'unrestricted',
+    };
+    expect(deterministicAgentOperations(current, 'Replace "Before" with "After".', scope)).toEqual([
+      {
+        op: 'replace_text',
+        slideId: 'slide-1',
+        elementId: 'headline',
+        text: 'After',
+      },
+    ]);
+    expect(() =>
+      deterministicAgentOperations(current, 'Replace "Missing" with "After".', scope),
+    ).toThrow('could not safely infer new wording');
   });
 });

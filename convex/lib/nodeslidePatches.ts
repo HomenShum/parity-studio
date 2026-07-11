@@ -48,9 +48,14 @@ export function validateNodeSlidePatch(
 
   const initialSlides = new Map(snapshot.slides.map((slide) => [slide.id, slide]));
   const initialElements = new Map(snapshot.elements.map((element) => [element.id, element]));
-  const slides = new Map(initialSlides);
-  const elements = new Map(initialElements);
+  const slides = new Map(
+    snapshot.slides.map((slide) => [slide.id, structuredClone(slide)] as const),
+  );
+  const elements = new Map(
+    snapshot.elements.map((element) => [element.id, structuredClone(element)] as const),
+  );
   const slideOrder = [...snapshot.deck.slideOrder];
+  let deckTitle = snapshot.deck.title;
   const sources = new Set(snapshot.sources.map((source) => source.id));
   const addedSlideIds = new Set<string>();
   const addedElementSlideIds = new Map<string, string>();
@@ -118,9 +123,11 @@ export function validateNodeSlidePatch(
   for (const operation of patch.operations) {
     if (operation.op === 'update_deck') {
       validateDeckTitle(operation.properties.title, errors);
-      if (operation.properties.title?.trim() === snapshot.deck.title) {
+      const nextTitle = operation.properties.title?.trim();
+      if (nextTitle === deckTitle) {
         errors.push('update_deck must change the deck title.');
       }
+      if (nextTitle && nextTitle.length <= MAX_DECK_TITLE_LENGTH) deckTitle = nextTitle;
       continue;
     }
 
@@ -154,10 +161,10 @@ export function validateNodeSlidePatch(
       }
       validateAddedSlideElementOrder(operation.slide.elementOrder, bundledIds, slideId, errors);
 
-      if (!duplicateSlide) slides.set(slideId, operation.slide);
+      if (!duplicateSlide) slides.set(slideId, structuredClone(operation.slide));
       if (validIndex && !duplicateSlide) slideOrder.splice(operation.index, 0, slideId);
       for (const element of operation.elements) {
-        if (!elements.has(element.id)) elements.set(element.id, element);
+        if (!elements.has(element.id)) elements.set(element.id, structuredClone(element));
       }
       continue;
     }
@@ -221,6 +228,13 @@ export function validateNodeSlidePatch(
       if (!changesSlide) {
         errors.push(`update_slide must change slide ${operation.slideId}.`);
       }
+      if (
+        changesSlide &&
+        (operation.properties.background === undefined ||
+          operation.properties.background.trim().length > 0)
+      ) {
+        Object.assign(slide, structuredClone(operation.properties));
+      }
       continue;
     }
     if (operation.op === 'add_element') {
@@ -235,7 +249,7 @@ export function validateNodeSlidePatch(
       }
       validateAddedElement(operation.element, patch.scope, sources, errors);
       if (!elements.has(operation.element.id)) {
-        elements.set(operation.element.id, operation.element);
+        elements.set(operation.element.id, structuredClone(operation.element));
       }
       continue;
     }
@@ -245,43 +259,60 @@ export function validateNodeSlidePatch(
       errors.push(`Operation ${operation.op} references unknown element ${operation.elementId}.`);
       continue;
     }
-    if (element.locked) errors.push(`Element ${operation.elementId} is locked.`);
+    const canMutate = !element.locked;
+    if (!canMutate) errors.push(`Element ${operation.elementId} is locked.`);
     if (operation.op === 'replace_text' && element.kind !== 'text') {
       errors.push(
         `replace_text requires a text element; ${operation.elementId} is ${element.kind}.`,
       );
     }
-    if (operation.op === 'replace_text' && operation.text === (element.content ?? '')) {
-      errors.push(`replace_text must change element ${operation.elementId}.`);
+    if (operation.op === 'replace_text' && element.kind === 'text') {
+      if (operation.text === (element.content ?? '')) {
+        errors.push(`replace_text must change element ${operation.elementId}.`);
+      } else if (canMutate) {
+        element.content = operation.text;
+      }
     }
     if (operation.op === 'move') {
-      if (
+      const invalidMove =
         !isUnitValue(operation.x) ||
         !isUnitValue(operation.y) ||
         operation.x + element.bbox.width > 1 + Number.EPSILON ||
-        operation.y + element.bbox.height > 1 + Number.EPSILON
-      ) {
+        operation.y + element.bbox.height > 1 + Number.EPSILON;
+      if (invalidMove) {
         errors.push(
           `Move for ${operation.elementId} would place its bbox outside normalized bounds.`,
         );
-      }
-      if (operation.x === element.bbox.x && operation.y === element.bbox.y) {
-        errors.push(`move must change element ${operation.elementId}.`);
+      } else {
+        const nextBox = canonicalBox({ ...element.bbox, x: operation.x, y: operation.y });
+        if (boxesEqual(nextBox, element.bbox)) {
+          errors.push(`move must change element ${operation.elementId}.`);
+        } else if (canMutate) {
+          element.bbox = nextBox;
+        }
       }
     }
     if (operation.op === 'resize') {
-      if (
+      const invalidResize =
         !isPositiveUnitValue(operation.width) ||
         !isPositiveUnitValue(operation.height) ||
         element.bbox.x + operation.width > 1 + Number.EPSILON ||
-        element.bbox.y + operation.height > 1 + Number.EPSILON
-      ) {
+        element.bbox.y + operation.height > 1 + Number.EPSILON;
+      if (invalidResize) {
         errors.push(
           `Resize for ${operation.elementId} would place its bbox outside normalized bounds.`,
         );
-      }
-      if (operation.width === element.bbox.width && operation.height === element.bbox.height) {
-        errors.push(`resize must change element ${operation.elementId}.`);
+      } else {
+        const nextBox = canonicalBox({
+          ...element.bbox,
+          width: operation.width,
+          height: operation.height,
+        });
+        if (boxesEqual(nextBox, element.bbox)) {
+          errors.push(`resize must change element ${operation.elementId}.`);
+        } else if (canMutate) {
+          element.bbox = nextBox;
+        }
       }
     }
     if (operation.op === 'update_style') {
@@ -292,9 +323,11 @@ export function validateNodeSlidePatch(
         errors.push('update_style requires at least one property.');
       } else if (styleKeys.every((key) => element.style[key] === operation.properties[key])) {
         errors.push(`update_style must change element ${operation.elementId}.`);
+      } else if (canMutate) {
+        element.style = { ...element.style, ...operation.properties };
       }
     }
-    if (operation.op === 'remove_element') elements.delete(operation.elementId);
+    if (operation.op === 'remove_element' && canMutate) elements.delete(operation.elementId);
   }
 
   return [...new Set(errors)];
@@ -600,9 +633,15 @@ function selectDeterministicTextTarget(
 }
 
 function deterministicRewrite(current: string, instruction: string): string | null {
-  const quotedMatch = instruction.match(/(?:“([^”]{1,500})”|"([^"]{1,500})")/u);
-  const quoted = (quotedMatch?.[1] ?? quotedMatch?.[2])?.trim();
-  if (quoted) return quoted;
+  const quoted = [...instruction.matchAll(/(?:\u201c([^\u201d]{1,500})\u201d|"([^"]{1,500})")/gu)]
+    .map((match) => (match[1] ?? match[2])?.trim())
+    .filter((value): value is string => Boolean(value));
+  if (quoted.length >= 2 && /\breplace\b[\s\S]*\bwith\b/i.test(instruction)) {
+    const [from, to] = quoted;
+    return from === current && to && to !== from ? to : null;
+  }
+  if (quoted.length === 1) return quoted[0] ?? null;
+  if (quoted.length > 1) return null;
   const direct = instruction
     .match(
       /(?:replace(?:\s+(?:the\s+)?(?:copy|text|headline|title|body))?\s+with|set(?:\s+(?:the\s+)?(?:copy|text|headline|title|body))?\s+to|(?:say|read))\s*[:\-]?\s*(.{3,500})$/i,
@@ -626,6 +665,23 @@ function isUnitValue(value: number): boolean {
 
 function isPositiveUnitValue(value: number): boolean {
   return Number.isFinite(value) && value > 0 && value <= 1;
+}
+
+function canonicalBox(bbox: BoundingBox): BoundingBox {
+  const width = Math.max(0.01, Math.min(1, Math.max(0, bbox.width)));
+  const height = Math.max(0.01, Math.min(1, Math.max(0, bbox.height)));
+  const x = Math.min(Math.min(1, Math.max(0, bbox.x)), 1 - width);
+  const y = Math.min(Math.min(1, Math.max(0, bbox.y)), 1 - height);
+  return { x, y, width, height };
+}
+
+function boxesEqual(left: BoundingBox, right: BoundingBox): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
 }
 
 function roundNormalized(value: number): number {
