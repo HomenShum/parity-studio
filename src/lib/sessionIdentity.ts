@@ -2,6 +2,12 @@ const SESSION_ID_KEY = 'parity.studio.sessionId';
 const OWNER_ACCESS_KEY = 'nodeslide.ownerAccessKey';
 const DECK_ACCESS_KEY = 'nodeslide.deckAccess.v1';
 
+export interface OwnerAccessPersistenceReceipt {
+  durable: boolean;
+  deckAccessDurable: boolean;
+  primaryAccessDurable: boolean;
+}
+
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -39,12 +45,27 @@ export function storeDeckOwnerAccessKey(
   deckId: string,
   ownerAccessKey: string,
   primary = false,
-): void {
-  if (typeof window === 'undefined' || !deckId || !ownerAccessKey) return;
-  if (primary) writeStorage(window.localStorage, OWNER_ACCESS_KEY, ownerAccessKey);
+): OwnerAccessPersistenceReceipt {
+  const unavailable: OwnerAccessPersistenceReceipt = {
+    durable: false,
+    deckAccessDurable: false,
+    primaryAccessDurable: false,
+  };
+  if (typeof window === 'undefined' || !deckId || !ownerAccessKey) return unavailable;
   const access = readDeckAccess();
   access[deckId] = ownerAccessKey;
-  writeStorage(window.localStorage, DECK_ACCESS_KEY, JSON.stringify(access));
+  const deckAccessDurable = writeStorage(
+    window.localStorage,
+    DECK_ACCESS_KEY,
+    JSON.stringify(access),
+  );
+  const primaryAccessDurable =
+    !primary || writeStorage(window.localStorage, OWNER_ACCESS_KEY, ownerAccessKey);
+  return {
+    durable: deckAccessDurable && primaryAccessDurable,
+    deckAccessDurable,
+    primaryAccessDurable,
+  };
 }
 
 export function getDeckOwnerAccessKey(deckId: string): string | undefined {
@@ -67,12 +88,14 @@ function readStorage(storage: Storage, key: string): string | null {
   }
 }
 
-function writeStorage(storage: Storage, key: string, value: string): void {
+function writeStorage(storage: Storage, key: string, value: string): boolean {
   try {
     storage.setItem(key, value);
+    return storage.getItem(key) === value;
   } catch {
     // Storage can be unavailable in hardened/private browser contexts. The
     // caller still receives a usable in-memory value for the current mount.
+    return false;
   }
 }
 
