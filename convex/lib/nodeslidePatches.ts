@@ -118,6 +118,9 @@ export function validateNodeSlidePatch(
   for (const operation of patch.operations) {
     if (operation.op === 'update_deck') {
       validateDeckTitle(operation.properties.title, errors);
+      if (operation.properties.title?.trim() === snapshot.deck.title) {
+        errors.push('update_deck must change the deck title.');
+      }
       continue;
     }
 
@@ -191,6 +194,9 @@ export function validateNodeSlidePatch(
       } else {
         const previousIndex = slideOrder.indexOf(operation.slideId);
         if (previousIndex >= 0) {
+          if (previousIndex === operation.index) {
+            errors.push(`reorder_slide must move slide ${operation.slideId} to a new index.`);
+          }
           slideOrder.splice(previousIndex, 1);
           slideOrder.splice(operation.index, 0, operation.slideId);
         }
@@ -206,6 +212,14 @@ export function validateNodeSlidePatch(
         operation.properties.background.trim().length === 0
       ) {
         errors.push('Slide background cannot be empty.');
+      }
+      const changesSlide =
+        (operation.properties.title !== undefined && operation.properties.title !== slide.title) ||
+        (operation.properties.notes !== undefined && operation.properties.notes !== slide.notes) ||
+        (operation.properties.background !== undefined &&
+          operation.properties.background !== slide.background);
+      if (!changesSlide) {
+        errors.push(`update_slide must change slide ${operation.slideId}.`);
       }
       continue;
     }
@@ -237,6 +251,9 @@ export function validateNodeSlidePatch(
         `replace_text requires a text element; ${operation.elementId} is ${element.kind}.`,
       );
     }
+    if (operation.op === 'replace_text' && operation.text === (element.content ?? '')) {
+      errors.push(`replace_text must change element ${operation.elementId}.`);
+    }
     if (operation.op === 'move') {
       if (
         !isUnitValue(operation.x) ||
@@ -247,6 +264,9 @@ export function validateNodeSlidePatch(
         errors.push(
           `Move for ${operation.elementId} would place its bbox outside normalized bounds.`,
         );
+      }
+      if (operation.x === element.bbox.x && operation.y === element.bbox.y) {
+        errors.push(`move must change element ${operation.elementId}.`);
       }
     }
     if (operation.op === 'resize') {
@@ -260,9 +280,19 @@ export function validateNodeSlidePatch(
           `Resize for ${operation.elementId} would place its bbox outside normalized bounds.`,
         );
       }
+      if (operation.width === element.bbox.width && operation.height === element.bbox.height) {
+        errors.push(`resize must change element ${operation.elementId}.`);
+      }
     }
-    if (operation.op === 'update_style' && Object.keys(operation.properties).length === 0) {
-      errors.push('update_style requires at least one property.');
+    if (operation.op === 'update_style') {
+      const styleKeys = Object.keys(operation.properties) as Array<
+        keyof typeof operation.properties
+      >;
+      if (styleKeys.length === 0) {
+        errors.push('update_style requires at least one property.');
+      } else if (styleKeys.every((key) => element.style[key] === operation.properties[key])) {
+        errors.push(`update_style must change element ${operation.elementId}.`);
+      }
     }
     if (operation.op === 'remove_element') elements.delete(operation.elementId);
   }
@@ -379,14 +409,25 @@ export function deterministicAgentOperations(
           : 'style';
 
   if (inferredMode === 'copy') {
-    const target = eligible.find((element) => element.kind === 'text');
+    const target = selectDeterministicTextTarget(eligible, instruction);
     if (!target) throw new Error('Deterministic copy fallback found no unlocked text in scope.');
+    const text = deterministicRewrite(target.content ?? '', instruction);
+    if (text === null) {
+      throw new Error(
+        'The free route returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
+      );
+    }
+    if (text === (target.content ?? '')) {
+      throw new Error(
+        `The free route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
+      );
+    }
     return [
       {
         op: 'replace_text',
         slideId: target.slideId,
         elementId: target.id,
-        text: deterministicRewrite(target.content ?? '', instruction),
+        text,
       },
     ];
   }
@@ -504,11 +545,51 @@ function eligibleElements(snapshot: DeckSnapshot, scope: PatchScope): SlideEleme
   });
 }
 
-function deterministicRewrite(current: string, instruction: string): string {
+function selectDeterministicTextTarget(
+  eligible: readonly SlideElement[],
+  instruction: string,
+): SlideElement | undefined {
+  const textElements = eligible.filter((element) => element.kind === 'text');
+  if (textElements.length <= 1) return textElements[0];
+
+  const lower = instruction.toLowerCase();
+  const intents = [
+    { pattern: /\b(?:headline|heading|title)\b/, roles: ['title', 'headline'] },
+    { pattern: /\b(?:body|paragraph|description|summary)\b/, roles: ['body'] },
+    { pattern: /\b(?:bullet|key point)\b/, roles: ['bullet'] },
+    { pattern: /\b(?:metric|number|stat)\b/, roles: ['metric', 'caption'] },
+    { pattern: /\b(?:section|eyebrow|label)\b/, roles: ['section'] },
+  ]
+    .map((intent) => ({ ...intent, index: lower.search(intent.pattern) }))
+    .filter((intent) => intent.index >= 0)
+    .sort((a, b) => a.index - b.index);
+  const requestedRoles = intents[0]?.roles;
+  if (requestedRoles) {
+    const explicit = textElements.find((element) =>
+      requestedRoles.includes((element.role ?? '').toLowerCase()),
+    );
+    if (explicit) return explicit;
+  }
+
+  const rolePriority = ['title', 'headline', 'body', 'bullet', 'metric', 'caption'];
+  return [...textElements].sort((left, right) => {
+    const leftIndex = rolePriority.indexOf((left.role ?? '').toLowerCase());
+    const rightIndex = rolePriority.indexOf((right.role ?? '').toLowerCase());
+    const leftScore = leftIndex < 0 ? rolePriority.length : leftIndex;
+    const rightScore = rightIndex < 0 ? rolePriority.length : rightIndex;
+    return leftScore - rightScore;
+  })[0];
+}
+
+function deterministicRewrite(current: string, instruction: string): string | null {
   const quotedMatch = instruction.match(/(?:“([^”]{1,500})”|"([^"]{1,500})")/u);
   const quoted = (quotedMatch?.[1] ?? quotedMatch?.[2])?.trim();
   if (quoted) return quoted;
-  const direct = instruction.match(/(?:say|read|to|with)\s+[:\-]?\s*(.{3,500})$/i)?.[1]?.trim();
+  const direct = instruction
+    .match(
+      /(?:replace(?:\s+(?:the\s+)?(?:copy|text|headline|title|body))?\s+with|set(?:\s+(?:the\s+)?(?:copy|text|headline|title|body))?\s+to|(?:say|read))\s*[:\-]?\s*(.{3,500})$/i,
+    )?.[1]
+    ?.trim();
   if (direct && !/^(make|be|feel)\b/i.test(direct)) return nodeslideCleanText(direct, 500);
   if (/upper(?:case)?|all caps/i.test(instruction)) return current.toUpperCase();
   if (/lower(?:case)?/i.test(instruction)) return current.toLowerCase();
@@ -518,7 +599,7 @@ function deterministicRewrite(current: string, instruction: string): string {
     return nodeslideCleanText(current, Math.max(24, Math.floor(current.length * 0.65)));
   }
   if (/question/i.test(instruction)) return `${current.replace(/[.!?]+$/, '')}?`;
-  return nodeslideCleanText(instruction, 240);
+  return null;
 }
 
 function isUnitValue(value: number): boolean {

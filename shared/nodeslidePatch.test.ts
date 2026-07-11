@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clocksForNodeSlideOperations,
+  deterministicAgentOperations,
   evaluateNodeSlideCas,
   summarizePatchOperations,
   touchedNodeSlideIds,
@@ -811,5 +812,99 @@ describe('NodeSlide deck-level operations and clocks', () => {
         { op: 'update_deck', properties: { title: 'Renamed' } },
       ]),
     ).toBe('add slide A new chapter; remove slide slide-1; update deck title');
+  });
+
+  it('rejects operations that claim a change but materialize as a no-op', () => {
+    const current = snapshot();
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(
+          current,
+          [
+            {
+              op: 'replace_text',
+              slideId: 'slide-1',
+              elementId: 'headline',
+              text: 'Before',
+            },
+          ],
+          {
+            kind: 'elements',
+            deckId: current.deck.id,
+            slideIds: ['slide-1'],
+            elementIds: ['headline'],
+            operationMode: 'copy',
+          },
+        ),
+      ),
+    ).toContain('replace_text must change element headline.');
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(current, [
+          {
+            op: 'update_style',
+            slideId: 'slide-1',
+            elementId: 'headline',
+            properties: { color: '#13233f' },
+          },
+        ]),
+      ),
+    ).toContain('update_style must change element headline.');
+  });
+
+  it('targets semantic copy instead of auxiliary labels in deterministic fallback', () => {
+    const current = snapshot();
+    const headline = current.elements.find((element) => element.id === 'headline');
+    if (!headline) throw new Error('Missing headline fixture');
+    current.elements.unshift({
+      ...headline,
+      id: 'section',
+      name: 'Section label',
+      role: 'section',
+      content: 'OPENING / 01',
+    });
+    current.elements.push({
+      ...headline,
+      id: 'body',
+      name: 'Body copy',
+      role: 'body',
+      content: 'Original body copy.',
+    });
+    const operations = deterministicAgentOperations(
+      current,
+      'Replace the body with “Reliability, security, and retention gate launch.”',
+      {
+        kind: 'slide',
+        deckId: current.deck.id,
+        slideIds: ['slide-1'],
+        operationMode: 'copy',
+      },
+    );
+    expect(operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: 'slide-1',
+        elementId: 'body',
+        text: 'Reliability, security, and retention gate launch.',
+      },
+    ]);
+  });
+
+  it('fails honestly when deterministic copy fallback cannot infer safe wording', () => {
+    const current = snapshot();
+    expect(() =>
+      deterministicAgentOperations(
+        current,
+        'Make the story more persuasive without inventing metrics.',
+        {
+          kind: 'slide',
+          deckId: current.deck.id,
+          slideIds: ['slide-1'],
+          operationMode: 'copy',
+        },
+      ),
+    ).toThrow('could not safely infer new wording');
   });
 });

@@ -107,13 +107,8 @@ export const proposeEdit = action({
     });
 
     let operations: PatchOperation[] | null = null;
-    let providerSummary: string | undefined;
     if (provider.ok) {
       operations = parseOperations(provider.value);
-      providerSummary =
-        isRecord(provider.value) && typeof provider.value.summary === 'string'
-          ? provider.value.summary.replace(/\s+/g, ' ').trim().slice(0, 240)
-          : undefined;
       if (operations) {
         const comment =
           scopedCommentId !== undefined
@@ -156,7 +151,9 @@ export const proposeEdit = action({
     const now = Date.now();
     const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
     const traceId = nodeslideStableId('trace', patchId);
-    const summary = providerSummary || summarizePatchOperations(finalOperations);
+    // Derive the proposal label from the validated diff. Provider-authored prose can diverge
+    // from its operations, so it is never used as the authoritative description of a patch.
+    const summary = summarizePatchOperations(finalOperations);
     const telemetry = provider.telemetry;
     return await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
       id: patchId,
