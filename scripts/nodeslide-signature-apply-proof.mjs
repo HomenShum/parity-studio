@@ -204,7 +204,7 @@ try {
       encoding: 'utf8',
     }).trim(),
     sourceDirty:
-      execFileSync('git', ['status', '--porcelain'], {
+      execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
         cwd: rootDirectory,
         encoding: 'utf8',
       }).trim().length > 0,
