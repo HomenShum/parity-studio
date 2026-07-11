@@ -475,15 +475,23 @@ export function deterministicAgentOperations(
   ];
 }
 
-export function summarizePatchOperations(operations: readonly PatchOperation[]): string {
+export function summarizePatchOperations(
+  operations: readonly PatchOperation[],
+  snapshot?: DeckSnapshot,
+): string {
   const labels = operations.map((operation) => {
     if (operation.op === 'update_deck') return 'update deck title';
     if (operation.op === 'add_slide') return `add slide ${operation.slide.title}`;
-    if (operation.op === 'remove_slide') return `remove slide ${operation.slideId}`;
-    if (operation.op === 'reorder_slide') return `reorder slide ${operation.slideId}`;
-    if (operation.op === 'update_slide') return `update slide ${operation.slideId}`;
+    const slideLabel =
+      snapshot?.slides.find((slide) => slide.id === operation.slideId)?.title ?? operation.slideId;
+    if (operation.op === 'remove_slide') return `remove slide ${slideLabel}`;
+    if (operation.op === 'reorder_slide') return `reorder slide ${slideLabel}`;
+    if (operation.op === 'update_slide') return `update slide ${slideLabel}`;
     if (operation.op === 'add_element') return `add ${operation.element.name}`;
-    return `${operation.op.replaceAll('_', ' ')} ${operation.elementId}`;
+    const elementLabel =
+      snapshot?.elements.find((element) => element.id === operation.elementId)?.name ??
+      operation.elementId;
+    return `${operation.op.replaceAll('_', ' ')} ${elementLabel}`;
   });
   return nodeslideCleanText(labels.join('; '), 240);
 }

@@ -29,6 +29,32 @@ describe('NodeSlide trace validation receipts', () => {
     expect(markup).toContain('Deck v7');
     expect(markup).toContain('Selected trace validation: passed');
     expect(markup).toContain('Deck v1');
+    expect(markup).toContain('Run');
+  });
+
+  it('labels proposal elapsed time as a human review cycle', () => {
+    const current = validation('validation-v2', 2, 2_000);
+    const trace: AgentTrace = {
+      id: 'trace-edit',
+      deckId: 'deck-a',
+      patchId: 'patch-a',
+      status: 'completed',
+      summary: 'replace text Body copy',
+      plan: ['Propose a scoped edit'],
+      context: [],
+      toolCalls: ['Validated patch'],
+      guardrails: ['Explicit scope'],
+      validation: current,
+      createdAt: 1_000,
+      completedAt: 42_000,
+    };
+
+    const markup = renderToStaticMarkup(
+      <TraceInspector traces={[trace]} validations={[current]} />,
+    );
+
+    expect(markup).toContain('Review cycle');
+    expect(markup).toContain('41s');
   });
 });
 

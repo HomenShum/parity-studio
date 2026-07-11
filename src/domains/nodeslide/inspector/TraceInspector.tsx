@@ -98,7 +98,8 @@ export function TraceInspector({ traces, validations }: TraceInspectorProps) {
                   <Cpu size={12} /> {selected.model ?? 'Automatic model'}
                 </span>
                 <span>
-                  <Clock3 size={12} /> {duration(selected)}
+                  <Clock3 size={12} /> {selected.patchId ? 'Review cycle' : 'Run'}{' '}
+                  {duration(selected)}
                 </span>
                 {selected.costMicroUsd !== undefined ? (
                   <span>

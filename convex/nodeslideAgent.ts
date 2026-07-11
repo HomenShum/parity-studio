@@ -167,7 +167,7 @@ export const proposeEdit = action({
     const traceId = nodeslideStableId('trace', patchId);
     // Derive the proposal label from the validated diff. Provider-authored prose can diverge
     // from its operations, so it is never used as the authoritative description of a patch.
-    const summary = summarizePatchOperations(finalOperations);
+    const summary = summarizePatchOperations(finalOperations, workspace);
     const telemetry = provider.telemetry;
     return await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
       id: patchId,

@@ -812,6 +812,19 @@ describe('NodeSlide deck-level operations and clocks', () => {
         { op: 'update_deck', properties: { title: 'Renamed' } },
       ]),
     ).toBe('add slide A new chapter; remove slide slide-1; update deck title');
+    expect(
+      summarizePatchOperations(
+        [
+          {
+            op: 'replace_text',
+            slideId: 'slide-1',
+            elementId: 'headline',
+            text: 'After',
+          },
+        ],
+        snapshot(),
+      ),
+    ).toBe('replace text Headline');
   });
 
   it('rejects operations that claim a change but materialize as a no-op', () => {
