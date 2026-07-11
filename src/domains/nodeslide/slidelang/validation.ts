@@ -7,6 +7,8 @@ import {
   type ValidationIssue,
   type ValidationResult,
 } from '../../../../shared/nodeslide';
+import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
+import { onBrandIssues } from '../../../../shared/nodeslideSignatureApply';
 import { getElementCapability } from './capabilities';
 import {
   MIN_READABLE_FONT_SIZE,
@@ -443,6 +445,7 @@ function validateSources(
 
 function isCollisionCandidate(element: SlideElement): boolean {
   if (element.kind === 'connector') return false;
+  if (element.role === 'footer' || element.role === 'page_number') return false;
   if (/(?:background|decorative|decoration|watermark)/i.test(element.role ?? '')) return false;
   return element.kind !== 'shape' || Boolean(element.content?.trim());
 }
@@ -513,7 +516,14 @@ function sortIssues(snapshot: DeckSnapshot, issues: ValidationIssue[]): Validati
   );
 }
 
-export function validateSnapshot(snapshot: DeckSnapshot): ValidationResult {
+export interface ValidateSnapshotOptions {
+  signatureProfile?: SignatureProfile;
+}
+
+export function validateSnapshot(
+  snapshot: DeckSnapshot,
+  options: ValidateSnapshotOptions = {},
+): ValidationResult {
   const issues: ValidationIssue[] = [];
   validateDeckStructure(snapshot, issues);
   const slidesById = new Map(snapshot.slides.map((slide) => [slide.id, slide]));
@@ -542,12 +552,19 @@ export function validateSnapshot(snapshot: DeckSnapshot): ValidationResult {
 
   for (const slide of snapshot.slides) validateCollisions(snapshot, slide, issues);
 
+  if (options.signatureProfile) {
+    for (const issue of onBrandIssues(snapshot, options.signatureProfile)) {
+      addIssue(issues, snapshot, issue);
+    }
+  }
+
   const sortedIssues = sortIssues(snapshot, issues);
   const hasBlockingIssue = sortedIssues.some(
     (issue) =>
       issue.severity === 'error' ||
       (issue.severity === 'warning' &&
-        ['source', 'missing_asset', 'export', 'contrast', 'font_size'].includes(issue.code)),
+        (['source', 'missing_asset', 'export', 'contrast', 'font_size'].includes(issue.code) ||
+          issue.code.startsWith('on_brand_'))),
   );
   const hasRepairableIssue = sortedIssues.some((issue) => issue.severity === 'warning');
   const hasCompilationIssue = sortedIssues.some(

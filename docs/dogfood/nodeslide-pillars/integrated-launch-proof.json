@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-07-10T18:38:18.1924029-07:00",
+  "sourceCommitBeforeFinalCommit": "483d704480563dc9e9fb26ead6f7f05a4115302f",
+  "sourceDirty": true,
+  "scope": "controlled_private_preview",
+  "environment": {
+    "browser": "Chrome",
+    "origin": "http://127.0.0.1:5190",
+    "convexDeployment": "blissful-pig-998",
+    "route": "free",
+    "disposable": true,
+    "existingUserDeckTouched": false
+  },
+  "journey": {
+    "deckId": "deck_mrfo38dp_15zde23",
+    "createdVersion": 1,
+    "signatureVersion": 2,
+    "rejectedCrossPillarProbeVersion": 3,
+    "cleanRestoreVersion": 4,
+    "onBrandVariationVersion": 5,
+    "manualEditVersion": 6,
+    "undoRestoreVersion": 7,
+    "activeProfileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+    "activeProfilePersistedAcrossReload": true,
+    "finalPublishOk": true,
+    "finalCleanOk": true,
+    "shareViewWasReadOnly": true,
+    "preferenceSignalCount": 13,
+    "exportWorkflowSignalInspectable": true,
+    "currentValidationReceiptVersion": 7
+  },
+  "variation": {
+    "requestedCount": 3,
+    "materializedCount": 3,
+    "origins": [
+      "deterministic_fallback"
+    ],
+    "fallbackReason": "malformed_provider_json",
+    "operationCounts": [
+      1,
+      1,
+      2
+    ],
+    "activeProfilePreserved": true,
+    "acceptedAtomically": true,
+    "siblingsRejected": true,
+    "postAcceptancePublishOk": true
+  },
+  "exports": {
+    "html": {
+      "fileName": "launch-readiness-narrative.html",
+      "bytes": 71601
+    },
+    "pptx": {
+      "fileName": "launch-readiness-narrative.pptx",
+      "bytes": 137685,
+      "presentationXmlPresent": true,
+      "nativeSlideXmlCount": 7
+    }
+  },
+  "responsive": {
+    "phone": {
+      "viewport": "390x844",
+      "initialZoomPercent": 35,
+      "documentHorizontalOverflow": false,
+      "inspectorOverlayWidth": 390
+    },
+    "tablet": {
+      "viewport": "1024x768",
+      "initialZoomPercent": 62,
+      "documentHorizontalOverflow": false
+    }
+  },
+  "accessibility": {
+    "visibleInteractiveCountAudited": 51,
+    "unnamedVisibleInteractiveCount": 0,
+    "duplicateIdCount": 0,
+    "imagesMissingAltCount": 0,
+    "keyboardCriticalPathPassed": true,
+    "reducedZoomTouchTargetHardeningPending": true
+  },
+  "linkedReceipts": [
+    "w1-signature-proof.json",
+    "w2-signature-apply-proof.json",
+    "w3-variation-proof.json",
+    "w4-preference-proof.json",
+    "w5-taste-pack-proof.json"
+  ],
+  "reliability": {
+    "BOUND": true,
+    "HONEST_STATUS": true,
+    "HONEST_SCORES": true,
+    "TIMEOUT": true,
+    "SSRF": true,
+    "BOUND_READ": true,
+    "ERROR_BOUNDARY": true,
+    "DETERMINISTIC": true
+  },
+  "verdict": {
+    "controlledPrivatePreview": "GO",
+    "publicMultiTenant": "NO_GO",
+    "publicNoGoReasons": [
+      "account identity and membership authorization",
+      "capability rotation and revocation",
+      "retention and deletion policy",
+      "abuse controls and operational monitoring",
+      "independent threat review"
+    ]
+  }
+}

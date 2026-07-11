@@ -1,0 +1,304 @@
+{
+  "generatedAt": "2026-07-11T01:39:48.787Z",
+  "sourceCommit": "483d704480563dc9e9fb26ead6f7f05a4115302f",
+  "sourceDirty": true,
+  "contractVersion": "nodeslide.signature-apply/v1",
+  "sourceDeck": {
+    "id": "deck_golden_1mexhug",
+    "version": 1,
+    "slideCount": 7,
+    "elementCount": 67,
+    "digestSha256": "f5845cc9bcf3e572cfedc022a2d06b7d3c722917d96b2d122faa2e4c474f9a50"
+  },
+  "profiles": [
+    {
+      "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "profileName": "Finance reporting",
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:130l0cl",
+      "planElapsedMs": 8.04,
+      "operationCount": 53,
+      "operationKinds": [
+        "update_slide",
+        "update_style"
+      ],
+      "lockedElementIds": [
+        "element_06nhsap",
+        "element_1ilin87",
+        "element_1i33hln",
+        "element_0eb5ejn",
+        "element_12uzpyl",
+        "element_1i4bwfp",
+        "element_0y6tmwb",
+        "element_1wjimlh",
+        "element_1jli2fh",
+        "element_15vmxqi",
+        "element_19t83s2",
+        "element_07g4boc",
+        "element_00angop",
+        "element_01bb0xr",
+        "element_012rm1v",
+        "element_0g83cjo",
+        "element_0dtvbds",
+        "element_159gh2u",
+        "element_0bdya8x",
+        "element_0gjguif",
+        "element_0dm0piz"
+      ],
+      "warningCodes": [],
+      "resolvedRoles": {
+        "colors": {
+          "canvas": "#FFFFFF",
+          "ink": "#171A1F",
+          "muted": "#4B5563",
+          "accent": "#005EA8",
+          "accentSoft": "#DCEBFA",
+          "border": "#8A94A3",
+          "data": [
+            "#334155",
+            "#006B5E",
+            "#A4262C",
+            "#65418A",
+            "#7A4F00"
+          ]
+        },
+        "typography": {
+          "display": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "body": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "data": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "titlePt": 36,
+          "bodyPt": 18,
+          "dataPt": 15
+        }
+      },
+      "preValidation": {
+        "ok": true,
+        "publishOk": false,
+        "cleanOk": false,
+        "issueCount": 143,
+        "onBrandBlockingCount": 136,
+        "issueCodes": [
+          "on_brand_background",
+          "on_brand_color",
+          "on_brand_font",
+          "on_brand_type_scale",
+          "scope"
+        ]
+      },
+      "postValidation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 7,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      },
+      "serverReceiptKeys": [
+        "checkedAt",
+        "cleanOk",
+        "deckId",
+        "deckVersion",
+        "id",
+        "issues",
+        "ok",
+        "publishOk",
+        "toolchainVersion"
+      ],
+      "deterministicValidation": true,
+      "visualFingerprint": "4b901ef196a50d89fe2f5e50dc3d8a688cbeb58a26f675f96d12d478596feb30",
+      "history": {
+        "baseDeckVersion": 1,
+        "resultingDeckVersion": 2,
+        "normalVersionIncrement": true,
+        "sourceSnapshotUnchanged": true,
+        "staleReplayRejected": true,
+        "alreadyAppliedStatus": "already_applied"
+      }
+    },
+    {
+      "profileId": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "profileName": "Startup narrative",
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800:v1:1uyoqt9",
+      "planElapsedMs": 2.798,
+      "operationCount": 53,
+      "operationKinds": [
+        "update_slide",
+        "update_style"
+      ],
+      "lockedElementIds": [
+        "element_06nhsap",
+        "element_1ilin87",
+        "element_1i33hln",
+        "element_0eb5ejn",
+        "element_12uzpyl",
+        "element_1i4bwfp",
+        "element_0y6tmwb",
+        "element_1wjimlh",
+        "element_1jli2fh",
+        "element_15vmxqi",
+        "element_19t83s2",
+        "element_07g4boc",
+        "element_00angop",
+        "element_01bb0xr",
+        "element_012rm1v",
+        "element_0g83cjo",
+        "element_0dtvbds",
+        "element_159gh2u",
+        "element_0bdya8x",
+        "element_0gjguif",
+        "element_0dm0piz"
+      ],
+      "warningCodes": [
+        "authored_token_fallback"
+      ],
+      "resolvedRoles": {
+        "colors": {
+          "canvas": "#FFFFFF",
+          "ink": "#111827",
+          "muted": "#475569",
+          "accent": "#0057B8",
+          "accentSoft": "#DCEBFA",
+          "border": "#64748B",
+          "data": [
+            "#FFFFFF",
+            "#F4F7FB",
+            "#111827",
+            "#475569",
+            "#0057B8",
+            "#DCEBFA"
+          ]
+        },
+        "typography": {
+          "display": "\"Aptos Display\", Aptos, \"Segoe UI\", Arial, sans-serif",
+          "body": "Aptos, \"Segoe UI\", Arial, sans-serif",
+          "data": "\"Aptos Mono\", \"Cascadia Mono\", Consolas, \"Courier New\", monospace",
+          "titlePt": 36,
+          "bodyPt": 18,
+          "dataPt": 15
+        }
+      },
+      "preValidation": {
+        "ok": true,
+        "publishOk": false,
+        "cleanOk": false,
+        "issueCount": 144,
+        "onBrandBlockingCount": 136,
+        "issueCodes": [
+          "on_brand_background",
+          "on_brand_color",
+          "on_brand_font",
+          "on_brand_type_scale",
+          "scope"
+        ]
+      },
+      "postValidation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 8,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      },
+      "serverReceiptKeys": [
+        "checkedAt",
+        "cleanOk",
+        "deckId",
+        "deckVersion",
+        "id",
+        "issues",
+        "ok",
+        "publishOk",
+        "toolchainVersion"
+      ],
+      "deterministicValidation": true,
+      "visualFingerprint": "b0d93583c8d859d1793dc3f6e6fc768b7c5aa445bfd46071e6ac9b6d05fae928",
+      "history": {
+        "baseDeckVersion": 1,
+        "resultingDeckVersion": 2,
+        "normalVersionIncrement": true,
+        "sourceSnapshotUnchanged": true,
+        "staleReplayRejected": true,
+        "alreadyAppliedStatus": "already_applied"
+      }
+    }
+  ],
+  "visualDistinction": {
+    "distinct": true,
+    "fingerprints": [
+      "4b901ef196a50d89fe2f5e50dc3d8a688cbeb58a26f675f96d12d478596feb30",
+      "b0d93583c8d859d1793dc3f6e6fc768b7c5aa445bfd46071e6ac9b6d05fae928"
+    ]
+  },
+  "productionDogfood": {
+    "deploymentUrl": "https://blissful-pig-998.convex.cloud",
+    "disposableDeckId": "deck_golden_1oponck",
+    "plan": {
+      "id": "signature-plan:deck_golden_1oponck:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:1o5lwzl",
+      "elapsedMs": 1.324,
+      "operationCount": 53
+    },
+    "application": {
+      "elapsedMs": 240.945,
+      "patchId": "patch_w2_signature_mrfp5qzy",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2,
+      "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "activeProfileDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "validation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 7,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      }
+    },
+    "persistence": {
+      "savedProfileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "listedProfileCount": 1,
+      "freshClientReloaded": true
+    },
+    "history": {
+      "versionReceiptId": "version_1o0xred",
+      "linkedCommentId": "comment_w2_signature_mrfp5qzy",
+      "linkedCommentResolved": true,
+      "offBrandIssueCodes": [
+        "on_brand_color"
+      ],
+      "offBrandPublishBlocked": true,
+      "restoredDeckVersion": 4,
+      "restorePublishOk": true,
+      "activationWasVersionNeutral": true,
+      "stalePatchRecorded": true,
+      "staleReplayWasVersionNeutral": true
+    },
+    "operationBoundary": {
+      "rejected513": true,
+      "rejectionWasAtomic": true,
+      "accepted512": true,
+      "acceptedOperationCount": 512,
+      "elapsedMs": 548.511
+    },
+    "tenantIsolation": {
+      "wrongOwnerDenied": true,
+      "crossTenantProfileCount": 0,
+      "profileLeakageDenied": true
+    }
+  },
+  "validationReceiptShapeUnchanged": true,
+  "reliability": {
+    "BOUND": true,
+    "HONEST_STATUS": true,
+    "HONEST_SCORES": true,
+    "TIMEOUT": true,
+    "SSRF": true,
+    "BOUND_READ": true,
+    "ERROR_BOUNDARY": true,
+    "DETERMINISTIC": true
+  }
+}

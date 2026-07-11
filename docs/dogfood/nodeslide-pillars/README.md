@@ -10,23 +10,18 @@ This directory contains reproducible receipts for the five Pillars workstreams. 
 | Receipt | Proves |
 |---|---|
 | `w1-signature-proof.json` | deterministic bounded PPTX signature extraction and golden-deck observations |
-| `w2-signature-apply-proof.json` | two distinct signatures, existing-patch application, on-brand validation, history/CAS |
+| `w2-signature-apply-proof.json` | two distinct signatures, durable profile JSON transport, production 53-operation apply, on-brand validation, history/CAS, and 512/513 bounds |
 | `w3-variation-proof.json` | three validated variants, honest fallback, review-before-accept, bounded retention |
 | `w4-preference-proof.json` | tenant-scoped events, provenance/evaluator gate, replayed preference signal |
 | `w5-taste-pack-proof.json` | cited pack schemas, citation coverage, contrast/font validation |
-| `integrated-proof.json` | one continuous old-deck → signature → variants → apply → export → preference chain |
+| `integrated-launch-proof.json` | fresh/repeat browser journey across signature, variants, profile-aware acceptance, preference memory, present/share/export, responsive checks, and launch verdict |
 
-## Global artifact gate
+## Bundle integrity
 
-Every receipt includes:
-
-- schema/proof version and source commit;
-- deterministic input/artifact IDs or digests;
-- command/runtime bounds relevant to the workstream;
-- binary metric result;
-- the eight reliability booleans: `BOUND`, `HONEST_STATUS`, `HONEST_SCORES`, `TIMEOUT`, `SSRF`, `BOUND_READ`, `ERROR_BOUNDARY`, `DETERMINISTIC`;
-- explicit deviations or `[]`;
-- no status claim without a referenced artifact or assertion.
+- All six receipts are valid JSON and use sanitized deterministic artifact IDs or digests.
+- W1-W4 and the integrated launch receipt report the eight reliability checks: `BOUND`, `HONEST_STATUS`, `HONEST_SCORES`, `TIMEOUT`, `SSRF`, `BOUND_READ`, `ERROR_BOUNDARY`, and `DETERMINISTIC`.
+- W5 reports its six pack-specific gates: parseability, rule citation coverage, citation reachability, contrast/font safety, deterministic serialization, and non-affiliation disclosure.
+- Runtime bounds, deviations, and source-state metadata are recorded by the workstream where they are relevant; no receipt contains owner capabilities, provider secrets, or raw model responses.
 
 ## IP boundary
 

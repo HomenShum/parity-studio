@@ -56,6 +56,7 @@ interface SlideCanvasProps {
   presence: readonly Presence[];
   theme: ThemeSpec;
   selectedElementIds: readonly string[];
+  readOnly?: boolean;
   zoom: number;
   onZoomChange: (zoom: number) => void;
   onSelectionChange: (elementIds: string[]) => void;
@@ -78,6 +79,7 @@ export function SlideCanvas({
   presence,
   theme,
   selectedElementIds,
+  readOnly = false,
   zoom,
   onZoomChange,
   onSelectionChange,
@@ -195,7 +197,7 @@ export function SlideCanvas({
             });
           }
         }
-        if (operations.length > 0) {
+        if (operations.length > 0 && !readOnly) {
           setOptimisticBoxes((current) => ({ ...current, ...boxes }));
           onApplyLayoutPatch(
             operations,
@@ -218,11 +220,12 @@ export function SlideCanvas({
       window.removeEventListener('pointercancel', onPointerUp);
       document.documentElement.classList.remove('ns-is-dragging');
     };
-  }, [elementMap, onApplyLayoutPatch, slide.id]);
+  }, [elementMap, onApplyLayoutPatch, readOnly, slide.id]);
 
   const beginElementMove = (event: ReactPointerEvent<HTMLDivElement>, element: SlideElement) => {
     if (panMode || spacePressed) return;
     event.stopPropagation();
+    if (readOnly) return;
     const modifier = event.shiftKey || event.metaKey || event.ctrlKey;
     let nextSelection = [...selectedElementIds];
     if (modifier) {
@@ -236,7 +239,7 @@ export function SlideCanvas({
       nextSelection = [element.id];
     }
     onSelectionChange(nextSelection);
-    if (element.locked || event.button !== 0) return;
+    if (readOnly || element.locked || event.button !== 0) return;
     startInteraction(
       event,
       'move',
@@ -251,6 +254,7 @@ export function SlideCanvas({
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) return;
 
     const modifier = event.shiftKey || event.metaKey || event.ctrlKey;
     if (!modifier) {
@@ -334,7 +338,7 @@ export function SlideCanvas({
           <i /> <strong>{slide.title}</strong>
         </div>
         <span className="ns-canvas-mode">
-          <span /> Live canvas
+          <span /> {readOnly ? 'Validated preview' : 'Live canvas'}
         </span>
       </div>
 
@@ -359,8 +363,12 @@ export function SlideCanvas({
               className="ns-editor-slide"
               elementClassName="ns-canvas-element"
               isElementSelected={(element) => selectedElementIds.includes(element.id)}
-              onElementKeyDown={selectElementFromKeyboard}
-              onElementPointerDown={beginElementMove}
+              {...(readOnly
+                ? {}
+                : {
+                    onElementKeyDown: selectElementFromKeyboard,
+                    onElementPointerDown: beginElementMove,
+                  })}
               getElementStyle={(element) => {
                 const box = displayedBox(element);
                 return {
@@ -368,11 +376,13 @@ export function SlideCanvas({
                   top: `${box.y * 100}%`,
                   width: `${box.width * 100}%`,
                   height: `${box.height * 100}%`,
-                  cursor: element.locked
-                    ? 'not-allowed'
-                    : panMode || spacePressed
-                      ? 'grab'
-                      : 'move',
+                  cursor: readOnly
+                    ? 'default'
+                    : element.locked
+                      ? 'not-allowed'
+                      : panMode || spacePressed
+                        ? 'grab'
+                        : 'move',
                 };
               }}
             >
@@ -380,7 +390,7 @@ export function SlideCanvas({
                 const box = displayedBox(element);
                 return (
                   <div className="ns-selection-box" key={element.id} style={boxStyle(box)}>
-                    {element.id === primarySelection?.id && !element.locked
+                    {element.id === primarySelection?.id && !element.locked && !readOnly
                       ? resizeDirections.map((direction) => (
                           <button
                             type="button"
@@ -431,7 +441,7 @@ export function SlideCanvas({
                 );
               })}
 
-              {selectedUnion ? (
+              {selectedUnion && !readOnly ? (
                 <div
                   className="ns-context-toolbar"
                   role="toolbar"

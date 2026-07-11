@@ -16,8 +16,139 @@ import {
   nodeslideThemeValidator,
   nodeslideValidationIssueValidator,
   nodeslideValidationResultValidator,
+  nodeslideVariationAxesValidator,
+  nodeslideVariationCandidateValidator,
+  nodeslideVariationDecisionEventValidator,
+  nodeslideVariationOriginValidator,
+  nodeslideVariationStatusValidator,
   nodeslideVersionClockValidator,
 } from './lib/nodeslideValidators';
+
+const nodeslidePreferenceEventTypeValidator = v.union(
+  v.literal('variation_generated'),
+  v.literal('variation_selected'),
+  v.literal('variation_rejected'),
+  v.literal('patch_accepted'),
+  v.literal('patch_modified'),
+  v.literal('patch_declined'),
+  v.literal('export_completed'),
+);
+
+const nodeslidePreferenceScopeValidator = v.union(
+  v.object({ kind: v.literal('deck'), deckId: v.string() }),
+  v.object({ kind: v.literal('slide'), deckId: v.string(), slideId: v.string() }),
+  v.object({
+    kind: v.literal('element'),
+    deckId: v.string(),
+    slideId: v.string(),
+    elementId: v.string(),
+  }),
+);
+
+const nodeslidePreferenceProvenanceValidator = v.object({
+  deckVersion: v.number(),
+  sourceEventId: v.optional(v.string()),
+  variationId: v.optional(v.string()),
+  variationBatchId: v.optional(v.string()),
+  patchId: v.optional(v.string()),
+  traceId: v.optional(v.string()),
+  exportId: v.optional(v.string()),
+  profileId: v.optional(v.string()),
+});
+
+const nodeslidePreferenceContentAngleValidator = v.union(
+  v.literal('data_led'),
+  v.literal('narrative_led'),
+  v.literal('balanced'),
+);
+const nodeslidePreferenceDensityValidator = v.union(
+  v.literal('executive'),
+  v.literal('detail'),
+  v.literal('balanced'),
+);
+const nodeslidePreferenceLayoutValidator = v.union(
+  v.literal('headline'),
+  v.literal('split'),
+  v.literal('evidence'),
+  v.literal('comparison'),
+);
+const nodeslidePreferenceAttributesValidator = v.union(
+  v.object({
+    contentAngle: nodeslidePreferenceContentAngleValidator,
+    density: nodeslidePreferenceDensityValidator,
+    layoutArchetype: nodeslidePreferenceLayoutValidator,
+    origin: v.union(v.literal('free_route'), v.literal('deterministic_fallback')),
+  }),
+  v.object({
+    contentAngle: nodeslidePreferenceContentAngleValidator,
+    density: nodeslidePreferenceDensityValidator,
+    layoutArchetype: nodeslidePreferenceLayoutValidator,
+  }),
+  v.object({ color: v.optional(v.string()), font: v.optional(v.string()) }),
+  v.object({
+    color: v.optional(v.string()),
+    font: v.optional(v.string()),
+    supersededColor: v.optional(v.string()),
+    supersededFont: v.optional(v.string()),
+  }),
+  v.object({}),
+  v.object({
+    exportFormat: v.union(v.literal('html'), v.literal('pptx'), v.literal('pdf'), v.literal('png')),
+  }),
+);
+
+const nodeslidePreferenceRejectionCodeValidator = v.union(
+  v.literal('invalid_event_schema'),
+  v.literal('invalid_signal_schema'),
+  v.literal('attribute_limit_exceeded'),
+  v.literal('attribute_not_allowed'),
+  v.literal('attribute_value_invalid'),
+  v.literal('missing_provenance'),
+  v.literal('provenance_unresolvable'),
+  v.literal('provenance_chain_invalid'),
+  v.literal('agent_trace_missing'),
+  v.literal('source_event_invalid'),
+  v.literal('export_without_accepted_change'),
+  v.literal('value_not_derivable'),
+  v.literal('contradicted_by_later_event'),
+  v.literal('sibling_axis_selected'),
+  v.literal('superseded_by_later_event'),
+  v.literal('conflicting_event_id'),
+);
+const nodeslidePreferenceEvaluatorCheckValidator = v.object({
+  passed: v.boolean(),
+  rejectionCodes: v.array(nodeslidePreferenceRejectionCodeValidator),
+});
+const nodeslidePreferenceSignalValidator = v.object({
+  id: v.string(),
+  tenantId: v.string(),
+  actorId: v.string(),
+  polarity: v.union(v.literal('positive'), v.literal('negative')),
+  scope: nodeslidePreferenceScopeValidator,
+  dimension: v.union(
+    v.literal('content_angle'),
+    v.literal('density'),
+    v.literal('layout_archetype'),
+    v.literal('color'),
+    v.literal('font'),
+    v.literal('workflow'),
+  ),
+  value: v.string(),
+  confidence: v.number(),
+  evidenceEventIds: v.array(v.string()),
+  evaluator: v.object({
+    evaluatorVersion: v.literal('nodeslide.preference-evaluator/v1'),
+    passed: v.boolean(),
+    checks: v.object({
+      schema: nodeslidePreferenceEvaluatorCheckValidator,
+      provenance: nodeslidePreferenceEvaluatorCheckValidator,
+      hallucination: nodeslidePreferenceEvaluatorCheckValidator,
+    }),
+    rejectionCodes: v.array(nodeslidePreferenceRejectionCodeValidator),
+    inputEventIds: v.array(v.string()),
+  }),
+  createdAt: v.number(),
+});
 
 // All cost fields stored as integer micro-cents (1 USD = 1_000_000 micro-cents)
 // to dodge floating-point drift on summation. UI converts back to USD on read.
@@ -333,6 +464,8 @@ export default defineSchema({
       v.literal('ready'),
       v.literal('published'),
     ),
+    activeSignatureProfileId: v.optional(v.string()),
+    activeSignatureProfileDigest: v.optional(v.string()),
     // Optional so deployed anonymous-session rows can be claimed lazily.
     ownerAccessKey: v.optional(v.string()),
     shareSlug: v.optional(v.string()),
@@ -407,12 +540,77 @@ export default defineSchema({
     summary: v.string(),
     linkedCommentId: v.optional(v.string()),
     traceId: v.optional(v.string()),
+    profileId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_status', ['deckId', 'status']),
+
+  nodeslide_variation_batches: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    slideId: v.string(),
+    requestedCount: v.literal(3),
+    status: v.union(v.literal('generating'), v.literal('ready'), v.literal('failed')),
+    origin: nodeslideVariationOriginValidator,
+    fallbackReason: v.optional(v.string()),
+    variationIds: v.array(v.string()),
+    elapsedMs: v.number(),
+    acceptingVariationId: v.optional(v.string()),
+    acceptedVariationId: v.optional(v.string()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_slide_created', ['deckId', 'slideId', 'createdAt']),
+
+  nodeslide_variations: defineTable({
+    schemaVersion: v.literal('nodeslide.variation/v1'),
+    id: v.string(),
+    batchId: v.string(),
+    deckId: v.string(),
+    slideId: v.string(),
+    baseDeckVersion: v.number(),
+    baseSlideVersion: v.number(),
+    baseElementVersions: nodeslideVersionClockValidator,
+    axes: nodeslideVariationAxesValidator,
+    origin: nodeslideVariationOriginValidator,
+    fallbackReason: v.optional(v.string()),
+    operations: v.array(nodeslidePatchOperationValidator),
+    candidate: nodeslideVariationCandidateValidator,
+    validation: nodeslideValidationResultValidator,
+    status: nodeslideVariationStatusValidator,
+    selectedPatchId: v.optional(v.string()),
+    createdAt: v.number(),
+    decidedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_batch', ['batchId'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_slide_created', ['deckId', 'slideId', 'createdAt']),
+
+  nodeslide_variation_decisions: defineTable({
+    id: v.string(),
+    eventName: nodeslideVariationDecisionEventValidator,
+    deckId: v.string(),
+    slideId: v.string(),
+    batchId: v.string(),
+    variationId: v.string(),
+    deckVersion: v.number(),
+    traceId: v.string(),
+    axes: nodeslideVariationAxesValidator,
+    origin: nodeslideVariationOriginValidator,
+    reason: v.optional(v.string()),
+    selectedPatchId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_variation', ['variationId'])
+    .index('by_batch', ['batchId'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
 
   nodeslide_comments: defineTable({
     id: v.string(),
@@ -526,6 +724,57 @@ export default defineSchema({
   })
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_preference_events: defineTable({
+    schemaVersion: v.literal('nodeslide.preference/v1'),
+    id: v.string(),
+    tenantId: v.string(),
+    actorId: v.string(),
+    deckId: v.string(),
+    type: nodeslidePreferenceEventTypeValidator,
+    scope: nodeslidePreferenceScopeValidator,
+    provenance: nodeslidePreferenceProvenanceValidator,
+    attributes: nodeslidePreferenceAttributesValidator,
+    occurredAt: v.number(),
+    recordedAt: v.number(),
+    processedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_tenant_actor_recorded', ['tenantId', 'actorId', 'recordedAt'])
+    .index('by_tenant_deck_recorded', ['tenantId', 'deckId', 'recordedAt']),
+
+  nodeslide_signature_profiles: defineTable({
+    id: v.string(),
+    tenantId: v.string(),
+    profileId: v.string(),
+    sourceDigest: v.string(),
+    sourceKind: v.union(
+      v.literal('pptx'),
+      v.literal('pdf'),
+      v.literal('screenshot'),
+      v.literal('taste_pack'),
+    ),
+    name: v.string(),
+    confidence: v.union(v.literal('high'), v.literal('medium'), v.literal('low')),
+    warningCount: v.number(),
+    profileJson: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_tenant_profile', ['tenantId', 'profileId'])
+    .index('by_tenant_updated', ['tenantId', 'updatedAt']),
+
+  nodeslide_taste_profiles: defineTable({
+    schemaVersion: v.literal('nodeslide.preference/v1'),
+    id: v.string(),
+    tenantId: v.string(),
+    actorId: v.string(),
+    signals: v.array(nodeslidePreferenceSignalValidator),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_tenant_actor', ['tenantId', 'actorId']),
 
   nodeslide_rate_limits: defineTable({
     key: v.string(),

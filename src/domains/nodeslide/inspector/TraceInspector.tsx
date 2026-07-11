@@ -21,12 +21,19 @@ interface TraceInspectorProps {
 
 export function TraceInspector({ traces, validations }: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
+  const latestValidation = useMemo(
+    () =>
+      [...validations].sort(
+        (left, right) => right.deckVersion - left.deckVersion || right.checkedAt - left.checkedAt,
+      )[0],
+    [validations],
+  );
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const selected = sorted.find((trace) => trace.id === selectedTraceId) ?? sorted[0];
-  const validation =
+  const traceValidation =
     selected?.validation ??
     validations.find((candidate) => candidate.deckVersion === selected?.validation?.deckVersion) ??
-    validations[0];
+    null;
 
   return (
     <div className="ns-inspector-scroll ns-trace-inspector">
@@ -45,6 +52,10 @@ export function TraceInspector({ traces, validations }: TraceInspectorProps) {
           validated.
         </p>
       </section>
+
+      {latestValidation ? (
+        <ValidationSummary validation={latestValidation} label="Current deck validation" />
+      ) : null}
 
       {sorted.length === 0 ? (
         <div className="ns-empty-state">
@@ -106,7 +117,9 @@ export function TraceInspector({ traces, validations }: TraceInspectorProps) {
                 title="Guardrails"
                 items={selected.guardrails}
               />
-              {validation ? <ValidationSummary validation={validation} /> : null}
+              {traceValidation && traceValidation.id !== latestValidation?.id ? (
+                <ValidationSummary validation={traceValidation} label="Selected trace validation" />
+              ) : null}
               <details className="ns-raw-trace">
                 <summary>
                   <Code2 size={13} /> Raw JSON <span>collapsed</span>
@@ -146,12 +159,18 @@ function TraceList({
   );
 }
 
-function ValidationSummary({ validation }: { validation: ValidationResult }) {
+function ValidationSummary({
+  validation,
+  label,
+}: {
+  validation: ValidationResult;
+  label: string;
+}) {
   return (
     <section className={`ns-validation-summary ${validation.ok ? 'is-ok' : 'has-issues'}`}>
       <h3>
         {validation.ok ? <CheckCircle2 size={14} /> : <TriangleAlert size={14} />}
-        {validation.ok ? 'Validation passed' : `${validation.issues.length} validation issues`}
+        {label}: {validation.ok ? 'passed' : `${validation.issues.length} issues`}
       </h3>
       <p>
         Deck v{validation.deckVersion} ·{' '}

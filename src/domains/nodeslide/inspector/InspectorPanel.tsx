@@ -20,6 +20,10 @@ import type {
   Slide,
   SlideElement,
 } from '../../../../shared/nodeslide';
+import type { TasteProfile } from '../../../../shared/nodeslidePreference';
+import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
+import type { SlideVariation } from '../../../../shared/nodeslideVariation';
+import type { NodeSlideTastePackId } from '../signature/packs/index';
 import { AiInspector } from './AiInspector';
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
@@ -42,12 +46,36 @@ interface InspectorPanelProps {
   collapsed: boolean;
   width: number;
   agentBusy: boolean;
+  variations: readonly SlideVariation[];
+  variationsLoading: boolean;
+  variationBusy: boolean;
+  variationGenerating: boolean;
+  variationError: string | null;
+  previewedVariationId: string | null;
+  activeTastePackId: NodeSlideTastePackId | null;
+  tastePackBusy: boolean;
+  activeProfileId?: string | null;
+  previewProfileId?: string | null;
+  signatureProfiles?: readonly SignatureProfile[];
+  tasteProfile?: TasteProfile | null;
+  tasteProfileLoading?: boolean;
   onTabChange: (tab: InspectorTab) => void;
   onToggleCollapsed: () => void;
   onWidthChange: (width: number) => void;
   onProposeEdit: (instruction: string, scope: PatchScope) => void;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
+  onGenerateVariations: () => void;
+  onPreviewVariation: (variation: SlideVariation | null) => void;
+  onAcceptVariation: (variation: SlideVariation) => void;
+  onRejectVariation: (variation: SlideVariation) => void;
+  onApplyTastePack: (packId: NodeSlideTastePackId) => void;
+  onClearTastePack: () => void;
+  onApplySignatureProfile?: (profile: SignatureProfile) => void;
+  onPreviewSignatureProfile?: (profile: SignatureProfile | null) => void;
+  onUploadSignatureSource?: (file: File) => void;
+  onEvictTasteSignal?: (signalId: string) => void;
+  onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
@@ -72,12 +100,36 @@ export function InspectorPanel({
   collapsed,
   width,
   agentBusy,
+  variations,
+  variationsLoading,
+  variationBusy,
+  variationGenerating,
+  variationError,
+  previewedVariationId,
+  activeTastePackId,
+  tastePackBusy,
+  activeProfileId = null,
+  previewProfileId = null,
+  signatureProfiles = [],
+  tasteProfile = null,
+  tasteProfileLoading = false,
   onTabChange,
   onToggleCollapsed,
   onWidthChange,
   onProposeEdit,
   onAcceptPatch,
   onRejectPatch,
+  onGenerateVariations,
+  onPreviewVariation,
+  onAcceptVariation,
+  onRejectVariation,
+  onApplyTastePack,
+  onClearTastePack,
+  onApplySignatureProfile,
+  onPreviewSignatureProfile,
+  onUploadSignatureSource,
+  onEvictTasteSignal,
+  onOpenPreferenceEvidence,
   onApplyDesignPatch,
   onAddComment,
   onReply,
@@ -202,7 +254,7 @@ export function InspectorPanel({
             <Icon size={14} />
             <span>{label}</span>
             {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-            {id === 'ai' && agentBusy ? <i className="is-live" /> : null}
+            {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
           </button>
         ))}
       </div>
@@ -220,10 +272,20 @@ export function InspectorPanel({
             selectedElements={selectedElements}
             patches={workspace.patches}
             traces={workspace.traces}
+            variations={variations}
+            variationsLoading={variationsLoading}
             isSubmitting={agentBusy}
+            variationBusy={variationBusy}
+            variationGenerating={variationGenerating}
+            variationError={variationError}
+            previewedVariationId={previewedVariationId}
             onPropose={onProposeEdit}
             onAccept={onAcceptPatch}
             onReject={onRejectPatch}
+            onGenerateVariations={onGenerateVariations}
+            onPreviewVariation={onPreviewVariation}
+            onAcceptVariation={onAcceptVariation}
+            onRejectVariation={onRejectVariation}
           />
         ) : null}
         {activeTab === 'design' ? (
@@ -231,6 +293,20 @@ export function InspectorPanel({
             slide={slide}
             selectedElements={selectedElements}
             theme={workspace.deck.theme}
+            activeTastePackId={activeTastePackId}
+            activeProfileId={activeProfileId}
+            previewProfileId={previewProfileId}
+            profiles={signatureProfiles}
+            busy={tastePackBusy}
+            onApplyTastePack={onApplyTastePack}
+            onApplyProfile={onApplySignatureProfile}
+            onPreviewProfile={onPreviewSignatureProfile}
+            onUploadSource={onUploadSignatureSource}
+            tasteProfile={tasteProfile}
+            tasteProfileLoading={tasteProfileLoading}
+            onEvictTasteSignal={onEvictTasteSignal}
+            onOpenPreferenceEvidence={onOpenPreferenceEvidence}
+            onClearTastePack={onClearTastePack}
             onApplyPatch={onApplyDesignPatch}
           />
         ) : null}

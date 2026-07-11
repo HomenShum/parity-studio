@@ -4,6 +4,7 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_PATCH_OPERATION_LIMIT,
   type PatchOperation,
   type PatchScope,
   type PatchSource,
@@ -11,6 +12,7 @@ import {
   clampNormalized,
 } from '../shared/nodeslide';
 import { applyDeckPatch } from '../shared/nodeslidePatch';
+import type { SlideVariation } from '../shared/nodeslideVariation';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
@@ -43,11 +45,13 @@ import {
   evaluateNodeSlideCas,
   validateNodeSlidePatch,
 } from './lib/nodeslidePatches';
+import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   buildBriefNodeSlide,
   buildGoldenNodeSlide,
   repairLegacyGoldenSnapshot,
 } from './lib/nodeslideSeed';
+import { requireSignatureProfile } from './lib/nodeslideSignatureProfiles';
 import { isNormalizedBoundingBox, validateNodeSlideSnapshot } from './lib/nodeslideValidation';
 import {
   nodeslideBriefValidator,
@@ -58,9 +62,18 @@ import {
   nodeslidePatchSourceValidator,
   nodeslideVersionClockValidator,
 } from './lib/nodeslideValidators';
+import {
+  NODESLIDE_VARIATION_DECISION_LIMIT,
+  NODESLIDE_VARIATION_REASON_LIMIT,
+  NodeSlideVariationError,
+  type VariationDecisionTrace,
+  planVariationAcceptance,
+  planVariationRejection,
+  summarizeVariationOperations,
+} from './lib/nodeslideVariationHarness';
 
 const PRESENCE_TTL_MS = 45_000;
-const MAX_PATCH_OPERATIONS = 32;
+const MAX_PATCH_OPERATIONS = NODESLIDE_PATCH_OPERATION_LIMIT;
 const MAX_PRESENCE_ELEMENTS = 64;
 const MAX_LISTED_DECKS = 32;
 const patchArgs = {
@@ -76,6 +89,7 @@ const patchArgs = {
   summary: v.optional(v.string()),
   linkedCommentId: v.optional(v.string()),
   traceId: v.optional(v.string()),
+  profileId: v.optional(v.string()),
 };
 
 type PatchMutationArgs = {
@@ -91,6 +105,7 @@ type PatchMutationArgs = {
   summary?: string;
   linkedCommentId?: string;
   traceId?: string;
+  profileId?: string;
 };
 
 export const ensureWorkspace = mutation({
@@ -213,6 +228,217 @@ export const acceptPatch = mutation({
   },
 });
 
+/**
+ * W3 acceptance is one transaction: the normal patch commit/CAS path and the
+ * selected/sibling decision records either all commit or all roll back.
+ */
+export const acceptVariationPatch = internalMutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    variationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const selectedRow = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+    const batch = await requireAtomicVariationBatch(ctx, args.deckId, selectedRow.batchId);
+    const siblingRows = await ctx.db
+      .query('nodeslide_variations')
+      .withIndex('by_batch', (index) => index.eq('batchId', selectedRow.batchId))
+      .collect();
+    if (
+      siblingRows.length !== 3 ||
+      siblingRows.some((variation) => variation.deckId !== args.deckId)
+    ) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The variation batch cannot be reconciled safely.',
+      );
+    }
+
+    const linkedPatches = await Promise.all(
+      siblingRows.map(async (variation) => ({
+        variation,
+        patch: await findAtomicVariationPatch(ctx, variation),
+      })),
+    );
+    if (
+      linkedPatches.some(
+        ({ variation, patch }) => patch && !atomicVariationPatchMatches(patch, variation),
+      )
+    ) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'A linked patch belongs to a different variation operation set.',
+      );
+    }
+    const committed = linkedPatches.filter(({ patch }) => patch?.status === 'accepted');
+    if (committed.length > 1) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'Multiple accepted patches exist for one variation batch.',
+      );
+    }
+    const committedWinner = committed[0];
+    if (committedWinner?.patch) {
+      const wasReady = selectedRow.status === 'ready';
+      await finalizeAtomicVariationSelection(
+        ctx,
+        batch,
+        siblingRows,
+        linkedPatches,
+        committedWinner.variation,
+        committedWinner.patch.id,
+      );
+      const updated = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+      return {
+        variation: atomicVariationFromRow(updated),
+        patch:
+          wasReady && committedWinner.variation.id === selectedRow.id
+            ? patchFromRow(committedWinner.patch)
+            : null,
+        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+        rebased: false,
+        staleReasons: [],
+      };
+    }
+
+    if (batch.acceptedVariationId) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The accepted variation decision has no verifiable accepted patch.',
+      );
+    }
+
+    if (selectedRow.status !== 'ready') {
+      if (batch.acceptingVariationId) {
+        await ctx.db.patch(batch._id, { acceptingVariationId: undefined });
+      }
+      return {
+        variation: atomicVariationFromRow(selectedRow),
+        patch: null,
+        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+        rebased: false,
+        staleReasons: [],
+      };
+    }
+
+    const selectedLink = linkedPatches.find(({ variation }) => variation.id === selectedRow.id);
+    const existingPatch = selectedLink?.patch ?? null;
+    if (existingPatch && !atomicVariationPatchMatches(existingPatch, selectedRow)) {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The linked patch ID belongs to a different operation set.',
+      );
+    }
+    if (existingPatch?.status === 'rejected') {
+      await rejectAtomicVariation(ctx, batch, selectedRow, 'patch_rejected');
+      const updated = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+      return {
+        variation: atomicVariationFromRow(updated),
+        patch: null,
+        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+        rebased: false,
+        staleReasons: [],
+      };
+    }
+    if (existingPatch?.status === 'stale') {
+      await markAtomicVariationStale(ctx, batch, selectedRow);
+      const updated = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+      return {
+        variation: atomicVariationFromRow(updated),
+        patch: patchFromRow(existingPatch),
+        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+        rebased: false,
+        staleReasons: ['The linked variation patch was already stale.'],
+      };
+    }
+
+    const patchId = await allocateAtomicVariationPatchId(ctx, selectedRow);
+    const patchArgs = atomicVariationPatchArgs(selectedRow, args.ownerAccessKey, patchId);
+    const snapshot = await requireSnapshot(ctx, args.deckId);
+    const cas = evaluateNodeSlideCas(snapshot, patchInput(patchArgs));
+    if (!cas.canCommit) {
+      const now = Date.now();
+      const stale = patchRow(patchArgs, now, 'stale', existingPatch?.createdAt);
+      if (existingPatch) {
+        await ctx.db.patch(existingPatch._id, { status: 'stale', updatedAt: now });
+      } else {
+        await ctx.db.insert('nodeslide_patches', stale);
+      }
+      await markAtomicVariationStale(ctx, batch, selectedRow, now);
+      const updated = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+      return {
+        variation: atomicVariationFromRow(updated),
+        patch: stale,
+        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
+        rebased: false,
+        staleReasons: cas.reasons,
+      };
+    }
+
+    if (snapshot.deck.activeSignatureProfileId) {
+      const checkedAt = Date.now();
+      let activeSignatureValidation: ValidationResult;
+      try {
+        const preview = applyDeckPatch(
+          structuredClone(snapshot),
+          {
+            baseDeckVersion: snapshot.deck.version,
+            scope: patchArgs.scope,
+            operations: patchArgs.operations,
+          },
+          checkedAt,
+        ).snapshot;
+        activeSignatureValidation = await validateWithActiveSignature(ctx, preview, checkedAt);
+      } catch {
+        throw new NodeSlideVariationError(
+          'generation_failed',
+          'The direction could not be checked against the active signature profile.',
+        );
+      }
+      if (!activeSignatureValidation.publishOk) {
+        throw new NodeSlideVariationError(
+          'generation_failed',
+          'This direction conflicts with the active signature profile. Generate new directions and review again.',
+        );
+      }
+    }
+
+    let receipt: Awaited<ReturnType<typeof commitPatch>>;
+    try {
+      receipt = await commitPatch(ctx, patchArgs, existingPatch);
+    } catch {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The variation could not be committed through the patch validator.',
+      );
+    }
+    if (receipt.patch.status !== 'accepted') {
+      throw new NodeSlideVariationError(
+        'generation_failed',
+        'The atomic variation patch returned an unexpected state.',
+      );
+    }
+    await finalizeAtomicVariationSelection(
+      ctx,
+      batch,
+      siblingRows,
+      linkedPatches,
+      selectedRow,
+      receipt.patch.id,
+    );
+    const updated = await requireAtomicVariationRow(ctx, args.deckId, args.variationId);
+    return {
+      variation: atomicVariationFromRow(updated),
+      patch: receipt.patch,
+      workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+      rebased: receipt.rebased,
+      staleReasons: [],
+    };
+  },
+});
+
 export const rejectPatch = mutation({
   args: { deckId: v.string(), ownerAccessKey: v.string(), patchId: v.string() },
   handler: async (ctx, { deckId, ownerAccessKey, patchId }) => {
@@ -272,11 +498,7 @@ export const restoreVersion = mutation({
       };
     }
     const restored = restoredSnapshot(current, target.snapshot, now);
-    const validation = validateNodeSlideSnapshot(
-      restored,
-      now,
-      nodeslideEventId('validation', now, args.deckId, 'restore'),
-    );
+    const validation = await validateWithActiveSignature(ctx, restored, now);
     await writeNodeSlideSnapshot(ctx, current, restored, now);
     await ctx.db.insert('nodeslide_patches', {
       ...receipt,
@@ -473,11 +695,7 @@ export const validateAndRecord = mutation({
     await requireOwnerAccess(ctx, deckId, ownerAccessKey);
     const snapshot = await requireSnapshot(ctx, deckId);
     const now = Date.now();
-    const result = validateNodeSlideSnapshot(
-      snapshot,
-      now,
-      nodeslideEventId('validation', now, deckId),
-    );
+    const result = await validateWithActiveSignature(ctx, snapshot, now);
     await ctx.db.insert('nodeslide_validations', result);
     return result;
   },
@@ -490,6 +708,23 @@ export const consumePreviewQuota = internalMutation({
   handler: async (ctx, { buckets }) => {
     await consumePreviewQuotaBuckets(ctx, buckets);
     return true;
+  },
+});
+
+export const consumePreviewQuotaResult = internalMutation({
+  args: {
+    buckets: v.array(v.object({ key: v.string(), limit: v.number(), windowMs: v.number() })),
+  },
+  handler: async (ctx, { buckets }) => {
+    try {
+      await consumePreviewQuotaBuckets(ctx, buckets);
+      return { ok: true as const };
+    } catch (error) {
+      if (error instanceof NodeSlidePreviewQuotaError) {
+        return { ok: false as const, reason: 'quota_exceeded' as const };
+      }
+      throw error;
+    }
   },
 });
 
@@ -621,16 +856,322 @@ export const proposeAgentPatchInternal = internalMutation({
   },
 });
 
+type AtomicVariationLink = {
+  variation: Doc<'nodeslide_variations'>;
+  patch: Doc<'nodeslide_patches'> | null;
+};
+
+async function requireAtomicVariationRow(
+  ctx: MutationCtx,
+  deckId: string,
+  variationId: string,
+): Promise<Doc<'nodeslide_variations'>> {
+  const rows = await ctx.db
+    .query('nodeslide_variations')
+    .withIndex('by_stable_id', (index) => index.eq('id', variationId))
+    .collect();
+  const row = rows.find((candidate) => candidate.deckId === deckId);
+  if (!row) throw new NodeSlideVariationError('invalid_request', 'Variation is unavailable.');
+  return row;
+}
+
+async function requireAtomicVariationBatch(
+  ctx: MutationCtx,
+  deckId: string,
+  batchId: string,
+): Promise<Doc<'nodeslide_variation_batches'>> {
+  const rows = await ctx.db
+    .query('nodeslide_variation_batches')
+    .withIndex('by_stable_id', (index) => index.eq('id', batchId))
+    .collect();
+  const row = rows.find((candidate) => candidate.deckId === deckId);
+  if (!row) throw new NodeSlideVariationError('invalid_request', 'Variation batch is unavailable.');
+  return row;
+}
+
+function atomicVariationPatchIds(variation: Doc<'nodeslide_variations'>): string[] {
+  return [
+    ...(variation.selectedPatchId ? [variation.selectedPatchId] : []),
+    nodeslideStableId('patch_variation', variation.id),
+    nodeslideStableId('patch_variation_scoped', variation.deckId, variation.id),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+}
+
+async function findAtomicVariationPatch(
+  ctx: MutationCtx,
+  variation: Doc<'nodeslide_variations'>,
+): Promise<Doc<'nodeslide_patches'> | null> {
+  for (const patchId of atomicVariationPatchIds(variation)) {
+    const rows = await ctx.db
+      .query('nodeslide_patches')
+      .withIndex('by_stable_id', (index) => index.eq('id', patchId))
+      .collect();
+    const linked = rows.find(
+      (patch) => patch.deckId === variation.deckId && patch.traceId === variation.id,
+    );
+    if (linked) return linked;
+  }
+  return null;
+}
+
+async function allocateAtomicVariationPatchId(
+  ctx: MutationCtx,
+  variation: Doc<'nodeslide_variations'>,
+): Promise<string> {
+  const linked = await findAtomicVariationPatch(ctx, variation);
+  if (linked) return linked.id;
+  const candidates = [
+    nodeslideStableId('patch_variation', variation.id),
+    nodeslideStableId('patch_variation_scoped', variation.deckId, variation.id),
+  ];
+  for (const patchId of candidates) {
+    const rows = await ctx.db
+      .query('nodeslide_patches')
+      .withIndex('by_stable_id', (index) => index.eq('id', patchId))
+      .collect();
+    if (rows.length === 0) return patchId;
+  }
+  throw new NodeSlideVariationError(
+    'generation_failed',
+    'A tenant-scoped variation patch ID could not be allocated.',
+  );
+}
+
+function atomicVariationPatchArgs(
+  variation: Doc<'nodeslide_variations'>,
+  ownerAccessKey: string,
+  patchId: string,
+): PatchMutationArgs {
+  const axes = `${variation.axes.contentAngle}/${variation.axes.density}/${variation.axes.layoutArchetype}`;
+  return {
+    id: patchId,
+    deckId: variation.deckId,
+    ownerAccessKey,
+    baseDeckVersion: variation.baseDeckVersion,
+    baseSlideVersions: { [variation.slideId]: variation.baseSlideVersion },
+    baseElementVersions: variation.baseElementVersions,
+    scope: {
+      kind: 'slide',
+      deckId: variation.deckId,
+      slideIds: [variation.slideId],
+      operationMode: 'unrestricted',
+    },
+    operations: variation.operations,
+    source: 'agent',
+    summary: `Variation ${axes}: ${summarizeVariationOperations(variation.operations)}`.slice(
+      0,
+      500,
+    ),
+    traceId: variation.id,
+  };
+}
+
+function atomicVariationPatchMatches(
+  patch: Doc<'nodeslide_patches'>,
+  variation: Doc<'nodeslide_variations'>,
+): boolean {
+  const expected = atomicVariationPatchArgs(variation, '', patch.id);
+  return (
+    patch.deckId === variation.deckId &&
+    patch.traceId === variation.id &&
+    patch.source === 'agent' &&
+    patch.baseDeckVersion === variation.baseDeckVersion &&
+    stableJson(patch.baseSlideVersions) === stableJson(expected.baseSlideVersions) &&
+    stableJson(patch.baseElementVersions) === stableJson(variation.baseElementVersions) &&
+    stableJson(patch.scope) === stableJson(expected.scope) &&
+    stableJson(patch.operations) === stableJson(variation.operations)
+  );
+}
+
+async function finalizeAtomicVariationSelection(
+  ctx: MutationCtx,
+  batch: Doc<'nodeslide_variation_batches'>,
+  siblingRows: Doc<'nodeslide_variations'>[],
+  linkedPatches: AtomicVariationLink[],
+  winnerRow: Doc<'nodeslide_variations'>,
+  selectedPatchId: string,
+): Promise<void> {
+  if (
+    siblingRows.some(
+      (variation) => variation.id !== winnerRow.id && variation.status === 'accepted',
+    )
+  ) {
+    throw new NodeSlideVariationError(
+      'generation_failed',
+      'The variation batch contains conflicting accepted decisions.',
+    );
+  }
+  const decidedAt = winnerRow.decidedAt ?? Date.now();
+  const plannedVariations = siblingRows.map((variation) => {
+    const mapped = atomicVariationFromRow(variation);
+    return variation.id === winnerRow.id ? { ...mapped, status: 'ready' as const } : mapped;
+  });
+  const decision = planVariationAcceptance(
+    plannedVariations,
+    winnerRow.id,
+    selectedPatchId,
+    decidedAt,
+  );
+  for (const update of decision.updates) {
+    const target = siblingRows.find((variation) => variation.id === update.id);
+    if (!target) continue;
+    await ctx.db.patch(target._id, {
+      status: update.status,
+      ...(update.selectedPatchId ? { selectedPatchId: update.selectedPatchId } : {}),
+      decidedAt: update.decidedAt,
+    });
+  }
+  for (const trace of decision.traces) await insertAtomicVariationDecision(ctx, trace);
+  for (const link of linkedPatches) {
+    if (link.variation.id !== winnerRow.id && link.patch?.status === 'ready') {
+      await ctx.db.patch(link.patch._id, { status: 'rejected', updatedAt: decidedAt });
+    }
+  }
+  await ctx.db.patch(batch._id, {
+    acceptingVariationId: undefined,
+    acceptedVariationId: winnerRow.id,
+  });
+  await pruneAtomicVariationDecisions(ctx, winnerRow.deckId);
+}
+
+async function rejectAtomicVariation(
+  ctx: MutationCtx,
+  batch: Doc<'nodeslide_variation_batches'>,
+  variation: Doc<'nodeslide_variations'>,
+  reason: string,
+): Promise<void> {
+  const decision = planVariationRejection(atomicVariationFromRow(variation), reason, Date.now());
+  if (decision.update && decision.trace) {
+    await ctx.db.patch(variation._id, {
+      status: 'rejected',
+      decidedAt: decision.update.decidedAt,
+    });
+    await insertAtomicVariationDecision(ctx, decision.trace);
+  }
+  if (batch.acceptingVariationId) {
+    await ctx.db.patch(batch._id, { acceptingVariationId: undefined });
+  }
+  await pruneAtomicVariationDecisions(ctx, variation.deckId);
+}
+
+async function markAtomicVariationStale(
+  ctx: MutationCtx,
+  batch: Doc<'nodeslide_variation_batches'>,
+  variation: Doc<'nodeslide_variations'>,
+  decidedAt = Date.now(),
+): Promise<void> {
+  await ctx.db.patch(variation._id, { status: 'stale', decidedAt });
+  if (batch.acceptingVariationId) {
+    await ctx.db.patch(batch._id, { acceptingVariationId: undefined });
+  }
+}
+
+async function insertAtomicVariationDecision(
+  ctx: MutationCtx,
+  trace: VariationDecisionTrace,
+): Promise<void> {
+  let candidate = trace;
+  const existingRows = await ctx.db
+    .query('nodeslide_variation_decisions')
+    .withIndex('by_stable_id', (index) => index.eq('id', trace.id))
+    .collect();
+  const matching = existingRows.find(
+    (row) =>
+      row.deckId === trace.deckId &&
+      row.variationId === trace.variationId &&
+      row.eventName === trace.eventName,
+  );
+  if (matching) return;
+  if (existingRows.length > 0) {
+    candidate = {
+      ...trace,
+      id: nodeslideStableId('variation_decision_scoped', trace.deckId, trace.id),
+    };
+    const scopedRows = await ctx.db
+      .query('nodeslide_variation_decisions')
+      .withIndex('by_stable_id', (index) => index.eq('id', candidate.id))
+      .collect();
+    if (
+      scopedRows.some(
+        (row) =>
+          row.deckId !== trace.deckId ||
+          row.variationId !== trace.variationId ||
+          row.eventName !== trace.eventName,
+      )
+    ) {
+      throw new NodeSlideVariationError('generation_failed', 'Decision trace ID collision.');
+    }
+    if (scopedRows.length > 0) return;
+  }
+  if (
+    candidate.reason !== undefined &&
+    (candidate.reason.length === 0 || candidate.reason.length > NODESLIDE_VARIATION_REASON_LIMIT)
+  ) {
+    throw new NodeSlideVariationError('generation_failed', 'Decision reason exceeds bounds.');
+  }
+  await ctx.db.insert('nodeslide_variation_decisions', candidate);
+}
+
+async function pruneAtomicVariationDecisions(ctx: MutationCtx, deckId: string): Promise<void> {
+  const rows = await ctx.db
+    .query('nodeslide_variation_decisions')
+    .withIndex('by_deck_created', (index) => index.eq('deckId', deckId))
+    .order('asc')
+    .take(NODESLIDE_VARIATION_DECISION_LIMIT * 2 + 1);
+  for (const row of rows.slice(0, Math.max(0, rows.length - NODESLIDE_VARIATION_DECISION_LIMIT))) {
+    await ctx.db.delete(row._id);
+  }
+}
+
+function atomicVariationFromRow(row: Doc<'nodeslide_variations'>): SlideVariation {
+  return {
+    schemaVersion: row.schemaVersion,
+    id: row.id,
+    batchId: row.batchId,
+    deckId: row.deckId,
+    slideId: row.slideId,
+    baseDeckVersion: row.baseDeckVersion,
+    baseSlideVersion: row.baseSlideVersion,
+    baseElementVersions: row.baseElementVersions,
+    axes: row.axes,
+    origin: row.origin,
+    ...(row.fallbackReason !== undefined ? { fallbackReason: row.fallbackReason } : {}),
+    operations: row.operations,
+    candidate: row.candidate,
+    validation: row.validation,
+    status: row.status,
+    ...(row.selectedPatchId !== undefined ? { selectedPatchId: row.selectedPatchId } : {}),
+    createdAt: row.createdAt,
+    ...(row.decidedAt !== undefined ? { decidedAt: row.decidedAt } : {}),
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
   const snapshot = await requireSnapshot(ctx, args.deckId);
   const existing = args.id ? await findPatchRow(ctx, args.id) : null;
-  if (existing)
+  if (existing) {
+    if (existing.deckId !== args.deckId) {
+      throw new Error('Patch is unavailable.');
+    }
     return {
       patch: patchFromRow(existing),
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
     };
+  }
   const scopedComment = await commentForScope(ctx, args.scope);
   const input = patchInput(args);
   const errors = validateNodeSlidePatch(snapshot, input, scopedComment);
@@ -652,7 +1193,7 @@ async function commitPatch(
   args: PatchMutationArgs,
   existing: Doc<'nodeslide_patches'> | null,
 ) {
-  await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+  const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
   const snapshot = await requireSnapshot(ctx, args.deckId);
   const scopedComment = await commentForScope(ctx, args.scope);
@@ -680,29 +1221,45 @@ async function commitPatch(
     { baseDeckVersion: snapshot.deck.version, scope: args.scope, operations: args.operations },
     now,
   );
+  const activeProfileId = args.profileId ?? snapshot.deck.activeSignatureProfileId;
+  const signatureProfile = activeProfileId
+    ? await requireSignatureProfile(ctx, deckRow.projectId, activeProfileId)
+    : undefined;
+  const appliedSnapshot: DeckSnapshot = signatureProfile
+    ? {
+        ...applied.snapshot,
+        deck: {
+          ...applied.snapshot.deck,
+          activeSignatureProfileId: signatureProfile.id,
+          activeSignatureProfileDigest: signatureProfile.source.digest,
+        },
+      }
+    : applied.snapshot;
   const validation = validateNodeSlideSnapshot(
-    applied.snapshot,
+    appliedSnapshot,
     now,
-    nodeslideEventId('validation', now, id),
+    undefined,
+    signatureProfile ? { signatureProfile } : {},
   );
   const accepted = patchRow(
     { ...args, id },
     now,
     'accepted',
     existing?.createdAt,
-    applied.snapshot.deck.version,
+    appliedSnapshot.deck.version,
   );
-  await writeNodeSlideSnapshot(ctx, snapshot, applied.snapshot, now);
+  await writeNodeSlideSnapshot(ctx, snapshot, appliedSnapshot, now);
   if (existing) {
     await ctx.db.patch(existing._id, {
       status: 'accepted',
-      resultingDeckVersion: applied.snapshot.deck.version,
+      resultingDeckVersion: appliedSnapshot.deck.version,
+      ...(args.profileId ? { profileId: args.profileId } : {}),
       updatedAt: now,
     });
   } else await ctx.db.insert('nodeslide_patches', accepted);
   await insertVersion(
     ctx,
-    applied.snapshot,
+    appliedSnapshot,
     args.summary ?? 'Applied patch',
     args.source ?? 'human',
     id,
@@ -712,7 +1269,7 @@ async function commitPatch(
   if (args.linkedCommentId)
     await resolveLinkedComment(ctx, args.linkedCommentId, args.deckId, id, now);
   if (args.traceId) await finishTrace(ctx, args.traceId, now, 'completed', validation, id);
-  return { patch: accepted, snapshot: applied.snapshot, validation, rebased: cas.rebased };
+  return { patch: accepted, snapshot: appliedSnapshot, validation, rebased: cas.rebased };
 }
 
 function normalizePatchArgs<T extends PatchMutationArgs>(args: T): PatchMutationArgs {
@@ -762,6 +1319,7 @@ function patchRow(
     summary: args.summary?.trim() || 'Scoped NodeSlide change.',
     ...(args.linkedCommentId ? { linkedCommentId: args.linkedCommentId } : {}),
     ...(args.traceId ? { traceId: args.traceId } : {}),
+    ...(args.profileId ? { profileId: args.profileId } : {}),
     createdAt,
     updatedAt: now,
   };
@@ -872,54 +1430,6 @@ async function requireSnapshot(
   return snapshot;
 }
 
-async function consumePreviewQuotaBuckets(
-  ctx: MutationCtx,
-  buckets: Array<{ key: string; limit: number; windowMs: number }>,
-): Promise<void> {
-  if (buckets.length === 0 || buckets.length > 4) throw new Error('Invalid preview quota request.');
-  const now = Date.now();
-  const pending: Array<{
-    bucket: { key: string; limit: number; windowMs: number };
-    windowStart: number;
-    row: Doc<'nodeslide_rate_limits'> | null;
-  }> = [];
-  for (const bucket of buckets) {
-    if (
-      !bucket.key ||
-      bucket.key.length > 128 ||
-      !Number.isInteger(bucket.limit) ||
-      bucket.limit < 1 ||
-      bucket.limit > 10_000 ||
-      !Number.isInteger(bucket.windowMs) ||
-      bucket.windowMs < 60_000 ||
-      bucket.windowMs > 86_400_000
-    ) {
-      throw new Error('Invalid preview quota bucket.');
-    }
-    const windowStart = Math.floor(now / bucket.windowMs) * bucket.windowMs;
-    const row = await ctx.db
-      .query('nodeslide_rate_limits')
-      .withIndex('by_key_window', (query) =>
-        query.eq('key', bucket.key).eq('windowStart', windowStart),
-      )
-      .first();
-    if ((row?.count ?? 0) >= bucket.limit) {
-      throw new Error('NodeSlide free-preview quota reached. Try again after the current window.');
-    }
-    pending.push({ bucket, windowStart, row });
-  }
-  for (const { bucket, windowStart, row } of pending) {
-    if (row) await ctx.db.patch(row._id, { count: row.count + 1, updatedAt: now });
-    else
-      await ctx.db.insert('nodeslide_rate_limits', {
-        key: bucket.key,
-        windowStart,
-        count: 1,
-        updatedAt: now,
-      });
-  }
-}
-
 async function migrateLegacyGoldenWorkspace(
   ctx: MutationCtx,
   deckId: string,
@@ -961,14 +1471,26 @@ async function migrateLegacyGoldenWorkspace(
       changedElementIds.has(element.id) ? { ...element, version: element.version + 1 } : element,
     ),
   };
-  const validation = validateNodeSlideSnapshot(
-    after,
-    now,
-    nodeslideEventId('validation', now, deckId, 'legacy-golden-migration'),
-  );
+  const validation = await validateWithActiveSignature(ctx, after, now);
   await writeNodeSlideSnapshot(ctx, before, after, now);
   await insertVersion(ctx, after, 'Repaired legacy golden seed', 'system', undefined, now);
   await ctx.db.insert('nodeslide_validations', validation);
+}
+
+async function validateWithActiveSignature(
+  ctx: { db: MutationCtx['db'] },
+  snapshot: DeckSnapshot,
+  checkedAt: number,
+): Promise<ValidationResult> {
+  const profileId = snapshot.deck.activeSignatureProfileId;
+  if (!profileId) return validateNodeSlideSnapshot(snapshot, checkedAt);
+  const deckRow = await findDeckRow(ctx, snapshot.deck.id);
+  if (!deckRow) throw new Error(`Deck ${snapshot.deck.id} not found.`);
+  const signatureProfile = await requireSignatureProfile(ctx, deckRow.projectId, profileId);
+  if (snapshot.deck.activeSignatureProfileDigest !== signatureProfile.source.digest) {
+    throw new Error('Active signature profile digest does not match the stored profile.');
+  }
+  return validateNodeSlideSnapshot(snapshot, checkedAt, undefined, { signatureProfile });
 }
 
 async function ownerWorkspaceResponse(

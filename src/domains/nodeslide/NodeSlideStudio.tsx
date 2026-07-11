@@ -26,6 +26,11 @@ import type {
   SlideElement,
 } from '../../../shared/nodeslide';
 import { isElementOperation } from '../../../shared/nodeslide';
+import { applyDeckPatch } from '../../../shared/nodeslidePatch';
+import type { TasteProfile } from '../../../shared/nodeslidePreference';
+import type { SignatureProfile } from '../../../shared/nodeslideSignature';
+import { planSignatureApplication } from '../../../shared/nodeslideSignatureApply';
+import type { SlideVariation, VariationBatch } from '../../../shared/nodeslideVariation';
 import {
   getDeckOwnerAccessKey,
   getOrCreateSessionId,
@@ -42,6 +47,12 @@ import { SlideNavigator } from './components/SlideNavigator';
 import { StudioToolbar } from './components/StudioToolbar';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import type { InspectorTab } from './inspector/types';
+import { extractPptxSignature } from './signature/index';
+import {
+  NODESLIDE_TASTE_PACKS,
+  type NodeSlideTastePackId,
+  getNodeSlideTastePack,
+} from './signature/packs/index';
 import { downloadDeckHtml, downloadPptx, validateSnapshot } from './slidelang/index';
 import './nodeslide.css';
 
@@ -60,6 +71,19 @@ interface PatchReceipt {
   snapshot?: DeckSnapshot;
 }
 
+interface VariationGenerationReceipt {
+  batch: VariationBatch;
+  variations: SlideVariation[];
+}
+
+interface VariationAcceptanceReceipt {
+  variation: SlideVariation;
+  patch: DeckPatch | null;
+  workspace?: NodeSlideWorkspace | null;
+  rebased?: boolean;
+  staleReasons?: string[];
+}
+
 type OwnerWorkspace = NodeSlideWorkspace & {
   ownerAccessKey: string;
   shareSlug: string | null;
@@ -75,6 +99,7 @@ interface ApplyPatchArgs {
   operations: PatchOperation[];
   source: 'human' | 'agent';
   summary: string;
+  profileId?: string;
 }
 
 interface NodeSlideGeneratedApi {
@@ -145,6 +170,59 @@ interface NodeSlideGeneratedApi {
     createDeckFromBrief: PublicAction<CreateDeckRequest, OwnerWorkspace>;
     proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, { patchId: string }>;
   };
+  nodeslideVariations: {
+    generate: PublicAction<
+      { deckId: string; ownerAccessKey: string; slideId: string },
+      VariationGenerationReceipt
+    >;
+    list: PublicQuery<
+      { deckId: string; ownerAccessKey: string; slideId: string; limit?: number },
+      SlideVariation[]
+    >;
+    accept: PublicAction<
+      { deckId: string; ownerAccessKey: string; variationId: string },
+      VariationAcceptanceReceipt
+    >;
+    reject: PublicMutation<
+      { deckId: string; ownerAccessKey: string; variationId: string; reason?: string },
+      SlideVariation
+    >;
+  };
+  nodeslideSignatures: {
+    saveProfile: PublicMutation<
+      { deckId: string; ownerAccessKey: string; profileJson: string },
+      string
+    >;
+    listProfiles: PublicQuery<{ deckId: string; ownerAccessKey: string; limit?: number }, string[]>;
+    activateProfile: PublicMutation<
+      { deckId: string; ownerAccessKey: string; profileId: string },
+      NodeSlideWorkspace | null
+    >;
+    clearActiveProfile: PublicMutation<
+      { deckId: string; ownerAccessKey: string },
+      NodeSlideWorkspace | null
+    >;
+  };
+  nodeslidePreferences: {
+    getTasteProfile: PublicQuery<{ deckId: string; ownerAccessKey: string }, TasteProfile | null>;
+    syncVariationDecisions: PublicMutation<
+      { deckId: string; ownerAccessKey: string; limit?: number },
+      { scanned: number; inserted: number; existing: number }
+    >;
+    recordPatchDecision: PublicMutation<
+      { deckId: string; ownerAccessKey: string; patchId: string; sourceEventId?: string },
+      { inserted: boolean }
+    >;
+    recordExportCompleted: PublicMutation<
+      { deckId: string; ownerAccessKey: string; kind: 'html' | 'pptx' },
+      { exportId: string; inserted: boolean }
+    >;
+    runEtl: PublicMutation<{ deckId: string; ownerAccessKey: string }, { profile: TasteProfile }>;
+    evictSignal: PublicMutation<
+      { deckId: string; ownerAccessKey: string; signalId: string },
+      TasteProfile | null
+    >;
+  };
 }
 
 const nodeslideApi = api as unknown as NodeSlideGeneratedApi;
@@ -183,6 +261,13 @@ export function NodeSlideStudio() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [variationGenerating, setVariationGenerating] = useState(false);
+  const [variationDecisionBusy, setVariationDecisionBusy] = useState(false);
+  const [tastePackBusy, setTastePackBusy] = useState(false);
+  const [variationError, setVariationError] = useState<string | null>(null);
+  const [previewedVariation, setPreviewedVariation] = useState<SlideVariation | null>(null);
+  const [previewedSignatureProfile, setPreviewedSignatureProfile] =
+    useState<SignatureProfile | null>(null);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -208,6 +293,23 @@ export function NodeSlideStudio() {
   const restoreVersion = useMutation(nodeslideApi.nodeslide.restoreVersion);
   const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
+  const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
+  const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
+  const rejectVariation = useMutation(nodeslideApi.nodeslideVariations.reject);
+  const saveSignatureProfile = useMutation(nodeslideApi.nodeslideSignatures.saveProfile);
+  const activateSignatureProfile = useMutation(nodeslideApi.nodeslideSignatures.activateProfile);
+  const clearActiveSignatureProfile = useMutation(
+    nodeslideApi.nodeslideSignatures.clearActiveProfile,
+  );
+  const syncVariationPreferences = useMutation(
+    nodeslideApi.nodeslidePreferences.syncVariationDecisions,
+  );
+  const recordPreferencePatch = useMutation(nodeslideApi.nodeslidePreferences.recordPatchDecision);
+  const recordPreferenceExport = useMutation(
+    nodeslideApi.nodeslidePreferences.recordExportCompleted,
+  );
+  const runPreferenceEtl = useMutation(nodeslideApi.nodeslidePreferences.runEtl);
+  const evictTasteSignal = useMutation(nodeslideApi.nodeslidePreferences.evictSignal);
   const queriedWorkspace = useQuery(
     nodeslideApi.nodeslide.getWorkspace,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
@@ -220,8 +322,33 @@ export function NodeSlideStudio() {
     nodeslideApi.nodeslide.listDecks,
     knownAccess.length > 0 ? { access: knownAccess } : 'skip',
   );
+  const variationRows = useQuery(
+    nodeslideApi.nodeslideVariations.list,
+    activeDeckId && ownerAccessKey && activeSlideId
+      ? { deckId: activeDeckId, ownerAccessKey, slideId: activeSlideId, limit: 30 }
+      : 'skip',
+  );
+  const signatureProfileRows = useQuery(
+    nodeslideApi.nodeslideSignatures.listProfiles,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 8 } : 'skip',
+  );
+  const tasteProfile = useQuery(
+    nodeslideApi.nodeslidePreferences.getTasteProfile,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
   const workspace =
     queriedWorkspace ?? (localWorkspace?.deck.id === activeDeckId ? localWorkspace : null);
+  const variationBusy = variationGenerating || variationDecisionBusy;
+  const signatureProfiles = parseSignatureProfileRows(signatureProfileRows ?? []);
+  const activeSignatureProfile = workspace?.deck.activeSignatureProfileId
+    ? (signatureProfiles.find(
+        (profile) => profile.id === workspace.deck.activeSignatureProfileId,
+      ) ??
+      NODESLIDE_TASTE_PACKS.find(
+        (profile) => profile.id === workspace.deck.activeSignatureProfileId,
+      ))
+    : undefined;
+  const activeTastePackId = tastePackIdForProfile(activeSignatureProfile);
 
   const installWorkspace = useCallback(
     (
@@ -282,6 +409,7 @@ export function NodeSlideStudio() {
         : (workspace.deck.slideOrder[0] ?? null),
     );
     if (historyDeckRef.current !== workspace.deck.id) {
+      setPreviewedSignatureProfile(null);
       historyDeckRef.current = workspace.deck.id;
       setUndoStack(
         [...workspace.versions]
@@ -321,6 +449,26 @@ export function NodeSlideStudio() {
         .filter((slide): slide is Slide => slide !== undefined) ?? [],
     [workspace],
   );
+  const signaturePreviewSnapshot = useMemo(() => {
+    if (!workspace || !previewedSignatureProfile) return null;
+    const source: DeckSnapshot = {
+      deck: workspace.deck,
+      slides: workspace.slides,
+      elements: workspace.elements,
+      sources: workspace.sources,
+    };
+    const planned = planSignatureApplication(source, previewedSignatureProfile);
+    if (!planned.ok) return planned.error.code === 'already_applied' ? source : null;
+    return applyDeckPatch(
+      source,
+      {
+        baseDeckVersion: planned.plan.baseDeckVersion,
+        operations: planned.plan.operations,
+        scope: planned.plan.scope,
+      },
+      source.deck.updatedAt,
+    ).snapshot;
+  }, [previewedSignatureProfile, workspace]);
   const activeSlide = orderedSlides.find((slide) => slide.id === activeSlideId) ?? orderedSlides[0];
   const activeSlideIndex = activeSlide
     ? orderedSlides.findIndex((slide) => slide.id === activeSlide.id)
@@ -334,6 +482,30 @@ export function NodeSlideStudio() {
         .map((id) => workspace.elements.find((element) => element.id === id))
         .filter((element): element is SlideElement => element !== undefined)
     : [];
+  const activeVariations = variationRows ?? [];
+  const previewMatchesActiveSlide = Boolean(
+    previewedVariation &&
+      activeSlide &&
+      previewedVariation.deckId === workspace?.deck.id &&
+      previewedVariation.slideId === activeSlide.id &&
+      previewedVariation.baseSlideVersion === activeSlide.version &&
+      previewedVariation.status === 'ready' &&
+      previewedVariation.validation.ok &&
+      !previewedVariation.validation.issues.some((issue) => issue.severity === 'error'),
+  );
+  const canvasSlide =
+    previewMatchesActiveSlide && previewedVariation
+      ? previewedVariation.candidate.slide
+      : (signaturePreviewSnapshot?.slides.find((slide) => slide.id === activeSlide?.id) ??
+        activeSlide);
+  const canvasElements =
+    previewMatchesActiveSlide && previewedVariation
+      ? previewedVariation.candidate.elements
+      : signaturePreviewSnapshot && activeSlide
+        ? signaturePreviewSnapshot.elements.filter((element) => element.slideId === activeSlide.id)
+        : slideElements;
+  const signaturePreviewActive = Boolean(signaturePreviewSnapshot && previewedSignatureProfile);
+  const variationContextKey = `${activeDeckId ?? ''}:${activeSlideId ?? ''}`;
   const recentDecks: RecentDeck[] =
     recentDeckRows ??
     (workspace
@@ -346,6 +518,32 @@ export function NodeSlideStudio() {
           },
         ]
       : []);
+
+  useEffect(() => {
+    setPreviewedVariation((current) => {
+      if (
+        !current ||
+        !activeSlide ||
+        current.slideId !== activeSlide.id ||
+        current.baseSlideVersion !== activeSlide.version
+      ) {
+        return null;
+      }
+      const latest = variationRows?.find((variation) => variation.id === current.id);
+      if (
+        latest?.status === 'ready' &&
+        latest.validation.ok &&
+        !latest.validation.issues.some((issue) => issue.severity === 'error')
+      ) {
+        return latest;
+      }
+      return variationRows === undefined ? current : null;
+    });
+  }, [activeSlide, variationRows]);
+
+  useEffect(() => {
+    if (variationContextKey !== ':') setVariationError(null);
+  }, [variationContextKey]);
 
   const openOwnedDeck = useCallback((deckId: string) => {
     const nextOwnerAccessKey = getDeckOwnerAccessKey(deckId);
@@ -364,12 +562,27 @@ export function NodeSlideStudio() {
     writeDeckToUrl(deckId);
   }, []);
 
+  const refreshVariationPreferences = useCallback(async () => {
+    if (!workspace || !ownerAccessKey) return;
+    try {
+      await syncVariationPreferences({
+        deckId: workspace.deck.id,
+        ownerAccessKey,
+        limit: 100,
+      });
+      await runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey });
+    } catch {
+      // Preference memory is inspectable and best-effort; editing must remain available.
+    }
+  }, [ownerAccessKey, runPreferenceEtl, syncVariationPreferences, workspace]);
+
   const applyOperations = useCallback(
     async (
       operations: PatchOperation[],
       scope: PatchScope,
       summary: string,
       source: 'human' | 'agent' = 'human',
+      profileId?: string,
     ) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
       const clocks = clocksForScope(workspace, scope, operations);
@@ -384,6 +597,7 @@ export function NodeSlideStudio() {
           operations,
           source,
           summary,
+          ...(profileId ? { profileId } : {}),
         });
         if (receipt.patch.status === 'stale') {
           if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
@@ -404,6 +618,13 @@ export function NodeSlideStudio() {
           setRedoStack([]);
         }
         if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
+        void recordPreferencePatch({
+          deckId: workspace.deck.id,
+          ownerAccessKey,
+          patchId: receipt.patch.id,
+        })
+          .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
+          .catch(() => undefined);
         return true;
       } catch (error) {
         setCanvasResetKey((value) => value + 1);
@@ -411,7 +632,14 @@ export function NodeSlideStudio() {
         return false;
       }
     },
-    [applyPatchMutation, installWorkspace, ownerAccessKey, workspace],
+    [
+      applyPatchMutation,
+      installWorkspace,
+      ownerAccessKey,
+      recordPreferencePatch,
+      runPreferenceEtl,
+      workspace,
+    ],
   );
 
   const restoreHistory = useCallback(
@@ -459,7 +687,30 @@ export function NodeSlideStudio() {
         setCommandOpen(true);
         return;
       }
+      if (
+        (previewMatchesActiveSlide || signaturePreviewActive) &&
+        event.key === 'Escape' &&
+        !commandOpen &&
+        !projectsOpen &&
+        !presentMode
+      ) {
+        event.preventDefault();
+        setPreviewedVariation(null);
+        setPreviewedSignatureProfile(null);
+        setSelectedElementIds([]);
+        return;
+      }
       if (isEditableTarget(event.target) || commandOpen || projectsOpen || presentMode) return;
+      if (previewMatchesActiveSlide || signaturePreviewActive) {
+        if (
+          event.key !== 'ArrowDown' &&
+          event.key !== 'PageDown' &&
+          event.key !== 'ArrowUp' &&
+          event.key !== 'PageUp'
+        ) {
+          return;
+        }
+      }
       const modified = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       if (modified && key === 'z') {
@@ -548,6 +799,8 @@ export function NodeSlideStudio() {
     orderedSlides,
     presentMode,
     projectsOpen,
+    previewMatchesActiveSlide,
+    signaturePreviewActive,
     restoreHistory,
     selectedElementIds.length,
     selectedElements,
@@ -711,9 +964,22 @@ export function NodeSlideStudio() {
     elements: workspace.elements,
     sources: workspace.sources,
   };
-  const exportValidation = validateSnapshot(snapshot);
+  const exportValidation = validateSnapshot(
+    snapshot,
+    activeSignatureProfile ? { signatureProfile: activeSignatureProfile } : {},
+  );
+  const activeSignatureLoading = Boolean(
+    workspace.deck.activeSignatureProfileId && signatureProfileRows === undefined,
+  );
   const canUndo = undoStack.length > 0;
   const beginPresentation = () => {
+    if (activeSignatureLoading) {
+      setToast({
+        kind: 'error',
+        message: 'Loading the active signature receipt. Try again shortly.',
+      });
+      return;
+    }
     if (!exportValidation.publishOk) {
       setActiveInspectorTab('trace');
       setInspectorCollapsed(false);
@@ -727,6 +993,13 @@ export function NodeSlideStudio() {
     setPresentMode(true);
   };
   const exportDeck = (kind: 'html' | 'pptx') => {
+    if (activeSignatureLoading) {
+      setToast({
+        kind: 'error',
+        message: 'Loading the active signature receipt. Try again shortly.',
+      });
+      return;
+    }
     if (!exportValidation.publishOk || !exportValidation.cleanOk) {
       setActiveInspectorTab('trace');
       setInspectorCollapsed(false);
@@ -736,16 +1009,114 @@ export function NodeSlideStudio() {
     if (kind === 'html') {
       downloadDeckHtml(snapshot);
       setToast({ kind: 'success', message: 'Validated HTML export prepared.' });
+      if (ownerAccessKey) {
+        void recordPreferenceExport({
+          deckId: workspace.deck.id,
+          ownerAccessKey,
+          kind,
+        })
+          .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
+          .catch(() => undefined);
+      }
       return;
     }
     void downloadPptx(snapshot)
-      .then(() => setToast({ kind: 'success', message: 'Validated PowerPoint export prepared.' }))
+      .then(() => {
+        setToast({ kind: 'success', message: 'Validated PowerPoint export prepared.' });
+        if (ownerAccessKey) {
+          void recordPreferenceExport({
+            deckId: workspace.deck.id,
+            ownerAccessKey,
+            kind,
+          })
+            .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
+            .catch(() => undefined);
+        }
+      })
       .catch((error: unknown) =>
         setToast({
           kind: 'error',
           message: errorMessage(error, 'PowerPoint export failed.'),
         }),
       );
+  };
+  const applySignatureProfile = (profile: SignatureProfile) => {
+    if (!ownerAccessKey || tastePackBusy) return;
+    setTastePackBusy(true);
+    setPreviewedSignatureProfile(null);
+    void saveSignatureProfile({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      profileJson: JSON.stringify(profile),
+    })
+      .then(async () => {
+        const result = planSignatureApplication(snapshot, profile);
+        if (!result.ok) {
+          if (result.error.code !== 'already_applied') throw new Error(result.error.message);
+          const activated = await activateSignatureProfile({
+            deckId: workspace.deck.id,
+            ownerAccessKey,
+            profileId: profile.id,
+          });
+          if (activated) installWorkspace(activated, ownerAccessKey);
+          setToast({
+            kind: 'success',
+            message: `${profile.name} was already present; durable on-brand checks are now active.`,
+          });
+          return;
+        }
+        const accepted = await applyOperations(
+          result.plan.operations,
+          result.plan.scope,
+          `Applied ${profile.name} signature`,
+          'human',
+          profile.id,
+        );
+        if (accepted) {
+          setToast({
+            kind: 'success',
+            message: `${profile.name} applied through a versioned, on-brand-validated patch.`,
+          });
+        }
+      })
+      .catch((error: unknown) =>
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'Signature could not be applied.'),
+        }),
+      )
+      .finally(() => setTastePackBusy(false));
+  };
+  const uploadSignatureSource = (file: File) => {
+    if (!ownerAccessKey || tastePackBusy) return;
+    setTastePackBusy(true);
+    void file
+      .arrayBuffer()
+      .then((buffer) =>
+        extractPptxSignature(new Uint8Array(buffer), {
+          fileName: file.name,
+        }),
+      )
+      .then(async (result) => {
+        if (!result.ok) throw new Error(result.error.message);
+        const profileJson = await saveSignatureProfile({
+          deckId: workspace.deck.id,
+          ownerAccessKey,
+          profileJson: JSON.stringify(result.profile),
+        });
+        const profile = parseSignatureProfileRows([profileJson])[0];
+        if (!profile) throw new Error('The saved signature profile could not be decoded.');
+        setPreviewedVariation(null);
+        setPreviewedSignatureProfile(profile);
+        setToast({
+          kind: 'success',
+          message: `${profile.name} extracted with ${profile.confidence} confidence. Preview before applying.`,
+        });
+      })
+      .catch((error: unknown) =>
+        setToast({ kind: 'error', message: errorMessage(error, 'Past deck could not be read.') }),
+      )
+      .finally(() => setTastePackBusy(false));
   };
   const commands: StudioCommand[] = [
     {
@@ -912,16 +1283,17 @@ export function NodeSlideStudio() {
         />
 
         <SlideCanvas
-          key={`${activeSlide.id}:${canvasResetKey}`}
-          slide={activeSlide}
+          key={`${activeSlide.id}:${previewMatchesActiveSlide ? previewedVariation?.id : (previewedSignatureProfile?.id ?? 'original')}:${canvasResetKey}`}
+          slide={canvasSlide ?? activeSlide}
           slideIndex={activeSlideIndex}
           slideCount={orderedSlides.length}
           deckVersion={workspace.deck.version}
-          elements={slideElements}
+          elements={canvasElements}
           comments={workspace.comments}
           presence={workspace.presence}
           theme={workspace.deck.theme}
           selectedElementIds={selectedElementIds}
+          readOnly={previewMatchesActiveSlide || signaturePreviewActive}
           zoom={zoom}
           onZoomChange={setZoom}
           onSelectionChange={selectElements}
@@ -1002,7 +1374,26 @@ export function NodeSlideStudio() {
           collapsed={inspectorCollapsed}
           width={inspectorWidth}
           agentBusy={agentBusy}
-          onTabChange={setActiveInspectorTab}
+          variations={activeVariations}
+          variationsLoading={
+            Boolean(activeDeckId && ownerAccessKey && activeSlideId) && variationRows === undefined
+          }
+          variationBusy={variationBusy}
+          variationGenerating={variationGenerating}
+          variationError={variationError}
+          previewedVariationId={previewMatchesActiveSlide ? (previewedVariation?.id ?? null) : null}
+          activeTastePackId={activeTastePackId}
+          activeProfileId={workspace.deck.activeSignatureProfileId ?? null}
+          previewProfileId={previewedSignatureProfile?.id ?? null}
+          signatureProfiles={signatureProfiles}
+          tasteProfile={tasteProfile ?? null}
+          tasteProfileLoading={tasteProfile === undefined}
+          tastePackBusy={tastePackBusy}
+          onTabChange={(tab) => {
+            if (tab !== 'ai') setPreviewedVariation(null);
+            if (tab !== 'design') setPreviewedSignatureProfile(null);
+            setActiveInspectorTab(tab);
+          }}
           onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
           onWidthChange={setInspectorWidth}
           onProposeEdit={(instruction, scope) => {
@@ -1048,6 +1439,13 @@ export function NodeSlideStudio() {
                   setRedoStack([]);
                 }
                 if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
+                void recordPreferencePatch({
+                  deckId: workspace.deck.id,
+                  ownerAccessKey,
+                  patchId: receipt.patch.id,
+                })
+                  .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
+                  .catch(() => undefined);
               })
               .catch((error: unknown) =>
                 setToast({
@@ -1062,12 +1460,189 @@ export function NodeSlideStudio() {
               deckId: workspace.deck.id,
               ownerAccessKey,
               patchId: patch.id,
+            })
+              .then((rejected) => {
+                if (!rejected) return;
+                return recordPreferencePatch({
+                  deckId: workspace.deck.id,
+                  ownerAccessKey,
+                  patchId: rejected.id,
+                }).then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }));
+              })
+              .catch((error: unknown) =>
+                setToast({
+                  kind: 'error',
+                  message: errorMessage(error, 'The proposal could not be rejected.'),
+                }),
+              );
+          }}
+          onGenerateVariations={() => {
+            if (!ownerAccessKey || variationBusy) return;
+            setPreviewedVariation(null);
+            setVariationError(null);
+            setVariationGenerating(true);
+            void generateVariations({
+              deckId: workspace.deck.id,
+              ownerAccessKey,
+              slideId: activeSlide.id,
+            })
+              .then((receipt) => {
+                if (receipt.variations.length !== 3) {
+                  throw new Error('The variation service did not return exactly three directions.');
+                }
+                const fallbackCount = receipt.variations.filter(
+                  (variation) => variation.origin === 'deterministic_fallback',
+                ).length;
+                setToast({
+                  kind: 'success',
+                  message:
+                    fallbackCount > 0
+                      ? `Three validated directions are ready; ${fallbackCount} used an honest fallback.`
+                      : 'Three validated free-route directions are ready to review.',
+                });
+                void refreshVariationPreferences();
+              })
+              .catch((error: unknown) => {
+                const message = errorMessage(
+                  error,
+                  'Three safe directions could not be generated for this slide.',
+                );
+                setVariationError(message);
+                setToast({ kind: 'error', message });
+              })
+              .finally(() => setVariationGenerating(false));
+          }}
+          onPreviewVariation={(variation) => {
+            if (
+              variation &&
+              (variation.status !== 'ready' ||
+                !variation.validation.ok ||
+                variation.validation.issues.some((issue) => issue.severity === 'error') ||
+                variation.slideId !== activeSlide.id ||
+                variation.baseSlideVersion !== activeSlide.version)
+            ) {
+              setVariationError(
+                'This direction is based on an older slide and can no longer be previewed safely.',
+              );
+              return;
+            }
+            if (variation) setSelectedElementIds([]);
+            setPreviewedVariation(variation);
+          }}
+          onAcceptVariation={(variation) => {
+            if (!ownerAccessKey || variationBusy) return;
+            const beforeVersion = currentVersion(workspace);
+            setVariationError(null);
+            setVariationDecisionBusy(true);
+            void acceptVariation({
+              deckId: workspace.deck.id,
+              ownerAccessKey,
+              variationId: variation.id,
+            })
+              .then((receipt) => {
+                setPreviewedVariation(null);
+                if (receipt.variation.status === 'stale' || receipt.patch?.status === 'stale') {
+                  setVariationError(
+                    'The slide changed after generation. The direction was marked stale and no content was overwritten.',
+                  );
+                  setToast({
+                    kind: 'error',
+                    message: 'This direction is stale; the newer slide was preserved.',
+                  });
+                  return;
+                }
+                if (receipt.variation.status !== 'accepted') {
+                  setToast({
+                    kind: 'error',
+                    message: `This direction is already ${receipt.variation.status}.`,
+                  });
+                  return;
+                }
+                if (!receipt.patch) {
+                  setToast({ kind: 'success', message: 'This direction was already accepted.' });
+                  return;
+                }
+                if (beforeVersion) {
+                  setUndoStack((stack) => [...stack, beforeVersion.id]);
+                  setRedoStack([]);
+                }
+                if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
+                setToast({
+                  kind: 'success',
+                  message: 'Direction accepted through a versioned patch.',
+                });
+                void refreshVariationPreferences();
+              })
+              .catch((error: unknown) => {
+                const message = errorMessage(error, 'The direction could not be accepted.');
+                setVariationError(message);
+                setToast({ kind: 'error', message });
+              })
+              .finally(() => setVariationDecisionBusy(false));
+          }}
+          onRejectVariation={(variation) => {
+            if (!ownerAccessKey || variationBusy) return;
+            setVariationError(null);
+            setVariationDecisionBusy(true);
+            void rejectVariation({
+              deckId: workspace.deck.id,
+              ownerAccessKey,
+              variationId: variation.id,
+              reason: 'user_rejected',
+            })
+              .then(() => {
+                setPreviewedVariation((current) => (current?.id === variation.id ? null : current));
+                void refreshVariationPreferences();
+              })
+              .catch((error: unknown) => {
+                const message = errorMessage(error, 'The direction could not be rejected.');
+                setVariationError(message);
+                setToast({ kind: 'error', message });
+              })
+              .finally(() => setVariationDecisionBusy(false));
+          }}
+          onApplyTastePack={(packId) => {
+            applySignatureProfile(getNodeSlideTastePack(packId));
+          }}
+          onApplySignatureProfile={applySignatureProfile}
+          onPreviewSignatureProfile={(profile) => {
+            setPreviewedVariation(null);
+            setSelectedElementIds([]);
+            setPreviewedSignatureProfile(profile);
+          }}
+          onUploadSignatureSource={uploadSignatureSource}
+          onClearTastePack={() => {
+            if (!ownerAccessKey || tastePackBusy) return;
+            setTastePackBusy(true);
+            setPreviewedSignatureProfile(null);
+            void clearActiveSignatureProfile({ deckId: workspace.deck.id, ownerAccessKey })
+              .then((cleared) => {
+                if (cleared) installWorkspace(cleared, ownerAccessKey);
+                setToast({ kind: 'success', message: 'Active on-brand checks cleared.' });
+              })
+              .catch((error: unknown) =>
+                setToast({
+                  kind: 'error',
+                  message: errorMessage(error, 'Active signature could not be cleared.'),
+                }),
+              )
+              .finally(() => setTastePackBusy(false));
+          }}
+          onEvictTasteSignal={(signalId) => {
+            if (!ownerAccessKey) return;
+            void evictTasteSignal({
+              deckId: workspace.deck.id,
+              ownerAccessKey,
+              signalId,
             }).catch((error: unknown) =>
               setToast({
                 kind: 'error',
-                message: errorMessage(error, 'The proposal could not be rejected.'),
+                message: errorMessage(error, 'Taste signal could not be removed.'),
               }),
             );
+          }}
+          onOpenPreferenceEvidence={() => {
+            setActiveInspectorTab('trace');
           }}
           onApplyDesignPatch={(operations, summary) =>
             void applyOperations(
@@ -1215,6 +1790,29 @@ function clocksForScope(
         .map((element) => [element.id, element.version]),
     ),
   };
+}
+
+function parseSignatureProfileRows(rows: readonly string[]): SignatureProfile[] {
+  const profiles: SignatureProfile[] = [];
+  for (const row of rows) {
+    if (typeof row !== 'string' || row.length === 0 || row.length > 1_000_000) continue;
+    try {
+      const candidate = JSON.parse(row) as Partial<SignatureProfile> | null;
+      if (
+        candidate &&
+        typeof candidate === 'object' &&
+        typeof candidate.id === 'string' &&
+        typeof candidate.name === 'string' &&
+        candidate.source &&
+        candidate.tokens
+      ) {
+        profiles.push(candidate as SignatureProfile);
+      }
+    } catch {
+      // Server rows are validated before storage; a corrupt row fails closed in the UI.
+    }
+  }
+  return profiles;
 }
 
 function scopeForOperations(
@@ -1477,6 +2075,17 @@ function markFirstRunSeen() {
   }
 }
 
+function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlideTastePackId | null {
+  if (!profile || profile.source.kind !== 'taste_pack') return null;
+  const extensions = (
+    profile as SignatureProfile & {
+      $extensions?: Record<string, { id?: string }>;
+    }
+  ).$extensions;
+  const id = extensions?.['com.nodeslide.tastePack']?.id;
+  return id === 'finance-ibcs' || id === 'startup-narrative' ? id : null;
+}
+
 function LoadingScreen({ title }: { title: string }) {
   return (
     <main
@@ -1519,6 +2128,12 @@ function RecoveryScreen({
 }
 
 function errorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = error.data;
+    if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+      return data.message;
+    }
+  }
   return error instanceof Error ? error.message : fallback;
 }
 

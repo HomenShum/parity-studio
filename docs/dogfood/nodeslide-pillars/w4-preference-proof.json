@@ -1,0 +1,328 @@
+{
+  "generatedAt": "2026-07-11T01:40:04.372Z",
+  "sourceCommit": "483d704480563dc9e9fb26ead6f7f05a4115302f",
+  "disposableDogfood": {
+    "deckId": "deck_golden_0osr6yj",
+    "baseDeckVersion": 1,
+    "resultingDeckVersion": 2,
+    "selectedVariationId": "variation_054xim4",
+    "acceptedPatchId": "patch_variation_173b72y",
+    "exportId": "export_15p6zu9",
+    "htmlDigestSha256": "e527c0347bac79b08911964ab8b2999641322de33a06551de72b55c01f4465b9"
+  },
+  "recording": {
+    "firstSync": {
+      "existing": 0,
+      "inserted": 6,
+      "scanned": 6
+    },
+    "retrySync": {
+      "existing": 6,
+      "inserted": 0,
+      "scanned": 6
+    },
+    "patchInsertedFirst": true,
+    "patchInsertedOnRetry": false,
+    "eventCount": 8,
+    "eventTypes": [
+      "export_completed",
+      "patch_accepted",
+      "variation_generated",
+      "variation_rejected",
+      "variation_selected"
+    ],
+    "sanitizedEventIds": [
+      "preference_event_0fcw7g0",
+      "preference_event_0o8pqlh",
+      "preference_event_0v5y4od",
+      "preference_event_197vu7e",
+      "preference_event_1cuvn43",
+      "preference_event_1emqqnb",
+      "preference_event_1j8kyow",
+      "preference_event_1twb3ob"
+    ]
+  },
+  "provenanceGraph": [
+    {
+      "signalId": "preference_signal_02uo5ol",
+      "polarity": "positive",
+      "dimension": "workflow",
+      "value": "export_completed",
+      "evidenceEventIds": [
+        "preference_event_197vu7e"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_197vu7e"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_1aqs2nw",
+      "polarity": "positive",
+      "dimension": "color",
+      "value": "#b44a2d",
+      "evidenceEventIds": [
+        "preference_event_1twb3ob"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_1twb3ob"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_0849drb",
+      "polarity": "negative",
+      "dimension": "layout_archetype",
+      "value": "split",
+      "evidenceEventIds": [
+        "preference_event_1j8kyow"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_1j8kyow"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_0e9uqod",
+      "polarity": "negative",
+      "dimension": "layout_archetype",
+      "value": "headline",
+      "evidenceEventIds": [
+        "preference_event_0fcw7g0"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_0fcw7g0"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_0ia5sqc",
+      "polarity": "negative",
+      "dimension": "content_angle",
+      "value": "narrative_led",
+      "evidenceEventIds": [
+        "preference_event_0fcw7g0"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_0fcw7g0"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_0v6hdl2",
+      "polarity": "negative",
+      "dimension": "density",
+      "value": "detail",
+      "evidenceEventIds": [
+        "preference_event_1j8kyow"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_1j8kyow"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_16efj0z",
+      "polarity": "negative",
+      "dimension": "density",
+      "value": "balanced",
+      "evidenceEventIds": [
+        "preference_event_0fcw7g0"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_0fcw7g0"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    },
+    {
+      "signalId": "preference_signal_19vihpo",
+      "polarity": "negative",
+      "dimension": "content_angle",
+      "value": "balanced",
+      "evidenceEventIds": [
+        "preference_event_1j8kyow"
+      ],
+      "evaluator": {
+        "checks": {
+          "hallucination": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "provenance": {
+            "passed": true,
+            "rejectionCodes": []
+          },
+          "schema": {
+            "passed": true,
+            "rejectionCodes": []
+          }
+        },
+        "evaluatorVersion": "nodeslide.preference-evaluator/v1",
+        "inputEventIds": [
+          "preference_event_1j8kyow"
+        ],
+        "passed": true,
+        "rejectionCodes": []
+      }
+    }
+  ],
+  "etl": {
+    "elapsedMs": 304.803,
+    "diagnostics": {
+      "candidatePatterns": 11,
+      "duplicateEvents": 0,
+      "inputEvents": 8,
+      "proposalsReturned": 11,
+      "proposalsTruncated": 0,
+      "signalsEmitted": 8,
+      "uniqueEvents": 8
+    },
+    "storedSignalCount": 8,
+    "concurrentReplayConverged": true,
+    "rejectedForgedSignalCount": 1
+  },
+  "retention": {
+    "inputEvents": 1500,
+    "deletedEvents": 500,
+    "retainedEvents": 1000,
+    "retainedEvidencePreserved": true
+  },
+  "tenantIsolationPassed": true,
+  "reliability": {
+    "BOUND": true,
+    "HONEST_STATUS": true,
+    "HONEST_SCORES": true,
+    "TIMEOUT": true,
+    "SSRF": true,
+    "BOUND_READ": true,
+    "ERROR_BOUNDARY": true,
+    "DETERMINISTIC": true
+  },
+  "deviations": []
+}

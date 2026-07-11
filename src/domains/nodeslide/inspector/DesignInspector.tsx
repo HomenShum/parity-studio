@@ -15,11 +15,29 @@ import {
   Type,
 } from 'lucide-react';
 import type { PatchOperation, Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
+import type { TasteProfile } from '../../../../shared/nodeslidePreference';
+import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
+import { NODESLIDE_TASTE_PACKS, type NodeSlideTastePackId } from '../signature/packs/index';
+import { TasteProfileCard } from './TasteProfileCard';
 
 interface DesignInspectorProps {
   slide: Slide;
   selectedElements: readonly SlideElement[];
   theme: ThemeSpec;
+  activeTastePackId: NodeSlideTastePackId | null;
+  activeProfileId: string | null;
+  previewProfileId: string | null;
+  profiles: readonly SignatureProfile[];
+  busy: boolean;
+  onApplyTastePack: (packId: NodeSlideTastePackId) => void;
+  onApplyProfile: ((profile: SignatureProfile) => void) | undefined;
+  onPreviewProfile: ((profile: SignatureProfile | null) => void) | undefined;
+  onUploadSource: ((file: File) => void) | undefined;
+  tasteProfile: TasteProfile | null;
+  tasteProfileLoading: boolean;
+  onEvictTasteSignal: ((signalId: string) => void) | undefined;
+  onOpenPreferenceEvidence: ((eventId: string) => void) | undefined;
+  onClearTastePack: () => void;
   onApplyPatch: (operations: PatchOperation[], summary: string) => void;
 }
 
@@ -27,6 +45,20 @@ export function DesignInspector({
   slide,
   selectedElements,
   theme,
+  activeTastePackId,
+  activeProfileId,
+  previewProfileId,
+  profiles,
+  busy,
+  onApplyTastePack,
+  onApplyProfile,
+  onPreviewProfile,
+  onUploadSource,
+  tasteProfile,
+  tasteProfileLoading,
+  onEvictTasteSignal,
+  onOpenPreferenceEvidence,
+  onClearTastePack,
   onApplyPatch,
 }: DesignInspectorProps) {
   const primary = selectedElements.at(-1);
@@ -44,6 +76,26 @@ export function DesignInspector({
           </p>
         </div>
         <SlideNotesEditor slide={slide} onApplyPatch={onApplyPatch} />
+        <TastePackPanel
+          activeTastePackId={activeTastePackId}
+          activeProfileId={activeProfileId}
+          previewProfileId={previewProfileId}
+          profiles={profiles}
+          busy={busy}
+          onApply={onApplyTastePack}
+          onApplyProfile={onApplyProfile}
+          onPreviewProfile={onPreviewProfile}
+          onUploadSource={onUploadSource}
+          onClear={onClearTastePack}
+        />
+        {onEvictTasteSignal ? (
+          <TasteProfileCard
+            profile={tasteProfile ?? null}
+            loading={tasteProfileLoading}
+            onEvictSignal={onEvictTasteSignal}
+            onOpenEvidence={onOpenPreferenceEvidence}
+          />
+        ) : null}
         <ThemeSummary theme={theme} />
       </div>
     );
@@ -81,6 +133,28 @@ export function DesignInspector({
           </span>
         ) : null}
       </section>
+
+      <TastePackPanel
+        activeTastePackId={activeTastePackId}
+        activeProfileId={activeProfileId}
+        previewProfileId={previewProfileId}
+        profiles={profiles}
+        busy={busy}
+        onApply={onApplyTastePack}
+        onApplyProfile={onApplyProfile}
+        onPreviewProfile={onPreviewProfile}
+        onUploadSource={onUploadSource}
+        onClear={onClearTastePack}
+      />
+
+      {onEvictTasteSignal ? (
+        <TasteProfileCard
+          profile={tasteProfile ?? null}
+          loading={tasteProfileLoading}
+          onEvictSignal={onEvictTasteSignal}
+          onOpenEvidence={onOpenPreferenceEvidence}
+        />
+      ) : null}
 
       <InspectorGroup icon={<Move size={14} />} title="Position & size">
         <div className="ns-field-grid ns-field-grid--four">
@@ -514,6 +588,168 @@ function ThemeSummary({ theme }: { theme: ThemeSpec }) {
       </p>
     </section>
   );
+}
+
+const TASTE_PACK_DESCRIPTIONS: Record<NodeSlideTastePackId, string> = {
+  'finance-ibcs': 'Compact, message-led reporting with restrained analytical emphasis.',
+  'startup-narrative': 'Clear narrative contrast, generous focus, and a decisive next action.',
+};
+
+function TastePackPanel({
+  activeTastePackId,
+  activeProfileId,
+  previewProfileId,
+  profiles,
+  busy,
+  onApply,
+  onApplyProfile,
+  onPreviewProfile,
+  onUploadSource,
+  onClear,
+}: {
+  activeTastePackId: NodeSlideTastePackId | null;
+  activeProfileId?: string | null;
+  previewProfileId?: string | null;
+  profiles: readonly SignatureProfile[];
+  busy: boolean;
+  onApply: (packId: NodeSlideTastePackId) => void;
+  onApplyProfile: ((profile: SignatureProfile) => void) | undefined;
+  onPreviewProfile: ((profile: SignatureProfile | null) => void) | undefined;
+  onUploadSource: ((file: File) => void) | undefined;
+  onClear: () => void;
+}) {
+  const allProfiles = [...NODESLIDE_TASTE_PACKS, ...profiles].filter(
+    (profile, index, values) =>
+      values.findIndex((candidate) => candidate.id === profile.id) === index,
+  );
+  return (
+    <section className="ns-inspector-section ns-taste-packs" data-testid="taste-pack-panel">
+      <div className="ns-section-title-row">
+        <div>
+          <span className="ns-eyebrow">Deck direction</span>
+          <h2>Signatures</h2>
+        </div>
+        {activeTastePackId || activeProfileId ? (
+          <span className="ns-kind-pill">Checks active</span>
+        ) : null}
+      </div>
+      <p>
+        Independent NodeSlide defaults with source-backed rules. Applying one creates a normal,
+        reversible deck version.
+      </p>
+      {onUploadSource ? (
+        <label className="ns-signature-upload">
+          <strong>Upload a past deck</strong>
+          <span>NodeSlide extracts observed colors, type, and layout evidence from PPTX.</span>
+          <input
+            type="file"
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            disabled={busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUploadSource(file);
+              event.target.value = '';
+            }}
+          />
+        </label>
+      ) : null}
+      <div className="ns-taste-pack-list">
+        {allProfiles.map((profile) => {
+          const tastePackMetadata =
+            '$extensions' in profile && profile.$extensions
+              ? (profile.$extensions as Record<string, unknown>)['com.nodeslide.tastePack']
+              : undefined;
+          const packId =
+            tastePackMetadata && typeof tastePackMetadata === 'object' && 'id' in tastePackMetadata
+              ? (tastePackMetadata.id as NodeSlideTastePackId)
+              : null;
+          const active = profile.id === activeProfileId || packId === activeTastePackId;
+          const previewing = profile.id === previewProfileId;
+          const swatches = Object.values(profile.tokens.colors)
+            .slice(0, 4)
+            .map((token) => token.$value.hex);
+          return (
+            <article
+              key={profile.id}
+              className={`ns-taste-pack-card${active ? ' is-active' : ''}${previewing ? ' is-previewing' : ''}`}
+              data-testid={`signature-profile-${packId ?? profile.id}`}
+            >
+              <span className="ns-taste-pack-card__heading">
+                <strong>{profile.name}</strong>
+                <span className="ns-taste-pack-swatches">
+                  {swatches.map((color) => (
+                    <i key={color} style={{ background: color }} aria-label={color} />
+                  ))}
+                </span>
+              </span>
+              <span>
+                {packId
+                  ? TASTE_PACK_DESCRIPTIONS[packId]
+                  : `Observed from ${profile.source.fileName ?? profile.source.kind}; review extraction evidence before applying.`}
+              </span>
+              <small>
+                {profile.confidence} confidence · {profile.warnings.length} warning
+                {profile.warnings.length === 1 ? '' : 's'} ·{' '}
+                {profile.source.kind === 'taste_pack' ? 'Sector pack' : 'Yours'}
+              </small>
+              <small>
+                {signatureFontLabel(profile.tokens.fontFamilies['display'], 'Display fallback')} +{' '}
+                {signatureFontLabel(profile.tokens.fontFamilies['body'], 'Body fallback')}
+              </small>
+              {profile.warnings.length > 0 ? (
+                <ul className="ns-signature-warnings">
+                  {profile.warnings.slice(0, 3).map((warning, index) => (
+                    <li key={`${warning.code}:${index}`}>{warning.message}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <span className="ns-signature-actions">
+                {onPreviewProfile ? (
+                  <button
+                    type="button"
+                    className="ns-button ns-button--quiet"
+                    disabled={busy}
+                    onClick={() => onPreviewProfile(previewing ? null : profile)}
+                  >
+                    {previewing ? 'Revert preview' : 'Preview'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ns-button ns-button--accent"
+                  disabled={busy}
+                  onClick={() => {
+                    if (onApplyProfile) onApplyProfile(profile);
+                    else if (packId) onApply(packId);
+                  }}
+                >
+                  {busy ? 'Applying…' : active ? 'Reapply' : 'Apply'}
+                </button>
+              </span>
+            </article>
+          );
+        })}
+      </div>
+      {activeTastePackId || activeProfileId ? (
+        <button
+          type="button"
+          className="ns-button ns-button--quiet ns-taste-pack-clear"
+          onClick={onClear}
+          disabled={busy}
+        >
+          Clear on-brand checks
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function signatureFontLabel(
+  token: SignatureProfile['tokens']['fontFamilies'][string] | undefined,
+  fallback: string,
+): string {
+  if (!token) return fallback;
+  return Array.isArray(token.$value) ? token.$value.join(', ') : token.$value;
 }
 
 function clampPercent(value: number) {

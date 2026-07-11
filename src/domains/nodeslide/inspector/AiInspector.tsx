@@ -4,12 +4,14 @@ import {
   Check,
   ChevronRight,
   Circle,
+  Eye,
+  Layers3,
   LoaderCircle,
   RotateCcw,
   Sparkles,
   X,
 } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type Ref, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentTrace,
   Deck,
@@ -20,6 +22,7 @@ import type {
   Slide,
   SlideElement,
 } from '../../../../shared/nodeslide';
+import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 
 type ScopeChoice = 'deck' | 'slide' | 'elements';
 
@@ -29,10 +32,20 @@ interface AiInspectorProps {
   selectedElements: readonly SlideElement[];
   patches: readonly DeckPatch[];
   traces: readonly AgentTrace[];
+  variations: readonly SlideVariation[];
+  variationsLoading: boolean;
   isSubmitting: boolean;
+  variationBusy: boolean;
+  variationGenerating: boolean;
+  variationError: string | null;
+  previewedVariationId: string | null;
   onPropose: (instruction: string, scope: PatchScope) => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
+  onGenerateVariations: () => void;
+  onPreviewVariation: (variation: SlideVariation | null) => void;
+  onAcceptVariation: (variation: SlideVariation) => void;
+  onRejectVariation: (variation: SlideVariation) => void;
 }
 
 export function AiInspector({
@@ -41,10 +54,20 @@ export function AiInspector({
   selectedElements,
   patches,
   traces,
+  variations,
+  variationsLoading,
   isSubmitting,
+  variationBusy,
+  variationGenerating,
+  variationError,
+  previewedVariationId,
   onPropose,
   onAccept,
   onReject,
+  onGenerateVariations,
+  onPreviewVariation,
+  onAcceptVariation,
+  onRejectVariation,
 }: AiInspectorProps) {
   const [instruction, setInstruction] = useState('');
   const [scopeChoice, setScopeChoice] = useState<ScopeChoice>(
@@ -52,6 +75,10 @@ export function AiInspector({
   );
   const [operationMode, setOperationMode] = useState<OperationMode>('unrestricted');
   const [showPlan, setShowPlan] = useState(true);
+  const focusGeneratedBatch = useRef(false);
+  const batchBeforeGeneration = useRef<string | undefined>(undefined);
+  const firstVariationRef = useRef<HTMLLIElement | null>(null);
+  const lastPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
@@ -75,6 +102,32 @@ export function AiInspector({
         .sort((a, b) => b.createdAt - a.createdAt),
     [patches],
   );
+  const latestBatchId = variations[0]?.batchId;
+  const directions = useMemo(
+    () => variations.filter((variation) => variation.batchId === latestBatchId),
+    [latestBatchId, variations],
+  );
+  const previewedVariation = directions.find(
+    (variation) =>
+      variation.id === previewedVariationId &&
+      variation.status === 'ready' &&
+      variation.validation.ok &&
+      !variation.validation.issues.some((issue) => issue.severity === 'error'),
+  );
+  const allRejected =
+    directions.length === 3 && directions.every((variation) => variation.status === 'rejected');
+  const hasFallback = directions.some((variation) => variation.origin === 'deterministic_fallback');
+
+  useEffect(() => {
+    if (variationGenerating || !focusGeneratedBatch.current) return;
+    if (variationError) {
+      focusGeneratedBatch.current = false;
+      return;
+    }
+    if (!latestBatchId || latestBatchId === batchBeforeGeneration.current) return;
+    focusGeneratedBatch.current = false;
+    firstVariationRef.current?.focus();
+  }, [latestBatchId, variationError, variationGenerating]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -82,6 +135,12 @@ export function AiInspector({
     if (!text || isSubmitting) return;
     onPropose(text, createScope(scopeChoice, operationMode, deck.id, slide.id, selectedElements));
     setInstruction('');
+  };
+
+  const returnToOriginal = () => {
+    const previewButton = lastPreviewButtonRef.current;
+    onPreviewVariation(null);
+    requestAnimationFrame(() => previewButton?.focus());
   };
 
   return (
@@ -97,6 +156,131 @@ export function AiInspector({
           </span>
         </div>
         <p>Describe the outcome. You’ll review a structured patch before anything changes.</p>
+      </section>
+
+      <section
+        className="ns-variation-section"
+        aria-labelledby="ns-variation-heading"
+        data-testid="variation-section"
+      >
+        <div className="ns-variation-heading-row">
+          <div>
+            <span className="ns-eyebrow">Slide directions</span>
+            <h2 id="ns-variation-heading">Explore before editing</h2>
+          </div>
+          <button
+            type="button"
+            className="ns-button ns-button--accent ns-variation-generate"
+            disabled={variationBusy}
+            onClick={() => {
+              focusGeneratedBatch.current = true;
+              batchBeforeGeneration.current = latestBatchId;
+              onGenerateVariations();
+            }}
+            aria-controls="ns-variation-results"
+            data-testid="variation-generate"
+          >
+            {variationGenerating ? (
+              <LoaderCircle className="ns-spin" size={14} />
+            ) : (
+              <Layers3 size={14} />
+            )}
+            {variationGenerating ? 'Generating...' : 'Generate 3 directions'}
+          </button>
+        </div>
+        <p className="ns-variation-explainer">
+          Each direction is materialized and validated. Your slide stays unchanged until Accept.
+        </p>
+
+        {previewedVariation ? (
+          <div className="ns-variation-preview-banner" aria-live="polite">
+            <Eye size={14} />
+            <span>
+              Previewing <strong>{axesLabel(previewedVariation)}</strong>
+            </span>
+            <button type="button" onClick={returnToOriginal}>
+              Return to original
+            </button>
+          </div>
+        ) : null}
+
+        {variationError ? (
+          <div className="ns-variation-error" role="alert">
+            <strong>Directions unavailable</strong>
+            <span>{variationError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                focusGeneratedBatch.current = true;
+                batchBeforeGeneration.current = latestBatchId;
+                onGenerateVariations();
+              }}
+              disabled={variationBusy}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+
+        {hasFallback ? (
+          <output className="ns-variation-fallback-note">
+            <Sparkles size={13} />
+            <span>
+              The free route could not safely supply every direction. Clearly labeled deterministic
+              fallbacks are shown instead.
+            </span>
+          </output>
+        ) : null}
+
+        <div id="ns-variation-results" aria-busy={variationBusy || variationsLoading}>
+          {variationGenerating ? (
+            <div className="ns-variation-loading" aria-live="polite">
+              <LoaderCircle className="ns-spin" size={16} />
+              <span>Generating, materializing, and validating three bounded directions...</span>
+            </div>
+          ) : variationsLoading ? (
+            <div className="ns-variation-loading" aria-live="polite">
+              <LoaderCircle className="ns-spin" size={16} />
+              <span>Loading saved directions...</span>
+            </div>
+          ) : directions.length > 0 ? (
+            <ul className="ns-variation-list" aria-label="Generated slide directions">
+              {directions.map((variation, index) => (
+                <VariationCard
+                  key={variation.id}
+                  focusRef={index === 0 ? firstVariationRef : null}
+                  variation={variation}
+                  previewed={variation.id === previewedVariationId}
+                  {...(variation.id === previewedVariationId
+                    ? {
+                        previewButtonRef: (node: HTMLButtonElement | null) => {
+                          if (node) lastPreviewButtonRef.current = node;
+                        },
+                      }
+                    : {})}
+                  busy={variationBusy}
+                  onPreview={onPreviewVariation}
+                  onAccept={onAcceptVariation}
+                  onReject={onRejectVariation}
+                />
+              ))}
+            </ul>
+          ) : (
+            <div className="ns-variation-empty">
+              <Layers3 size={17} />
+              <span>
+                <strong>No directions yet</strong>
+                Generate three reviewable options for this slide.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {allRejected ? (
+          <output className="ns-variation-all-rejected">
+            All three directions were rejected. The original slide remains unchanged.
+          </output>
+        ) : null}
       </section>
 
       <form className="ns-ai-composer" onSubmit={submit} data-testid="ai-composer">
@@ -241,6 +425,131 @@ export function AiInspector({
   );
 }
 
+function VariationCard({
+  variation,
+  previewed,
+  previewButtonRef,
+  busy,
+  focusRef,
+  onPreview,
+  onAccept,
+  onReject,
+}: {
+  variation: SlideVariation;
+  previewed: boolean;
+  previewButtonRef?: (node: HTMLButtonElement | null) => void;
+  busy: boolean;
+  focusRef: Ref<HTMLLIElement> | null;
+  onPreview: (variation: SlideVariation | null) => void;
+  onAccept: (variation: SlideVariation) => void;
+  onReject: (variation: SlideVariation) => void;
+}) {
+  const validationNotes = variation.validation.issues.filter((issue) => issue.severity !== 'error');
+  const validationClean =
+    variation.validation.ok &&
+    !variation.validation.issues.some((issue) => issue.severity === 'error');
+  const reviewable = variation.status === 'ready' && validationClean;
+  const previewable = variation.status === 'ready' && validationClean;
+  return (
+    <li
+      ref={focusRef}
+      tabIndex={-1}
+      className={`ns-variation-card is-${variation.status} ${previewed ? 'is-previewed' : ''}`}
+      data-testid="variation-card"
+      data-variation-id={variation.id}
+    >
+      <div className="ns-variation-card-topline">
+        <span className={`ns-status-dot ns-status-dot--${variation.status}`} />
+        <strong>{variationStatusLabel(variation.status)}</strong>
+        <small>based on v{variation.baseDeckVersion}</small>
+      </div>
+      <h3>{axesLabel(variation)}</h3>
+      <div className="ns-variation-axis-pills" aria-label="Variation axes">
+        <span>{humanizeAxis(variation.axes.contentAngle)}</span>
+        <span>{humanizeAxis(variation.axes.density)}</span>
+        <span>{humanizeAxis(variation.axes.layoutArchetype)}</span>
+      </div>
+      <div className="ns-variation-evidence-row">
+        <span className={`is-${variation.origin}`}>
+          {variation.origin === 'free_route' ? 'Free route' : 'Deterministic fallback'}
+        </span>
+        <span className={variation.validation.ok ? 'is-valid' : 'is-invalid'}>
+          {variation.validation.ok
+            ? validationNotes.length > 0
+              ? `Valid / ${validationNotes.length} note${validationNotes.length === 1 ? '' : 's'}`
+              : 'Validation clean'
+            : 'Validation blocked'}
+        </span>
+      </div>
+      {validationNotes.length > 0 ? (
+        <details className="ns-variation-validation-details">
+          <summary>View validation notes</summary>
+          <ul>
+            {validationNotes.map((issue) => (
+              <li key={issue.id}>{issue.message}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      <p className="ns-variation-change-summary">{variationChangedFields(variation.operations)}</p>
+      {variation.fallbackReason ? (
+        <p className="ns-variation-fallback-reason">
+          Fallback reason: {humanizeDiagnostic(variation.fallbackReason)}
+        </p>
+      ) : null}
+      <details>
+        <summary>Review {variation.operations.length} bounded changes</summary>
+        <ul>
+          {variation.operations.map((operation, index) => (
+            <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
+          ))}
+        </ul>
+      </details>
+      <div className="ns-variation-actions">
+        <button
+          ref={previewButtonRef}
+          className="ns-button ns-button--quiet"
+          type="button"
+          onClick={() => onPreview(previewed ? null : variation)}
+          disabled={!previewable || busy}
+          aria-pressed={previewed}
+          data-testid="variation-preview"
+        >
+          <Eye size={13} /> {previewed ? 'Original' : 'Preview'}
+        </button>
+        <button
+          className="ns-button ns-button--accent"
+          type="button"
+          onClick={() => onAccept(variation)}
+          disabled={!reviewable || busy}
+          data-testid="variation-accept"
+        >
+          <Check size={13} /> Accept
+        </button>
+        <button
+          className="ns-button ns-button--quiet"
+          type="button"
+          onClick={() => onReject(variation)}
+          disabled={!reviewable || busy}
+          data-testid="variation-reject"
+        >
+          <X size={13} /> Reject
+        </button>
+      </div>
+      {variation.status === 'stale' ? (
+        <p className="ns-variation-stale-copy">
+          The slide changed after generation. This direction cannot overwrite newer work.
+        </p>
+      ) : null}
+      {variation.status === 'accepted' && variation.selectedPatchId ? (
+        <p className="ns-variation-selected-copy">
+          Applied through patch {variation.selectedPatchId}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 function ProposalCard({
   patch,
   onAccept,
@@ -332,6 +641,53 @@ function createScope(
     };
   }
   return { kind: 'slide', deckId, slideIds: [slideId], operationMode };
+}
+
+function axesLabel(variation: SlideVariation) {
+  const angle =
+    variation.axes.contentAngle === 'data_led'
+      ? 'Evidence-first'
+      : variation.axes.contentAngle === 'narrative_led'
+        ? 'Story-first'
+        : 'Balanced detail';
+  return `${angle} / ${humanizeAxis(variation.axes.layoutArchetype)}`;
+}
+
+function humanizeAxis(value: string) {
+  return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function variationStatusLabel(status: SlideVariation['status']) {
+  if (status === 'ready') return 'Ready to review';
+  if (status === 'accepted') return 'Accepted';
+  if (status === 'rejected') return 'Rejected';
+  return 'Stale direction';
+}
+
+function variationChangedFields(operations: readonly PatchOperation[]) {
+  const fields = new Set<string>();
+  for (const operation of operations) {
+    if (operation.op === 'replace_text') fields.add('copy');
+    else if (operation.op === 'update_style') {
+      for (const key of Object.keys(operation.properties)) fields.add(key);
+    } else if (operation.op === 'move') {
+      fields.add('position');
+    } else if (operation.op === 'resize') {
+      fields.add('size');
+    } else if (operation.op === 'update_slide') {
+      for (const key of Object.keys(operation.properties)) fields.add(`slide ${key}`);
+    }
+  }
+  const labels = [...fields].slice(0, 6);
+  return `Changes ${labels.join(', ')} across ${operations.length} operation${operations.length === 1 ? '' : 's'}.`;
+}
+
+function humanizeDiagnostic(value: string) {
+  return value
+    .split(';')
+    .map((part) => part.trim().replaceAll('_', ' '))
+    .filter(Boolean)
+    .join('; ');
 }
 
 function countOperations(operations: readonly PatchOperation[]) {

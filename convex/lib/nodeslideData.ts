@@ -30,6 +30,12 @@ export function deckFromRow(row: Doc<'nodeslide_decks'>): Deck {
     slideOrder: row.slideOrder,
     version: row.version,
     status: row.status,
+    ...(row.activeSignatureProfileId !== undefined
+      ? { activeSignatureProfileId: row.activeSignatureProfileId }
+      : {}),
+    ...(row.activeSignatureProfileDigest !== undefined
+      ? { activeSignatureProfileDigest: row.activeSignatureProfileDigest }
+      : {}),
     ...(row.shareSlug !== undefined ? { shareSlug: row.shareSlug } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -100,6 +106,7 @@ export function patchFromRow(row: Doc<'nodeslide_patches'>): DeckPatch {
     summary: row.summary,
     ...(row.linkedCommentId !== undefined ? { linkedCommentId: row.linkedCommentId } : {}),
     ...(row.traceId !== undefined ? { traceId: row.traceId } : {}),
+    ...(row.profileId !== undefined ? { profileId: row.profileId } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -385,6 +392,12 @@ export async function insertNodeSlideSnapshot(
     slideOrder: deck.slideOrder,
     version: deck.version,
     status: deck.status,
+    ...(deck.activeSignatureProfileId !== undefined
+      ? { activeSignatureProfileId: deck.activeSignatureProfileId }
+      : {}),
+    ...(deck.activeSignatureProfileDigest !== undefined
+      ? { activeSignatureProfileDigest: deck.activeSignatureProfileDigest }
+      : {}),
     ...(deck.shareSlug !== undefined ? { shareSlug: deck.shareSlug } : {}),
     plan: args.plan,
     spec: args.spec,
@@ -417,6 +430,8 @@ export async function writeNodeSlideSnapshot(
     slideOrder: after.deck.slideOrder,
     version: after.deck.version,
     status: after.deck.status,
+    activeSignatureProfileId: after.deck.activeSignatureProfileId,
+    activeSignatureProfileDigest: after.deck.activeSignatureProfileDigest,
     ...(after.deck.shareSlug !== undefined ? { shareSlug: after.deck.shareSlug } : {}),
     updatedAt: now,
   });

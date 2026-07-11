@@ -1,5 +1,6 @@
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.0.0' as const;
+export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
 export const SLIDE_WIDTH_IN = 13.333;
 export const SLIDE_HEIGHT_IN = 7.5;
 
@@ -130,6 +131,8 @@ export interface Deck {
   slideOrder: string[];
   version: number;
   status: 'draft' | 'validating' | 'ready' | 'published';
+  activeSignatureProfileId?: string;
+  activeSignatureProfileDigest?: string;
   shareSlug?: string;
   createdAt: number;
   updatedAt: number;
@@ -226,6 +229,7 @@ export interface DeckPatch {
   summary: string;
   linkedCommentId?: string;
   traceId?: string;
+  profileId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -253,7 +257,11 @@ export interface ValidationIssue {
     | 'font_size'
     | 'source'
     | 'scope'
-    | 'export';
+    | 'export'
+    | 'on_brand_color'
+    | 'on_brand_font'
+    | 'on_brand_type_scale'
+    | 'on_brand_background';
   message: string;
   slideId?: string;
   elementId?: string;

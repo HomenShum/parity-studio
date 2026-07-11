@@ -83,6 +83,28 @@ function repairDefinition(issue: ValidationIssue): RepairDefinition {
         'Accept the explicit fallback or replace the element with a natively editable kind.',
       automatic: false,
     },
+    on_brand_color: {
+      kind: 'repair_schema',
+      description:
+        'Review the off-brand color against the active deck signature before changing it.',
+      automatic: false,
+    },
+    on_brand_font: {
+      kind: 'repair_schema',
+      description:
+        'Review the off-brand font against the active deck signature before changing it.',
+      automatic: false,
+    },
+    on_brand_type_scale: {
+      kind: 'repair_schema',
+      description: 'Review the type scale against the active deck signature before changing it.',
+      automatic: false,
+    },
+    on_brand_background: {
+      kind: 'repair_schema',
+      description: 'Review the background against the active deck signature before changing it.',
+      automatic: false,
+    },
   };
   return definitions[issue.code];
 }

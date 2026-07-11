@@ -130,6 +130,8 @@ export const nodeslideDeckValidator = v.object({
     v.literal('ready'),
     v.literal('published'),
   ),
+  activeSignatureProfileId: v.optional(v.string()),
+  activeSignatureProfileDigest: v.optional(v.string()),
   shareSlug: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -313,6 +315,10 @@ export const nodeslideValidationIssueValidator = v.object({
     v.literal('source'),
     v.literal('scope'),
     v.literal('export'),
+    v.literal('on_brand_color'),
+    v.literal('on_brand_font'),
+    v.literal('on_brand_type_scale'),
+    v.literal('on_brand_background'),
   ),
   message: v.string(),
   slideId: v.optional(v.string()),
@@ -339,3 +345,72 @@ export const nodeslideSnapshotValidator = v.object({
 });
 
 export const nodeslideCursorValidator = v.object({ x: v.number(), y: v.number() });
+
+export const nodeslideVariationAxesValidator = v.object({
+  contentAngle: v.union(v.literal('data_led'), v.literal('narrative_led'), v.literal('balanced')),
+  density: v.union(v.literal('executive'), v.literal('detail'), v.literal('balanced')),
+  layoutArchetype: v.union(
+    v.literal('headline'),
+    v.literal('split'),
+    v.literal('evidence'),
+    v.literal('comparison'),
+  ),
+});
+
+export const nodeslideVariationOriginValidator = v.union(
+  v.literal('free_route'),
+  v.literal('deterministic_fallback'),
+);
+
+export const nodeslideVariationStatusValidator = v.union(
+  v.literal('ready'),
+  v.literal('accepted'),
+  v.literal('rejected'),
+  v.literal('stale'),
+);
+
+export const nodeslideVariationCandidateValidator = v.object({
+  slide: nodeslideSlideValidator,
+  elements: v.array(nodeslideElementValidator),
+});
+
+export const nodeslideVariationValidator = v.object({
+  schemaVersion: v.literal('nodeslide.variation/v1'),
+  id: v.string(),
+  batchId: v.string(),
+  deckId: v.string(),
+  slideId: v.string(),
+  baseDeckVersion: v.number(),
+  baseSlideVersion: v.number(),
+  baseElementVersions: nodeslideVersionClockValidator,
+  axes: nodeslideVariationAxesValidator,
+  origin: nodeslideVariationOriginValidator,
+  fallbackReason: v.optional(v.string()),
+  operations: v.array(nodeslidePatchOperationValidator),
+  candidate: nodeslideVariationCandidateValidator,
+  validation: nodeslideValidationResultValidator,
+  status: nodeslideVariationStatusValidator,
+  selectedPatchId: v.optional(v.string()),
+  createdAt: v.number(),
+  decidedAt: v.optional(v.number()),
+});
+
+export const nodeslideVariationBatchValidator = v.object({
+  id: v.string(),
+  deckId: v.string(),
+  slideId: v.string(),
+  requestedCount: v.literal(3),
+  status: v.union(v.literal('generating'), v.literal('ready'), v.literal('failed')),
+  origin: nodeslideVariationOriginValidator,
+  fallbackReason: v.optional(v.string()),
+  variationIds: v.array(v.string()),
+  elapsedMs: v.number(),
+  createdAt: v.number(),
+  completedAt: v.optional(v.number()),
+});
+
+export const nodeslideVariationDecisionEventValidator = v.union(
+  v.literal('variation_generated'),
+  v.literal('variation_selected'),
+  v.literal('variation_rejected'),
+);

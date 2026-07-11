@@ -7,25 +7,35 @@ import {
   type ValidationIssue,
   type ValidationResult,
 } from '../../shared/nodeslide';
+import type { SignatureProfile } from '../../shared/nodeslideSignature';
+import { onBrandIssues } from '../../shared/nodeslideSignatureApply';
 import { nodeslideStableId } from './nodeslideIds';
+
+export interface NodeSlideValidationOptions {
+  signatureProfile?: SignatureProfile;
+}
 
 export function validateNodeSlideSnapshot(
   snapshot: DeckSnapshot,
   checkedAt: number,
-  validationId = nodeslideStableId(
-    'validation',
-    snapshot.deck.id,
-    String(snapshot.deck.version),
-    String(checkedAt),
-  ),
+  validationId?: string,
+  options: NodeSlideValidationOptions = {},
 ): ValidationResult {
+  const resolvedValidationId =
+    validationId ??
+    nodeslideStableId(
+      'validation',
+      snapshot.deck.id,
+      String(snapshot.deck.version),
+      options.signatureProfile?.source.digest ?? 'no-signature',
+    );
   const issues: ValidationIssue[] = [];
   const addIssue = (issue: Omit<ValidationIssue, 'id'>, discriminator = String(issues.length)) => {
     issues.push({
       ...issue,
       id: nodeslideStableId(
         'issue',
-        validationId,
+        resolvedValidationId,
         issue.code,
         issue.slideId ?? '',
         issue.elementId ?? '',
@@ -212,6 +222,12 @@ export function validateNodeSlideSnapshot(
     }
   }
 
+  if (options.signatureProfile) {
+    onBrandIssues(snapshot, options.signatureProfile).forEach((issue, index) => {
+      addIssue(issue, `on-brand:${index}:${issue.code}`);
+    });
+  }
+
   const hasErrors = issues.some((issue) => issue.severity === 'error');
   const hasPublishBlocker = issues.some(
     (issue) =>
@@ -221,11 +237,12 @@ export function validateNodeSlideSnapshot(
           issue.code === 'missing_asset' ||
           issue.code === 'export' ||
           issue.code === 'contrast' ||
-          issue.code === 'font_size')),
+          issue.code === 'font_size' ||
+          issue.code.startsWith('on_brand_'))),
   );
   const hasCleanupIssue = issues.some((issue) => issue.severity !== 'info');
   return {
-    id: validationId,
+    id: resolvedValidationId,
     deckId: snapshot.deck.id,
     deckVersion: snapshot.deck.version,
     ok: !hasErrors,

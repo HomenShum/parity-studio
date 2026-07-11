@@ -8,6 +8,7 @@ import {
 } from '../convex/lib/nodeslidePatches';
 import {
   type DeckSnapshot,
+  NODESLIDE_PATCH_OPERATION_LIMIT,
   NODESLIDE_SCHEMA_VERSION,
   NODESLIDE_TOOLCHAIN_VERSION,
   type PatchOperation,
@@ -166,6 +167,10 @@ function serverPatch(
 }
 
 describe('NodeSlide patch protocol', () => {
+  it('keeps the production patch boundary aligned with signature application', () => {
+    expect(NODESLIDE_PATCH_OPERATION_LIMIT).toBe(512);
+  });
+
   it('changes only the explicitly selected element', () => {
     const scope: PatchScope = {
       kind: 'elements',

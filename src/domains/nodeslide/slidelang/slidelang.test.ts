@@ -209,11 +209,27 @@ describe('local SlideLangAdapter', () => {
         exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
         version: 1,
       },
+      {
+        id: 'element:near-footer',
+        slideId: slide.id,
+        name: 'Closing point',
+        kind: 'text',
+        role: 'bullet',
+        bbox: { x: 0.06, y: 0.88, width: 0.38, height: 0.08 },
+        rotation: 0,
+        content: 'Hand off editable structure',
+        style: { color: '#f7f4ec', fontFamily: 'Aptos', fontSize: 16 },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+        version: 1,
+      },
     );
-    slide.elementOrder.push('element:footer', 'element:page-number');
+    slide.elementOrder.push('element:near-footer', 'element:footer', 'element:page-number');
 
     const validation = adapter.validate(snapshot);
     expect(validation.issues.filter((issue) => issue.code === 'font_size')).toEqual([]);
+    expect(validation.issues.filter((issue) => issue.code === 'collision')).toEqual([]);
     expect(validation.publishOk).toBe(true);
   });
 
