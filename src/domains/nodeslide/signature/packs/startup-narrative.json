@@ -1,0 +1,837 @@
+{
+  "$extensions": {
+    "com.nodeslide.rules": {
+      "nonAffiliation": {
+        "independent": true,
+        "organizations": ["Duarte, Inc.", "Design Tokens Community Group", "W3C"],
+        "prohibitedClaims": [
+          "Duarte style",
+          "Duarte method",
+          "Duarte approved",
+          "Duarte certified",
+          "DTCG endorsed",
+          "W3C endorsed"
+        ],
+        "statement": "The NodeSlide Startup narrative taste pack is independently authored and is not affiliated with, approved by, certified by, sponsored by, or endorsed by Duarte, Inc., the Design Tokens Community Group, or W3C. It does not reproduce their prose, diagrams, templates, course materials, trade dress, or marks."
+      },
+      "rules": [
+        {
+          "behavior": "Frame the audience as the main actor and organize the narrative around the change they need rather than around the presenter, company, or product.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "Frame the audience, rather than the speaker, company, or product, as the main actor; focus the message on what the audience needs and the change in what they think, feel, believe, or do.",
+              "title": "Center the audience's transformation",
+              "url": "https://www.duarte.com/blog/presentation-storytelling-audience-is-hero/"
+            }
+          ],
+          "id": "startup.audience-centered-arc",
+          "title": "Center the audience transformation"
+        },
+        {
+          "behavior": "Give each substantive slide one evidence-backed takeaway and split the slide when two independent claims remain.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "Limit a slide to one main idea so the visual supports the spoken message instead of competing with it.",
+              "title": "Keep one clear takeaway per slide",
+              "url": "https://www.duarte.com/blog/presenting/"
+            }
+          ],
+          "id": "startup.single-takeaway",
+          "title": "Keep one takeaway per slide"
+        },
+        {
+          "behavior": "Move from shared current context through credible evidence toward a possible future without copying a proprietary story diagram or pitch-deck sequence.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "Establish a shared current reality, introduce a credible possible future, and keep presentation content aligned to the audience's intended transformation.",
+              "title": "Contrast current reality with a possible future",
+              "url": "https://www.duarte.com/blog/move-presentation-audience-with-story-techniques-in-presentations/"
+            }
+          ],
+          "id": "startup.current-future-contrast",
+          "title": "Contrast current reality with a possible future"
+        },
+        {
+          "behavior": "Use design to carry meaning, remove non-meaningful decoration, and keep the slide only as complex as its message requires.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "Use design to carry meaning, not as decoration; remove superfluous details and keep the slide as simple as the message allows.",
+              "title": "Make every visual element earn its place",
+              "url": "https://www.duarte.com/blog/presenting/"
+            }
+          ],
+          "id": "startup.purposeful-simplicity",
+          "title": "Make each visual element earn its place"
+        },
+        {
+          "behavior": "Reserve open space around the essential message and split cluttered content instead of shrinking it.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "Use open space to direct focus; when a slide feels cluttered, reduce or split its content so the essential message remains clear.",
+              "title": "Preserve whitespace for focus",
+              "url": "https://www.duarte.com/blog/techniques-for-using-critique-language-for-more-powerful-and-effective-presentations/"
+            }
+          ],
+          "id": "startup.whitespace-for-focus",
+          "title": "Preserve whitespace for focus"
+        },
+        {
+          "behavior": "Close with a supplied verb-plus-object ask and add an owner or timing only when the brief provides them.",
+          "citations": [
+            {
+              "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+              "supports": "At the end, state clearly what the audience can do to move from the current state toward the possible future, using concrete tasks.",
+              "title": "End with a clear next action",
+              "url": "https://www.duarte.com/blog/audience-engagement-strategies-presentations/"
+            }
+          ],
+          "id": "startup.decisive-next-action",
+          "title": "End with a clear next action"
+        }
+      ]
+    },
+    "com.nodeslide.tastePack": {
+      "approvedContrastPairs": [
+        {
+          "background": "canvas",
+          "foreground": "ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas-alt",
+          "foreground": "ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "muted",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent",
+          "foreground": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent-soft",
+          "foreground": "ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "insight",
+          "foreground": "insight-ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "current",
+          "foreground": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "future",
+          "foreground": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "border",
+          "minimumRatio": 3,
+          "usage": "non_text"
+        },
+        {
+          "background": "inverse-canvas",
+          "foreground": "inverse-ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        }
+      ],
+      "authoredTokenPriority": {
+        "colors": [
+          "canvas",
+          "canvas-alt",
+          "ink",
+          "muted",
+          "accent",
+          "accent-soft",
+          "insight",
+          "insight-ink",
+          "current",
+          "future",
+          "border",
+          "inverse-canvas",
+          "inverse-ink"
+        ],
+        "fontFamilies": ["display", "body", "data"],
+        "fontSizes": ["hero", "title", "takeaway", "body", "label", "footer"]
+      },
+      "authorship": {
+        "confidence": 1,
+        "confidenceMeaning": "Confidence 1 means the literal value exactly matches the NodeSlide-authored default; it does not attribute the value to a cited source or assert design quality.",
+        "method": "authored",
+        "sourceDerived": false
+      },
+      "fontPolicy": {
+        "embedsFonts": false,
+        "networkFetch": false,
+        "requiresGenericFallback": true
+      },
+      "id": "startup-narrative",
+      "layout": {
+        "evidenceIds": ["authored:startup-narrative:layout:intent"],
+        "guardrails": [
+          "Require audience, current state, desired state, stakes, and ask inputs or report a bounded narrative-incomplete warning.",
+          "Give each substantive slide one evidence-backed takeaway of at most twelve words; split independent claims.",
+          "Use explicit Current and Possible labels plus position or shape differences; color is only a redundant cue.",
+          "Default to one focal visual and at most two supporting groups; split instead of shrinking past the type floor.",
+          "Keep at least thirty percent whitespace outside foreground bounds on non-full-bleed slides.",
+          "Put a supplied verb-plus-object ask on the final substantive slide; never invent owner or timing.",
+          "Repair overflow by removing decoration, shortening or splitting content, and then restoring whitespace."
+        ],
+        "intendedDensity": "sparse",
+        "neutralProfileFields": [
+          "slideCount",
+          "masterCount",
+          "layoutCount",
+          "layoutUsage",
+          "averageShapesPerSlide",
+          "maximumShapesPerSlide",
+          "averageTextRunsPerSlide",
+          "medianFontSizePoints",
+          "embeddedFontsPresent",
+          "embeddedFontFamilies"
+        ],
+        "observedDeckFacts": false,
+        "safeAreaInches": {
+          "bottom": 0.5,
+          "left": 0.67,
+          "right": 0.67,
+          "top": 0.5
+        },
+        "sourceRole": "authored",
+        "targets": {
+          "maximumFocalVisuals": 1,
+          "maximumForegroundElements": 12,
+          "maximumSupportingGroups": 2,
+          "minimumNonFooterFontPoints": 15,
+          "minimumWhitespaceFraction": 0.3
+        }
+      }
+    }
+  },
+  "confidence": "high",
+  "evidence": [
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:accent",
+      "locator": "tokens.colors.accent.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0,0.341176,0.721569],\"hex\":\"#0057B8\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:accent-soft",
+      "locator": "tokens.colors.accent-soft.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.862745,0.921569,0.980392],\"hex\":\"#DCEBFA\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:border",
+      "locator": "tokens.colors.border.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.392157,0.454902,0.545098],\"hex\":\"#64748B\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:canvas",
+      "locator": "tokens.colors.canvas.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[1,1,1],\"hex\":\"#FFFFFF\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:canvas-alt",
+      "locator": "tokens.colors.canvas-alt.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.956863,0.968627,0.984314],\"hex\":\"#F4F7FB\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:current",
+      "locator": "tokens.colors.current.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.356863,0.294118,0.541176],\"hex\":\"#5B4B8A\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:future",
+      "locator": "tokens.colors.future.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.058824,0.462745,0.431373],\"hex\":\"#0F766E\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:ink",
+      "locator": "tokens.colors.ink.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.066667,0.094118,0.152941],\"hex\":\"#111827\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:insight",
+      "locator": "tokens.colors.insight.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.968627,0.788235,0.282353],\"hex\":\"#F7C948\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:insight-ink",
+      "locator": "tokens.colors.insight-ink.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.164706,0.105882,0],\"hex\":\"#2A1B00\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:inverse-canvas",
+      "locator": "tokens.colors.inverse-canvas.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.043137,0.062745,0.12549],\"hex\":\"#0B1020\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:inverse-ink",
+      "locator": "tokens.colors.inverse-ink.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[1,1,1],\"hex\":\"#FFFFFF\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:color:muted",
+      "locator": "tokens.colors.muted.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.278431,0.333333,0.411765],\"hex\":\"#475569\"}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-family:body",
+      "locator": "tokens.fontFamilies.body.$value",
+      "method": "authored",
+      "observedValue": "[\"Aptos\",\"Segoe UI\",\"Arial\",\"sans-serif\"]",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-family:data",
+      "locator": "tokens.fontFamilies.data.$value",
+      "method": "authored",
+      "observedValue": "[\"Aptos Mono\",\"Cascadia Mono\",\"Consolas\",\"Courier New\",\"monospace\"]",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-family:display",
+      "locator": "tokens.fontFamilies.display.$value",
+      "method": "authored",
+      "observedValue": "[\"Aptos Display\",\"Aptos\",\"Segoe UI\",\"Arial\",\"sans-serif\"]",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:body",
+      "locator": "tokens.fontSizes.body.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":24}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:footer",
+      "locator": "tokens.fontSizes.footer.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":16}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:hero",
+      "locator": "tokens.fontSizes.hero.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":64}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:label",
+      "locator": "tokens.fontSizes.label.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":20}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:takeaway",
+      "locator": "tokens.fontSizes.takeaway.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":36}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:font-size:title",
+      "locator": "tokens.fontSizes.title.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":48}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:startup-narrative:layout:intent",
+      "locator": "$extensions.com.nodeslide.tastePack.layout",
+      "method": "authored",
+      "observedValue": "{\"aspectRatio\":1.777778,\"density\":\"sparse\",\"guardrails\":[\"Require audience, current state, desired state, stakes, and ask inputs or report a bounded narrative-incomplete warning.\",\"Give each substantive slide one evidence-backed takeaway of at most twelve words; split independent claims.\",\"Use explicit Current and Possible labels plus position or shape differences; color is only a redundant cue.\",\"Default to one focal visual and at most two supporting groups; split instead of shrinking past the type floor.\",\"Keep at least thirty percent whitespace outside foreground bounds on non-full-bleed slides.\",\"Put a supplied verb-plus-object ask on the final substantive slide; never invent owner or timing.\",\"Repair overflow by removing decoration, shortening or splitting content, and then restoring whitespace.\"],\"heightInches\":7.5,\"safeAreaInches\":{\"bottom\":0.5,\"left\":0.67,\"right\":0.67,\"top\":0.5},\"targets\":{\"maximumFocalVisuals\":1,\"maximumForegroundElements\":12,\"maximumSupportingGroups\":2,\"minimumNonFooterFontPoints\":15,\"minimumWhitespaceFraction\":0.3},\"widthInches\":13.333333}",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "sourceKind": "taste_pack"
+    }
+  ],
+  "id": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+  "layout": {
+    "aspectRatio": 1.777778,
+    "averageShapesPerSlide": 0,
+    "averageTextRunsPerSlide": 0,
+    "density": "sparse",
+    "embeddedFontFamilies": [],
+    "embeddedFontsPresent": false,
+    "layoutCount": 0,
+    "layoutUsage": [],
+    "masterCount": 0,
+    "maximumShapesPerSlide": 0,
+    "slideCount": 0,
+    "slideHeightInches": 7.5,
+    "slideWidthInches": 13.333333
+  },
+  "name": "Startup narrative",
+  "schemaVersion": "nodeslide.signature/v1",
+  "source": {
+    "digest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+    "fileName": "startup-narrative.json",
+    "kind": "taste_pack"
+  },
+  "tokens": {
+    "colors": {
+      "accent": {
+        "$description": "Primary emphasis and action fill.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:accent"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0, 0.341176, 0.721569],
+          "hex": "#0057B8"
+        }
+      },
+      "accent-soft": {
+        "$description": "Low-emphasis callout surface.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:accent-soft"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.862745, 0.921569, 0.980392],
+          "hex": "#DCEBFA"
+        }
+      },
+      "border": {
+        "$description": "Essential dividers and object boundaries.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:border"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.392157, 0.454902, 0.545098],
+          "hex": "#64748B"
+        }
+      },
+      "canvas": {
+        "$description": "Primary light canvas and inverse text.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:canvas"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [1, 1, 1],
+          "hex": "#FFFFFF"
+        }
+      },
+      "canvas-alt": {
+        "$description": "Quiet section or card surface.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:canvas-alt"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.956863, 0.968627, 0.984314],
+          "hex": "#F4F7FB"
+        }
+      },
+      "current": {
+        "$description": "Current-state marker without implying that current means failure.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:current"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.356863, 0.294118, 0.541176],
+          "hex": "#5B4B8A"
+        }
+      },
+      "future": {
+        "$description": "Possible-future or progress marker.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:future"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.058824, 0.462745, 0.431373],
+          "hex": "#0F766E"
+        }
+      },
+      "ink": {
+        "$description": "Primary text and dark marks.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:ink"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.066667, 0.094118, 0.152941],
+          "hex": "#111827"
+        }
+      },
+      "insight": {
+        "$description": "Highlight surface, never a text color on white.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:insight"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.968627, 0.788235, 0.282353],
+          "hex": "#F7C948"
+        }
+      },
+      "insight-ink": {
+        "$description": "Text and marks on the insight surface.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:insight-ink"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.164706, 0.105882, 0],
+          "hex": "#2A1B00"
+        }
+      },
+      "inverse-canvas": {
+        "$description": "Optional dark cover or closing canvas.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:inverse-canvas"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.043137, 0.062745, 0.12549],
+          "hex": "#0B1020"
+        }
+      },
+      "inverse-ink": {
+        "$description": "Text on approved dark fills.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:inverse-ink"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [1, 1, 1],
+          "hex": "#FFFFFF"
+        }
+      },
+      "muted": {
+        "$description": "Secondary text that remains readable as body copy.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:color:muted"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.278431, 0.333333, 0.411765],
+          "hex": "#475569"
+        }
+      }
+    },
+    "fontFamilies": {
+      "body": {
+        "$description": "Local body fallback stack for explanation, labels, and annotations.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-family:body"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Aptos", "Segoe UI", "Arial", "sans-serif"]
+      },
+      "data": {
+        "$description": "Local monospace fallback stack for aligned figures and technical labels.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-family:data"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Aptos Mono", "Cascadia Mono", "Consolas", "Courier New", "monospace"]
+      },
+      "display": {
+        "$description": "Local display fallback stack for titles and large takeaway statements.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-family:display"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Aptos Display", "Aptos", "Segoe UI", "Arial", "sans-serif"]
+      }
+    },
+    "fontSizes": {
+      "body": {
+        "$description": "Main explanatory text, equivalent to 18 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:body"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 24
+        }
+      },
+      "footer": {
+        "$description": "Source, footer, and page-number roles only, equivalent to 12 points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:footer"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 16
+        }
+      },
+      "hero": {
+        "$description": "Cover claim or singular close, equivalent to 48 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:hero"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 64
+        }
+      },
+      "label": {
+        "$description": "Smallest non-footer text, equivalent to 15 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:label"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 20
+        }
+      },
+      "takeaway": {
+        "$description": "Dominant evidence-backed takeaway, equivalent to 27 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:takeaway"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 36
+        }
+      },
+      "title": {
+        "$description": "Slide title, equivalent to 36 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:startup-narrative:font-size:title"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 48
+        }
+      }
+    }
+  },
+  "usage": {
+    "colors": [],
+    "fontSizes": [],
+    "fonts": []
+  },
+  "warnings": []
+}

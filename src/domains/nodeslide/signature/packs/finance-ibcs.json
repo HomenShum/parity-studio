@@ -1,0 +1,846 @@
+{
+  "$extensions": {
+    "com.nodeslide.rules": {
+      "nonAffiliation": {
+        "independent": true,
+        "organizations": [
+          "IBCS Association",
+          "IBCS Institute",
+          "Financial Times",
+          "Design Tokens Community Group",
+          "W3C",
+          "ISO"
+        ],
+        "prohibitedClaims": [
+          "IBCS certified",
+          "IBCS compliant",
+          "IBCS style",
+          "FT style",
+          "FT approved",
+          "ISO 24896 conformant"
+        ],
+        "statement": "The NodeSlide Finance reporting taste pack is independently authored and is not affiliated with, endorsed by, certified by, or approved by the IBCS Association, IBCS Institute, Financial Times, DTCG, W3C, or ISO. It does not reproduce their templates, brand identity, or proprietary assets."
+      },
+      "rules": [
+        {
+          "behavior": "Lead each analytical slide with one clear takeaway and keep reporting unit, measure, period, and scenario in a separate context line.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports presenting a clear key message before its evidence, keeping message placement consistent, and keeping descriptive reporting context distinct from evaluation.",
+              "title": "IBCS Standards 2.0 - SA 3.2 and UN 2.1-2.2",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.message-first",
+          "title": "Lead with the analytical message"
+        },
+        {
+          "behavior": "Map each business meaning to a stable visual role across slides; do not reuse one treatment for unrelated meanings.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports using the same visual representation for the same business meaning throughout a reporting system.",
+              "title": "IBCS Standards 2.0 - UNIFY",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.semantic-consistency",
+          "title": "Keep business meanings visually consistent"
+        },
+        {
+          "behavior": "Use a neutral canvas, flat marks, legible type, and color only for an explicit analytical role.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports removing non-semantic backgrounds, effects, colors, and decorative type so that data and labels carry the communication.",
+              "title": "IBCS Standards 2.0 - SI 1-3",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.no-decoration",
+          "title": "Remove decoration without analytical meaning"
+        },
+        {
+          "behavior": "Reduce wasted margins and oversized components without shrinking below the authored type floor or removing useful whitespace.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports compact, legible visuals and better use of space while retaining whitespace that improves clarity and structure.",
+              "title": "IBCS Standards 2.0 - CO 1-2",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.dense-but-legible",
+          "title": "Keep reporting compact and legible"
+        },
+        {
+          "behavior": "Place series labels next to marks or line ends when feasible and retain legends or reference furniture when direct labels would reduce comprehension.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports integrating series identification into charts and using data labels to reduce external legends and redundant reference furniture when comprehension is preserved.",
+              "title": "IBCS Standards 2.0 - UN 2.3 and SI 3.1",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.direct-labels",
+          "title": "Label data where it is read"
+        },
+        {
+          "behavior": "Start magnitude bars and columns at zero, share scales for same-unit comparisons, and expose any allowed indexed or scale exception.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports a general zero-baseline rule, a disclosed indexed-data exception, and identical scales for same-unit charts on one page unless a scale difference is clearly marked.",
+              "title": "IBCS Standards 2.0 - CH 1.1 and CH 4.1",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            },
+            {
+              "license": "FT content; all rights reserved; short paraphrase and link only",
+              "supports": "Supports zero-based standard bars and columns when the analytical task is comparing magnitude.",
+              "title": "Financial Times Visual Vocabulary - Magnitude",
+              "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md#magnitude"
+            }
+          ],
+          "id": "finance.integrity-axes-scales",
+          "title": "Preserve axis and scale integrity"
+        },
+        {
+          "behavior": "Place time on the horizontal axis in left-to-right order; default to a line for continuous change and consider columns for one discrete series.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports horizontal left-to-right presentation of time in charts and tabular columns.",
+              "title": "IBCS Standards 2.0 - UN 3.3",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            },
+            {
+              "license": "FT content; all rights reserved; short paraphrase and link only",
+              "supports": "Supports line charts as the default for changing time series, with columns useful mainly for a single series and with period context chosen deliberately.",
+              "title": "Financial Times Visual Vocabulary - Change over Time",
+              "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md#change-over-time"
+            }
+          ],
+          "id": "finance.time-horizontal",
+          "title": "Show time from left to right"
+        },
+        {
+          "behavior": "Use a vertical category axis and horizontal bars for non-time structures, especially when labels are long, unless the scale type calls for a documented exception.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports vertical category axes for structural dimensions in the general case, with explicit exceptions for other scale types.",
+              "title": "IBCS Standards 2.0 - UN 3.4",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            },
+            {
+              "license": "FT content; all rights reserved; short paraphrase and link only",
+              "supports": "Supports horizontal bars for non-time magnitude comparisons and long category labels.",
+              "title": "Financial Times Visual Vocabulary - Magnitude",
+              "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md#magnitude"
+            }
+          ],
+          "id": "finance.structure-vertical",
+          "title": "Put structural categories on a vertical axis"
+        },
+        {
+          "behavior": "Emphasize the evidence for the key message, reserve semantic colors for their named meanings, and keep other series neutral.",
+          "citations": [
+            {
+              "license": "CC BY-SA 4.0; paraphrased with attribution",
+              "supports": "Supports consistent markers that connect selected values, differences, trends, or references to the key message and defined business meaning.",
+              "title": "IBCS Standards 2.0 - UN 5.1 and SA 4.3",
+              "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf"
+            }
+          ],
+          "id": "finance.highlight-with-purpose",
+          "title": "Highlight only with analytical purpose"
+        },
+        {
+          "behavior": "Choose a chart family from the data relationship before applying visual tokens rather than using one chart type universally.",
+          "citations": [
+            {
+              "license": "FT content; all rights reserved; short paraphrase and link only",
+              "supports": "Supports selecting chart symbology according to the relationship or question in the data rather than applying one chart type universally.",
+              "title": "Financial Times Visual Vocabulary",
+              "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md"
+            }
+          ],
+          "id": "finance.chart-by-question",
+          "title": "Choose the chart from the analytical question"
+        }
+      ]
+    },
+    "com.nodeslide.tastePack": {
+      "approvedContrastPairs": [
+        {
+          "background": "canvas",
+          "foreground": "ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "muted",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "accent",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent",
+          "foreground": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent-soft",
+          "foreground": "ink",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent-soft",
+          "foreground": "muted",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "accent-soft",
+          "foreground": "accent",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "border",
+          "minimumRatio": 3,
+          "usage": "non_text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "data-neutral",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "data-positive",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "data-negative",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "data-comparison",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "background": "canvas",
+          "foreground": "data-caution",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        }
+      ],
+      "authoredTokenPriority": {
+        "colors": [
+          "canvas",
+          "ink",
+          "muted",
+          "accent",
+          "accent-soft",
+          "border",
+          "data-neutral",
+          "data-positive",
+          "data-negative",
+          "data-comparison",
+          "data-caution"
+        ],
+        "fontFamilies": ["display", "body", "data"],
+        "fontSizes": ["title", "context", "body", "data-label", "caption"]
+      },
+      "authorship": {
+        "confidence": 1,
+        "confidenceMeaning": "Confidence 1 means the literal value exactly matches the NodeSlide-authored default; it does not attribute the value to a cited source or assert design quality.",
+        "method": "authored",
+        "sourceDerived": false
+      },
+      "fontPolicy": {
+        "embedsFonts": false,
+        "networkFetch": false,
+        "requiresGenericFallback": true
+      },
+      "id": "finance-ibcs",
+      "layout": {
+        "evidenceIds": ["authored:finance-ibcs:layout:intent"],
+        "guardrails": [
+          "Lead with one message line and keep unit, measure, period, and scenario in separate context.",
+          "Use one primary analytical view or two to four same-unit small multiples with shared scaling.",
+          "Prefer direct labels; use a legend only when direct labels collide with or obscure the data.",
+          "Never encode meaning by hue alone; add a label, sign, marker, pattern, or textual status.",
+          "Start magnitude bars and columns at zero; disclose any indexed or cropped exception.",
+          "Use equal scales for same-unit charts on one slide or visibly disclose the difference.",
+          "Remove pseudo-3D, decorative shadows, patterned backgrounds, and ornamental transitions.",
+          "Retain whitespace that clarifies the message, labels, and groups despite the dense intent."
+        ],
+        "intendedDensity": "dense",
+        "neutralProfileFields": [
+          "slideCount",
+          "masterCount",
+          "layoutCount",
+          "layoutUsage",
+          "averageShapesPerSlide",
+          "maximumShapesPerSlide",
+          "averageTextRunsPerSlide",
+          "medianFontSizePoints",
+          "embeddedFontsPresent",
+          "embeddedFontFamilies"
+        ],
+        "observedDeckFacts": false,
+        "sourceRole": "authored",
+        "targets": {
+          "maximumFocalAccents": 1,
+          "maximumSmallMultiples": 4,
+          "minimumNonFooterFontPoints": 15
+        }
+      }
+    }
+  },
+  "confidence": "high",
+  "evidence": [
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:accent",
+      "locator": "tokens.colors.accent.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0,0.368627,0.658824],\"hex\":\"#005EA8\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:accent-soft",
+      "locator": "tokens.colors.accent-soft.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.862745,0.921569,0.980392],\"hex\":\"#DCEBFA\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:border",
+      "locator": "tokens.colors.border.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.541176,0.580392,0.639216],\"hex\":\"#8A94A3\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:canvas",
+      "locator": "tokens.colors.canvas.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[1,1,1],\"hex\":\"#FFFFFF\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:data-caution",
+      "locator": "tokens.colors.data-caution.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.478431,0.309804,0],\"hex\":\"#7A4F00\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:data-comparison",
+      "locator": "tokens.colors.data-comparison.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.396078,0.254902,0.541176],\"hex\":\"#65418A\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:data-negative",
+      "locator": "tokens.colors.data-negative.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.643137,0.14902,0.172549],\"hex\":\"#A4262C\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:data-neutral",
+      "locator": "tokens.colors.data-neutral.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.2,0.254902,0.333333],\"hex\":\"#334155\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:data-positive",
+      "locator": "tokens.colors.data-positive.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0,0.419608,0.368627],\"hex\":\"#006B5E\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:ink",
+      "locator": "tokens.colors.ink.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.090196,0.101961,0.121569],\"hex\":\"#171A1F\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:color:muted",
+      "locator": "tokens.colors.muted.$value",
+      "method": "authored",
+      "observedValue": "{\"colorSpace\":\"srgb\",\"components\":[0.294118,0.333333,0.388235],\"hex\":\"#4B5563\"}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-family:body",
+      "locator": "tokens.fontFamilies.body.$value",
+      "method": "authored",
+      "observedValue": "[\"Arial\",\"Helvetica Neue\",\"Helvetica\",\"Liberation Sans\",\"sans-serif\"]",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-family:data",
+      "locator": "tokens.fontFamilies.data.$value",
+      "method": "authored",
+      "observedValue": "[\"Arial\",\"Helvetica Neue\",\"Helvetica\",\"Liberation Sans\",\"sans-serif\"]",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-family:display",
+      "locator": "tokens.fontFamilies.display.$value",
+      "method": "authored",
+      "observedValue": "[\"Arial\",\"Helvetica Neue\",\"Helvetica\",\"Liberation Sans\",\"sans-serif\"]",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-size:body",
+      "locator": "tokens.fontSizes.body.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":24}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-size:caption",
+      "locator": "tokens.fontSizes.caption.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":20}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-size:context",
+      "locator": "tokens.fontSizes.context.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":28}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-size:data-label",
+      "locator": "tokens.fontSizes.data-label.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":20}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:font-size:title",
+      "locator": "tokens.fontSizes.title.$value",
+      "method": "authored",
+      "observedValue": "{\"unit\":\"px\",\"value\":48}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    },
+    {
+      "confidence": 1,
+      "id": "authored:finance-ibcs:layout:intent",
+      "locator": "$extensions.com.nodeslide.tastePack.layout",
+      "method": "authored",
+      "observedValue": "{\"aspectRatio\":1.777778,\"density\":\"dense\",\"guardrails\":[\"Lead with one message line and keep unit, measure, period, and scenario in separate context.\",\"Use one primary analytical view or two to four same-unit small multiples with shared scaling.\",\"Prefer direct labels; use a legend only when direct labels collide with or obscure the data.\",\"Never encode meaning by hue alone; add a label, sign, marker, pattern, or textual status.\",\"Start magnitude bars and columns at zero; disclose any indexed or cropped exception.\",\"Use equal scales for same-unit charts on one slide or visibly disclose the difference.\",\"Remove pseudo-3D, decorative shadows, patterned backgrounds, and ornamental transitions.\",\"Retain whitespace that clarifies the message, labels, and groups despite the dense intent.\"],\"heightInches\":7.5,\"safeAreaInches\":null,\"targets\":{\"maximumFocalAccents\":1,\"maximumSmallMultiples\":4,\"minimumNonFooterFontPoints\":15},\"widthInches\":13.333333}",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "sourceKind": "taste_pack"
+    }
+  ],
+  "id": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+  "layout": {
+    "aspectRatio": 1.777778,
+    "averageShapesPerSlide": 0,
+    "averageTextRunsPerSlide": 0,
+    "density": "dense",
+    "embeddedFontFamilies": [],
+    "embeddedFontsPresent": false,
+    "layoutCount": 0,
+    "layoutUsage": [],
+    "masterCount": 0,
+    "maximumShapesPerSlide": 0,
+    "slideCount": 0,
+    "slideHeightInches": 7.5,
+    "slideWidthInches": 13.333333
+  },
+  "name": "Finance reporting",
+  "schemaVersion": "nodeslide.signature/v1",
+  "source": {
+    "digest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+    "fileName": "finance-ibcs.json",
+    "kind": "taste_pack"
+  },
+  "tokens": {
+    "colors": {
+      "accent": {
+        "$description": "One focal series, selected value, or neutral reference.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:accent"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0, 0.368627, 0.658824],
+          "hex": "#005EA8"
+        }
+      },
+      "accent-soft": {
+        "$description": "Small analytical callout surface, not a decorative full-slide fill.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:accent-soft"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.862745, 0.921569, 0.980392],
+          "hex": "#DCEBFA"
+        }
+      },
+      "border": {
+        "$description": "Essential dividers and focus boundaries.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:border"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.541176, 0.580392, 0.639216],
+          "hex": "#8A94A3"
+        }
+      },
+      "canvas": {
+        "$description": "Default slide and chart background.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:canvas"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [1, 1, 1],
+          "hex": "#FFFFFF"
+        }
+      },
+      "data-caution": {
+        "$description": "Explicit caution state, never decoration.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:data-caution"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.478431, 0.309804, 0],
+          "hex": "#7A4F00"
+        }
+      },
+      "data-comparison": {
+        "$description": "Secondary named comparison when neutral plus accent is insufficient.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:data-comparison"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.396078, 0.254902, 0.541176],
+          "hex": "#65418A"
+        }
+      },
+      "data-negative": {
+        "$description": "Undesirable business impact only.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:data-negative"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.643137, 0.14902, 0.172549],
+          "hex": "#A4262C"
+        }
+      },
+      "data-neutral": {
+        "$description": "Default comparison series.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:data-neutral"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.2, 0.254902, 0.333333],
+          "hex": "#334155"
+        }
+      },
+      "data-positive": {
+        "$description": "Desirable business impact only.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:data-positive"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0, 0.419608, 0.368627],
+          "hex": "#006B5E"
+        }
+      },
+      "ink": {
+        "$description": "Primary text, labels, and axes.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:ink"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.090196, 0.101961, 0.121569],
+          "hex": "#171A1F"
+        }
+      },
+      "muted": {
+        "$description": "Reporting context, source notes, and secondary labels.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:color:muted"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.294118, 0.333333, 0.388235],
+          "hex": "#4B5563"
+        }
+      }
+    },
+    "fontFamilies": {
+      "body": {
+        "$description": "System-safe reporting body fallback stack; no font is downloaded.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-family:body"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Arial", "Helvetica Neue", "Helvetica", "Liberation Sans", "sans-serif"]
+      },
+      "data": {
+        "$description": "System-safe chart and tabular-label fallback stack; no font is downloaded.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-family:data"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Arial", "Helvetica Neue", "Helvetica", "Liberation Sans", "sans-serif"]
+      },
+      "display": {
+        "$description": "System-safe reporting headline fallback stack; no font is downloaded.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-family:display"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "fontFamily",
+        "$value": ["Arial", "Helvetica Neue", "Helvetica", "Liberation Sans", "sans-serif"]
+      }
+    },
+    "fontSizes": {
+      "body": {
+        "$description": "Main explanatory text, equivalent to 18 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-size:body"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 24
+        }
+      },
+      "caption": {
+        "$description": "Source and caption text, equivalent to 15 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-size:caption"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 20
+        }
+      },
+      "context": {
+        "$description": "Reporting context line, equivalent to 21 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-size:context"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 28
+        }
+      },
+      "data-label": {
+        "$description": "Chart and table label, equivalent to 15 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-size:data-label"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 20
+        }
+      },
+      "title": {
+        "$description": "Message line, equivalent to 36 presentation points.",
+        "$extensions": {
+          "com.nodeslide.signature": {
+            "confidence": 1,
+            "evidenceIds": ["authored:finance-ibcs:font-size:title"],
+            "occurrences": 0,
+            "sourceRole": "authored"
+          }
+        },
+        "$type": "dimension",
+        "$value": {
+          "unit": "px",
+          "value": 48
+        }
+      }
+    }
+  },
+  "usage": {
+    "colors": [],
+    "fontSizes": [],
+    "fonts": []
+  },
+  "warnings": []
+}
