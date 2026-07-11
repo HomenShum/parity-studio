@@ -26,12 +26,15 @@ import {
   normalizePreferenceFont,
   stablePreferenceStringify,
 } from './lib/nodeslidePreferenceEtl';
-import { planPreferenceEventRetention } from './lib/nodeslidePreferenceRetention';
+import {
+  NODESLIDE_PREFERENCE_RETENTION_SCAN_LIMIT,
+  NODESLIDE_PREFERENCE_RETENTION_WRITE_BURST_LIMIT,
+  type PreferenceRetentionReceipt,
+  planPreferenceEventRetention,
+} from './lib/nodeslidePreferenceRetention';
 
-const SYNC_LIMIT = 200;
+const SYNC_LIMIT = NODESLIDE_PREFERENCE_RETENTION_WRITE_BURST_LIMIT;
 const RESOLVER_ROW_LIMIT = 300;
-const PRUNE_READ_LIMIT = NODESLIDE_PREFERENCE_BOUNDS.maxRetainedEvents + 501;
-
 type ReadCtx = Pick<QueryCtx, 'db'> | Pick<MutationCtx, 'db'>;
 
 export const syncVariationDecisions = mutation({
@@ -57,8 +60,8 @@ export const syncVariationDecisions = mutation({
       if (await insertPreferenceEvent(ctx, event)) inserted += 1;
       else existing += 1;
     }
-    await prunePreferenceEvents(ctx, deck.projectId, actorId);
-    return { scanned: decisions.length, inserted, existing };
+    const { receipt: retention } = await prunePreferenceEvents(ctx, deck.projectId, actorId);
+    return { scanned: decisions.length, inserted, existing, retention };
   },
 });
 
@@ -131,8 +134,8 @@ export const recordPatchDecision = mutation({
       recordedAt: Math.max(recordedAt, patch.updatedAt),
     };
     const inserted = await insertPreferenceEvent(ctx, event);
-    await prunePreferenceEvents(ctx, deck.projectId, actorId);
-    return { event, inserted };
+    const { receipt: retention } = await prunePreferenceEvents(ctx, deck.projectId, actorId);
+    return { event, inserted, retention };
   },
 });
 
@@ -189,8 +192,8 @@ export const recordExportCompleted = mutation({
       recordedAt: now,
     };
     const inserted = await insertPreferenceEvent(ctx, event);
-    await prunePreferenceEvents(ctx, deck.projectId, actorId);
-    return { exportId, event, inserted };
+    const { receipt: retention } = await prunePreferenceEvents(ctx, deck.projectId, actorId);
+    return { exportId, event, inserted, retention };
   },
 });
 
@@ -228,9 +231,10 @@ export const runEtl = mutation({
     if (current) await ctx.db.patch(current._id, { signals: mergedSignals, updatedAt: now });
     else await ctx.db.insert('nodeslide_taste_profiles', profile);
     for (const row of eventRows) await ctx.db.patch(row._id, { processedAt: now });
-    await prunePreferenceEvents(ctx, deck.projectId, actorId, profile);
+    const retentionResult = await prunePreferenceEvents(ctx, deck.projectId, actorId, profile);
     return {
-      profile,
+      profile: retentionResult.profile ?? profile,
+      retention: retentionResult.receipt,
       diagnostics: extraction.diagnostics,
       evaluations: extraction.evaluations.map(({ proposal, evaluator, sourceEventType }) => ({
         signalId: proposal.id,
@@ -602,26 +606,100 @@ async function prunePreferenceEvents(
   tenantId: string,
   actorId: string,
   suppliedProfile?: TasteProfile,
-): Promise<void> {
+): Promise<{ profile: TasteProfile | null; receipt: PreferenceRetentionReceipt }> {
   const rows = await ctx.db
     .query('nodeslide_preference_events')
     .withIndex('by_tenant_actor_recorded', (index) =>
       index.eq('tenantId', tenantId).eq('actorId', actorId),
     )
     .order('asc')
-    .take(PRUNE_READ_LIMIT);
-  const overflow = rows.length - NODESLIDE_PREFERENCE_BOUNDS.maxRetainedEvents;
-  if (overflow <= 0) return;
-  const profile =
-    suppliedProfile ??
-    tasteProfileFromRow(await findTasteProfile(ctx, nodeslideTasteProfileId(tenantId, actorId)));
-  const referenced = new Set(profile?.signals.flatMap((signal) => signal.evidenceEventIds) ?? []);
-  const plan = planPreferenceEventRetention(rows, referenced);
+    .take(NODESLIDE_PREFERENCE_RETENTION_SCAN_LIMIT);
+  const profileId = nodeslideTasteProfileId(tenantId, actorId);
+  const profile = suppliedProfile ?? tasteProfileFromRow(await findTasteProfile(ctx, profileId));
+  if (
+    profile &&
+    (profile.id !== profileId || profile.tenantId !== tenantId || profile.actorId !== actorId)
+  ) {
+    throw new Error('Preference retention profile scope mismatch.');
+  }
+  const plan = planPreferenceEventRetention(
+    rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      actorId: row.actorId,
+      recordedAt: row.recordedAt,
+      ...(row.processedAt === undefined ? {} : { processedAt: row.processedAt }),
+      ...(row.provenance.sourceEventId ? { sourceEventId: row.provenance.sourceEventId } : {}),
+    })),
+    (profile?.signals ?? []).map((signal) => ({
+      id: signal.id,
+      tenantId: signal.tenantId,
+      actorId: signal.actorId,
+      createdAt: signal.createdAt,
+      evidenceEventIds: signal.evidenceEventIds,
+      evaluatorInputEventIds: signal.evaluator.inputEventIds,
+    })),
+    { tenantId, actorId },
+  );
+
+  let retainedProfile = profile;
+  if (profile && plan.signalIdsToEvict.length > 0) {
+    const profileRow = await findTasteProfile(ctx, profileId);
+    if (!profileRow) throw new Error('Preference retention profile unavailable.');
+    const evictedSignalIds = new Set(plan.signalIdsToEvict);
+    const signals = profile.signals.filter((signal) => !evictedSignalIds.has(signal.id));
+    if (signals.length !== plan.receipt.retainedSignalCount) {
+      throw new Error('Preference retention profile compaction mismatch.');
+    }
+    const updatedAt = Math.max(Date.now(), profile.updatedAt);
+    await ctx.db.patch(profileRow._id, { signals, updatedAt });
+    retainedProfile = { ...profile, signals, updatedAt };
+  }
+
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   for (const eventId of plan.eventIdsToDelete) {
     const row = rowsById.get(eventId);
     if (row) await ctx.db.delete(row._id);
   }
+
+  const postRows = await ctx.db
+    .query('nodeslide_preference_events')
+    .withIndex('by_tenant_actor_recorded', (index) =>
+      index.eq('tenantId', tenantId).eq('actorId', actorId),
+    )
+    .order('asc')
+    .take(NODESLIDE_PREFERENCE_BOUNDS.maxRetainedEvents + 1);
+  if (postRows.length > NODESLIDE_PREFERENCE_BOUNDS.maxRetainedEvents) {
+    throw new Error('Preference retention post-count exceeds configured limit.');
+  }
+  if (postRows.length !== plan.receipt.postCount) {
+    throw new Error('Preference retention post-count does not match its plan.');
+  }
+  const retainedEventIds = new Set(postRows.map((row) => row.id));
+  const noDanglingProfileReferences = (retainedProfile?.signals ?? []).every(
+    (signal) =>
+      signal.evidenceEventIds.every((eventId) => retainedEventIds.has(eventId)) &&
+      signal.evaluator.inputEventIds.every((eventId) => retainedEventIds.has(eventId)),
+  );
+  const noDanglingEventProvenance = postRows.every(
+    (row) => !row.provenance.sourceEventId || retainedEventIds.has(row.provenance.sourceEventId),
+  );
+  if (!noDanglingProfileReferences || !noDanglingEventProvenance) {
+    throw new Error('Preference retention left a dangling provenance reference.');
+  }
+  const retainedEvidenceEventIds = new Set(
+    (retainedProfile?.signals ?? []).flatMap((signal) => signal.evidenceEventIds),
+  );
+  const receipt: PreferenceRetentionReceipt = {
+    ...plan.receipt,
+    deletedEventCount: plan.eventIdsToDelete.length,
+    postCount: postRows.length,
+    retainedSignalCount: retainedProfile?.signals.length ?? 0,
+    retainedEvidenceEventCount: retainedEvidenceEventIds.size,
+    postCountAtOrBelowLimit: true,
+    noDanglingReferences: true,
+  };
+  return { profile: retainedProfile, receipt };
 }
 
 function preferenceEventFromRow(row: Doc<'nodeslide_preference_events'>): PreferenceEvent {
