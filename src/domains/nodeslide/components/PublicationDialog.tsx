@@ -5,6 +5,7 @@ import type { NodeSlidePublication } from '../../../../shared/nodeslide';
 interface PublicationDialogProps {
   open: boolean;
   publication: NodeSlidePublication | null;
+  shareUrl: string | null;
   currentDeckVersion: number;
   busy: boolean;
   onClose: () => void;
@@ -16,6 +17,7 @@ interface PublicationDialogProps {
 export function PublicationDialog({
   open,
   publication,
+  shareUrl,
   currentDeckVersion,
   busy,
   onClose,
@@ -96,6 +98,19 @@ export function PublicationDialog({
             </small>
           </span>
         </div>
+        {active && shareUrl ? (
+          <label className="ns-share-url">
+            View-only link
+            <input
+              type="url"
+              value={shareUrl}
+              readOnly
+              spellCheck={false}
+              onFocus={(event) => event.currentTarget.select()}
+              aria-label="Published view-only link"
+            />
+          </label>
+        ) : null}
       </div>
       <footer>
         {active ? (

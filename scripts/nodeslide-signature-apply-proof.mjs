@@ -192,7 +192,7 @@ try {
       ) &&
       distinct &&
       productionDogfood.persistence.freshClientReloaded &&
-      productionDogfood.history.activationWasVersionNeutral,
+      productionDogfood.history.activationWasVersioned,
   };
   assert(distinct, 'The two profile applications were not visibly distinct.');
   assert(Object.values(reliability).every(Boolean), 'A W2 reliability check failed.');
@@ -317,10 +317,10 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       ...signatureClocks,
       scope: application.plan.scope,
       operations: application.plan.operations,
-      source: 'human',
       summary: `Applied ${profile.name} signature`,
       linkedCommentId: comment.id,
       profileId: profile.id,
+      profileDigest: profile.source.digest,
     }),
   );
   const applyElapsedMs = performance.now() - applyStart;
@@ -331,6 +331,10 @@ async function runProductionDogfood({ client, applyModule, profile }) {
   assert(
     signatureReceipt.patch.profileId === profile.id,
     'Production signature patch omitted its durable profile reference.',
+  );
+  assert(
+    signatureReceipt.patch.profileDigest === profile.source.digest,
+    'Production signature patch omitted its immutable profile digest.',
   );
   assert(
     signatureReceipt.snapshot.deck.activeSignatureProfileId === profile.id &&
@@ -395,7 +399,6 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       ...clocksForOperations(appliedWorkspace, offBrandOperations, offBrandScope),
       scope: offBrandScope,
       operations: offBrandOperations,
-      source: 'human',
       summary: 'W2 disposable off-brand validation probe',
     }),
   );
@@ -465,18 +468,35 @@ async function runProductionDogfood({ client, applyModule, profile }) {
   );
   assert(freshClientReloaded, 'A fresh client could not reload the durable active profile.');
 
+  const staleTarget = workspace.elements.find(
+    (element) => element.kind === 'text' && !element.locked && element.content,
+  );
+  assert(staleTarget, 'The disposable W2 workspace has no text element for the stale CAS probe.');
+  const staleOperations = [
+    {
+      op: 'replace_text',
+      slideId: staleTarget.slideId,
+      elementId: staleTarget.id,
+      text: `${staleTarget.content} Stale CAS probe.`,
+    },
+  ];
+  const staleScope = {
+    kind: 'elements',
+    deckId: workspace.deck.id,
+    slideIds: [staleTarget.slideId],
+    elementIds: [staleTarget.id],
+    operationMode: 'copy',
+  };
   const staleReceipt = await step('exercise stale signature CAS path', () =>
     client.mutation(api.nodeslide.applyPatch, {
       id: `patch_w2_stale_${nonce}`,
       deckId: workspace.deck.id,
       ownerAccessKey,
       baseDeckVersion: workspace.deck.version,
-      ...signatureClocks,
-      scope: application.plan.scope,
-      operations: application.plan.operations,
-      source: 'human',
-      summary: 'W2 stale signature replay probe',
-      profileId: profile.id,
+      ...clocksForOperations(workspace, staleOperations, staleScope),
+      scope: staleScope,
+      operations: staleOperations,
+      summary: 'W2 stale active-signature CAS probe',
     }),
   );
   assert(staleReceipt.patch.status === 'stale', 'Stale production signature replay was accepted.');
@@ -517,12 +537,6 @@ async function runProductionDogfood({ client, applyModule, profile }) {
   );
   const boundaryTarget = boundaryWorkspace.elements.find((element) => !element.locked);
   assert(boundaryTarget, 'W2 boundary workspace has no editable element.');
-  const operation = {
-    op: 'update_style',
-    slideId: boundaryTarget.slideId,
-    elementId: boundaryTarget.id,
-    properties: { opacity: boundaryTarget.style.opacity ?? 1 },
-  };
   const boundaryScope = {
     kind: 'elements',
     deckId: boundaryWorkspace.deck.id,
@@ -530,7 +544,12 @@ async function runProductionDogfood({ client, applyModule, profile }) {
     elementIds: [boundaryTarget.id],
     operationMode: 'style',
   };
-  const operations513 = Array.from({ length: 513 }, () => structuredClone(operation));
+  const operations513 = Array.from({ length: 513 }, (_, index) => ({
+    op: 'update_style',
+    slideId: boundaryTarget.slideId,
+    elementId: boundaryTarget.id,
+    properties: { opacity: 0.1 + ((index + 1) / 514) * 0.8 },
+  }));
   const rejected513 = await captureFailure(() =>
     client.mutation(api.nodeslide.applyPatch, {
       id: `patch_w2_513_${nonce}`,
@@ -540,7 +559,6 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       ...clocksForOperations(boundaryWorkspace, operations513, boundaryScope),
       scope: boundaryScope,
       operations: operations513,
-      source: 'system',
       summary: 'W2 513-operation rejection probe',
     }),
   );
@@ -563,7 +581,6 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       ...clocksForOperations(boundaryWorkspace, operations512, boundaryScope),
       scope: boundaryScope,
       operations: operations512,
-      source: 'system',
       summary: 'W2 exact 512-operation acceptance probe',
     }),
   );
@@ -604,8 +621,8 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       offBrandPublishBlocked: !offBrandReceipt.validation.publishOk,
       restoredDeckVersion: restoreReceipt.snapshot.deck.version,
       restorePublishOk: restoreReceipt.validation.publishOk,
-      activationWasVersionNeutral:
-        activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version,
+      activationWasVersioned:
+        activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version + 1,
       stalePatchRecorded: staleReceipt.patch.status === 'stale',
       staleReplayWasVersionNeutral: afterStale.deck.version === activatedWorkspace.deck.version,
     },

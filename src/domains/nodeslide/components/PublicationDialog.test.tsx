@@ -20,6 +20,7 @@ describe('NodeSlide publication dialog', () => {
       <PublicationDialog
         open
         publication={publication}
+        shareUrl="https://example.com/?share=share-private&amp;present=1"
         currentDeckVersion={5}
         busy={false}
         onClose={() => undefined}
@@ -34,5 +35,6 @@ describe('NodeSlide publication dialog', () => {
     expect(markup).toContain('Version 4 remains published');
     expect(markup).toContain('Publish current version &amp; copy');
     expect(markup).toContain('Revoke link');
+    expect(markup).toContain('Published view-only link');
   });
 });

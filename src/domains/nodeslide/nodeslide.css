@@ -3021,6 +3021,23 @@
   color: var(--ns-muted);
   font-size: 11px;
 }
+.ns-share-url {
+  color: var(--ns-muted);
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+}
+.ns-share-url input {
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line);
+  border-radius: 8px;
+  color: var(--ns-ink);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 9px 10px;
+  width: 100%;
+}
 .ns-share-dialog > footer {
   border-top: 1px solid var(--ns-line-soft);
   display: flex;

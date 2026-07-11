@@ -243,7 +243,6 @@ async function normalizeWorkflowNumbering(client, workspace, ownerAccessKey) {
       elementId: element.id,
       text,
     })),
-    source: 'human',
     summary: 'Removed duplicate workflow numbering after PPTX visual QA',
   });
   assert(result.patch.status === 'accepted', 'Workflow numbering repair was not accepted.');
@@ -268,7 +267,6 @@ function patchFor(base, ownerAccessKey, slide, element, text, summary) {
       operationMode: 'copy',
     },
     operations: [{ op: 'replace_text', slideId: slide.id, elementId: element.id, text }],
-    source: 'human',
     summary,
   };
 }

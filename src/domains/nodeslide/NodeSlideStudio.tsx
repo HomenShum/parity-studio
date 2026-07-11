@@ -1874,6 +1874,11 @@ export function NodeSlideStudio() {
       <PublicationDialog
         open={shareOpen}
         publication={workspace.publication}
+        shareUrl={
+          workspace.publication?.status === 'active'
+            ? publishedDeckUrl(workspace.publication.shareSlug)
+            : null
+        }
         currentDeckVersion={workspace.deck.version}
         busy={shareBusy}
         onClose={() => setShareOpen(false)}
@@ -2216,12 +2221,16 @@ function setQueryParam(key: string, value: string | null) {
 }
 
 async function shareDeck(shareSlug: string) {
+  await navigator.clipboard.writeText(publishedDeckUrl(shareSlug));
+}
+
+function publishedDeckUrl(shareSlug: string): string {
   const url = new URL(window.location.href);
   url.searchParams.delete('deck');
   url.searchParams.delete('slide');
   url.searchParams.set('share', shareSlug);
   url.searchParams.set('present', '1');
-  await navigator.clipboard.writeText(url.toString());
+  return url.toString();
 }
 
 function isEditableTarget(target: EventTarget | null) {
