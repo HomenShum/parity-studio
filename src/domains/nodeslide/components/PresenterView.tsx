@@ -1,15 +1,25 @@
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, NotebookText, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { DeckSnapshot, Slide } from '../../../../shared/nodeslide';
+import type { Deck, Slide, SlideElement } from '../../../../shared/nodeslide';
 import { SlideRenderer } from './SlideRenderer';
 
 interface PresenterViewProps {
-  workspace: Pick<DeckSnapshot, 'deck' | 'slides' | 'elements'>;
+  workspace: {
+    deck: Pick<Deck, 'title' | 'theme' | 'slideOrder'>;
+    slides: Slide[];
+    elements: SlideElement[];
+  };
   initialSlideId?: string;
+  showNotes?: boolean;
   onExit: (slideId: string) => void;
 }
 
-export function PresenterView({ workspace, initialSlideId, onExit }: PresenterViewProps) {
+export function PresenterView({
+  workspace,
+  initialSlideId,
+  showNotes = true,
+  onExit,
+}: PresenterViewProps) {
   const slides = workspace.deck.slideOrder
     .map((id) => workspace.slides.find((slide) => slide.id === id))
     .filter((slide): slide is Slide => slide !== undefined);
@@ -33,7 +43,7 @@ export function PresenterView({ workspace, initialSlideId, onExit }: PresenterVi
         setIndex((value) => Math.max(0, value - 1));
       } else if (event.key === 'Escape' && !document.fullscreenElement && slide) {
         onExit(slide.id);
-      } else if (event.key.toLowerCase() === 'n') {
+      } else if (showNotes && event.key.toLowerCase() === 'n') {
         setNotesOpen((value) => !value);
       }
     };
@@ -44,7 +54,7 @@ export function PresenterView({ workspace, initialSlideId, onExit }: PresenterVi
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('fullscreenchange', onFullscreen);
     };
-  }, [onExit, slide, slides.length]);
+  }, [onExit, showNotes, slide, slides.length]);
 
   useEffect(() => {
     if (!slide) return;
@@ -71,13 +81,15 @@ export function PresenterView({ workspace, initialSlideId, onExit }: PresenterVi
       <div className="ns-presenter-topbar">
         <span>{workspace.deck.title}</span>
         <div>
-          <button
-            type="button"
-            onClick={() => setNotesOpen((value) => !value)}
-            className={notesOpen ? 'is-active' : ''}
-          >
-            <NotebookText size={15} /> Notes
-          </button>
+          {showNotes ? (
+            <button
+              type="button"
+              onClick={() => setNotesOpen((value) => !value)}
+              className={notesOpen ? 'is-active' : ''}
+            >
+              <NotebookText size={15} /> Notes
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -90,7 +102,7 @@ export function PresenterView({ workspace, initialSlideId, onExit }: PresenterVi
           </button>
         </div>
       </div>
-      <div className={`ns-presenter-stage ${notesOpen ? 'has-notes' : ''}`}>
+      <div className={`ns-presenter-stage ${showNotes && notesOpen ? 'has-notes' : ''}`}>
         <div className="ns-presenter-slide-wrap">
           <SlideRenderer
             slide={slide}
@@ -99,7 +111,7 @@ export function PresenterView({ workspace, initialSlideId, onExit }: PresenterVi
             className="ns-presenter-slide"
           />
         </div>
-        {notesOpen ? (
+        {showNotes && notesOpen ? (
           <aside className="ns-presenter-notes">
             <span className="ns-eyebrow">Speaker notes</span>
             <h2>{slide.title}</h2>

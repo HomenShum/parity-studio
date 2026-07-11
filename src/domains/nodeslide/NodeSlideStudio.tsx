@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type {
   AgentEditRequest,
@@ -18,9 +18,11 @@ import type {
   DeckPatch,
   DeckSnapshot,
   DeckVersion,
+  NodeSlidePublication,
   NodeSlideWorkspace,
   PatchOperation,
   PatchScope,
+  PublishedNodeSlide,
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
@@ -39,12 +41,17 @@ import {
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
 import { FirstRunDialog } from './components/FirstRunDialog';
+import {
+  type OwnerCapabilityRecovery,
+  OwnerCapabilityRecoveryDialog,
+} from './components/OwnerCapabilityRecoveryDialog';
 import { PresenterView } from './components/PresenterView';
 import {
   type CreateDeckAdmissionRequest,
   ProjectDialog,
   type RecentDeck,
 } from './components/ProjectDialog';
+import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import { SlideNavigator } from './components/SlideNavigator';
 import { StudioToolbar } from './components/StudioToolbar';
@@ -100,9 +107,9 @@ interface ApplyPatchArgs {
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
   operations: PatchOperation[];
-  source: 'human' | 'agent';
   summary: string;
   profileId?: string;
+  profileDigest?: string;
 }
 
 interface NodeSlideGeneratedApi {
@@ -111,7 +118,7 @@ interface NodeSlideGeneratedApi {
       { deckId: string; ownerAccessKey: string },
       NodeSlideWorkspace | null
     >;
-    getPresenterSnapshot: PublicQuery<{ shareSlug: string }, DeckSnapshot | null>;
+    getPresenterSnapshot: PublicQuery<{ shareSlug: string }, PublishedNodeSlide | null>;
     listDecks: PublicQuery<
       { access: Array<{ deckId: string; ownerAccessKey: string }> },
       RecentDeck[]
@@ -168,6 +175,11 @@ interface NodeSlideGeneratedApi {
       },
       PatchReceipt
     >;
+    publishDeck: PublicMutation<{ deckId: string; ownerAccessKey: string }, PublishedNodeSlide>;
+    revokePublication: PublicMutation<
+      { deckId: string; ownerAccessKey: string },
+      NodeSlidePublication | null
+    >;
   };
   nodeslideAgent: {
     createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
@@ -198,11 +210,17 @@ interface NodeSlideGeneratedApi {
     >;
     listProfiles: PublicQuery<{ deckId: string; ownerAccessKey: string; limit?: number }, string[]>;
     activateProfile: PublicMutation<
-      { deckId: string; ownerAccessKey: string; profileId: string },
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        profileId: string;
+        profileDigest: string;
+        baseDeckVersion: number;
+      },
       NodeSlideWorkspace | null
     >;
     clearActiveProfile: PublicMutation<
-      { deckId: string; ownerAccessKey: string },
+      { deckId: string; ownerAccessKey: string; baseDeckVersion: number },
       NodeSlideWorkspace | null
     >;
   };
@@ -242,6 +260,10 @@ export function NodeSlideStudio() {
     requestedDeck ? (getDeckOwnerAccessKey(requestedDeck) ?? null) : null,
   );
   const [knownAccess, setKnownAccess] = useState(() => listStoredDeckAccess());
+  const [ownerRecovery, setOwnerRecovery] = useState<OwnerCapabilityRecovery | null>(null);
+  const [recoveryAccessInput, setRecoveryAccessInput] = useState('');
+  const [recoveryAccessRequest, setRecoveryAccessRequest] = useState<string | null>(null);
+  const [recoveryAccessError, setRecoveryAccessError] = useState<string | null>(null);
   const [localWorkspace, setLocalWorkspace] = useState<NodeSlideWorkspace | null>(null);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
@@ -263,6 +285,8 @@ export function NodeSlideStudio() {
   );
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
   const [variationGenerating, setVariationGenerating] = useState(false);
   const [variationDecisionBusy, setVariationDecisionBusy] = useState(false);
@@ -284,6 +308,7 @@ export function NodeSlideStudio() {
   );
   const bootstrapped = useRef(false);
   const historyDeckRef = useRef<string | null>(null);
+  const promptedRecoveryDecks = useRef(new Set<string>());
 
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
@@ -294,6 +319,8 @@ export function NodeSlideStudio() {
   const resolveComment = useMutation(nodeslideApi.nodeslide.resolveComment);
   const reopenComment = useMutation(nodeslideApi.nodeslide.reopenComment);
   const restoreVersion = useMutation(nodeslideApi.nodeslide.restoreVersion);
+  const publishDeck = useMutation(nodeslideApi.nodeslide.publishDeck);
+  const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
   const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
@@ -316,6 +343,12 @@ export function NodeSlideStudio() {
   const queriedWorkspace = useQuery(
     nodeslideApi.nodeslide.getWorkspace,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  const recoveredWorkspace = useQuery(
+    nodeslideApi.nodeslide.getWorkspace,
+    requestedDeck && !ownerAccessKey && recoveryAccessRequest
+      ? { deckId: requestedDeck, ownerAccessKey: recoveryAccessRequest }
+      : 'skip',
   );
   const sharedSnapshot = useQuery(
     nodeslideApi.nodeslide.getPresenterSnapshot,
@@ -345,10 +378,14 @@ export function NodeSlideStudio() {
   const signatureProfiles = parseSignatureProfileRows(signatureProfileRows ?? []);
   const activeSignatureProfile = workspace?.deck.activeSignatureProfileId
     ? (signatureProfiles.find(
-        (profile) => profile.id === workspace.deck.activeSignatureProfileId,
+        (profile) =>
+          profile.id === workspace.deck.activeSignatureProfileId &&
+          profile.source.digest === workspace.deck.activeSignatureProfileDigest,
       ) ??
       NODESLIDE_TASTE_PACKS.find(
-        (profile) => profile.id === workspace.deck.activeSignatureProfileId,
+        (profile) =>
+          profile.id === workspace.deck.activeSignatureProfileId &&
+          profile.source.digest === workspace.deck.activeSignatureProfileDigest,
       ))
     : undefined;
   const activeTastePackId = tastePackIdForProfile(activeSignatureProfile);
@@ -359,10 +396,28 @@ export function NodeSlideStudio() {
       explicitOwnerAccessKey?: string,
       primary = false,
     ) => {
+      let accessDurable = true;
       const nextOwnerAccessKey =
         'ownerAccessKey' in next ? next.ownerAccessKey : explicitOwnerAccessKey;
       if (nextOwnerAccessKey) {
-        storeDeckOwnerAccessKey(next.deck.id, nextOwnerAccessKey, primary);
+        const persistence = storeDeckOwnerAccessKey(next.deck.id, nextOwnerAccessKey, primary);
+        accessDurable = persistence.durable;
+        if (!persistence.durable && !promptedRecoveryDecks.current.has(next.deck.id)) {
+          promptedRecoveryDecks.current.add(next.deck.id);
+          setOwnerRecovery({
+            deckId: next.deck.id,
+            deckTitle: next.deck.title,
+            ownerAccessKey: nextOwnerAccessKey,
+          });
+          setToast({
+            kind: 'error',
+            message:
+              'This browser did not save the deck owner key. Save the recovery key before closing this tab.',
+          });
+        } else if (persistence.durable) {
+          promptedRecoveryDecks.current.delete(next.deck.id);
+          setOwnerRecovery((current) => (current?.deckId === next.deck.id ? null : current));
+        }
         setOwnerAccessKey(nextOwnerAccessKey);
         setKnownAccess(listStoredDeckAccess());
       }
@@ -374,9 +429,25 @@ export function NodeSlideStudio() {
           : (next.deck.slideOrder[0] ?? null),
       );
       writeDeckToUrl(next.deck.id);
+      return accessDurable;
     },
     [],
   );
+
+  useEffect(() => {
+    if (!recoveryAccessRequest || recoveredWorkspace === undefined) return;
+    if (!recoveredWorkspace) {
+      setRecoveryAccessRequest(null);
+      setRecoveryAccessError('That recovery key did not grant access to this deck.');
+      return;
+    }
+    const recoveredOwnerAccessKey = recoveryAccessRequest;
+    setRecoveryAccessRequest(null);
+    setRecoveryAccessInput('');
+    setRecoveryAccessError(null);
+    const accessDurable = installWorkspace(recoveredWorkspace, recoveredOwnerAccessKey);
+    if (accessDurable) setToast({ kind: 'success', message: 'Deck access recovered.' });
+  }, [installWorkspace, recoveredWorkspace, recoveryAccessRequest]);
 
   useEffect(() => {
     void bootstrapAttempt;
@@ -584,8 +655,7 @@ export function NodeSlideStudio() {
       operations: PatchOperation[],
       scope: PatchScope,
       summary: string,
-      source: 'human' | 'agent' = 'human',
-      profileId?: string,
+      signatureProfile?: SignatureProfile,
     ) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
       const clocks = clocksForScope(workspace, scope, operations);
@@ -598,9 +668,13 @@ export function NodeSlideStudio() {
           ...clocks,
           scope,
           operations,
-          source,
           summary,
-          ...(profileId ? { profileId } : {}),
+          ...(signatureProfile
+            ? {
+                profileId: signatureProfile.id,
+                profileDigest: signatureProfile.source.digest,
+              }
+            : {}),
         });
         if (receipt.patch.status === 'stale') {
           if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
@@ -659,6 +733,17 @@ export function NodeSlideStudio() {
           versionId: targetId,
           baseDeckVersion: workspace.deck.version,
         });
+        if (receipt.patch.status !== 'accepted') {
+          if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
+          setToast({
+            kind: 'error',
+            message:
+              'This deck changed before the restore could apply. Your undo history was preserved.',
+          });
+          setActiveInspectorTab('versions');
+          setInspectorCollapsed(false);
+          return;
+        }
         if (!receipt.workspace) throw new Error('Restore completed without a workspace receipt.');
         if (direction === 'undo') {
           setUndoStack((stack) => stack.slice(0, -1));
@@ -823,17 +908,19 @@ export function NodeSlideStudio() {
     setCreating(true);
     try {
       const result = await createDeckFromBrief({ ...request });
-      installWorkspace(result);
+      const accessDurable = installWorkspace(result);
       markFirstRunSeen();
       setFirstRunOpen(false);
       setProjectsOpen(false);
-      setToast({
-        kind: 'success',
-        message:
-          request.providerMode === 'deterministic'
-            ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
-            : 'Deck created after your consented OpenRouter attempt. Trace shows whether OpenRouter or the deterministic fallback produced it.',
-      });
+      if (accessDurable) {
+        setToast({
+          kind: 'success',
+          message:
+            request.providerMode === 'deterministic'
+              ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
+              : 'Deck created after your consented OpenRouter attempt. Trace shows whether OpenRouter or the deterministic fallback produced it.',
+        });
+      }
     } catch (error) {
       setToast({ kind: 'error', message: errorMessage(error, 'The deck could not be created.') });
     } finally {
@@ -873,7 +960,8 @@ export function NodeSlideStudio() {
     const requestedSlide = new URLSearchParams(window.location.search).get('slide') ?? undefined;
     return (
       <PresenterView
-        workspace={sharedSnapshot}
+        workspace={sharedSnapshot.snapshot}
+        showNotes={false}
         {...(requestedSlide ? { initialSlideId: requestedSlide } : {})}
         onExit={() => window.history.back()}
       />
@@ -885,10 +973,43 @@ export function NodeSlideStudio() {
       <>
         <RecoveryScreen
           title="This is an editor link, not a share link"
-          detail="Raw deck IDs do not grant access. Open a deck owned by this browser or ask for a view-only presentation link."
+          detail="Raw deck IDs do not grant access. Paste the private recovery key for this deck, open a deck owned by this browser, or ask for a view-only presentation link."
           primaryLabel="Open my decks"
           onPrimary={() => setProjectsOpen(true)}
-        />
+        >
+          <form
+            className="ns-recovery-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const candidate = recoveryAccessInput.trim();
+              if (!candidate || candidate.length > 256 || recoveryAccessRequest) return;
+              setRecoveryAccessError(null);
+              setRecoveryAccessRequest(candidate);
+              setRecoveryAccessInput('');
+            }}
+          >
+            <label htmlFor="nodeslide-owner-recovery-key">Private recovery key</label>
+            <input
+              id="nodeslide-owner-recovery-key"
+              type="password"
+              value={recoveryAccessInput}
+              onChange={(event) => setRecoveryAccessInput(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={256}
+              disabled={Boolean(recoveryAccessRequest)}
+            />
+            {recoveryAccessError ? <output aria-live="polite">{recoveryAccessError}</output> : null}
+            <button
+              className="ns-button ns-button--accent"
+              type="submit"
+              disabled={!recoveryAccessInput.trim() || Boolean(recoveryAccessRequest)}
+            >
+              {recoveryAccessRequest ? <LoaderCircle className="ns-spin" size={15} /> : null}
+              {recoveryAccessRequest ? 'Checking key…' : 'Recover deck access'}
+            </button>
+          </form>
+        </RecoveryScreen>
         {projectsDialog}
         {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
       </>
@@ -1062,6 +1183,8 @@ export function NodeSlideStudio() {
             deckId: workspace.deck.id,
             ownerAccessKey,
             profileId: profile.id,
+            profileDigest: profile.source.digest,
+            baseDeckVersion: workspace.deck.version,
           });
           if (activated) installWorkspace(activated, ownerAccessKey);
           setToast({
@@ -1074,8 +1197,7 @@ export function NodeSlideStudio() {
           result.plan.operations,
           result.plan.scope,
           `Applied ${profile.name} signature`,
-          'human',
-          profile.id,
+          profile,
         );
         if (accepted) {
           setToast({
@@ -1194,20 +1316,7 @@ export function NodeSlideStudio() {
         onOpenProjects={() => setProjectsOpen(true)}
         onUndo={() => void restoreHistory('undo')}
         onRedo={() => void restoreHistory('redo')}
-        onShare={() =>
-          workspace.deck.shareSlug
-            ? void shareDeck(workspace.deck.shareSlug)
-                .then(() =>
-                  setToast({ kind: 'success', message: 'Read-only presentation link copied.' }),
-                )
-                .catch((error: unknown) =>
-                  setToast({
-                    kind: 'error',
-                    message: errorMessage(error, 'Could not copy the presentation link.'),
-                  }),
-                )
-            : setToast({ kind: 'error', message: 'This deck does not have a share link yet.' })
-        }
+        onShare={() => setShareOpen(true)}
         onPresent={beginPresentation}
         onExportHtml={() => exportDeck('html')}
         onExportPptx={() => exportDeck('pptx')}
@@ -1620,7 +1729,11 @@ export function NodeSlideStudio() {
             if (!ownerAccessKey || tastePackBusy) return;
             setTastePackBusy(true);
             setPreviewedSignatureProfile(null);
-            void clearActiveSignatureProfile({ deckId: workspace.deck.id, ownerAccessKey })
+            void clearActiveSignatureProfile({
+              deckId: workspace.deck.id,
+              ownerAccessKey,
+              baseDeckVersion: workspace.deck.version,
+            })
               .then((cleared) => {
                 if (cleared) installWorkspace(cleared, ownerAccessKey);
                 setToast({ kind: 'success', message: 'Active on-brand checks cleared.' });
@@ -1710,6 +1823,15 @@ export function NodeSlideStudio() {
               baseDeckVersion: workspace.deck.version,
             })
               .then((receipt) => {
+                if (receipt.patch.status !== 'accepted') {
+                  if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
+                  setToast({
+                    kind: 'error',
+                    message:
+                      'This deck changed before the restore could apply. No version history was changed.',
+                  });
+                  return;
+                }
                 if (receipt.workspace) {
                   installWorkspace(receipt.workspace, ownerAccessKey);
                   setUndoStack([]);
@@ -1743,6 +1865,71 @@ export function NodeSlideStudio() {
         open={commandOpen}
         commands={commands}
         onClose={() => setCommandOpen(false)}
+      />
+      <OwnerCapabilityRecoveryDialog
+        open={Boolean(ownerRecovery) && !firstRunOpen && !projectsOpen}
+        recovery={ownerRecovery}
+        onClose={() => setOwnerRecovery(null)}
+      />
+      <PublicationDialog
+        open={shareOpen}
+        publication={workspace.publication}
+        currentDeckVersion={workspace.deck.version}
+        busy={shareBusy}
+        onClose={() => setShareOpen(false)}
+        onCopy={() => {
+          const publication = workspace.publication;
+          if (!publication || publication.status !== 'active') return;
+          setShareBusy(true);
+          void shareDeck(publication.shareSlug)
+            .then(() => setToast({ kind: 'success', message: 'Frozen view-only link copied.' }))
+            .catch((error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: errorMessage(error, 'Share link could not be copied.'),
+              }),
+            )
+            .finally(() => setShareBusy(false));
+        }}
+        onPublish={() => {
+          if (!ownerAccessKey) return;
+          setShareBusy(true);
+          void publishDeck({ deckId: workspace.deck.id, ownerAccessKey })
+            .then(async (published) => {
+              try {
+                await shareDeck(published.publication.shareSlug);
+                setToast({
+                  kind: 'success',
+                  message: `Published immutable version ${published.publication.deckVersion}; link copied.`,
+                });
+              } catch {
+                setToast({
+                  kind: 'error',
+                  message: `Published immutable version ${published.publication.deckVersion}, but this browser could not copy the link. Use “Copy existing link” to retry.`,
+                });
+              }
+            })
+            .catch((error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: errorMessage(error, 'The current deck could not be published.'),
+              }),
+            )
+            .finally(() => setShareBusy(false));
+        }}
+        onRevoke={() => {
+          if (!ownerAccessKey) return;
+          setShareBusy(true);
+          void revokePublication({ deckId: workspace.deck.id, ownerAccessKey })
+            .then(() => setToast({ kind: 'success', message: 'The view-only link was revoked.' }))
+            .catch((error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: errorMessage(error, 'The share link could not be revoked.'),
+              }),
+            )
+            .finally(() => setShareBusy(false));
+        }}
       />
       {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
     </main>
@@ -2031,6 +2218,7 @@ function setQueryParam(key: string, value: string | null) {
 async function shareDeck(shareSlug: string) {
   const url = new URL(window.location.href);
   url.searchParams.delete('deck');
+  url.searchParams.delete('slide');
   url.searchParams.set('share', shareSlug);
   url.searchParams.set('present', '1');
   await navigator.clipboard.writeText(url.toString());
@@ -2115,7 +2303,14 @@ function RecoveryScreen({
   detail,
   primaryLabel,
   onPrimary,
-}: { title: string; detail: string; primaryLabel: string; onPrimary: () => void }) {
+  children,
+}: {
+  title: string;
+  detail: string;
+  primaryLabel: string;
+  onPrimary: () => void;
+  children?: ReactNode;
+}) {
   return (
     <main className="nodeslide-studio ns-recovery-screen" data-testid="nodeslide-studio">
       <span className="ns-recovery-mark" aria-hidden="true">
@@ -2124,6 +2319,7 @@ function RecoveryScreen({
       <span className="ns-eyebrow">Safe recovery</span>
       <h1>{title}</h1>
       <p>{detail}</p>
+      {children}
       <button className="ns-button ns-button--accent" type="button" onClick={onPrimary}>
         {primaryLabel === 'Retry' ? <RefreshCw size={15} /> : <FolderOpen size={15} />}
         {primaryLabel}
