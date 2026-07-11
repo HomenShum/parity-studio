@@ -404,9 +404,19 @@ export function deterministicAgentOperations(
       ? scope.operationMode
       : /move|layout|align|position|space|resize/.test(lower)
         ? 'layout'
-        : /copy|text|title|headline|word|short|concise|say|read/.test(lower)
+        : /copy|text|title|headline|body|paragraph|description|summary|bullet|section|label|word|short|concise|say|read|replace|rewrite/.test(
+              lower,
+            )
           ? 'copy'
-          : 'style';
+          : /style|color|font|bold|weight|emphasis|accent|contrast|visual/.test(lower)
+            ? 'style'
+            : null;
+
+  if (inferredMode === null) {
+    throw new Error(
+      'The free route returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
+    );
+  }
 
   if (inferredMode === 'copy') {
     const target = selectDeterministicTextTarget(eligible, instruction);

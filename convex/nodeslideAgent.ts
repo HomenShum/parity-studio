@@ -1,6 +1,6 @@
 'use node';
 
-import { v } from 'convex/values';
+import { ConvexError, v } from 'convex/values';
 import type {
   DeckSnapshot,
   ElementStyle,
@@ -130,8 +130,17 @@ export const proposeEdit = action({
       }
     }
     const usedFallback = operations === null;
-    const finalOperations =
-      operations ?? deterministicAgentOperations(workspace, instruction, args.scope);
+    let finalOperations: PatchOperation[];
+    try {
+      finalOperations =
+        operations ?? deterministicAgentOperations(workspace, instruction, args.scope);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.startsWith('The free route returned')
+          ? error.message
+          : 'The free route could not produce a safe scoped proposal. Retry with a smaller request or exact replacement copy in quotation marks.';
+      throw publicAgentError('fallback_unavailable', message);
+    }
     const fallbackErrors = validateNodeSlidePatch(
       workspace,
       {
@@ -146,7 +155,12 @@ export const proposeEdit = action({
         ? workspace.comments.find((candidate) => candidate.id === scopedCommentId)
         : null,
     );
-    if (fallbackErrors.length > 0) throw new Error(fallbackErrors.join(' '));
+    if (fallbackErrors.length > 0) {
+      throw publicAgentError(
+        'proposal_invalid',
+        `The proposed edit did not pass NodeSlide’s safety checks: ${fallbackErrors[0]}`,
+      );
+    }
 
     const now = Date.now();
     const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
@@ -415,6 +429,14 @@ function stringField(value: unknown): value is string {
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function publicAgentError(code: 'fallback_unavailable' | 'proposal_invalid', message: string) {
+  return new ConvexError({
+    kind: 'nodeslide_agent' as const,
+    code,
+    message: message.replace(/\s+/g, ' ').trim().slice(0, 360),
+  });
 }
 
 function requiredText(value: string, label: string, max: number): string {

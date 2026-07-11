@@ -879,7 +879,7 @@ describe('NodeSlide deck-level operations and clocks', () => {
         kind: 'slide',
         deckId: current.deck.id,
         slideIds: ['slide-1'],
-        operationMode: 'copy',
+        operationMode: 'unrestricted',
       },
     );
     expect(operations).toEqual([
@@ -902,9 +902,9 @@ describe('NodeSlide deck-level operations and clocks', () => {
           kind: 'slide',
           deckId: current.deck.id,
           slideIds: ['slide-1'],
-          operationMode: 'copy',
+          operationMode: 'unrestricted',
         },
       ),
-    ).toThrow('could not safely infer new wording');
+    ).toThrow('could not safely infer a copy, style, or layout operation');
   });
 });
