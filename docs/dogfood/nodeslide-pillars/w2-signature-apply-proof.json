@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-11T01:39:48.787Z",
-  "sourceCommit": "483d704480563dc9e9fb26ead6f7f05a4115302f",
+  "generatedAt": "2026-07-11T13:16:14.492Z",
+  "sourceCommit": "11fa43f51b978e4bc94069601f416dd9b82e59fa",
   "sourceDirty": true,
   "contractVersion": "nodeslide.signature-apply/v1",
   "sourceDeck": {
@@ -8,41 +8,41 @@
     "version": 1,
     "slideCount": 7,
     "elementCount": 67,
-    "digestSha256": "f5845cc9bcf3e572cfedc022a2d06b7d3c722917d96b2d122faa2e4c474f9a50"
+    "digestSha256": "5dad74283b3c670a21a44b851b2c17e949e930fa727e942d8d0e463a06832854"
   },
   "profiles": [
     {
       "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
       "profileName": "Finance reporting",
-      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:130l0cl",
-      "planElapsedMs": 8.04,
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:1lg5t6u",
+      "planElapsedMs": 21.566,
       "operationCount": 53,
       "operationKinds": [
         "update_slide",
         "update_style"
       ],
       "lockedElementIds": [
-        "element_06nhsap",
-        "element_1ilin87",
-        "element_1i33hln",
-        "element_0eb5ejn",
-        "element_12uzpyl",
-        "element_1i4bwfp",
-        "element_0y6tmwb",
-        "element_1wjimlh",
-        "element_1jli2fh",
-        "element_15vmxqi",
-        "element_19t83s2",
-        "element_07g4boc",
-        "element_00angop",
-        "element_01bb0xr",
-        "element_012rm1v",
-        "element_0g83cjo",
-        "element_0dtvbds",
-        "element_159gh2u",
-        "element_0bdya8x",
-        "element_0gjguif",
-        "element_0dm0piz"
+        "element_83128d848bc4929de0dfc06e90c8c8d0",
+        "element_2aa2595d3f09269352353bdf8aef0b75",
+        "element_f018212537c418f87307586cffc626f9",
+        "element_3e957fb482b7be3f91d5f6457e0aaee3",
+        "element_3e14d9003c5e9d52fdc7033423c9aa2e",
+        "element_287f0606dba237972d3f923966cc2e19",
+        "element_164db2479fe9909e8392b559e2a13ec8",
+        "element_e5d97720d08aff64847adf1051ae5d98",
+        "element_81b4f144144ca387b074c79b1529c6fc",
+        "element_d0d5730ffaf0e71b0ca380e78f96d5dd",
+        "element_f44557dc89aaca66603104a76bb608c0",
+        "element_684e8233a705f533b690d0bb725e245c",
+        "element_8f890c3b4f95f3f742fe17347b6804bd",
+        "element_f58220de2a0ea0260b840026f2ec10c0",
+        "element_37e19b6e7f8497ce87ab51041413c017",
+        "element_67d45a84100c559336c77b33aa33852f",
+        "element_dfc36ac5c9d46e3949f0c37059b97a01",
+        "element_25ef789ee58334a45c2411e655b9b39e",
+        "element_2c435f5043803f75361462fad6d49080",
+        "element_bea6dea3e24e646e49d5d422d7769ae2",
+        "element_58f5ae7d7a58eecbdd74420285b080c0"
       ],
       "warningCodes": [],
       "resolvedRoles": {
@@ -106,7 +106,7 @@
         "toolchainVersion"
       ],
       "deterministicValidation": true,
-      "visualFingerprint": "4b901ef196a50d89fe2f5e50dc3d8a688cbeb58a26f675f96d12d478596feb30",
+      "visualFingerprint": "0feb791cf49a504bad39fe79118f66e472c2ee0e8e0868aba5da45d91c144cdf",
       "history": {
         "baseDeckVersion": 1,
         "resultingDeckVersion": 2,
@@ -119,35 +119,35 @@
     {
       "profileId": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
       "profileName": "Startup narrative",
-      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800:v1:1uyoqt9",
-      "planElapsedMs": 2.798,
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800:v1:0m5rqye",
+      "planElapsedMs": 2.726,
       "operationCount": 53,
       "operationKinds": [
         "update_slide",
         "update_style"
       ],
       "lockedElementIds": [
-        "element_06nhsap",
-        "element_1ilin87",
-        "element_1i33hln",
-        "element_0eb5ejn",
-        "element_12uzpyl",
-        "element_1i4bwfp",
-        "element_0y6tmwb",
-        "element_1wjimlh",
-        "element_1jli2fh",
-        "element_15vmxqi",
-        "element_19t83s2",
-        "element_07g4boc",
-        "element_00angop",
-        "element_01bb0xr",
-        "element_012rm1v",
-        "element_0g83cjo",
-        "element_0dtvbds",
-        "element_159gh2u",
-        "element_0bdya8x",
-        "element_0gjguif",
-        "element_0dm0piz"
+        "element_83128d848bc4929de0dfc06e90c8c8d0",
+        "element_2aa2595d3f09269352353bdf8aef0b75",
+        "element_f018212537c418f87307586cffc626f9",
+        "element_3e957fb482b7be3f91d5f6457e0aaee3",
+        "element_3e14d9003c5e9d52fdc7033423c9aa2e",
+        "element_287f0606dba237972d3f923966cc2e19",
+        "element_164db2479fe9909e8392b559e2a13ec8",
+        "element_e5d97720d08aff64847adf1051ae5d98",
+        "element_81b4f144144ca387b074c79b1529c6fc",
+        "element_d0d5730ffaf0e71b0ca380e78f96d5dd",
+        "element_f44557dc89aaca66603104a76bb608c0",
+        "element_684e8233a705f533b690d0bb725e245c",
+        "element_8f890c3b4f95f3f742fe17347b6804bd",
+        "element_f58220de2a0ea0260b840026f2ec10c0",
+        "element_37e19b6e7f8497ce87ab51041413c017",
+        "element_67d45a84100c559336c77b33aa33852f",
+        "element_dfc36ac5c9d46e3949f0c37059b97a01",
+        "element_25ef789ee58334a45c2411e655b9b39e",
+        "element_2c435f5043803f75361462fad6d49080",
+        "element_bea6dea3e24e646e49d5d422d7769ae2",
+        "element_58f5ae7d7a58eecbdd74420285b080c0"
       ],
       "warningCodes": [
         "authored_token_fallback"
@@ -214,7 +214,7 @@
         "toolchainVersion"
       ],
       "deterministicValidation": true,
-      "visualFingerprint": "b0d93583c8d859d1793dc3f6e6fc768b7c5aa445bfd46071e6ac9b6d05fae928",
+      "visualFingerprint": "07eea479c6d3274ae91de16ad329607200fc86d927c5ac59d1cf2faa91de36f2",
       "history": {
         "baseDeckVersion": 1,
         "resultingDeckVersion": 2,
@@ -228,21 +228,21 @@
   "visualDistinction": {
     "distinct": true,
     "fingerprints": [
-      "4b901ef196a50d89fe2f5e50dc3d8a688cbeb58a26f675f96d12d478596feb30",
-      "b0d93583c8d859d1793dc3f6e6fc768b7c5aa445bfd46071e6ac9b6d05fae928"
+      "0feb791cf49a504bad39fe79118f66e472c2ee0e8e0868aba5da45d91c144cdf",
+      "07eea479c6d3274ae91de16ad329607200fc86d927c5ac59d1cf2faa91de36f2"
     ]
   },
   "productionDogfood": {
     "deploymentUrl": "https://blissful-pig-998.convex.cloud",
-    "disposableDeckId": "deck_golden_1oponck",
+    "disposableDeckId": "deck_golden_08xxbeu",
     "plan": {
-      "id": "signature-plan:deck_golden_1oponck:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:1o5lwzl",
-      "elapsedMs": 1.324,
+      "id": "signature-plan:deck_golden_08xxbeu:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:0hxxm6g",
+      "elapsedMs": 1.458,
       "operationCount": 53
     },
     "application": {
-      "elapsedMs": 240.945,
-      "patchId": "patch_w2_signature_mrfp5qzy",
+      "elapsedMs": 375.711,
+      "patchId": "patch_w2_signature_mrge1cvc",
       "baseDeckVersion": 1,
       "resultingDeckVersion": 2,
       "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
@@ -264,8 +264,8 @@
       "freshClientReloaded": true
     },
     "history": {
-      "versionReceiptId": "version_1o0xred",
-      "linkedCommentId": "comment_w2_signature_mrfp5qzy",
+      "versionReceiptId": "version_895ca2f109be9128b3a6ecada94ea1cd",
+      "linkedCommentId": "comment_w2_signature_mrge1cvc",
       "linkedCommentResolved": true,
       "offBrandIssueCodes": [
         "on_brand_color"
@@ -273,7 +273,7 @@
       "offBrandPublishBlocked": true,
       "restoredDeckVersion": 4,
       "restorePublishOk": true,
-      "activationWasVersionNeutral": true,
+      "activationWasVersioned": true,
       "stalePatchRecorded": true,
       "staleReplayWasVersionNeutral": true
     },
@@ -282,7 +282,7 @@
       "rejectionWasAtomic": true,
       "accepted512": true,
       "acceptedOperationCount": 512,
-      "elapsedMs": 548.511
+      "elapsedMs": 394.412
     },
     "tenantIsolation": {
       "wrongOwnerDenied": true,
