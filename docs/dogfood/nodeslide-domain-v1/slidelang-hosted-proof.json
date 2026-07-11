@@ -1,0 +1,37 @@
+{
+  "publishedAt": "2026-07-10T12:10:16.833Z",
+  "project": "nodeslide-golden",
+  "workflow": "slidemaker",
+  "slideCount": 8,
+  "check": {
+    "ok": true,
+    "publishOk": true,
+    "cleanOk": true,
+    "blockingIssues": 0,
+    "repairableIssues": 0,
+    "editorialIssues": 0
+  },
+  "budget": {
+    "ok": true,
+    "tight": 93,
+    "overflow": 0
+  },
+  "publish": {
+    "ok": true,
+    "publishOk": true,
+    "cleanOk": true,
+    "stored": true,
+    "compileDeferred": false,
+    "revisionId": "rev_20260710121016833_6082525f93"
+  },
+  "apiBaseUrl": "https://slidelang.ai",
+  "presentUrl": "https://slidelang.ai/present/nodeslide-golden/slidemaker/",
+  "editorUrl": "https://slidelang.ai/?project=nodeslide-golden&workflow=slidemaker&slide=slide_00",
+  "browser": {
+    "title": "Living decks, built together",
+    "initialHash": "#slide-1",
+    "advancedHash": "#slide-2",
+    "counterAfterAdvance": "2 / 8",
+    "previousEnabledAfterAdvance": true
+  }
+}

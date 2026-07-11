@@ -1,0 +1,51 @@
+<!-- @dsCard group="Components" -->
+<style>
+  .c-vs { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 28px; border-radius: 14px; }
+  .c-vs * { box-sizing: border-box; margin: 0; }
+  .c-vs .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .c-vs h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 16px; }
+  .c-vs h2 { font-size: 12px; font-weight: 600; color: #99A3AE; margin: 20px 0 8px; }
+  .c-vs .strip { border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 10px; padding: 10px; display: flex; gap: 8px; align-items: stretch; }
+  .c-vs .hdr { width: 92px; flex: none; font-size: 10px; color: #8A94A0; font-family: "JetBrains Mono", monospace; line-height: 1.7; }
+  .c-vs .v { flex: 1; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: #171B20; overflow: hidden; }
+  .c-vs .v .thumb { height: 54px; background: #FBF8F2; border-bottom: 1px solid rgba(255,255,255,.08); position: relative; }
+  .c-vs .v .thumb::after { content: attr(data-l); position: absolute; inset: 8px; font-size: 8px; color: #9CA3AF; }
+  .c-vs .v .meta { padding: 6px 8px; font-size: 10px; color: #99A3AE; }
+  .c-vs .v .axes { color: #C6CCD4; font-weight: 600; font-size: 10px; }
+  .c-vs .v .ok { font-family: "JetBrains Mono", monospace; font-size: 9px; color: #2E9E6B; }
+  .c-vs .v .acts { display: flex; gap: 4px; padding: 0 8px 8px; }
+  .c-vs .v .acts span { font-size: 9px; border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 1px 8px; color: #C6CCD4; }
+  .c-vs .v .acts .sel { border-color: rgba(217,119,87,.5); color: #E59579; }
+  .c-vs .badge { display: inline-block; font-size: 9px; border-radius: 9999px; padding: 1px 7px; margin-left: 4px; }
+  .c-vs .badge.fb { background: rgba(239,183,133,.14); color: #EFB785; border: 1px solid rgba(239,183,133,.3); }
+  .c-vs .skel { flex: 1; border-radius: 8px; background: linear-gradient(90deg,#171B20,#1B2027,#171B20); border: 1px solid rgba(255,255,255,.08); min-height: 96px; }
+  .c-vs .stale .v { opacity: .45; }
+  .c-vs .notice { font-size: 11px; color: #EFB785; padding: 6px 10px; }
+  .c-vs .fail { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #C6CCD4; padding: 12px; }
+  .c-vs .fail .re { border: 1px solid rgba(217,119,87,.5); color: #E59579; border-radius: 9999px; padding: 2px 10px; font-size: 11px; }
+</style>
+<div class="c-vs">
+  <div class="kicker">NodeSlide · Components · Pillar 2</div>
+  <h1>VariationStrip</h1>
+
+  <h2>ready — 3 validated variants, distinct axes</h2>
+  <div class="strip">
+    <div class="hdr">slide 4<br>batch b_31<br>2.4s</div>
+    <div class="v"><div class="thumb" data-l="38% CAGR — evidence grid"></div><div class="meta"><span class="axes">data_led · executive · evidence</span><br><span class="ok">▮ ok</span></div><div class="acts"><span class="sel">Select</span><span>Reject</span></div></div>
+    <div class="v"><div class="thumb" data-l="One buyer. One pain. — headline"></div><div class="meta"><span class="axes">narrative_led · executive · headline</span><br><span class="ok">▮ ok</span></div><div class="acts"><span class="sel">Select</span><span>Reject</span></div></div>
+    <div class="v"><div class="thumb" data-l="Before / after — comparison split"></div><div class="meta"><span class="axes">balanced · detail · comparison</span><br><span class="ok">▮ ok</span><span class="badge fb">fallback</span></div><div class="acts"><span class="sel">Select</span><span>Reject</span></div></div>
+  </div>
+
+  <h2>generating — skeletons, no fake previews</h2>
+  <div class="strip"><div class="hdr">slide 4<br>generating…<br>1.1s</div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+
+  <h2>stale — deck moved past baseDeckVersion</h2>
+  <div class="strip stale">
+    <div class="hdr">slide 4<br>batch b_29</div>
+    <div class="v"><div class="thumb"></div><div class="meta"><span class="axes">data_led · executive · evidence</span></div></div>
+    <div class="notice">Deck changed since these were generated — select disabled.</div>
+  </div>
+
+  <h2>failed</h2>
+  <div class="strip"><div class="hdr">slide 4<br>batch b_30</div><div class="fail">Generation failed: provider route unavailable. <span class="re">Regenerate</span></div></div>
+</div>

@@ -1,0 +1,15 @@
+{
+  "name": "NodeSlide Editorial",
+  "paper": "#F6F0E5",
+  "ink": "#14213D",
+  "muted": "#536850",
+  "line": "#B9B0A2",
+  "cool": "#2554D9",
+  "warm": "#B46F52",
+  "neutral": "#DCE4D7",
+  "panel": "#EAE1D3",
+  "dark": "#0F1E36",
+  "font": "Geist, Inter, Arial, sans-serif",
+  "font_body": "Geist, Inter, Arial, sans-serif",
+  "font_display": "Fraunces, Georgia, serif"
+}

@@ -1,0 +1,244 @@
+{
+  "$description": "NodeSlide design tokens (W3C Design Tokens format). Derived 2026-07-10 from NodeRoom's design language (noderoom/src/app/styles.css + docs/visuals/noderoom-design-0618/assets/colors_and_type.css). Two namespaces: `app` (studio chrome, fixed) and `slide` (deck surface defaults, overridable per-deck by a SignatureProfile). Same token format as SignatureProfile output — the app is themed by the system it sells.",
+  "app": {
+    "color": {
+      "bg": {
+        "$type": "color",
+        "app": {
+          "$value": "#09090B",
+          "$description": "App shell (dark-first). NodeRoom --bg-app."
+        },
+        "surface-1": { "$value": "#111418", "$description": "Primary panel surface." },
+        "surface-2": { "$value": "#171B20" },
+        "surface-3": { "$value": "#1B2027" },
+        "hover": { "$value": "#20262D" },
+        "light": {
+          "app": { "$value": "#FAFAFA" },
+          "surface-1": { "$value": "#FFFFFF" },
+          "surface-2": { "$value": "#F3F4F6" },
+          "surface-3": { "$value": "#F3F4F6" },
+          "hover": { "$value": "#E5E7EB" }
+        }
+      },
+      "text": {
+        "$type": "color",
+        "primary": { "$value": "#F2F4F7" },
+        "secondary": { "$value": "#C6CCD4" },
+        "tertiary": { "$value": "#99A3AE" },
+        "muted": { "$value": "#8A94A0" },
+        "light": {
+          "primary": { "$value": "#111827" },
+          "secondary": { "$value": "#374151" },
+          "tertiary": { "$value": "#6B7280" },
+          "muted": { "$value": "#9CA3AF" }
+        }
+      },
+      "border": {
+        "$type": "color",
+        "hairline": { "$value": "rgba(255,255,255,0.10)" },
+        "strong": { "$value": "rgba(255,255,255,0.14)" },
+        "light": {
+          "hairline": { "$value": "rgba(0,0,0,0.06)" },
+          "strong": { "$value": "#E5E7EB" }
+        }
+      },
+      "ink": {
+        "$type": "color",
+        "$description": "Authorship inks — every patch is signed by a hand. Terracotta is the human's pen, indigo is the agent's pen. Promoted from NodeRoom --ink-user/--ink-agent.",
+        "user": { "$value": "#D97757" },
+        "user-hover": { "$value": "#C76648" },
+        "user-solid": {
+          "$value": "#B0562F",
+          "$description": "Filled controls, AA on dark and light."
+        },
+        "user-tint": { "$value": "rgba(217,119,87,0.16)" },
+        "user-border": { "$value": "rgba(217,119,87,0.24)" },
+        "agent": { "$value": "#5E6AD2" },
+        "agent-tint": { "$value": "rgba(94,106,210,0.16)" },
+        "agent-border": { "$value": "rgba(94,106,210,0.28)" }
+      },
+      "semantic": {
+        "$type": "color",
+        "verified": {
+          "$value": "#2E9E6B",
+          "$description": "Receipt pass. Never used decoratively."
+        },
+        "verified-tint": { "$value": "rgba(46,158,107,0.14)" },
+        "danger": { "$value": "#F87171" },
+        "danger-solid": { "$value": "#B3261E" },
+        "danger-tint": { "$value": "rgba(179,38,30,0.14)" },
+        "warning": { "$value": "#EFB785" },
+        "warning-ink-light": { "$value": "#8A4A20" },
+        "warning-tint": { "$value": "rgba(239,183,133,0.14)" }
+      },
+      "focus-ring": { "$type": "color", "$value": "rgba(217,119,87,0.42)" }
+    },
+    "typography": {
+      "family": {
+        "display": {
+          "$type": "fontFamily",
+          "$value": ["Manrope", "Inter", "-apple-system", "system-ui", "sans-serif"]
+        },
+        "body": {
+          "$type": "fontFamily",
+          "$value": ["Inter", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"]
+        },
+        "mono": {
+          "$type": "fontFamily",
+          "$value": ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+          "$description": "Receipts, patch hashes, data, provenance. The proof voice."
+        }
+      },
+      "scale": {
+        "$type": "dimension",
+        "xs": {
+          "$value": "11px",
+          "$description": "Kickers, receipt labels. Uppercase, tracking 0.16em."
+        },
+        "sm": { "$value": "13px" },
+        "base": { "$value": "14px" },
+        "md": { "$value": "15px" },
+        "lg": { "$value": "17px" },
+        "xl": { "$value": "20px" },
+        "2xl": { "$value": "26px" },
+        "3xl": { "$value": "31px", "$description": "Page titles: display 700, -0.02em." },
+        "4xl": { "$value": "40px" }
+      },
+      "weight": {
+        "body": { "$value": 400 },
+        "medium": { "$value": 500 },
+        "semibold": { "$value": 600 },
+        "display": { "$value": 700 },
+        "display-max": { "$value": 800 }
+      }
+    },
+    "space": {
+      "$type": "dimension",
+      "$description": "4px base scale, from NodeRoom --space-*.",
+      "1": { "$value": "4px" },
+      "2": { "$value": "8px" },
+      "3": { "$value": "12px" },
+      "4": { "$value": "16px" },
+      "5": { "$value": "20px" },
+      "6": { "$value": "24px" },
+      "8": { "$value": "32px" },
+      "12": { "$value": "48px" },
+      "20": { "$value": "80px" }
+    },
+    "radius": {
+      "$type": "dimension",
+      "control": { "$value": "8px" },
+      "chip": { "$value": "6px" },
+      "panel": { "$value": "14px" },
+      "pill": { "$value": "9999px" }
+    },
+    "shadow": {
+      "panel": {
+        "$type": "shadow",
+        "$value": "0 0 0 1px rgba(255,255,255,0.03), 0 4px 14px rgba(0,0,0,0.7)"
+      },
+      "panel-light": {
+        "$type": "shadow",
+        "$value": "0 0 0 1px rgba(0,0,0,0.03), 0 4px 14px rgba(0,0,0,0.08)"
+      },
+      "accent-glow": { "$type": "shadow", "$value": "0 14px 34px rgba(217,119,87,0.18)" }
+    },
+    "motion": {
+      "duration": {
+        "$type": "duration",
+        "fast": { "$value": "120ms" },
+        "base": { "$value": "180ms" },
+        "slow": { "$value": "340ms" }
+      },
+      "easing": {
+        "$type": "cubicBezier",
+        "out-expo": { "$value": [0.16, 1, 0.3, 1] },
+        "spring": { "$value": [0.32, 0.72, 0, 1] },
+        "smooth": { "$value": [0.25, 0.1, 0.25, 1] }
+      },
+      "$description": "Calm, banker-readable. Motion explains state transitions and builds trust. All decorative motion behind prefers-reduced-motion."
+    },
+    "layout": {
+      "$description": "Studio shell, adapted from NodeRoom RoomShell (june-2026): binder left, stage center, copilot right. Chat lives on the RIGHT.",
+      "topbar": { "$type": "dimension", "$value": "52px" },
+      "rail-binder": {
+        "$type": "dimension",
+        "$value": "232px",
+        "$description": "SlideNavigator. Resizable, min 176px."
+      },
+      "rail-copilot": {
+        "$type": "dimension",
+        "$value": "340px",
+        "$description": "Agent chat + patch proposals. Resizable, min 280px."
+      },
+      "stage": {
+        "$value": "flex:1",
+        "$description": "Deck canvas / artifact stage. Tabbed; split view at ≥1200px doubles as variation compare."
+      },
+      "breakpoint-compact": {
+        "$type": "dimension",
+        "$value": "980px",
+        "$description": "≤980: one panel at a time."
+      },
+      "breakpoint-split": {
+        "$type": "dimension",
+        "$value": "1200px",
+        "$description": "≥1200: side-by-side artifacts / variation compare."
+      },
+      "panel-gap": { "$type": "dimension", "$value": "10px" }
+    }
+  },
+  "mobile": {
+    "$description": "Companion review-and-present skin, derived from NodeRoom's mobile clay skin (src/ui/mobile/mobile.css). Not an authoring surface: read decks, review patches in bottom sheets, present. Deeper terracotta as hero.",
+    "color": {
+      "$type": "color",
+      "bg-app": { "$value": "#FBF4E7", "$description": "Cream — paper-as-app." },
+      "card": { "$value": "#F3E8D8" },
+      "inset": { "$value": "#EADDC6" },
+      "ink": { "$value": "#2B1D14", "$description": "Ink-brown text." },
+      "accent": {
+        "$value": "#C56A3C",
+        "$description": "Deeper mobile terracotta. Hero usage: logo marks, active nav, card accent rails, primary buttons."
+      },
+      "accent-hover": { "$value": "#9C4F25" },
+      "accent-tint": { "$value": "#FBEDE3" }
+    },
+    "typography": {
+      "family": {
+        "display": {
+          "$type": "fontFamily",
+          "$value": ["DM Serif Display", "Georgia", "serif"],
+          "$description": "Deck titles, stat numbers."
+        },
+        "body": {
+          "$type": "fontFamily",
+          "$value": ["DM Sans", "-apple-system", "system-ui", "sans-serif"]
+        },
+        "mono": { "$type": "fontFamily", "$value": ["JetBrains Mono", "ui-monospace", "monospace"] }
+      }
+    },
+    "pattern": {
+      "$description": "Bottom tab bar (blurred, safe-area-inset aware, optional floating dock pill). Grabber bottom-sheets with spring transform — the patch-review surface on mobile. Visibility color language reused from NodeRoom (private=slate, team=terracotta, mention=violet, shared=green; values in noderoom mobile.css:64-68)."
+    }
+  },
+  "slide": {
+    "$description": "Deck-surface DEFAULTS only. A deck's SignatureProfile (extracted from the customer's own PPTX/style guide) overrides this entire namespace at render time. App chrome never bleeds into slide.*, slide.* never leaks into app.*.",
+    "color": {
+      "$type": "color",
+      "paper": {
+        "$value": "#FBF8F2",
+        "$description": "Default slide surface (NodeRoom paper idiom). Light even in dark app — slides are artifacts, not chrome."
+      },
+      "paper-dark": { "$value": "#1B1A18" },
+      "rule": { "$value": "rgba(217,119,87,0.24)", "$description": "Margin/rule lines on paper." },
+      "text": { "$value": "#1F2937" },
+      "text-muted": { "$value": "#6B7280" }
+    },
+    "typography": {
+      "family": {
+        "display": { "$type": "fontFamily", "$value": ["Manrope", "system-ui", "sans-serif"] },
+        "body": { "$type": "fontFamily", "$value": ["Inter", "system-ui", "sans-serif"] }
+      }
+    }
+  }
+}

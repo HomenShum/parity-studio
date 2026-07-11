@@ -1,0 +1,54 @@
+{
+  "title": "Living decks, built together",
+  "subtitle": "NodeSlide product pitch + product requirements",
+  "slides": [
+    {
+      "stem": "slide_00",
+      "title": "Living decks, built together",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_01",
+      "title": "Slides stop where work keeps moving",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_02",
+      "title": "Keep people in control; let agents carry change",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_03",
+      "title": "Every change is a scoped, inspectable proposal",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_04",
+      "title": "Concurrent writes stay safe—and stale work stays visible",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_05",
+      "title": "One canonical deck connects every surface",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_06",
+      "title": "Distribution keeps a path back to source",
+      "mode": "native",
+      "assets": []
+    },
+    {
+      "stem": "slide_07",
+      "title": "Prove the loop before scaling it",
+      "mode": "native",
+      "assets": []
+    }
+  ]
+}

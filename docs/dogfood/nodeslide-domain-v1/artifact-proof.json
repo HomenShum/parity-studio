@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-07-11T13:18:04.332Z",
+  "deckId": "deck_golden_0blht0b",
+  "deckVersion": 1,
+  "slideCount": 7,
+  "elementCount": 67,
+  "latestValidation": {
+    "ok": true,
+    "publishOk": true,
+    "cleanOk": true,
+    "issueCount": 0
+  },
+  "html": {
+    "bytes": 80550,
+    "slideRegions": 7,
+    "stableElementIds": 127
+  },
+  "pptx": {
+    "bytes": 138747,
+    "zipSignature": "PK",
+    "editableElementClaims": 67,
+    "nativeChartClaims": 0
+  }
+}

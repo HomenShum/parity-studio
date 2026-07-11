@@ -1,0 +1,501 @@
+{
+  "generatedAt": "2026-07-11T00:08:52.745Z",
+  "sourceDeckId": "deck_golden_1k8gjys",
+  "packs": [
+    {
+      "internalId": "finance-ibcs",
+      "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "userFacingName": "Finance reporting",
+      "schemaVersion": "nodeslide.signature/v1",
+      "sourceDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "stableSerializationMatches": true,
+      "ruleCount": 10,
+      "evidenceCount": 20,
+      "authoredLayout": {
+        "sourceRole": "authored",
+        "evidenceIds": [
+          "authored:finance-ibcs:layout:intent"
+        ],
+        "observedDeckFacts": false,
+        "intendedDensity": "dense",
+        "targets": {
+          "minimumNonFooterFontPoints": 15,
+          "maximumFocalAccents": 1,
+          "maximumSmallMultiples": 4
+        },
+        "guardrails": [
+          "Lead with one message line and keep unit, measure, period, and scenario in separate context.",
+          "Use one primary analytical view or two to four same-unit small multiples with shared scaling.",
+          "Prefer direct labels; use a legend only when direct labels collide with or obscure the data.",
+          "Never encode meaning by hue alone; add a label, sign, marker, pattern, or textual status.",
+          "Start magnitude bars and columns at zero; disclose any indexed or cropped exception.",
+          "Use equal scales for same-unit charts on one slide or visibly disclose the difference.",
+          "Remove pseudo-3D, decorative shadows, patterned backgrounds, and ornamental transitions.",
+          "Retain whitespace that clarifies the message, labels, and groups despite the dense intent."
+        ],
+        "neutralProfileFields": [
+          "slideCount",
+          "masterCount",
+          "layoutCount",
+          "layoutUsage",
+          "averageShapesPerSlide",
+          "maximumShapesPerSlide",
+          "averageTextRunsPerSlide",
+          "medianFontSizePoints",
+          "embeddedFontsPresent",
+          "embeddedFontFamilies"
+        ]
+      },
+      "approvedContrastPairs": [
+        {
+          "foreground": "ink",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "muted",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "accent",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "canvas",
+          "background": "accent",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "ink",
+          "background": "accent-soft",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "muted",
+          "background": "accent-soft",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "accent",
+          "background": "accent-soft",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "border",
+          "background": "canvas",
+          "minimumRatio": 3,
+          "usage": "non_text"
+        },
+        {
+          "foreground": "data-neutral",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "data-positive",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "data-negative",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "data-comparison",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "data-caution",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        }
+      ],
+      "fontPolicy": {
+        "networkFetch": false,
+        "embedsFonts": false,
+        "requiresGenericFallback": true
+      },
+      "validation": {
+        "packOk": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "contrastOrFontIssueCount": 0,
+        "onBrandBlockingCount": 0
+      },
+      "nonAffiliation": {
+        "independent": true,
+        "statement": "The NodeSlide Finance reporting taste pack is independently authored and is not affiliated with, endorsed by, certified by, or approved by the IBCS Association, IBCS Institute, Financial Times, DTCG, W3C, or ISO. It does not reproduce their templates, brand identity, or proprietary assets.",
+        "organizations": [
+          "IBCS Association",
+          "IBCS Institute",
+          "Financial Times",
+          "Design Tokens Community Group",
+          "W3C",
+          "ISO"
+        ],
+        "prohibitedClaims": [
+          "IBCS certified",
+          "IBCS compliant",
+          "IBCS style",
+          "FT style",
+          "FT approved",
+          "ISO 24896 conformant"
+        ]
+      }
+    },
+    {
+      "internalId": "startup-narrative",
+      "profileId": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "userFacingName": "Startup narrative",
+      "schemaVersion": "nodeslide.signature/v1",
+      "sourceDigest": "sha256:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "stableSerializationMatches": true,
+      "ruleCount": 6,
+      "evidenceCount": 23,
+      "authoredLayout": {
+        "sourceRole": "authored",
+        "evidenceIds": [
+          "authored:startup-narrative:layout:intent"
+        ],
+        "observedDeckFacts": false,
+        "intendedDensity": "sparse",
+        "safeAreaInches": {
+          "top": 0.5,
+          "right": 0.67,
+          "bottom": 0.5,
+          "left": 0.67
+        },
+        "targets": {
+          "minimumNonFooterFontPoints": 15,
+          "maximumForegroundElements": 12,
+          "maximumFocalVisuals": 1,
+          "maximumSupportingGroups": 2,
+          "minimumWhitespaceFraction": 0.3
+        },
+        "guardrails": [
+          "Require audience, current state, desired state, stakes, and ask inputs or report a bounded narrative-incomplete warning.",
+          "Give each substantive slide one evidence-backed takeaway of at most twelve words; split independent claims.",
+          "Use explicit Current and Possible labels plus position or shape differences; color is only a redundant cue.",
+          "Default to one focal visual and at most two supporting groups; split instead of shrinking past the type floor.",
+          "Keep at least thirty percent whitespace outside foreground bounds on non-full-bleed slides.",
+          "Put a supplied verb-plus-object ask on the final substantive slide; never invent owner or timing.",
+          "Repair overflow by removing decoration, shortening or splitting content, and then restoring whitespace."
+        ],
+        "neutralProfileFields": [
+          "slideCount",
+          "masterCount",
+          "layoutCount",
+          "layoutUsage",
+          "averageShapesPerSlide",
+          "maximumShapesPerSlide",
+          "averageTextRunsPerSlide",
+          "medianFontSizePoints",
+          "embeddedFontsPresent",
+          "embeddedFontFamilies"
+        ]
+      },
+      "approvedContrastPairs": [
+        {
+          "foreground": "ink",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "ink",
+          "background": "canvas-alt",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "muted",
+          "background": "canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "canvas",
+          "background": "accent",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "ink",
+          "background": "accent-soft",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "insight-ink",
+          "background": "insight",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "canvas",
+          "background": "current",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "canvas",
+          "background": "future",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        },
+        {
+          "foreground": "border",
+          "background": "canvas",
+          "minimumRatio": 3,
+          "usage": "non_text"
+        },
+        {
+          "foreground": "inverse-ink",
+          "background": "inverse-canvas",
+          "minimumRatio": 4.5,
+          "usage": "text"
+        }
+      ],
+      "fontPolicy": {
+        "networkFetch": false,
+        "embedsFonts": false,
+        "requiresGenericFallback": true
+      },
+      "validation": {
+        "packOk": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "contrastOrFontIssueCount": 0,
+        "onBrandBlockingCount": 0
+      },
+      "nonAffiliation": {
+        "independent": true,
+        "statement": "The NodeSlide Startup narrative taste pack is independently authored and is not affiliated with, approved by, certified by, sponsored by, or endorsed by Duarte, Inc., the Design Tokens Community Group, or W3C. It does not reproduce their prose, diagrams, templates, course materials, trade dress, or marks.",
+        "organizations": [
+          "Duarte, Inc.",
+          "Design Tokens Community Group",
+          "W3C"
+        ],
+        "prohibitedClaims": [
+          "Duarte style",
+          "Duarte method",
+          "Duarte approved",
+          "Duarte certified",
+          "DTCG endorsed",
+          "W3C endorsed"
+        ]
+      }
+    }
+  ],
+  "citations": [
+    {
+      "title": "IBCS Standards 2.0 - SA 3.2 and UN 2.1-2.2",
+      "url": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf",
+      "license": "CC BY-SA 4.0; paraphrased with attribution",
+      "supports": [
+        {
+          "ruleId": "finance.message-first",
+          "statement": "Supports presenting a clear key message before its evidence, keeping message placement consistent, and keeping descriptive reporting context distinct from evaluation."
+        },
+        {
+          "ruleId": "finance.semantic-consistency",
+          "statement": "Supports using the same visual representation for the same business meaning throughout a reporting system."
+        },
+        {
+          "ruleId": "finance.no-decoration",
+          "statement": "Supports removing non-semantic backgrounds, effects, colors, and decorative type so that data and labels carry the communication."
+        },
+        {
+          "ruleId": "finance.dense-but-legible",
+          "statement": "Supports compact, legible visuals and better use of space while retaining whitespace that improves clarity and structure."
+        },
+        {
+          "ruleId": "finance.direct-labels",
+          "statement": "Supports integrating series identification into charts and using data labels to reduce external legends and redundant reference furniture when comprehension is preserved."
+        },
+        {
+          "ruleId": "finance.integrity-axes-scales",
+          "statement": "Supports a general zero-baseline rule, a disclosed indexed-data exception, and identical scales for same-unit charts on one page unless a scale difference is clearly marked."
+        },
+        {
+          "ruleId": "finance.time-horizontal",
+          "statement": "Supports horizontal left-to-right presentation of time in charts and tabular columns."
+        },
+        {
+          "ruleId": "finance.structure-vertical",
+          "statement": "Supports vertical category axes for structural dimensions in the general case, with explicit exceptions for other scale types."
+        },
+        {
+          "ruleId": "finance.highlight-with-purpose",
+          "statement": "Supports consistent markers that connect selected values, differences, trends, or references to the key message and defined business meaning."
+        }
+      ],
+      "reachable": true,
+      "status": 206,
+      "finalUrl": "https://www.ibcs.com/wp-content/uploads/2026/07/IBCS_v2_final_2026-07-02_jf-with-ad.pdf",
+      "checkedAt": "2026-07-11T00:08:52.148Z",
+      "error": null
+    },
+    {
+      "title": "Financial Times Visual Vocabulary - Magnitude",
+      "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md#magnitude",
+      "license": "FT content; all rights reserved; short paraphrase and link only",
+      "supports": [
+        {
+          "ruleId": "finance.integrity-axes-scales",
+          "statement": "Supports zero-based standard bars and columns when the analytical task is comparing magnitude."
+        },
+        {
+          "ruleId": "finance.structure-vertical",
+          "statement": "Supports horizontal bars for non-time magnitude comparisons and long category labels."
+        }
+      ],
+      "reachable": true,
+      "status": 206,
+      "finalUrl": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md",
+      "checkedAt": "2026-07-11T00:08:52.119Z",
+      "error": null
+    },
+    {
+      "title": "Financial Times Visual Vocabulary - Change over Time",
+      "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md#change-over-time",
+      "license": "FT content; all rights reserved; short paraphrase and link only",
+      "supports": [
+        {
+          "ruleId": "finance.time-horizontal",
+          "statement": "Supports line charts as the default for changing time series, with columns useful mainly for a single series and with period context chosen deliberately."
+        }
+      ],
+      "reachable": true,
+      "status": 206,
+      "finalUrl": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md",
+      "checkedAt": "2026-07-11T00:08:52.121Z",
+      "error": null
+    },
+    {
+      "title": "Financial Times Visual Vocabulary",
+      "url": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md",
+      "license": "FT content; all rights reserved; short paraphrase and link only",
+      "supports": [
+        {
+          "ruleId": "finance.chart-by-question",
+          "statement": "Supports selecting chart symbology according to the relationship or question in the data rather than applying one chart type universally."
+        }
+      ],
+      "reachable": true,
+      "status": 206,
+      "finalUrl": "https://github.com/Financial-Times/chart-doctor/blob/f54ecfd57b9450aad86bdbcbd19a26b0405375ce/visual-vocabulary/README.md",
+      "checkedAt": "2026-07-11T00:08:52.122Z",
+      "error": null
+    },
+    {
+      "title": "Center the audience's transformation",
+      "url": "https://www.duarte.com/blog/presentation-storytelling-audience-is-hero/",
+      "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+      "supports": [
+        {
+          "ruleId": "startup.audience-centered-arc",
+          "statement": "Frame the audience, rather than the speaker, company, or product, as the main actor; focus the message on what the audience needs and the change in what they think, feel, believe, or do."
+        }
+      ],
+      "reachable": true,
+      "status": 200,
+      "finalUrl": "https://www.duarte.com/blog/presentation-storytelling-audience-is-hero/",
+      "checkedAt": "2026-07-11T00:08:52.745Z",
+      "error": null
+    },
+    {
+      "title": "Keep one clear takeaway per slide",
+      "url": "https://www.duarte.com/blog/presenting/",
+      "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+      "supports": [
+        {
+          "ruleId": "startup.single-takeaway",
+          "statement": "Limit a slide to one main idea so the visual supports the spoken message instead of competing with it."
+        },
+        {
+          "ruleId": "startup.purposeful-simplicity",
+          "statement": "Use design to carry meaning, not as decoration; remove superfluous details and keep the slide as simple as the message allows."
+        }
+      ],
+      "reachable": true,
+      "status": 200,
+      "finalUrl": "https://www.duarte.com/blog/presenting/",
+      "checkedAt": "2026-07-11T00:08:51.859Z",
+      "error": null
+    },
+    {
+      "title": "Contrast current reality with a possible future",
+      "url": "https://www.duarte.com/blog/move-presentation-audience-with-story-techniques-in-presentations/",
+      "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+      "supports": [
+        {
+          "ruleId": "startup.current-future-contrast",
+          "statement": "Establish a shared current reality, introduce a credible possible future, and keep presentation content aligned to the audience's intended transformation."
+        }
+      ],
+      "reachable": true,
+      "status": 200,
+      "finalUrl": "https://www.duarte.com/blog/move-presentation-audience-with-story-techniques-in-presentations/",
+      "checkedAt": "2026-07-11T00:08:51.795Z",
+      "error": null
+    },
+    {
+      "title": "Preserve whitespace for focus",
+      "url": "https://www.duarte.com/blog/techniques-for-using-critique-language-for-more-powerful-and-effective-presentations/",
+      "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+      "supports": [
+        {
+          "ruleId": "startup.whitespace-for-focus",
+          "statement": "Use open space to direct focus; when a slide feels cluttered, reduce or split its content so the essential message remains clear."
+        }
+      ],
+      "reachable": true,
+      "status": 200,
+      "finalUrl": "https://www.duarte.com/blog/techniques-for-using-critique-language-for-more-powerful-and-effective-presentations/",
+      "checkedAt": "2026-07-11T00:08:52.585Z",
+      "error": null
+    },
+    {
+      "title": "End with a clear next action",
+      "url": "https://www.duarte.com/blog/audience-engagement-strategies-presentations/",
+      "license": "No permissive content license identified; citation and idea-level paraphrase only. Do not reproduce source prose, images, diagrams, templates, course materials, trade dress, or marks; no affiliation or endorsement.",
+      "supports": [
+        {
+          "ruleId": "startup.decisive-next-action",
+          "statement": "At the end, state clearly what the audience can do to move from the current state toward the possible future, using concrete tasks."
+        }
+      ],
+      "reachable": true,
+      "status": 200,
+      "finalUrl": "https://www.duarte.com/blog/audience-engagement-strategies-presentations/",
+      "checkedAt": "2026-07-11T00:08:52.709Z",
+      "error": null
+    }
+  ],
+  "disclaimer": "These are independent NodeSlide-authored defaults. They are not certifications, endorsements, or copies of third-party templates or trade dress.",
+  "gates": {
+    "bothProfilesParse": true,
+    "everyRuleCited": true,
+    "everyCitationReachable": true,
+    "zeroContrastOrFontIssues": true,
+    "deterministicSerialization": true,
+    "nonAffiliationRecorded": true
+  }
+}

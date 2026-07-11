@@ -1,0 +1,68 @@
+<!-- @dsCard group="Foundations" -->
+<style>
+  .ds-mob { font-family: "DM Sans", "Inter", -apple-system, system-ui, sans-serif; background: #FBF4E7; color: #2B1D14; padding: 32px; border-radius: 14px; }
+  .ds-mob * { box-sizing: border-box; margin: 0; }
+  .ds-mob .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #9C4F25; font-weight: 700; }
+  .ds-mob h1 { font-family: "DM Serif Display", Georgia, serif; font-size: 28px; font-weight: 400; margin: 6px 0 4px; }
+  .ds-mob .lede { font-size: 14px; color: #5A4634; max-width: 62ch; line-height: 1.55; }
+  .ds-mob section { margin-top: 26px; }
+  .ds-mob h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .ds-mob .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ds-mob .sw { width: 118px; border: 1px solid rgba(43,29,20,.12); border-radius: 8px; overflow: hidden; background: #F3E8D8; }
+  .ds-mob .sw .chip { height: 52px; }
+  .ds-mob .sw .meta { padding: 8px 10px; }
+  .ds-mob .sw .name { font-size: 12px; font-weight: 700; }
+  .ds-mob .sw .hex { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: #8A6A4F; }
+  .ds-mob .phone { margin-top: 4px; width: 240px; border: 1px solid rgba(43,29,20,.15); border-radius: 20px; background: #FBF4E7; overflow: hidden; box-shadow: 0 6px 20px rgba(43,29,20,.12); }
+  .ds-mob .phone .hdr { padding: 14px 14px 8px; }
+  .ds-mob .phone .hdr .t { font-family: "DM Serif Display", Georgia, serif; font-size: 17px; }
+  .ds-mob .card { margin: 8px 12px; background: #F3E8D8; border: 1px solid rgba(43,29,20,.10); border-radius: 10px; padding: 10px 12px; position: relative; font-size: 11px; color: #5A4634; }
+  .ds-mob .card::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: #C56A3C; }
+  .ds-mob .card b { color: #2B1D14; font-size: 12px; display: block; }
+  .ds-mob .sheet { margin: 10px 8px 0; background: #FFFFFF; border-radius: 14px 14px 0 0; border: 1px solid rgba(43,29,20,.10); border-bottom: 0; padding: 8px 12px 10px; font-size: 11px; color: #5A4634; }
+  .ds-mob .sheet .handle { width: 32px; height: 4px; border-radius: 9999px; background: rgba(43,29,20,.18); margin: 0 auto 8px; }
+  .ds-mob .sheet .acts { display: flex; gap: 4px; margin-top: 6px; }
+  .ds-mob .sheet .acts span { border: 1px solid rgba(43,29,20,.15); border-radius: 9999px; padding: 2px 8px; font-size: 10px; }
+  .ds-mob .sheet .acts span.go { background: #C56A3C; border-color: #C56A3C; color: #FFF7EE; }
+  .ds-mob .nav { display: flex; border-top: 1px solid rgba(43,29,20,.10); background: rgba(251,244,231,.9); }
+  .ds-mob .nav div { flex: 1; text-align: center; font-size: 10px; padding: 8px 0 10px; color: #8A6A4F; }
+  .ds-mob .nav div.on { color: #C56A3C; font-weight: 700; }
+  .ds-mob .note { font-size: 13px; color: #5A4634; line-height: 1.6; padding: 10px 14px; border-left: 2px solid #C56A3C; background: #F3E8D8; border-radius: 0 8px 8px 0; margin-top: 14px; max-width: 68ch; }
+  .ds-mob .note strong { color: #2B1D14; }
+  .ds-mob .cols { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+</style>
+<div class="ds-mob">
+  <div class="kicker">NodeSlide · Foundations</div>
+  <h1>Mobile — the clay review surface</h1>
+  <p class="lede">Derived from NodeRoom's mobile skin. Mobile is not an authoring surface: you read decks, review patches, and present. Paper becomes the whole app — cream and clay surfaces, ink-brown text, serif deck titles — and terracotta steps forward from accent to hero.</p>
+
+  <div class="cols">
+    <div style="flex:1;min-width:260px">
+      <section style="margin-top:0">
+        <h2>Clay palette</h2>
+        <div class="row">
+          <div class="sw"><div class="chip" style="background:#FBF4E7"></div><div class="meta"><div class="name">bg / app</div><div class="hex">#FBF4E7</div></div></div>
+          <div class="sw"><div class="chip" style="background:#F3E8D8"></div><div class="meta"><div class="name">card</div><div class="hex">#F3E8D8</div></div></div>
+          <div class="sw"><div class="chip" style="background:#EADDC6"></div><div class="meta"><div class="name">inset</div><div class="hex">#EADDC6</div></div></div>
+          <div class="sw"><div class="chip" style="background:#2B1D14"></div><div class="meta"><div class="name">ink</div><div class="hex">#2B1D14</div></div></div>
+          <div class="sw"><div class="chip" style="background:#C56A3C"></div><div class="meta"><div class="name">accent</div><div class="hex">#C56A3C</div></div></div>
+          <div class="sw"><div class="chip" style="background:#9C4F25"></div><div class="meta"><div class="name">accent / hover</div><div class="hex">#9C4F25</div></div></div>
+        </div>
+      </section>
+      <p class="note"><strong>Terracotta deepens on clay.</strong> Desktop uses #D97757 on dark; mobile uses #C56A3C on cream for contrast, and spends it generously — active nav, card accent rails, primary actions, gradient logo marks. Type flips register too: DM Serif Display for deck titles and numbers, DM Sans for UI. Same receipt discipline, warmer voice.</p>
+      <p class="note"><strong>Visibility language carries over</strong> from NodeRoom: private = slate, team = terracotta, mention = violet, shared = green. Maps directly onto deck sharing states.</p>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="hdr"><div class="kicker" style="font-size:10px">Awaiting your review</div><div class="t">Q3 Portfolio Review</div></div>
+        <div class="card"><b>Slide 4 · proposed rewrite</b>agent · p_9a41 · 2 ops</div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <b style="color:#2B1D14">Review patch</b> tighten wedge headline
+          <div class="acts"><span class="go">Accept</span><span>Modify</span><span>Decline</span></div>
+        </div>
+        <div class="nav"><div>Decks</div><div class="on">Review</div><div>Present</div></div>
+      </div>
+    </div>
+  </div>
+</div>

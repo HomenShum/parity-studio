@@ -1,0 +1,61 @@
+{
+  "checkedAt": "2026-07-10T20:46:00Z",
+  "browser": "Codex in-app browser",
+  "capabilitiesRedacted": true,
+  "journeys": {
+    "freshUser": {
+      "welcomeDialog": true,
+      "escapeCloses": true,
+      "focusReturns": true,
+      "minimalBrief": true,
+      "freeRouteGeneration": true,
+      "generatedSlideCount": 6,
+      "exactValidationPassed": true
+    },
+    "experiencedAuthor": {
+      "deckRename": true,
+      "directTextEdit": true,
+      "speakerNotesEdit": true,
+      "slideAddDuplicateDeleteReorder": true,
+      "storyboardTitleSync": true,
+      "pageNumberSync": true,
+      "keyboardElementDuplicate": true,
+      "undo": true,
+      "redo": true,
+      "aiProposalReviewAccept": true,
+      "freeProviderFallbackObserved": true
+    },
+    "presentShareExport": {
+      "presenterKeyboardNavigation": true,
+      "presenterNotes": true,
+      "readOnlyShare": true,
+      "shareUrlContainsDeckParameter": false,
+      "cleanViewerContainsEditor": false,
+      "rawDeckIdGrantsEditor": false,
+      "htmlDownloaded": true,
+      "pptxDownloaded": true
+    }
+  },
+  "responsive": {
+    "desktop": { "width": 1440, "height": 900, "passed": true },
+    "tablet": {
+      "width": 1024,
+      "height": 768,
+      "inspector": { "x": 604, "y": 58, "width": 420, "height": 710 },
+      "storyboard": { "x": 0, "y": 58, "width": 246, "height": 710 },
+      "passed": true
+    },
+    "phone": {
+      "width": 390,
+      "height": 844,
+      "studioScrollWidth": 390,
+      "storyboard": { "x": 0, "y": 52, "width": 338, "height": 112 },
+      "inspector": { "x": 0, "y": 52, "width": 390, "height": 792 },
+      "passed": true
+    }
+  },
+  "console": {
+    "releaseJourneyErrorsOrWarnings": 0,
+    "experiencedJourneyErrorsOrWarnings": 0
+  }
+}

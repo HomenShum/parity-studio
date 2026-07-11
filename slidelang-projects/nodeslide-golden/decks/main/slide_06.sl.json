@@ -1,0 +1,305 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_06", "title": "Distribution keeps a path back to source" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "b",
+      "S06_CURATED_PREVIEW",
+      72,
+      205,
+      565,
+      435,
+      "pnb",
+      null,
+      { "cp": 0, "fill": "paper", "stroke": "cool", "stroke_width": 2, "td": 0.58, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S06_PREVIEW_SPINE",
+      72,
+      205,
+      16,
+      435,
+      "sqb",
+      "S06_CURATED_PREVIEW",
+      { "cp": 0, "fill": "cool", "stroke": "none", "decorative": true }
+    ],
+    [
+      "b",
+      "S06_PREVIEW_HERO",
+      130,
+      320,
+      430,
+      116,
+      "pn",
+      "S06_CURATED_PREVIEW",
+      { "cp": 24, "fill": "neutral", "stroke": "none", "td": 0.84, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S06_COMMENTS",
+      720,
+      255,
+      250,
+      330,
+      "pn",
+      null,
+      { "cp": 28, "fill": "neutral", "stroke": "none", "td": 0.68, "ov": "fail" }
+    ],
+    [
+      "b",
+      "S06_LIVING_DECK",
+      1060,
+      195,
+      300,
+      455,
+      "kd",
+      null,
+      { "cp": 30, "td": 0.62, "ov": "fail" }
+    ],
+    ["c", "S06_TRACE_COMMENT", 1112, 405, 7, "cb"],
+    ["c", "S06_TRACE_PROPOSAL", 1112, 478, 7, "cb"],
+    ["c", "S06_TRACE_ACCEPT", 1112, 548, 7, "cb"]
+  ],
+  "tx": [
+    [
+      "s06_eyebrow",
+      72,
+      34,
+      260,
+      22,
+      "lab",
+      "06 / DISTRIBUTION",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s06_title",
+      72,
+      72,
+      1280,
+      60,
+      "ttc",
+      "Distribution keeps a path back to source",
+      null,
+      { "fs": 46, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s06_dek",
+      74,
+      140,
+      1210,
+      42,
+      "mic",
+      "A curated preview focuses the story without forking it. Comments remain anchored and can become scoped writes.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s06_preview_label",
+      126,
+      240,
+      440,
+      24,
+      "lab",
+      "CURATED PREVIEW",
+      "S06_CURATED_PREVIEW",
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s06_preview_title",
+      126,
+      272,
+      450,
+      34,
+      "sec",
+      "Only this audience's narrative",
+      "S06_CURATED_PREVIEW",
+      { "fs": 24, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s06_hero_h",
+      158,
+      342,
+      374,
+      34,
+      "ttc",
+      "Living decks, built together",
+      "S06_PREVIEW_HERO",
+      { "fs": 27, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s06_hero_b",
+      158,
+      392,
+      374,
+      26,
+      "mic",
+      "A selected view of the canonical deck",
+      "S06_PREVIEW_HERO",
+      { "fs": 17, "ta": "l", "c": "#536850", "ml": 1 }
+    ],
+    [
+      "s06_preview_body",
+      126,
+      475,
+      440,
+      82,
+      "mic",
+      "Share the thesis, collaboration model, and proof plan—while every slide keeps its canonical ID.",
+      "S06_CURATED_PREVIEW",
+      { "fs": 20, "ta": "l", "c": "#14213D", "ml": 3, "lh": 1.25 }
+    ],
+    [
+      "s06_preview_count",
+      126,
+      588,
+      300,
+      24,
+      "lab",
+      "3 OF 8 SLIDES SHARED",
+      "S06_CURATED_PREVIEW",
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s06_comments_h",
+      750,
+      286,
+      190,
+      54,
+      "ttc",
+      "Comments\nstay anchored",
+      "S06_COMMENTS",
+      { "fs": 27, "ta": "l", "c": "#14213D", "ml": 2, "lh": 1.0 }
+    ],
+    [
+      "s06_comment_anchor",
+      750,
+      382,
+      190,
+      40,
+      "lab",
+      "slide_04 / S04_PROP_C",
+      "S06_COMMENTS",
+      { "fs": 14, "ta": "l", "c": "#536850", "ml": 2 }
+    ],
+    [
+      "s06_comment_body",
+      750,
+      446,
+      190,
+      58,
+      "mic",
+      "Clarify the stale state before sharing.",
+      "S06_COMMENTS",
+      { "fs": 19, "ta": "l", "c": "#14213D", "ml": 2, "lh": 1.22 }
+    ],
+    [
+      "s06_comment_rule",
+      750,
+      520,
+      190,
+      30,
+      "sec",
+      "CONTEXT CAN WRITE BACK",
+      "S06_COMMENTS",
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s06_live_h",
+      1092,
+      226,
+      236,
+      60,
+      "ttc",
+      "Connected\nliving deck",
+      "S06_LIVING_DECK",
+      { "fs": 31, "ta": "l", "c": "#F6F0E5", "ml": 2, "lh": 1.0 }
+    ],
+    [
+      "s06_live_rev",
+      1092,
+      320,
+      236,
+      26,
+      "lab",
+      "REVISION v14",
+      "S06_LIVING_DECK",
+      { "fs": 15, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s06_trace_t1",
+      1140,
+      392,
+      170,
+      26,
+      "mic",
+      "comment",
+      "S06_LIVING_DECK",
+      { "fs": 18, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s06_trace_t2",
+      1140,
+      465,
+      170,
+      26,
+      "mic",
+      "scoped proposal",
+      "S06_LIVING_DECK",
+      { "fs": 18, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s06_trace_t3",
+      1140,
+      535,
+      170,
+      26,
+      "mic",
+      "accepted write",
+      "S06_LIVING_DECK",
+      { "fs": 18, "ta": "l", "c": "#FFFFFF", "ml": 1 }
+    ],
+    [
+      "s06_live_b",
+      1140,
+      590,
+      170,
+      38,
+      "mic",
+      "The next preview inherits the accepted truth.",
+      "S06_LIVING_DECK",
+      { "fs": 17, "ta": "l", "c": "#C9D2E5", "ml": 2 }
+    ],
+    [
+      "s06_rule",
+      72,
+      724,
+      1288,
+      34,
+      "sec",
+      "Share a view, not a fork.",
+      null,
+      { "fs": 24, "ta": "center", "c": "#2554D9", "ml": 1 }
+    ]
+  ],
+  "cn": [
+    [
+      "pl",
+      "S06_PREVIEW_TO_COMMENTS",
+      ["S06_CURATED_PREVIEW:r", "S06_COMMENTS:l"],
+      "cb",
+      { "th": 3.2 }
+    ],
+    ["pl", "S06_COMMENTS_TO_LIVE", ["S06_COMMENTS:r", "S06_LIVING_DECK:l"], "cb", { "th": 3.2 }],
+    [
+      "pl",
+      "S06_REFRESH_LOOP",
+      ["S06_LIVING_DECK:b", [1210, 690], [354, 690], "S06_CURATED_PREVIEW:b"],
+      "ca1",
+      { "th": 2.6, "dash": "8 6", "cr": 18, "op": 0.72 }
+    ]
+  ]
+}

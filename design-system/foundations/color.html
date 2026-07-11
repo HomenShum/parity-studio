@@ -1,0 +1,64 @@
+<!-- @dsCard group="Foundations" -->
+<style>
+  .ds-color { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 32px; border-radius: 14px; }
+  .ds-color * { box-sizing: border-box; margin: 0; }
+  .ds-color .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .ds-color h1 { font-family: "Manrope", "Inter", sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 4px; }
+  .ds-color .lede { font-size: 14px; color: #C6CCD4; max-width: 62ch; line-height: 1.55; }
+  .ds-color section { margin-top: 28px; }
+  .ds-color h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #F2F4F7; }
+  .ds-color .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ds-color .sw { width: 128px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; overflow: hidden; background: #111418; }
+  .ds-color .sw .chip { height: 56px; }
+  .ds-color .sw .meta { padding: 8px 10px; }
+  .ds-color .sw .name { font-size: 12px; font-weight: 600; }
+  .ds-color .sw .hex { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: #99A3AE; }
+  .ds-color .rule { font-size: 13px; color: #C6CCD4; line-height: 1.6; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 10px; max-width: 68ch; }
+  .ds-color .rule strong { color: #F2F4F7; }
+  .ds-color .inkdemo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .ds-color .patch { border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 8px; padding: 10px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .ds-color .dot { width: 8px; height: 8px; border-radius: 9999px; display: inline-block; }
+  .ds-color .hash { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: #8A94A0; }
+</style>
+<div class="ds-color">
+  <div class="kicker">NodeSlide · Foundations</div>
+  <h1>Color — instrument and ink</h1>
+  <p class="lede">The chrome frames other people's brands, so it stays a quiet instrument. Color carries exactly two messages: <strong style="color:#F2F4F7">who touched this</strong> (authorship inks) and <strong style="color:#F2F4F7">can you trust it</strong> (receipt semantics). Derived from NodeRoom; nothing here is decorative.</p>
+
+  <section>
+    <h2>Surface ladder — dark-first</h2>
+    <div class="row">
+      <div class="sw"><div class="chip" style="background:#09090B"></div><div class="meta"><div class="name">bg / app</div><div class="hex">#09090B</div></div></div>
+      <div class="sw"><div class="chip" style="background:#111418"></div><div class="meta"><div class="name">surface-1</div><div class="hex">#111418</div></div></div>
+      <div class="sw"><div class="chip" style="background:#171B20"></div><div class="meta"><div class="name">surface-2</div><div class="hex">#171B20</div></div></div>
+      <div class="sw"><div class="chip" style="background:#1B2027"></div><div class="meta"><div class="name">surface-3</div><div class="hex">#1B2027</div></div></div>
+      <div class="sw"><div class="chip" style="background:#20262D"></div><div class="meta"><div class="name">hover</div><div class="hex">#20262D</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FBF8F2"></div><div class="meta"><div class="name">slide / paper</div><div class="hex">#FBF8F2</div></div></div>
+    </div>
+    <p class="rule"><strong>Paper stays light even in the dark app.</strong> Slides are artifacts, not chrome — the canvas reads as a document sitting on an instrument, and a deck's SignatureProfile can replace the whole <span class="hash">slide.*</span> namespace without touching the app.</p>
+  </section>
+
+  <section>
+    <h2>Authorship inks — two pens, one deck</h2>
+    <div class="row">
+      <div class="sw"><div class="chip" style="background:#D97757"></div><div class="meta"><div class="name">ink / user</div><div class="hex">#D97757</div></div></div>
+      <div class="sw"><div class="chip" style="background:#B0562F"></div><div class="meta"><div class="name">user / solid</div><div class="hex">#B0562F</div></div></div>
+      <div class="sw"><div class="chip" style="background:#5E6AD2"></div><div class="meta"><div class="name">ink / agent</div><div class="hex">#5E6AD2</div></div></div>
+    </div>
+    <div class="inkdemo">
+      <div class="patch"><span class="dot" style="background:#D97757"></span> moved chart · <span class="hash">p_8f2c · you</span></div>
+      <div class="patch"><span class="dot" style="background:#5E6AD2"></span> proposed rewrite · <span class="hash">p_9a41 · agent · awaiting review</span></div>
+    </div>
+    <p class="rule"><strong>Terracotta is the human's pen. Indigo is the agent's pen.</strong> Every patch, selection outline, proposal card, and version entry is signed with its author's ink. Agents never write in terracotta — an agent action can never impersonate a human one.</p>
+  </section>
+
+  <section>
+    <h2>Receipt semantics</h2>
+    <div class="row">
+      <div class="sw"><div class="chip" style="background:#2E9E6B"></div><div class="meta"><div class="name">verified</div><div class="hex">#2E9E6B</div></div></div>
+      <div class="sw"><div class="chip" style="background:#EFB785"></div><div class="meta"><div class="name">warning</div><div class="hex">#EFB785</div></div></div>
+      <div class="sw"><div class="chip" style="background:#B3261E"></div><div class="meta"><div class="name">danger</div><div class="hex">#B3261E</div></div></div>
+    </div>
+    <p class="rule"><strong>Green only ever means a passed check.</strong> No decorative green, no green CTAs. If a surface shows verified, a validation receipt exists behind it — click through and it will be there.</p>
+  </section>
+</div>

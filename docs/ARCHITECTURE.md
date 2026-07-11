@@ -7,13 +7,13 @@ Image (or sketch / prompt) → componentized `ui_kits/<slug>/` bundle, self-judg
 
 | Concern | Choice | Why |
 |---|---|---|
-| **LLM client** | `@mariozechner/pi-ai` 0.70.2 | Unified provider abstraction, vision support, streaming; user has deep familiarity from PR #241 work |
+| **LLM client** | `@mariozechner/pi-ai` 0.73.1 | Unified provider abstraction, vision support, and streaming. Patched transitive versions are locked; migration to its maintained successor remains a deliberate follow-up rather than an untested launch-day API change. |
 | **Backend** | Convex Cloud | Real-time queries, durable actions, schema-first, free tier covers MVP |
 | **Multi-step orchestration** | `@convex-dev/workflow` | Durable, retryable, deterministic step chains for `generate -> decompose -> verify -> iterate -> done` |
 | **Token streaming to browser** | `@convex-dev/persistent-text-streaming` | Independent of any LLM SDK — `appendChunk(token)` writes to DB and HTTP stream simultaneously; pi-ai output flows through unchanged |
 | **NOT used: `@convex-dev/agent`** | — | Locks to Vercel AI SDK (`LanguageModelV2` interface). Would require a pi-ai → AI SDK adapter that adds a layer with no benefit at this scale. Revisit if multi-agent orchestration emerges |
 | **Frontend** | Vite + React 19 + TypeScript + Tailwind 4 | Matches NodeBench's existing skill set, fastest dev loop, tightest bundle |
-| **Auth** | Anonymous sessions v1 | ZIP export covers handoff; teams/sharing is post-MVP |
+| **Auth** | Anonymous capability ownership for private preview | 256-bit editor capabilities and separate unguessable read-only share capabilities prevent raw-ID access. Real account auth, tenant policy, and share revocation are required before public multi-tenant launch. |
 | **Storage** | Convex Storage | Image uploads + zip exports; same auth surface |
 | **Hosting** | Vercel (web) + Convex Cloud (backend) | Both have generous free tiers; deploys on git push |
 
@@ -65,6 +65,52 @@ User input (image | prompt)
         v
 Browser sees real-time updates via Convex queries
 ```
+
+## NodeSlide domain architecture
+
+NodeSlide is an additive domain, not a replacement for the original Parity pipeline. `src/App.tsx` selects NodeSlide by default and preserves the existing application behind `?domain=parity`.
+
+The canonical runtime record is a `DeckSnapshot`:
+
+```text
+Deck
+  -> ordered Slide records
+      -> ordered SlideElement records with stable IDs and normalized bboxes
+  -> Source records referenced by elements and charts
+```
+
+`NodeSlideWorkspace` adds comments, patches, versions, traces, validations, exports, and ephemeral presence. Convex owns persistence and authoritative clocks; the React client never receives provider keys.
+
+Every write follows one path:
+
+```text
+intent + explicit scope + base clocks
+  -> validate operation mode, IDs, locks, sources, and normalized geometry
+  -> compare touched slide/element clocks
+      -> unchanged clocks: commit atomically
+      -> deck changed elsewhere: safely rebase and commit
+      -> touched clock changed: persist stale proposal without mutation
+  -> write accepted patch + snapshot + version + validation + trace receipt
+```
+
+Restore is a new monotonic write rather than a destructive rewind. Agent edits use the same patch contract as human drag/resize edits. The default free route is `openrouter/free` through the existing server-side pi-ai adapter; invalid or unavailable model output falls back to deterministic operations that remain constrained by the requested scope and operation mode.
+
+Preview access follows a capability model:
+
+```text
+creating browser -> durable local owner capability -> all editor reads and writes
+read-only share action -> independent random share capability -> presenter snapshot only
+raw deck ID without owner capability -> safe recovery screen, never editor data
+```
+
+Capabilities are a private-preview boundary, not identity. Public launch still requires account authentication, tenant membership, capability rotation/revocation, audit administration, and a deliberate migration path for existing anonymous decks.
+
+Rendering has two explicit boundaries:
+
+- The repository adapter under `src/domains/nodeslide/slidelang/` provides deterministic local validation, semantic HTML/SVG, hosted SlideLang calls, and editable PPTX text/shapes/connectors/native charts.
+- The official SlideLang project under `slidelang-projects/nodeslide-golden/` is checked and published with the upstream project CLI. Hosted check success requires all three independent flags: `ok`, `publish_ok`, and `clean_ok`.
+
+Static fallbacks are capability-labelled. Complex CSS, unsupported media, and advanced animation are never represented as editable-PPTX parity.
 
 ## Schema (4 tables + 2 component tables)
 

@@ -1,0 +1,179 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_00", "title": "Living decks, built together" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "b",
+      "S00_TRACE_SURFACE",
+      930,
+      70,
+      430,
+      670,
+      "kd",
+      null,
+      { "cp": 0, "td": 0.55, "ov": "fail", "co": false }
+    ],
+    [
+      "b",
+      "S00_SOURCE",
+      1000,
+      152,
+      260,
+      90,
+      "pn",
+      "S00_TRACE_SURFACE",
+      { "cp": 22, "fill": "neutral", "stroke": "none" }
+    ],
+    [
+      "b",
+      "S00_PROPOSAL",
+      1045,
+      325,
+      250,
+      110,
+      "pnb",
+      "S00_TRACE_SURFACE",
+      { "cp": 22, "fill": "paper", "stroke": "cool", "stroke_width": 2 }
+    ],
+    [
+      "b",
+      "S00_ACCEPTED",
+      980,
+      525,
+      300,
+      120,
+      "sqb",
+      "S00_TRACE_SURFACE",
+      { "cp": 22, "fill": "cool", "stroke": "none" }
+    ]
+  ],
+  "tx": [
+    [
+      "s00_eyebrow",
+      88,
+      70,
+      720,
+      24,
+      "lab",
+      "NODESLIDE / PRODUCT PITCH + PRD",
+      null,
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s00_title",
+      88,
+      185,
+      760,
+      170,
+      "ttc",
+      "Living decks,\nbuilt together",
+      null,
+      { "fs": 72, "ta": "l", "c": "#14213D", "ml": 2, "lh": 0.98 }
+    ],
+    [
+      "s00_dek",
+      92,
+      390,
+      720,
+      84,
+      "mic",
+      "NodeSlide keeps research, data, decisions, and presentation structure connected—while people retain the final word.",
+      null,
+      { "fs": 25, "ta": "l", "c": "#536850", "ml": 3, "lh": 1.24 }
+    ],
+    [
+      "s00_promise",
+      92,
+      632,
+      700,
+      62,
+      "sec",
+      "Structured enough for agents.\nControlled enough for people.",
+      null,
+      { "fs": 22, "ta": "l", "c": "#2554D9", "ml": 2, "lh": 1.2 }
+    ],
+    [
+      "s00_trace_label",
+      970,
+      100,
+      330,
+      22,
+      "lab",
+      "A DECK THAT MOVES WITH THE WORK",
+      "S00_TRACE_SURFACE",
+      { "fs": 14, "ta": "l", "c": "#D8E0FF", "ml": 1 }
+    ],
+    [
+      "s00_source_h",
+      1020,
+      170,
+      220,
+      24,
+      "sec",
+      "SOURCE CHANGE",
+      "S00_SOURCE",
+      { "fs": 15, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s00_source_b",
+      1020,
+      202,
+      220,
+      24,
+      "mic",
+      "Research + data move",
+      "S00_SOURCE",
+      { "fs": 18, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s00_proposal_h",
+      1067,
+      347,
+      206,
+      24,
+      "sec",
+      "SCOPED PROPOSAL",
+      "S00_PROPOSAL",
+      { "fs": 15, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s00_proposal_b",
+      1067,
+      382,
+      206,
+      40,
+      "mic",
+      "Only selected nodes change",
+      "S00_PROPOSAL",
+      { "fs": 18, "ta": "l", "c": "#14213D", "ml": 2 }
+    ],
+    [
+      "s00_accepted_h",
+      1004,
+      550,
+      250,
+      24,
+      "sec",
+      "ACCEPTED VERSION",
+      "S00_ACCEPTED",
+      { "fs": 15, "ta": "l", "c": "#F6F0E5", "ml": 1 }
+    ],
+    [
+      "s00_accepted_b",
+      1004,
+      585,
+      250,
+      42,
+      "mic",
+      "The deck stays connected",
+      "S00_ACCEPTED",
+      { "fs": 20, "ta": "l", "c": "#FFFFFF", "ml": 2 }
+    ]
+  ],
+  "cn": [
+    ["pl", "S00_SOURCE_TO_PROPOSAL", ["S00_SOURCE:b", "S00_PROPOSAL:t"], "cb", { "th": 3.2 }],
+    ["pl", "S00_PROPOSAL_TO_ACCEPTED", ["S00_PROPOSAL:b", "S00_ACCEPTED:t"], "cb", { "th": 3.2 }]
+  ]
+}

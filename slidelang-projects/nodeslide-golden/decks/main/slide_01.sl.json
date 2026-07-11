@@ -1,0 +1,164 @@
+{
+  "v": "sl0",
+  "fr": [1440, 810, 18],
+  "meta": { "id": "slide_01", "title": "Slides stop where work keeps moving" },
+  "gd": { "page": 18, "attach": 14, "gap": 8, "txtc": 10 },
+  "el": [
+    [
+      "ch",
+      "S01_DRIFT_CHART",
+      72,
+      220,
+      820,
+      430,
+      null,
+      {
+        "kind": "line",
+        "data": [
+          {
+            "name": "Static export",
+            "data": [{ "x": 0, "y": 0 }, { "x": 1, "y": 1 }, { "x": 2, "y": 2 }, { "x": 3, "y": 3 }]
+          },
+          {
+            "name": "Connected deck",
+            "data": [{ "x": 0, "y": 0 }, { "x": 1, "y": 0 }, { "x": 2, "y": 0 }, { "x": 3, "y": 0 }]
+          }
+        ],
+        "x": {
+          "field": "x",
+          "scale": "linear",
+          "label": "Change cycle (illustrative)",
+          "format": "int"
+        },
+        "y": {
+          "field": "y",
+          "scale": "linear",
+          "label": "Distance from source truth",
+          "format": "int"
+        },
+        "marks": ["line", "dot"],
+        "palette": ["muted", "cool"],
+        "gridlines": { "x": false, "y": true },
+        "annotations": [
+          {
+            "kind": "point-label",
+            "target": { "series": "Static export", "index": 2 },
+            "text": "static drift",
+            "dx": 10,
+            "dy": -10
+          },
+          {
+            "kind": "point-label",
+            "target": { "series": "Connected deck", "index": 2 },
+            "text": "connected",
+            "dx": 10,
+            "dy": -12
+          }
+        ],
+        "caption": "Conceptual model only—not observed performance data."
+      }
+    ],
+    [
+      "b",
+      "S01_SNAPSHOT_PANEL",
+      960,
+      200,
+      400,
+      500,
+      "kd",
+      null,
+      { "cp": 36, "td": 0.64, "ov": "fail" }
+    ]
+  ],
+  "tx": [
+    [
+      "s01_eyebrow",
+      72,
+      34,
+      240,
+      22,
+      "lab",
+      "01 / PROBLEM",
+      null,
+      { "fs": 14, "ta": "l", "c": "#2554D9", "ml": 1 }
+    ],
+    [
+      "s01_title",
+      72,
+      72,
+      1260,
+      60,
+      "ttc",
+      "Slides stop where work keeps moving",
+      null,
+      { "fs": 46, "ta": "l", "c": "#14213D", "ml": 1 }
+    ],
+    [
+      "s01_dek",
+      74,
+      140,
+      1180,
+      42,
+      "mic",
+      "Research changes. Data refreshes. Decisions sharpen. The exported deck keeps none of that lineage by itself.",
+      null,
+      { "fs": 21, "ta": "l", "c": "#536850", "ml": 2, "lh": 1.25 }
+    ],
+    [
+      "s01_panel_label",
+      998,
+      242,
+      310,
+      22,
+      "lab",
+      "THE COST OF A SNAPSHOT",
+      "S01_SNAPSHOT_PANEL",
+      { "fs": 14, "ta": "l", "c": "#AFC0FF", "ml": 1 }
+    ],
+    [
+      "s01_panel_claim",
+      998,
+      304,
+      310,
+      142,
+      "ttc",
+      "The artifact stays polished while its truth expires.",
+      "S01_SNAPSHOT_PANEL",
+      { "fs": 34, "ta": "l", "c": "#F6F0E5", "ml": 4, "lh": 1.08 }
+    ],
+    [
+      "s01_panel_one",
+      998,
+      500,
+      310,
+      30,
+      "sec",
+      "RESEARCH MOVES",
+      "S01_SNAPSHOT_PANEL",
+      { "fs": 17, "ta": "l", "c": "#FFFFFF", "ml": 1 }
+    ],
+    [
+      "s01_panel_two",
+      998,
+      548,
+      310,
+      30,
+      "sec",
+      "DATA REFRESHES",
+      "S01_SNAPSHOT_PANEL",
+      { "fs": 17, "ta": "l", "c": "#FFFFFF", "ml": 1 }
+    ],
+    [
+      "s01_panel_three",
+      998,
+      596,
+      310,
+      52,
+      "mic",
+      "The deck loses context, ownership, and a safe path back.",
+      "S01_SNAPSHOT_PANEL",
+      { "fs": 18, "ta": "l", "c": "#C9D2E5", "ml": 2, "lh": 1.22 }
+    ]
+  ],
+  "cn": []
+}

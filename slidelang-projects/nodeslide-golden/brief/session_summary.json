@@ -1,0 +1,19 @@
+{
+  "intent": "NodeSlide's native product pitch and product requirements deck for product, design, and engineering stakeholders, explaining how humans and agents co-author living, versioned decks and defining the golden path, quality gates, and dogfood proof plan.",
+  "project_id": "nodeslide-golden",
+  "project_dir": ".",
+  "placeholder_title": "Nodeslide Golden",
+  "planned_slides": [
+    "slide_00",
+    "slide_01",
+    "slide_02",
+    "slide_03",
+    "slide_04",
+    "slide_05",
+    "slide_06",
+    "slide_07"
+  ],
+  "planner_model": null,
+  "plan_generated": true,
+  "refs_dir": "assets/refs"
+}

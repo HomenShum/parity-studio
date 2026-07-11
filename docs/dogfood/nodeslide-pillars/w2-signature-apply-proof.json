@@ -1,0 +1,304 @@
+{
+  "generatedAt": "2026-07-11T13:17:37.624Z",
+  "sourceCommit": "5df8c6739e36b77184e4e399538cab561b89e653",
+  "sourceDirty": false,
+  "contractVersion": "nodeslide.signature-apply/v1",
+  "sourceDeck": {
+    "id": "deck_golden_1mexhug",
+    "version": 1,
+    "slideCount": 7,
+    "elementCount": 67,
+    "digestSha256": "5dad74283b3c670a21a44b851b2c17e949e930fa727e942d8d0e463a06832854"
+  },
+  "profiles": [
+    {
+      "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "profileName": "Finance reporting",
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:1lg5t6u",
+      "planElapsedMs": 13.813,
+      "operationCount": 53,
+      "operationKinds": [
+        "update_slide",
+        "update_style"
+      ],
+      "lockedElementIds": [
+        "element_83128d848bc4929de0dfc06e90c8c8d0",
+        "element_2aa2595d3f09269352353bdf8aef0b75",
+        "element_f018212537c418f87307586cffc626f9",
+        "element_3e957fb482b7be3f91d5f6457e0aaee3",
+        "element_3e14d9003c5e9d52fdc7033423c9aa2e",
+        "element_287f0606dba237972d3f923966cc2e19",
+        "element_164db2479fe9909e8392b559e2a13ec8",
+        "element_e5d97720d08aff64847adf1051ae5d98",
+        "element_81b4f144144ca387b074c79b1529c6fc",
+        "element_d0d5730ffaf0e71b0ca380e78f96d5dd",
+        "element_f44557dc89aaca66603104a76bb608c0",
+        "element_684e8233a705f533b690d0bb725e245c",
+        "element_8f890c3b4f95f3f742fe17347b6804bd",
+        "element_f58220de2a0ea0260b840026f2ec10c0",
+        "element_37e19b6e7f8497ce87ab51041413c017",
+        "element_67d45a84100c559336c77b33aa33852f",
+        "element_dfc36ac5c9d46e3949f0c37059b97a01",
+        "element_25ef789ee58334a45c2411e655b9b39e",
+        "element_2c435f5043803f75361462fad6d49080",
+        "element_bea6dea3e24e646e49d5d422d7769ae2",
+        "element_58f5ae7d7a58eecbdd74420285b080c0"
+      ],
+      "warningCodes": [],
+      "resolvedRoles": {
+        "colors": {
+          "canvas": "#FFFFFF",
+          "ink": "#171A1F",
+          "muted": "#4B5563",
+          "accent": "#005EA8",
+          "accentSoft": "#DCEBFA",
+          "border": "#8A94A3",
+          "data": [
+            "#334155",
+            "#006B5E",
+            "#A4262C",
+            "#65418A",
+            "#7A4F00"
+          ]
+        },
+        "typography": {
+          "display": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "body": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "data": "Arial, \"Helvetica Neue\", Helvetica, \"Liberation Sans\", sans-serif",
+          "titlePt": 36,
+          "bodyPt": 18,
+          "dataPt": 15
+        }
+      },
+      "preValidation": {
+        "ok": true,
+        "publishOk": false,
+        "cleanOk": false,
+        "issueCount": 143,
+        "onBrandBlockingCount": 136,
+        "issueCodes": [
+          "on_brand_background",
+          "on_brand_color",
+          "on_brand_font",
+          "on_brand_type_scale",
+          "scope"
+        ]
+      },
+      "postValidation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 7,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      },
+      "serverReceiptKeys": [
+        "checkedAt",
+        "cleanOk",
+        "deckId",
+        "deckVersion",
+        "id",
+        "issues",
+        "ok",
+        "publishOk",
+        "toolchainVersion"
+      ],
+      "deterministicValidation": true,
+      "visualFingerprint": "0feb791cf49a504bad39fe79118f66e472c2ee0e8e0868aba5da45d91c144cdf",
+      "history": {
+        "baseDeckVersion": 1,
+        "resultingDeckVersion": 2,
+        "normalVersionIncrement": true,
+        "sourceSnapshotUnchanged": true,
+        "staleReplayRejected": true,
+        "alreadyAppliedStatus": "already_applied"
+      }
+    },
+    {
+      "profileId": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
+      "profileName": "Startup narrative",
+      "planId": "signature-plan:deck_golden_1mexhug:taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800:v1:0m5rqye",
+      "planElapsedMs": 1.655,
+      "operationCount": 53,
+      "operationKinds": [
+        "update_slide",
+        "update_style"
+      ],
+      "lockedElementIds": [
+        "element_83128d848bc4929de0dfc06e90c8c8d0",
+        "element_2aa2595d3f09269352353bdf8aef0b75",
+        "element_f018212537c418f87307586cffc626f9",
+        "element_3e957fb482b7be3f91d5f6457e0aaee3",
+        "element_3e14d9003c5e9d52fdc7033423c9aa2e",
+        "element_287f0606dba237972d3f923966cc2e19",
+        "element_164db2479fe9909e8392b559e2a13ec8",
+        "element_e5d97720d08aff64847adf1051ae5d98",
+        "element_81b4f144144ca387b074c79b1529c6fc",
+        "element_d0d5730ffaf0e71b0ca380e78f96d5dd",
+        "element_f44557dc89aaca66603104a76bb608c0",
+        "element_684e8233a705f533b690d0bb725e245c",
+        "element_8f890c3b4f95f3f742fe17347b6804bd",
+        "element_f58220de2a0ea0260b840026f2ec10c0",
+        "element_37e19b6e7f8497ce87ab51041413c017",
+        "element_67d45a84100c559336c77b33aa33852f",
+        "element_dfc36ac5c9d46e3949f0c37059b97a01",
+        "element_25ef789ee58334a45c2411e655b9b39e",
+        "element_2c435f5043803f75361462fad6d49080",
+        "element_bea6dea3e24e646e49d5d422d7769ae2",
+        "element_58f5ae7d7a58eecbdd74420285b080c0"
+      ],
+      "warningCodes": [
+        "authored_token_fallback"
+      ],
+      "resolvedRoles": {
+        "colors": {
+          "canvas": "#FFFFFF",
+          "ink": "#111827",
+          "muted": "#475569",
+          "accent": "#0057B8",
+          "accentSoft": "#DCEBFA",
+          "border": "#64748B",
+          "data": [
+            "#FFFFFF",
+            "#F4F7FB",
+            "#111827",
+            "#475569",
+            "#0057B8",
+            "#DCEBFA"
+          ]
+        },
+        "typography": {
+          "display": "\"Aptos Display\", Aptos, \"Segoe UI\", Arial, sans-serif",
+          "body": "Aptos, \"Segoe UI\", Arial, sans-serif",
+          "data": "\"Aptos Mono\", \"Cascadia Mono\", Consolas, \"Courier New\", monospace",
+          "titlePt": 36,
+          "bodyPt": 18,
+          "dataPt": 15
+        }
+      },
+      "preValidation": {
+        "ok": true,
+        "publishOk": false,
+        "cleanOk": false,
+        "issueCount": 144,
+        "onBrandBlockingCount": 136,
+        "issueCodes": [
+          "on_brand_background",
+          "on_brand_color",
+          "on_brand_font",
+          "on_brand_type_scale",
+          "scope"
+        ]
+      },
+      "postValidation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 8,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      },
+      "serverReceiptKeys": [
+        "checkedAt",
+        "cleanOk",
+        "deckId",
+        "deckVersion",
+        "id",
+        "issues",
+        "ok",
+        "publishOk",
+        "toolchainVersion"
+      ],
+      "deterministicValidation": true,
+      "visualFingerprint": "07eea479c6d3274ae91de16ad329607200fc86d927c5ac59d1cf2faa91de36f2",
+      "history": {
+        "baseDeckVersion": 1,
+        "resultingDeckVersion": 2,
+        "normalVersionIncrement": true,
+        "sourceSnapshotUnchanged": true,
+        "staleReplayRejected": true,
+        "alreadyAppliedStatus": "already_applied"
+      }
+    }
+  ],
+  "visualDistinction": {
+    "distinct": true,
+    "fingerprints": [
+      "0feb791cf49a504bad39fe79118f66e472c2ee0e8e0868aba5da45d91c144cdf",
+      "07eea479c6d3274ae91de16ad329607200fc86d927c5ac59d1cf2faa91de36f2"
+    ]
+  },
+  "productionDogfood": {
+    "deploymentUrl": "https://blissful-pig-998.convex.cloud",
+    "disposableDeckId": "deck_golden_04sgckm",
+    "plan": {
+      "id": "signature-plan:deck_golden_04sgckm:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:14vriyg",
+      "elapsedMs": 1.362,
+      "operationCount": 53
+    },
+    "application": {
+      "elapsedMs": 334.296,
+      "patchId": "patch_w2_signature_mrge34zj",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2,
+      "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "activeProfileDigest": "sha256:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "validation": {
+        "ok": true,
+        "publishOk": true,
+        "cleanOk": true,
+        "issueCount": 7,
+        "onBrandBlockingCount": 0,
+        "issueCodes": [
+          "scope"
+        ]
+      }
+    },
+    "persistence": {
+      "savedProfileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
+      "listedProfileCount": 1,
+      "freshClientReloaded": true
+    },
+    "history": {
+      "versionReceiptId": "version_d15b25fdbca35752685e896ae76170a8",
+      "linkedCommentId": "comment_w2_signature_mrge34zj",
+      "linkedCommentResolved": true,
+      "offBrandIssueCodes": [
+        "on_brand_color"
+      ],
+      "offBrandPublishBlocked": true,
+      "restoredDeckVersion": 4,
+      "restorePublishOk": true,
+      "activationWasVersioned": true,
+      "stalePatchRecorded": true,
+      "staleReplayWasVersionNeutral": true
+    },
+    "operationBoundary": {
+      "rejected513": true,
+      "rejectionWasAtomic": true,
+      "accepted512": true,
+      "acceptedOperationCount": 512,
+      "elapsedMs": 367.729
+    },
+    "tenantIsolation": {
+      "wrongOwnerDenied": true,
+      "crossTenantProfileCount": 0,
+      "profileLeakageDenied": true
+    }
+  },
+  "validationReceiptShapeUnchanged": true,
+  "reliability": {
+    "BOUND": true,
+    "HONEST_STATUS": true,
+    "HONEST_SCORES": true,
+    "TIMEOUT": true,
+    "SSRF": true,
+    "BOUND_READ": true,
+    "ERROR_BOUNDARY": true,
+    "DETERMINISTIC": true
+  }
+}

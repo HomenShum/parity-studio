@@ -1,0 +1,56 @@
+<!-- @dsCard group="Components" -->
+<style>
+  .c-tp { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 28px; border-radius: 14px; }
+  .c-tp * { box-sizing: border-box; margin: 0; }
+  .c-tp .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .c-tp h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 16px; }
+  .c-tp h2 { font-size: 12px; font-weight: 600; color: #99A3AE; margin: 20px 0 8px; }
+  .c-tp .cols { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .c-tp .panel { width: 330px; border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 10px; overflow: hidden; }
+  .c-tp .hd { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 12px; display: flex; justify-content: space-between; }
+  .c-tp .hd .m { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; }
+  .c-tp .sig { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid rgba(255,255,255,.06); font-size: 11px; }
+  .c-tp .pol { font-family: "JetBrains Mono", monospace; width: 16px; text-align: center; }
+  .c-tp .pol.p { color: #2E9E6B; } .c-tp .pol.n { color: #F87171; }
+  .c-tp .dim { font-size: 9px; border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 1px 7px; color: #99A3AE; flex: none; }
+  .c-tp .val { flex: 1; color: #C6CCD4; }
+  .c-tp .cf { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #8A94A0; }
+  .c-tp .rec { margin: 0 12px 10px; border: 1px dashed rgba(217,119,87,.24); border-radius: 6px; padding: 8px 10px; font-family: "JetBrains Mono", monospace; font-size: 10px; line-height: 1.9; color: #99A3AE; }
+  .c-tp .rec .ok { color: #2E9E6B; }
+  .c-tp .rec a { color: #C6CCD4; text-decoration: underline dotted; }
+  .c-tp .ft { padding: 8px 12px; border-top: 1px solid rgba(255,255,255,.08); font-size: 10px; color: #8A94A0; }
+  .c-tp .empty { width: 330px; border: 1px dashed rgba(255,255,255,.14); border-radius: 10px; padding: 22px 18px; font-size: 12px; color: #99A3AE; line-height: 1.65; text-align: center; }
+  .c-tp .empty b { color: #F2F4F7; display: block; margin-bottom: 4px; }
+  .c-tp .evict { display: flex; gap: 5px; margin: 0 12px 10px; }
+  .c-tp .evict span { border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 2px 10px; font-size: 10px; color: #C6CCD4; }
+  .c-tp .evict .rm { border-color: rgba(248,113,113,.4); color: #F87171; }
+</style>
+<div class="c-tp">
+  <div class="kicker">NodeSlide · Components · Taste memory</div>
+  <h1>TasteProfileCard</h1>
+
+  <div class="cols">
+    <div>
+      <h2 style="margin-top:0">populated + inspecting</h2>
+      <div class="panel">
+        <div class="hd"><span>Your taste — learned</span><span class="m">4 signals · upd 14:22</span></div>
+        <div class="sig"><span class="pol p">＋</span><span class="dim">density</span><span class="val">executive</span><span class="cf">0.87 · 6 ev</span></div>
+        <div class="sig" style="background:#171B20"><span class="pol p">＋</span><span class="dim">layout</span><span class="val">evidence</span><span class="cf">0.74 · 4 ev</span></div>
+        <div class="rec">evaluator nodeslide.preference-evaluator/v1 · <span class="ok">passed</span><br><span class="ok">▮ schema</span> &nbsp;<span class="ok">▮ provenance</span> &nbsp;<span class="ok">▮ hallucination</span><br>evidence: <a>ev_a4f2</a> <a>ev_b911</a> <a>ev_c03d</a> <a>+1</a></div>
+        <div class="sig"><span class="pol n">－</span><span class="dim">color</span><span class="val">gradient backgrounds</span><span class="cf">0.69 · 3 ev</span></div>
+        <div class="sig"><span class="pol p">＋</span><span class="dim">font</span><span class="val">Manrope display</span><span class="cf">0.91 · 8 ev</span></div>
+        <div class="ft">Tenant-scoped. Learned only from evaluator-passed events. Nothing pooled, nothing invented.</div>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">evict confirm</h2>
+      <div class="panel">
+        <div class="sig"><span class="pol n">－</span><span class="dim">color</span><span class="val">gradient backgrounds</span><span class="cf">0.69</span></div>
+        <div class="evict"><span class="rm">Remove this belief</span><span>Keep</span></div>
+        <div class="ft">Eviction is recorded — removing a belief is itself a signal.</div>
+      </div>
+      <h2>empty</h2>
+      <div class="empty"><b>Nothing learned yet</b>NodeSlide learns your taste from what you select, accept, and decline — each belief arrives with its receipt.</div>
+    </div>
+  </div>
+</div>

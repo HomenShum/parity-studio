@@ -1,0 +1,45 @@
+<!-- @dsCard group="Foundations" -->
+<style>
+  .ds-type { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 32px; border-radius: 14px; }
+  .ds-type * { box-sizing: border-box; margin: 0; }
+  .ds-type .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .ds-type h1 { font-family: "Manrope", "Inter", sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 4px; }
+  .ds-type .lede { font-size: 14px; color: #C6CCD4; max-width: 62ch; line-height: 1.55; }
+  .ds-type section { margin-top: 28px; }
+  .ds-type h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .ds-type .spec { border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 8px; padding: 16px 18px; display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .ds-type .spec .label { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: #8A94A0; min-width: 148px; }
+  .ds-type .receipt { font-family: "JetBrains Mono", ui-monospace, monospace; border: 1px solid rgba(255,255,255,.10); background: #111418; border-radius: 8px; padding: 12px 16px; font-size: 12px; line-height: 1.9; color: #C6CCD4; max-width: 460px; }
+  .ds-type .receipt .ok { color: #2E9E6B; }
+  .ds-type .receipt .dim { color: #8A94A0; }
+  .ds-type .receipt .rule-line { border-top: 1px dashed rgba(217,119,87,.24); margin: 6px 0; }
+  .ds-type .note { font-size: 13px; color: #C6CCD4; line-height: 1.6; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 12px; max-width: 68ch; }
+  .ds-type .note strong { color: #F2F4F7; }
+</style>
+<div class="ds-type">
+  <div class="kicker">NodeSlide · Foundations</div>
+  <h1>Type — a voice for claims, a voice for proof</h1>
+  <p class="lede">Two registers. Manrope/Inter speak for the interface. JetBrains Mono speaks only when something is being <em>proven</em> — receipts, patch hashes, provenance, token values. When you see mono, the system is showing its work.</p>
+
+  <section>
+    <h2>Scale</h2>
+    <div class="spec"><span class="label">display · 31px / 700</span><span style="font-family:'Manrope','Inter',sans-serif;font-size:31px;font-weight:700;letter-spacing:-0.02em;">Q3 Portfolio Review</span></div>
+    <div class="spec"><span class="label">title · 20px / 700</span><span style="font-family:'Manrope','Inter',sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.01em;">Slide 4 — Market wedge</span></div>
+    <div class="spec"><span class="label">body · 14px / 400</span><span style="font-size:14px;line-height:1.6;color:#C6CCD4;">Structured records are the deck. Renders are derived, never the source of truth.</span></div>
+    <div class="spec"><span class="label">kicker · 11px / 600</span><span style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#99A3AE;font-weight:600;">Awaiting review</span></div>
+    <div class="spec"><span class="label">data · 12px mono / 500</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#C6CCD4;">deck v41 · 7 slides · 69 elements</span></div>
+  </section>
+
+  <section>
+    <h2>The receipt — signature element</h2>
+    <div class="receipt">
+      <span class="dim">validation · deck v41</span><br>
+      <span class="ok">▮ ok</span> &nbsp;<span class="ok">▮ publish</span> &nbsp;<span class="ok">▮ clean</span><br>
+      <div class="rule-line"></div>
+      <span class="dim">contrast 4.6:1 · fonts ≥ 12pt · 0 collisions</span><br>
+      <span class="dim">patch p_8f2c · </span><span style="color:#D97757">you</span><span class="dim"> · accepted 14:02</span><br>
+      <span class="dim">patch p_9a41 · </span><span style="color:#5E6AD2">agent</span><span class="dim"> · awaiting review</span>
+    </div>
+    <p class="note"><strong>Proof over polish, rendered literally.</strong> The receipt is typeset like a till print: mono, dashed terracotta rule, pass-marks that only the validator can turn green. It appears under every deck, every export, every agent proposal — the one place NodeSlide is unmistakably itself.</p>
+  </section>
+</div>

@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-07-10T20:46:00Z",
+  "browserReleaseExport": {
+    "html": {
+      "fileName": "nodeslide-launch-proof.html",
+      "bytes": 62445,
+      "sha256": "451F7B612307D8DF82A112E4761F6C7A8311DAED626ED9BA008A8EF0120399FA",
+      "slides": 6,
+      "semanticSlides": 6,
+      "sourceRecordsEmbedded": true,
+      "presenterNotesEmbedded": true,
+      "illustrativeDisclosureEmbedded": true,
+      "duplicateNumbering": false
+    },
+    "pptx": {
+      "fileName": "nodeslide-launch-proof.pptx",
+      "bytes": 121029,
+      "sha256": "FF89D24CE511A8536BA0553354EF27B8BC3B1F4C7F657C5F0051D5CF9BFE6A8D",
+      "slides": 6,
+      "notesSlides": 6,
+      "nativeShapes": 55,
+      "nativeCharts": 0,
+      "sourceNotesEmbedded": true,
+      "illustrativeDisclosureEmbedded": true,
+      "duplicateNumbering": false,
+      "renderedEverySlide": true,
+      "overflowDetected": false
+    }
+  },
+  "reproducibleRepositoryProof": {
+    "deckVersion": 1,
+    "slides": 7,
+    "elements": 67,
+    "validation": { "ok": true, "publishOk": true, "cleanOk": true, "issues": 0 },
+    "htmlBytes": 74525,
+    "pptxBytes": 136847,
+    "htmlSha256": "15EF358BC20728F75CFAFDF087AB261AB6E548C3A0982B547EEF2B24DDDD4018",
+    "pptxSha256": "3400EB45EE22DE7618F4C2426076A7D900FAC7F1C8AAAF275D7694E6FBDF5354",
+    "twoClientCas": {
+      "firstWriteAccepted": true,
+      "nonOverlappingStaleWriteRebased": true,
+      "overlappingStaleWriteBlocked": true,
+      "bothAcceptedContentsPreserved": true
+    }
+  }
+}
