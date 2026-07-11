@@ -1,0 +1,136 @@
+{
+  "generatedAt": "2026-07-10T23:59:08.551Z",
+  "input": {
+    "fileName": "nodeslide-golden.pptx",
+    "bytes": 136847,
+    "digestSha256": "3400eb45ee22de7618f4c2426076a7d900fac7f1c8aaaf275d7694e6fbdf5354",
+    "canonicalSourceDigest": "e6b133697a94d439620c063787cac80483cacc23b9b70f149f399e88b5c6227b",
+    "extractorSchemaVersion": "nodeslide.signature/v1"
+  },
+  "extraction": {
+    "elapsedMilliseconds": 55.574,
+    "bounds": {
+      "maxCompressedBytes": 67108864,
+      "maxZipEntries": 5000,
+      "maxSlides": 200,
+      "maxAggregateXmlBytes": 67108864,
+      "maxXmlPartBytes": 8388608,
+      "timeoutMs": 10000,
+      "maxEvidenceRecords": 2000,
+      "maxUsageValuesPerCategory": 128
+    },
+    "zipEntries": 63,
+    "xmlBytesRead": 92819,
+    "partsRead": 21,
+    "slidesProcessed": 7
+  },
+  "timing200Slides": {
+    "extractorElapsedMilliseconds": 75.129,
+    "wallClockMilliseconds": 75.144,
+    "budgetMilliseconds": 10000,
+    "slidesProcessed": 200,
+    "insideDefaultBudget": true
+  },
+  "recovered": {
+    "palette": [
+      "#000000",
+      "#0563C1",
+      "#26221D",
+      "#34452C",
+      "#44546A",
+      "#4472C4",
+      "#5B9BD5",
+      "#70AD47",
+      "#756B61",
+      "#954F72",
+      "#A5A5A5",
+      "#B44A2D",
+      "#E7E6E6",
+      "#ED7D31",
+      "#F7F4ED",
+      "#FFC000",
+      "#FFFFFF"
+    ],
+    "fontFamilies": [
+      "Fraunces Variable",
+      "Geist Variable",
+      "JetBrains Mono Variable"
+    ]
+  },
+  "layout": {
+    "slideWidthInches": 13.333,
+    "slideHeightInches": 7.5,
+    "aspectRatio": 1.777733,
+    "slideCount": 7,
+    "masterCount": 1,
+    "layoutCount": 1,
+    "layoutUsage": [
+      {
+        "partName": "ppt/slideLayouts/slideLayout1.xml",
+        "occurrences": 7
+      }
+    ],
+    "averageShapesPerSlide": 9.571429,
+    "maximumShapesPerSlide": 11,
+    "averageTextRunsPerSlide": 8.571429,
+    "medianFontSizePoints": 17,
+    "density": "balanced",
+    "embeddedFontsPresent": false,
+    "embeddedFontFamilies": []
+  },
+  "warningCodes": [],
+  "deterministicReplayEqual": true,
+  "hostileFixture": {
+    "kind": "forged-size-and-invalid-ooxml-suite",
+    "forgedEntries": 10,
+    "actualOptionalXmlBytes": 25620,
+    "aggregateLimitBytes": 4096,
+    "forgedSizeTypedError": "archive_too_large",
+    "invalidNamespaceTypedError": "invalid_pptx",
+    "invalidRelationshipTypeError": "invalid_pptx",
+    "numericOverflowTypedError": "invalid_pptx",
+    "throwEscaped": false
+  },
+  "measurements": {
+    "evidenceCap": {
+      "configured": 16,
+      "retained": 16,
+      "emittedTokens": 15,
+      "tokenEvidenceLinksValid": true
+    },
+    "postAssemblyTimeout": {
+      "baselineClockCalls": 193,
+      "replayClockCalls": 193,
+      "typedError": "timeout",
+      "elapsedMilliseconds": 20000,
+      "budgetMilliseconds": 10000
+    },
+    "unsupportedTransform": {
+      "warningEmitted": true,
+      "guessedColorEmitted": false
+    },
+    "alphaDistinct": {
+      "tokens": [
+        {
+          "hex": "#123456",
+          "alpha": 1
+        },
+        {
+          "hex": "#123456",
+          "alpha": 0.5
+        }
+      ]
+    },
+    "fetchCalls": 0
+  },
+  "reliability": {
+    "BOUND": true,
+    "HONEST_STATUS": true,
+    "HONEST_SCORES": true,
+    "TIMEOUT": true,
+    "SSRF": true,
+    "BOUND_READ": true,
+    "ERROR_BOUNDARY": true,
+    "DETERMINISTIC": true
+  }
+}
