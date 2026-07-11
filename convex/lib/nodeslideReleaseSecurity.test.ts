@@ -470,6 +470,7 @@ describe('NodeSlide release security', () => {
       ownerAccessKey: OWNER_ACCESS_KEY,
     });
     const slug = first.publication.shareSlug;
+    expect(slug).not.toBe(fixture.snapshot.deck.shareSlug);
     const publicRead = await presenterHandler(context, { shareSlug: slug });
     if (!publicRead) throw new Error('Published snapshot was unavailable.');
 

@@ -252,8 +252,15 @@ export const publishDeck = mutation({
     }
 
     const now = Date.now();
-    const shareSlug = isSecureShareSlug(deckRow.shareSlug) ? deckRow.shareSlug : createShareSlug();
     const previous = await findLatestPublicationForDeck(ctx, deckId);
+    const shareSlug =
+      previous?.status === 'active' && isSecureShareSlug(previous.shareSlug)
+        ? previous.shareSlug
+        : previous?.status === 'revoked' &&
+            isSecureShareSlug(deckRow.shareSlug) &&
+            deckRow.shareSlug !== previous.shareSlug
+          ? deckRow.shareSlug
+          : createShareSlug();
     const revision = (previous?.revision ?? 0) + 1;
     const id = nodeslideStableId('publication', deckId, String(revision));
     if (previous?.status === 'active') {
