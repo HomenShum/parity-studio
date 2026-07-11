@@ -14,7 +14,6 @@ import { api } from '../../../convex/_generated/api';
 import type {
   AgentEditRequest,
   CommentAnchor,
-  CreateDeckRequest,
   DeckComment,
   DeckPatch,
   DeckSnapshot,
@@ -41,7 +40,11 @@ import {
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
 import { FirstRunDialog } from './components/FirstRunDialog';
 import { PresenterView } from './components/PresenterView';
-import { ProjectDialog, type RecentDeck } from './components/ProjectDialog';
+import {
+  type CreateDeckAdmissionRequest,
+  ProjectDialog,
+  type RecentDeck,
+} from './components/ProjectDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import { SlideNavigator } from './components/SlideNavigator';
 import { StudioToolbar } from './components/StudioToolbar';
@@ -167,7 +170,7 @@ interface NodeSlideGeneratedApi {
     >;
   };
   nodeslideAgent: {
-    createDeckFromBrief: PublicAction<CreateDeckRequest, OwnerWorkspace>;
+    createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
     proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, { patchId: string }>;
   };
   nodeslideVariations: {
@@ -816,7 +819,7 @@ export function NodeSlideStudio() {
     if (ids.length > 0) openInspector('design');
   };
 
-  const createDeck = async (request: CreateDeckRequest) => {
+  const createDeck = async (request: CreateDeckAdmissionRequest) => {
     setCreating(true);
     try {
       const result = await createDeckFromBrief({ ...request });
@@ -827,7 +830,9 @@ export function NodeSlideStudio() {
       setToast({
         kind: 'success',
         message:
-          'Deck created from your brief. The Trace tab records the free-route and fallback receipt.',
+          request.providerMode === 'deterministic'
+            ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
+            : 'Deck created after your consented OpenRouter attempt. Trace shows whether OpenRouter or the deterministic fallback produced it.',
       });
     } catch (error) {
       setToast({ kind: 'error', message: errorMessage(error, 'The deck could not be created.') });

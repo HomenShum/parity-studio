@@ -20,15 +20,23 @@ import {
 import { callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import { deterministicBriefSpec } from './lib/nodeslideSeed';
 import {
+  invokeNodeSlideBriefProvider,
   nodeslideBriefValidator,
+  nodeslideCreatePublicError,
   nodeslidePatchScopeValidator,
   nodeslideVersionClockValidator,
+  validateNodeSlideBriefProviderChoice,
+  validateNodeSlideCreateDeckFields,
+  validateNodeSlidePreviewAdmission,
 } from './lib/nodeslideValidators';
 
 // Generated API files are intentionally not regenerated in this lane. Convex resolves this proxy
 // dynamically at runtime; the cast only bridges the pre-existing generated declaration.
 // biome-ignore lint/suspicious/noExplicitAny: see comment above
 const nodeslideInternal: any = (internal as any).nodeslide;
+
+const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
+const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
 
 export const proposeEdit = action({
   args: {
@@ -209,57 +217,93 @@ export const proposeEdit = action({
 
 export const createDeckFromBrief = action({
   args: {
+    accessCode: v.optional(v.string()),
     clientSessionId: v.string(),
     title: v.string(),
     brief: nodeslideBriefValidator,
     themeId: v.string(),
     route: v.union(v.literal('free'), v.literal('balanced'), v.literal('frontier')),
+    providerMode: v.optional(v.string()),
+    providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const admissionQuotaSubject = await validateNodeSlidePreviewAdmission({
+      providedAccessCode: args.accessCode,
+      expectedAccessCode: process.env[NODESLIDE_PREVIEW_ACCESS_CODE_ENV],
+      admissionSubject: process.env[NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV],
+    });
     if (args.route !== 'free') {
-      throw new Error('Only the free private-preview route is available in this release.');
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        'Only the free private-preview route is available in this release.',
+      );
     }
-    const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
-    await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
+    const providerChoice = validateNodeSlideBriefProviderChoice(
+      args.providerMode,
+      args.providerConsent,
+    );
+    const { title, brief } = validateNodeSlideCreateDeckFields({
+      title: args.title,
+      brief: args.brief,
+    });
+    const clientSessionId = requiredCreateText(args.clientSessionId, 'clientSessionId', 256, 768);
+    const themeId = requiredCreateText(args.themeId, 'themeId', 128, 256);
+    const quotaResult = (await ctx.runMutation(nodeslideInternal.consumePreviewQuotaResult, {
       buckets: [
         {
-          key: `create:${nodeslideHash(clientSessionId)}`,
+          key: `create:${admissionQuotaSubject}`,
           limit: 10,
           windowMs: 86_400_000,
         },
         { key: 'create:global', limit: 120, windowMs: 3_600_000 },
       ],
-    });
-    const title = args.title.replace(/\s+/g, ' ').trim().slice(0, 80);
-    if (!title) throw new Error('Deck title is required.');
-    const fallbackSpec = deterministicBriefSpec(title, args.brief);
-    const provider = await callNodeSlideFreeJson({
-      systemPrompt:
-        'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string}}]}. Produce 6–8 concise slides. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
-      userText: JSON.stringify({ title, brief: args.brief, requestedRoute: args.route }),
-      maxTokens: 5000,
-    });
-    const rawSpec = provider.ok ? provider.value : fallbackSpec;
-    const plan = extractPlan(provider.ok ? provider.value : null, fallbackSpec);
+    })) as { ok: boolean; reason?: 'quota_exceeded' };
+    if (!quotaResult.ok) {
+      throw nodeslideCreatePublicError(
+        'quota_exceeded',
+        'NodeSlide private-preview creation quota reached. Try again after the current window.',
+      );
+    }
+
+    const fallbackSpec = deterministicBriefSpec(title, brief);
+    const provider = await invokeNodeSlideBriefProvider(providerChoice, async () =>
+      callNodeSlideFreeJson({
+        systemPrompt:
+          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string}}]}. Produce 6–8 concise slides. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
+        userText: JSON.stringify({
+          title,
+          brief,
+          requestedRoute: args.route,
+          providerMode: providerChoice.providerMode,
+        }),
+        maxTokens: 5000,
+      }),
+    );
+    const rawSpec = provider?.ok === true ? provider.value : fallbackSpec;
+    const plan = extractPlan(provider?.ok === true ? provider.value : null, fallbackSpec);
     const now = Date.now();
     const uniqueness = `${clientSessionId}:${title}:${now}`;
     const deckId = nodeslideEventId('deck', now, uniqueness);
     const projectId = nodeslideEventId('project_nodeslide', now, uniqueness);
-    const telemetry = provider.telemetry;
+    const telemetry = provider?.telemetry;
+    const traceSummary =
+      providerChoice.providerMode === 'deterministic'
+        ? 'NodeSlide created the deck with its deterministic brief generator. The brief was not sent to OpenRouter.'
+        : provider?.ok === true
+          ? 'The user consented to send the full brief to OpenRouter. Its zero-cost router supplied the narrative plan; NodeSlide normalized, persisted, and validated the deck deterministically.'
+          : `The user consented to send the full brief to OpenRouter. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : 'the free route was unavailable.'}`;
     return await ctx.runMutation(nodeslideInternal.createFromBriefInternal, {
       deckId,
       projectId,
       clientSessionId,
       ownerAccessKey: createOwnerAccessKey(),
       title,
-      brief: args.brief,
-      themeId: args.themeId,
+      brief,
+      themeId,
       route: args.route,
       plan,
       spec: rawSpec,
-      traceSummary: provider.ok
-        ? 'OpenRouter’s zero-cost router supplied the narrative plan; NodeSlide normalized, persisted, and validated the deck deterministically.'
-        : `Deterministic brief fallback created the deck because ${provider.reason}`,
+      traceSummary,
       ...(telemetry
         ? {
             provider: telemetry.provider,
@@ -268,7 +312,9 @@ export const createDeckFromBrief = action({
             inputTokens: telemetry.inputTokens,
             outputTokens: telemetry.outputTokens,
           }
-        : { provider: 'deterministic', model: 'brief-to-deck-fallback/v1' }),
+        : providerChoice.providerMode === 'deterministic'
+          ? { provider: 'deterministic', model: 'brief-to-deck/v1' }
+          : { provider: 'openrouter', model: 'openrouter/free (deterministic fallback)' }),
     });
   },
 });
@@ -439,10 +485,23 @@ function publicAgentError(code: 'fallback_unavailable' | 'proposal_invalid', mes
   });
 }
 
-function requiredText(value: string, label: string, max: number): string {
+function requiredCreateText(
+  value: string,
+  label: string,
+  maxCharacters: number,
+  maxBytes: number,
+): string {
   const clean = value.replace(/\s+/g, ' ').trim();
-  if (!clean) throw new Error(`${label} is required.`);
-  if (clean.length > max) throw new Error(`${label} exceeds ${max} characters.`);
+  if (!clean) throw nodeslideCreatePublicError('invalid_request', `${label} is required.`);
+  if (
+    Array.from(value).length > maxCharacters ||
+    new TextEncoder().encode(value).byteLength > maxBytes
+  ) {
+    throw nodeslideCreatePublicError(
+      'invalid_request',
+      `${label} exceeds the private-preview size limit.`,
+    );
+  }
   return clean;
 }
 
