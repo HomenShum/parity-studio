@@ -38,9 +38,11 @@ spatial board, Layers element tree, @// autocomplete menus) — not observed as 
 - Layers rail: REAL element tree — glyphs, Group/Ungroup, z-order, lock, visibility, + "Bound to 1 source"
   binding indicators the reference lacked.
 - Overview: spatial thumbnail board (7 rendered thumbs), distinct from Outline/Story-Arc. Both exist.
-ONE UNCONFIRMED: whether @/ open working autocomplete MENUS vs affordance-only (composer renders the
-"@ context / commands" affordances; popup firing not confirmed). Single remaining click-verify.
-FINAL: no launch-blocking UI parity gaps across all 6 inspector tabs, both rail modes, all 3 canvas modes.
+FINAL CLICK-VERIFY (production, 2026-07-12): both composer autocomplete menus are real and keyboard-safe.
+`@` opens the bounded read-context registry (deck, slides, elements, and sources); `/` opens the command
+registry (`/variations`, `/edit`, and `/propagate`). The composer was cleared afterward and logged no errors.
+FINAL: no launch-blocking UI parity gaps across all 6 inspector tabs, both rail modes, all 3 canvas modes,
+or the context/command autocomplete interactions.
 Build meets/exceeds v3 on every verified surface and is materially MORE honest.
 
 ---
