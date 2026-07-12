@@ -13,6 +13,7 @@ import {
 } from '../shared/nodeslide';
 import { applyDeckPatch } from '../shared/nodeslidePatch';
 import type { SlideVariation } from '../shared/nodeslideVariation';
+import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
@@ -23,6 +24,7 @@ import {
   requireOwnerAccess,
   requireShareSlug,
 } from './lib/nodeslideAccess';
+import { summarizeNodeSlideExecutionTraces } from './lib/nodeslideAgenticTelemetry';
 import {
   NODESLIDE_WORKSPACE_LIMITS,
   commentFromRow,
@@ -44,7 +46,19 @@ import {
   sanitizeNodeSlideSnapshot,
   writeNodeSlideSnapshot,
 } from './lib/nodeslideData';
-import { nodeslideEventId, nodeslideHash, nodeslideStableId } from './lib/nodeslideIds';
+import {
+  NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK,
+  type NodeSlideExecutionTrace,
+  assertExecutionTraceBounds,
+  executionTraceRetentionPlan,
+} from './lib/nodeslideExecutionTrace';
+import { nodeslideExecutionTraceValidator } from './lib/nodeslideExecutionTraceValidator';
+import {
+  nodeslideContentDigest,
+  nodeslideEventId,
+  nodeslideHash,
+  nodeslideStableId,
+} from './lib/nodeslideIds';
 import {
   type NodeSlidePatchInput,
   clocksForNodeSlideOperations,
@@ -57,6 +71,15 @@ import {
   buildGoldenNodeSlide,
   repairLegacyGoldenSnapshot,
 } from './lib/nodeslideSeed';
+import {
+  NODESLIDE_SHADOW_COMPARISON_LIMIT_PER_DECK,
+  type NodeSlideShadowComparison,
+  assertNodeSlideShadowComparisonBaselineBinding,
+  assertNodeSlideShadowComparisonBounds,
+  nodeSlideShadowComparisonExpected,
+  nodeSlideShadowComparisonRetentionPlan,
+} from './lib/nodeslideShadowComparison';
+import { nodeslideShadowComparisonValidator } from './lib/nodeslideShadowComparisonValidator';
 import {
   requireDeckSignatureProfile,
   requireSignatureProfile,
@@ -830,6 +853,227 @@ export const validateAndRecord = mutation({
   },
 });
 
+export const listExecutionTraces = query({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const requestedLimit = args.limit ?? 20;
+    if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) {
+      throw new Error('Execution trace list limit must be an integer from 1 to 50.');
+    }
+    const now = Date.now();
+    const rows = await ctx.db
+      .query('nodeslide_execution_traces')
+      .withIndex('by_deck_expiry', (index) => index.eq('deckId', args.deckId).gt('expiresAt', now))
+      .take(NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK);
+    return rows
+      .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id))
+      .slice(0, requestedLimit)
+      .map(({ _id, _creationTime, actorDigest: _actorDigest, ...trace }) => trace);
+  },
+});
+
+export const listShadowComparisons = query({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const requestedLimit = args.limit ?? 20;
+    if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) {
+      throw new Error('Shadow comparison list limit must be an integer from 1 to 50.');
+    }
+    const now = Date.now();
+    const rows = await ctx.db
+      .query('nodeslide_shadow_comparisons')
+      .withIndex('by_deck_expiry', (index) => index.eq('deckId', args.deckId).gt('expiresAt', now))
+      .take(NODESLIDE_SHADOW_COMPARISON_LIMIT_PER_DECK);
+    return rows
+      .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id))
+      .slice(0, requestedLimit)
+      .map(({ _id, _creationTime, actorDigest: _actorDigest, ...comparison }) => comparison);
+  },
+});
+
+export const getExecutionTelemetrySummary = query({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const now = Date.now();
+    const rows = await ctx.db
+      .query('nodeslide_execution_traces')
+      .withIndex('by_deck_expiry', (index) => index.eq('deckId', args.deckId).gt('expiresAt', now))
+      .take(NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK);
+    return summarizeNodeSlideExecutionTraces(rows.map(({ _id, _creationTime, ...trace }) => trace));
+  },
+});
+
+export const persistExecutionTraceInternal = internalMutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    trace: nodeslideExecutionTraceValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const trace = structuredClone(args.trace) as NodeSlideExecutionTrace;
+    assertExecutionTraceBounds(trace);
+    if (trace.deckId !== args.deckId) throw new Error('Execution trace deck binding mismatch.');
+    if (trace.actorDigest !== `actor_${nodeslideContentDigest(args.ownerAccessKey)}`) {
+      throw new Error('Execution trace actor binding mismatch.');
+    }
+    const collisions = await ctx.db
+      .query('nodeslide_execution_traces')
+      .withIndex('by_stable_id', (index) => index.eq('id', trace.id))
+      .take(2);
+    if (collisions.length > 0) {
+      const existing = collisions.find(
+        (candidate) =>
+          candidate.deckId === trace.deckId && candidate.traceDigest === trace.traceDigest,
+      );
+      if (existing) return existing;
+      throw new Error('Execution trace ID collision.');
+    }
+    await ctx.db.insert('nodeslide_execution_traces', trace);
+
+    const now = Date.now();
+    const [expired, recent] = await Promise.all([
+      ctx.db
+        .query('nodeslide_execution_traces')
+        .withIndex('by_deck_expiry', (index) =>
+          index.eq('deckId', args.deckId).lte('expiresAt', now),
+        )
+        .take(NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK),
+      ctx.db
+        .query('nodeslide_execution_traces')
+        .withIndex('by_deck_created', (index) => index.eq('deckId', args.deckId))
+        .order('desc')
+        .take(NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK + 1),
+    ]);
+    const deleteIds = new Set(executionTraceRetentionPlan([...expired, ...recent], now));
+    for (const row of [...expired, ...recent]) {
+      if (deleteIds.has(row.id)) await ctx.db.delete(row._id);
+    }
+    return trace;
+  },
+});
+
+const EXECUTION_TRACE_PRUNE_BATCH_SIZE = 250;
+
+export const pruneExpiredExecutionTracesInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const expired = await ctx.db
+      .query('nodeslide_execution_traces')
+      .withIndex('by_expiry', (index) => index.lte('expiresAt', now))
+      .take(EXECUTION_TRACE_PRUNE_BATCH_SIZE);
+    for (const row of expired) await ctx.db.delete(row._id);
+    if (expired.length === EXECUTION_TRACE_PRUNE_BATCH_SIZE) {
+      await ctx.scheduler.runAfter(0, internal.nodeslide.pruneExpiredExecutionTracesInternal, {});
+    }
+    return { deleted: expired.length, cutoff: now };
+  },
+});
+
+export const persistShadowComparisonInternal = internalMutation({
+  args: {
+    deckId: v.string(),
+    comparison: nodeslideShadowComparisonValidator,
+  },
+  handler: async (ctx, args) => {
+    const deck = await findDeckRow(ctx, args.deckId);
+    if (!deck?.ownerAccessKey) throw new Error('Shadow comparison deck binding mismatch.');
+    const comparison = structuredClone(args.comparison) as NodeSlideShadowComparison;
+    assertNodeSlideShadowComparisonBounds(comparison);
+    if (comparison.deckId !== args.deckId) {
+      throw new Error('Shadow comparison deck binding mismatch.');
+    }
+    if (comparison.actorDigest !== `actor_${nodeslideContentDigest(deck.ownerAccessKey)}`) {
+      throw new Error('Shadow comparison actor binding mismatch.');
+    }
+    const baselinePatch = await findPatchRow(ctx, comparison.baselinePatchId);
+    const baselineTrace = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_stable_deck_patch', (index) =>
+        index
+          .eq('id', comparison.baselineTraceId)
+          .eq('deckId', args.deckId)
+          .eq('patchId', comparison.baselinePatchId),
+      )
+      .first();
+    if (!baselinePatch || !baselineTrace) {
+      throw new Error('Shadow comparison baseline binding mismatch.');
+    }
+    assertNodeSlideShadowComparisonBaselineBinding({
+      comparison,
+      baselinePatch,
+      baselineTrace,
+    });
+    const collisions = await ctx.db
+      .query('nodeslide_shadow_comparisons')
+      .withIndex('by_stable_id', (index) => index.eq('id', comparison.id))
+      .take(2);
+    if (collisions.length > 0) {
+      const existing = collisions.find(
+        (candidate) =>
+          candidate.deckId === comparison.deckId &&
+          candidate.comparisonDigest === comparison.comparisonDigest,
+      );
+      if (existing) return existing;
+      throw new Error('Shadow comparison ID collision.');
+    }
+    await ctx.db.insert('nodeslide_shadow_comparisons', comparison);
+
+    const now = Date.now();
+    const [expired, recent] = await Promise.all([
+      ctx.db
+        .query('nodeslide_shadow_comparisons')
+        .withIndex('by_deck_expiry', (index) =>
+          index.eq('deckId', args.deckId).lte('expiresAt', now),
+        )
+        .take(NODESLIDE_SHADOW_COMPARISON_LIMIT_PER_DECK),
+      ctx.db
+        .query('nodeslide_shadow_comparisons')
+        .withIndex('by_deck_created', (index) => index.eq('deckId', args.deckId))
+        .order('desc')
+        .take(NODESLIDE_SHADOW_COMPARISON_LIMIT_PER_DECK + 1),
+    ]);
+    const deleteIds = new Set(nodeSlideShadowComparisonRetentionPlan([...expired, ...recent], now));
+    for (const row of [...expired, ...recent]) {
+      if (deleteIds.has(row.id)) await ctx.db.delete(row._id);
+    }
+    return comparison;
+  },
+});
+
+const SHADOW_COMPARISON_PRUNE_BATCH_SIZE = 250;
+
+export const pruneExpiredShadowComparisonsInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const expired = await ctx.db
+      .query('nodeslide_shadow_comparisons')
+      .withIndex('by_expiry', (index) => index.lte('expiresAt', now))
+      .take(SHADOW_COMPARISON_PRUNE_BATCH_SIZE);
+    for (const row of expired) await ctx.db.delete(row._id);
+    if (expired.length === SHADOW_COMPARISON_PRUNE_BATCH_SIZE) {
+      await ctx.scheduler.runAfter(0, internal.nodeslide.pruneExpiredShadowComparisonsInternal, {});
+    }
+    return { deleted: expired.length, cutoff: now };
+  },
+});
+
 export const consumePreviewQuota = internalMutation({
   args: {
     buckets: v.array(v.object({ key: v.string(), limit: v.number(), windowMs: v.number() })),
@@ -933,6 +1177,11 @@ export const proposeAgentPatchInternal = internalMutation({
   args: {
     ...internalAgentPatchArgs,
     instruction: v.string(),
+    planningInputDigest: v.optional(v.string()),
+    planningSnapshotDigest: v.optional(v.string()),
+    shadowComparisonRequested: v.boolean(),
+    shadowControlsDigest: v.optional(v.string()),
+    shadowComparison: v.optional(nodeslideShadowComparisonValidator),
     traceSummary: v.string(),
     toolCalls: v.array(v.string()),
     provider: v.optional(v.string()),
@@ -944,14 +1193,33 @@ export const proposeAgentPatchInternal = internalMutation({
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     if (args.toolCalls.length > 16) throw new Error('Too many agent tool calls recorded.');
+    const planningBindingsValid =
+      /^turn_sha256:[0-9a-f]{64}$/.test(args.planningInputDigest ?? '') &&
+      /^snap_sha256:[0-9a-f]{64}$/.test(args.planningSnapshotDigest ?? '');
+    if (
+      (args.shadowComparisonRequested &&
+        (!planningBindingsValid ||
+          !/^controls_sha256:[0-9a-f]{64}$/.test(args.shadowControlsDigest ?? ''))) ||
+      (!args.shadowComparisonRequested &&
+        (args.planningInputDigest !== undefined ||
+          args.planningSnapshotDigest !== undefined ||
+          args.shadowControlsDigest !== undefined))
+    ) {
+      throw new Error('Agent shadow comparison authorization binding is invalid.');
+    }
     const proposal = await persistProposal(ctx, { ...args, source: 'agent' });
     const now = Date.now();
     const validation = proposal.workspace?.validations[0];
-    await ctx.db.insert('nodeslide_traces', {
+    const shadowComparisonExpected = nodeSlideShadowComparisonExpected(
+      args.shadowComparisonRequested,
+      proposal.patch.status,
+    );
+    const trace = {
       id: args.traceId,
       deckId: args.deckId,
       patchId: args.id,
-      status: proposal.patch.status === 'stale' ? 'failed' : 'awaiting_review',
+      status:
+        proposal.patch.status === 'stale' ? ('failed' as const) : ('awaiting_review' as const),
       summary: args.traceSummary,
       plan: [
         'Read scoped deck context',
@@ -970,6 +1238,12 @@ export const proposeAgentPatchInternal = internalMutation({
         'Fine-grained CAS before commit',
         'No provider secrets persisted',
       ],
+      ...(args.planningInputDigest ? { planningInputDigest: args.planningInputDigest } : {}),
+      ...(args.planningSnapshotDigest
+        ? { planningSnapshotDigest: args.planningSnapshotDigest }
+        : {}),
+      shadowComparisonExpected,
+      ...(args.shadowControlsDigest ? { shadowControlsDigest: args.shadowControlsDigest } : {}),
       ...(validation ? { validation } : {}),
       ...(args.provider ? { provider: args.provider } : {}),
       ...(args.model ? { model: args.model } : {}),
@@ -978,7 +1252,25 @@ export const proposeAgentPatchInternal = internalMutation({
       ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
       createdAt: now,
       ...(proposal.patch.status === 'stale' ? { completedAt: now } : {}),
-    });
+    };
+    await ctx.db.insert('nodeslide_traces', trace);
+    if (args.shadowComparison) {
+      try {
+        assertNodeSlideShadowComparisonBounds(args.shadowComparison);
+        assertNodeSlideShadowComparisonBaselineBinding({
+          comparison: args.shadowComparison,
+          baselinePatch: proposal.patch,
+          baselineTrace: trace,
+        });
+        await ctx.scheduler.runAfter(0, internal.nodeslide.persistShadowComparisonInternal, {
+          deckId: args.deckId,
+          comparison: args.shadowComparison,
+        });
+      } catch {
+        // The atomic trace marker remains as an observable missing-comparison
+        // event. Shadow scheduling can never roll back the baseline proposal.
+      }
+    }
     return proposal;
   },
 });

@@ -3,6 +3,7 @@ import {
   buildBriefNodeSlide,
   buildGoldenNodeSlide,
   coerceBriefSpec,
+  deterministicBriefSpec,
   nodeslideTheme,
   repairLegacyGoldenSnapshot,
 } from './nodeslideSeed';
@@ -61,6 +62,22 @@ describe('NodeSlide seed', () => {
       'Align on intent',
       'Name the owner',
       'Review the evidence',
+    ]);
+  });
+
+  it('keeps deterministic fallback headlines sentence-cased and sequence labels singular', () => {
+    const spec = deterministicBriefSpec('Pilot story', {
+      prompt: 'Explain a bounded pilot.',
+      audience: 'Reviewers',
+      purpose: 'earn confidence in the pilot',
+      successCriteria: ['Show the boundary'],
+    });
+
+    expect(spec.slides[0]?.headline).toBe('Earn confidence in the pilot');
+    expect(spec.slides[3]?.bullets).toEqual([
+      'Align on intent',
+      'Execute the critical moves',
+      'Review measurable outcomes',
     ]);
   });
 

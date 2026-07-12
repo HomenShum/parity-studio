@@ -302,6 +302,10 @@ export interface AgentTrace {
   context: string[];
   toolCalls: string[];
   guardrails: string[];
+  planningInputDigest?: string;
+  planningSnapshotDigest?: string;
+  shadowComparisonExpected?: boolean;
+  shadowControlsDigest?: string;
   validation?: ValidationResult;
   provider?: string;
   model?: string;

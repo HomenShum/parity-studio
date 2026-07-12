@@ -1,0 +1,731 @@
+{
+  "schemaVersion": "nodeslide.agentic-proof/v1",
+  "generatedAt": "2026-07-12T03:56:28.750Z",
+  "deterministicFixtureTime": "2026-07-11T12:00:00.000Z",
+  "route": "local-ci-reference-no-provider",
+  "scope": "controlled-private-preview-r1-shadow",
+  "artifacts": [
+    {
+      "id": "founder",
+      "title": "NodeSlide — Founder launch narrative",
+      "deckId": "deck_agentic_founder",
+      "deckVersion": 1,
+      "slides": 7,
+      "elements": 65,
+      "sources": 2,
+      "snapshotDigest": "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+      "validation": {
+        "ok": true,
+        "cleanOk": true,
+        "publishOk": true,
+        "issueCounts": {}
+      },
+      "deckRepl": {
+        "terminalReason": "completed",
+        "steps": 2,
+        "proposals": 1,
+        "operations": 1,
+        "egressMode": "deny",
+        "traceDigest": "trace_sha256:24bdb21cf28d7acbecfe053482b1ebf824cfaa2963e16a43a16785abe86354f6"
+      },
+      "taste": {
+        "receiptDigest": "taste_sha256:7ff97c0b3f4250732a695378b0344fbaedaafdff0a9071409657b047f499b98e",
+        "violationCounts": {
+          "color": 65,
+          "font": 58,
+          "type_scale": 50,
+          "background": 7,
+          "spacing": 1,
+          "density": 1,
+          "export_capability": 0
+        },
+        "repairStatus": "blocked",
+        "repairOperations": 51,
+        "blockers": [
+          "locked_elements"
+        ]
+      },
+      "html": {
+        "file": "founder.html",
+        "bytes": 78974,
+        "slideRegions": 7
+      },
+      "pptx": {
+        "file": "founder.pptx",
+        "bytes": 137336,
+        "zipSignature": "PK"
+      }
+    },
+    {
+      "id": "investor",
+      "title": "NodeSlide — Investor strategy brief",
+      "deckId": "deck_agentic_investor",
+      "deckVersion": 1,
+      "slides": 7,
+      "elements": 65,
+      "sources": 2,
+      "snapshotDigest": "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+      "validation": {
+        "ok": true,
+        "cleanOk": true,
+        "publishOk": true,
+        "issueCounts": {}
+      },
+      "deckRepl": {
+        "terminalReason": "completed",
+        "steps": 2,
+        "proposals": 1,
+        "operations": 1,
+        "egressMode": "deny",
+        "traceDigest": "trace_sha256:cf6b5f6e1a5142e6aa8a6cf31950dd5bf5c3fbb466fea9581f6585dea1fccad3"
+      },
+      "taste": {
+        "receiptDigest": "taste_sha256:92efa2c6f030c06c240b137e5489934c7d78a6f57f26bdc2a554bc65027779e6",
+        "violationCounts": {
+          "color": 65,
+          "font": 58,
+          "type_scale": 50,
+          "background": 7,
+          "spacing": 1,
+          "density": 1,
+          "export_capability": 0
+        },
+        "repairStatus": "blocked",
+        "repairOperations": 51,
+        "blockers": [
+          "locked_elements"
+        ]
+      },
+      "html": {
+        "file": "investor.html",
+        "bytes": 78873,
+        "slideRegions": 7
+      },
+      "pptx": {
+        "file": "investor.pptx",
+        "bytes": 137277,
+        "zipSignature": "PK"
+      }
+    },
+    {
+      "id": "technical",
+      "title": "NodeSlide — Agentic authoring architecture",
+      "deckId": "deck_agentic_technical",
+      "deckVersion": 1,
+      "slides": 7,
+      "elements": 65,
+      "sources": 2,
+      "snapshotDigest": "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+      "validation": {
+        "ok": true,
+        "cleanOk": true,
+        "publishOk": true,
+        "issueCounts": {}
+      },
+      "deckRepl": {
+        "terminalReason": "completed",
+        "steps": 2,
+        "proposals": 1,
+        "operations": 1,
+        "egressMode": "deny",
+        "traceDigest": "trace_sha256:dbbfa625a2c1b4b993d4c67ae07046bf477af0a97a9d75b76be9cd3d51e75dcf"
+      },
+      "taste": {
+        "receiptDigest": "taste_sha256:3a2e86d71d23ae04a7a3c2a13e77b7cef7a656b5afef1b22ef75964fdaab915e",
+        "violationCounts": {
+          "color": 65,
+          "font": 58,
+          "type_scale": 50,
+          "background": 7,
+          "spacing": 1,
+          "density": 1,
+          "export_capability": 0
+        },
+        "repairStatus": "blocked",
+        "repairOperations": 51,
+        "blockers": [
+          "locked_elements"
+        ]
+      },
+      "html": {
+        "file": "technical.html",
+        "bytes": 79351,
+        "slideRegions": 7
+      },
+      "pptx": {
+        "file": "technical.pptx",
+        "bytes": 137533,
+        "zipSignature": "PK"
+      }
+    }
+  ],
+  "controls": {
+    "closedControlsDigest": "controls_sha256:d805403db89b1717a05ef94d0ce86765c49b10afb2472db00eba5b06e0539ba7",
+    "closedAuthorization": {
+      "allowed": false,
+      "reasons": [
+        "cohort_admission_disabled",
+        "global_execution_disabled"
+      ],
+      "controlsDigest": "controls_sha256:d805403db89b1717a05ef94d0ce86765c49b10afb2472db00eba5b06e0539ba7"
+    },
+    "shadowControlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+    "shadowAuthorization": {
+      "allowed": true,
+      "reasons": [],
+      "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894"
+    },
+    "publicationAuthorization": {
+      "allowed": false,
+      "reasons": [
+        "agentic_publication_disabled"
+      ],
+      "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894"
+    },
+    "networkEgress": false,
+    "automaticContinuation": false
+  },
+  "telemetry": {
+    "schemaVersion": "nodeslide.agentic-telemetry/v1",
+    "sampleSize": 3,
+    "window": {
+      "firstCreatedAt": 1783771200000,
+      "lastCreatedAt": 1783771200002
+    },
+    "totals": {
+      "requests": 3,
+      "completed": 3,
+      "stopped": 0,
+      "cleanupFailures": 0,
+      "egressSessions": 0,
+      "usage": {
+        "steps": 6,
+        "inputBytes": 11304,
+        "outputBytes": 3638,
+        "operations": 3,
+        "elapsedMs": 0
+      },
+      "provider": {
+        "requests": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "costMicroUsd": 0,
+        "latencyMs": 0,
+        "retries": 0,
+        "fallbacks": 0
+      }
+    },
+    "groups": [
+      {
+        "cohort": "local-ci-reference",
+        "adapterId": "nodeslide/deck-repl",
+        "adapterVersion": "1.0.0",
+        "kind": "deck_repl",
+        "requests": 3,
+        "completed": 3,
+        "stopped": 0,
+        "cleanupFailures": 0,
+        "egressSessions": 0,
+        "terminalReasons": {
+          "completed": 3
+        },
+        "usage": {
+          "steps": 6,
+          "inputBytes": 11304,
+          "outputBytes": 3638,
+          "operations": 3,
+          "elapsedMs": 0
+        },
+        "elapsedHistogram": {
+          "lte_100": 3
+        },
+        "provider": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "costMicroUsd": 0,
+          "latencyMs": 0,
+          "retries": 0,
+          "fallbacks": 0,
+          "resolvedModels": {}
+        }
+      }
+    ],
+    "summaryDigest": "telemetry_sha256:6c35b907ff31016b2d84a03d5e3e882b45a6851ead1a3c1c58cf5bfc916c960c"
+  },
+  "pairedEditShadow": [
+    {
+      "schemaVersion": "nodeslide.shadow-comparison/v1",
+      "id": "shadow_comparison_90db2d718b1ace6ebe6588890e930218",
+      "deckId": "deck_agentic_founder",
+      "actorDigest": "actor_sha256:8054588f4905285869d0f49d5492b4959c454dc4a664bc3248f3e37ce460c223",
+      "turnId": "turn_895a92775a4869440fe1295c4d215234",
+      "baselinePatchId": "patch_proof_10d5eac1ba12181b9d7fb965558e2df7",
+      "baselineTraceId": "trace_7fbb00962f80e6e57bda0785d7da071d",
+      "turnInputDigest": "turn_sha256:dd2e2fbb309251d389e5b7231f47c6bfdbd2794cbe385450429bdbac4e731e2f",
+      "baseSnapshotDigest": "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+      "baseDeckVersion": 1,
+      "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+      "baseline": {
+        "adapterId": "nodeslide/single-shot-edit-planner",
+        "adapterVersion": "1.0.0",
+        "origin": "deterministic_fallback",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:22a58e6059424db09d975f5d77f661b8b54b16872f00230d3692c0a170e29829",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidate": {
+        "adapterId": "nodeslide/deterministic-edit-shadow",
+        "adapterVersion": "1.0.0",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:22a58e6059424db09d975f5d77f661b8b54b16872f00230d3692c0a170e29829",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidateExposed": false,
+      "candidateCommitted": false,
+      "createdAt": 1783771200000,
+      "completedAt": 1783771200000,
+      "expiresAt": 1786363200000,
+      "comparisonDigest": "comparison_sha256:e5903650c78e1af18dbaf6e0515ef17d9d023ce9bf8ad22b1405c2b4af691636"
+    },
+    {
+      "schemaVersion": "nodeslide.shadow-comparison/v1",
+      "id": "shadow_comparison_3460d481437fb323d68190db111c2e01",
+      "deckId": "deck_agentic_investor",
+      "actorDigest": "actor_sha256:3cc74e1b8b49b02a4e4b36d0cf1f9dacbb5a85857036b01c4c2104cd4bb558f6",
+      "turnId": "turn_44b60bcf60abf82123dbd5dfa3a595a8",
+      "baselinePatchId": "patch_proof_18b5ad35a4376cdf890c9c0a222f05e0",
+      "baselineTraceId": "trace_a78e42f6f806a3f65c4716c434cb18f2",
+      "turnInputDigest": "turn_sha256:dc56e2989766cda33589988982b517cb10ffadd89416f7b4465149d99405a570",
+      "baseSnapshotDigest": "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+      "baseDeckVersion": 1,
+      "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+      "baseline": {
+        "adapterId": "nodeslide/single-shot-edit-planner",
+        "adapterVersion": "1.0.0",
+        "origin": "deterministic_fallback",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:90f14f0bff5c697fe3a1781b2f3663305fd6d94ab388e502d0ac27f30ca50b6b",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidate": {
+        "adapterId": "nodeslide/deterministic-edit-shadow",
+        "adapterVersion": "1.0.0",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:90f14f0bff5c697fe3a1781b2f3663305fd6d94ab388e502d0ac27f30ca50b6b",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidateExposed": false,
+      "candidateCommitted": false,
+      "createdAt": 1783771200001,
+      "completedAt": 1783771200001,
+      "expiresAt": 1786363200001,
+      "comparisonDigest": "comparison_sha256:7c401a8b544761e2b9bf768f1cca215dc58a0f9c49d5d97d96ba98c3d832cadf"
+    },
+    {
+      "schemaVersion": "nodeslide.shadow-comparison/v1",
+      "id": "shadow_comparison_c633c9bd6804dc77cd2eea62cde02478",
+      "deckId": "deck_agentic_technical",
+      "actorDigest": "actor_sha256:780868ec3c48ef7f8c0e9a1d2840607cb1e039c940330b98367944ad6a04fcb5",
+      "turnId": "turn_0abf97acef7f12ce43d0b76dc20978a2",
+      "baselinePatchId": "patch_proof_36df62f3d75bad8832997229c7343e68",
+      "baselineTraceId": "trace_bcaf4702cc275800fc4e4c1a0566b14d",
+      "turnInputDigest": "turn_sha256:22965fa8418dbeffe6677548069fa260bcc271126ad7c1732ecca865d5b8a4d0",
+      "baseSnapshotDigest": "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+      "baseDeckVersion": 1,
+      "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+      "baseline": {
+        "adapterId": "nodeslide/single-shot-edit-planner",
+        "adapterVersion": "1.0.0",
+        "origin": "deterministic_fallback",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:af96a66844cb5c58d0d50328289e130586f649ba4a4b4e8671f2133ca7c26818",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidate": {
+        "adapterId": "nodeslide/deterministic-edit-shadow",
+        "adapterVersion": "1.0.0",
+        "outcome": "proposed",
+        "terminalReason": "completed",
+        "proposalDigest": "ops_sha256:af96a66844cb5c58d0d50328289e130586f649ba4a4b4e8671f2133ca7c26818",
+        "operationCount": 1,
+        "elapsedMs": 0
+      },
+      "candidateExposed": false,
+      "candidateCommitted": false,
+      "createdAt": 1783771200002,
+      "completedAt": 1783771200002,
+      "expiresAt": 1786363200002,
+      "comparisonDigest": "comparison_sha256:85d9e66230ccd5107cdfcfd0b711fd1367b4c21f7ec60b8afba05148c14bd92b"
+    }
+  ],
+  "kernel": {
+    "adapterId": "nodeslide/deterministic-analysis",
+    "adapterVersion": "1.0.0",
+    "conformance": {
+      "passed": true,
+      "checks": [
+        {
+          "id": "summarize",
+          "passed": true,
+          "detail": "completed; cleanup=true"
+        },
+        {
+          "id": "derive",
+          "passed": true,
+          "detail": "completed; cleanup=true"
+        },
+        {
+          "id": "chart",
+          "passed": true,
+          "detail": "completed; cleanup=true"
+        },
+        {
+          "id": "default-no-egress",
+          "passed": true,
+          "detail": "Network use requires an explicit allowlist policy and consent at execution time."
+        }
+      ]
+    },
+    "terminalReason": "completed",
+    "network": {
+      "mode": "deny",
+      "allowedHosts": [],
+      "consentRecorded": false
+    },
+    "cleanupConfirmed": true,
+    "outputDigest": "output_sha256:3a6c938269833eaf2755bb18dbaad529fe6a4eb41bf25c0ad22cb1d5285830d2"
+  },
+  "managedKernelSeam": {
+    "providerContacted": false,
+    "transport": "injected-fixture-no-provider",
+    "adapterId": "openai/code-interpreter",
+    "adapterVersion": "1.0.0",
+    "terminalReason": "completed",
+    "network": {
+      "mode": "deny",
+      "allowedHosts": [],
+      "consentRecorded": false
+    },
+    "cleanupConfirmed": true,
+    "outputDigest": "output_sha256:09945baeb062f2102e814189682fdf88687f7cf3c5c195cd53eda6d066d90f26"
+  },
+  "renderRepair": {
+    "terminalReason": "clean",
+    "attempts": 1,
+    "operations": 1,
+    "baseSnapshotDigest": "snap_sha256:37a11f1c8db3b3cf68351a070f562da68bfbd6c123fa6f350cb0ec7e63bab628",
+    "candidateSnapshotDigest": "snap_sha256:6a4f6ee363487ad06d9a5a95fdfa04da46d6ccb3fa0259b324685da2d392fdbd"
+  },
+  "storyBench": {
+    "report": {
+      "schemaVersion": "nodeslide.storybench/v1",
+      "suiteId": "nodeslide-private-preview-reference-2026-07-11",
+      "cases": [
+        {
+          "id": "founder",
+          "tier": "A",
+          "fixtureDigest": "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+          "provenancePassed": true,
+          "failures": []
+        },
+        {
+          "id": "investor",
+          "tier": "A",
+          "fixtureDigest": "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+          "provenancePassed": true,
+          "failures": []
+        },
+        {
+          "id": "technical",
+          "tier": "A",
+          "fixtureDigest": "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+          "provenancePassed": true,
+          "failures": []
+        }
+      ],
+      "adapters": [
+        {
+          "id": "nodeslide/deck-repl-shadow",
+          "version": "1.0.0"
+        },
+        {
+          "id": "nodeslide/single-shot-reference",
+          "version": "1.0.0"
+        }
+      ],
+      "results": [
+        {
+          "caseId": "founder",
+          "adapterId": "nodeslide/deck-repl-shadow",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+          "sourceId": "nodeslide-internal-founder",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+            "trace_sha256:24bdb21cf28d7acbecfe053482b1ebf824cfaa2963e16a43a16785abe86354f6",
+            "taste_sha256:7ff97c0b3f4250732a695378b0344fbaedaafdff0a9071409657b047f499b98e"
+          ],
+          "resultDigest": "result_sha256:cffa046a1228c91e2f6d584c13d12b377fcd2784beb08081a4b6239164026985"
+        },
+        {
+          "caseId": "founder",
+          "adapterId": "nodeslide/single-shot-reference",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+          "sourceId": "nodeslide-internal-founder",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:943933513157f25f7226f110d1071b79a0fac10e4655487a2d41fba15f391be1",
+            "trace_sha256:24bdb21cf28d7acbecfe053482b1ebf824cfaa2963e16a43a16785abe86354f6",
+            "taste_sha256:7ff97c0b3f4250732a695378b0344fbaedaafdff0a9071409657b047f499b98e"
+          ],
+          "resultDigest": "result_sha256:e385dde14b16b8be9816406b703b5632f469adc652a144e1ca5862d01418171a"
+        },
+        {
+          "caseId": "investor",
+          "adapterId": "nodeslide/deck-repl-shadow",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+          "sourceId": "nodeslide-internal-investor",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+            "trace_sha256:cf6b5f6e1a5142e6aa8a6cf31950dd5bf5c3fbb466fea9581f6585dea1fccad3",
+            "taste_sha256:92efa2c6f030c06c240b137e5489934c7d78a6f57f26bdc2a554bc65027779e6"
+          ],
+          "resultDigest": "result_sha256:a9f8fbbd6e159413855d237042b2fe6bad9e9a1d310cee72c19069023312567a"
+        },
+        {
+          "caseId": "investor",
+          "adapterId": "nodeslide/single-shot-reference",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+          "sourceId": "nodeslide-internal-investor",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:da11f1bb73d23d26f38d043c77073bca77e0434bce88fb7c0cdf8896835107bf",
+            "trace_sha256:cf6b5f6e1a5142e6aa8a6cf31950dd5bf5c3fbb466fea9581f6585dea1fccad3",
+            "taste_sha256:92efa2c6f030c06c240b137e5489934c7d78a6f57f26bdc2a554bc65027779e6"
+          ],
+          "resultDigest": "result_sha256:f540b427aece372a15e02e488a077586309b65668cd349848199c3b9e8abe62f"
+        },
+        {
+          "caseId": "technical",
+          "adapterId": "nodeslide/deck-repl-shadow",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+          "sourceId": "nodeslide-internal-technical",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+            "trace_sha256:dbbfa625a2c1b4b993d4c67ae07046bf477af0a97a9d75b76be9cd3d51e75dcf",
+            "taste_sha256:3a2e86d71d23ae04a7a3c2a13e77b7cef7a656b5afef1b22ef75964fdaab915e"
+          ],
+          "resultDigest": "result_sha256:5e14503491aa90d174067228676411cadd21540cdd47b1e86b9c577ca79d0770"
+        },
+        {
+          "caseId": "technical",
+          "adapterId": "nodeslide/single-shot-reference",
+          "adapterVersion": "1.0.0",
+          "fixtureDigest": "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+          "sourceId": "nodeslide-internal-technical",
+          "tier": "A",
+          "status": "completed",
+          "eligible": true,
+          "score": 1,
+          "dimensions": {
+            "taskCompletion": 1,
+            "narrativeCoherence": 1,
+            "evidenceLineage": 1,
+            "editability": 1,
+            "visualIntegrity": 1,
+            "versionSafety": 1,
+            "latencyEfficiency": 1,
+            "costEfficiency": 1
+          },
+          "safetyPassed": true,
+          "budgetPassed": true,
+          "completenessPassed": true,
+          "failures": [],
+          "metrics": {
+            "latencyMs": 0,
+            "costMicroUsd": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "steps": 2
+          },
+          "evidenceDigests": [
+            "snap_sha256:0f5f3fd82bec93b16d619bc29f70707539a25861fd75d31a931079c10db9f567",
+            "trace_sha256:dbbfa625a2c1b4b993d4c67ae07046bf477af0a97a9d75b76be9cd3d51e75dcf",
+            "taste_sha256:3a2e86d71d23ae04a7a3c2a13e77b7cef7a656b5afef1b22ef75964fdaab915e"
+          ],
+          "resultDigest": "result_sha256:ccc044bfc66cb5ca04f554583a327ad0ecf82997c8707e5df6cc178cced954af"
+        }
+      ],
+      "provenancePassed": true,
+      "reportDigest": "storybench_sha256:96c591a5e0da93ea6c933e2c67062236ff6a3c24929381afb20df25e7c783e51"
+    },
+    "comparison": {
+      "baselineAdapterId": "nodeslide/single-shot-reference",
+      "candidateAdapterId": "nodeslide/deck-repl-shadow",
+      "decision": "hold",
+      "reason": "Observed delta 0.0000 is below the promotion threshold.",
+      "matchedCases": 3,
+      "baselineMean": 1,
+      "candidateMean": 1,
+      "meanDelta": 0,
+      "dimensionDeltas": {
+        "taskCompletion": 0,
+        "narrativeCoherence": 0,
+        "evidenceLineage": 0,
+        "editability": 0,
+        "visualIntegrity": 0,
+        "versionSafety": 0,
+        "latencyEfficiency": 0,
+        "costEfficiency": 0
+      },
+      "confidence": "insufficient",
+      "caveat": "This deterministic comparison reports matched-case direction and bounded effect only; it does not claim statistical significance or population-level generalization.",
+      "blockers": []
+    }
+  },
+  "verdict": {
+    "r0LocalReference": "GO",
+    "r1PrivatePreviewShadow": "GO_AFTER_STAGING_SWITCH_EXERCISE",
+    "r2ReviewedAgenticProposals": "HOLD",
+    "publicMultiTenant": "NO_GO",
+    "rationale": "The candidate is safety-clean and StoryBench-score-identical to baseline, so promotion remains on hold; public identity, lifecycle, tenancy, and managed-kernel gates remain unresolved."
+  }
+}

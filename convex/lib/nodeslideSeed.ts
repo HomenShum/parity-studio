@@ -372,6 +372,7 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   const cleanTitle = nodeslideCleanText(title, 80) || 'Untitled story';
   const audience = nodeslideCleanText(brief.audience, 120) || 'the audience';
   const purpose = nodeslideCleanText(brief.purpose, 180) || nodeslideCleanText(brief.prompt, 180);
+  const outcome = sentenceCase(purpose || nodeslideCleanText(brief.prompt, 180));
   const criteria = brief.successCriteria
     .map((criterion) => nodeslideCleanText(criterion, 96))
     .filter(Boolean)
@@ -390,7 +391,7 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
       {
         title: cleanTitle,
         section: 'Opening / 01',
-        headline: purpose || nodeslideCleanText(brief.prompt, 150),
+        headline: outcome,
         body: `A focused narrative for ${audience}, built from the supplied brief and kept editable from first draft onward.`,
         bullets: success,
       },
@@ -413,11 +414,7 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         section: 'Approach / 04',
         headline: 'Turn the idea into a sequence people can understand and own.',
         body: 'Connect intent, action, and feedback in one visible operating path so the audience can see both the destination and the mechanics.',
-        bullets: [
-          '01 · Align on intent',
-          '02 · Execute the critical moves',
-          '03 · Review measurable outcomes',
-        ],
+        bullets: ['Align on intent', 'Execute the critical moves', 'Review measurable outcomes'],
       },
       {
         title: 'What success looks like',
@@ -442,12 +439,18 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
       {
         title: 'The decision',
         section: 'Close / 07',
-        headline: purpose || 'Choose the next move and make ownership explicit.',
+        headline: outcome || 'Choose the next move and make ownership explicit.',
         body: `Invite ${audience} to align on the outcome, the first action, and the evidence that will guide the next decision.`,
         bullets: ['Agree the outcome', 'Name the owner', 'Set the next checkpoint'],
       },
     ],
   };
+}
+
+function sentenceCase(value: string): string {
+  const characters = Array.from(value);
+  if (characters.length === 0) return '';
+  return `${characters[0]?.toLocaleUpperCase() ?? ''}${characters.slice(1).join('')}`;
 }
 
 export function coerceBriefSpec(

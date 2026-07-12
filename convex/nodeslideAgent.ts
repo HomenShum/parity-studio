@@ -1,28 +1,54 @@
 'use node';
 
 import { ConvexError, v } from 'convex/values';
-import type {
-  DeckSnapshot,
-  ElementStyle,
-  NodeSlideWorkspace,
-  PatchOperation,
-  PatchScope,
-} from '../shared/nodeslide';
+import type { DeckSnapshot, NodeSlideWorkspace, PatchOperation } from '../shared/nodeslide';
 import { internal } from './_generated/api';
 import { action } from './_generated/server';
-import { createOwnerAccessKey } from './lib/nodeslideAccess';
-import { nodeslideEventId, nodeslideHash, nodeslideStableId } from './lib/nodeslideIds';
+import { createOwnerAccessKey, isOwnerAccessKey } from './lib/nodeslideAccess';
 import {
-  deterministicAgentOperations,
-  summarizePatchOperations,
-  validateNodeSlidePatch,
-} from './lib/nodeslidePatches';
+  authorizeNodeSlideAgenticOperation,
+  resolveNodeSlideAgenticControls,
+} from './lib/nodeslideAgenticControls';
+import {
+  nodeSlideDeckReplDefaultBudget,
+  nodeSlideDeckReplInputBytes,
+  nodeSlideDeckReplShadowReceipt,
+  nodeSlideOperationDigest,
+  nodeSlideSnapshotDigest,
+  runNodeSlideDeckRepl,
+} from './lib/nodeslideDeckRepl';
+import {
+  NODESLIDE_BASELINE_EDIT_ADAPTER_ID,
+  NODESLIDE_BASELINE_EDIT_ADAPTER_VERSION,
+  type NodeSlideEditPlannerReceipt,
+  type NodeSlideEditPlanningRequest,
+  planNodeSlideEdit,
+} from './lib/nodeslideEditPlanner';
+import {
+  NODESLIDE_EDIT_SHADOW_ADAPTER_ID,
+  NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
+  planNodeSlideEditShadow,
+} from './lib/nodeslideEditShadowPlanner';
+import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
+import {
+  nodeslideContentDigest,
+  nodeslideEventId,
+  nodeslideHash,
+  nodeslideStableId,
+} from './lib/nodeslideIds';
 import { callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import { deterministicBriefSpec } from './lib/nodeslideSeed';
+import {
+  type NodeSlideShadowComparison,
+  type NodeSlideShadowComparisonLane,
+  createNodeSlideShadowComparison,
+  nodeSlideEditTurnInputDigest,
+} from './lib/nodeslideShadowComparison';
 import {
   invokeNodeSlideBriefProvider,
   nodeslideBriefValidator,
   nodeslideCreatePublicError,
+  nodeslideDeckReplCommandValidator,
   nodeslidePatchScopeValidator,
   nodeslideVersionClockValidator,
   validateNodeSlideBriefProviderChoice,
@@ -30,9 +56,10 @@ import {
   validateNodeSlidePreviewAdmission,
 } from './lib/nodeslideValidators';
 
-// Generated API files are intentionally not regenerated in this lane. Convex resolves this proxy
-// dynamically at runtime; the cast only bridges the pre-existing generated declaration.
-// biome-ignore lint/suspicious/noExplicitAny: see comment above
+// Convex's generated API creates a TypeScript self-reference when this action module invokes
+// functions whose declarations also include this module. Runtime arguments still cross explicit
+// validators; keep the escape hatch confined to this generated function-reference proxy.
+// biome-ignore lint/suspicious/noExplicitAny: generated Convex self-reference described above
 const nodeslideInternal: any = (internal as any).nodeslide;
 
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
@@ -70,114 +97,64 @@ export const proposeEdit = action({
     if (!workspace) throw new Error(`Deck ${args.deckId} not found.`);
     if (args.scope.deckId !== args.deckId) throw new Error('Patch scope deckId mismatch.');
     const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
-    const scopedSlideIds =
-      args.scope.kind === 'deck'
-        ? new Set(workspace.deck.slideOrder)
-        : new Set(args.scope.slideIds);
-    const scopedElementIds = 'elementIds' in args.scope ? new Set(args.scope.elementIds) : null;
-    const scopedSlides = workspace.slides.filter((slide) => scopedSlideIds.has(slide.id));
-    const scopedElements = workspace.elements.filter(
-      (element) =>
-        scopedSlideIds.has(element.slideId) &&
-        (!scopedElementIds || scopedElementIds.has(element.id)),
-    );
+    const snapshot = snapshotOf(workspace);
 
-    const provider = await callNodeSlideFreeJson({
-      systemPrompt:
-        'You are NodeSlide’s bounded edit planner. Return JSON only: {"summary":string,"operations":PatchOperation[]}. Never target IDs outside the supplied scope. Never edit locked elements. Use normalized 0..1 geometry and at most 8 operations. Do not add or remove elements.',
-      userText: JSON.stringify({
-        instruction,
-        baseDeckVersion: args.baseDeckVersion,
-        scope: args.scope,
-        deck: {
-          id: workspace.deck.id,
-          title: workspace.deck.title,
-          version: workspace.deck.version,
-        },
-        slides: scopedSlides.map((slide) => ({
-          id: slide.id,
-          title: slide.title,
-          version: slide.version,
-        })),
-        elements: scopedElements.map((element) => ({
-          id: element.id,
-          slideId: element.slideId,
-          kind: element.kind,
-          role: element.role,
-          content: element.content,
-          bbox: element.bbox,
-          style: element.style,
-          locked: element.locked,
-          version: element.version,
-        })),
-      }),
-      maxTokens: 3000,
+    const request = {
+      deckId: args.deckId,
+      instruction,
+      baseDeckVersion: args.baseDeckVersion,
+      baseSlideVersions: args.baseSlideVersions,
+      baseElementVersions: args.baseElementVersions,
+      scope: args.scope,
+    };
+    const planningStartedAt = Date.now();
+    const baseline = await planNodeSlideEdit({
+      snapshot,
+      scopedComment:
+        scopedCommentId === undefined
+          ? null
+          : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null),
+      request,
     });
 
-    let operations: PatchOperation[] | null = null;
-    if (provider.ok) {
-      operations = parseOperations(provider.value);
-      if (operations) {
-        const comment =
-          scopedCommentId !== undefined
-            ? workspace.comments.find((candidate) => candidate.id === scopedCommentId)
-            : null;
-        const errors = validateNodeSlidePatch(
-          workspace,
-          {
-            deckId: args.deckId,
-            baseDeckVersion: args.baseDeckVersion,
-            baseSlideVersions: args.baseSlideVersions,
-            baseElementVersions: args.baseElementVersions,
-            scope: args.scope,
-            operations,
-          },
-          comment,
-        );
-        if (errors.length > 0) operations = null;
-      }
-    }
-    const usedFallback = operations === null;
-    let finalOperations: PatchOperation[];
-    try {
-      finalOperations =
-        operations ?? deterministicAgentOperations(workspace, instruction, args.scope);
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message.startsWith('The free route returned')
-          ? error.message
-          : 'The free route could not produce a safe scoped proposal. Retry with a smaller request or exact replacement copy in quotation marks.';
-      throw publicAgentError('fallback_unavailable', message);
-    }
-    const fallbackErrors = validateNodeSlidePatch(
-      workspace,
-      {
-        deckId: args.deckId,
-        baseDeckVersion: args.baseDeckVersion,
-        baseSlideVersions: args.baseSlideVersions,
-        baseElementVersions: args.baseElementVersions,
-        scope: args.scope,
-        operations: finalOperations,
-      },
-      scopedCommentId !== undefined
-        ? workspace.comments.find((candidate) => candidate.id === scopedCommentId)
-        : null,
+    const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
+    if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
+    const finalOperations = baseline.operations;
+    const summary = baseline.summary;
+    const usedFallback = baseline.receipt.origin === 'deterministic_fallback';
+    const telemetry = baseline.receipt.providerTelemetry;
+    const shadowAuthorization = authorizeNodeSlideAgenticOperation(
+      resolveNodeSlideAgenticControls(process.env),
+      { operation: 'deck_repl_shadow' },
     );
-    if (fallbackErrors.length > 0) {
-      throw publicAgentError(
-        'proposal_invalid',
-        `The proposed edit did not pass NodeSlide’s safety checks: ${fallbackErrors[0]}`,
-      );
-    }
-
+    const shadowBinding = shadowAuthorization.allowed
+      ? {
+          planningInputDigest: nodeSlideEditTurnInputDigest(request),
+          planningSnapshotDigest: nodeSlideSnapshotDigest(snapshot),
+        }
+      : null;
     const now = Date.now();
     const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
     const traceId = nodeslideStableId('trace', patchId);
-    // Derive the proposal label from the validated diff. Provider-authored prose can diverge
-    // from its operations, so it is never used as the authoritative description of a patch.
-    const summary = summarizePatchOperations(finalOperations, workspace);
-    const telemetry = provider.telemetry;
-    return await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
+    const shadowComparison = shadowBinding
+      ? buildEditShadowComparisonBestEffort({
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          patchId,
+          traceId,
+          turnId: nodeslideStableId('turn', patchId),
+          snapshot,
+          request,
+          planningInputDigest: shadowBinding.planningInputDigest,
+          planningSnapshotDigest: shadowBinding.planningSnapshotDigest,
+          controlsDigest: shadowAuthorization.controlsDigest,
+          baselineOperations: finalOperations,
+          baselineReceipt: baseline.receipt,
+          baselineElapsedMs,
+          createdAt: planningStartedAt,
+        })
+      : null;
+    const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
       id: patchId,
       traceId,
       deckId: args.deckId,
@@ -191,8 +168,16 @@ export const proposeEdit = action({
       summary,
       ...(scopedCommentId !== undefined ? { linkedCommentId: scopedCommentId } : {}),
       instruction,
+      shadowComparisonRequested: shadowAuthorization.allowed,
+      ...(shadowBinding
+        ? {
+            ...shadowBinding,
+            shadowControlsDigest: shadowAuthorization.controlsDigest,
+          }
+        : {}),
+      ...(shadowComparison ? { shadowComparison } : {}),
       traceSummary: usedFallback
-        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${provider.ok ? 'the free response was invalid' : provider.reason}`
+        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? 'the free response was invalid'}`
         : `OpenRouter free route proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`,
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
@@ -212,6 +197,228 @@ export const proposeEdit = action({
           }
         : { provider: 'deterministic', model: 'bounded-edit-fallback/v1' }),
     });
+    return proposal;
+  },
+});
+
+function buildEditShadowComparisonBestEffort(args: {
+  deckId: string;
+  ownerAccessKey: string;
+  patchId: string;
+  traceId: string;
+  turnId: string;
+  snapshot: DeckSnapshot;
+  request: NodeSlideEditPlanningRequest;
+  planningInputDigest: string;
+  planningSnapshotDigest: string;
+  controlsDigest: string;
+  baselineOperations: PatchOperation[];
+  baselineReceipt: NodeSlideEditPlannerReceipt;
+  baselineElapsedMs: number;
+  createdAt: number;
+}): NodeSlideShadowComparison | null {
+  try {
+    const candidateStartedAt = Date.now();
+    let candidate: NodeSlideShadowComparisonLane;
+    try {
+      const plan = planNodeSlideEditShadow({
+        snapshot: args.snapshot,
+        instruction: args.request.instruction,
+        deckId: args.request.deckId,
+        baseDeckVersion: args.request.baseDeckVersion,
+        baseSlideVersions: args.request.baseSlideVersions,
+        baseElementVersions: args.request.baseElementVersions,
+        scope: args.request.scope,
+      });
+      if (plan.outcome === 'skipped') {
+        candidate = {
+          adapterId: plan.adapterId,
+          adapterVersion: plan.adapterVersion,
+          outcome: plan.reason === 'planner_error' ? 'failed' : 'skipped',
+          terminalReason:
+            plan.reason === 'planner_error' ? 'planner_error' : `skipped_${plan.reason}`,
+          operationCount: 0,
+          elapsedMs: boundedLaneElapsed(Date.now() - candidateStartedAt),
+        };
+      } else {
+        const result = runNodeSlideDeckRepl({
+          sessionId: nodeslideStableId('session_shadow', args.turnId),
+          traceId: nodeslideStableId('trace_shadow', args.patchId),
+          snapshot: args.snapshot,
+          expectedSnapshotDigest: args.planningSnapshotDigest,
+          commands: [plan.command],
+          budget: {
+            maxSteps: 1,
+            maxInputBytes: 64_000,
+            maxOutputBytes: 16_000,
+            maxOperations: 8,
+            maxWallTimeMs: 2_000,
+          },
+        });
+        const proposal =
+          result.status === 'completed' && result.proposals.length === 1
+            ? result.proposals[0]
+            : null;
+        candidate = proposal
+          ? {
+              adapterId: NODESLIDE_EDIT_SHADOW_ADAPTER_ID,
+              adapterVersion: NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
+              outcome: 'proposed',
+              terminalReason: 'completed',
+              proposalDigest: proposal.operationDigest,
+              operationCount: proposal.operations.length,
+              elapsedMs: boundedLaneElapsed(Date.now() - candidateStartedAt),
+            }
+          : {
+              adapterId: NODESLIDE_EDIT_SHADOW_ADAPTER_ID,
+              adapterVersion: NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
+              outcome: 'stopped',
+              terminalReason:
+                result.terminalReason === 'completed' ? 'no_proposal' : result.terminalReason,
+              operationCount: 0,
+              elapsedMs: boundedLaneElapsed(Date.now() - candidateStartedAt),
+            };
+      }
+    } catch {
+      candidate = {
+        adapterId: NODESLIDE_EDIT_SHADOW_ADAPTER_ID,
+        adapterVersion: NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
+        outcome: 'failed',
+        terminalReason: 'executor_error',
+        operationCount: 0,
+        elapsedMs: boundedLaneElapsed(Date.now() - candidateStartedAt),
+      };
+    }
+
+    return createNodeSlideShadowComparison({
+      id: nodeslideStableId('shadow_comparison', args.patchId),
+      deckId: args.deckId,
+      actorSubject: args.ownerAccessKey,
+      turnId: args.turnId,
+      baselinePatchId: args.patchId,
+      baselineTraceId: args.traceId,
+      turnInputDigest: args.planningInputDigest,
+      baseSnapshotDigest: args.planningSnapshotDigest,
+      baseDeckVersion: args.request.baseDeckVersion,
+      controlsDigest: args.controlsDigest,
+      baseline: {
+        adapterId: NODESLIDE_BASELINE_EDIT_ADAPTER_ID,
+        adapterVersion: NODESLIDE_BASELINE_EDIT_ADAPTER_VERSION,
+        origin: args.baselineReceipt.origin,
+        outcome: 'proposed',
+        terminalReason: 'completed',
+        proposalDigest: nodeSlideOperationDigest(args.baselineOperations),
+        operationCount: args.baselineOperations.length,
+        elapsedMs: args.baselineElapsedMs,
+      },
+      candidate,
+      createdAt: args.createdAt,
+      completedAt: Date.now(),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function boundedLaneElapsed(value: number): number {
+  if (!Number.isFinite(value)) return 300_000;
+  return Math.min(300_000, Math.max(0, Math.round(value)));
+}
+
+/**
+ * Private-preview probe for the provider-neutral Deck REPL. Candidate operations
+ * stay server-side; the caller receives only an opaque, non-committing receipt.
+ */
+export const runDeckReplShadow = action({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    sessionId: v.string(),
+    expectedSnapshotDigest: v.optional(v.string()),
+    commands: v.array(nodeslideDeckReplCommandValidator),
+  },
+  handler: async (ctx, args) => {
+    const controls = resolveNodeSlideAgenticControls(process.env);
+    const authorization = authorizeNodeSlideAgenticOperation(controls, {
+      operation: 'deck_repl_shadow',
+    });
+    if (!authorization.allowed) {
+      throw publicAgentError(
+        'feature_disabled',
+        'The bounded agentic shadow path is not enabled for this deployment.',
+      );
+    }
+    const deckId = requiredShadowText(args.deckId, 'deckId', 256, 512);
+    const ownerAccessKey = args.ownerAccessKey;
+    if (!isOwnerAccessKey(ownerAccessKey)) {
+      throw publicAgentError('invalid_request', 'Deck is unavailable.');
+    }
+    const sessionId = requiredShadowText(args.sessionId, 'sessionId', 160, 320);
+    const expectedSnapshotDigest = args.expectedSnapshotDigest;
+    if (
+      expectedSnapshotDigest !== undefined &&
+      !/^snap_sha256:[0-9a-f]{64}$/.test(expectedSnapshotDigest)
+    ) {
+      throw publicAgentError('invalid_request', 'Expected snapshot digest is invalid.');
+    }
+    const shadowBudget = nodeSlideDeckReplDefaultBudget();
+    if (args.commands.length > shadowBudget.maxSteps) {
+      throw publicAgentError(
+        'invalid_request',
+        `Deck REPL shadow probes support at most ${shadowBudget.maxSteps} semantic commands.`,
+      );
+    }
+    if (nodeSlideDeckReplInputBytes(args.commands) > shadowBudget.maxInputBytes) {
+      throw publicAgentError(
+        'invalid_request',
+        'Deck REPL shadow probe commands exceed the input-size budget.',
+      );
+    }
+    const workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+      deckId,
+      ownerAccessKey,
+    })) as NodeSlideWorkspace | null;
+    if (!workspace) throw publicAgentError('invalid_request', 'Deck is unavailable.');
+    await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
+      buckets: [
+        {
+          key: `deck-repl:${nodeslideContentDigest(ownerAccessKey)}`,
+          limit: 120,
+          windowMs: 86_400_000,
+        },
+        { key: 'deck-repl:global', limit: 1_000, windowMs: 3_600_000 },
+      ],
+    });
+    const snapshot: DeckSnapshot = {
+      deck: structuredClone(workspace.deck),
+      slides: structuredClone(workspace.slides),
+      elements: structuredClone(workspace.elements),
+      sources: structuredClone(workspace.sources),
+    };
+    const now = Date.now();
+    const traceId = nodeslideEventId('trace_deck_repl', now, deckId, sessionId);
+    const result = runNodeSlideDeckRepl({
+      sessionId,
+      traceId,
+      snapshot,
+      ...(expectedSnapshotDigest ? { expectedSnapshotDigest } : {}),
+      commands: args.commands,
+    });
+    const trace = executionTraceFromDeckRepl({
+      result,
+      deckId,
+      actorSubject: ownerAccessKey,
+      createdAt: now,
+      adapterId: 'nodeslide/deck-repl-shadow-probe',
+      cohort: 'private-preview-shadow',
+      controlsDigest: authorization.controlsDigest,
+    });
+    await ctx.runMutation(nodeslideInternal.persistExecutionTraceInternal, {
+      deckId,
+      ownerAccessKey,
+      trace,
+    });
+    return nodeSlideDeckReplShadowReceipt(result);
   },
 });
 
@@ -334,150 +541,18 @@ function extractPlan(
   return fallback.slides.map((slide, index) => `${index + 1}. ${slide.section}: ${slide.headline}`);
 }
 
-function parseOperations(value: unknown): PatchOperation[] | null {
-  if (!isRecord(value) || !Array.isArray(value.operations)) return null;
-  const operations = value.operations.map(parseOperation);
-  if (
-    operations.length === 0 ||
-    operations.length > 8 ||
-    operations.some((item) => item === null)
-  ) {
-    return null;
-  }
-  return operations as PatchOperation[];
-}
-
-function parseOperation(value: unknown): PatchOperation | null {
-  if (!isRecord(value) || typeof value.op !== 'string' || typeof value.slideId !== 'string') {
-    return null;
-  }
-  if (
-    value.op === 'move' &&
-    stringField(value.elementId) &&
-    finiteNumber(value.x) &&
-    finiteNumber(value.y)
-  ) {
-    return {
-      op: 'move',
-      slideId: value.slideId,
-      elementId: value.elementId,
-      x: value.x,
-      y: value.y,
-    };
-  }
-  if (
-    value.op === 'resize' &&
-    stringField(value.elementId) &&
-    finiteNumber(value.width) &&
-    finiteNumber(value.height)
-  ) {
-    return {
-      op: 'resize',
-      slideId: value.slideId,
-      elementId: value.elementId,
-      width: value.width,
-      height: value.height,
-    };
-  }
-  if (
-    value.op === 'replace_text' &&
-    stringField(value.elementId) &&
-    typeof value.text === 'string'
-  ) {
-    return {
-      op: 'replace_text',
-      slideId: value.slideId,
-      elementId: value.elementId,
-      text: value.text.slice(0, 4000),
-    };
-  }
-  if (value.op === 'update_style' && stringField(value.elementId) && isRecord(value.properties)) {
-    const properties = parseStyle(value.properties);
-    return Object.keys(properties).length
-      ? { op: 'update_style', slideId: value.slideId, elementId: value.elementId, properties }
-      : null;
-  }
-  if (value.op === 'reorder_slide' && finiteNumber(value.index)) {
-    return { op: 'reorder_slide', slideId: value.slideId, index: value.index };
-  }
-  if (value.op === 'update_slide' && isRecord(value.properties)) {
-    const properties: { title?: string; notes?: string; background?: string } = {};
-    if (typeof value.properties.title === 'string')
-      properties.title = value.properties.title.slice(0, 160);
-    if (typeof value.properties.notes === 'string')
-      properties.notes = value.properties.notes.slice(0, 4000);
-    if (typeof value.properties.background === 'string')
-      properties.background = value.properties.background.slice(0, 128);
-    return Object.keys(properties).length
-      ? { op: 'update_slide', slideId: value.slideId, properties }
-      : null;
-  }
-  return null;
-}
-
-function parseStyle(value: NodeSlideAgentRecord): Partial<ElementStyle> {
-  const out: Partial<ElementStyle> = {};
-  const stringKeys = ['fill', 'stroke', 'color', 'fontFamily', 'shadow'] as const;
-  const numberKeys = [
-    'strokeWidth',
-    'fontSize',
-    'fontWeight',
-    'lineHeight',
-    'letterSpacing',
-    'radius',
-    'opacity',
-    'padding',
-  ] as const;
-  for (const key of stringKeys)
-    if (typeof value[key] === 'string') out[key] = value[key].slice(0, 256);
-  for (const key of numberKeys) if (finiteNumber(value[key])) out[key] = value[key];
-  if (value.textAlign === 'left' || value.textAlign === 'center' || value.textAlign === 'right') {
-    out.textAlign = value.textAlign;
-  }
-  if (
-    value.verticalAlign === 'top' ||
-    value.verticalAlign === 'middle' ||
-    value.verticalAlign === 'bottom'
-  ) {
-    out.verticalAlign = value.verticalAlign;
-  }
-  return out;
-}
-
 interface NodeSlideAgentRecord extends Record<string, unknown> {
-  summary?: unknown;
   plan?: unknown;
-  operations?: unknown;
-  op?: unknown;
-  slideId?: unknown;
-  elementId?: unknown;
-  x?: unknown;
-  y?: unknown;
-  width?: unknown;
-  height?: unknown;
-  text?: unknown;
-  properties?: unknown;
-  index?: unknown;
-  title?: unknown;
-  notes?: unknown;
-  background?: unknown;
-  textAlign?: unknown;
-  verticalAlign?: unknown;
 }
 
 function isRecord(value: unknown): value is NodeSlideAgentRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function stringField(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function finiteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function publicAgentError(code: 'fallback_unavailable' | 'proposal_invalid', message: string) {
+function publicAgentError(
+  code: 'fallback_unavailable' | 'proposal_invalid' | 'invalid_request' | 'feature_disabled',
+  message: string,
+) {
   return new ConvexError({
     kind: 'nodeslide_agent' as const,
     code,
@@ -505,6 +580,23 @@ function requiredCreateText(
   return clean;
 }
 
+function requiredShadowText(
+  value: string,
+  label: string,
+  maxCharacters: number,
+  maxBytes: number,
+): string {
+  const clean = value.replace(/\s+/g, ' ').trim();
+  if (
+    !clean ||
+    Array.from(value).length > maxCharacters ||
+    new TextEncoder().encode(value).byteLength > maxBytes
+  ) {
+    throw publicAgentError('invalid_request', `${label} is invalid.`);
+  }
+  return clean;
+}
+
 function snapshotOf(workspace: NodeSlideWorkspace): DeckSnapshot {
   return {
     deck: workspace.deck,
@@ -513,6 +605,3 @@ function snapshotOf(workspace: NodeSlideWorkspace): DeckSnapshot {
     sources: workspace.sources,
   };
 }
-
-void snapshotOf;
-void (null as PatchScope | null);

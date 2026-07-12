@@ -41,6 +41,11 @@ export function nodeslideIdDigest(value: string): string {
   return sha256Hex(value).slice(0, 32);
 }
 
+/** Full SHA-256 digest for persisted content, audit bindings, and artifact receipts. */
+export function nodeslideContentDigest(value: string | Uint8Array): string {
+  return `sha256:${sha256Hex(value)}`;
+}
+
 export function nodeslideSlug(value: string, suffix?: string): string {
   const stem = value
     .normalize('NFKD')
@@ -63,8 +68,8 @@ function rotateRight(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
 }
 
-function sha256Hex(value: string): string {
-  const input = new TextEncoder().encode(value);
+function sha256Hex(value: string | Uint8Array): string {
+  const input = typeof value === 'string' ? new TextEncoder().encode(value) : value;
   const paddedLength = Math.ceil((input.length + 9) / 64) * 64;
   const padded = new Uint8Array(paddedLength);
   padded.set(input);

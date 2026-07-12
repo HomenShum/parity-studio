@@ -17,6 +17,8 @@
     "proof:nodeslide:w3": "node scripts/nodeslide-variation-proof.mjs",
     "proof:nodeslide:w4": "node scripts/nodeslide-preference-proof.mjs",
     "proof:nodeslide:w5": "node scripts/nodeslide-taste-pack-proof.mjs",
+    "proof:nodeslide:agentic": "node scripts/nodeslide-agentic-proof.mjs",
+    "proof:nodeslide:agentic:local": "node scripts/nodeslide-agentic-local-switch-proof.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

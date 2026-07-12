@@ -174,6 +174,18 @@ export function traceFromRow(row: Doc<'nodeslide_traces'>): AgentTrace {
     context: row.context,
     toolCalls: row.toolCalls,
     guardrails: row.guardrails,
+    ...(row.planningInputDigest !== undefined
+      ? { planningInputDigest: row.planningInputDigest }
+      : {}),
+    ...(row.planningSnapshotDigest !== undefined
+      ? { planningSnapshotDigest: row.planningSnapshotDigest }
+      : {}),
+    ...(row.shadowComparisonExpected !== undefined
+      ? { shadowComparisonExpected: row.shadowComparisonExpected }
+      : {}),
+    ...(row.shadowControlsDigest !== undefined
+      ? { shadowControlsDigest: row.shadowControlsDigest }
+      : {}),
     ...(row.validation !== undefined ? { validation: row.validation } : {}),
     ...(row.provider !== undefined ? { provider: row.provider } : {}),
     ...(row.model !== undefined ? { model: row.model } : {}),

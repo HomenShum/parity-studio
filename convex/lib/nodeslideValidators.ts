@@ -508,6 +508,49 @@ export const nodeslidePatchSourceValidator = v.union(
 
 export const nodeslideVersionClockValidator = v.record(v.string(), v.number());
 
+export const nodeslideDeckReplCommandValidator = v.union(
+  v.object({
+    id: v.string(),
+    type: v.literal('inspect_deck'),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('inspect_slide'),
+    slideId: v.string(),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('find_elements'),
+    slideId: v.optional(v.string()),
+    kind: v.optional(
+      v.union(
+        v.literal('text'),
+        v.literal('shape'),
+        v.literal('image'),
+        v.literal('chart'),
+        v.literal('connector'),
+      ),
+    ),
+    role: v.optional(v.string()),
+    text: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('measure_slide'),
+    slideId: v.string(),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('propose_patch'),
+    baseDeckVersion: v.number(),
+    baseSlideVersions: nodeslideVersionClockValidator,
+    baseElementVersions: nodeslideVersionClockValidator,
+    scope: nodeslidePatchScopeValidator,
+    operations: v.array(nodeslidePatchOperationValidator),
+  }),
+);
+
 export const nodeslidePatchStatusValidator = v.union(
   v.literal('draft'),
   v.literal('validating'),

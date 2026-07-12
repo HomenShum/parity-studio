@@ -1,5 +1,7 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
+import { nodeslideExecutionTraceFields } from './lib/nodeslideExecutionTraceValidator';
+import { nodeslideShadowComparisonFields } from './lib/nodeslideShadowComparisonValidator';
 import {
   nodeslideBoundingBoxValidator,
   nodeslideBriefValidator,
@@ -739,6 +741,10 @@ export default defineSchema({
     context: v.array(v.string()),
     toolCalls: v.array(v.string()),
     guardrails: v.array(v.string()),
+    planningInputDigest: v.optional(v.string()),
+    planningSnapshotDigest: v.optional(v.string()),
+    shadowComparisonExpected: v.optional(v.boolean()),
+    shadowControlsDigest: v.optional(v.string()),
     validation: v.optional(nodeslideValidationResultValidator),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
@@ -753,6 +759,21 @@ export default defineSchema({
     .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
     .index('by_patch', ['patchId'])
     .index('by_stable_deck_patch', ['id', 'deckId', 'patchId']),
+
+  nodeslide_execution_traces: defineTable(nodeslideExecutionTraceFields)
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_session', ['deckId', 'sessionId'])
+    .index('by_deck_expiry', ['deckId', 'expiresAt'])
+    .index('by_expiry', ['expiresAt'])
+    .index('by_status_created', ['status', 'createdAt']),
+
+  nodeslide_shadow_comparisons: defineTable(nodeslideShadowComparisonFields)
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_expiry', ['deckId', 'expiresAt'])
+    .index('by_expiry', ['expiresAt'])
+    .index('by_baseline_patch', ['baselinePatchId']),
 
   nodeslide_exports: defineTable({
     id: v.string(),
