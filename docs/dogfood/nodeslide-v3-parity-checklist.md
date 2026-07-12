@@ -26,6 +26,23 @@ reference was only decorative. No launch-blocking UI parity gaps observed in Edi
 [verify] items below need a click-through (inspector Design/Comments/Versions/Data/Trace bodies, Overview
 spatial board, Layers element tree, @// autocomplete menus) — not observed as broken, just not yet exercised.
 
+## FULL CLICK-THROUGH (2026-07-12) — every flagged item exercised, all real/deep, none placeholders
+- Design: PPTX signature upload + 2 signature cards (confidence/warnings/fonts, Preview/Apply) + taste
+  ledger ("0 signals · learns only from select/accept/decline/export · No cross-tenant pooling").
+- Comments: anchor-scoped (Deck/Slide/Element/Box), Open/All, honest "All clear" empty.
+- Versions: revision history (v1 · Compare/Restore · timestamp), "proposals that missed their base clocks".
+- Data: source records + "checks attachment and disclosure; does not independently verify facts", a source
+  labeled "no measured customer benchmark is claimed".
+- Trace: full accountability — Human/Pro/Tech views, validation passed, 7-step Plan, What-it-used, Guardrails
+  (normalized geometry, source-aware, stable IDs, deterministic validation), Raw JSON. Beyond reference.
+- Layers rail: REAL element tree — glyphs, Group/Ungroup, z-order, lock, visibility, + "Bound to 1 source"
+  binding indicators the reference lacked.
+- Overview: spatial thumbnail board (7 rendered thumbs), distinct from Outline/Story-Arc. Both exist.
+ONE UNCONFIRMED: whether @/ open working autocomplete MENUS vs affordance-only (composer renders the
+"@ context / commands" affordances; popup firing not confirmed). Single remaining click-verify.
+FINAL: no launch-blocking UI parity gaps across all 6 inspector tabs, both rail modes, all 3 canvas modes.
+Build meets/exceeds v3 on every verified surface and is materially MORE honest.
+
 ---
 Legend: [likely done] per lane report · [verify] claimed but not independently confirmed · [risk] likely gap.
 
