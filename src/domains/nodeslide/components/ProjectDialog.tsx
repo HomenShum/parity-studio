@@ -389,10 +389,10 @@ export function ProjectDialog({
                   >
                     <Sparkles size={20} aria-hidden="true" />
                     <span>
-                      <strong>Use OpenRouter’s free route</strong>
+                      <strong>Use OpenRouter · GLM 5.2</strong>
                       <small>
                         Sends the full brief—title, prompt, audience, purpose, and success
-                        criteria—to OpenRouter, which may route it to a third-party model.
+                        criteria—to the named GLM 5.2 model through OpenRouter.
                       </small>
                     </span>
                     {providerMode === 'openrouter_free' ? <Check size={14} /> : null}
@@ -511,7 +511,8 @@ export function ProjectDialog({
                     </>
                   ) : (
                     <>
-                      <Sparkles size={13} /> OpenRouter free · will send full brief with consent
+                      <Sparkles size={13} /> OpenRouter · GLM 5.2 · will send full brief with
+                      consent
                     </>
                   )}
                 </span>

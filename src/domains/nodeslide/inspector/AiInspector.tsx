@@ -215,6 +215,13 @@ export function AiInspector<CommandId extends string = string>({
         .sort((a, b) => b.createdAt - a.createdAt),
     [patches],
   );
+  const proposalTraceByPatchId = useMemo(() => {
+    const byPatchId = new Map<string, AgentTrace>();
+    for (const trace of [...traces].sort((a, b) => a.createdAt - b.createdAt)) {
+      if (trace.patchId) byPatchId.set(trace.patchId, trace);
+    }
+    return byPatchId;
+  }, [traces]);
   const latestBatchId = variations[0]?.batchId;
   const directions = useMemo(
     () => variations.filter((variation) => variation.batchId === latestBatchId),
@@ -599,6 +606,9 @@ export function AiInspector<CommandId extends string = string>({
               <ProposalCard
                 key={patch.id}
                 patch={patch}
+                {...(proposalTraceByPatchId.get(patch.id)
+                  ? { trace: proposalTraceByPatchId.get(patch.id) }
+                  : {})}
                 previewed={patch.id === previewedPatchId}
                 {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
                 onAccept={onAccept}
@@ -682,7 +692,7 @@ export function AiInspector<CommandId extends string = string>({
               <Sparkles size={13} />
               <span>
                 {hasProviderFallback
-                  ? 'The external free route could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
+                  ? 'The external GLM 5.2 route could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
                   : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
               </span>
             </output>
@@ -775,7 +785,7 @@ export function AiInspector<CommandId extends string = string>({
               </>
             ) : (
               <>
-                <Sparkles size={13} /> Web: external · OpenRouter free
+                <Sparkles size={13} /> Web: external · OpenRouter · GLM 5.2
                 <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
                   {providerConsent ? 'Consent attached' : 'Consent required'}
                 </span>
@@ -816,10 +826,10 @@ export function AiInspector<CommandId extends string = string>({
               />
               <Sparkles size={15} />
               <span>
-                <strong>OpenRouter free — external</strong>
+                <strong>OpenRouter · GLM 5.2 — external</strong>
                 <small>
-                  Sends this ask, selected read context, and scoped slide content to OpenRouter,
-                  which may route it to a third-party model.
+                  Sends this ask, selected read context, and scoped slide content to the named GLM
+                  5.2 model through OpenRouter.
                 </small>
               </span>
             </label>
@@ -1144,7 +1154,7 @@ function VariationCard({
       <div className="ns-variation-evidence-row">
         <span className={`is-${variation.origin}`}>
           {variation.origin === 'free_route'
-            ? 'OpenRouter free route · external'
+            ? 'OpenRouter · GLM 5.2 · external'
             : variation.fallbackReason === 'provider_not_requested'
               ? 'Private deterministic'
               : 'Deterministic fallback'}
@@ -1228,12 +1238,14 @@ function VariationCard({
 
 function ProposalCard({
   patch,
+  trace,
   previewed,
   onPreview,
   onAccept,
   onReject,
 }: {
   patch: AiReviewablePatch;
+  trace?: AgentTrace | undefined;
   previewed: boolean;
   onPreview?: (patch: AiReviewablePatch | null) => void;
   onAccept: (patch: DeckPatch) => void;
@@ -1275,6 +1287,14 @@ function ProposalCard({
           <dt>Operations</dt>
           <dd>{patch.operations.length} ops</dd>
         </div>
+        {trace?.provider && trace.model ? (
+          <div>
+            <dt>Provider · model</dt>
+            <dd>
+              {trace.provider} · {trace.model}
+            </dd>
+          </div>
+        ) : null}
       </dl>
       <div className="ns-diff-summary">
         {counts.map(({ label, count, kind }) => (

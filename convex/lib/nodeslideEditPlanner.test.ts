@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DeckComment, DeckSnapshot, PatchScope, SlideElement } from '../../shared/nodeslide';
 import { planNodeSlideEdit } from './nodeslideEditPlanner';
+import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 
 const NOW = 1_700_000_000_000;
@@ -200,8 +201,8 @@ describe('NodeSlide baseline edit planner extraction', () => {
         ],
       },
       telemetry: {
-        provider: 'openrouter',
-        model: 'resolved/free-model',
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
         costMicroUsd: 0,
         inputTokens: 100,
         outputTokens: 20,
@@ -247,8 +248,8 @@ describe('NodeSlide baseline edit planner extraction', () => {
         ],
       },
       telemetry: {
-        provider: 'openrouter',
-        model: 'resolved/free-model',
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
         costMicroUsd: 0,
         inputTokens: 100,
         outputTokens: 20,
@@ -263,7 +264,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     if (!result.ok) return;
     expect(result.receipt.origin).toBe('deterministic_fallback');
     expect(result.receipt.providerOutcome).toBe('invalid');
-    expect(result.receipt.fallbackReason).toBe('the free response was invalid');
+    expect(result.receipt.fallbackReason).toBe('the GLM 5.2 response was invalid');
     expect(result.operations).toEqual([
       {
         op: 'replace_text',
@@ -277,8 +278,8 @@ describe('NodeSlide baseline edit planner extraction', () => {
   it('retains provider telemetry when a failed route supplies it', async () => {
     const { snapshot, target, scope } = fixture();
     const telemetry = {
-      provider: 'openrouter',
-      model: 'resolved/free-model',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -286,7 +287,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     const result = await planNodeSlideEdit(input(snapshot, target, scope), {
       callProvider: async () => ({
         ok: false,
-        reason: 'The free route response was incomplete.',
+        reason: 'The GLM 5.2 route returned invalid JSON after one repair attempt.',
         telemetry,
       }),
     });
@@ -304,7 +305,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     const planningInput = input(snapshot, target, scope);
     planningInput.request.instruction = 'Improve it somehow.';
     const result = await planNodeSlideEdit(planningInput, {
-      callProvider: async () => ({ ok: false, reason: 'The free route was unavailable.' }),
+      callProvider: async () => ({ ok: false, reason: 'The GLM 5.2 route was unavailable.' }),
     });
 
     expect(result).toMatchObject({

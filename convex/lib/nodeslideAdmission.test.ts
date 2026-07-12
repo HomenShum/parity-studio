@@ -11,7 +11,10 @@ import {
   validateNodeSlidePreviewAdmission,
 } from './nodeslideValidators';
 
-vi.mock('./nodeslideProvider', () => ({ callNodeSlideFreeJson: vi.fn() }));
+vi.mock('./nodeslideProvider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./nodeslideProvider')>()),
+  callNodeSlideFreeJson: vi.fn(),
+}));
 
 const PREVIEW_ACCESS_CODE = 'preview-code-7f21';
 const PREVIEW_ADMISSION_SUBJECT = 'invite-cohort-2026-07';
