@@ -5,9 +5,22 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/$/, '');
 }
 
+export function resolveConvexWsUrl(
+  configuredUrl: string | undefined,
+  options: { allowDevelopmentFallback: boolean },
+): string {
+  const configured = configuredUrl?.trim();
+  if (configured) return trimTrailingSlash(configured);
+  if (options.allowDevelopmentFallback) return DEFAULT_CONVEX_URL;
+  throw new Error(
+    'VITE_CONVEX_URL is required for hosted builds. This deployment is intentionally disconnected rather than falling back to production data.',
+  );
+}
+
 export function convexWsUrl(): string {
-  const fromEnv = import.meta.env['VITE_CONVEX_URL'] as string | undefined;
-  return trimTrailingSlash(fromEnv || DEFAULT_CONVEX_URL);
+  return resolveConvexWsUrl(import.meta.env['VITE_CONVEX_URL'] as string | undefined, {
+    allowDevelopmentFallback: import.meta.env.DEV,
+  });
 }
 
 export function convexHttpUrl(): string {
@@ -16,7 +29,10 @@ export function convexHttpUrl(): string {
     (import.meta.env['VITE_CONVEX_SITE_URL'] as string | undefined);
   if (fromEnv) return trimTrailingSlash(fromEnv);
   const wsUrl = convexWsUrl();
-  return (
-    trimTrailingSlash(wsUrl.replace('.convex.cloud', '.convex.site')) || DEFAULT_CONVEX_HTTP_URL
+  const inferred = trimTrailingSlash(wsUrl.replace('.convex.cloud', '.convex.site'));
+  if (inferred !== wsUrl) return inferred;
+  if (import.meta.env.DEV) return DEFAULT_CONVEX_HTTP_URL;
+  throw new Error(
+    'VITE_CONVEX_SITE_URL is required when VITE_CONVEX_URL is not a convex.cloud endpoint.',
   );
 }

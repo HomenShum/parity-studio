@@ -1,10 +1,16 @@
 import { v } from 'convex/values';
 import {
+  type CandidateValidationReceipt,
   type CommentAnchor,
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_DESIGN_BEHAVIORS,
+  NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION,
+  NODESLIDE_EDITOR_CAPABILITY_VERSION,
+  NODESLIDE_LAYER_OPERATION_VERSION,
   NODESLIDE_PATCH_OPERATION_LIMIT,
+  NODESLIDE_REFERENCE_USE_POLICIES,
   type PatchOperation,
   type PatchScope,
   type PatchSource,
@@ -25,6 +31,14 @@ import {
   requireShareSlug,
 } from './lib/nodeslideAccess';
 import { summarizeNodeSlideExecutionTraces } from './lib/nodeslideAgenticTelemetry';
+import {
+  candidateValidationBindingMatches,
+  candidateValidationReceipt,
+  materializeNodeSlideCandidate,
+  nodeSlideCandidateDigest,
+  nodeSlideCandidateValidationId,
+  validationFromCandidateReceipt,
+} from './lib/nodeslideCandidate';
 import {
   NODESLIDE_WORKSPACE_LIMITS,
   commentFromRow,
@@ -65,6 +79,7 @@ import {
   evaluateNodeSlideCas,
   validateNodeSlidePatch,
 } from './lib/nodeslidePatches';
+import { planNodeSlidePropagation } from './lib/nodeslidePropagation';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   buildBriefNodeSlide,
@@ -159,6 +174,12 @@ type PatchMutationArgs = {
   summary?: string;
   linkedCommentId?: string;
   traceId?: string;
+  proposalKind?: 'edit' | 'propagation';
+  parentPatchId?: string;
+  affectedSlideIds?: string[];
+  affectedSlideDigest?: string;
+  candidateDigest?: string;
+  candidateValidation?: CandidateValidationReceipt;
   profileId?: string;
   profileDigest?: string;
 };
@@ -243,6 +264,44 @@ export const getWorkspace = query({
       return null;
     }
     return await loadNodeSlideWorkspace(ctx, deckId, Date.now());
+  },
+});
+
+/** Versioned, owner-gated registry consumed by the editor command and policy menus. */
+export const getEditorCapabilities = query({
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, { deckId, ownerAccessKey }) => {
+    await requireOwnerAccess(ctx, deckId, ownerAccessKey);
+    return {
+      version: NODESLIDE_EDITOR_CAPABILITY_VERSION,
+      designBehaviorPolicyVersion: NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION,
+      designBehaviors: NODESLIDE_DESIGN_BEHAVIORS,
+      referenceUsePolicies: NODESLIDE_REFERENCE_USE_POLICIES,
+      commands: [
+        {
+          id: 'edit' as const,
+          authority: 'nodeslideAgent.proposeEdit' as const,
+          proposalKind: 'edit' as const,
+        },
+        {
+          id: 'variations' as const,
+          authority: 'nodeslideVariations.generate' as const,
+          proposalKind: 'edit' as const,
+        },
+        {
+          id: 'propagate' as const,
+          authority: 'nodeslide.proposePropagation' as const,
+          proposalKind: 'propagation' as const,
+        },
+      ],
+      layerOperationVersion: NODESLIDE_LAYER_OPERATION_VERSION,
+      layerOperations: [
+        'set_visibility_v1',
+        'group_elements_v1',
+        'ungroup_elements_v1',
+        'reorder_element_v1',
+      ] as const,
+    };
   },
 });
 
@@ -358,6 +417,45 @@ export const applyPatch = mutation({
 export const proposePatch = mutation({
   args: publicPatchArgs,
   handler: async (ctx, args) => await persistProposal(ctx, normalizeHumanPatchArgs(args)),
+});
+
+export const proposePropagation = mutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    parentPatchId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const parent = await findPatchRow(ctx, args.parentPatchId);
+    if (!parent || parent.deckId !== args.deckId) throw new Error('Parent patch is unavailable.');
+    const snapshot = await requireSnapshot(ctx, args.deckId);
+    const plan = planNodeSlidePropagation(snapshot, patchFromRow(parent));
+    const now = Date.now();
+    const id = nodeslideEventId(
+      'patch_propagation',
+      now,
+      args.deckId,
+      args.parentPatchId,
+      plan.affectedSlideDigest,
+    );
+    return await persistProposal(ctx, {
+      id,
+      deckId: args.deckId,
+      ownerAccessKey: args.ownerAccessKey,
+      baseDeckVersion: plan.baseDeckVersion,
+      baseSlideVersions: plan.baseSlideVersions,
+      baseElementVersions: plan.baseElementVersions,
+      scope: plan.scope,
+      operations: plan.operations,
+      source: 'system',
+      summary: `Propagate accepted design behavior to ${plan.affectedSlideIds.length} matching slide${plan.affectedSlideIds.length === 1 ? '' : 's'}.`,
+      proposalKind: 'propagation',
+      parentPatchId: plan.parentPatchId,
+      affectedSlideIds: plan.affectedSlideIds,
+      affectedSlideDigest: plan.affectedSlideDigest,
+    });
+  },
 });
 
 export const acceptPatch = mutation({
@@ -1209,7 +1307,9 @@ export const proposeAgentPatchInternal = internalMutation({
     }
     const proposal = await persistProposal(ctx, { ...args, source: 'agent' });
     const now = Date.now();
-    const validation = proposal.workspace?.validations[0];
+    const validation = proposal.patch.candidateValidation
+      ? validationFromCandidateReceipt(proposal.patch.candidateValidation)
+      : undefined;
     const shadowComparisonExpected = nodeSlideShadowComparisonExpected(
       args.shadowComparisonRequested,
       proposal.patch.status,
@@ -1228,7 +1328,7 @@ export const proposeAgentPatchInternal = internalMutation({
         'Save proposal for review',
       ],
       context: [
-        `Instruction: ${requiredText(args.instruction, 'instruction', 2000)}`,
+        `Instruction: ${requiredText(args.instruction, 'instruction', 4000)}`,
         `Base deck version: ${args.baseDeckVersion}`,
       ],
       toolCalls: args.toolCalls,
@@ -1245,6 +1345,9 @@ export const proposeAgentPatchInternal = internalMutation({
       shadowComparisonExpected,
       ...(args.shadowControlsDigest ? { shadowControlsDigest: args.shadowControlsDigest } : {}),
       ...(validation ? { validation } : {}),
+      ...(proposal.patch.candidateDigest
+        ? { candidateDigest: proposal.patch.candidateDigest }
+        : {}),
       ...(args.provider ? { provider: args.provider } : {}),
       ...(args.model ? { model: args.model } : {}),
       ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
@@ -1584,6 +1687,7 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
   assertPatchProfileReference(args);
+  assertProposalMetadata(args);
   const snapshot = await requireSnapshot(ctx, args.deckId);
   const existing = args.id ? await findPatchRow(ctx, args.id) : null;
   if (existing) {
@@ -1595,14 +1699,34 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
     };
   }
-  await resolvePatchSignatureProfile(ctx, deckRow.projectId, args, snapshot);
+  const signatureProfile = await resolvePatchSignatureProfile(
+    ctx,
+    deckRow.projectId,
+    args,
+    snapshot,
+  );
   const scopedComment = await commentForScope(ctx, args.scope);
   const input = patchInput(args);
   const errors = validateNodeSlidePatch(snapshot, input, scopedComment);
   if (errors.length) throw new Error(errors.join(' '));
   const cas = evaluateNodeSlideCas(snapshot, input);
   const now = Date.now();
-  const row = patchRow(args, now, cas.canCommit ? 'ready' : 'stale');
+  const id = args.id ?? nodeslideEventId('patch', now, args.deckId, args.summary ?? 'proposal');
+  let boundArgs = { ...args, id };
+  if (cas.canCommit) {
+    const candidate = preflightNodeSlideCandidate(snapshot, boundArgs, signatureProfile, id, now);
+    if (!candidate.validation.ok) {
+      throw new Error(
+        `The exact proposal candidate failed full validation: ${candidate.validation.issues.find((issue) => issue.severity === 'error')?.message ?? 'candidate invalid'}`,
+      );
+    }
+    boundArgs = {
+      ...boundArgs,
+      candidateDigest: candidate.digest,
+      candidateValidation: candidate.receipt,
+    };
+  }
+  const row = patchRow(boundArgs, now, cas.canCommit ? 'ready' : 'stale');
   await ctx.db.insert('nodeslide_patches', row);
   return {
     patch: row,
@@ -1620,6 +1744,7 @@ async function commitPatch(
   const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
   assertPatchProfileReference(args);
+  assertProposalMetadata(args);
   const snapshot = await requireSnapshot(ctx, args.deckId);
   const signatureProfile = await resolvePatchSignatureProfile(
     ctx,
@@ -1647,29 +1772,56 @@ async function commitPatch(
       staleReasons: cas.reasons,
     };
   }
-  const applied = applyDeckPatch(
-    snapshot,
-    { baseDeckVersion: snapshot.deck.version, scope: args.scope, operations: args.operations },
-    now,
-  );
-  const appliedSnapshot: DeckSnapshot = signatureProfile
-    ? {
-        ...applied.snapshot,
-        deck: {
-          ...applied.snapshot.deck,
-          activeSignatureProfileId: signatureProfile.id,
-          activeSignatureProfileDigest: signatureProfile.source.digest,
-        },
-      }
-    : applied.snapshot;
-  const validation = validateNodeSlideSnapshot(
-    appliedSnapshot,
-    now,
-    undefined,
-    signatureProfile ? { signatureProfile } : {},
-  );
+  const candidate = preflightNodeSlideCandidate(snapshot, args, signatureProfile, id, now);
+  const hasPersistedBinding =
+    existing?.candidateDigest !== undefined || existing?.candidateValidation !== undefined;
+  const bindingMatches = candidateValidationBindingMatches({
+    patchId: id,
+    candidateDigest: candidate.digest,
+    ...(existing?.candidateDigest !== undefined
+      ? { persistedDigest: existing.candidateDigest }
+      : {}),
+    ...(existing?.candidateValidation !== undefined
+      ? { persistedReceipt: existing.candidateValidation }
+      : {}),
+    validation: candidate.validation,
+  });
+  if (!candidate.validation.ok || (hasPersistedBinding && !bindingMatches)) {
+    const stale = patchRow(
+      {
+        ...args,
+        id,
+        candidateDigest: candidate.digest,
+        candidateValidation: candidate.receipt,
+      },
+      now,
+      'stale',
+      existing?.createdAt,
+    );
+    if (existing) await ctx.db.patch(existing._id, { status: 'stale', updatedAt: now });
+    else await ctx.db.insert('nodeslide_patches', stale);
+    if (existing) await finishPatchTrace(ctx, existing, now, 'failed');
+    return {
+      patch: stale,
+      workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
+      rebased: false,
+      staleReasons: [
+        candidate.validation.ok
+          ? 'The exact candidate no longer matches its preflight validation binding.'
+          : 'The exact candidate failed full validation.',
+      ],
+    };
+  }
+  const appliedSnapshot = candidate.snapshot;
+  const validation = candidate.validation;
+  const persistedCandidateValidation = existing?.candidateValidation ?? candidate.receipt;
   const accepted = patchRow(
-    { ...args, id },
+    {
+      ...args,
+      id,
+      candidateDigest: candidate.digest,
+      candidateValidation: persistedCandidateValidation,
+    },
     now,
     'accepted',
     existing?.createdAt,
@@ -1682,6 +1834,8 @@ async function commitPatch(
       resultingDeckVersion: appliedSnapshot.deck.version,
       ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
       ...(args.profileDigest !== undefined ? { profileDigest: args.profileDigest } : {}),
+      candidateDigest: candidate.digest,
+      candidateValidation: persistedCandidateValidation,
       updatedAt: now,
     });
   } else await ctx.db.insert('nodeslide_patches', accepted);
@@ -1757,6 +1911,39 @@ async function resolvePatchSignatureProfile(
   return await requireDeckSignatureProfile(ctx, tenantId, snapshot.deck);
 }
 
+function preflightNodeSlideCandidate(
+  snapshot: DeckSnapshot,
+  args: Pick<PatchMutationArgs, 'scope' | 'operations'>,
+  signatureProfile: Awaited<ReturnType<typeof resolvePatchSignatureProfile>>,
+  patchId: string,
+  checkedAt: number,
+) {
+  const materialized = materializeNodeSlideCandidate(snapshot, args, checkedAt);
+  const candidateSnapshot: DeckSnapshot = signatureProfile
+    ? {
+        ...materialized,
+        deck: {
+          ...materialized.deck,
+          activeSignatureProfileId: signatureProfile.id,
+          activeSignatureProfileDigest: signatureProfile.source.digest,
+        },
+      }
+    : materialized;
+  const digest = nodeSlideCandidateDigest(candidateSnapshot);
+  const validation = validateNodeSlideSnapshot(
+    candidateSnapshot,
+    checkedAt,
+    nodeSlideCandidateValidationId(patchId, digest),
+    signatureProfile ? { signatureProfile } : {},
+  );
+  return {
+    snapshot: candidateSnapshot,
+    digest,
+    validation,
+    receipt: candidateValidationReceipt({ patchId, candidateDigest: digest, validation }),
+  };
+}
+
 function patchInput(args: PatchMutationArgs): NodeSlidePatchInput {
   return {
     deckId: args.deckId,
@@ -1776,6 +1963,7 @@ function patchRow(
   resultingDeckVersion?: number,
 ): DeckPatch {
   assertPatchProfileReference(args);
+  assertProposalMetadata(args);
   return {
     id: args.id ?? nodeslideEventId('patch', now, args.deckId, args.summary ?? 'patch'),
     deckId: args.deckId,
@@ -1790,11 +1978,51 @@ function patchRow(
     summary: args.summary?.trim() || 'Scoped NodeSlide change.',
     ...(args.linkedCommentId ? { linkedCommentId: args.linkedCommentId } : {}),
     ...(args.traceId ? { traceId: args.traceId } : {}),
+    ...(args.proposalKind !== undefined ? { proposalKind: args.proposalKind } : {}),
+    ...(args.parentPatchId !== undefined ? { parentPatchId: args.parentPatchId } : {}),
+    ...(args.affectedSlideIds !== undefined ? { affectedSlideIds: args.affectedSlideIds } : {}),
+    ...(args.affectedSlideDigest !== undefined
+      ? { affectedSlideDigest: args.affectedSlideDigest }
+      : {}),
+    ...(args.candidateDigest !== undefined ? { candidateDigest: args.candidateDigest } : {}),
+    ...(args.candidateValidation !== undefined
+      ? { candidateValidation: args.candidateValidation }
+      : {}),
     ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
     ...(args.profileDigest !== undefined ? { profileDigest: args.profileDigest } : {}),
     createdAt,
     updatedAt: now,
   };
+}
+
+function assertProposalMetadata(
+  args: Pick<
+    PatchMutationArgs,
+    'proposalKind' | 'parentPatchId' | 'affectedSlideIds' | 'affectedSlideDigest'
+  >,
+): void {
+  const kind = args.proposalKind ?? 'edit';
+  if (kind === 'edit') {
+    if (
+      args.parentPatchId !== undefined ||
+      args.affectedSlideIds !== undefined ||
+      args.affectedSlideDigest !== undefined
+    ) {
+      throw new Error('Only propagation proposals may carry propagation metadata.');
+    }
+    return;
+  }
+  if (
+    !args.parentPatchId ||
+    args.parentPatchId.length > 256 ||
+    !args.affectedSlideIds ||
+    args.affectedSlideIds.length === 0 ||
+    args.affectedSlideIds.length > 64 ||
+    new Set(args.affectedSlideIds).size !== args.affectedSlideIds.length ||
+    !/^sha256:[0-9a-f]{64}$/.test(args.affectedSlideDigest ?? '')
+  ) {
+    throw new Error('Propagation proposal metadata is invalid or exceeds bounds.');
+  }
 }
 
 async function createWorkspaceRows(
@@ -2075,6 +2303,7 @@ function restoredSnapshot(current: DeckSnapshot, target: DeckSnapshot, now: numb
     })),
     elements: target.elements.map((element) => ({
       ...structuredClone(element),
+      visible: element.visible ?? true,
       version: Math.max(element.version, currentElements.get(element.id) ?? 0) + 1,
     })),
     sources: target.sources.map((source) => ({

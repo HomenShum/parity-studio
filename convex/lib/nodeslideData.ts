@@ -91,6 +91,8 @@ export function elementFromRow(row: Doc<'nodeslide_elements'>): SlideElement {
     ...(row.altText !== undefined ? { altText: row.altText } : {}),
     sourceIds: row.sourceIds,
     locked: row.locked,
+    visible: row.visible ?? true,
+    ...(row.groupId !== undefined ? { groupId: row.groupId } : {}),
     exportCapabilities: row.exportCapabilities,
     version: row.version,
   };
@@ -126,6 +128,16 @@ export function patchFromRow(row: Doc<'nodeslide_patches'>): DeckPatch {
     summary: row.summary,
     ...(row.linkedCommentId !== undefined ? { linkedCommentId: row.linkedCommentId } : {}),
     ...(row.traceId !== undefined ? { traceId: row.traceId } : {}),
+    ...(row.proposalKind !== undefined ? { proposalKind: row.proposalKind } : {}),
+    ...(row.parentPatchId !== undefined ? { parentPatchId: row.parentPatchId } : {}),
+    ...(row.affectedSlideIds !== undefined ? { affectedSlideIds: row.affectedSlideIds } : {}),
+    ...(row.affectedSlideDigest !== undefined
+      ? { affectedSlideDigest: row.affectedSlideDigest }
+      : {}),
+    ...(row.candidateDigest !== undefined ? { candidateDigest: row.candidateDigest } : {}),
+    ...(row.candidateValidation !== undefined
+      ? { candidateValidation: row.candidateValidation }
+      : {}),
     ...(row.profileId !== undefined ? { profileId: row.profileId } : {}),
     ...(row.profileDigest !== undefined ? { profileDigest: row.profileDigest } : {}),
     createdAt: row.createdAt,
@@ -187,6 +199,7 @@ export function traceFromRow(row: Doc<'nodeslide_traces'>): AgentTrace {
       ? { shadowControlsDigest: row.shadowControlsDigest }
       : {}),
     ...(row.validation !== undefined ? { validation: row.validation } : {}),
+    ...(row.candidateDigest !== undefined ? { candidateDigest: row.candidateDigest } : {}),
     ...(row.provider !== undefined ? { provider: row.provider } : {}),
     ...(row.model !== undefined ? { model: row.model } : {}),
     ...(row.costMicroUsd !== undefined ? { costMicroUsd: row.costMicroUsd } : {}),
@@ -771,6 +784,8 @@ function elementFields(
     ...(element.altText !== undefined ? { altText: element.altText } : {}),
     sourceIds: element.sourceIds,
     locked: element.locked,
+    visible: element.visible ?? true,
+    ...(element.groupId !== undefined ? { groupId: element.groupId } : {}),
     exportCapabilities: element.exportCapabilities,
     version: element.version,
     createdAt,

@@ -1,6 +1,9 @@
 import {
   type BoundingBox,
   type DeckSnapshot,
+  NODESLIDE_ELEMENT_SOURCE_LIMIT,
+  NODESLIDE_GROUP_ID_LIMIT,
+  NODESLIDE_GROUP_MEMBER_LIMIT,
   NODESLIDE_SCHEMA_VERSION,
   NODESLIDE_TOOLCHAIN_VERSION,
   type SlideElement,
@@ -169,7 +172,12 @@ export function validateNodeSlideSnapshot(
     for (const element of slideElements) {
       validateElement(element, slide.background, sourceIds, addIssue);
     }
-    validateCollisions(slideElements, slide.id, addIssue);
+    validateFlatGroups(slide.elementOrder, slideElements, slide.id, addIssue);
+    validateCollisions(
+      slideElements.filter((element) => element.visible !== false),
+      slide.id,
+      addIssue,
+    );
   }
 
   for (const [slideId, orphaned] of elementsBySlide.entries()) {
@@ -288,6 +296,27 @@ function validateElement(
   sourceIds: ReadonlySet<string>,
   addIssue: (issue: Omit<ValidationIssue, 'id'>, discriminator?: string) => void,
 ) {
+  if (element.sourceIds.length > NODESLIDE_ELEMENT_SOURCE_LIMIT) {
+    addIssue({
+      severity: 'error',
+      code: 'source',
+      message: `Element ${element.id} exceeds the source-reference limit.`,
+      slideId: element.slideId,
+      elementId: element.id,
+    });
+  }
+  if (
+    element.groupId !== undefined &&
+    (!element.groupId || element.groupId.length > NODESLIDE_GROUP_ID_LIMIT)
+  ) {
+    addIssue({
+      severity: 'error',
+      code: 'schema',
+      message: `Element ${element.id} has invalid flat-group metadata.`,
+      slideId: element.slideId,
+      elementId: element.id,
+    });
+  }
   if (!element.name.trim()) {
     addIssue({
       severity: 'error',
@@ -425,6 +454,40 @@ function validateElement(
       slideId: element.slideId,
       elementId: element.id,
     });
+  }
+}
+
+function validateFlatGroups(
+  elementOrder: readonly string[],
+  elements: readonly SlideElement[],
+  slideId: string,
+  addIssue: (issue: Omit<ValidationIssue, 'id'>, discriminator?: string) => void,
+): void {
+  const groups = new Map<string, string[]>();
+  for (const element of elements) {
+    if (!element.groupId) continue;
+    const members = groups.get(element.groupId) ?? [];
+    members.push(element.id);
+    groups.set(element.groupId, members);
+  }
+  for (const [groupId, members] of groups) {
+    const indexes = members
+      .map((id) => elementOrder.indexOf(id))
+      .sort((left, right) => left - right);
+    const contiguous = indexes.every(
+      (value, index) => index === 0 || value === (indexes[index - 1] ?? value) + 1,
+    );
+    if (members.length < 2 || members.length > NODESLIDE_GROUP_MEMBER_LIMIT || !contiguous) {
+      addIssue(
+        {
+          severity: 'error',
+          code: 'schema',
+          message: `Flat group ${groupId} must contain 2-${NODESLIDE_GROUP_MEMBER_LIMIT} contiguous same-slide elements.`,
+          slideId,
+        },
+        `group:${groupId}`,
+      );
+    }
   }
 }
 

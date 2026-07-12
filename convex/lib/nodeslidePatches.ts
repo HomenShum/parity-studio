@@ -3,10 +3,17 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT,
+  NODESLIDE_ELEMENT_SOURCE_LIMIT,
+  NODESLIDE_GROUP_ID_LIMIT,
+  NODESLIDE_GROUP_MEMBER_LIMIT,
+  NODESLIDE_SCOPE_ELEMENT_LIMIT,
+  NODESLIDE_SCOPE_SLIDE_LIMIT,
+  NODESLIDE_VERSION_CLOCK_LIMIT,
   type PatchOperation,
   type PatchScope,
   type SlideElement,
-  isElementOperation,
+  operationElementIds,
 } from '../../shared/nodeslide';
 import { validatePatchScope } from '../../shared/nodeslidePatch';
 import { nodeslideCleanText } from './nodeslideIds';
@@ -45,6 +52,18 @@ export function validateNodeSlidePatch(
     errors.push(`Scope deck ${patch.scope.deckId} does not match patch deck ${patch.deckId}.`);
   }
   if (patch.operations.length === 0) errors.push('A patch must contain at least one operation.');
+  validateClockBounds(
+    'baseSlideVersions',
+    patch.baseSlideVersions,
+    NODESLIDE_VERSION_CLOCK_LIMIT,
+    errors,
+  );
+  validateClockBounds(
+    'baseElementVersions',
+    patch.baseElementVersions,
+    NODESLIDE_VERSION_CLOCK_LIMIT,
+    errors,
+  );
 
   const initialSlides = new Map(snapshot.slides.map((slide) => [slide.id, slide]));
   const initialElements = new Map(snapshot.elements.map((element) => [element.id, element]));
@@ -71,6 +90,9 @@ export function validateNodeSlidePatch(
   }
 
   if ('slideIds' in patch.scope) {
+    if (patch.scope.slideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT) {
+      errors.push(`Patch scope supports at most ${NODESLIDE_SCOPE_SLIDE_LIMIT} slide IDs.`);
+    }
     if (patch.scope.slideIds.length === 0) errors.push('Scoped slideIds cannot be empty.');
     if (new Set(patch.scope.slideIds).size !== patch.scope.slideIds.length) {
       errors.push('Scoped slideIds must be unique.');
@@ -82,6 +104,9 @@ export function validateNodeSlidePatch(
     }
   }
   if ('elementIds' in patch.scope) {
+    if (patch.scope.elementIds.length > NODESLIDE_SCOPE_ELEMENT_LIMIT) {
+      errors.push(`Patch scope supports at most ${NODESLIDE_SCOPE_ELEMENT_LIMIT} element IDs.`);
+    }
     if (patch.scope.elementIds.length === 0) errors.push('Scoped elementIds cannot be empty.');
     if (new Set(patch.scope.elementIds).size !== patch.scope.elementIds.length) {
       errors.push('Scoped elementIds must be unique.');
@@ -117,6 +142,7 @@ export function validateNodeSlidePatch(
       if (scopedComment.status !== 'open') {
         errors.push(`Comment ${scopedComment.id} is not open.`);
       }
+      validateCommentAnchorScope(scopedComment, patch.scope, initialElements, errors);
     }
   }
 
@@ -146,6 +172,11 @@ export function validateNodeSlidePatch(
       if (operation.slide.deckId !== patch.deckId) {
         errors.push(`Added slide ${slideId} belongs to another deck.`);
       }
+      if (operation.elements.length > NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT) {
+        errors.push(
+          `Added slides support at most ${NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT} bundled elements.`,
+        );
+      }
 
       const bundledIds = new Set<string>();
       for (const element of operation.elements) {
@@ -160,6 +191,7 @@ export function validateNodeSlidePatch(
         validateAddedElement(element, patch.scope, sources, errors);
       }
       validateAddedSlideElementOrder(operation.slide.elementOrder, bundledIds, slideId, errors);
+      validateFlatGroupMetadata(operation.slide.elementOrder, operation.elements, errors);
 
       if (!duplicateSlide) slides.set(slideId, structuredClone(operation.slide));
       if (validIndex && !duplicateSlide) slideOrder.splice(operation.index, 0, slideId);
@@ -247,9 +279,31 @@ export function validateNodeSlidePatch(
       if ('elementIds' in patch.scope && !patch.scope.elementIds.includes(operation.element.id)) {
         errors.push(`Added element ${operation.element.id} is not explicitly named in scope.`);
       }
+      if (operation.element.groupId !== undefined) {
+        errors.push('add_element cannot create partial group membership; group it explicitly.');
+      }
       validateAddedElement(operation.element, patch.scope, sources, errors);
       if (!elements.has(operation.element.id)) {
         elements.set(operation.element.id, structuredClone(operation.element));
+      }
+      continue;
+    }
+
+    if (operation.op === 'group_elements_v1' || operation.op === 'ungroup_elements_v1') {
+      const groupErrors = validateGroupOperation(operation, slide.elementOrder, elements);
+      errors.push(...groupErrors);
+      if (groupErrors.length === 0) {
+        const members = operation.elementIds.map((elementId) => elements.get(elementId));
+        if (operation.op === 'group_elements_v1') {
+          slide.elementOrder = compactGroupOrder(slide.elementOrder, operation.elementIds);
+          for (const member of members) if (member) member.groupId = operation.groupId;
+        } else {
+          for (const member of members) {
+            if (!member) continue;
+            // biome-ignore lint/performance/noDelete: optional storage must omit group metadata.
+            delete member.groupId;
+          }
+        }
       }
       continue;
     }
@@ -327,10 +381,80 @@ export function validateNodeSlidePatch(
         element.style = { ...element.style, ...operation.properties };
       }
     }
-    if (operation.op === 'remove_element' && canMutate) elements.delete(operation.elementId);
+    if (operation.op === 'set_visibility_v1') {
+      if ((element.visible ?? true) === operation.visible) {
+        errors.push(`set_visibility_v1 must change element ${operation.elementId}.`);
+      } else if (canMutate) {
+        element.visible = operation.visible;
+      }
+    }
+    if (operation.op === 'reorder_element_v1') {
+      const previousIndex = slide.elementOrder.indexOf(operation.elementId);
+      if (element.groupId !== undefined) {
+        errors.push(`Element ${operation.elementId} must be ungrouped before z-order changes.`);
+      } else if (
+        !Number.isInteger(operation.index) ||
+        operation.index < 0 ||
+        operation.index >= slide.elementOrder.length
+      ) {
+        errors.push(`Element z-order index ${operation.index} is outside slide bounds.`);
+      } else if (previousIndex < 0) {
+        errors.push(`Element ${operation.elementId} is absent from slide order.`);
+      } else if (previousIndex === operation.index) {
+        errors.push(`reorder_element_v1 must change element ${operation.elementId}.`);
+      } else if (canMutate) {
+        slide.elementOrder.splice(previousIndex, 1);
+        slide.elementOrder.splice(operation.index, 0, operation.elementId);
+      }
+    }
+    if (operation.op === 'remove_element') {
+      if (element.groupId !== undefined) {
+        errors.push(`Element ${operation.elementId} must be ungrouped before removal.`);
+      } else if (canMutate) {
+        elements.delete(operation.elementId);
+        slide.elementOrder = slide.elementOrder.filter((id) => id !== operation.elementId);
+      }
+    }
   }
 
   return [...new Set(errors)];
+}
+
+function validateCommentAnchorScope(
+  comment: DeckComment,
+  scope: Extract<PatchScope, { kind: 'comment' }>,
+  elements: ReadonlyMap<string, SlideElement>,
+  errors: string[],
+): void {
+  const anchor = comment.anchor;
+  if (anchor.deckId !== scope.deckId) {
+    errors.push(`Comment ${comment.id} anchor belongs to another deck.`);
+  }
+  if (anchor.type === 'deck') return;
+
+  for (const slideId of scope.slideIds) {
+    if (slideId !== anchor.slideId) {
+      errors.push(`Comment ${comment.id} scope targets slide ${slideId} outside its anchor.`);
+    }
+  }
+
+  for (const elementId of scope.elementIds) {
+    const element = elements.get(elementId);
+    if (!element) {
+      errors.push(`Comment ${comment.id} scope cannot expand to new element ${elementId}.`);
+      continue;
+    }
+    if (element.slideId !== anchor.slideId) {
+      errors.push(`Comment ${comment.id} scope targets element ${elementId} outside its anchor.`);
+      continue;
+    }
+    if (anchor.type === 'element' && element.id !== anchor.elementId) {
+      errors.push(`Comment ${comment.id} scope targets element ${elementId} outside its anchor.`);
+    }
+    if (anchor.type === 'bounding_box' && !boundingBoxesIntersect(element.bbox, anchor.bbox)) {
+      errors.push(`Comment ${comment.id} scope targets element ${elementId} outside its anchor.`);
+    }
+  }
 }
 
 export function evaluateNodeSlideCas(
@@ -397,8 +521,8 @@ export function touchedNodeSlideIds(
       }
       continue;
     }
-    if (isElementOperation(operation) && operation.op !== 'add_element') {
-      if (existingIds.has(operation.elementId)) elementIds.add(operation.elementId);
+    for (const elementId of operationElementIds(operation)) {
+      if (existingIds.has(elementId)) elementIds.add(elementId);
     }
   }
   return { slideIds: [...slideIds], elementIds: [...elementIds] };
@@ -521,6 +645,12 @@ export function summarizePatchOperations(
     if (operation.op === 'reorder_slide') return `reorder slide ${slideLabel}`;
     if (operation.op === 'update_slide') return `update slide ${slideLabel}`;
     if (operation.op === 'add_element') return `add ${operation.element.name}`;
+    if (operation.op === 'group_elements_v1') {
+      return `group ${operation.elementIds.length} elements on ${slideLabel}`;
+    }
+    if (operation.op === 'ungroup_elements_v1') {
+      return `ungroup ${operation.elementIds.length} elements on ${slideLabel}`;
+    }
     const elementLabel =
       snapshot?.elements.find((element) => element.id === operation.elementId)?.name ??
       operation.elementId;
@@ -548,6 +678,9 @@ function validateAddedElement(
   sourceIds: ReadonlySet<string>,
   errors: string[],
 ): void {
+  if (element.sourceIds.length > NODESLIDE_ELEMENT_SOURCE_LIMIT) {
+    errors.push(`Added element ${element.id} exceeds the source-reference limit.`);
+  }
   if (!isNormalizedBoundingBox(element.bbox)) {
     errors.push(`Added element ${element.id} must have a normalized in-bounds bbox.`);
   }
@@ -562,6 +695,114 @@ function validateAddedElement(
   if (element.chart?.sourceId && !sourceIds.has(element.chart.sourceId)) {
     errors.push(`Added chart ${element.id} references unknown source ${element.chart.sourceId}.`);
   }
+}
+
+function validateClockBounds(
+  label: string,
+  clocks: Record<string, number>,
+  limit: number,
+  errors: string[],
+): void {
+  const entries = Object.entries(clocks);
+  if (entries.length > limit) errors.push(`${label} supports at most ${limit} entries.`);
+  for (const [id, version] of entries) {
+    if (!id || id.length > 256 || !Number.isSafeInteger(version) || version < 1) {
+      errors.push(`${label} contains an invalid ID or version.`);
+      break;
+    }
+  }
+}
+
+function validateGroupOperation(
+  operation: Extract<PatchOperation, { op: 'group_elements_v1' | 'ungroup_elements_v1' }>,
+  elementOrder: readonly string[],
+  elements: ReadonlyMap<string, SlideElement>,
+): string[] {
+  const errors: string[] = [];
+  if (!operation.groupId || operation.groupId.length > NODESLIDE_GROUP_ID_LIMIT) {
+    errors.push(`Group IDs must contain 1-${NODESLIDE_GROUP_ID_LIMIT} characters.`);
+  }
+  if (
+    operation.elementIds.length < 2 ||
+    operation.elementIds.length > NODESLIDE_GROUP_MEMBER_LIMIT ||
+    new Set(operation.elementIds).size !== operation.elementIds.length
+  ) {
+    errors.push(`Groups require 2-${NODESLIDE_GROUP_MEMBER_LIMIT} unique element IDs.`);
+    return errors;
+  }
+  const members = operation.elementIds.map((elementId) => elements.get(elementId));
+  if (
+    members.some(
+      (member) =>
+        !member || member.slideId !== operation.slideId || !elementOrder.includes(member.id),
+    )
+  ) {
+    errors.push(`Group ${operation.groupId} references an unknown or cross-slide element.`);
+    return errors;
+  }
+  if (members.some((member) => member?.locked)) errors.push('Locked elements cannot be regrouped.');
+  if (operation.op === 'group_elements_v1') {
+    if (members.some((member) => member?.groupId !== undefined)) {
+      errors.push('An element must be ungrouped before joining another flat group.');
+    }
+    if ([...elements.values()].some((element) => element.groupId === operation.groupId)) {
+      errors.push(`Group ${operation.groupId} already exists.`);
+    }
+  } else {
+    const actual = [...elements.values()]
+      .filter(
+        (element) => element.slideId === operation.slideId && element.groupId === operation.groupId,
+      )
+      .map((element) => element.id);
+    if (
+      members.some((member) => member?.groupId !== operation.groupId) ||
+      !sameMembers(actual, operation.elementIds)
+    ) {
+      errors.push(`ungroup_elements_v1 must name every member of group ${operation.groupId}.`);
+    }
+  }
+  return errors;
+}
+
+function validateFlatGroupMetadata(
+  elementOrder: readonly string[],
+  elements: readonly SlideElement[],
+  errors: string[],
+): void {
+  const groups = new Map<string, string[]>();
+  for (const element of elements) {
+    if (element.groupId === undefined) continue;
+    if (!element.groupId || element.groupId.length > NODESLIDE_GROUP_ID_LIMIT) {
+      errors.push(`Element ${element.id} has an invalid group ID.`);
+      continue;
+    }
+    const members = groups.get(element.groupId) ?? [];
+    members.push(element.id);
+    groups.set(element.groupId, members);
+  }
+  for (const [groupId, members] of groups) {
+    const indexes = members.map((id) => elementOrder.indexOf(id)).sort((a, b) => a - b);
+    if (
+      members.length < 2 ||
+      members.length > NODESLIDE_GROUP_MEMBER_LIMIT ||
+      indexes.some((value, index) => index > 0 && value !== (indexes[index - 1] ?? 0) + 1)
+    ) {
+      errors.push(`Group ${groupId} must contain bounded contiguous elements.`);
+    }
+  }
+}
+
+function compactGroupOrder(order: readonly string[], memberIds: readonly string[]): string[] {
+  const selected = new Set(memberIds);
+  const members = order.filter((id) => selected.has(id));
+  const insertionIndex = Math.min(...members.map((id) => order.indexOf(id)));
+  const remaining = order.filter((id) => !selected.has(id));
+  remaining.splice(insertionIndex, 0, ...members);
+  return remaining;
+}
+
+function sameMembers(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 function validateAddedSlideElementOrder(

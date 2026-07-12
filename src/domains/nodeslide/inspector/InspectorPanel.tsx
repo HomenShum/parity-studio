@@ -12,6 +12,7 @@ import {
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from 'react';
 import type {
   CommentAnchor,
+  DeckComment,
   DeckPatch,
   DeckVersion,
   NodeSlideWorkspace,
@@ -24,13 +25,24 @@ import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import type { NodeSlideTastePackId } from '../signature/packs/index';
-import { AiInspector } from './AiInspector';
+import {
+  type AiAgentActivity,
+  type AiCommentContext,
+  type AiComposerCommand,
+  AiInspector,
+  type AiProposalOptions,
+  type AiReadReference,
+  type AiReviewablePatch,
+  type AiSuggestedAction,
+  type AiVariationRequest,
+} from './AiInspector';
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
 import { DesignInspector } from './DesignInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
 import type { InspectorTab } from './types';
+import './reviewInspector.css';
 
 interface ResizeState {
   pointerId: number;
@@ -38,7 +50,7 @@ interface ResizeState {
   startWidth: number;
 }
 
-interface InspectorPanelProps {
+export interface InspectorPanelProps<CommandId extends string = string> {
   workspace: NodeSlideWorkspace;
   slide: Slide;
   selectedElements: readonly SlideElement[];
@@ -52,6 +64,12 @@ interface InspectorPanelProps {
   variationGenerating: boolean;
   variationError: string | null;
   previewedVariationId: string | null;
+  aiReferences?: readonly AiReadReference[];
+  aiCommands?: readonly AiComposerCommand<CommandId>[];
+  aiSuggestedActions?: readonly AiSuggestedAction[];
+  aiAgentActivity?: AiAgentActivity | null;
+  aiCommentContext?: AiCommentContext | null;
+  previewedPatchId?: string | null;
   activeTastePackId: NodeSlideTastePackId | null;
   tastePackBusy: boolean;
   activeProfileId?: string | null;
@@ -62,10 +80,16 @@ interface InspectorPanelProps {
   onTabChange: (tab: InspectorTab) => void;
   onToggleCollapsed: () => void;
   onWidthChange: (width: number) => void;
-  onProposeEdit: (instruction: string, scope: PatchScope) => void;
+  onProposeEdit: (
+    instruction: string,
+    scope: PatchScope,
+    options: AiProposalOptions<CommandId>,
+  ) => void;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
-  onGenerateVariations: () => void;
+  onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
+  onClearAiCommentContext?: () => void;
+  onGenerateVariations: (request: AiVariationRequest) => void;
   onPreviewVariation: (variation: SlideVariation | null) => void;
   onAcceptVariation: (variation: SlideVariation) => void;
   onRejectVariation: (variation: SlideVariation) => void;
@@ -80,6 +104,7 @@ interface InspectorPanelProps {
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
   onSetCommentStatus: (commentId: string, status: 'open' | 'resolved') => void;
+  onSendCommentToAi?: (comment: DeckComment) => void;
   onRestoreVersion: (version: DeckVersion) => void;
 }
 
@@ -92,7 +117,7 @@ const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'trace', label: 'Trace', icon: Activity },
 ];
 
-export function InspectorPanel({
+export function InspectorPanel<CommandId extends string = string>({
   workspace,
   slide,
   selectedElements,
@@ -106,6 +131,12 @@ export function InspectorPanel({
   variationGenerating,
   variationError,
   previewedVariationId,
+  aiReferences = [],
+  aiCommands = [],
+  aiSuggestedActions,
+  aiAgentActivity,
+  aiCommentContext = null,
+  previewedPatchId = null,
   activeTastePackId,
   tastePackBusy,
   activeProfileId = null,
@@ -119,6 +150,8 @@ export function InspectorPanel({
   onProposeEdit,
   onAcceptPatch,
   onRejectPatch,
+  onPreviewPatch,
+  onClearAiCommentContext,
   onGenerateVariations,
   onPreviewVariation,
   onAcceptVariation,
@@ -134,8 +167,9 @@ export function InspectorPanel({
   onAddComment,
   onReply,
   onSetCommentStatus,
+  onSendCommentToAi,
   onRestoreVersion,
-}: InspectorPanelProps) {
+}: InspectorPanelProps<CommandId>) {
   const resizeRef = useRef<ResizeState | null>(null);
 
   useEffect(() => {
@@ -188,10 +222,12 @@ export function InspectorPanel({
           <span>Inspector</span>
         </button>
         <div className="ns-inspector-collapsed-tabs">
-          {tabs.slice(0, 4).map(({ id, label, icon: Icon }) => (
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
+              className={activeTab === id ? 'is-active' : ''}
+              aria-pressed={activeTab === id}
               onClick={() => {
                 onTabChange(id);
                 onToggleCollapsed();
@@ -223,11 +259,16 @@ export function InspectorPanel({
         title="Drag to resize inspector"
       />
       <div className="ns-inspector-topbar">
-        <div>
+        <div className="ns-inspector-context-summary">
           <span className="ns-eyebrow">Inspector</span>
-          <strong>
-            {selectedElements.length > 0 ? `${selectedElements.length} selected` : slide.title}
-          </strong>
+          <div className="ns-inspector-context-chips" aria-label="Current inspector context">
+            <span className="is-slide" title={slide.title}>
+              Slide · {slide.title}
+            </span>
+            <span className={selectedElements.length > 0 ? 'is-selection' : 'is-empty'}>
+              Selection · {selectedElements.length > 0 ? selectedElements.length : 'none'}
+            </span>
+          </div>
         </div>
         <button
           className="ns-icon-button"
@@ -270,6 +311,7 @@ export function InspectorPanel({
             deck={workspace.deck}
             slide={slide}
             selectedElements={selectedElements}
+            workspaceElements={workspace.elements}
             patches={workspace.patches}
             traces={workspace.traces}
             variations={variations}
@@ -279,6 +321,14 @@ export function InspectorPanel({
             variationGenerating={variationGenerating}
             variationError={variationError}
             previewedVariationId={previewedVariationId}
+            references={aiReferences}
+            commands={aiCommands}
+            commentContext={aiCommentContext}
+            previewedPatchId={previewedPatchId}
+            {...(aiSuggestedActions ? { suggestedActions: aiSuggestedActions } : {})}
+            {...(aiAgentActivity !== undefined ? { agentActivity: aiAgentActivity } : {})}
+            {...(onPreviewPatch ? { onPreviewPatch } : {})}
+            {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
             onPropose={onProposeEdit}
             onAccept={onAcceptPatch}
             onReject={onRejectPatch}
@@ -319,6 +369,10 @@ export function InspectorPanel({
             onAddComment={onAddComment}
             onReply={onReply}
             onSetStatus={onSetCommentStatus}
+            onSendToAi={(comment) => {
+              onSendCommentToAi?.(comment);
+              onTabChange('ai');
+            }}
           />
         ) : null}
         {activeTab === 'versions' ? (

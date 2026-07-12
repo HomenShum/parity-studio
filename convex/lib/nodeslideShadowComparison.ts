@@ -1,4 +1,10 @@
-import type { PatchOperation, PatchScope } from '../../shared/nodeslide';
+import type {
+  NodeSlideDesignBehavior,
+  NodeSlideProviderMode,
+  NodeSlideReferenceUsePolicy,
+  PatchOperation,
+  PatchScope,
+} from '../../shared/nodeslide';
 import { nodeSlideOperationDigest } from './nodeslideDeckRepl';
 import { nodeslideContentDigest } from './nodeslideIds';
 
@@ -54,6 +60,9 @@ export function nodeSlideEditTurnInputDigest(input: {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  designBehavior?: NodeSlideDesignBehavior;
+  referenceUse?: NodeSlideReferenceUsePolicy;
+  providerMode?: NodeSlideProviderMode;
 }): string {
   return `turn_${nodeslideContentDigest(stableSerialize(input))}`;
 }

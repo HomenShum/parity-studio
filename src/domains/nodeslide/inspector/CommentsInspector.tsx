@@ -1,4 +1,5 @@
 import {
+  Bot,
   CheckCircle2,
   CornerDownRight,
   MapPin,
@@ -18,7 +19,7 @@ import type {
 
 type AnchorChoice = 'deck' | 'slide' | 'element' | 'bounding_box';
 
-interface CommentsInspectorProps {
+export interface CommentsInspectorProps {
   deckId: string;
   slide: Slide;
   selectedElements: readonly SlideElement[];
@@ -26,6 +27,7 @@ interface CommentsInspectorProps {
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
   onSetStatus: (commentId: string, status: 'open' | 'resolved') => void;
+  onSendToAi: (comment: DeckComment) => void;
 }
 
 export function CommentsInspector({
@@ -36,6 +38,7 @@ export function CommentsInspector({
   onAddComment,
   onReply,
   onSetStatus,
+  onSendToAi,
 }: CommentsInspectorProps) {
   const [anchorChoice, setAnchorChoice] = useState<AnchorChoice>(
     selectedElements.length > 0 ? 'element' : 'slide',
@@ -244,6 +247,16 @@ export function CommentsInspector({
                   <Reply size={13} /> Reply
                 </button>
               )}
+              {comment.status === 'open' ? (
+                <button
+                  className="ns-comment-send-ai"
+                  type="button"
+                  onClick={() => onSendToAi(comment)}
+                  aria-label={`Send comment from ${comment.authorName} to AI`}
+                >
+                  <Bot size={13} /> Send to AI
+                </button>
+              ) : null}
             </article>
           ))
         )}

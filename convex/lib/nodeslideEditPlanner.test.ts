@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DeckSnapshot, PatchScope, SlideElement } from '../../shared/nodeslide';
+import type { DeckComment, DeckSnapshot, PatchScope, SlideElement } from '../../shared/nodeslide';
 import { planNodeSlideEdit } from './nodeslideEditPlanner';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 
@@ -40,11 +40,86 @@ function input(snapshot: DeckSnapshot, target: SlideElement, scope: PatchScope) 
       baseSlideVersions: { [slide.id]: slide.version },
       baseElementVersions: { [target.id]: target.version },
       scope,
+      designBehavior: 'preserve' as const,
+      referenceUse: 'context_only' as const,
+      providerMode: 'openrouter_free' as const,
     },
   };
 }
 
 describe('NodeSlide baseline edit planner extraction', () => {
+  it('does not call a provider when deterministic mode is selected', async () => {
+    const { snapshot, target, scope } = fixture();
+    const planningInput = input(snapshot, target, scope);
+    const deterministicInput = {
+      ...planningInput,
+      request: { ...planningInput.request, providerMode: 'deterministic' as const },
+    };
+    const provider = vi.fn(async () => ({
+      ok: false as const,
+      reason: 'must_not_be_called',
+    }));
+
+    const result = await planNodeSlideEdit(deterministicInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    expect(provider).not.toHaveBeenCalled();
+    if (result.ok) expect(result.receipt.providerOutcome).toBe('not_requested');
+  });
+
+  it('plans a deterministic exact-copy edit from a slide-anchored comment', async () => {
+    const { snapshot, target } = fixture();
+    const headline = snapshot.elements.find(
+      (element) =>
+        element.slideId === target.slideId &&
+        (element.role === 'headline' || element.role === 'title') &&
+        !element.locked,
+    );
+    if (!headline) throw new Error('Fixture needs an editable headline.');
+    const slideElements = snapshot.elements.filter((element) => element.slideId === target.slideId);
+    const comment: DeckComment = {
+      id: 'comment-slide-scope',
+      deckId: snapshot.deck.id,
+      anchor: { type: 'slide', deckId: snapshot.deck.id, slideId: target.slideId },
+      authorId: 'reviewer',
+      authorName: 'Reviewer',
+      text: 'Make the headline more decisive.',
+      status: 'open',
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    const scope: PatchScope = {
+      kind: 'comment',
+      deckId: snapshot.deck.id,
+      slideIds: [target.slideId],
+      elementIds: slideElements.map((element) => element.id),
+      commentId: comment.id,
+      operationMode: 'copy',
+    };
+    const planningInput = input(snapshot, headline, scope);
+
+    const result = await planNodeSlideEdit({
+      ...planningInput,
+      scopedComment: comment,
+      request: {
+        ...planningInput.request,
+        providerMode: 'deterministic',
+        instruction: 'Set the headline copy exactly to "Launch-ready decisions stay reviewable".',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: headline.slideId,
+        elementId: headline.id,
+        text: 'Launch-ready decisions stay reviewable',
+      },
+    ]);
+  });
+
   it('accepts valid provider operations and derives its summary from the validated diff', async () => {
     const { snapshot, target, scope } = fixture();
     const before = structuredClone(snapshot);

@@ -30,8 +30,15 @@ export default function App() {
       ? null
       : new URLSearchParams(window.location.search).get('domain');
   const configuredDomain = import.meta.env['VITE_STUDIO_DOMAIN'] ?? 'nodeslide';
+  const parityEnabled = import.meta.env['VITE_ENABLE_PARITY_DOMAIN'] === 'true';
   const domain =
-    urlDomain === 'parity' ? 'parity' : urlDomain === 'nodeslide' ? 'nodeslide' : configuredDomain;
+    urlDomain === 'parity' && parityEnabled
+      ? 'parity'
+      : urlDomain === 'nodeslide'
+        ? 'nodeslide'
+        : configuredDomain === 'parity' && parityEnabled
+          ? 'parity'
+          : 'nodeslide';
   return domain === 'parity' ? <ParityApp /> : <NodeSlideStudio />;
 }
 

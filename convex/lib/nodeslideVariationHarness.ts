@@ -16,7 +16,7 @@ import {
   type VariationOrigin,
   type VariationStatus,
 } from '../../shared/nodeslideVariation';
-import { nodeslideHash, nodeslideStableId } from './nodeslideIds';
+import { nodeslideContentDigest, nodeslideHash, nodeslideStableId } from './nodeslideIds';
 import { summarizePatchOperations, validateNodeSlidePatch } from './nodeslidePatches';
 import { validateNodeSlideSnapshot } from './nodeslideValidation';
 
@@ -112,7 +112,7 @@ export interface VariationDecisionUpdate {
 export function variationPreviewQuotaBuckets(ownerAccessKey: string) {
   return [
     {
-      key: `variation:${nodeslideHash(ownerAccessKey)}`,
+      key: `variation:${nodeslideContentDigest(ownerAccessKey)}`,
       limit: NODESLIDE_VARIATION_OWNER_QUOTA,
       windowMs: 86_400_000,
     },

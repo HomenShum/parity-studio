@@ -9,6 +9,7 @@ import {
   authorizeNodeSlideAgenticOperation,
   resolveNodeSlideAgenticControls,
 } from './lib/nodeslideAgenticControls';
+import { authorizeBeforeConsumingQuota, nodeSlideActorQuotaKey } from './lib/nodeslideAuthority';
 import {
   nodeSlideDeckReplDefaultBudget,
   nodeSlideDeckReplInputBytes,
@@ -30,13 +31,13 @@ import {
   planNodeSlideEditShadow,
 } from './lib/nodeslideEditShadowPlanner';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
-import {
-  nodeslideContentDigest,
-  nodeslideEventId,
-  nodeslideHash,
-  nodeslideStableId,
-} from './lib/nodeslideIds';
+import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
 import { callNodeSlideFreeJson } from './lib/nodeslideProvider';
+import {
+  NodeSlideProviderConsentError,
+  validateNodeSlideProviderChoice,
+} from './lib/nodeslideProviderConsent';
+import { resolveNodeSlideReadContext } from './lib/nodeslideReadContext';
 import { deterministicBriefSpec } from './lib/nodeslideSeed';
 import {
   type NodeSlideShadowComparison,
@@ -46,10 +47,15 @@ import {
 } from './lib/nodeslideShadowComparison';
 import {
   invokeNodeSlideBriefProvider,
+  nodeslideAgentReadReferenceValidator,
   nodeslideBriefValidator,
   nodeslideCreatePublicError,
   nodeslideDeckReplCommandValidator,
+  nodeslideDesignBehaviorValidator,
+  nodeslideEditorCommandIdValidator,
   nodeslidePatchScopeValidator,
+  nodeslideProviderModeValidator,
+  nodeslideReferenceUseValidator,
   nodeslideVersionClockValidator,
   validateNodeSlideBriefProviderChoice,
   validateNodeSlideCreateDeckFields,
@@ -74,30 +80,67 @@ export const proposeEdit = action({
     baseSlideVersions: nodeslideVersionClockValidator,
     baseElementVersions: nodeslideVersionClockValidator,
     scope: nodeslidePatchScopeValidator,
+    readContext: v.optional(v.array(nodeslideAgentReadReferenceValidator)),
+    designBehavior: v.optional(nodeslideDesignBehaviorValidator),
+    referenceUse: v.optional(nodeslideReferenceUseValidator),
+    commandId: v.optional(nodeslideEditorCommandIdValidator),
+    providerMode: v.optional(nodeslideProviderModeValidator),
+    providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const instruction = args.instruction.replace(/\s+/g, ' ').trim();
     if (!instruction) throw new Error('NodeSlide edit instruction is required.');
     if (instruction.length > 4000)
       throw new Error('NodeSlide edit instruction exceeds 4000 characters.');
-    await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
-      buckets: [
-        {
-          key: `edit:${nodeslideHash(args.ownerAccessKey)}`,
-          limit: 60,
-          windowMs: 86_400_000,
-        },
-        { key: 'edit:global', limit: 500, windowMs: 3_600_000 },
-      ],
+    if ((args.commandId ?? 'edit') !== 'edit') {
+      throw publicAgentError(
+        'invalid_request',
+        args.commandId === 'variations'
+          ? 'The variations command is served by the existing NodeSlide variation authority.'
+          : 'The propagation command requires an accepted parent patch.',
+      );
+    }
+    let providerChoice: ReturnType<typeof validateNodeSlideProviderChoice>;
+    try {
+      providerChoice = validateNodeSlideProviderChoice(
+        'propose_edit',
+        args.providerMode,
+        args.providerConsent,
+      );
+    } catch (error) {
+      if (error instanceof NodeSlideProviderConsentError) {
+        throw publicAgentError('invalid_request', error.message);
+      }
+      throw error;
+    }
+    const workspace = await authorizeBeforeConsumingQuota({
+      authorize: async () =>
+        (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+        })) as NodeSlideWorkspace | null,
+      consume: async () => {
+        await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
+          buckets: [
+            {
+              key: nodeSlideActorQuotaKey('edit', args.ownerAccessKey),
+              limit: 60,
+              windowMs: 86_400_000,
+            },
+            { key: 'edit:global', limit: 500, windowMs: 3_600_000 },
+          ],
+        });
+      },
     });
-    const workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
-      deckId: args.deckId,
-      ownerAccessKey: args.ownerAccessKey,
-    })) as NodeSlideWorkspace | null;
     if (!workspace) throw new Error(`Deck ${args.deckId} not found.`);
     if (args.scope.deckId !== args.deckId) throw new Error('Patch scope deckId mismatch.');
     const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
     const snapshot = snapshotOf(workspace);
+    const readContext = resolveNodeSlideReadContext({
+      workspace,
+      writeScope: args.scope,
+      ...(args.readContext ? { requested: args.readContext } : {}),
+    });
 
     const request = {
       deckId: args.deckId,
@@ -106,6 +149,9 @@ export const proposeEdit = action({
       baseSlideVersions: args.baseSlideVersions,
       baseElementVersions: args.baseElementVersions,
       scope: args.scope,
+      designBehavior: args.designBehavior ?? 'preserve',
+      referenceUse: args.referenceUse ?? 'context_only',
+      providerMode: providerChoice.providerMode,
     };
     const planningStartedAt = Date.now();
     const baseline = await planNodeSlideEdit({
@@ -114,6 +160,7 @@ export const proposeEdit = action({
         scopedCommentId === undefined
           ? null
           : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null),
+      readContext,
       request,
     });
 
@@ -121,7 +168,8 @@ export const proposeEdit = action({
     if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
     const finalOperations = baseline.operations;
     const summary = baseline.summary;
-    const usedFallback = baseline.receipt.origin === 'deterministic_fallback';
+    const providerRequested = providerChoice.providerMode === 'openrouter_free';
+    const usedFallback = providerRequested && baseline.receipt.origin === 'deterministic_fallback';
     const telemetry = baseline.receipt.providerTelemetry;
     const shadowAuthorization = authorizeNodeSlideAgenticOperation(
       resolveNodeSlideAgenticControls(process.env),
@@ -178,13 +226,19 @@ export const proposeEdit = action({
       ...(shadowComparison ? { shadowComparison } : {}),
       traceSummary: usedFallback
         ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? 'the free response was invalid'}`
-        : `OpenRouter free route proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`,
+        : providerRequested
+          ? `OpenRouter free route proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
+          : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
-        'Called piAi through openrouter/openrouter/free',
-        usedFallback
-          ? 'Used deterministic bounded edit fallback'
-          : 'Parsed and validated free-route JSON',
+        providerRequested
+          ? 'Called piAi through openrouter/openrouter/free after exact edit consent'
+          : 'Kept review context on the deterministic local route',
+        providerRequested
+          ? usedFallback
+            ? 'Used deterministic bounded edit fallback'
+            : 'Parsed and validated free-route JSON'
+          : 'Produced deterministic bounded edit operations',
         'Persisted proposal and human-readable trace atomically',
       ],
       ...(telemetry
@@ -195,7 +249,7 @@ export const proposeEdit = action({
             inputTokens: telemetry.inputTokens,
             outputTokens: telemetry.outputTokens,
           }
-        : { provider: 'deterministic', model: 'bounded-edit-fallback/v1' }),
+        : { provider: 'deterministic', model: 'bounded-edit-planner/v1' }),
     });
     return proposal;
   },

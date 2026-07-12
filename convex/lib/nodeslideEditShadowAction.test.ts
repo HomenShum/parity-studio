@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NodeSlideWorkspace, PatchScope } from '../../shared/nodeslide';
+import {
+  NODESLIDE_OPENROUTER_EDIT_CONSENT,
+  type NodeSlideWorkspace,
+  type PatchScope,
+} from '../../shared/nodeslide';
 import { proposeEdit } from '../nodeslideAgent';
 import { nodeSlideSnapshotDigest } from './nodeslideDeckRepl';
 import { callNodeSlideFreeJson } from './nodeslideProvider';
@@ -34,6 +38,8 @@ type ProposeArgs = {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  providerMode: 'openrouter_free';
+  providerConsent: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
 };
 
 type ProposeHandler = (context: ProposeContext, args: ProposeArgs) => Promise<unknown>;
@@ -72,6 +78,8 @@ function fixture() {
     baseSlideVersions: { [slide.id]: slide.version },
     baseElementVersions: { [target.id]: target.version },
     scope,
+    providerMode: 'openrouter_free',
+    providerConsent: NODESLIDE_OPENROUTER_EDIT_CONSENT,
   };
   return { snapshot, workspace, target, args };
 }
@@ -170,6 +178,9 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         baseSlideVersions: args.baseSlideVersions,
         baseElementVersions: args.baseElementVersions,
         scope: args.scope,
+        designBehavior: 'preserve',
+        referenceUse: 'context_only',
+        providerMode: args.providerMode,
       }),
     );
     expect(comparison.baseline.outcome).toBe('proposed');

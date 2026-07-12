@@ -1,6 +1,48 @@
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.0.0' as const;
 export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
+export const NODESLIDE_SCOPE_SLIDE_LIMIT = 64 as const;
+export const NODESLIDE_SCOPE_ELEMENT_LIMIT = 256 as const;
+export const NODESLIDE_VERSION_CLOCK_LIMIT = 512 as const;
+export const NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT = 128 as const;
+export const NODESLIDE_ELEMENT_SOURCE_LIMIT = 64 as const;
+export const NODESLIDE_GROUP_MEMBER_LIMIT = 64 as const;
+export const NODESLIDE_GROUP_ID_LIMIT = 128 as const;
+export const NODESLIDE_AGENT_READ_CONTEXT_VERSION = 'nodeslide.read-context/v1' as const;
+export const NODESLIDE_AGENT_READ_CONTEXT_LIMITS = {
+  slideIds: 32,
+  elementIds: 128,
+  sourceIds: 64,
+  commentIds: 32,
+  totalRefs: 192,
+  promptBytes: 96_000,
+} as const;
+
+/** Exact, operation-specific consent receipts. They are intentionally not interchangeable. */
+export const NODESLIDE_OPENROUTER_REVIEW_CONSENT =
+  'openrouter_nodeslide_review_context_v1' as const;
+/** Backwards-compatible authority name for the inspector's review consent constant. */
+export const NODESLIDE_OPENROUTER_EDIT_CONSENT = NODESLIDE_OPENROUTER_REVIEW_CONSENT;
+export const NODESLIDE_OPENROUTER_VARIATIONS_CONSENT =
+  'openrouter_nodeslide_variations_context_v1' as const;
+export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
+export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
+  'nodeslide.design-behavior-policy/v1' as const;
+export const NODESLIDE_DESIGN_BEHAVIORS = [
+  'preserve',
+  'refine',
+  'rebalance',
+  'reinterpret',
+  'reimagine',
+] as const;
+export const NODESLIDE_REFERENCE_USE_POLICIES = [
+  'context_only',
+  'inspiration',
+  'style_direction',
+] as const;
+export const NODESLIDE_EDITOR_COMMAND_IDS = ['edit', 'variations', 'propagate'] as const;
+export const NODESLIDE_LAYER_OPERATION_VERSION = 'nodeslide.layers/v1' as const;
+export const NODESLIDE_PROPAGATION_OPERATION_LIMIT = 128 as const;
 export const SLIDE_WIDTH_IN = 13.333;
 export const SLIDE_HEIGHT_IN = 7.5;
 
@@ -9,6 +51,19 @@ export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'connector';
 export type PatchSource = 'human' | 'agent' | 'import' | 'system';
 export type PatchStatus = 'draft' | 'validating' | 'ready' | 'accepted' | 'rejected' | 'stale';
 export type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
+export type NodeSlideProviderMode = 'deterministic' | 'openrouter_free';
+export type NodeSlideDesignBehavior = (typeof NODESLIDE_DESIGN_BEHAVIORS)[number];
+export type NodeSlideReferenceUsePolicy = (typeof NODESLIDE_REFERENCE_USE_POLICIES)[number];
+export type NodeSlideEditorCommandId = (typeof NODESLIDE_EDITOR_COMMAND_IDS)[number];
+export type NodeSlideProposalKind = 'edit' | 'propagation';
+export type AgentReadReferenceKind =
+  | 'deck'
+  | 'slide'
+  | 'element'
+  | 'comment'
+  | 'source'
+  | 'version'
+  | 'data';
 export type ExportCapability =
   | 'web_native'
   | 'pptx_editable'
@@ -105,6 +160,10 @@ export interface SlideElement {
   altText?: string;
   sourceIds: string[];
   locked: boolean;
+  /** Rows written before layers/v1 omit this field and are interpreted as visible. */
+  visible?: boolean;
+  /** Flat group membership. An element can belong to at most one same-slide group. */
+  groupId?: string;
   exportCapabilities: ExportCapability[];
   version: number;
 }
@@ -203,6 +262,30 @@ export type PatchOperation =
     }
   | { op: 'add_element'; slideId: string; element: SlideElement }
   | { op: 'remove_element'; slideId: string; elementId: string }
+  | {
+      op: 'set_visibility_v1';
+      slideId: string;
+      elementId: string;
+      visible: boolean;
+    }
+  | {
+      op: 'group_elements_v1';
+      slideId: string;
+      elementIds: string[];
+      groupId: string;
+    }
+  | {
+      op: 'ungroup_elements_v1';
+      slideId: string;
+      elementIds: string[];
+      groupId: string;
+    }
+  | {
+      op: 'reorder_element_v1';
+      slideId: string;
+      elementId: string;
+      index: number;
+    }
   | { op: 'add_slide'; slide: Slide; elements: SlideElement[]; index: number }
   | { op: 'remove_slide'; slideId: string }
   | { op: 'reorder_slide'; slideId: string; index: number }
@@ -229,6 +312,18 @@ export interface DeckPatch {
   summary: string;
   linkedCommentId?: string;
   traceId?: string;
+  /** Defaults to edit for rows created before proposal provenance v1. */
+  proposalKind?: NodeSlideProposalKind;
+  /** Present only for a separately reviewed propagation proposal. */
+  parentPatchId?: string;
+  /** Canonical, sorted slide set affected by a propagation proposal. */
+  affectedSlideIds?: string[];
+  /** Full SHA-256 binding of the propagation slide set and its parent patch. */
+  affectedSlideDigest?: string;
+  /** Full SHA-256 semantic digest of the exact preflight candidate. */
+  candidateDigest?: string;
+  /** Full validation receipt for this patch's materialized candidate, never the current deck. */
+  candidateValidation?: CandidateValidationReceipt;
   /** Immutable signature revision; profileId and profileDigest always appear together. */
   profileId?: string;
   profileDigest?: string;
@@ -307,6 +402,7 @@ export interface AgentTrace {
   shadowComparisonExpected?: boolean;
   shadowControlsDigest?: string;
   validation?: ValidationResult;
+  candidateDigest?: string;
   provider?: string;
   model?: string;
   costMicroUsd?: number;
@@ -421,6 +517,54 @@ export interface AgentEditRequest {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  readContext?: readonly AgentReadReference[];
+  designBehavior?: NodeSlideDesignBehavior;
+  referenceUse?: NodeSlideReferenceUsePolicy;
+  commandId?: NodeSlideEditorCommandId;
+  providerMode?: NodeSlideProviderMode;
+  providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+}
+
+/** Explicit read authority is independent from PatchScope, which remains write authority. */
+export interface AgentReadReference {
+  id: string;
+  kind: AgentReadReferenceKind;
+  /** Display-only input. The server derives trusted provider labels from authoritative rows. */
+  label: string;
+}
+
+export interface CandidateValidationReceipt {
+  id: string;
+  patchId: string;
+  candidateDigest: string;
+  deckId: string;
+  deckVersion: number;
+  ok: boolean;
+  publishOk: boolean;
+  cleanOk: boolean;
+  issues: ValidationIssue[];
+  checkedAt: number;
+  toolchainVersion: string;
+}
+
+export interface NodeSlideEditorCapabilityRegistry {
+  version: typeof NODESLIDE_EDITOR_CAPABILITY_VERSION;
+  designBehaviorPolicyVersion: typeof NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION;
+  designBehaviors: readonly NodeSlideDesignBehavior[];
+  referenceUsePolicies: readonly NodeSlideReferenceUsePolicy[];
+  commands: readonly {
+    id: NodeSlideEditorCommandId;
+    authority:
+      | 'nodeslideAgent.proposeEdit'
+      | 'nodeslideVariations.generate'
+      | 'nodeslide.proposePropagation';
+    proposalKind: NodeSlideProposalKind;
+  }[];
+  layerOperationVersion: typeof NODESLIDE_LAYER_OPERATION_VERSION;
+  layerOperations: readonly Extract<
+    PatchOperation['op'],
+    'set_visibility_v1' | 'group_elements_v1' | 'ungroup_elements_v1' | 'reorder_element_v1'
+  >[];
 }
 
 export interface CreateDeckRequest {
@@ -440,14 +584,28 @@ export function isElementOperation(
   | { op: 'reorder_slide' }
   | { op: 'update_slide' }
   | { op: 'update_deck' }
+  | { op: 'group_elements_v1' }
+  | { op: 'ungroup_elements_v1' }
 > {
   return (
     operation.op !== 'add_slide' &&
     operation.op !== 'remove_slide' &&
     operation.op !== 'reorder_slide' &&
     operation.op !== 'update_slide' &&
-    operation.op !== 'update_deck'
+    operation.op !== 'update_deck' &&
+    operation.op !== 'group_elements_v1' &&
+    operation.op !== 'ungroup_elements_v1'
   );
+}
+
+export function operationElementIds(operation: PatchOperation): string[] {
+  if (operation.op === 'add_slide') return operation.elements.map((element) => element.id);
+  if (operation.op === 'add_element') return [operation.element.id];
+  if (operation.op === 'group_elements_v1' || operation.op === 'ungroup_elements_v1') {
+    return [...operation.elementIds];
+  }
+  if (isElementOperation(operation)) return [operation.elementId];
+  return [];
 }
 
 export function clampNormalized(value: number): number {
