@@ -232,7 +232,7 @@ export const proposeEdit = action({
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
         providerRequested
-          ? 'Called piAi through openrouter/openrouter/free after exact edit consent'
+          ? 'Called a pinned OpenRouter free model with structured output after exact edit consent'
           : 'Kept review context on the deterministic local route',
         providerRequested
           ? usedFallback
