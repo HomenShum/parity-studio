@@ -2,9 +2,9 @@
  * pi-ai wrapper for Convex actions.
  *
  * Source: github.com/badlogic/pi-mono, packages/ai (published as
- * `@mariozechner/pi-ai`). Real API surface, NOT a stub:
+ * `@earendil-works/pi-ai`). Real API surface, NOT a stub:
  *
- *   import { getModel, complete } from '@mariozechner/pi-ai';
+ *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
  *   const model = getModel('anthropic', 'claude-sonnet-4-20250514');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
@@ -38,7 +38,7 @@ import {
   type TextContent,
   getModel,
   complete as piComplete,
-} from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 
 /**
  * pi-ai's Provider type is `KnownProvider | string` (open by design — users

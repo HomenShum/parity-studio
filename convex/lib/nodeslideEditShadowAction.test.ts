@@ -6,14 +6,19 @@ import {
 } from '../../shared/nodeslide';
 import { proposeEdit } from '../nodeslideAgent';
 import { nodeSlideSnapshotDigest } from './nodeslideDeckRepl';
-import { callNodeSlideFreeJson } from './nodeslideProvider';
+import {
+  NODESLIDE_EDIT_MODEL,
+  NODESLIDE_EDIT_PROVIDER,
+  callNodeSlideFreeJson,
+} from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 import {
   type NodeSlideShadowComparison,
   nodeSlideEditTurnInputDigest,
 } from './nodeslideShadowComparison';
 
-vi.mock('./nodeslideProvider', () => ({
+vi.mock('./nodeslideProvider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./nodeslideProvider')>()),
   callNodeSlideFreeJson: vi.fn(),
 }));
 
@@ -99,8 +104,8 @@ function providerSuccess(target: { id: string; slideId: string }) {
       ],
     },
     telemetry: {
-      provider: 'openrouter',
-      model: 'resolved/free-model',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -167,6 +172,13 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         text: 'BASELINE_ONLY',
       },
     ]);
+    expect(proposalArgs).toMatchObject({
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      costMicroUsd: 0,
+      inputTokens: 100,
+      outputTokens: 20,
+    });
     expect(JSON.stringify(proposalArgs?.operations)).not.toContain('CANDIDATE_ONLY');
 
     expect(comparison.baseSnapshotDigest).toBe(nodeSlideSnapshotDigest(snapshot));
@@ -216,15 +228,15 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
   it('preserves deterministic-fallback persistence attribution after extraction', async () => {
     const { workspace, args } = fixture();
     const telemetry = {
-      provider: 'openrouter',
-      model: 'resolved/free-model',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
     };
     providerMock.mockResolvedValue({
       ok: false,
-      reason: 'The free route response was incomplete.',
+      reason: 'The GLM 5.2 route returned invalid JSON after one repair attempt.',
       telemetry,
     });
     const test = harness(workspace);
@@ -234,13 +246,15 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     const proposalArgs = test.calls.find((call) => 'operations' in call);
     expect(proposalArgs).toMatchObject({
       provider: telemetry.provider,
-      model: telemetry.model,
+      model: `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
       costMicroUsd: telemetry.costMicroUsd,
       inputTokens: telemetry.inputTokens,
       outputTokens: telemetry.outputTokens,
       operations: [{ op: 'replace_text', text: 'CANDIDATE_ONLY' }],
     });
-    expect(proposalArgs?.traceSummary).toContain('The free route response was incomplete.');
+    expect(proposalArgs?.traceSummary).toContain(
+      'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+    );
     expect(proposalArgs?.toolCalls).toContain('Used deterministic bounded edit fallback');
     expect(proposalArgs?.shadowComparison).toBeDefined();
   });
@@ -300,7 +314,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     const { workspace, args } = fixture();
     args.scope.operationMode = 'unrestricted';
     args.instruction = 'Improve it somehow.';
-    providerMock.mockResolvedValue({ ok: false, reason: 'The free route was unavailable.' });
+    providerMock.mockResolvedValue({ ok: false, reason: 'The GLM 5.2 route was unavailable.' });
     const test = harness(workspace);
 
     await expect(proposeHandler(test.context, args)).rejects.toMatchObject({

@@ -9,7 +9,7 @@ import {
   type ToolCall,
   getModel,
   complete as piComplete,
-} from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 import { Type } from '@sinclair/typebox';
 import { v } from 'convex/values';
 import { internal } from './_generated/api';

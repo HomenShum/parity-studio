@@ -211,7 +211,7 @@ export async function planNodeSlideEdit(
     providerOutcome,
     ...(usedFallback
       ? {
-          fallbackReason: provider.ok ? 'the free response was invalid' : provider.reason,
+          fallbackReason: provider.ok ? 'the GLM 5.2 response was invalid' : provider.reason,
         }
       : {}),
     ...('telemetry' in provider && provider.telemetry
@@ -225,9 +225,9 @@ export async function planNodeSlideEdit(
       operations ?? deterministicAgentOperations(snapshot, request.instruction, request.scope);
   } catch (error) {
     const message =
-      error instanceof Error && error.message.startsWith('The free route returned')
+      error instanceof Error && error.message.startsWith('The GLM 5.2 route returned')
         ? error.message
-        : 'The free route could not produce a safe scoped proposal. Retry with a smaller request or exact replacement copy in quotation marks.';
+        : 'The GLM 5.2 route could not produce a safe scoped proposal. Retry with a smaller request or exact replacement copy in quotation marks.';
     return {
       ok: false,
       code: 'fallback_unavailable',

@@ -571,7 +571,7 @@ export function deterministicAgentOperations(
 
   if (inferredMode === null) {
     throw new Error(
-      'The free route returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
+      'The GLM 5.2 route returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
     );
   }
 
@@ -581,7 +581,7 @@ export function deterministicAgentOperations(
     const text = deterministicRewrite(target.content ?? '', instruction);
     if (text === null) {
       throw new Error(
-        'The free route returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
+        'The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
       );
     }
     if (text === (target.content ?? '')) {
@@ -609,7 +609,7 @@ export function deterministicAgentOperations(
         ];
       }
       throw new Error(
-        `The free route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
+        `The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
       );
     }
     return [
