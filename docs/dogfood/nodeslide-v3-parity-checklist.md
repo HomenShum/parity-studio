@@ -1,11 +1,32 @@
 # NodeSlide v3 parity — acceptance checklist (2026-07-12)
 
 Independent second-opinion audit by Fable, read-only. Reference: NodeSlide Editor v3 Standalone
-(the interactive prototype = acceptance criteria, not a screenshot). Cross-checked against the
-implementation lane's self-reported state (52/300/340 geometry, terracotta system, text-only inspector
-tabs, StoryArcOverview, receipt-safe Compare, ProjectDialog onboarding, 44 UI tests). NOT edited any code —
-the implementation lane owns the tree.
+(the interactive prototype = acceptance criteria). NOT edited any code — the implementation lane owns the tree.
 
+## VERDICT (live side-by-side, 2026-07-12): STRONG PARITY, exceeds reference on correctness
+Ran the reference (served :5193) and the running build (:5180) side by side in Chrome, Edit + Compare states.
+Findings from direct observation:
+- Geometry, top bar (N brand · breadcrumb · centered undo/redo · theme · EN · Reset · Share · Present ·
+  terracotta Export), left rail (Slides/Outline/Layers · sections · thumbnails · "N sources · cur" status ·
+  Add slide), narrative banner (SLIDE JOB), Edit/Overview/Compare, 6-tab inspector, anchored composer with
+  scope + policy + @//: ALL present and match the reference.
+- MY #1 RISK — Compare sub-modes — RESOLVED: Side-by-side / Slider / Overlay / Blink all present, with the
+  honest "No proposal yet · Preview a proposal from the AI lab" empty state matching the reference exactly.
+- The build EXCEEDS the reference on correctness/honesty: it surfaces "read context · locked write scope"
+  (the reference collapses readContext/writeScope), "Web off · Private deterministic" provider consent,
+  and "Structure, presentation, and cleanup checks passed" as a real receipt. Correct-over-decorative — keep.
+- Composer is MORE complete than reference: Write Deck/This slide/Selection scope + Operation mode / Design
+  behavior / Reference use, vs the reference's single Selection·Harmonize row.
+- Only cosmetic divergences: the sample deck uses a light NodeSlide taste pack (reference used a dark
+  investor pack) — that's sample content, not shell; and SUGGESTED consolidates to "Sharpen the story /
+  Reduce density" + a SLIDE DIRECTIONS "Generate 3 directions" block (reference listed them flat). Minor.
+
+Bottom line: the v3-aligned editor is at high visual parity AND is more honest than the reference where the
+reference was only decorative. No launch-blocking UI parity gaps observed in Edit/Compare. Remaining
+[verify] items below need a click-through (inspector Design/Comments/Versions/Data/Trace bodies, Overview
+spatial board, Layers element tree, @// autocomplete menus) — not observed as broken, just not yet exercised.
+
+---
 Legend: [likely done] per lane report · [verify] claimed but not independently confirmed · [risk] likely gap.
 
 ## Shell geometry
