@@ -13,8 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      VITE_CONVEX_URL: https://blissful-pig-998.convex.cloud
-      VITE_CONVEX_SITE_URL: https://blissful-pig-998.convex.site
+      # Build-time shape only. CI must never inherit a writable production endpoint.
+      VITE_CONVEX_URL: https://ci-placeholder.convex.cloud
+      VITE_CONVEX_SITE_URL: https://ci-placeholder.convex.site
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -679,7 +679,7 @@ export const acceptVariationPatch = internalMutation({
     return {
       variation: atomicVariationFromRow(updated),
       patch: receipt.patch,
-      workspace: await loadNodeSlideWorkspace(ctx, args.deckId, Date.now()),
+      workspace: receipt.workspace,
       rebased: receipt.rebased,
       staleReasons: [],
     };
@@ -1851,7 +1851,12 @@ async function commitPatch(
   if (args.linkedCommentId)
     await resolveLinkedComment(ctx, args.linkedCommentId, args.deckId, id, now);
   await finishPatchTrace(ctx, accepted, now, 'completed', validation);
-  return { patch: accepted, snapshot: appliedSnapshot, validation, rebased: cas.rebased };
+  return {
+    patch: accepted,
+    workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
+    validation,
+    rebased: cas.rebased,
+  };
 }
 
 function normalizeHumanPatchArgs(args: HumanPatchMutationArgs): PatchMutationArgs {

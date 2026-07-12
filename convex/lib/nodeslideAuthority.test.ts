@@ -81,4 +81,56 @@ describe('NodeSlide quota authority ordering', () => {
       ]),
     );
   });
+
+  it('rejects whole-slide mutations under comment-scoped element authority', () => {
+    const snapshot = buildGoldenNodeSlide('comment-slide-escape', 2_000).snapshot;
+    const slide = snapshot.slides[0];
+    const element = snapshot.elements.find(
+      (candidate) => candidate.slideId === slide?.id && !candidate.locked,
+    );
+    if (!slide || !element) throw new Error('Fixture needs an editable element.');
+    const comment: DeckComment = {
+      id: 'comment-element-anchor',
+      deckId: snapshot.deck.id,
+      anchor: {
+        type: 'element',
+        deckId: snapshot.deck.id,
+        slideId: slide.id,
+        elementId: element.id,
+      },
+      authorId: 'reviewer',
+      authorName: 'Reviewer',
+      text: 'Review this element only.',
+      status: 'open',
+      createdAt: 2_000,
+      updatedAt: 2_000,
+    };
+    const patch: Pick<
+      DeckPatch,
+      | 'deckId'
+      | 'baseDeckVersion'
+      | 'baseSlideVersions'
+      | 'baseElementVersions'
+      | 'scope'
+      | 'operations'
+    > = {
+      deckId: snapshot.deck.id,
+      baseDeckVersion: snapshot.deck.version,
+      baseSlideVersions: { [slide.id]: slide.version },
+      baseElementVersions: { [element.id]: element.version },
+      scope: {
+        kind: 'comment',
+        deckId: snapshot.deck.id,
+        slideIds: [slide.id],
+        elementIds: [element.id],
+        commentId: comment.id,
+        operationMode: 'unrestricted',
+      },
+      operations: [{ op: 'update_slide', slideId: slide.id, properties: { title: 'Escaped' } }],
+    };
+
+    expect(validateNodeSlidePatch(snapshot, patch, comment)).toContain(
+      'Operation update_slide targets a whole slide outside element-scoped authority.',
+    );
+  });
 });

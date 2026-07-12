@@ -11,6 +11,15 @@ import {
 
 const REFERENCE_ID_LIMIT = 256;
 const REFERENCE_LABEL_LIMIT = 240;
+const REFERENCE_KIND_LIMITS: Readonly<Record<AgentReadReference['kind'], number>> = {
+  deck: 1,
+  slide: NODESLIDE_AGENT_READ_CONTEXT_LIMITS.slideIds,
+  element: NODESLIDE_AGENT_READ_CONTEXT_LIMITS.elementIds,
+  comment: NODESLIDE_AGENT_READ_CONTEXT_LIMITS.commentIds,
+  source: NODESLIDE_AGENT_READ_CONTEXT_LIMITS.sourceIds,
+  version: 8,
+  data: 32,
+};
 
 export interface ResolvedNodeSlideReadContext {
   references: AgentReadReference[];
@@ -26,11 +35,11 @@ export function resolveNodeSlideReadContext(args: {
   writeScope: PatchScope;
   requested?: readonly AgentReadReference[];
 }): ResolvedNodeSlideReadContext {
-  const requested = withRequiredScopedComment(
-    args.workspace,
-    args.writeScope,
-    args.requested ?? defaultReferences(args.workspace, args.writeScope),
-  );
+  const supplied = args.requested ?? [];
+  assertReferenceBounds(supplied);
+  const reserved = withRequiredScopedComment(args.workspace, args.writeScope, supplied);
+  assertReferenceBounds(reserved);
+  const requested = mergeReferences(reserved, defaultReferences(args.workspace, args.writeScope));
   assertReferenceBounds(requested);
 
   const references = canonicalReferences(requested);
@@ -92,6 +101,30 @@ export function resolveNodeSlideReadContext(args: {
   };
 }
 
+function mergeReferences(
+  reservedReferences: readonly AgentReadReference[],
+  scopedDefaults: readonly AgentReadReference[],
+): AgentReadReference[] {
+  const merged = [...reservedReferences];
+  const seen = new Set(reservedReferences.map(referenceKey));
+  const counts = new Map<AgentReadReference['kind'], number>();
+  for (const reference of reservedReferences) {
+    counts.set(reference.kind, (counts.get(reference.kind) ?? 0) + 1);
+  }
+
+  for (const reference of scopedDefaults) {
+    const key = referenceKey(reference);
+    if (seen.has(key)) continue;
+    if (merged.length >= NODESLIDE_AGENT_READ_CONTEXT_LIMITS.totalRefs) break;
+    const kindCount = counts.get(reference.kind) ?? 0;
+    if (kindCount >= REFERENCE_KIND_LIMITS[reference.kind]) continue;
+    merged.push(reference);
+    seen.add(key);
+    counts.set(reference.kind, kindCount + 1);
+  }
+  return merged;
+}
+
 function withRequiredScopedComment(
   workspace: NodeSlideWorkspace,
   scope: PatchScope,
@@ -110,7 +143,7 @@ function withRequiredScopedComment(
     {
       id: comment.id,
       kind: 'comment',
-      label: `Comment by ${comment.authorName}`,
+      label: safeLabel(`Comment by ${comment.authorName}`),
     },
   ];
 }
@@ -126,34 +159,37 @@ function defaultReferences(workspace: NodeSlideWorkspace, scope: PatchScope): Ag
             .filter((element) => slideIds.has(element.slideId))
             .map((element) => element.id),
         );
+  const slides = workspace.slides.filter((slide) => slideIds.has(slide.id));
+  const elements = workspace.elements.filter((element) => elementIds.has(element.id));
   const sourceIds = new Set(
-    workspace.elements
-      .filter((element) => elementIds.has(element.id))
-      .flatMap((element) => [
-        ...element.sourceIds,
-        ...(element.chart?.sourceId ? [element.chart.sourceId] : []),
-      ]),
+    elements.flatMap((element) => [
+      ...element.sourceIds,
+      ...(element.chart?.sourceId ? [element.chart.sourceId] : []),
+    ]),
   );
   return [
-    ...workspace.slides
-      .filter((slide) => slideIds.has(slide.id))
-      .map((slide) => ({ id: slide.id, kind: 'slide' as const, label: slide.title })),
-    ...workspace.elements
-      .filter((element) => elementIds.has(element.id))
-      .map((element) => ({ id: element.id, kind: 'element' as const, label: element.name })),
+    ...slides.map((slide) => ({
+      id: slide.id,
+      kind: 'slide' as const,
+      label: safeLabel(slide.title),
+    })),
+    ...elements.map((element) => ({
+      id: element.id,
+      kind: 'element' as const,
+      label: safeLabel(element.name),
+    })),
     ...workspace.sources
       .filter((source) => sourceIds.has(source.id))
-      .map((source) => ({ id: source.id, kind: 'source' as const, label: source.title })),
-    ...(scope.kind === 'comment'
-      ? workspace.comments
-          .filter((comment) => comment.id === scope.commentId)
-          .map((comment) => ({
-            id: comment.id,
-            kind: 'comment' as const,
-            label: `Comment by ${comment.authorName}`,
-          }))
-      : []),
+      .map((source) => ({
+        id: source.id,
+        kind: 'source' as const,
+        label: safeLabel(source.title),
+      })),
   ];
+}
+
+function safeLabel(label: string): string {
+  return label.slice(0, REFERENCE_LABEL_LIMIT);
 }
 
 function assertReferenceBounds(references: readonly AgentReadReference[]): void {
@@ -171,7 +207,7 @@ function assertReferenceBounds(references: readonly AgentReadReference[]): void 
     ) {
       throw new Error('NodeSlide readContext contains an invalid reference.');
     }
-    const key = `${reference.kind}\u0000${reference.id}`;
+    const key = referenceKey(reference);
     if (seen.has(key)) throw new Error('NodeSlide readContext references must be unique.');
     seen.add(key);
     counts.set(reference.kind, (counts.get(reference.kind) ?? 0) + 1);
@@ -188,6 +224,10 @@ function assertReferenceBounds(references: readonly AgentReadReference[]): void 
   if ((counts.get('version') ?? 0) > 8 || (counts.get('data') ?? 0) > 32) {
     throw new Error('readContext exceeds the version or data reference limit.');
   }
+}
+
+function referenceKey(reference: AgentReadReference): string {
+  return `${reference.kind}\u0000${reference.id}`;
 }
 
 function canonicalReferences(references: readonly AgentReadReference[]): AgentReadReference[] {

@@ -1,6 +1,6 @@
 # NodeSlide agentic-authoring controlled-preview checklist
 
-Date: 2026-07-11
+Date: 2026-07-12
 
 ## Required before merge/deployment
 
@@ -18,9 +18,9 @@ Date: 2026-07-11
 - [x] Taste receipts bind profile, snapshot, render, violations, proposal, blockers, and human decision provenance.
 - [x] Founder, investor, and technical HTML/PPTX artifacts generated.
 - [x] Twenty-one native slides individually inspected; all three PPTX files pass overflow checks.
-- [ ] Re-run the isolated local disabled → enabled → disabled rollback exercise on the exact final diff; port 3210 was unavailable in this session.
+- [x] Re-run disabled → enabled → paired-shadow evidence → disabled rollback on the isolated staging deployment; candidate exposure and commit remained false.
 - [x] Unit and deterministic proof paths show enabled baseline edits produce one same-input/same-snapshot opaque comparison while candidate operations remain unexposed and uncommitted.
-- [x] Full repository gates pass on the final diff (343 tests, Biome, TypeScript/Vite build).
+- [x] Full repository gates pass on the final diff (413 tests, Biome, application and Convex TypeScript, Vite build, and production dependency audit).
 - [x] Independent final security/product/reliability audit records no private-preview code P0/P1/P2 blocker; R1 remains conditional on exact-commit staging exercise.
 - [ ] Reviewed branch is merged and the exact commit is deployed with an audit message.
 

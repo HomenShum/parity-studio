@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
@@ -522,6 +522,21 @@ try {
   assert(!publicationAuthorization.allowed, 'Agentic publication was not independently closed.');
 
   const telemetrySummary = telemetry.summarizeNodeSlideExecutionTraces(traces);
+  const switchProof = await readSwitchProof();
+  const switchExercise = switchProof?.switchExercise;
+  const stagingSwitchReady = Boolean(
+    switchProof?.deployment === 'isolated-staging' &&
+      switchProof?.productionTouched === false &&
+      switchExercise?.disabledBefore === true &&
+      switchExercise?.enabledCompleted === true &&
+      switchExercise?.candidateExposed === false &&
+      switchExercise?.candidateCommitted === false &&
+      switchExercise?.pairedComparisonPersisted === true &&
+      switchExercise?.pairedCandidateExposed === false &&
+      switchExercise?.pairedCandidateCommitted === false &&
+      switchExercise?.disabledAfter === true &&
+      switchExercise?.rollbackConfirmed === true,
+  );
   const proof = {
     schemaVersion: 'nodeslide.agentic-proof/v1',
     generatedAt: new Date().toISOString(),
@@ -539,6 +554,7 @@ try {
       automaticContinuation: shadowControls.automaticContinuation,
     },
     telemetry: telemetrySummary,
+    stagingSwitchProof: switchProof,
     pairedEditShadow: shadowComparisons,
     kernel: {
       adapterId: kernel.id,
@@ -572,11 +588,12 @@ try {
     },
     verdict: {
       r0LocalReference: 'GO',
-      r1PrivatePreviewShadow: 'GO_AFTER_STAGING_SWITCH_EXERCISE',
+      r1PrivatePreviewShadow: stagingSwitchReady ? 'GO' : 'GO_AFTER_STAGING_SWITCH_EXERCISE',
       r2ReviewedAgenticProposals: 'HOLD',
       publicMultiTenant: 'NO_GO',
-      rationale:
-        'The candidate is safety-clean and StoryBench-score-identical to baseline, so promotion remains on hold; public identity, lifecycle, tenancy, and managed-kernel gates remain unresolved.',
+      rationale: stagingSwitchReady
+        ? 'The isolated staging switch and rollback passed without exposing or committing a shadow candidate. R2 remains on hold because the matched candidate is StoryBench-score-identical to baseline; public identity, lifecycle, tenancy, and managed-kernel gates remain unresolved.'
+        : 'The candidate is safety-clean and StoryBench-score-identical to baseline, so promotion remains on hold; public identity, lifecycle, tenancy, and managed-kernel gates remain unresolved.',
     },
   };
   await writeFile(
@@ -587,6 +604,19 @@ try {
   process.stdout.write(`${JSON.stringify({ outputDirectory, verdict: proof.verdict }, null, 2)}\n`);
 } finally {
   await vite.close();
+}
+
+async function readSwitchProof() {
+  try {
+    return JSON.parse(
+      await readFile(path.join(outputDirectory, 'local-switch-proof.json'), 'utf8'),
+    );
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function qualityScores(snapshot, validation) {

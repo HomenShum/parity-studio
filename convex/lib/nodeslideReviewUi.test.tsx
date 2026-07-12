@@ -11,6 +11,7 @@ import {
 } from '../../shared/nodeslide';
 import {
   type AiAgentActivity,
+  type AiCommentContext,
   type AiComposerCommand,
   AiInspector,
   type AiReadReference,
@@ -181,6 +182,25 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('Suggestions only prefill the composer');
   });
 
+  it('keeps comment-to-AI context implicit when no @ reference was selected', () => {
+    const snapshot = fixture();
+    const comment = commentFixture(snapshot)[0];
+    if (!comment) throw new Error('Fixture needs an open comment.');
+    const commentContext: AiCommentContext = {
+      id: comment.id,
+      kind: 'comment',
+      label: `Comment by ${comment.authorName}`,
+      text: comment.text,
+      anchor: comment.anchor,
+    };
+
+    const markup = renderAi({ commentContext });
+
+    expect(markup).toContain('Scoped context by default');
+    expect(markup).toContain(`@${commentContext.label}`);
+    expect(markup).not.toContain('1 explicit reference');
+  });
+
   it('shows preview, scope/base/ops evidence, and only candidate-specific validation receipts', () => {
     const snapshot = fixture();
     const patch = proposal(snapshot, true);
@@ -232,6 +252,12 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     const expanded = renderPanel(workspace, slide, false, [element]);
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
+    expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
+    for (const tab of ['design', 'comments', 'versions', 'data', 'trace']) {
+      expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
+    }
+    expect(expanded).toContain('aria-label="Resize inspector"');
+    expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
     const collapsed = renderPanel(workspace, slide, true, []);
     for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Data', 'Trace']) {
@@ -242,6 +268,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
 
 interface RenderAiOptions {
   agentActivity?: AiAgentActivity;
+  commentContext?: AiCommentContext;
   initialInstruction?: string;
   initialReadContext?: readonly AiReadReference[];
   references?: readonly AiReadReference[];
@@ -251,6 +278,7 @@ interface RenderAiOptions {
 
 function renderAi({
   agentActivity,
+  commentContext,
   initialInstruction = '',
   initialReadContext = [],
   references = [],
@@ -277,6 +305,7 @@ function renderAi({
       commands={commands}
       initialInstruction={initialInstruction}
       initialReadContext={initialReadContext}
+      {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
       onPropose={() => undefined}
       onAccept={() => undefined}

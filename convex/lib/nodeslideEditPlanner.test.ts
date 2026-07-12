@@ -67,6 +67,69 @@ describe('NodeSlide baseline edit planner extraction', () => {
     if (result.ok) expect(result.receipt.providerOutcome).toBe('not_requested');
   });
 
+  it('turns a common decisive-headline request into a bounded visual emphasis fallback', async () => {
+    const { snapshot, target, scope } = fixture();
+    target.name = 'Headline';
+    target.role = 'headline';
+    target.content = 'Decision briefing';
+    target.style.fontWeight = 500;
+    scope.operationMode = 'unrestricted';
+    const planningInput = input(snapshot, target, scope);
+
+    const result = await planNodeSlideEdit({
+      ...planningInput,
+      request: {
+        ...planningInput.request,
+        instruction: 'Make the headline more decisive and concise for an executive audience.',
+        providerMode: 'deterministic',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'update_style',
+        slideId: target.slideId,
+        elementId: target.id,
+        properties: {
+          color: snapshot.deck.theme.colors.accent,
+          fontWeight: 700,
+        },
+      },
+    ]);
+  });
+
+  it('keeps a repeated decisive-headline fallback non-empty after prior emphasis', async () => {
+    const { snapshot, target, scope } = fixture();
+    target.name = 'Headline';
+    target.role = 'headline';
+    target.content = 'Decision briefing';
+    target.style.color = snapshot.deck.theme.colors.accent;
+    target.style.fontWeight = 700;
+    scope.operationMode = 'unrestricted';
+    const planningInput = input(snapshot, target, scope);
+
+    const result = await planNodeSlideEdit({
+      ...planningInput,
+      request: {
+        ...planningInput.request,
+        instruction: 'Make the headline more decisive and concise for an executive audience.',
+        providerMode: 'deterministic',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toMatchObject([
+      {
+        op: 'update_style',
+        elementId: target.id,
+        properties: { fontWeight: 750 },
+      },
+    ]);
+  });
+
   it('plans a deterministic exact-copy edit from a slide-anchored comment', async () => {
     const { snapshot, target } = fixture();
     const headline = snapshot.elements.find(

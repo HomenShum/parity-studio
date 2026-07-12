@@ -7,31 +7,24 @@ import {
   useMemo,
 } from 'react';
 import type { PatchOperation, Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
+import {
+  type EditorCandidateReceipt,
+  type EditorCandidateStatus,
+  editorCandidateCanAccept,
+} from '../editorStateIntegrity';
 import './editorShell.css';
 import { SlideRenderer } from './SlideRenderer';
+
+export type { EditorCandidateReceipt, EditorCandidateStatus } from '../editorStateIntegrity';
 
 export type EditorCanvasMode = 'edit' | 'overview' | 'compare';
 export type EditorCompareMode = 'side-by-side' | 'slider' | 'overlay' | 'blink';
 export type EditorCompareOperationTone = 'change' | 'addition' | 'removal';
-export type EditorCandidateStatus =
-  | 'ready'
-  | 'validating'
-  | 'warning'
-  | 'invalid'
-  | 'stale'
-  | 'unavailable';
 
 export interface EditorCompareOperation {
   id?: string;
   label: string;
   tone?: EditorCompareOperationTone;
-}
-
-export interface EditorCandidateReceipt {
-  id?: string;
-  status: EditorCandidateStatus;
-  summary?: string;
-  versionLabel?: string;
 }
 
 export interface EditorCanvasModesProps {
@@ -48,6 +41,8 @@ export interface EditorCanvasModesProps {
   onSelectSlide?: (slideId: string) => void;
   affectedSlideIds?: readonly string[];
   narrativeBanner?: ReactNode;
+  storyArcBoard?: ReactNode;
+  validationStatus?: 'verified' | 'needs_review' | 'classification_issue' | 'validating';
 
   baselineCanvas?: ReactNode;
   baselineLabel?: string;
@@ -85,6 +80,8 @@ export function EditorCanvasModes({
   onSelectSlide,
   affectedSlideIds = [],
   narrativeBanner,
+  storyArcBoard,
+  validationStatus = 'validating',
   baselineCanvas,
   baselineLabel,
   candidateCanvas,
@@ -157,33 +154,41 @@ export function EditorCanvasModes({
       onKeyDown={stopStudioNavigationFromControls}
     >
       <header className="ns-editor-modebar">
+        {storyArcBoard ? (
+          <span className="ns-story-mode-label">Story arc</span>
+        ) : (
+          <div className="ns-editor-mode-controls" role="tablist" aria-label="Canvas views">
+            {CANVAS_MODES.map((canvasMode) => (
+              <button
+                type="button"
+                role="tab"
+                id={`${shellId}-${canvasMode}-tab`}
+                aria-controls={`${shellId}-${canvasMode}-panel`}
+                aria-selected={mode === canvasMode}
+                className={mode === canvasMode ? 'is-active' : ''}
+                key={canvasMode}
+                tabIndex={mode === canvasMode ? 0 : -1}
+                onClick={() => onModeChange(canvasMode)}
+                onKeyDown={(event) =>
+                  handleTabKeyDown(event, CANVAS_MODES, canvasMode, onModeChange)
+                }
+              >
+                {capitalize(canvasMode)}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="ns-editor-mode-context">
-          <span className="ns-eyebrow">Canvas</span>
-          <strong>
-            {activeSlide
-              ? `${activeSlideIndex + 1} / ${slides.length} · ${activeSlide.title}`
-              : 'No active slide'}
-          </strong>
+          <span className="ns-editor-slide-number">
+            {activeSlide ? String(activeSlideIndex + 1).padStart(2, '0') : '—'}
+          </span>
+          <strong>{activeSlide?.title ?? 'No active slide'}</strong>
         </div>
-        <div className="ns-editor-mode-controls" role="tablist" aria-label="Canvas views">
-          {CANVAS_MODES.map((canvasMode) => (
-            <button
-              type="button"
-              role="tab"
-              id={`${shellId}-${canvasMode}-tab`}
-              aria-controls={`${shellId}-${canvasMode}-panel`}
-              aria-selected={mode === canvasMode}
-              className={mode === canvasMode ? 'is-active' : ''}
-              key={canvasMode}
-              tabIndex={mode === canvasMode ? 0 : -1}
-              onClick={() => onModeChange(canvasMode)}
-              onKeyDown={(event) => handleTabKeyDown(event, CANVAS_MODES, canvasMode, onModeChange)}
-            >
-              {capitalize(canvasMode)}
-            </button>
-          ))}
-        </div>
-        {mode === 'compare' ? (
+        <span className={`ns-editor-validation is-${validationStatus}`}>{validationStatus}</span>
+      </header>
+
+      {mode === 'compare' && !storyArcBoard ? (
+        <div className="ns-compare-toolbar">
           <div
             className="ns-compare-mode-controls"
             role="tablist"
@@ -207,197 +212,224 @@ export function EditorCanvasModes({
               </button>
             ))}
           </div>
-        ) : null}
-      </header>
+          <span>{hasCandidate ? 'proposal · pending review' : 'no proposal pending'}</span>
+          {narrativeBanner ? <span className="ns-sr-only">{narrativeBanner}</span> : null}
+        </div>
+      ) : null}
 
-      {narrativeBanner ? (
+      {mode === 'edit' && narrativeBanner && !storyArcBoard ? (
         <aside className="ns-narrative-banner" aria-label="Narrative context">
+          <span className="ns-narrative-label">Slide job</span>
           {narrativeBanner}
         </aside>
       ) : null}
 
-      <div
-        className={`ns-editor-mode-panel is-${mode}`}
-        role="tabpanel"
-        id={`${shellId}-${mode}-panel`}
-        aria-labelledby={`${shellId}-${mode}-tab`}
-      >
-        {mode === 'edit' ? (
-          <div className="ns-editor-edit-canvas" data-testid="editor-edit-canvas">
-            {editCanvas}
-          </div>
-        ) : null}
+      {storyArcBoard ? (
+        <div className="ns-story-arc-host">{storyArcBoard}</div>
+      ) : (
+        <div
+          className={`ns-editor-mode-panel is-${mode}`}
+          role="tabpanel"
+          id={`${shellId}-${mode}-panel`}
+          aria-labelledby={`${shellId}-${mode}-tab`}
+        >
+          {mode === 'edit' ? (
+            <div className="ns-editor-edit-canvas" data-testid="editor-edit-canvas">
+              {editCanvas}
+            </div>
+          ) : null}
 
-        {mode === 'overview' ? (
-          <section className="ns-editor-overview" aria-label="Deck overview">
-            <ol className="ns-overview-grid">
-              {slides.map((slide, index) => {
-                const affected = affectedSet.has(slide.id);
-                const active = slide.id === activeSlideId;
-                const slideElements = elements.filter((element) => element.slideId === slide.id);
-                return (
-                  <li
-                    className={`${affected ? 'is-affected' : ''} ${active ? 'is-active' : ''}`}
-                    data-affected={affected ? 'true' : 'false'}
-                    key={slide.id}
-                  >
+          {mode === 'overview' ? (
+            <section className="ns-editor-overview" aria-label="Deck overview">
+              <ol className="ns-overview-grid">
+                {slides.map((slide, index) => {
+                  const affected = affectedSet.has(slide.id);
+                  const active = slide.id === activeSlideId;
+                  const slideElements = elements.filter((element) => element.slideId === slide.id);
+                  return (
+                    <li
+                      className={`${affected ? 'is-affected' : ''} ${active ? 'is-active' : ''}`}
+                      data-affected={affected ? 'true' : 'false'}
+                      key={slide.id}
+                    >
+                      <button
+                        type="button"
+                        aria-current={active ? 'page' : undefined}
+                        aria-label={`Open slide ${index + 1}: ${slide.title}${affected ? ', affected by propagation preview' : ''}`}
+                        data-testid={`overview-slide-${slide.id}`}
+                        onClick={() => onSelectSlide?.(slide.id)}
+                      >
+                        <span className="ns-overview-thumbnail">
+                          <SlideRenderer
+                            slide={slide}
+                            elements={slideElements}
+                            theme={theme}
+                            className="ns-editor-shell-slide"
+                          />
+                        </span>
+                        <span className="ns-overview-caption">
+                          <span>
+                            {String(index + 1).padStart(2, '0')} · {slide.title}
+                          </span>
+                          {affected ? (
+                            <span
+                              className="ns-affected-halo-label"
+                              data-affected-slide-id={slide.id}
+                            >
+                              <span aria-hidden="true" /> Affected
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ) : null}
+
+          {mode === 'compare' ? (
+            hasCandidate ? (
+              <section
+                className="ns-editor-compare"
+                id={`${shellId}-comparison`}
+                aria-label="Baseline and candidate comparison"
+              >
+                <div
+                  className={`ns-compare-stage is-${compareMode}`}
+                  data-compare-mode={compareMode}
+                  style={
+                    {
+                      '--ns-compare-position': `${safeSliderPosition}%`,
+                      '--ns-compare-opacity': safeOverlayOpacity / 100,
+                    } as CSSProperties
+                  }
+                >
+                  {compareMode === 'side-by-side' ? (
+                    <>
+                      <ComparisonFrame label={resolvedBaselineLabel} kind="baseline">
+                        {baselineView}
+                      </ComparisonFrame>
+                      <CompareSeam operations={operations} />
+                      <ComparisonFrame label={resolvedCandidateLabel} kind="candidate">
+                        {candidateView}
+                      </ComparisonFrame>
+                    </>
+                  ) : (
+                    <>
+                      <div className="ns-compare-composite">
+                        <div className="ns-compare-composite-label is-baseline">
+                          {resolvedBaselineLabel}
+                        </div>
+                        <div className="ns-compare-layer is-baseline">{baselineView}</div>
+                        <div
+                          className={`ns-compare-layer is-candidate is-${compareMode} ${compareMode === 'blink' && effectiveBlinkPaused ? 'is-paused' : ''}`}
+                        >
+                          {candidateView}
+                        </div>
+                        <div className="ns-compare-composite-label is-candidate">
+                          {resolvedCandidateLabel}
+                        </div>
+                      </div>
+                      <CompareSeam operations={operations} />
+                    </>
+                  )}
+                </div>
+
+                {compareMode === 'slider' ? (
+                  <label className="ns-compare-adjustment">
+                    <span>Candidate reveal</span>
+                    <input
+                      type="range"
+                      min="5"
+                      max="95"
+                      step="1"
+                      value={safeSliderPosition}
+                      disabled={!onSliderPositionChange}
+                      aria-label="Candidate reveal position"
+                      onChange={(event) =>
+                        onSliderPositionChange?.(Number(event.currentTarget.value))
+                      }
+                    />
+                    <output>{safeSliderPosition}%</output>
+                  </label>
+                ) : null}
+                {compareMode === 'overlay' ? (
+                  <label className="ns-compare-adjustment">
+                    <span>Candidate opacity</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={safeOverlayOpacity}
+                      disabled={!onOverlayOpacityChange}
+                      aria-label="Candidate overlay opacity"
+                      onChange={(event) =>
+                        onOverlayOpacityChange?.(Number(event.currentTarget.value))
+                      }
+                    />
+                    <output>{safeOverlayOpacity}%</output>
+                  </label>
+                ) : null}
+                {compareMode === 'blink' ? (
+                  <div className="ns-compare-adjustment">
+                    <span>Alternate baseline and candidate</span>
                     <button
                       type="button"
-                      aria-current={active ? 'page' : undefined}
-                      aria-label={`Open slide ${index + 1}: ${slide.title}${affected ? ', affected by propagation preview' : ''}`}
-                      data-testid={`overview-slide-${slide.id}`}
-                      onClick={() => onSelectSlide?.(slide.id)}
+                      aria-pressed={!effectiveBlinkPaused}
+                      disabled={!onBlinkPausedChange}
+                      onClick={() => onBlinkPausedChange?.(!blinkPaused)}
                     >
-                      <span className="ns-overview-thumbnail">
-                        <SlideRenderer
-                          slide={slide}
-                          elements={slideElements}
-                          theme={theme}
-                          className="ns-editor-shell-slide"
-                        />
-                      </span>
-                      <span className="ns-overview-caption">
-                        <span>
-                          {String(index + 1).padStart(2, '0')} · {slide.title}
-                        </span>
-                        {affected ? (
-                          <span
-                            className="ns-affected-halo-label"
-                            data-affected-slide-id={slide.id}
-                          >
-                            <span aria-hidden="true" /> Affected
-                          </span>
-                        ) : null}
-                      </span>
+                      {effectiveBlinkPaused ? <Play size={13} /> : <Pause size={13} />}
+                      {effectiveBlinkPaused ? 'Resume blink' : 'Pause blink'}
                     </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        ) : null}
+                  </div>
+                ) : null}
 
-        {mode === 'compare' ? (
-          hasCandidate ? (
-            <section
-              className="ns-editor-compare"
-              id={`${shellId}-comparison`}
-              aria-label="Baseline and candidate comparison"
-            >
-              <div
-                className={`ns-compare-stage is-${compareMode}`}
-                data-compare-mode={compareMode}
-                style={
-                  {
-                    '--ns-compare-position': `${safeSliderPosition}%`,
-                    '--ns-compare-opacity': safeOverlayOpacity / 100,
-                  } as CSSProperties
-                }
+                <CandidateReceipt
+                  baselineLabel={resolvedBaselineLabel}
+                  candidateLabel={resolvedCandidateLabel}
+                  operationCount={operations.length}
+                  receipt={candidateReceipt}
+                  onAccept={onAcceptCandidate}
+                  onDecline={onDeclineCandidate}
+                />
+              </section>
+            ) : (
+              <section
+                className="ns-editor-compare ns-compare-empty"
+                aria-live="polite"
+                data-testid="no-candidate-state"
               >
-                {compareMode === 'side-by-side' ? (
-                  <>
-                    <ComparisonFrame label={resolvedBaselineLabel} kind="baseline">
-                      {baselineView}
-                    </ComparisonFrame>
-                    <CompareSeam operations={operations} />
-                    <ComparisonFrame label={resolvedCandidateLabel} kind="candidate">
-                      {candidateView}
-                    </ComparisonFrame>
-                  </>
-                ) : (
-                  <>
-                    <div className="ns-compare-composite">
-                      <div className="ns-compare-composite-label is-baseline">
-                        {resolvedBaselineLabel}
-                      </div>
-                      <div className="ns-compare-layer is-baseline">{baselineView}</div>
-                      <div
-                        className={`ns-compare-layer is-candidate is-${compareMode} ${compareMode === 'blink' && effectiveBlinkPaused ? 'is-paused' : ''}`}
-                      >
-                        {candidateView}
-                      </div>
-                      <div className="ns-compare-composite-label is-candidate">
-                        {resolvedCandidateLabel}
-                      </div>
+                <div className="ns-compare-stage is-side-by-side">
+                  <ComparisonFrame label={resolvedBaselineLabel} kind="baseline">
+                    {baselineView}
+                  </ComparisonFrame>
+                  <ComparisonFrame label="Proposal" kind="candidate">
+                    <div className="ns-compare-placeholder">
+                      <span className="ns-eyebrow">Proposal</span>
+                      <h2>No proposal yet</h2>
+                      <p>Preview a proposal from the AI tab to draft and review one.</p>
+                      <span className="ns-sr-only">No candidate to compare</span>
                     </div>
-                    <CompareSeam operations={operations} />
-                  </>
-                )}
-              </div>
-
-              {compareMode === 'slider' ? (
-                <label className="ns-compare-adjustment">
-                  <span>Candidate reveal</span>
-                  <input
-                    type="range"
-                    min="5"
-                    max="95"
-                    step="1"
-                    value={safeSliderPosition}
-                    disabled={!onSliderPositionChange}
-                    aria-label="Candidate reveal position"
-                    onChange={(event) =>
-                      onSliderPositionChange?.(Number(event.currentTarget.value))
-                    }
-                  />
-                  <output>{safeSliderPosition}%</output>
-                </label>
-              ) : null}
-              {compareMode === 'overlay' ? (
-                <label className="ns-compare-adjustment">
-                  <span>Candidate opacity</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={safeOverlayOpacity}
-                    disabled={!onOverlayOpacityChange}
-                    aria-label="Candidate overlay opacity"
-                    onChange={(event) =>
-                      onOverlayOpacityChange?.(Number(event.currentTarget.value))
-                    }
-                  />
-                  <output>{safeOverlayOpacity}%</output>
-                </label>
-              ) : null}
-              {compareMode === 'blink' ? (
-                <div className="ns-compare-adjustment">
-                  <span>Alternate baseline and candidate</span>
-                  <button
-                    type="button"
-                    aria-pressed={!effectiveBlinkPaused}
-                    disabled={!onBlinkPausedChange}
-                    onClick={() => onBlinkPausedChange?.(!blinkPaused)}
-                  >
-                    {effectiveBlinkPaused ? <Play size={13} /> : <Pause size={13} />}
-                    {effectiveBlinkPaused ? 'Resume blink' : 'Pause blink'}
-                  </button>
+                  </ComparisonFrame>
                 </div>
-              ) : null}
-
-              <CandidateReceipt
-                baselineLabel={resolvedBaselineLabel}
-                candidateLabel={resolvedCandidateLabel}
-                operationCount={operations.length}
-                receipt={candidateReceipt}
-                onAccept={onAcceptCandidate}
-                onDecline={onDeclineCandidate}
-              />
-            </section>
-          ) : (
-            <section
-              className="ns-compare-empty"
-              aria-live="polite"
-              data-testid="no-candidate-state"
-            >
-              <span className="ns-eyebrow">Compare</span>
-              <h2>No candidate to compare</h2>
-              <p>Preview a proposal to inspect its operations against the active slide.</p>
-            </section>
-          )
-        ) : null}
-      </div>
+                {candidateReceipt ? (
+                  <CandidateReceipt
+                    baselineLabel={resolvedBaselineLabel}
+                    candidateLabel={resolvedCandidateLabel}
+                    operationCount={operations.length}
+                    receipt={candidateReceipt}
+                    onAccept={onAcceptCandidate}
+                    onDecline={onDeclineCandidate}
+                  />
+                ) : null}
+              </section>
+            )
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }
@@ -467,6 +499,7 @@ function CandidateReceipt({
   onDecline: (() => void) | undefined;
 }) {
   const status = receipt?.status ?? 'unavailable';
+  const acceptEnabled = editorCandidateCanAccept(receipt);
   return (
     <footer
       className={`ns-candidate-receipt is-${status}`}
@@ -487,7 +520,16 @@ function CandidateReceipt({
       {onAccept || onDecline ? (
         <span className="ns-candidate-actions">
           {onAccept ? (
-            <button type="button" onClick={onAccept}>
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={!acceptEnabled}
+              title={
+                acceptEnabled
+                  ? 'Accept this exact validated patch candidate'
+                  : 'Accept requires a successful patch- and candidate-digest-bound receipt'
+              }
+            >
               Accept
             </button>
           ) : null}

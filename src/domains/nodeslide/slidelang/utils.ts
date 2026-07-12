@@ -63,6 +63,11 @@ export function orderedElements(snapshot: DeckSnapshot, slide: Slide): SlideElem
   return [...ordered, ...candidates.filter((element) => !seen.has(element.id))];
 }
 
+/** Non-mutating element view shared by every SlideLang export path. */
+export function orderedExportElements(snapshot: DeckSnapshot, slide: Slide): SlideElement[] {
+  return orderedElements(snapshot, slide).filter((element) => element.visible !== false);
+}
+
 export function cloneSnapshot(snapshot: DeckSnapshot): DeckSnapshot {
   return structuredClone(snapshot);
 }

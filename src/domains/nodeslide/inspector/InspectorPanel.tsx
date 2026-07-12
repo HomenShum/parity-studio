@@ -9,7 +9,12 @@ import {
   PanelRightClose,
   SlidersHorizontal,
 } from 'lucide-react';
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+} from 'react';
 import type {
   CommentAnchor,
   DeckComment,
@@ -255,8 +260,18 @@ export function InspectorPanel<CommandId extends string = string>({
         className="ns-inspector-resizer"
         type="button"
         onPointerDown={startResize}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            onWidthChange(clampWidth(width + 16));
+          }
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            onWidthChange(clampWidth(width - 16));
+          }
+        }}
         aria-label="Resize inspector"
-        title="Drag to resize inspector"
+        title="Drag or use Left and Right arrow keys to resize inspector"
       />
       <div className="ns-inspector-topbar">
         <div className="ns-inspector-context-summary">
@@ -290,7 +305,9 @@ export function InspectorPanel<CommandId extends string = string>({
             className={activeTab === id ? 'is-active' : ''}
             data-testid={`inspector-tab-${id}`}
             key={id}
+            tabIndex={activeTab === id ? 0 : -1}
             onClick={() => onTabChange(id)}
+            onKeyDown={(event) => handleInspectorTabKeyDown(event, id, onTabChange)}
           >
             <Icon size={14} />
             <span>{label}</span>
@@ -408,6 +425,25 @@ export function InspectorPanel<CommandId extends string = string>({
 
 function clampWidth(width: number) {
   return Math.min(560, Math.max(304, width));
+}
+
+function handleInspectorTabKeyDown(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  currentTab: InspectorTab,
+  onTabChange: (tab: InspectorTab) => void,
+) {
+  const currentIndex = tabs.findIndex(({ id }) => id === currentTab);
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  const nextTab = tabs[nextIndex]?.id;
+  if (!nextTab) return;
+  onTabChange(nextTab);
+  requestAnimationFrame(() => document.getElementById(`ns-tab-${nextTab}`)?.focus());
 }
 
 function validationLabel(validation: NodeSlideWorkspace['validations'][number] | undefined) {

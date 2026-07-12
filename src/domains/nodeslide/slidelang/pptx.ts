@@ -13,7 +13,7 @@ import {
   colorToPptxHex,
   isEmbeddedImageData,
   normalizeBoundingBox,
-  orderedElements,
+  orderedExportElements,
   orderedSlides,
 } from './utils';
 
@@ -337,7 +337,7 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
     pptxSlide.background = {
       color: colorToPptxHex(slide.background, snapshot.deck.theme.colors.canvas),
     };
-    for (const element of orderedElements(snapshot, slide)) {
+    for (const element of orderedExportElements(snapshot, slide)) {
       addElement(pptx, pptxSlide, snapshot, element);
     }
     const notes = speakerNotesForSlide(snapshot, slide);

@@ -7,13 +7,30 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../convex/_generated/api.js';
 
 const execFileAsync = promisify(execFile);
-const DEPLOYMENT = 'anonymous:anonymous-parity-studio';
-const CONVEX_URL = 'http://127.0.0.1:3210';
+const DEPLOYMENT =
+  process.env.NODESLIDE_SWITCH_PROOF_DEPLOYMENT ?? 'anonymous:anonymous-parity-studio';
+const CONVEX_URL = process.env.NODESLIDE_SWITCH_PROOF_CONVEX_URL ?? 'http://127.0.0.1:3210';
+const IS_LOCAL = /^http:\/\/(?:127\.0\.0\.1|localhost):3210\/?$/i.test(CONVEX_URL);
 const FLAGS = ['NODESLIDE_AGENTIC_GLOBAL_ENABLED', 'NODESLIDE_AGENTIC_SHADOW_ENABLED'];
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rootDirectory = path.resolve(scriptDirectory, '..');
 const outputDirectory = path.join(rootDirectory, 'docs', 'dogfood', 'nodeslide-agentic-authoring');
 const outputPath = path.join(outputDirectory, 'local-switch-proof.json');
+
+if (!IS_LOCAL) {
+  assert(
+    process.argv.includes('--isolated-staging'),
+    'Remote switch proof requires --isolated-staging and an explicitly isolated non-production deployment.',
+  );
+  assert(
+    !/^prod(?::|$)/i.test(DEPLOYMENT),
+    'Switch proof refuses production deployment references.',
+  );
+  assert(
+    /^https:\/\/[a-z0-9-]+\.convex\.cloud\/?$/i.test(CONVEX_URL),
+    'Invalid staging Convex URL.',
+  );
+}
 
 const client = new ConvexHttpClient(CONVEX_URL);
 let workspace;
@@ -120,7 +137,7 @@ try {
   const proof = {
     schemaVersion: 'nodeslide.local-switch-proof/v1',
     generatedAt: new Date().toISOString(),
-    deployment: 'isolated-local',
+    deployment: IS_LOCAL ? 'isolated-local' : 'isolated-staging',
     productionTouched: false,
     disposableDeckId: workspace.deck.id,
     switchExercise: {

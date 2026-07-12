@@ -585,6 +585,29 @@ export function deterministicAgentOperations(
       );
     }
     if (text === (target.content ?? '')) {
+      if (
+        scope.operationMode === 'unrestricted' &&
+        /\b(?:decisive|assertive|stronger|emphasis|emphasize|bold)\b/.test(lower)
+      ) {
+        const currentWeight = target.style.fontWeight ?? 500;
+        const nextWeight =
+          currentWeight < 700 ? 700 : currentWeight < 900 ? currentWeight + 50 : 900;
+        const accentAlreadyApplied = target.style.color === snapshot.deck.theme.colors.accent;
+        return [
+          {
+            op: 'update_style',
+            slideId: target.slideId,
+            elementId: target.id,
+            properties: {
+              color: snapshot.deck.theme.colors.accent,
+              fontWeight: nextWeight,
+              ...(currentWeight >= 900 && accentAlreadyApplied
+                ? { letterSpacing: target.style.letterSpacing === -0.01 ? -0.015 : -0.01 }
+                : {}),
+            },
+          },
+        ];
+      }
       throw new Error(
         `The free route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
       );

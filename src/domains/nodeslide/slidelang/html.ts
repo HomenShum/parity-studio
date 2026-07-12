@@ -8,7 +8,7 @@ import {
   escapeHtml,
   isEmbeddedImageData,
   normalizeBoundingBox,
-  orderedElements,
+  orderedExportElements,
   orderedSlides,
   stableDomId,
 } from './utils';
@@ -204,7 +204,7 @@ function renderSemanticSlide(
   references: readonly SlideSourceReference[],
 ): string {
   const headingId = `${stableDomId(slide.id)}-semantic-title`;
-  const elements = orderedElements(snapshot, slide).map(renderSemanticElement).join('');
+  const elements = orderedExportElements(snapshot, slide).map(renderSemanticElement).join('');
   const sources =
     references.length > 0
       ? `<aside data-slide-sources aria-labelledby="${stableDomId(`${slide.id}:sources`)}"><h3 id="${stableDomId(`${slide.id}:sources`)}">Sources</h3><ol>${references.map(renderSemanticSource).join('')}</ol></aside>`
@@ -221,6 +221,19 @@ function serializeJsonForHtml(value: unknown): string {
     if (character === '\u2028') return '\\u2028';
     return '\\u2029';
   });
+}
+
+function exportedSourceRecords(
+  snapshot: DeckSnapshot,
+  slides: readonly Slide[],
+): DeckSnapshot['sources'] {
+  const sourceIds = new Set<string>();
+  for (const slide of slides) {
+    for (const element of orderedExportElements(snapshot, slide)) {
+      for (const sourceId of elementSourceIds(element)) sourceIds.add(sourceId);
+    }
+  }
+  return snapshot.sources.filter((source) => sourceIds.has(source.id));
 }
 
 function renderTextBox(
@@ -426,7 +439,7 @@ function renderSlideSection(
   const markerId = `${stableDomId(slide.id)}-arrow`;
   const semanticHeadingId = `${stableDomId(slide.id)}-semantic-title`;
   const sourceReferences = slideSourceReferences(snapshot, slide);
-  const elements = orderedElements(snapshot, slide)
+  const elements = orderedExportElements(snapshot, slide)
     .map((element) => renderElement(snapshot, element, markerId))
     .join('');
   const semantics = renderSemanticSlide(snapshot, slide, index, total, sourceReferences);
@@ -450,7 +463,8 @@ export function renderDeckHtml(snapshot: DeckSnapshot): string {
     .map((slide, index) => renderSlideSection(snapshot, slide, index, slides.length))
     .join('');
   const title = escapeHtml(snapshot.deck.title);
-  const sourceRecords = serializeJsonForHtml(snapshot.sources);
+  const exportedSources = exportedSourceRecords(snapshot, slides);
+  const sourceRecords = serializeJsonForHtml(exportedSources);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -470,7 +484,7 @@ export function renderDeckHtml(snapshot: DeckSnapshot): string {
 </head>
 <body>
   <main aria-label="${title} presentation"><div class="deck-stage">${renderedSlides}</div></main>
-  <script type="application/json" data-nodeslide-source-records data-deck-id="${escapeHtml(snapshot.deck.id)}" data-source-count="${snapshot.sources.length}">${sourceRecords}</script>
+  <script type="application/json" data-nodeslide-source-records data-deck-id="${escapeHtml(snapshot.deck.id)}" data-source-count="${exportedSources.length}">${sourceRecords}</script>
   <nav aria-label="Presenter navigation"><button type="button" data-action="previous" aria-label="Previous slide">← Previous</button><output aria-live="polite">1 / ${slides.length}</output><button type="button" data-action="next" aria-label="Next slide">Next →</button></nav>
   <script>
     (()=>{const slides=[...document.querySelectorAll('[data-slide-id]')];const output=document.querySelector('output');const previous=document.querySelector('[data-action="previous"]');const next=document.querySelector('[data-action="next"]');let index=Math.max(0,slides.findIndex(slide=>decodeURIComponent(location.hash.slice(1))===slide.dataset.slideId));const show=(value)=>{index=Math.max(0,Math.min(slides.length-1,value));slides.forEach((slide,i)=>{slide.hidden=i!==index;slide.setAttribute('aria-hidden',String(i!==index));});if(output)output.textContent=(index+1)+' / '+slides.length;if(previous)previous.disabled=index===0;if(next)next.disabled=index===slides.length-1;const id=slides[index]?.dataset.slideId;if(id&&location.hash.slice(1)!==encodeURIComponent(id))history.replaceState(null,'','#'+encodeURIComponent(id));};previous?.addEventListener('click',()=>show(index-1));next?.addEventListener('click',()=>show(index+1));addEventListener('keydown',(event)=>{if(['ArrowRight','PageDown',' '].includes(event.key)){event.preventDefault();show(index+1);}else if(['ArrowLeft','PageUp'].includes(event.key)){event.preventDefault();show(index-1);}else if(event.key==='Home')show(0);else if(event.key==='End')show(slides.length-1);else if(event.key.toLowerCase()==='p'){const notes=slides[index]?.querySelector('[data-presenter-notes]');if(notes)notes.hidden=!notes.hidden;}});addEventListener('hashchange',()=>{const target=slides.findIndex(slide=>decodeURIComponent(location.hash.slice(1))===slide.dataset.slideId);if(target>=0)show(target);});show(index);})();

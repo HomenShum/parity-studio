@@ -1,13 +1,13 @@
 # NodeSlide agentic-authoring dogfood
 
-Date: 2026-07-11
+Date: 2026-07-12
 
 ## Decision
 
 | Boundary | Decision | Evidence |
 | --- | --- | --- |
 | R0 local/CI reference path | **GO** | Deck REPL, deterministic analysis kernel, render–observe–repair, taste mismatch, trace, telemetry, controls, and StoryBench fixtures pass without a provider or network. |
-| R1 private-preview shadow traces | **GO after audited deployment** | The isolated local Convex switch exercise proves disabled → enabled → disabled rollback, owner authorization, one bounded trace, deny egress, and telemetry aggregation. |
+| R1 private-preview shadow traces | **GO** | The isolated staging switch exercise proves disabled → enabled → disabled rollback, owner authorization, one bounded trace, deny egress, paired comparison persistence, and zero candidate exposure or commit. |
 | R2 reviewed agentic proposals | **HOLD** | Three matched internal cases are safety-clean but evidence-identical to baseline; StoryBench correctly reports a zero-delta hold with insufficient confidence. |
 | Public multi-tenant launch | **NO-GO** | Identity, tenant authorization, account lifecycle, share governance, managed-kernel operations, privacy, billing, and incident controls remain explicit blockers. |
 
@@ -38,7 +38,7 @@ The fallback remains intentionally conservative and readable, but its repeated t
 ## Proof index
 
 - `agentic-proof.json` — reproducible local/CI core, artifact, StoryBench, kernel, repair, controls, telemetry, and taste receipts.
-- `local-switch-proof.json` — isolated local Convex disabled/enabled/rollback exercise plus one paired baseline/candidate shadow receipt; owner capability and candidate content omitted.
+- `local-switch-proof.json` — isolated Convex disabled/enabled/rollback exercise plus one paired baseline/candidate shadow receipt; owner capability and candidate content omitted.
 - `native-artifact-qa.json` — final PPTX/HTML checksums, 21-slide render/overflow results, and resolved visual defects.
 - `independent-audit.md` — security/product/reliability verdict, resolved findings, residual holds, and controlled launch sequence.
 - `qa-critique.md` — fresh, expert, repeat-user, and senior cross-functional critique.
@@ -53,8 +53,12 @@ The fallback remains intentionally conservative and readable, but its repeated t
 pnpm proof:nodeslide:agentic
 ```
 
-The local switch proof additionally requires the isolated local Convex backend and must never be pointed at production:
+The switch proof defaults to an isolated local Convex backend and refuses remote use unless the caller explicitly confirms isolated staging. It must never be pointed at production:
 
 ```powershell
 pnpm proof:nodeslide:agentic:local
+
+$env:NODESLIDE_SWITCH_PROOF_DEPLOYMENT='your-isolated-dev-deployment'
+$env:NODESLIDE_SWITCH_PROOF_CONVEX_URL='https://your-isolated-dev-deployment.convex.cloud'
+node scripts/nodeslide-agentic-local-switch-proof.mjs --isolated-staging
 ```

@@ -157,6 +157,68 @@ describe('NodeSlide editor canvas modes', () => {
     expect(markup).not.toContain('data-testid="candidate-receipt"');
   });
 
+  it('renders the story arc board in place of canvas mode tabs', () => {
+    const markup = renderCanvas({
+      storyArcBoard: <section aria-label="Story arc board">Story arc content</section>,
+    });
+
+    expect(markup).toContain('Story arc board');
+    expect(markup).toContain('Story arc content');
+    expect(markup).toContain('Story arc');
+    expect(markup).not.toContain('role="tablist"');
+  });
+
+  it('enables Compare accept only for an exact successful patch candidate binding', () => {
+    const markup = renderCanvas({
+      mode: 'compare',
+      candidateCanvas: <div>Bound candidate</div>,
+      candidateReceipt: {
+        status: 'ready',
+        binding: {
+          patchId: 'patch:bound',
+          candidateDigest: 'sha256:bound',
+          receiptPatchId: 'patch:bound',
+          receiptCandidateDigest: 'sha256:bound',
+        },
+      },
+      onAcceptCandidate: () => undefined,
+    });
+    const acceptButton = markup.match(/<button[^>]*>Accept<\/button>/)?.[0];
+
+    expect(acceptButton).toBeDefined();
+    expect(acceptButton).not.toContain('disabled');
+    expect(acceptButton).toContain('Accept this exact validated patch candidate');
+  });
+
+  it.each(['invalid', 'stale', 'unavailable'] as const)(
+    'keeps a %s candidate visibly non-accepting',
+    (status) => {
+      const markup = renderCanvas({
+        mode: 'compare',
+        candidateCanvas: <div>Unsafe candidate</div>,
+        candidateReceipt: { status },
+        onAcceptCandidate: () => undefined,
+      });
+      const acceptButton = markup.match(/<button[^>]*>Accept<\/button>/)?.[0];
+
+      expect(markup).toContain(`data-candidate-status="${status}"`);
+      expect(acceptButton).toContain('disabled');
+    },
+  );
+
+  it('does not trust an unbound ready label from an unvalidated signature preview', () => {
+    const markup = renderCanvas({
+      mode: 'compare',
+      candidateCanvas: <div>Local signature preview</div>,
+      candidateReceipt: { status: 'ready', summary: 'No persisted receipt' },
+      onAcceptCandidate: () => undefined,
+    });
+    const acceptButton = markup.match(/<button[^>]*>Accept<\/button>/)?.[0];
+
+    expect(markup).toContain('Candidate ready');
+    expect(acceptButton).toContain('disabled');
+  });
+
   it('summarizes long operation lists without hiding the authoritative receipt total', () => {
     const markup = renderCanvas({
       mode: 'compare',

@@ -1,9 +1,9 @@
 {
   "schemaVersion": "nodeslide.local-switch-proof/v1",
-  "generatedAt": "2026-07-12T03:58:36.164Z",
-  "deployment": "isolated-local",
+  "generatedAt": "2026-07-12T21:56:45.653Z",
+  "deployment": "isolated-staging",
   "productionTouched": false,
-  "disposableDeckId": "deck_golden_0rmyfsg",
+  "disposableDeckId": "deck_golden_1dju1af",
   "switchExercise": {
     "disabledBefore": true,
     "enabledCompleted": true,
@@ -29,7 +29,7 @@
     "adapterId": "nodeslide/deck-repl-shadow-probe",
     "terminalReason": "completed",
     "cleanupConfirmed": true,
-    "traceDigest": "trace_sha256:45d3ac8e89601976f044f68c5c6b0fcc61d81ced77b3ab6b64a3779caa07350f"
+    "traceDigest": "trace_sha256:a28c9e6be7c5faf2ac464d78609e651cecc042f6e1444a39712205b40dba7b62"
   },
   "telemetry": {
     "schemaVersion": "nodeslide.agentic-telemetry/v1",
@@ -38,35 +38,35 @@
     "stopped": 0,
     "cleanupFailures": 0,
     "egressSessions": 0,
-    "summaryDigest": "telemetry_sha256:85b057aa0bd1e1c8236718aab28203c7c47483708a184dd9015f7b51dec2ae14"
+    "summaryDigest": "telemetry_sha256:fb5f8193696ac1abbb37d78458490de334b14e6af02a8dfbb9ad618a6fecdadd"
   },
   "pairedComparison": {
     "schemaVersion": "nodeslide.shadow-comparison/v1",
-    "baselinePatchId": "patch_agent_mrh9k525_aef541196f2d7b6b0c2c3dd08c9b03e2",
-    "turnInputDigest": "turn_sha256:2c1e92ec466ebba3a349a6d14e88f965897e676ffe8fb0a3df051b950ad8e440",
-    "baseSnapshotDigest": "snap_sha256:8e85972d757aa6c6ab8f0293e1fb097cdff4217fe24946808f64370674502e3b",
+    "baselinePatchId": "patch_agent_mric2n2h_1b52f34b19d6a73ca8002804182dfa2e",
+    "turnInputDigest": "turn_sha256:9877649b78191ee406398b1fed97fbd212e3ccd5cadbbeb5b028811c904cc8ed",
+    "baseSnapshotDigest": "snap_sha256:415058d32390e14c4dd688818dddbcd4568e1e487f5e35f0011d4f3457f45770",
     "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
     "baseline": {
       "adapterId": "nodeslide/single-shot-edit-planner",
       "adapterVersion": "1.0.0",
-      "elapsedMs": 19,
+      "elapsedMs": 4,
       "operationCount": 1,
       "origin": "deterministic_fallback",
       "outcome": "proposed",
-      "proposalDigest": "ops_sha256:e1483439b905ed37f216d67d067581d30610fc4420e547d063160d3a7fe46e12",
+      "proposalDigest": "ops_sha256:82152338a26b0776636335b5abf3b1ee52bf5e945c7a044d641cd8373cd46ba6",
       "terminalReason": "completed"
     },
     "candidate": {
       "adapterId": "nodeslide/deterministic-edit-shadow",
       "adapterVersion": "1.0.0",
-      "elapsedMs": 9,
+      "elapsedMs": 27,
       "operationCount": 1,
       "outcome": "proposed",
-      "proposalDigest": "ops_sha256:e1483439b905ed37f216d67d067581d30610fc4420e547d063160d3a7fe46e12",
+      "proposalDigest": "ops_sha256:82152338a26b0776636335b5abf3b1ee52bf5e945c7a044d641cd8373cd46ba6",
       "terminalReason": "completed"
     },
     "candidateExposed": false,
     "candidateCommitted": false,
-    "comparisonDigest": "comparison_sha256:24bcd0a56daffc2446a3babfc1b8f83274bc0f877b5fe3260bbc5b245ab1bd70"
+    "comparisonDigest": "comparison_sha256:23faadc75bd829afa249333699799bdbbe05a4f24ca810cb04886e9cda7c82b3"
   }
 }

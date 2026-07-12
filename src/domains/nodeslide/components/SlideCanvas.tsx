@@ -30,6 +30,11 @@ import type {
   SlideElement,
   ThemeSpec,
 } from '../../../../shared/nodeslide';
+import {
+  type InlineEditSession,
+  captureInlineEditSession,
+  inlineEditCommit,
+} from '../editorStateIntegrity';
 import { SlideRenderer } from './SlideRenderer';
 
 type ResizeDirection = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
@@ -66,7 +71,7 @@ interface SlideCanvasProps {
   onDuplicateElements: (elementIds: string[]) => void;
   onDeleteElements: (elementIds: string[]) => void;
   onApplyLayoutPatch: (operations: PatchOperation[], elementIds: string[], summary: string) => void;
-  onReplaceText: (elementId: string, text: string) => void;
+  onReplaceText: (elementId: string, text: string, baseElementVersion: number) => void;
   onReorderElements: (elementIds: string[], direction: 'forward' | 'backward') => void;
   onCursorChange?: (cursor: { x: number; y: number } | null) => void;
   onPreviousSlide: () => void;
@@ -105,8 +110,9 @@ export function SlideCanvas({
   const [optimisticBoxes, setOptimisticBoxes] = useState<Record<string, BoundingBox>>({});
   const [panMode, setPanMode] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
-  const [editingElementId, setEditingElementId] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState('');
+  const [inlineEditSession, setInlineEditSession] = useState<InlineEditSession | null>(null);
+  const inlineEditSessionRef = useRef<InlineEditSession | null>(null);
+  const editingValueRef = useRef('');
 
   const elementMap = useMemo(
     () => new Map(elements.map((element) => [element.id, element])),
@@ -336,28 +342,29 @@ export function SlideCanvas({
 
   const beginInlineEdit = (element: SlideElement) => {
     if (readOnly || element.locked || element.kind !== 'text') return;
-    setEditingElementId(element.id);
-    setEditingValue(element.content ?? '');
+    const session = captureInlineEditSession(element);
+    inlineEditSessionRef.current = session;
+    editingValueRef.current = session.initialValue;
+    setInlineEditSession(session);
     onSelectionChange([element.id]);
   };
 
   const finishInlineEdit = (commit: boolean) => {
-    const element = editingElementId ? elementMap.get(editingElementId) : undefined;
-    if (commit && element && editingValue !== (element.content ?? '')) {
-      onReplaceText(element.id, editingValue);
+    const session = inlineEditSessionRef.current;
+    if (!session) return;
+    inlineEditSessionRef.current = null;
+    if (commit) {
+      const submission = inlineEditCommit(session, editingValueRef.current);
+      if (submission) {
+        onReplaceText(submission.elementId, submission.text, submission.baseElementVersion);
+      }
     }
-    setEditingElementId(null);
-    setEditingValue('');
+    editingValueRef.current = '';
+    setInlineEditSession(null);
   };
 
   const fitSlide = () => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const horizontalPadding = 56;
-    const verticalPadding = 72;
-    const byWidth = ((viewport.clientWidth - horizontalPadding) / 960) * 100;
-    const byHeight = ((viewport.clientHeight - verticalPadding) / 540) * 100;
-    onZoomChange(clampZoom(Math.floor(Math.min(byWidth, byHeight))));
+    onZoomChange(65);
   };
 
   return (
@@ -428,7 +435,9 @@ export function SlideCanvas({
         >
           <div
             className="ns-slide-shell"
-            style={{ width: `${Math.round(960 * (zoom / 100))}px` }}
+            style={{
+              width: `max(min(${Math.round(74 * (zoom / 65))}%, ${Math.round(860 * (zoom / 65))}px), 340px)`,
+            }}
             onPointerMove={(event) => {
               if (!onCursorChange) return;
               const rect = event.currentTarget.getBoundingClientRect();
@@ -455,7 +464,7 @@ export function SlideCanvas({
                     onElementDoubleClick: (_event, element) => beginInlineEdit(element),
                   })}
               renderElementContent={(element, defaultContent) =>
-                element.id === editingElementId ? (
+                element.id === inlineEditSession?.elementId ? (
                   <span
                     className="ns-element-copy ns-inline-text-editor"
                     contentEditable
@@ -464,7 +473,9 @@ export function SlideCanvas({
                     tabIndex={0}
                     aria-label={`Edit ${element.name}`}
                     onPointerDown={(event) => event.stopPropagation()}
-                    onInput={(event) => setEditingValue(event.currentTarget.textContent ?? '')}
+                    onInput={(event) => {
+                      editingValueRef.current = event.currentTarget.textContent ?? '';
+                    }}
                     onBlur={() => finishInlineEdit(true)}
                     onKeyDown={(event) => {
                       event.stopPropagation();
@@ -479,7 +490,7 @@ export function SlideCanvas({
                     ref={(node) => {
                       if (!node || node.dataset['initialized'] === 'true') return;
                       node.dataset['initialized'] = 'true';
-                      node.textContent = editingValue;
+                      node.textContent = inlineEditSession.initialValue;
                       requestAnimationFrame(() => {
                         node.focus();
                         const selection = window.getSelection();
@@ -609,7 +620,7 @@ export function SlideCanvas({
       <div className="ns-zoom-controls" aria-label="Canvas zoom and pan controls">
         <button
           type="button"
-          className={panMode ? 'is-active' : ''}
+          className={`ns-pan-toggle ${panMode ? 'is-active' : ''}`}
           onClick={() => setPanMode((value) => !value)}
           aria-pressed={panMode}
           aria-label="Toggle pan tool"
@@ -620,25 +631,26 @@ export function SlideCanvas({
         <i />
         <button
           type="button"
-          onClick={() => onZoomChange(clampZoom(zoom - 10))}
+          onClick={() => onZoomChange(clampZoom(zoom - 5))}
           aria-label="Zoom out"
         >
           <Minus size={14} />
         </button>
+        <span className="ns-zoom-value">{zoom}%</span>
         <button
           type="button"
-          className="ns-zoom-value"
-          onClick={fitSlide}
-          aria-label="Fit slide to workspace"
-        >
-          Fit · {zoom}%
-        </button>
-        <button
-          type="button"
-          onClick={() => onZoomChange(clampZoom(zoom + 10))}
+          onClick={() => onZoomChange(clampZoom(zoom + 5))}
           aria-label="Zoom in"
         >
           <Plus size={14} />
+        </button>
+        <button
+          type="button"
+          className="ns-fit-button"
+          onClick={fitSlide}
+          aria-label="Fit slide to workspace"
+        >
+          Fit
         </button>
       </div>
     </section>
@@ -732,7 +744,7 @@ function handleWheelZoom(
 }
 
 function clampZoom(zoom: number) {
-  return Math.min(200, Math.max(25, zoom));
+  return Math.min(120, Math.max(40, zoom));
 }
 
 function clampUnit(value: number) {

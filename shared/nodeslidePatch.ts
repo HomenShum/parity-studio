@@ -29,6 +29,8 @@ export function validatePatchScope(
   const errors: string[] = [];
   const allowedSlides = 'slideIds' in scope ? new Set(scope.slideIds) : null;
   const allowedElements = 'elementIds' in scope ? new Set(scope.elementIds) : null;
+  const hasElementScopedAuthority =
+    scope.kind === 'elements' || scope.kind === 'bounding_box' || scope.kind === 'comment';
 
   if ('slideIds' in scope && scope.slideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT) {
     errors.push(`Patch scope supports at most ${NODESLIDE_SCOPE_SLIDE_LIMIT} slide IDs.`);
@@ -55,8 +57,16 @@ export function validatePatchScope(
         }
       }
     }
-    if (allowedElements && (operation.op === 'add_slide' || operation.op === 'remove_slide')) {
-      errors.push(`Operation ${operation.op} targets a whole slide outside element scope.`);
+    if (
+      hasElementScopedAuthority &&
+      (operation.op === 'add_slide' ||
+        operation.op === 'remove_slide' ||
+        operation.op === 'update_slide' ||
+        operation.op === 'reorder_slide')
+    ) {
+      errors.push(
+        `Operation ${operation.op} targets a whole slide outside element-scoped authority.`,
+      );
     }
     if (
       operation.op === 'update_deck' &&
