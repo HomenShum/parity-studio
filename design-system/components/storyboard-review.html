@@ -1,0 +1,53 @@
+<!-- @dsCard group="Components" -->
+<style>
+  .c-sb { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 28px; border-radius: 14px; }
+  .c-sb * { box-sizing: border-box; margin: 0; }
+  .c-sb .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .c-sb h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 16px; }
+  .c-sb h2 { font-size: 12px; font-weight: 600; color: #99A3AE; margin: 20px 0 8px; }
+  .c-sb .thesis { font-family: "Manrope", sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 2px; }
+  .c-sb .sub { font-size: 10px; color: #8A94A0; margin-bottom: 10px; }
+  .c-sb .arc { font-family: "JetBrains Mono", monospace; font-size: 9px; color: #8E97E8; border: 1px solid rgba(94,106,210,0.28); border-radius: 9999px; padding: 1px 8px; margin-left: 8px; }
+  .c-sb .entry { display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.10); border-left: 2px solid #5E6AD2; background: #111418; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .c-sb .role { font-family: "JetBrains Mono", monospace; font-size: 8px; letter-spacing: .12em; color: #8E97E8; border: 1px solid rgba(94,106,210,0.28); border-radius: 4px; padding: 1px 6px; flex: none; width: 92px; text-align: center; }
+  .c-sb .claim { flex: 1; font-size: 12px; color: #F2F4F7; background: #171B20; border: 1px solid rgba(255,255,255,.08); border-radius: 6px; padding: 5px 8px; }
+  .c-sb .ctl { display: flex; gap: 4px; flex: none; }
+  .c-sb .ctl span { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; font-size: 10px; color: #C6CCD4; }
+  .c-sb .st { font-family: "JetBrains Mono", monospace; font-size: 9px; flex: none; width: 118px; }
+  .c-sb .landed { color: #2E9E6B; } .c-sb .fb { color: #EFB785; } .c-sb .fail { color: #F87171; } .c-sb .pend { color: #8A94A0; }
+  .c-sb .go { display: inline-block; background: rgba(217,119,87,0.12); color: #E59579; border: 1px solid rgba(217,119,87,0.45); border-radius: 9999px; padding: 4px 14px; font-size: 12px; margin-top: 6px; }
+  .c-sb .skip { font-size: 11px; color: #8A94A0; text-decoration: underline dotted; margin-left: 10px; }
+  .c-sb .note { font-size: 12px; color: #C6CCD4; line-height: 1.55; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 16px; max-width: 66ch; }
+  .c-sb .note strong { color: #F2F4F7; }
+  .c-sb .failbar { border: 1px solid rgba(239,183,133,.3); background: rgba(239,183,133,.08); border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #EFB785; margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+  .c-sb .failbar span { border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 2px 9px; font-size: 10px; color: #C6CCD4; }
+</style>
+<div class="c-sb">
+  <div class="kicker">NodeSlide · Components · Storyboard</div>
+  <h1>StoryboardReview — the plan before the pixels</h1>
+
+  <h2>review — reorder, rewrite claims, cut, then generate</h2>
+  <div>
+    <div class="thesis">Portfolio holds through the squeeze.<span class="arc">arc · narrative_led</span></div>
+    <div class="sub">for the partners · 5 entries — review the plan before any slides exist</div>
+    <div class="entry"><span class="role">OPENING</span><span class="claim">Revenue held across all eight companies.</span><span class="ctl"><span>↑</span><span>↓</span><span>×</span></span></div>
+    <div class="entry"><span class="role">EVIDENCE</span><span class="claim">EBITDA compressed only in the two healthcare names.</span><span class="ctl"><span>↑</span><span>↓</span><span>×</span></span></div>
+    <div class="entry"><span class="role">RECOMMENDATION</span><span class="claim">Hold reserves for follow-ons in the top quartile.</span><span class="ctl"><span>↑</span><span>↓</span><span>×</span></span></div>
+    <span class="go">Generate 5 slides</span><span class="skip">skip storyboard — generate directly</span>
+  </div>
+
+  <h2>expanding — entries land card-by-card (server truth, per-entry receipts)</h2>
+  <div>
+    <div class="entry"><span class="role">OPENING</span><span class="claim" style="color:#99A3AE">Revenue held across all eight companies.</span><span class="st landed">▮ landed · 2.3s</span></div>
+    <div class="entry"><span class="role">EVIDENCE</span><span class="claim" style="color:#99A3AE">EBITDA compressed in two healthcare names.</span><span class="st fb">▮ fallback · labeled</span></div>
+    <div class="entry" style="opacity:.55"><span class="role">RECOMMENDATION</span><span class="claim" style="color:#8A94A0">Hold reserves for follow-ons.</span><span class="st pend">… expanding</span></div>
+  </div>
+
+  <h2>complete_with_failures — the failure surface stays (never auto-navigate away)</h2>
+  <div>
+    <div class="entry"><span class="role">RISKS</span><span class="claim" style="color:#99A3AE">Exit window stays shut until rates settle.</span><span class="st fail">▮ failed · provider 429</span></div>
+    <div class="failbar">2 of 6 entries failed — reasons above. <span>Retry failed entries</span><span>Open deck anyway</span></div>
+  </div>
+
+  <p class="note"><strong>Contract:</strong> the storyboard is a projection of the DeckSpec, never a second store. Claims are ops; reorders are ops; every landed entry carries a receipt; fallbacks are labeled; an all-failed job can never read "complete". Correcting the story here costs one line — after render it costs N slides.</p>
+</div>

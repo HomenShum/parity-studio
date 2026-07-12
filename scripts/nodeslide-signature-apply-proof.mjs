@@ -337,8 +337,8 @@ async function runProductionDogfood({ client, applyModule, profile }) {
     'Production signature patch omitted its immutable profile digest.',
   );
   assert(
-    signatureReceipt.snapshot.deck.activeSignatureProfileId === profile.id &&
-      signatureReceipt.snapshot.deck.activeSignatureProfileDigest === profile.source.digest,
+    signatureReceipt.workspace.deck.activeSignatureProfileId === profile.id &&
+      signatureReceipt.workspace.deck.activeSignatureProfileDigest === profile.source.digest,
     'Production signature patch did not atomically activate the profile.',
   );
   assert(
@@ -363,7 +363,7 @@ async function runProductionDogfood({ client, applyModule, profile }) {
     (candidate) => candidate.id === comment.id,
   );
   assert(
-    appliedVersion?.version === signatureReceipt.snapshot.deck.version,
+    appliedVersion?.version === signatureReceipt.workspace.deck.version,
     'Signature patch did not produce a normal version receipt.',
   );
   assert(
@@ -419,7 +419,7 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       deckId: workspace.deck.id,
       ownerAccessKey,
       versionId: appliedVersion.id,
-      baseDeckVersion: offBrandReceipt.snapshot.deck.version,
+      baseDeckVersion: offBrandReceipt.workspace.deck.version,
     }),
   );
   assert(
@@ -427,7 +427,7 @@ async function runProductionDogfood({ client, applyModule, profile }) {
     'Restoring the clean signature version did not produce a publishable receipt.',
   );
   assert(
-    restoreReceipt.snapshot.deck.activeSignatureProfileId === profile.id,
+    restoreReceipt.workspace.deck.activeSignatureProfileId === profile.id,
     'Version restore did not preserve the durable active signature profile.',
   );
 
@@ -437,12 +437,12 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       ownerAccessKey,
       profileId: profile.id,
       profileDigest: profile.source.digest,
-      baseDeckVersion: restoreReceipt.snapshot.deck.version,
+      baseDeckVersion: restoreReceipt.workspace.deck.version,
     }),
   );
   assert(activatedWorkspace, 'Already-applied durable profile activation returned no workspace.');
   assert(
-    activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version + 1,
+    activatedWorkspace.deck.version === restoreReceipt.workspace.deck.version + 1,
     'Profile activation did not create an auditable policy version.',
   );
 
@@ -587,7 +587,7 @@ async function runProductionDogfood({ client, applyModule, profile }) {
   const boundaryElapsedMs = performance.now() - boundaryStart;
   assert(
     accepted512Receipt.patch.status === 'accepted' &&
-      accepted512Receipt.snapshot.deck.version === boundaryWorkspace.deck.version + 1,
+      accepted512Receipt.workspace.deck.version === boundaryWorkspace.deck.version + 1,
     'The exact 512-operation production boundary was not accepted.',
   );
 
@@ -603,9 +603,9 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       elapsedMs: round(applyElapsedMs),
       patchId: signaturePatchId,
       baseDeckVersion: workspace.deck.version,
-      resultingDeckVersion: signatureReceipt.snapshot.deck.version,
+      resultingDeckVersion: signatureReceipt.workspace.deck.version,
       profileId: signatureReceipt.patch.profileId,
-      activeProfileDigest: signatureReceipt.snapshot.deck.activeSignatureProfileDigest,
+      activeProfileDigest: signatureReceipt.workspace.deck.activeSignatureProfileDigest,
       validation: summarizeValidation(signatureReceipt.validation),
     },
     persistence: {
@@ -619,10 +619,10 @@ async function runProductionDogfood({ client, applyModule, profile }) {
       linkedCommentResolved: resolvedComment.status === 'resolved',
       offBrandIssueCodes,
       offBrandPublishBlocked: !offBrandReceipt.validation.publishOk,
-      restoredDeckVersion: restoreReceipt.snapshot.deck.version,
+      restoredDeckVersion: restoreReceipt.workspace.deck.version,
       restorePublishOk: restoreReceipt.validation.publishOk,
       activationWasVersioned:
-        activatedWorkspace.deck.version === restoreReceipt.snapshot.deck.version + 1,
+        activatedWorkspace.deck.version === restoreReceipt.workspace.deck.version + 1,
       stalePatchRecorded: staleReceipt.patch.status === 'stale',
       staleReplayWasVersionNeutral: afterStale.deck.version === activatedWorkspace.deck.version,
     },

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "nodeslide.local-switch-proof/v1",
+  "generatedAt": "2026-07-12T21:56:45.653Z",
+  "deployment": "isolated-staging",
+  "productionTouched": false,
+  "disposableDeckId": "deck_golden_1dju1af",
+  "switchExercise": {
+    "disabledBefore": true,
+    "enabledCompleted": true,
+    "enabledProposalCount": 0,
+    "candidateExposed": false,
+    "candidateCommitted": false,
+    "enabledEgressMode": "deny",
+    "enabledAllowedHosts": [],
+    "tracePersisted": true,
+    "telemetrySampleSize": 1,
+    "pairedComparisonPersisted": true,
+    "pairedCandidateExposed": false,
+    "pairedCandidateCommitted": false,
+    "pairedBaselineExpected": true,
+    "disabledAfter": true,
+    "rollbackConfirmed": true
+  },
+  "trace": {
+    "schemaVersion": "nodeslide.execution-trace/v1",
+    "kind": "deck_repl",
+    "cohort": "private-preview-shadow",
+    "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+    "adapterId": "nodeslide/deck-repl-shadow-probe",
+    "terminalReason": "completed",
+    "cleanupConfirmed": true,
+    "traceDigest": "trace_sha256:a28c9e6be7c5faf2ac464d78609e651cecc042f6e1444a39712205b40dba7b62"
+  },
+  "telemetry": {
+    "schemaVersion": "nodeslide.agentic-telemetry/v1",
+    "requests": 1,
+    "completed": 1,
+    "stopped": 0,
+    "cleanupFailures": 0,
+    "egressSessions": 0,
+    "summaryDigest": "telemetry_sha256:fb5f8193696ac1abbb37d78458490de334b14e6af02a8dfbb9ad618a6fecdadd"
+  },
+  "pairedComparison": {
+    "schemaVersion": "nodeslide.shadow-comparison/v1",
+    "baselinePatchId": "patch_agent_mric2n2h_1b52f34b19d6a73ca8002804182dfa2e",
+    "turnInputDigest": "turn_sha256:9877649b78191ee406398b1fed97fbd212e3ccd5cadbbeb5b028811c904cc8ed",
+    "baseSnapshotDigest": "snap_sha256:415058d32390e14c4dd688818dddbcd4568e1e487f5e35f0011d4f3457f45770",
+    "controlsDigest": "controls_sha256:efa2f3bb7a175ff98c6333a67f78cf0d37af233f6273c8e8d641500dd2d89894",
+    "baseline": {
+      "adapterId": "nodeslide/single-shot-edit-planner",
+      "adapterVersion": "1.0.0",
+      "elapsedMs": 4,
+      "operationCount": 1,
+      "origin": "deterministic_fallback",
+      "outcome": "proposed",
+      "proposalDigest": "ops_sha256:82152338a26b0776636335b5abf3b1ee52bf5e945c7a044d641cd8373cd46ba6",
+      "terminalReason": "completed"
+    },
+    "candidate": {
+      "adapterId": "nodeslide/deterministic-edit-shadow",
+      "adapterVersion": "1.0.0",
+      "elapsedMs": 27,
+      "operationCount": 1,
+      "outcome": "proposed",
+      "proposalDigest": "ops_sha256:82152338a26b0776636335b5abf3b1ee52bf5e945c7a044d641cd8373cd46ba6",
+      "terminalReason": "completed"
+    },
+    "candidateExposed": false,
+    "candidateCommitted": false,
+    "comparisonDigest": "comparison_sha256:23faadc75bd829afa249333699799bdbbe05a4f24ca810cb04886e9cda7c82b3"
+  }
+}

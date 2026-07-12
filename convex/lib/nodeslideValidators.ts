@@ -331,6 +331,8 @@ export const nodeslideElementValidator = v.object({
   altText: v.optional(v.string()),
   sourceIds: v.array(v.string()),
   locked: v.boolean(),
+  visible: v.optional(v.boolean()),
+  groupId: v.optional(v.string()),
   exportCapabilities: v.array(nodeslideExportCapabilityValidator),
   version: v.number(),
 });
@@ -392,6 +394,45 @@ export const nodeslideOperationModeValidator = v.union(
   v.literal('layout'),
   v.literal('unrestricted'),
 );
+
+export const nodeslideProviderModeValidator = v.union(
+  v.literal('deterministic'),
+  v.literal('openrouter_free'),
+);
+
+export const nodeslideDesignBehaviorValidator = v.union(
+  v.literal('preserve'),
+  v.literal('refine'),
+  v.literal('rebalance'),
+  v.literal('reinterpret'),
+  v.literal('reimagine'),
+);
+
+export const nodeslideReferenceUseValidator = v.union(
+  v.literal('context_only'),
+  v.literal('inspiration'),
+  v.literal('style_direction'),
+);
+
+export const nodeslideEditorCommandIdValidator = v.union(
+  v.literal('edit'),
+  v.literal('variations'),
+  v.literal('propagate'),
+);
+
+export const nodeslideAgentReadReferenceValidator = v.object({
+  id: v.string(),
+  kind: v.union(
+    v.literal('deck'),
+    v.literal('slide'),
+    v.literal('element'),
+    v.literal('comment'),
+    v.literal('source'),
+    v.literal('version'),
+    v.literal('data'),
+  ),
+  label: v.string(),
+});
 
 export const nodeslidePatchScopeValidator = v.union(
   v.object({
@@ -468,6 +509,30 @@ export const nodeslidePatchOperationValidator = v.union(
     elementId: v.string(),
   }),
   v.object({
+    op: v.literal('set_visibility_v1'),
+    slideId: v.string(),
+    elementId: v.string(),
+    visible: v.boolean(),
+  }),
+  v.object({
+    op: v.literal('group_elements_v1'),
+    slideId: v.string(),
+    elementIds: v.array(v.string()),
+    groupId: v.string(),
+  }),
+  v.object({
+    op: v.literal('ungroup_elements_v1'),
+    slideId: v.string(),
+    elementIds: v.array(v.string()),
+    groupId: v.string(),
+  }),
+  v.object({
+    op: v.literal('reorder_element_v1'),
+    slideId: v.string(),
+    elementId: v.string(),
+    index: v.number(),
+  }),
+  v.object({
     op: v.literal('add_slide'),
     slide: nodeslideSlideValidator,
     elements: v.array(nodeslideElementValidator),
@@ -507,6 +572,49 @@ export const nodeslidePatchSourceValidator = v.union(
 );
 
 export const nodeslideVersionClockValidator = v.record(v.string(), v.number());
+
+export const nodeslideDeckReplCommandValidator = v.union(
+  v.object({
+    id: v.string(),
+    type: v.literal('inspect_deck'),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('inspect_slide'),
+    slideId: v.string(),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('find_elements'),
+    slideId: v.optional(v.string()),
+    kind: v.optional(
+      v.union(
+        v.literal('text'),
+        v.literal('shape'),
+        v.literal('image'),
+        v.literal('chart'),
+        v.literal('connector'),
+      ),
+    ),
+    role: v.optional(v.string()),
+    text: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('measure_slide'),
+    slideId: v.string(),
+  }),
+  v.object({
+    id: v.string(),
+    type: v.literal('propose_patch'),
+    baseDeckVersion: v.number(),
+    baseSlideVersions: nodeslideVersionClockValidator,
+    baseElementVersions: nodeslideVersionClockValidator,
+    scope: nodeslidePatchScopeValidator,
+    operations: v.array(nodeslidePatchOperationValidator),
+  }),
+);
 
 export const nodeslidePatchStatusValidator = v.union(
   v.literal('draft'),
@@ -559,6 +667,20 @@ export const nodeslideValidationIssueValidator = v.object({
 
 export const nodeslideValidationResultValidator = v.object({
   id: v.string(),
+  deckId: v.string(),
+  deckVersion: v.number(),
+  ok: v.boolean(),
+  publishOk: v.boolean(),
+  cleanOk: v.boolean(),
+  issues: v.array(nodeslideValidationIssueValidator),
+  checkedAt: v.number(),
+  toolchainVersion: v.string(),
+});
+
+export const nodeslideCandidateValidationReceiptValidator = v.object({
+  id: v.string(),
+  patchId: v.string(),
+  candidateDigest: v.string(),
   deckId: v.string(),
   deckVersion: v.number(),
   ok: v.boolean(),

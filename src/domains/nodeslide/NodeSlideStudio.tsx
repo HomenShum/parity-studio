@@ -18,6 +18,8 @@ import type {
   DeckPatch,
   DeckSnapshot,
   DeckVersion,
+  NodeSlideEditorCapabilityRegistry,
+  NodeSlideEditorCommandId,
   NodeSlidePublication,
   NodeSlideWorkspace,
   PatchOperation,
@@ -26,7 +28,7 @@ import type {
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
-import { isElementOperation } from '../../../shared/nodeslide';
+import { operationElementIds } from '../../../shared/nodeslide';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -40,6 +42,12 @@ import {
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
+import {
+  type EditorCandidateReceipt,
+  type EditorCanvasMode,
+  EditorCanvasModes,
+  type EditorCompareMode,
+} from './components/EditorCanvasModes';
 import { FirstRunDialog } from './components/FirstRunDialog';
 import {
   type OwnerCapabilityRecovery,
@@ -53,8 +61,35 @@ import {
 } from './components/ProjectDialog';
 import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
-import { SlideNavigator } from './components/SlideNavigator';
-import { StudioToolbar } from './components/StudioToolbar';
+import {
+  type LayerZOrderAction,
+  SlideNavigator,
+  type SlideNavigatorTab,
+} from './components/SlideNavigator';
+import { StoryArcOverview } from './components/StoryArcOverview';
+import { type StudioThemeMode, StudioToolbar } from './components/StudioToolbar';
+import { shouldRevealCandidateCanvas } from './components/editorShellResponsive';
+import {
+  type EditorRequestToken,
+  type WorkspaceReceiptMarker,
+  appendDistinctHistoryVersion,
+  applyExpectedElementVersions,
+  authoritativePredecessorVersion,
+  classifyEditorVersionAdvance,
+  createEditorRequestGate,
+  createSerializedEditorWriteQueue,
+  editorCandidateCanAccept,
+  editorCandidateReceiptForPatch,
+  workspaceReceiptMarker,
+  workspaceSatisfiesReceiptMarker,
+} from './editorStateIntegrity';
+import type {
+  AiAgentActivity,
+  AiCommentContext,
+  AiProposalOptions,
+  AiReadReference,
+  AiVariationRequest,
+} from './inspector/AiInspector';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import type { InspectorTab } from './inspector/types';
 import { extractPptxSignature } from './signature/index';
@@ -65,6 +100,7 @@ import {
 } from './signature/packs/index';
 import { downloadDeckHtml, downloadPptx, validateSnapshot } from './slidelang/index';
 import './nodeslide.css';
+import './nodeslideV3.css';
 
 type ConvexArgs<Args> = Args & DefaultFunctionArgs;
 type PublicQuery<Args, Result> = FunctionReference<'query', 'public', ConvexArgs<Args>, Result>;
@@ -78,7 +114,6 @@ type PublicAction<Args, Result> = FunctionReference<'action', 'public', ConvexAr
 interface PatchReceipt {
   patch: DeckPatch;
   workspace?: NodeSlideWorkspace | null;
-  snapshot?: DeckSnapshot;
 }
 
 interface VariationGenerationReceipt {
@@ -112,6 +147,12 @@ interface ApplyPatchArgs {
   profileDigest?: string;
 }
 
+interface EditorWriteContext {
+  workspace: NodeSlideWorkspace;
+  ownerAccessKey: string;
+  requestToken: EditorRequestToken;
+}
+
 interface NodeSlideGeneratedApi {
   nodeslide: {
     getWorkspace: PublicQuery<
@@ -119,6 +160,10 @@ interface NodeSlideGeneratedApi {
       NodeSlideWorkspace | null
     >;
     getPresenterSnapshot: PublicQuery<{ shareSlug: string }, PublishedNodeSlide | null>;
+    getEditorCapabilities: PublicQuery<
+      { deckId: string; ownerAccessKey: string },
+      NodeSlideEditorCapabilityRegistry
+    >;
     listDecks: PublicQuery<
       { access: Array<{ deckId: string; ownerAccessKey: string }> },
       RecentDeck[]
@@ -135,6 +180,10 @@ interface NodeSlideGeneratedApi {
     rejectPatch: PublicMutation<
       { deckId: string; ownerAccessKey: string; patchId: string },
       DeckPatch | null
+    >;
+    proposePropagation: PublicMutation<
+      { deckId: string; ownerAccessKey: string; parentPatchId: string },
+      PatchReceipt
     >;
     addComment: PublicMutation<
       {
@@ -159,7 +208,7 @@ interface NodeSlideGeneratedApi {
       DeckComment
     >;
     resolveComment: PublicMutation<
-      { deckId: string; ownerAccessKey: string; commentId: string },
+      { deckId: string; ownerAccessKey: string; commentId: string; linkedPatchId?: string },
       DeckComment | null
     >;
     reopenComment: PublicMutation<
@@ -180,14 +229,33 @@ interface NodeSlideGeneratedApi {
       { deckId: string; ownerAccessKey: string },
       NodeSlidePublication | null
     >;
+    touchPresence: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        sessionId: string;
+        displayName: string;
+        color: string;
+        slideId?: string;
+        elementIds: string[];
+        cursor?: { x: number; y: number };
+      },
+      NodeSlideWorkspace['presence']
+    >;
   };
   nodeslideAgent: {
     createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
-    proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, { patchId: string }>;
+    proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, PatchReceipt>;
   };
   nodeslideVariations: {
     generate: PublicAction<
-      { deckId: string; ownerAccessKey: string; slideId: string },
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        slideId: string;
+        providerMode?: 'deterministic' | 'openrouter_free';
+        providerConsent?: string;
+      },
       VariationGenerationReceipt
     >;
     list: PublicQuery<
@@ -267,18 +335,29 @@ export function NodeSlideStudio() {
   const [localWorkspace, setLocalWorkspace] = useState<NodeSlideWorkspace | null>(null);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+  const [navigatorTab, setNavigatorTab] = useState<SlideNavigatorTab>('slides');
+  const [collapsedNavigatorSections, setCollapsedNavigatorSections] = useState<string[]>([]);
+  const [canvasMode, setCanvasMode] = useState<EditorCanvasMode>('edit');
+  const [compareMode, setCompareMode] = useState<EditorCompareMode>('side-by-side');
+  const [compareSliderPosition, setCompareSliderPosition] = useState(50);
+  const [compareOverlayOpacity, setCompareOverlayOpacity] = useState(50);
+  const [compareBlinkPaused, setCompareBlinkPaused] = useState(false);
+  const [previewedPatchId, setPreviewedPatchId] = useState<string | null>(null);
+  const [aiCommentContext, setAiCommentContext] = useState<AiCommentContext | null>(null);
+  const [aiAgentActivity, setAiAgentActivity] = useState<AiAgentActivity | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>('ai');
-  const [navigatorCollapsed, setNavigatorCollapsed] = useState(
-    () => window.innerWidth <= 1100 && window.innerWidth > 720,
+  const [studioTheme, setStudioTheme] = useState<StudioThemeMode>(() =>
+    readStudioPreference('theme') === 'dark' ? 'dark' : 'light',
   );
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth <= 1100);
-  const [inspectorWidth, setInspectorWidth] = useState(388);
+  const [navigatorCollapsed, setNavigatorCollapsed] = useState(
+    () => window.innerWidth >= 700 && window.innerWidth < 1100,
+  );
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth < 1100);
+  const [inspectorWidth, setInspectorWidth] = useState(340);
   const [zoom, setZoom] = useState(() => {
-    if (window.innerWidth <= 720) return 35;
-    if (window.innerWidth <= 1100) return 62;
-    if (window.innerWidth <= 1360) return 55;
-    if (window.innerWidth <= 1600) return 65;
-    return 82;
+    if (window.innerWidth < 700) return 40;
+    if (window.innerWidth < 1100) return 55;
+    return 65;
   });
   const [presentMode, setPresentMode] = useState(
     () => new URLSearchParams(window.location.search).get('present') === '1',
@@ -298,6 +377,7 @@ export function NodeSlideStudio() {
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [projectError, setProjectError] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [canvasResetKey, setCanvasResetKey] = useState(0);
   const [undoStack, setUndoStack] = useState<string[]>([]);
@@ -309,11 +389,27 @@ export function NodeSlideStudio() {
   const bootstrapped = useRef(false);
   const historyDeckRef = useRef<string | null>(null);
   const promptedRecoveryDecks = useRef(new Set<string>());
+  const presenceCursorRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  const presenceCursorTimerRef = useRef<number | null>(null);
+  const workspaceRef = useRef<NodeSlideWorkspace | null>(null);
+  const workspaceReceiptMarkerRef = useRef<WorkspaceReceiptMarker | null>(null);
+  const activeDeckIdRef = useRef<string | null>(activeDeckId);
+  const ownerAccessKeyRef = useRef<string | null>(ownerAccessKey);
+  const undoStackRef = useRef<string[]>([]);
+  const redoStackRef = useRef<string[]>([]);
+  const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
+  const localCommitVersionsRef = useRef(new Set<number>());
+  const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
+  const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
+  editorRequestGateRef.current.setActiveDeck(activeDeckId);
+  activeDeckIdRef.current = activeDeckId;
+  ownerAccessKeyRef.current = ownerAccessKey;
 
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
+  const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
   const addComment = useMutation(nodeslideApi.nodeslide.addComment);
   const replyComment = useMutation(nodeslideApi.nodeslide.replyComment);
   const resolveComment = useMutation(nodeslideApi.nodeslide.resolveComment);
@@ -321,6 +417,7 @@ export function NodeSlideStudio() {
   const restoreVersion = useMutation(nodeslideApi.nodeslide.restoreVersion);
   const publishDeck = useMutation(nodeslideApi.nodeslide.publishDeck);
   const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
+  const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
   const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
@@ -342,6 +439,10 @@ export function NodeSlideStudio() {
   const evictTasteSignal = useMutation(nodeslideApi.nodeslidePreferences.evictSignal);
   const queriedWorkspace = useQuery(
     nodeslideApi.nodeslide.getWorkspace,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  const editorCapabilities = useQuery(
+    nodeslideApi.nodeslide.getEditorCapabilities,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const recoveredWorkspace = useQuery(
@@ -372,8 +473,32 @@ export function NodeSlideStudio() {
     nodeslideApi.nodeslidePreferences.getTasteProfile,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
+  const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
+  const localReceiptMarker =
+    workspaceReceiptMarkerRef.current?.deckId === activeDeckId
+      ? workspaceReceiptMarkerRef.current
+      : null;
+  const queryCoversLocalReceipt = Boolean(
+    queriedWorkspace &&
+      (!localReceiptMarker ||
+        workspaceSatisfiesReceiptMarker(queriedWorkspace, localReceiptMarker)),
+  );
   const workspace =
-    queriedWorkspace ?? (localWorkspace?.deck.id === activeDeckId ? localWorkspace : null);
+    queriedWorkspace && localWorkspaceForDeck
+      ? queriedWorkspace.deck.version > localWorkspaceForDeck.deck.version ||
+        (queriedWorkspace.deck.version === localWorkspaceForDeck.deck.version &&
+          queryCoversLocalReceipt)
+        ? queriedWorkspace
+        : localWorkspaceForDeck
+      : (queriedWorkspace ?? localWorkspaceForDeck);
+  if (!workspace || workspace.deck.id !== activeDeckId) {
+    if (workspaceRef.current?.deck.id !== activeDeckId) workspaceRef.current = null;
+  } else if (
+    workspaceRef.current?.deck.id !== workspace.deck.id ||
+    workspace.deck.version >= workspaceRef.current.deck.version
+  ) {
+    workspaceRef.current = workspace;
+  }
   const variationBusy = variationGenerating || variationDecisionBusy;
   const signatureProfiles = parseSignatureProfileRows(signatureProfileRows ?? []);
   const activeSignatureProfile = workspace?.deck.activeSignatureProfileId
@@ -395,7 +520,11 @@ export function NodeSlideStudio() {
       next: NodeSlideWorkspace | OwnerWorkspace,
       explicitOwnerAccessKey?: string,
       primary = false,
+      allowDeckSwitch = false,
     ) => {
+      if (!allowDeckSwitch && activeDeckIdRef.current && activeDeckIdRef.current !== next.deck.id) {
+        return false;
+      }
       let accessDurable = true;
       const nextOwnerAccessKey =
         'ownerAccessKey' in next ? next.ownerAccessKey : explicitOwnerAccessKey;
@@ -418,9 +547,21 @@ export function NodeSlideStudio() {
           promptedRecoveryDecks.current.delete(next.deck.id);
           setOwnerRecovery((current) => (current?.deckId === next.deck.id ? null : current));
         }
+        ownerAccessKeyRef.current = nextOwnerAccessKey;
         setOwnerAccessKey(nextOwnerAccessKey);
         setKnownAccess(listStoredDeckAccess());
       }
+      const currentWorkspace = workspaceRef.current;
+      if (
+        currentWorkspace?.deck.id === next.deck.id &&
+        currentWorkspace.deck.version > next.deck.version
+      ) {
+        return accessDurable;
+      }
+      workspaceReceiptMarkerRef.current = workspaceReceiptMarker(next);
+      editorRequestGateRef.current?.setActiveDeck(next.deck.id);
+      activeDeckIdRef.current = next.deck.id;
+      workspaceRef.current = next;
       setLocalWorkspace(next);
       setActiveDeckId(next.deck.id);
       setActiveSlideId((current) =>
@@ -436,6 +577,13 @@ export function NodeSlideStudio() {
 
   useEffect(() => {
     if (!recoveryAccessRequest || recoveredWorkspace === undefined) return;
+    if (
+      !requestedDeck ||
+      activeDeckId !== requestedDeck ||
+      !editorRequestGateRef.current?.isDeckCurrent(requestedDeck)
+    ) {
+      return;
+    }
     if (!recoveredWorkspace) {
       setRecoveryAccessRequest(null);
       setRecoveryAccessError('That recovery key did not grant access to this deck.');
@@ -447,7 +595,7 @@ export function NodeSlideStudio() {
     setRecoveryAccessError(null);
     const accessDurable = installWorkspace(recoveredWorkspace, recoveredOwnerAccessKey);
     if (accessDurable) setToast({ kind: 'success', message: 'Deck access recovered.' });
-  }, [installWorkspace, recoveredWorkspace, recoveryAccessRequest]);
+  }, [activeDeckId, installWorkspace, recoveredWorkspace, recoveryAccessRequest, requestedDeck]);
 
   useEffect(() => {
     void bootstrapAttempt;
@@ -455,17 +603,25 @@ export function NodeSlideStudio() {
     bootstrapped.current = true;
     setBootstrapError(null);
     const storedOwnerAccessKey = getStoredOwnerAccessKey();
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('bootstrap', activeDeckId);
     void ensureWorkspace({
       clientSessionId,
       ...(storedOwnerAccessKey ? { ownerAccessKey: storedOwnerAccessKey } : {}),
     })
-      .then((next) => installWorkspace(next, undefined, true))
+      .then((next) => {
+        if (requestGate.isCurrent(requestToken)) {
+          installWorkspace(next, undefined, true, true);
+        }
+      })
       .catch((error: unknown) => {
+        if (!requestGate.isCurrent(requestToken)) return;
         const message = errorMessage(error, 'Could not open the sample deck.');
         setBootstrapError(message);
         setToast({ kind: 'error', message });
       });
   }, [
+    activeDeckId,
     bootstrapAttempt,
     clientSessionId,
     ensureWorkspace,
@@ -484,16 +640,78 @@ export function NodeSlideStudio() {
     );
     if (historyDeckRef.current !== workspace.deck.id) {
       setPreviewedSignatureProfile(null);
+      setPreviewedPatchId(null);
+      setAiCommentContext(null);
+      setCanvasMode('edit');
+      setNavigatorTab('slides');
       historyDeckRef.current = workspace.deck.id;
-      setUndoStack(
-        [...workspace.versions]
-          .filter((version) => version.version < workspace.deck.version)
-          .sort((left, right) => left.version - right.version)
-          .map((version) => version.id),
-      );
+      historyVersionRef.current = {
+        deckId: workspace.deck.id,
+        version: workspace.deck.version,
+      };
+      localCommitVersionsRef.current.clear();
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setUndoStack([]);
       setRedoStack([]);
+      return;
+    }
+
+    const previousHistoryVersion = historyVersionRef.current;
+    if (
+      previousHistoryVersion?.deckId === workspace.deck.id &&
+      workspace.deck.version > previousHistoryVersion.version
+    ) {
+      const advance = classifyEditorVersionAdvance(
+        previousHistoryVersion.version,
+        workspace.deck.version,
+        localCommitVersionsRef.current,
+      );
+      for (const version of localCommitVersionsRef.current) {
+        if (version <= workspace.deck.version) localCommitVersionsRef.current.delete(version);
+      }
+      if (advance === 'external') {
+        undoStackRef.current = [];
+        redoStackRef.current = [];
+        setUndoStack([]);
+        setRedoStack([]);
+      }
+      historyVersionRef.current = {
+        deckId: workspace.deck.id,
+        version: workspace.deck.version,
+      };
     }
   }, [workspace]);
+
+  useEffect(() => {
+    void activeDeckId;
+    setAgentBusy(false);
+    setVariationGenerating(false);
+    setVariationDecisionBusy(false);
+    setTastePackBusy(false);
+    setShareBusy(false);
+  }, [activeDeckId]);
+
+  useEffect(() => {
+    if (aiAgentActivity?.status !== 'running') return;
+    const startedAt = Date.now();
+    const timeout = window.setInterval(() => {
+      const elapsedMs = Date.now() - startedAt;
+      setAiAgentActivity((current) => {
+        if (current?.status !== 'running') return current;
+        if (elapsedMs >= 20_000) {
+          return {
+            status: 'timed_out',
+            elapsedMs,
+            ask: current.ask,
+            message: 'Still working in the background. You can keep reviewing the deck.',
+          };
+        }
+        return { ...current, elapsedMs };
+      });
+    }, 500);
+    return () => window.clearInterval(timeout);
+  }, [aiAgentActivity?.status]);
 
   useEffect(() => {
     let previousBreakpoint = responsiveBreakpoint(window.innerWidth);
@@ -556,6 +774,44 @@ export function NodeSlideStudio() {
         .map((id) => workspace.elements.find((element) => element.id === id))
         .filter((element): element is SlideElement => element !== undefined)
     : [];
+  const previewedPatch = previewedPatchId
+    ? (workspace?.patches.find((patch) => patch.id === previewedPatchId) ?? null)
+    : null;
+  const patchCandidateReceipt =
+    previewedPatch && workspace
+      ? editorCandidateReceiptForPatch(previewedPatch, workspace.deck)
+      : null;
+  const patchCandidateSnapshot = useMemo(() => {
+    if (
+      !workspace ||
+      !previewedPatch ||
+      !editorCandidateCanAccept(editorCandidateReceiptForPatch(previewedPatch, workspace.deck))
+    ) {
+      return null;
+    }
+    try {
+      return applyDeckPatch(
+        {
+          deck: workspace.deck,
+          slides: workspace.slides,
+          elements: workspace.elements,
+          sources: workspace.sources,
+        },
+        { ...previewedPatch, baseDeckVersion: workspace.deck.version },
+        previewedPatch.candidateValidation?.checkedAt ?? previewedPatch.createdAt,
+      ).snapshot;
+    } catch {
+      return null;
+    }
+  }, [previewedPatch, workspace]);
+  const patchCandidateSlide = patchCandidateSnapshot?.slides.find(
+    (slide) => slide.id === activeSlide?.id,
+  );
+  const patchCandidateElements = patchCandidateSlide
+    ? (patchCandidateSnapshot?.elements.filter(
+        (element) => element.slideId === patchCandidateSlide.id,
+      ) ?? [])
+    : [];
   const activeVariations = variationRows ?? [];
   const previewMatchesActiveSlide = Boolean(
     previewedVariation &&
@@ -567,18 +823,62 @@ export function NodeSlideStudio() {
       previewedVariation.validation.ok &&
       !previewedVariation.validation.issues.some((issue) => issue.severity === 'error'),
   );
-  const canvasSlide =
-    previewMatchesActiveSlide && previewedVariation
+  const signaturePreviewActive = Boolean(signaturePreviewSnapshot && previewedSignatureProfile);
+  const compareCandidateSlide = previewedPatch
+    ? patchCandidateSlide
+    : previewMatchesActiveSlide && previewedVariation
       ? previewedVariation.candidate.slide
-      : (signaturePreviewSnapshot?.slides.find((slide) => slide.id === activeSlide?.id) ??
-        activeSlide);
-  const canvasElements =
-    previewMatchesActiveSlide && previewedVariation
+      : signaturePreviewSnapshot
+        ? signaturePreviewSnapshot.slides.find((slide) => slide.id === activeSlide?.id)
+        : null;
+  const compareCandidateElements = previewedPatch
+    ? patchCandidateElements
+    : previewMatchesActiveSlide && previewedVariation
       ? previewedVariation.candidate.elements
       : signaturePreviewSnapshot && activeSlide
         ? signaturePreviewSnapshot.elements.filter((element) => element.slideId === activeSlide.id)
-        : slideElements;
-  const signaturePreviewActive = Boolean(signaturePreviewSnapshot && previewedSignatureProfile);
+        : [];
+  const compareCandidateReceipt: EditorCandidateReceipt | null = previewedPatch
+    ? patchCandidateReceipt
+    : previewMatchesActiveSlide && previewedVariation
+      ? {
+          id: previewedVariation.id,
+          status: 'unavailable',
+          summary: 'Validated variation preview; no accept-bound patch receipt is available yet.',
+          versionLabel: `Variation from slide v${previewedVariation.baseSlideVersion}`,
+        }
+      : signaturePreviewActive && previewedSignatureProfile
+        ? {
+            id: previewedSignatureProfile.id,
+            status: 'unavailable',
+            summary: `${previewedSignatureProfile.name} is a local preview without a persisted patch receipt.`,
+          }
+        : null;
+  const compareCandidateLabel =
+    previewedPatch?.summary ??
+    (previewedVariation ? variationDirectionLabel(previewedVariation) : null) ??
+    previewedSignatureProfile?.name ??
+    null;
+  const compareOperations =
+    previewedPatch?.operations ??
+    (previewMatchesActiveSlide && previewedVariation ? previewedVariation.operations : []);
+  const affectedSlideIds = previewedPatch?.affectedSlideIds ?? [];
+  const aiReferences = useMemo(
+    () =>
+      workspace && activeSlide
+        ? buildAiReferences(workspace, activeSlide, selectedElements)
+        : ([] as AiReadReference[]),
+    [activeSlide, selectedElements, workspace],
+  );
+  const aiCommands = useMemo(
+    () =>
+      (editorCapabilities?.commands ?? fallbackEditorCommands()).map((command) => ({
+        id: command.id,
+        label: editorCommandLabel(command.id),
+        description: editorCommandDescription(command.id),
+      })),
+    [editorCapabilities],
+  );
   const variationContextKey = `${activeDeckId ?? ''}:${activeSlideId ?? ''}`;
   const recentDecks: RecentDeck[] =
     recentDeckRows ??
@@ -619,6 +919,62 @@ export function NodeSlideStudio() {
     if (variationContextKey !== ':') setVariationError(null);
   }, [variationContextKey]);
 
+  useEffect(() => {
+    if (!previewedPatchId || !workspace) return;
+    const patch = workspace.patches.find((candidate) => candidate.id === previewedPatchId);
+    if (!patch || patch.status === 'accepted' || patch.status === 'rejected') {
+      setPreviewedPatchId(null);
+      setCanvasMode('edit');
+    }
+  }, [previewedPatchId, workspace]);
+
+  const sendPresence = useCallback(() => {
+    if (!activeDeckId || !ownerAccessKey || !activeSlideId) return;
+    void touchPresence({
+      deckId: activeDeckId,
+      ownerAccessKey,
+      sessionId: clientSessionId,
+      displayName: 'You',
+      color: '#6d5dfc',
+      slideId: activeSlideId,
+      elementIds: selectedElementIds.slice(0, 24),
+      ...(presenceCursorRef.current ? { cursor: presenceCursorRef.current } : {}),
+    }).catch(() => undefined);
+  }, [
+    activeDeckId,
+    activeSlideId,
+    clientSessionId,
+    ownerAccessKey,
+    selectedElementIds,
+    touchPresence,
+  ]);
+
+  useEffect(() => {
+    sendPresence();
+    const heartbeat = window.setInterval(sendPresence, 10_000);
+    return () => window.clearInterval(heartbeat);
+  }, [sendPresence]);
+
+  useEffect(
+    () => () => {
+      if (presenceCursorTimerRef.current !== null) {
+        window.clearTimeout(presenceCursorTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const updatePresenceCursor = useCallback(
+    (cursor: { x: number; y: number } | null) => {
+      presenceCursorRef.current = cursor ?? undefined;
+      if (presenceCursorTimerRef.current !== null) {
+        window.clearTimeout(presenceCursorTimerRef.current);
+      }
+      presenceCursorTimerRef.current = window.setTimeout(sendPresence, 140);
+    },
+    [sendPresence],
+  );
+
   const openOwnedDeck = useCallback((deckId: string) => {
     const nextOwnerAccessKey = getDeckOwnerAccessKey(deckId);
     if (!nextOwnerAccessKey) {
@@ -629,6 +985,11 @@ export function NodeSlideStudio() {
       });
       return;
     }
+    editorRequestGateRef.current?.setActiveDeck(deckId);
+    activeDeckIdRef.current = deckId;
+    workspaceRef.current = null;
+    workspaceReceiptMarkerRef.current = null;
+    ownerAccessKeyRef.current = nextOwnerAccessKey;
     setOwnerAccessKey(nextOwnerAccessKey);
     setActiveDeckId(deckId);
     setLocalWorkspace(null);
@@ -650,70 +1011,153 @@ export function NodeSlideStudio() {
     }
   }, [ownerAccessKey, runPreferenceEtl, syncVariationPreferences, workspace]);
 
+  const enqueueEditorWrite = useCallback(
+    <Result,>(
+      deckId: string,
+      skippedResult: Result,
+      write: (context: EditorWriteContext) => Promise<Result>,
+    ): Promise<Result> =>
+      editorWriteQueueRef.current.enqueue(async () => {
+        const currentWorkspace = workspaceRef.current;
+        const currentOwnerAccessKey = ownerAccessKeyRef.current;
+        const requestGate = editorRequestGateRef.current;
+        if (
+          !currentWorkspace ||
+          currentWorkspace.deck.id !== deckId ||
+          !currentOwnerAccessKey ||
+          !requestGate.isDeckCurrent(deckId)
+        ) {
+          return skippedResult;
+        }
+        return write({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken: requestGate.begin('write', deckId),
+        });
+      }),
+    [],
+  );
+
+  const recordSuccessfulCommit = useCallback(
+    (predecessor: DeckVersion | undefined, resultingVersion: number) => {
+      localCommitVersionsRef.current.add(resultingVersion);
+      if (!predecessor) return;
+      const nextUndoStack = appendDistinctHistoryVersion(undoStackRef.current, predecessor.id);
+      undoStackRef.current = nextUndoStack;
+      redoStackRef.current = [];
+      setUndoStack(nextUndoStack);
+      setRedoStack([]);
+    },
+    [],
+  );
+
   const applyOperations = useCallback(
     async (
       operations: PatchOperation[],
       scope: PatchScope,
       summary: string,
       signatureProfile?: SignatureProfile,
+      expectedElementVersions?: Readonly<Record<string, number>>,
+      originRequestToken?: EditorRequestToken,
     ) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
-      const clocks = clocksForScope(workspace, scope, operations);
-      const beforeVersion = currentVersion(workspace);
-      try {
-        const receipt = await applyPatchMutation({
-          deckId: workspace.deck.id,
-          ownerAccessKey,
-          baseDeckVersion: workspace.deck.version,
-          ...clocks,
-          scope,
-          operations,
-          summary,
-          ...(signatureProfile
-            ? {
-                profileId: signatureProfile.id,
-                profileDigest: signatureProfile.source.digest,
+      const requestedDeckId = workspace.deck.id;
+      return enqueueEditorWrite(
+        requestedDeckId,
+        false,
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          const requestGate = editorRequestGateRef.current;
+          if (originRequestToken && !requestGate.isCurrent(originRequestToken)) return false;
+          const clocks = clocksForScope(currentWorkspace, scope, operations);
+          try {
+            const receipt = await applyPatchMutation({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: currentWorkspace.deck.version,
+              baseSlideVersions: clocks.baseSlideVersions,
+              baseElementVersions: applyExpectedElementVersions(
+                clocks.baseElementVersions,
+                expectedElementVersions,
+              ),
+              scope,
+              operations,
+              summary,
+              ...(signatureProfile
+                ? {
+                    profileId: signatureProfile.id,
+                    profileDigest: signatureProfile.source.digest,
+                  }
+                : {}),
+            });
+            if (
+              !requestGate.isCurrent(requestToken) ||
+              (originRequestToken && !requestGate.isCurrent(originRequestToken))
+            ) {
+              return false;
+            }
+            if (receipt.patch.status === 'stale') {
+              if (receipt.workspace) {
+                installWorkspace(receipt.workspace, currentOwnerAccessKey);
               }
-            : {}),
-        });
-        if (receipt.patch.status === 'stale') {
-          if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-          setCanvasResetKey((value) => value + 1);
-          setToast({
-            kind: 'error',
-            message:
-              'This object changed elsewhere. Your local preview was rolled back; review the stale proposal in Versions.',
-          });
-          setActiveInspectorTab('versions');
-          setInspectorCollapsed(false);
-          return false;
-        }
-        if (beforeVersion) {
-          setUndoStack((stack) =>
-            stack.at(-1) === beforeVersion.id ? stack : [...stack, beforeVersion.id],
-          );
-          setRedoStack([]);
-        }
-        if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-        void recordPreferencePatch({
-          deckId: workspace.deck.id,
-          ownerAccessKey,
-          patchId: receipt.patch.id,
-        })
-          .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
-          .catch(() => undefined);
-        return true;
-      } catch (error) {
-        setCanvasResetKey((value) => value + 1);
-        setToast({ kind: 'error', message: errorMessage(error, 'The edit could not be applied.') });
-        return false;
-      }
+              setCanvasResetKey((value) => value + 1);
+              setToast({
+                kind: 'error',
+                message:
+                  'This object changed elsewhere. Your local preview was rolled back; review the stale proposal in Versions.',
+              });
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+              return false;
+            }
+            if (receipt.patch.status !== 'accepted' || !receipt.workspace) {
+              throw new Error('The edit completed without an authoritative commit receipt.');
+            }
+            recordSuccessfulCommit(
+              authoritativePredecessorVersion(receipt.workspace),
+              receipt.workspace.deck.version,
+            );
+            installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            void recordPreferencePatch({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              patchId: receipt.patch.id,
+            })
+              .then(() =>
+                runPreferenceEtl({
+                  deckId: requestedDeckId,
+                  ownerAccessKey: currentOwnerAccessKey,
+                }),
+              )
+              .catch(() => undefined);
+            return true;
+          } catch (error) {
+            if (
+              !requestGate.isCurrent(requestToken) ||
+              (originRequestToken && !requestGate.isCurrent(originRequestToken))
+            ) {
+              return false;
+            }
+            setCanvasResetKey((value) => value + 1);
+            setToast({
+              kind: 'error',
+              message: errorMessage(error, 'The edit could not be applied.'),
+            });
+            return false;
+          }
+        },
+      );
     },
     [
       applyPatchMutation,
+      enqueueEditorWrite,
       installWorkspace,
       ownerAccessKey,
       recordPreferencePatch,
+      recordSuccessfulCommit,
       runPreferenceEtl,
       workspace,
     ],
@@ -722,50 +1166,83 @@ export function NodeSlideStudio() {
   const restoreHistory = useCallback(
     async (direction: 'undo' | 'redo') => {
       if (!workspace || !ownerAccessKey) return;
-      const sourceStack = direction === 'undo' ? undoStack : redoStack;
-      const targetId = sourceStack.at(-1);
-      if (!targetId) return;
-      const current = currentVersion(workspace);
-      try {
-        const receipt = await restoreVersion({
-          deckId: workspace.deck.id,
-          ownerAccessKey,
-          versionId: targetId,
-          baseDeckVersion: workspace.deck.version,
-        });
-        if (receipt.patch.status !== 'accepted') {
-          if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-          setToast({
-            kind: 'error',
-            message:
-              'This deck changed before the restore could apply. Your undo history was preserved.',
-          });
-          setActiveInspectorTab('versions');
-          setInspectorCollapsed(false);
-          return;
-        }
-        if (!receipt.workspace) throw new Error('Restore completed without a workspace receipt.');
-        if (direction === 'undo') {
-          setUndoStack((stack) => stack.slice(0, -1));
-          if (current) setRedoStack((stack) => [...stack, current.id]);
-        } else {
-          setRedoStack((stack) => stack.slice(0, -1));
-          if (current) setUndoStack((stack) => [...stack, current.id]);
-        }
-        installWorkspace(receipt.workspace, ownerAccessKey);
-        setCanvasResetKey((value) => value + 1);
-        setToast({
-          kind: 'success',
-          message: direction === 'undo' ? 'Change undone.' : 'Change redone.',
-        });
-      } catch (error) {
-        setToast({
-          kind: 'error',
-          message: errorMessage(error, direction === 'undo' ? 'Undo failed.' : 'Redo failed.'),
-        });
-      }
+      const requestedDeckId = workspace.deck.id;
+      await enqueueEditorWrite(
+        requestedDeckId,
+        false,
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          const requestGate = editorRequestGateRef.current;
+          const sourceStack = direction === 'undo' ? undoStackRef.current : redoStackRef.current;
+          const targetId = sourceStack.at(-1);
+          if (!targetId) return false;
+          const current = currentVersion(currentWorkspace);
+          try {
+            const receipt = await restoreVersion({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              versionId: targetId,
+              baseDeckVersion: currentWorkspace.deck.version,
+            });
+            if (!requestGate.isCurrent(requestToken)) return false;
+            if (receipt.patch.status !== 'accepted') {
+              if (receipt.workspace) {
+                installWorkspace(receipt.workspace, currentOwnerAccessKey);
+              }
+              setToast({
+                kind: 'error',
+                message:
+                  'This deck changed before the restore could apply. Your undo history was preserved.',
+              });
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+              return false;
+            }
+            if (!receipt.workspace) {
+              throw new Error('Restore completed without a workspace receipt.');
+            }
+            localCommitVersionsRef.current.add(receipt.workspace.deck.version);
+            if (direction === 'undo') {
+              undoStackRef.current = undoStackRef.current.slice(0, -1);
+              if (current) {
+                redoStackRef.current = appendDistinctHistoryVersion(
+                  redoStackRef.current,
+                  current.id,
+                );
+              }
+            } else {
+              redoStackRef.current = redoStackRef.current.slice(0, -1);
+              if (current) {
+                undoStackRef.current = appendDistinctHistoryVersion(
+                  undoStackRef.current,
+                  current.id,
+                );
+              }
+            }
+            setUndoStack(undoStackRef.current);
+            setRedoStack(redoStackRef.current);
+            installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            setCanvasResetKey((value) => value + 1);
+            setToast({
+              kind: 'success',
+              message: direction === 'undo' ? 'Change undone.' : 'Change redone.',
+            });
+            return true;
+          } catch (error) {
+            if (!requestGate.isCurrent(requestToken)) return false;
+            setToast({
+              kind: 'error',
+              message: errorMessage(error, direction === 'undo' ? 'Undo failed.' : 'Redo failed.'),
+            });
+            return false;
+          }
+        },
+      );
     },
-    [installWorkspace, ownerAccessKey, redoStack, restoreVersion, undoStack, workspace],
+    [enqueueEditorWrite, installWorkspace, ownerAccessKey, restoreVersion, workspace],
   );
 
   useEffect(() => {
@@ -776,7 +1253,7 @@ export function NodeSlideStudio() {
         return;
       }
       if (
-        (previewMatchesActiveSlide || signaturePreviewActive) &&
+        (previewMatchesActiveSlide || signaturePreviewActive || previewedPatch) &&
         event.key === 'Escape' &&
         !commandOpen &&
         !projectsOpen &&
@@ -785,22 +1262,31 @@ export function NodeSlideStudio() {
         event.preventDefault();
         setPreviewedVariation(null);
         setPreviewedSignatureProfile(null);
+        setPreviewedPatchId(null);
+        setCanvasMode('edit');
         setSelectedElementIds([]);
         return;
       }
       if (isEditableTarget(event.target) || commandOpen || projectsOpen || presentMode) return;
-      if (previewMatchesActiveSlide || signaturePreviewActive) {
+      if (previewMatchesActiveSlide || signaturePreviewActive || previewedPatch) {
         if (
           event.key !== 'ArrowDown' &&
           event.key !== 'PageDown' &&
           event.key !== 'ArrowUp' &&
-          event.key !== 'PageUp'
+          event.key !== 'PageUp' &&
+          event.key !== 'ArrowLeft' &&
+          event.key !== 'ArrowRight'
         ) {
           return;
         }
       }
       const modified = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
+      if (!modified && !event.altKey && (key === 'e' || key === 'o' || key === 'c')) {
+        event.preventDefault();
+        setCanvasMode(key === 'e' ? 'edit' : key === 'o' ? 'overview' : 'compare');
+        return;
+      }
       if (modified && key === 'z') {
         event.preventDefault();
         void restoreHistory(event.shiftKey ? 'redo' : 'undo');
@@ -843,11 +1329,11 @@ export function NodeSlideStudio() {
         });
         return;
       }
-      if (event.key === 'ArrowDown' || event.key === 'PageDown') {
+      if (event.key === 'ArrowDown' || event.key === 'PageDown' || event.key === 'ArrowRight') {
         event.preventDefault();
         const next = orderedSlides[Math.min(orderedSlides.length - 1, activeSlideIndex + 1)];
         if (next) selectSlide(next.id, setActiveSlideId, setSelectedElementIds);
-      } else if (event.key === 'ArrowUp' || event.key === 'PageUp') {
+      } else if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'ArrowLeft') {
         event.preventDefault();
         const previous = orderedSlides[Math.max(0, activeSlideIndex - 1)];
         if (previous) selectSlide(previous.id, setActiveSlideId, setSelectedElementIds);
@@ -888,6 +1374,7 @@ export function NodeSlideStudio() {
     presentMode,
     projectsOpen,
     previewMatchesActiveSlide,
+    previewedPatch,
     signaturePreviewActive,
     restoreHistory,
     selectedElementIds.length,
@@ -905,10 +1392,15 @@ export function NodeSlideStudio() {
   };
 
   const createDeck = async (request: CreateDeckAdmissionRequest) => {
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('create-deck', activeDeckId);
+    setProjectError(null);
     setCreating(true);
     try {
       const result = await createDeckFromBrief({ ...request });
-      const accessDurable = installWorkspace(result);
+      if (!requestGate.isCurrent(requestToken)) return;
+      setCreating(false);
+      const accessDurable = installWorkspace(result, undefined, false, true);
       markFirstRunSeen();
       setFirstRunOpen(false);
       setProjectsOpen(false);
@@ -922,9 +1414,12 @@ export function NodeSlideStudio() {
         });
       }
     } catch (error) {
-      setToast({ kind: 'error', message: errorMessage(error, 'The deck could not be created.') });
+      if (!requestGate.isCurrent(requestToken)) return;
+      const message = errorMessage(error, 'The deck could not be created.');
+      setProjectError(message);
+      setToast({ kind: 'error', message });
     } finally {
-      setCreating(false);
+      if (requestGate.isCurrent(requestToken)) setCreating(false);
     }
   };
 
@@ -934,7 +1429,12 @@ export function NodeSlideStudio() {
       clientSessionId={clientSessionId}
       recentDecks={recentDecks}
       creating={creating}
-      onClose={() => setProjectsOpen(false)}
+      error={projectError}
+      onClearError={() => setProjectError(null)}
+      onClose={() => {
+        setProjectError(null);
+        setProjectsOpen(false);
+      }}
       onCreate={(request) => void createDeck(request)}
       onOpenDeck={openOwnedDeck}
     />
@@ -1168,25 +1668,64 @@ export function NodeSlideStudio() {
   };
   const applySignatureProfile = (profile: SignatureProfile) => {
     if (!ownerAccessKey || tastePackBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('signature-apply', requestedDeckId);
     setTastePackBusy(true);
     setPreviewedSignatureProfile(null);
-    void saveSignatureProfile({
-      deckId: workspace.deck.id,
-      ownerAccessKey,
-      profileJson: JSON.stringify(profile),
-    })
-      .then(async () => {
-        const result = planSignatureApplication(snapshot, profile);
+    void (async () => {
+      try {
+        await saveSignatureProfile({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          profileJson: JSON.stringify(profile),
+        });
+        if (!requestGate.isCurrent(requestToken)) return;
+        const currentWorkspace = workspaceRef.current;
+        if (!currentWorkspace || currentWorkspace.deck.id !== requestedDeckId) return;
+        const currentSnapshot: DeckSnapshot = {
+          deck: currentWorkspace.deck,
+          slides: currentWorkspace.slides,
+          elements: currentWorkspace.elements,
+          sources: currentWorkspace.sources,
+        };
+        const result = planSignatureApplication(currentSnapshot, profile);
         if (!result.ok) {
           if (result.error.code !== 'already_applied') throw new Error(result.error.message);
-          const activated = await activateSignatureProfile({
-            deckId: workspace.deck.id,
-            ownerAccessKey,
-            profileId: profile.id,
-            profileDigest: profile.source.digest,
-            baseDeckVersion: workspace.deck.version,
-          });
-          if (activated) installWorkspace(activated, ownerAccessKey);
+          await enqueueEditorWrite(
+            requestedDeckId,
+            false,
+            async ({
+              workspace: writeWorkspace,
+              ownerAccessKey: writeOwnerAccessKey,
+              requestToken: writeRequestToken,
+            }) => {
+              if (!requestGate.isCurrent(requestToken)) return false;
+              const activated = await activateSignatureProfile({
+                deckId: requestedDeckId,
+                ownerAccessKey: writeOwnerAccessKey,
+                profileId: profile.id,
+                profileDigest: profile.source.digest,
+                baseDeckVersion: writeWorkspace.deck.version,
+              });
+              if (
+                !requestGate.isCurrent(writeRequestToken) ||
+                !requestGate.isCurrent(requestToken)
+              ) {
+                return false;
+              }
+              if (activated) {
+                recordSuccessfulCommit(
+                  authoritativePredecessorVersion(activated),
+                  activated.deck.version,
+                );
+                installWorkspace(activated, writeOwnerAccessKey);
+              }
+              return true;
+            },
+          );
+          if (!requestGate.isCurrent(requestToken)) return;
           setToast({
             kind: 'success',
             message: `${profile.name} was already present; durable on-brand checks are now active.`,
@@ -1198,39 +1737,48 @@ export function NodeSlideStudio() {
           result.plan.scope,
           `Applied ${profile.name} signature`,
           profile,
+          undefined,
+          requestToken,
         );
-        if (accepted) {
+        if (accepted && requestGate.isCurrent(requestToken)) {
           setToast({
             kind: 'success',
             message: `${profile.name} applied through a versioned, on-brand-validated patch.`,
           });
         }
-      })
-      .catch((error: unknown) =>
+      } catch (error) {
+        if (!requestGate.isCurrent(requestToken)) return;
         setToast({
           kind: 'error',
           message: errorMessage(error, 'Signature could not be applied.'),
-        }),
-      )
-      .finally(() => setTastePackBusy(false));
+        });
+      } finally {
+        if (requestGate.isCurrent(requestToken)) setTastePackBusy(false);
+      }
+    })();
   };
   const uploadSignatureSource = (file: File) => {
     if (!ownerAccessKey || tastePackBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('signature-upload', requestedDeckId);
     setTastePackBusy(true);
-    void file
-      .arrayBuffer()
-      .then((buffer) =>
-        extractPptxSignature(new Uint8Array(buffer), {
+    void (async () => {
+      try {
+        const buffer = await file.arrayBuffer();
+        if (!requestGate.isCurrent(requestToken)) return;
+        const result = await extractPptxSignature(new Uint8Array(buffer), {
           fileName: file.name,
-        }),
-      )
-      .then(async (result) => {
+        });
+        if (!requestGate.isCurrent(requestToken)) return;
         if (!result.ok) throw new Error(result.error.message);
         const profileJson = await saveSignatureProfile({
-          deckId: workspace.deck.id,
-          ownerAccessKey,
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
           profileJson: JSON.stringify(result.profile),
         });
+        if (!requestGate.isCurrent(requestToken)) return;
         const profile = parseSignatureProfileRows([profileJson])[0];
         if (!profile) throw new Error('The saved signature profile could not be decoded.');
         setPreviewedVariation(null);
@@ -1239,11 +1787,568 @@ export function NodeSlideStudio() {
           kind: 'success',
           message: `${profile.name} extracted with ${profile.confidence} confidence. Preview before applying.`,
         });
-      })
-      .catch((error: unknown) =>
-        setToast({ kind: 'error', message: errorMessage(error, 'Past deck could not be read.') }),
-      )
-      .finally(() => setTastePackBusy(false));
+      } catch (error) {
+        if (!requestGate.isCurrent(requestToken)) return;
+        setToast({ kind: 'error', message: errorMessage(error, 'Past deck could not be read.') });
+      } finally {
+        if (requestGate.isCurrent(requestToken)) setTastePackBusy(false);
+      }
+    })();
+  };
+
+  const previewPatch = (patch: DeckPatch | null) => {
+    setPreviewedVariation(null);
+    setPreviewedSignatureProfile(null);
+    if (!patch) {
+      setPreviewedPatchId(null);
+      setCanvasMode('edit');
+      return;
+    }
+    const currentWorkspace = workspaceRef.current;
+    if (
+      !currentWorkspace ||
+      !editorCandidateCanAccept(editorCandidateReceiptForPatch(patch, currentWorkspace.deck))
+    ) {
+      setPreviewedPatchId(null);
+      setCanvasMode('edit');
+      setToast({
+        kind: 'error',
+        message: "Compare requires this patch's exact successful candidate validation receipt.",
+      });
+      return;
+    }
+    setPreviewedPatchId(patch.id);
+    const firstAffectedSlideId = 'slideIds' in patch.scope ? patch.scope.slideIds[0] : undefined;
+    if (firstAffectedSlideId && currentWorkspace.deck.slideOrder.includes(firstAffectedSlideId)) {
+      selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+    }
+    setCanvasMode('compare');
+    if (shouldRevealCandidateCanvas(window.innerWidth)) setInspectorCollapsed(true);
+  };
+
+  const handleAcceptPatch = (patch: DeckPatch) => {
+    if (!ownerAccessKey || !workspace) return;
+    const requestedDeckId = workspace.deck.id;
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({
+        workspace: currentWorkspace,
+        ownerAccessKey: currentOwnerAccessKey,
+        requestToken,
+      }) => {
+        const requestGate = editorRequestGateRef.current;
+        const currentPatch =
+          currentWorkspace.patches.find((candidate) => candidate.id === patch.id) ?? patch;
+        if (
+          !editorCandidateCanAccept(
+            editorCandidateReceiptForPatch(currentPatch, currentWorkspace.deck),
+          )
+        ) {
+          setToast({
+            kind: 'error',
+            message: "Accept requires this patch's exact successful candidate validation receipt.",
+          });
+          return false;
+        }
+        try {
+          const receipt = await acceptPatch({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            patchId: currentPatch.id,
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          if (receipt.patch.status === 'stale') {
+            if (receipt.workspace) {
+              installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            }
+            setActiveInspectorTab('versions');
+            setInspectorCollapsed(false);
+            setToast({
+              kind: 'error',
+              message: 'The proposal is stale. Compare it with the current deck before retrying.',
+            });
+            return false;
+          }
+          if (receipt.patch.status !== 'accepted' || !receipt.workspace) {
+            throw new Error('Accept completed without an authoritative commit receipt.');
+          }
+          recordSuccessfulCommit(
+            authoritativePredecessorVersion(receipt.workspace),
+            receipt.workspace.deck.version,
+          );
+          installWorkspace(receipt.workspace, currentOwnerAccessKey);
+          setPreviewedPatchId(null);
+          setCanvasMode('edit');
+          if (currentPatch.linkedCommentId) setAiCommentContext(null);
+          setToast({
+            kind: 'success',
+            message: 'Validated proposal accepted as a new deck version.',
+          });
+          void recordPreferencePatch({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            patchId: receipt.patch.id,
+          })
+            .then(() =>
+              runPreferenceEtl({
+                deckId: requestedDeckId,
+                ownerAccessKey: currentOwnerAccessKey,
+              }),
+            )
+            .catch(() => undefined);
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setToast({
+            kind: 'error',
+            message: errorMessage(error, 'The proposal could not be accepted.'),
+          });
+          return false;
+        }
+      },
+    );
+  };
+
+  const handleRejectPatch = (patch: DeckPatch) => {
+    if (!ownerAccessKey || !workspace) return;
+    const requestedDeckId = workspace.deck.id;
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({
+        workspace: currentWorkspace,
+        ownerAccessKey: currentOwnerAccessKey,
+        requestToken,
+      }) => {
+        const requestGate = editorRequestGateRef.current;
+        try {
+          const rejected = await rejectPatch({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            patchId: patch.id,
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setPreviewedPatchId((current) => (current === patch.id ? null : current));
+          setCanvasMode('edit');
+          if (!rejected) return true;
+          installWorkspace(
+            {
+              ...currentWorkspace,
+              patches: currentWorkspace.patches.map((candidate) =>
+                candidate.id === rejected.id ? rejected : candidate,
+              ),
+            },
+            currentOwnerAccessKey,
+          );
+          void recordPreferencePatch({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            patchId: rejected.id,
+          })
+            .then(() =>
+              runPreferenceEtl({
+                deckId: requestedDeckId,
+                ownerAccessKey: currentOwnerAccessKey,
+              }),
+            )
+            .catch(() => undefined);
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setToast({
+            kind: 'error',
+            message: errorMessage(error, 'The proposal could not be rejected.'),
+          });
+          return false;
+        }
+      },
+    );
+  };
+
+  const handleProposeEdit = (
+    instruction: string,
+    scope: PatchScope,
+    options: AiProposalOptions<NodeSlideEditorCommandId>,
+  ) => {
+    if (!ownerAccessKey) return;
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('proposal', requestedDeckId);
+    setAgentBusy(true);
+    setAiAgentActivity({ status: 'running', elapsedMs: 0, ask: instruction });
+    if (options.commandId === 'propagate') {
+      const parent = latestPropagatablePatch(workspace.patches);
+      if (!parent) {
+        setAgentBusy(false);
+        setAiAgentActivity(null);
+        setToast({
+          kind: 'error',
+          message: 'Accept a style or visibility proposal before asking NodeSlide to propagate it.',
+        });
+        return;
+      }
+      void (async () => {
+        try {
+          const receipt = await proposePropagation({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+            parentPatchId: parent.id,
+          });
+          if (!requestGate.isCurrent(requestToken)) return;
+          if (!receipt.workspace) {
+            throw new Error('The proposal completed without an authoritative workspace receipt.');
+          }
+          installWorkspace(receipt.workspace, requestedOwnerAccessKey);
+          previewPatch(
+            receipt.workspace.patches.find((candidate) => candidate.id === receipt.patch.id) ??
+              receipt.patch,
+          );
+          setAiAgentActivity(null);
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return;
+          const message = errorMessage(error, 'A safe propagation proposal could not be created.');
+          setAiAgentActivity({ status: 'failed', elapsedMs: 0, ask: instruction, message });
+          setToast({ kind: 'error', message });
+        } finally {
+          if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
+        }
+      })();
+      return;
+    }
+
+    const clocks = clocksForScope(workspace, scope, []);
+    const { commentContext: _commentContext, ...requestOptions } = options;
+    void (async () => {
+      try {
+        const receipt = await proposeEdit({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          instruction,
+          baseDeckVersion: workspace.deck.version,
+          ...clocks,
+          scope,
+          ...requestOptions,
+        });
+        if (!requestGate.isCurrent(requestToken)) return;
+        if (!receipt.workspace) {
+          throw new Error('The proposal completed without an authoritative workspace receipt.');
+        }
+        installWorkspace(receipt.workspace, requestedOwnerAccessKey);
+        previewPatch(
+          receipt.workspace.patches.find((candidate) => candidate.id === receipt.patch.id) ??
+            receipt.patch,
+        );
+        setAiAgentActivity(null);
+      } catch (error) {
+        if (!requestGate.isCurrent(requestToken)) return;
+        const message = errorMessage(error, 'The agent could not create a proposal.');
+        setAiAgentActivity({ status: 'failed', elapsedMs: 0, ask: instruction, message });
+        setToast({ kind: 'error', message });
+      } finally {
+        if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
+      }
+    })();
+  };
+
+  const handleGenerateVariations = (request: AiVariationRequest) => {
+    if (!ownerAccessKey || variationBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestedSlideId = activeSlide.id;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('variation-generation', requestedDeckId);
+    const providerRequest =
+      request.providerMode === 'openrouter_free'
+        ? {
+            providerMode: request.providerMode,
+            providerConsent: request.providerConsent,
+          }
+        : { providerMode: request.providerMode };
+    setPreviewedPatchId(null);
+    setPreviewedVariation(null);
+    setVariationError(null);
+    setVariationGenerating(true);
+    void (async () => {
+      try {
+        const receipt = await generateVariations({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          slideId: requestedSlideId,
+          ...providerRequest,
+        });
+        if (!requestGate.isCurrent(requestToken)) return;
+        if (receipt.variations.length !== 3) {
+          throw new Error('The variation service did not return exactly three directions.');
+        }
+        const fallbackCount = receipt.variations.filter(
+          (variation) => variation.origin === 'deterministic_fallback',
+        ).length;
+        setToast({
+          kind: 'success',
+          message:
+            request.providerMode === 'deterministic'
+              ? 'Three validated private directions are ready to review.'
+              : fallbackCount > 0
+                ? `Three validated directions are ready; ${fallbackCount} used an honest fallback.`
+                : 'Three validated directions are ready to review.',
+        });
+        void refreshVariationPreferences();
+      } catch (error) {
+        if (!requestGate.isCurrent(requestToken)) return;
+        const message = errorMessage(
+          error,
+          'Three safe directions could not be generated for this slide.',
+        );
+        setVariationError(message);
+        setToast({ kind: 'error', message });
+      } finally {
+        if (requestGate.isCurrent(requestToken)) setVariationGenerating(false);
+      }
+    })();
+  };
+
+  const handleAcceptVariation = (variation: SlideVariation) => {
+    if (!ownerAccessKey || variationBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    setVariationError(null);
+    setVariationDecisionBusy(true);
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({
+        workspace: currentWorkspace,
+        ownerAccessKey: currentOwnerAccessKey,
+        requestToken,
+      }) => {
+        const requestGate = editorRequestGateRef.current;
+        const currentSlide = currentWorkspace.slides.find(
+          (slide) => slide.id === variation.slideId,
+        );
+        const currentElements = new Map(
+          currentWorkspace.elements.map((element) => [element.id, element]),
+        );
+        const variationIsCurrent =
+          variation.deckId === requestedDeckId &&
+          variation.status === 'ready' &&
+          variation.validation.ok &&
+          !variation.validation.issues.some((issue) => issue.severity === 'error') &&
+          currentSlide?.version === variation.baseSlideVersion &&
+          Object.entries(variation.baseElementVersions).every(
+            ([elementId, version]) => currentElements.get(elementId)?.version === version,
+          );
+        if (!variationIsCurrent) {
+          setVariationError(
+            'The slide changed after generation. The direction is stale and cannot overwrite it.',
+          );
+          setToast({ kind: 'error', message: 'This direction is stale.' });
+          setVariationDecisionBusy(false);
+          return false;
+        }
+        try {
+          const receipt = await acceptVariation({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            variationId: variation.id,
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setPreviewedVariation(null);
+          setCanvasMode('edit');
+          if (receipt.variation.status === 'stale' || receipt.patch?.status === 'stale') {
+            if (receipt.workspace) {
+              installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            }
+            setVariationError(
+              'The slide changed after generation. The direction was marked stale and no content was overwritten.',
+            );
+            setToast({
+              kind: 'error',
+              message: 'This direction is stale; the newer slide was preserved.',
+            });
+            return false;
+          }
+          if (receipt.variation.status !== 'accepted') {
+            setToast({
+              kind: 'error',
+              message: `This direction is already ${receipt.variation.status}.`,
+            });
+            return false;
+          }
+          if (!receipt.patch) {
+            setToast({ kind: 'success', message: 'This direction was already accepted.' });
+            return true;
+          }
+          if (receipt.patch.status !== 'accepted' || !receipt.workspace) {
+            throw new Error('Variation accept completed without an authoritative commit receipt.');
+          }
+          recordSuccessfulCommit(
+            authoritativePredecessorVersion(receipt.workspace),
+            receipt.workspace.deck.version,
+          );
+          installWorkspace(receipt.workspace, currentOwnerAccessKey);
+          setToast({ kind: 'success', message: 'Direction accepted through a versioned patch.' });
+          void refreshVariationPreferences();
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          const message = errorMessage(error, 'The direction could not be accepted.');
+          setVariationError(message);
+          setToast({ kind: 'error', message });
+          return false;
+        } finally {
+          if (requestGate.isCurrent(requestToken)) setVariationDecisionBusy(false);
+        }
+      },
+    );
+  };
+
+  const handleRejectVariation = (variation: SlideVariation) => {
+    if (!ownerAccessKey || variationBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    setVariationError(null);
+    setVariationDecisionBusy(true);
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({ ownerAccessKey: currentOwnerAccessKey, requestToken }) => {
+        const requestGate = editorRequestGateRef.current;
+        try {
+          await rejectVariation({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            variationId: variation.id,
+            reason: 'user_rejected',
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setPreviewedVariation((current) => (current?.id === variation.id ? null : current));
+          setCanvasMode('edit');
+          void refreshVariationPreferences();
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          const message = errorMessage(error, 'The direction could not be rejected.');
+          setVariationError(message);
+          setToast({ kind: 'error', message });
+          return false;
+        } finally {
+          if (requestGate.isCurrent(requestToken)) setVariationDecisionBusy(false);
+        }
+      },
+    );
+  };
+
+  const handleClearSignatureProfile = () => {
+    if (!ownerAccessKey || tastePackBusy) return;
+    const requestedDeckId = workspace.deck.id;
+    setTastePackBusy(true);
+    setPreviewedSignatureProfile(null);
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({
+        workspace: currentWorkspace,
+        ownerAccessKey: currentOwnerAccessKey,
+        requestToken,
+      }) => {
+        const requestGate = editorRequestGateRef.current;
+        try {
+          const cleared = await clearActiveSignatureProfile({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            baseDeckVersion: currentWorkspace.deck.version,
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          if (cleared) {
+            recordSuccessfulCommit(authoritativePredecessorVersion(cleared), cleared.deck.version);
+            installWorkspace(cleared, currentOwnerAccessKey);
+          }
+          setToast({ kind: 'success', message: 'Active on-brand checks cleared.' });
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setToast({
+            kind: 'error',
+            message: errorMessage(error, 'Active signature could not be cleared.'),
+          });
+          return false;
+        } finally {
+          if (requestGate.isCurrent(requestToken)) setTastePackBusy(false);
+        }
+      },
+    );
+  };
+
+  const handleRestoreVersion = (version: DeckVersion) => {
+    if (!ownerAccessKey) return;
+    const requestedDeckId = workspace.deck.id;
+    void enqueueEditorWrite(
+      requestedDeckId,
+      false,
+      async ({
+        workspace: currentWorkspace,
+        ownerAccessKey: currentOwnerAccessKey,
+        requestToken,
+      }) => {
+        const requestGate = editorRequestGateRef.current;
+        try {
+          const receipt = await restoreVersion({
+            deckId: requestedDeckId,
+            ownerAccessKey: currentOwnerAccessKey,
+            versionId: version.id,
+            baseDeckVersion: currentWorkspace.deck.version,
+          });
+          if (!requestGate.isCurrent(requestToken)) return false;
+          if (receipt.patch.status !== 'accepted') {
+            if (receipt.workspace) {
+              installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            }
+            setToast({
+              kind: 'error',
+              message:
+                'This deck changed before the restore could apply. No version history was changed.',
+            });
+            return false;
+          }
+          if (!receipt.workspace) {
+            throw new Error(
+              'Version restore completed without an authoritative workspace receipt.',
+            );
+          }
+          localCommitVersionsRef.current.add(receipt.workspace.deck.version);
+          installWorkspace(receipt.workspace, currentOwnerAccessKey);
+          undoStackRef.current = [];
+          redoStackRef.current = [];
+          setUndoStack([]);
+          setRedoStack([]);
+          setCanvasResetKey((value) => value + 1);
+          return true;
+        } catch (error) {
+          if (!requestGate.isCurrent(requestToken)) return false;
+          setToast({
+            kind: 'error',
+            message: errorMessage(error, 'Version restore failed.'),
+          });
+          return false;
+        }
+      },
+    );
+  };
+
+  const changeElementZOrder = (elementIds: readonly string[], action: LayerZOrderAction) => {
+    const targets = elementIds
+      .map((id) => workspace.elements.find((element) => element.id === id))
+      .filter((element): element is SlideElement => element !== undefined);
+    if (targets.some((element) => element.groupId)) {
+      setToast({ kind: 'error', message: 'Ungroup grouped layers before changing their z-order.' });
+      return;
+    }
+    const operations = reorderElementOperations(activeSlide, elementIds, action);
+    void applyOperations(
+      operations,
+      elementScope(workspace.deck.id, targets),
+      layerZOrderSummary(action, operations.length),
+    );
   };
   const commands: StudioCommand[] = [
     {
@@ -1292,10 +2397,11 @@ export function NodeSlideStudio() {
     <main
       className="nodeslide-studio"
       data-testid="nodeslide-studio"
+      data-ns-theme={studioTheme}
       style={
         {
-          '--ns-nav-width': navigatorCollapsed ? '52px' : '246px',
-          '--ns-inspector-width': inspectorCollapsed ? '52px' : `${inspectorWidth}px`,
+          '--ns-nav-width': navigatorCollapsed ? '0px' : '300px',
+          '--ns-inspector-width': inspectorCollapsed ? '48px' : `${inspectorWidth}px`,
         } as React.CSSProperties
       }
     >
@@ -1306,6 +2412,8 @@ export function NodeSlideStudio() {
         canUndo={canUndo}
         canRedo={redoStack.length > 0}
         inspectorCollapsed={inspectorCollapsed}
+        themeMode={studioTheme}
+        navigatorCollapsed={navigatorCollapsed}
         onTitleChange={(title) =>
           void applyOperations(
             [{ op: 'update_deck', properties: { title } }],
@@ -1322,6 +2430,22 @@ export function NodeSlideStudio() {
         onExportPptx={() => exportDeck('pptx')}
         onOpenCommandPalette={() => setCommandOpen(true)}
         onToggleInspector={() => setInspectorCollapsed((value) => !value)}
+        onThemeModeChange={(mode) => {
+          setStudioTheme(mode);
+          writeStudioPreference('theme', mode);
+        }}
+        onToggleNavigator={() => setNavigatorCollapsed((value) => !value)}
+        onResetView={() => {
+          setNavigatorTab('slides');
+          setCanvasMode('edit');
+          setActiveInspectorTab('ai');
+          setSelectedElementIds([]);
+          setPreviewedPatchId(null);
+          setPreviewedVariation(null);
+          setPreviewedSignatureProfile(null);
+          setZoom(65);
+          setToast({ kind: 'success', message: 'Editor view reset.' });
+        }}
       />
 
       <div className="ns-studio-grid">
@@ -1331,10 +2455,41 @@ export function NodeSlideStudio() {
           theme={workspace.deck.theme}
           activeSlideId={activeSlide.id}
           collapsed={navigatorCollapsed}
+          activeTab={navigatorTab}
+          comments={workspace.comments}
+          patches={workspace.patches}
+          sources={workspace.sources}
+          validations={workspace.validations}
+          collapsedSections={collapsedNavigatorSections}
+          propagationSlideIds={affectedSlideIds}
+          selectedElementIds={selectedElementIds}
           canAddSlide
           canDeleteSlide={orderedSlides.length > 1}
           onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
           onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
+          onTabChange={setNavigatorTab}
+          onToggleSection={(section) =>
+            setCollapsedNavigatorSections((current) =>
+              current.includes(section)
+                ? current.filter((candidate) => candidate !== section)
+                : [...current, section],
+            )
+          }
+          onSelectedElementIdsChange={selectElements}
+          onRenameSlide={(slideId, currentTitle) => {
+            const title = window.prompt('Rename slide', currentTitle)?.trim();
+            if (!title || title === currentTitle) return;
+            void applyOperations(
+              [{ op: 'update_slide', slideId, properties: { title } }],
+              {
+                kind: 'slide',
+                deckId: workspace.deck.id,
+                slideIds: [slideId],
+                operationMode: 'unrestricted',
+              },
+              `Renamed slide to ${title}`,
+            );
+          }}
           onAddSlide={() => {
             const added = createBlankSlide(workspace, activeSlideIndex + 1);
             void applyOperations(
@@ -1394,93 +2549,226 @@ export function NodeSlideStudio() {
               `Moved slide to position ${index + 1}`,
             )
           }
-        />
-
-        <SlideCanvas
-          key={`${activeSlide.id}:${previewMatchesActiveSlide ? previewedVariation?.id : (previewedSignatureProfile?.id ?? 'original')}:${canvasResetKey}`}
-          slide={canvasSlide ?? activeSlide}
-          slideIndex={activeSlideIndex}
-          slideCount={orderedSlides.length}
-          deckVersion={workspace.deck.version}
-          elements={canvasElements}
-          comments={workspace.comments}
-          presence={workspace.presence}
-          theme={workspace.deck.theme}
-          selectedElementIds={selectedElementIds}
-          readOnly={previewMatchesActiveSlide || signaturePreviewActive}
-          zoom={zoom}
-          onZoomChange={setZoom}
-          onSelectionChange={selectElements}
-          onOpenAi={() => openInspector('ai')}
-          onOpenComments={() => openInspector('comments')}
-          onDuplicateElements={(ids) => {
-            const sourceElements = ids
-              .map((id) => workspace.elements.find((element) => element.id === id))
-              .filter(
-                (element): element is SlideElement => element !== undefined && !element.locked,
-              );
-            const copies = sourceElements.map((element, index) => duplicateElement(element, index));
-            const operations: PatchOperation[] = copies.map((element) => ({
-              op: 'add_element',
-              slideId: element.slideId,
-              element,
-            }));
-            const scope: PatchScope = {
-              kind: 'elements',
-              deckId: workspace.deck.id,
-              slideIds: [...new Set(copies.map((element) => element.slideId))],
-              elementIds: copies.map((element) => element.id),
-              operationMode: 'unrestricted',
-            };
+          onToggleElementVisibility={(elementId, visible) => {
+            const element = workspace.elements.find((candidate) => candidate.id === elementId);
+            if (!element) return;
             void applyOperations(
-              operations,
-              scope,
-              `Duplicated ${copies.length} element${copies.length === 1 ? '' : 's'}`,
-            ).then((accepted) => {
-              if (accepted) setSelectedElementIds(copies.map((element) => element.id));
-            });
-          }}
-          onDeleteElements={(ids) => {
-            const targets = ids
-              .map((id) => workspace.elements.find((element) => element.id === id))
-              .filter(
-                (element): element is SlideElement => element !== undefined && !element.locked,
-              );
-            void applyOperations(
-              targets.map((element) => ({
-                op: 'remove_element',
-                slideId: element.slideId,
-                elementId: element.id,
-              })),
-              elementScope(workspace.deck.id, targets),
-              `Deleted ${targets.length} element${targets.length === 1 ? '' : 's'}`,
+              [{ op: 'set_visibility_v1', slideId: element.slideId, elementId, visible }],
+              elementScope(workspace.deck.id, [element]),
+              `${visible ? 'Showed' : 'Hid'} ${element.name}`,
             );
-            setSelectedElementIds([]);
           }}
-          onApplyLayoutPatch={(operations, elementIds, summary) =>
+          onGroupElements={(elementIds) => {
+            const targets = elementIds
+              .map((id) => workspace.elements.find((element) => element.id === id))
+              .filter((element): element is SlideElement => element !== undefined);
+            if (
+              targets.length < 2 ||
+              targets.some((element) => element.slideId !== activeSlide.id)
+            ) {
+              return;
+            }
+            void applyOperations(
+              [
+                {
+                  op: 'group_elements_v1',
+                  slideId: activeSlide.id,
+                  elementIds: targets.map((element) => element.id),
+                  groupId: uniqueClientId('group'),
+                },
+              ],
+              elementScope(workspace.deck.id, targets),
+              `Grouped ${targets.length} layers`,
+            );
+          }}
+          onUngroupElements={(elementIds) => {
+            const groupIds = new Set(
+              elementIds.flatMap((id) => {
+                const groupId = workspace.elements.find((element) => element.id === id)?.groupId;
+                return groupId ? [groupId] : [];
+              }),
+            );
+            const operations: PatchOperation[] = [];
+            const members: SlideElement[] = [];
+            for (const groupId of groupIds) {
+              const groupMembers = workspace.elements.filter(
+                (element) => element.slideId === activeSlide.id && element.groupId === groupId,
+              );
+              members.push(...groupMembers);
+              operations.push({
+                op: 'ungroup_elements_v1',
+                slideId: activeSlide.id,
+                elementIds: groupMembers.map((element) => element.id),
+                groupId,
+              });
+            }
             void applyOperations(
               operations,
-              {
-                kind: 'elements',
-                deckId: workspace.deck.id,
-                slideIds: [activeSlide.id],
-                elementIds,
-                operationMode: 'layout',
-              },
-              summary,
-            )
-          }
-          onPreviousSlide={() => {
-            const previous = orderedSlides[activeSlideIndex - 1];
-            if (previous) selectSlide(previous.id, setActiveSlideId, setSelectedElementIds);
+              elementScope(workspace.deck.id, members),
+              `Ungrouped ${groupIds.size} layer group${groupIds.size === 1 ? '' : 's'}`,
+            );
           }}
-          onNextSlide={() => {
-            const next = orderedSlides[activeSlideIndex + 1];
-            if (next) selectSlide(next.id, setActiveSlideId, setSelectedElementIds);
-          }}
+          onChangeElementZOrder={changeElementZOrder}
         />
 
-        <InspectorPanel
+        <EditorCanvasModes
+          mode={canvasMode}
+          onModeChange={setCanvasMode}
+          compareMode={compareMode}
+          onCompareModeChange={setCompareMode}
+          slides={orderedSlides}
+          elements={workspace.elements}
+          theme={workspace.deck.theme}
+          activeSlideId={activeSlide.id}
+          onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
+          affectedSlideIds={affectedSlideIds}
+          validationStatus={editorValidationStatus(workspace.validations[0])}
+          {...(navigatorTab === 'outline'
+            ? {
+                storyArcBoard: (
+                  <StoryArcOverview
+                    deck={workspace.deck}
+                    slides={orderedSlides}
+                    activeSlideId={activeSlide.id}
+                    onOpenSlide={(slideId) => {
+                      selectSlide(slideId, setActiveSlideId, setSelectedElementIds);
+                      setNavigatorTab('slides');
+                      setCanvasMode('edit');
+                    }}
+                  />
+                ),
+              }
+            : {})}
+          narrativeBanner={
+            activeSlide.notes ? (
+              <>
+                <strong>Narrative</strong>
+                <span>{activeSlide.notes}</span>
+              </>
+            ) : undefined
+          }
+          candidateSlide={compareCandidateSlide ?? null}
+          candidateElements={compareCandidateElements}
+          {...(compareCandidateLabel ? { candidateLabel: compareCandidateLabel } : {})}
+          compareOperations={compareOperations}
+          candidateReceipt={compareCandidateReceipt}
+          sliderPosition={compareSliderPosition}
+          onSliderPositionChange={setCompareSliderPosition}
+          overlayOpacity={compareOverlayOpacity}
+          onOverlayOpacityChange={setCompareOverlayOpacity}
+          blinkPaused={compareBlinkPaused}
+          onBlinkPausedChange={setCompareBlinkPaused}
+          {...(previewedPatch
+            ? {
+                onAcceptCandidate: () => handleAcceptPatch(previewedPatch),
+                onDeclineCandidate: () => handleRejectPatch(previewedPatch),
+              }
+            : {})}
+          editCanvas={
+            <SlideCanvas
+              key={`${activeSlide.id}:original:${canvasResetKey}`}
+              slide={activeSlide}
+              slideIndex={activeSlideIndex}
+              slideCount={orderedSlides.length}
+              deckVersion={workspace.deck.version}
+              elements={slideElements}
+              comments={workspace.comments}
+              presence={workspace.presence.filter((person) => person.sessionId !== clientSessionId)}
+              theme={workspace.deck.theme}
+              selectedElementIds={selectedElementIds}
+              readOnly={false}
+              zoom={zoom}
+              onZoomChange={setZoom}
+              onSelectionChange={selectElements}
+              onOpenAi={() => openInspector('ai')}
+              onOpenComments={() => openInspector('comments')}
+              onDuplicateElements={(ids) => {
+                const sourceElements = ids
+                  .map((id) => workspace.elements.find((element) => element.id === id))
+                  .filter(
+                    (element): element is SlideElement => element !== undefined && !element.locked,
+                  );
+                const copies = sourceElements.map((element, index) =>
+                  duplicateElement(element, index),
+                );
+                const operations: PatchOperation[] = copies.map((element) => ({
+                  op: 'add_element',
+                  slideId: element.slideId,
+                  element,
+                }));
+                const scope: PatchScope = {
+                  kind: 'elements',
+                  deckId: workspace.deck.id,
+                  slideIds: [...new Set(copies.map((element) => element.slideId))],
+                  elementIds: copies.map((element) => element.id),
+                  operationMode: 'unrestricted',
+                };
+                void applyOperations(
+                  operations,
+                  scope,
+                  `Duplicated ${copies.length} element${copies.length === 1 ? '' : 's'}`,
+                ).then((accepted) => {
+                  if (accepted) setSelectedElementIds(copies.map((element) => element.id));
+                });
+              }}
+              onDeleteElements={(ids) => {
+                const targets = ids
+                  .map((id) => workspace.elements.find((element) => element.id === id))
+                  .filter(
+                    (element): element is SlideElement => element !== undefined && !element.locked,
+                  );
+                void applyOperations(
+                  targets.map((element) => ({
+                    op: 'remove_element',
+                    slideId: element.slideId,
+                    elementId: element.id,
+                  })),
+                  elementScope(workspace.deck.id, targets),
+                  `Deleted ${targets.length} element${targets.length === 1 ? '' : 's'}`,
+                );
+                setSelectedElementIds([]);
+              }}
+              onApplyLayoutPatch={(operations, elementIds, summary) =>
+                void applyOperations(
+                  operations,
+                  {
+                    kind: 'elements',
+                    deckId: workspace.deck.id,
+                    slideIds: [activeSlide.id],
+                    elementIds,
+                    operationMode: 'layout',
+                  },
+                  summary,
+                )
+              }
+              onReplaceText={(elementId, text, baseElementVersion) => {
+                const element = workspace.elements.find((candidate) => candidate.id === elementId);
+                if (!element || element.locked) return;
+                void applyOperations(
+                  [{ op: 'replace_text', slideId: element.slideId, elementId, text }],
+                  elementScope(workspace.deck.id, [element]),
+                  `Updated ${element.name}`,
+                  undefined,
+                  { [elementId]: baseElementVersion },
+                );
+              }}
+              onReorderElements={(elementIds, direction) =>
+                changeElementZOrder(elementIds, direction)
+              }
+              onCursorChange={updatePresenceCursor}
+              onPreviousSlide={() => {
+                const previous = orderedSlides[activeSlideIndex - 1];
+                if (previous) selectSlide(previous.id, setActiveSlideId, setSelectedElementIds);
+              }}
+              onNextSlide={() => {
+                const next = orderedSlides[activeSlideIndex + 1];
+                if (next) selectSlide(next.id, setActiveSlideId, setSelectedElementIds);
+              }}
+            />
+          }
+        />
+
+        <InspectorPanel<NodeSlideEditorCommandId>
           workspace={workspace}
           slide={activeSlide}
           selectedElements={selectedElements}
@@ -1496,6 +2784,11 @@ export function NodeSlideStudio() {
           variationGenerating={variationGenerating}
           variationError={variationError}
           previewedVariationId={previewMatchesActiveSlide ? (previewedVariation?.id ?? null) : null}
+          aiReferences={aiReferences}
+          aiCommands={aiCommands}
+          aiAgentActivity={aiAgentActivity}
+          aiCommentContext={aiCommentContext}
+          previewedPatchId={previewedPatchId}
           activeTastePackId={activeTastePackId}
           activeProfileId={workspace.deck.activeSignatureProfileId ?? null}
           previewProfileId={previewedSignatureProfile?.id ?? null}
@@ -1510,122 +2803,12 @@ export function NodeSlideStudio() {
           }}
           onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
           onWidthChange={setInspectorWidth}
-          onProposeEdit={(instruction, scope) => {
-            if (!ownerAccessKey) return;
-            const clocks = clocksForScope(workspace, scope, []);
-            setAgentBusy(true);
-            void proposeEdit({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              instruction,
-              baseDeckVersion: workspace.deck.version,
-              ...clocks,
-              scope,
-            })
-              .catch((error: unknown) =>
-                setToast({
-                  kind: 'error',
-                  message: errorMessage(error, 'The agent could not create a proposal.'),
-                }),
-              )
-              .finally(() => setAgentBusy(false));
-          }}
-          onAcceptPatch={(patch) => {
-            if (!ownerAccessKey) return;
-            const beforeVersion = currentVersion(workspace);
-            void acceptPatch({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              patchId: patch.id,
-            })
-              .then((receipt) => {
-                if (receipt.patch.status === 'stale') {
-                  setActiveInspectorTab('versions');
-                  setToast({
-                    kind: 'error',
-                    message:
-                      'The proposal is stale. Compare it with the current deck before retrying.',
-                  });
-                  return;
-                }
-                if (beforeVersion) {
-                  setUndoStack((stack) => [...stack, beforeVersion.id]);
-                  setRedoStack([]);
-                }
-                if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-                void recordPreferencePatch({
-                  deckId: workspace.deck.id,
-                  ownerAccessKey,
-                  patchId: receipt.patch.id,
-                })
-                  .then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }))
-                  .catch(() => undefined);
-              })
-              .catch((error: unknown) =>
-                setToast({
-                  kind: 'error',
-                  message: errorMessage(error, 'The proposal could not be accepted.'),
-                }),
-              );
-          }}
-          onRejectPatch={(patch) => {
-            if (!ownerAccessKey) return;
-            void rejectPatch({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              patchId: patch.id,
-            })
-              .then((rejected) => {
-                if (!rejected) return;
-                return recordPreferencePatch({
-                  deckId: workspace.deck.id,
-                  ownerAccessKey,
-                  patchId: rejected.id,
-                }).then(() => runPreferenceEtl({ deckId: workspace.deck.id, ownerAccessKey }));
-              })
-              .catch((error: unknown) =>
-                setToast({
-                  kind: 'error',
-                  message: errorMessage(error, 'The proposal could not be rejected.'),
-                }),
-              );
-          }}
-          onGenerateVariations={() => {
-            if (!ownerAccessKey || variationBusy) return;
-            setPreviewedVariation(null);
-            setVariationError(null);
-            setVariationGenerating(true);
-            void generateVariations({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              slideId: activeSlide.id,
-            })
-              .then((receipt) => {
-                if (receipt.variations.length !== 3) {
-                  throw new Error('The variation service did not return exactly three directions.');
-                }
-                const fallbackCount = receipt.variations.filter(
-                  (variation) => variation.origin === 'deterministic_fallback',
-                ).length;
-                setToast({
-                  kind: 'success',
-                  message:
-                    fallbackCount > 0
-                      ? `Three validated directions are ready; ${fallbackCount} used an honest fallback.`
-                      : 'Three validated free-route directions are ready to review.',
-                });
-                void refreshVariationPreferences();
-              })
-              .catch((error: unknown) => {
-                const message = errorMessage(
-                  error,
-                  'Three safe directions could not be generated for this slide.',
-                );
-                setVariationError(message);
-                setToast({ kind: 'error', message });
-              })
-              .finally(() => setVariationGenerating(false));
-          }}
+          onProposeEdit={handleProposeEdit}
+          onAcceptPatch={handleAcceptPatch}
+          onRejectPatch={handleRejectPatch}
+          onPreviewPatch={previewPatch}
+          onClearAiCommentContext={() => setAiCommentContext(null)}
+          onGenerateVariations={handleGenerateVariations}
           onPreviewVariation={(variation) => {
             if (
               variation &&
@@ -1640,112 +2823,35 @@ export function NodeSlideStudio() {
               );
               return;
             }
-            if (variation) setSelectedElementIds([]);
+            if (variation) {
+              setSelectedElementIds([]);
+              setPreviewedPatchId(null);
+              setPreviewedSignatureProfile(null);
+              setCanvasMode('compare');
+              if (shouldRevealCandidateCanvas(window.innerWidth)) setInspectorCollapsed(true);
+            } else {
+              setCanvasMode('edit');
+            }
             setPreviewedVariation(variation);
           }}
-          onAcceptVariation={(variation) => {
-            if (!ownerAccessKey || variationBusy) return;
-            const beforeVersion = currentVersion(workspace);
-            setVariationError(null);
-            setVariationDecisionBusy(true);
-            void acceptVariation({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              variationId: variation.id,
-            })
-              .then((receipt) => {
-                setPreviewedVariation(null);
-                if (receipt.variation.status === 'stale' || receipt.patch?.status === 'stale') {
-                  setVariationError(
-                    'The slide changed after generation. The direction was marked stale and no content was overwritten.',
-                  );
-                  setToast({
-                    kind: 'error',
-                    message: 'This direction is stale; the newer slide was preserved.',
-                  });
-                  return;
-                }
-                if (receipt.variation.status !== 'accepted') {
-                  setToast({
-                    kind: 'error',
-                    message: `This direction is already ${receipt.variation.status}.`,
-                  });
-                  return;
-                }
-                if (!receipt.patch) {
-                  setToast({ kind: 'success', message: 'This direction was already accepted.' });
-                  return;
-                }
-                if (beforeVersion) {
-                  setUndoStack((stack) => [...stack, beforeVersion.id]);
-                  setRedoStack([]);
-                }
-                if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-                setToast({
-                  kind: 'success',
-                  message: 'Direction accepted through a versioned patch.',
-                });
-                void refreshVariationPreferences();
-              })
-              .catch((error: unknown) => {
-                const message = errorMessage(error, 'The direction could not be accepted.');
-                setVariationError(message);
-                setToast({ kind: 'error', message });
-              })
-              .finally(() => setVariationDecisionBusy(false));
-          }}
-          onRejectVariation={(variation) => {
-            if (!ownerAccessKey || variationBusy) return;
-            setVariationError(null);
-            setVariationDecisionBusy(true);
-            void rejectVariation({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              variationId: variation.id,
-              reason: 'user_rejected',
-            })
-              .then(() => {
-                setPreviewedVariation((current) => (current?.id === variation.id ? null : current));
-                void refreshVariationPreferences();
-              })
-              .catch((error: unknown) => {
-                const message = errorMessage(error, 'The direction could not be rejected.');
-                setVariationError(message);
-                setToast({ kind: 'error', message });
-              })
-              .finally(() => setVariationDecisionBusy(false));
-          }}
+          onAcceptVariation={handleAcceptVariation}
+          onRejectVariation={handleRejectVariation}
           onApplyTastePack={(packId) => {
             applySignatureProfile(getNodeSlideTastePack(packId));
           }}
           onApplySignatureProfile={applySignatureProfile}
           onPreviewSignatureProfile={(profile) => {
             setPreviewedVariation(null);
+            setPreviewedPatchId(null);
             setSelectedElementIds([]);
             setPreviewedSignatureProfile(profile);
+            setCanvasMode(profile ? 'compare' : 'edit');
+            if (profile && shouldRevealCandidateCanvas(window.innerWidth)) {
+              setInspectorCollapsed(true);
+            }
           }}
           onUploadSignatureSource={uploadSignatureSource}
-          onClearTastePack={() => {
-            if (!ownerAccessKey || tastePackBusy) return;
-            setTastePackBusy(true);
-            setPreviewedSignatureProfile(null);
-            void clearActiveSignatureProfile({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              baseDeckVersion: workspace.deck.version,
-            })
-              .then((cleared) => {
-                if (cleared) installWorkspace(cleared, ownerAccessKey);
-                setToast({ kind: 'success', message: 'Active on-brand checks cleared.' });
-              })
-              .catch((error: unknown) =>
-                setToast({
-                  kind: 'error',
-                  message: errorMessage(error, 'Active signature could not be cleared.'),
-                }),
-              )
-              .finally(() => setTastePackBusy(false));
-          }}
+          onClearTastePack={handleClearSignatureProfile}
           onEvictTasteSignal={(signalId) => {
             if (!ownerAccessKey) return;
             void evictTasteSignal({
@@ -1814,38 +2920,18 @@ export function NodeSlideStudio() {
                 )
               : undefined
           }
-          onRestoreVersion={(version: DeckVersion) => {
-            if (!ownerAccessKey) return;
-            void restoreVersion({
-              deckId: workspace.deck.id,
-              ownerAccessKey,
-              versionId: version.id,
-              baseDeckVersion: workspace.deck.version,
-            })
-              .then((receipt) => {
-                if (receipt.patch.status !== 'accepted') {
-                  if (receipt.workspace) installWorkspace(receipt.workspace, ownerAccessKey);
-                  setToast({
-                    kind: 'error',
-                    message:
-                      'This deck changed before the restore could apply. No version history was changed.',
-                  });
-                  return;
-                }
-                if (receipt.workspace) {
-                  installWorkspace(receipt.workspace, ownerAccessKey);
-                  setUndoStack([]);
-                  setRedoStack([]);
-                  setCanvasResetKey((value) => value + 1);
-                }
-              })
-              .catch((error: unknown) =>
-                setToast({
-                  kind: 'error',
-                  message: errorMessage(error, 'Version restore failed.'),
-                }),
-              );
+          onSendCommentToAi={(comment) => {
+            setAiCommentContext({
+              id: comment.id,
+              kind: 'comment',
+              label: `Comment by ${comment.authorName}`,
+              text: comment.text,
+              anchor: comment.anchor,
+            });
+            setActiveInspectorTab('ai');
+            setInspectorCollapsed(false);
           }}
+          onRestoreVersion={handleRestoreVersion}
         />
       </div>
 
@@ -1885,60 +2971,237 @@ export function NodeSlideStudio() {
         onCopy={() => {
           const publication = workspace.publication;
           if (!publication || publication.status !== 'active') return;
+          const requestGate = editorRequestGateRef.current;
+          const requestToken = requestGate.begin('publication', workspace.deck.id);
           setShareBusy(true);
           void shareDeck(publication.shareSlug)
-            .then(() => setToast({ kind: 'success', message: 'Frozen view-only link copied.' }))
-            .catch((error: unknown) =>
+            .then(() => {
+              if (requestGate.isCurrent(requestToken)) {
+                setToast({ kind: 'success', message: 'Frozen view-only link copied.' });
+              }
+            })
+            .catch((error: unknown) => {
+              if (!requestGate.isCurrent(requestToken)) return;
               setToast({
                 kind: 'error',
                 message: errorMessage(error, 'Share link could not be copied.'),
-              }),
-            )
-            .finally(() => setShareBusy(false));
+              });
+            })
+            .finally(() => {
+              if (requestGate.isCurrent(requestToken)) setShareBusy(false);
+            });
         }}
         onPublish={() => {
           if (!ownerAccessKey) return;
+          const requestedDeckId = workspace.deck.id;
+          const requestedOwnerAccessKey = ownerAccessKey;
+          const requestGate = editorRequestGateRef.current;
+          const requestToken = requestGate.begin('publication', requestedDeckId);
           setShareBusy(true);
-          void publishDeck({ deckId: workspace.deck.id, ownerAccessKey })
+          void publishDeck({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+          })
             .then(async (published) => {
+              if (!requestGate.isCurrent(requestToken)) return;
               try {
                 await shareDeck(published.publication.shareSlug);
+                if (!requestGate.isCurrent(requestToken)) return;
                 setToast({
                   kind: 'success',
                   message: `Published immutable version ${published.publication.deckVersion}; link copied.`,
                 });
               } catch {
+                if (!requestGate.isCurrent(requestToken)) return;
                 setToast({
                   kind: 'error',
                   message: `Published immutable version ${published.publication.deckVersion}, but this browser could not copy the link. Use “Copy existing link” to retry.`,
                 });
               }
             })
-            .catch((error: unknown) =>
+            .catch((error: unknown) => {
+              if (!requestGate.isCurrent(requestToken)) return;
               setToast({
                 kind: 'error',
                 message: errorMessage(error, 'The current deck could not be published.'),
-              }),
-            )
-            .finally(() => setShareBusy(false));
+              });
+            })
+            .finally(() => {
+              if (requestGate.isCurrent(requestToken)) setShareBusy(false);
+            });
         }}
         onRevoke={() => {
           if (!ownerAccessKey) return;
+          const requestedDeckId = workspace.deck.id;
+          const requestedOwnerAccessKey = ownerAccessKey;
+          const requestGate = editorRequestGateRef.current;
+          const requestToken = requestGate.begin('publication', requestedDeckId);
           setShareBusy(true);
-          void revokePublication({ deckId: workspace.deck.id, ownerAccessKey })
-            .then(() => setToast({ kind: 'success', message: 'The view-only link was revoked.' }))
-            .catch((error: unknown) =>
+          void revokePublication({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+          })
+            .then(() => {
+              if (requestGate.isCurrent(requestToken)) {
+                setToast({ kind: 'success', message: 'The view-only link was revoked.' });
+              }
+            })
+            .catch((error: unknown) => {
+              if (!requestGate.isCurrent(requestToken)) return;
               setToast({
                 kind: 'error',
                 message: errorMessage(error, 'The share link could not be revoked.'),
-              }),
-            )
-            .finally(() => setShareBusy(false));
+              });
+            })
+            .finally(() => {
+              if (requestGate.isCurrent(requestToken)) setShareBusy(false);
+            });
         }}
       />
       {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
     </main>
   );
+}
+
+function variationDirectionLabel(variation: SlideVariation): string {
+  const label = `${variation.axes.contentAngle.replace('_', ' ')} · ${variation.axes.layoutArchetype}`;
+  return label.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function buildAiReferences(
+  workspace: NodeSlideWorkspace,
+  activeSlide: Slide,
+  selectedElements: readonly SlideElement[],
+): AiReadReference[] {
+  const references = new Map<string, AiReadReference>();
+  const add = (reference: AiReadReference) =>
+    references.set(`${reference.kind}:${reference.id}`, reference);
+  add({ id: workspace.deck.id, kind: 'deck', label: workspace.deck.title });
+  add({ id: activeSlide.id, kind: 'slide', label: `Current slide: ${activeSlide.title}` });
+  for (const element of selectedElements) {
+    add({ id: element.id, kind: 'element', label: `Selected: ${element.name}` });
+  }
+  for (const slide of workspace.slides) {
+    add({ id: slide.id, kind: 'slide', label: `Slide: ${slide.title}` });
+  }
+  for (const element of workspace.elements.filter(
+    (element) => element.slideId === activeSlide.id,
+  )) {
+    add({ id: element.id, kind: 'element', label: `Layer: ${element.name}` });
+  }
+  for (const source of workspace.sources) {
+    add({ id: source.id, kind: 'source', label: `Source: ${source.title}` });
+  }
+  for (const comment of workspace.comments.filter((comment) => comment.status === 'open')) {
+    add({ id: comment.id, kind: 'comment', label: `Comment by ${comment.authorName}` });
+  }
+  return [...references.values()].slice(0, 96);
+}
+
+function fallbackEditorCommands(): NodeSlideEditorCapabilityRegistry['commands'] {
+  return [
+    { id: 'edit', authority: 'nodeslideAgent.proposeEdit', proposalKind: 'edit' },
+    { id: 'variations', authority: 'nodeslideVariations.generate', proposalKind: 'edit' },
+    {
+      id: 'propagate',
+      authority: 'nodeslide.proposePropagation',
+      proposalKind: 'propagation',
+    },
+  ];
+}
+
+function editorCommandLabel(command: NodeSlideEditorCommandId): string {
+  if (command === 'variations') return 'Generate three directions';
+  if (command === 'propagate') return 'Propagate accepted design behavior';
+  return 'Create a scoped edit proposal';
+}
+
+function editorCommandDescription(command: NodeSlideEditorCommandId): string {
+  if (command === 'variations') return 'Use the bounded three-direction variation authority.';
+  if (command === 'propagate')
+    return 'Create a separate proposal for semantic matches across slides.';
+  return 'Plan an edit inside the selected write scope.';
+}
+
+function latestPropagatablePatch(patches: readonly DeckPatch[]): DeckPatch | undefined {
+  return [...patches]
+    .filter(
+      (patch) =>
+        patch.status === 'accepted' &&
+        patch.proposalKind !== 'propagation' &&
+        patch.operations.some(
+          (operation) => operation.op === 'update_style' || operation.op === 'set_visibility_v1',
+        ),
+    )
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+}
+
+function reorderElementOperations(
+  slide: Slide,
+  elementIds: readonly string[],
+  action: LayerZOrderAction,
+): PatchOperation[] {
+  const selected = new Set(elementIds.filter((id) => slide.elementOrder.includes(id)));
+  const current = [...slide.elementOrder];
+  const operations: PatchOperation[] = [];
+  const move = (elementId: string, index: number) => {
+    const from = current.indexOf(elementId);
+    if (from < 0 || from === index) return;
+    current.splice(from, 1);
+    const boundedIndex = Math.max(0, Math.min(index, current.length));
+    current.splice(boundedIndex, 0, elementId);
+    operations.push({
+      op: 'reorder_element_v1',
+      slideId: slide.id,
+      elementId,
+      index: boundedIndex,
+    });
+  };
+
+  if (action === 'front') {
+    for (const elementId of slide.elementOrder.filter((id) => selected.has(id))) {
+      move(elementId, current.length - 1);
+    }
+  } else if (action === 'back') {
+    for (const elementId of slide.elementOrder.filter((id) => selected.has(id)).reverse()) {
+      move(elementId, 0);
+    }
+  } else if (action === 'forward') {
+    for (const elementId of [...slide.elementOrder].reverse()) {
+      if (!selected.has(elementId)) continue;
+      const index = current.indexOf(elementId);
+      if (index >= 0 && index < current.length - 1 && !selected.has(current[index + 1] ?? '')) {
+        move(elementId, index + 1);
+      }
+    }
+  } else {
+    for (const elementId of slide.elementOrder) {
+      if (!selected.has(elementId)) continue;
+      const index = current.indexOf(elementId);
+      if (index > 0 && !selected.has(current[index - 1] ?? '')) move(elementId, index - 1);
+    }
+  }
+  return operations;
+}
+
+function layerZOrderSummary(action: LayerZOrderAction, count: number): string {
+  const verb =
+    action === 'front'
+      ? 'Brought'
+      : action === 'forward'
+        ? 'Moved'
+        : action === 'backward'
+          ? 'Moved'
+          : 'Sent';
+  const destination =
+    action === 'front'
+      ? 'to front'
+      : action === 'forward'
+        ? 'forward'
+        : action === 'backward'
+          ? 'backward'
+          : 'to back';
+  return `${verb} ${count} layer${count === 1 ? '' : 's'} ${destination}`;
 }
 
 function clocksForScope(
@@ -1970,8 +3233,8 @@ function clocksForScope(
         for (const element of workspace.elements) {
           if (element.slideId === operation.slideId) elementIds.add(element.id);
         }
-      } else if (isElementOperation(operation) && operation.op !== 'add_element') {
-        elementIds.add(operation.elementId);
+      } else if (operation.op !== 'add_element') {
+        for (const elementId of operationElementIds(operation)) elementIds.add(elementId);
       }
     }
   }
@@ -2035,8 +3298,7 @@ function scopeForOperations(
   const elementIds = [
     ...new Set(
       operations.flatMap((operation) => {
-        if (!isElementOperation(operation)) return [];
-        return [operation.op === 'add_element' ? operation.element.id : operation.elementId];
+        return operationElementIds(operation);
       }),
     ),
   ];
@@ -2245,8 +3507,8 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 function responsiveBreakpoint(width: number): 'phone' | 'tablet' | 'desktop' {
-  if (width <= 720) return 'phone';
-  if (width <= 1100) return 'tablet';
+  if (width < 700) return 'phone';
+  if (width < 1100) return 'tablet';
   return 'desktop';
 }
 
@@ -2259,6 +3521,31 @@ function validationBlockMessage(
     return `${actionLabel} is blocked by ${validation.issues.length} structure, readability, source, or capability issue${validation.issues.length === 1 ? '' : 's'}. Open validation details to resolve them.`;
   }
   return `${actionLabel} is paused until ${validation.issues.length} cleanup warning${validation.issues.length === 1 ? ' is' : 's are'} reviewed.`;
+}
+
+function editorValidationStatus(
+  validation: NodeSlideWorkspace['validations'][number] | undefined,
+): 'verified' | 'needs_review' | 'classification_issue' | 'validating' {
+  if (!validation) return 'validating';
+  if (!validation.ok || !validation.publishOk) return 'classification_issue';
+  if (!validation.cleanOk || validation.issues.length > 0) return 'needs_review';
+  return 'verified';
+}
+
+function readStudioPreference(key: 'theme'): string | null {
+  try {
+    return window.localStorage.getItem(`nodeslide.v3.${key}`);
+  } catch {
+    return null;
+  }
+}
+
+function writeStudioPreference(key: 'theme', value: string) {
+  try {
+    window.localStorage.setItem(`nodeslide.v3.${key}`, value);
+  } catch {
+    // Visual preferences remain available for this session when storage is unavailable.
+  }
 }
 
 function hasSeenFirstRun() {

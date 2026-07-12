@@ -670,18 +670,52 @@ describe('NodeSlide canonical slide lifecycle', () => {
         [removeOperation],
       ),
     ).toContain('Operation remove_slide targets slide slide-1 outside scope.');
+    const elementScope: PatchScope = {
+      kind: 'elements',
+      deckId: 'deck-1',
+      slideIds: ['slide-1'],
+      elementIds: ['headline'],
+      operationMode: 'unrestricted',
+    };
+    const wholeSlideOperations: PatchOperation[] = [
+      { op: 'add_slide', ...slideBundle(), index: 1 },
+      removeOperation,
+      { op: 'update_slide', slideId: 'slide-1', properties: { title: 'Escaped' } },
+      { op: 'reorder_slide', slideId: 'slide-1', index: 0 },
+    ];
+    for (const operation of wholeSlideOperations) {
+      expect(validatePatchScope(elementScope, [operation])).toContain(
+        `Operation ${operation.op} targets a whole slide outside element-scoped authority.`,
+      );
+    }
+
     expect(
       validatePatchScope(
         {
-          kind: 'elements',
+          kind: 'bounding_box',
           deckId: 'deck-1',
+          slideIds: ['slide-1'],
+          elementIds: ['headline'],
+          bbox: { x: 0, y: 0, width: 0.5, height: 0.5 },
+          operationMode: 'unrestricted',
+        },
+        [{ op: 'update_slide', slideId: 'slide-1', properties: { title: 'Escaped' } }],
+      ),
+    ).toContain('Operation update_slide targets a whole slide outside element-scoped authority.');
+
+    expect(
+      validatePatchScope(
+        {
+          kind: 'comment',
+          deckId: 'deck-1',
+          commentId: 'comment-1',
           slideIds: ['slide-1'],
           elementIds: ['headline'],
           operationMode: 'unrestricted',
         },
-        [removeOperation],
+        [{ op: 'reorder_slide', slideId: 'slide-1', index: 0 }],
       ),
-    ).toContain('Operation remove_slide targets a whole slide outside element scope.');
+    ).toContain('Operation reorder_slide targets a whole slide outside element-scoped authority.');
 
     const current = snapshot();
     const scopedNewSlide: PatchScope = {

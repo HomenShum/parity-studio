@@ -36,6 +36,8 @@ interface ProjectDialogProps {
   clientSessionId: string;
   recentDecks: readonly RecentDeck[];
   creating: boolean;
+  error?: string | null;
+  onClearError?: () => void;
   onClose: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onOpenDeck: (deckId: string) => void;
@@ -67,6 +69,8 @@ export function ProjectDialog({
   clientSessionId,
   recentDecks,
   creating,
+  error = null,
+  onClearError,
   onClose,
   onCreate,
   onOpenDeck,
@@ -90,6 +94,7 @@ export function ProjectDialog({
   const profileHeadingId = `${dialogId}-profile-heading`;
   const providerHeadingId = `${dialogId}-provider-heading`;
   const accessCodeDescriptionId = `${dialogId}-access-code-description`;
+  const createStatusId = `${dialogId}-create-status`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
@@ -174,6 +179,20 @@ export function ProjectDialog({
     setAccessCode('');
   };
 
+  const createBlocker = !title.trim()
+    ? 'Add a deck title to continue.'
+    : !prompt.trim()
+      ? 'Describe what this deck should accomplish.'
+      : !audience.trim()
+        ? 'Add the intended audience under Improve the brief.'
+        : !purpose.trim()
+          ? 'Add the deck purpose under Improve the brief.'
+          : !accessCode.trim()
+            ? 'Enter the private-preview access code to continue.'
+            : providerMode === 'openrouter_free' && !providerConsent
+              ? 'Confirm consent before sending this brief to OpenRouter.'
+              : null;
+
   if (!open) return null;
 
   return (
@@ -250,6 +269,7 @@ export function ProjectDialog({
             role="tabpanel"
             aria-labelledby={createTabId}
             onSubmit={submit}
+            onChangeCapture={error ? onClearError : undefined}
             data-testid="new-deck-form"
             aria-busy={creating}
           >
@@ -470,13 +490,21 @@ export function ProjectDialog({
               </section>
             </div>
             <footer>
-              {creating ? (
-                <output aria-live="polite">
+              {error ? (
+                <output className="ns-project-error" id={createStatusId} role="alert">
+                  {error}
+                </output>
+              ) : creating ? (
+                <output id={createStatusId} aria-live="polite">
                   <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and
                   validating…
                 </output>
+              ) : createBlocker ? (
+                <span className="ns-create-blocker" id={createStatusId} aria-live="polite">
+                  {createBlocker}
+                </span>
               ) : (
-                <span>
+                <span id={createStatusId}>
                   {providerMode === 'deterministic' ? (
                     <>
                       <ShieldCheck size={13} /> Deterministic · brief stays inside NodeSlide
@@ -491,15 +519,8 @@ export function ProjectDialog({
               <button
                 className="ns-button ns-button--accent"
                 type="submit"
-                disabled={
-                  creating ||
-                  !title.trim() ||
-                  !prompt.trim() ||
-                  !audience.trim() ||
-                  !purpose.trim() ||
-                  !accessCode.trim() ||
-                  (providerMode === 'openrouter_free' && !providerConsent)
-                }
+                disabled={creating || createBlocker !== null}
+                aria-describedby={createStatusId}
               >
                 {creating ? 'Creating deck…' : 'Create deck'} <ArrowRight size={14} />
               </button>

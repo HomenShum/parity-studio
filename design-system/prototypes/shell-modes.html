@@ -1,0 +1,160 @@
+<!-- @dsCard group="Prototypes" -->
+<style>
+  .sm { font-family: "Inter", -apple-system, system-ui, sans-serif; background: #09090B; color: #F2F4F7; padding: 24px; border-radius: 14px; }
+  .sm * { box-sizing: border-box; margin: 0; }
+  .sm button { font: inherit; cursor: pointer; background: none; border: 0; color: inherit; padding: 0; }
+  .sm .kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #99A3AE; font-weight: 600; }
+  .sm h1 { font-family: "Manrope", sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 14px; }
+  .sm .shell { border: 1px solid rgba(255,255,255,.10); border-radius: 10px; overflow: hidden; background: #09090B; }
+  .sm .top { height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #111418; border-bottom: 1px solid rgba(255,255,255,.10); font-size: 11px; }
+  .sm .top .t { font-family: "Manrope", sans-serif; font-weight: 700; }
+  .sm .top .v { font-family: "JetBrains Mono", monospace; font-size: 9px; color: #8A94A0; }
+  .sm .cols { display: flex; height: 356px; }
+  .sm .rail { width: 172px; flex: none; background: #111418; border-right: 1px solid rgba(255,255,255,.10); display: flex; flex-direction: column; }
+  .sm .tabs { display: flex; gap: 2px; padding: 6px 6px 4px; }
+  .sm .tab { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: #8A94A0; padding: 3px 7px; border-radius: 5px; }
+  .sm .tab.on { background: rgba(217,119,87,.12); color: #E59579; }
+  .sm .railbody { flex: 1; overflow: hidden; padding: 4px 6px; font-size: 10px; }
+  .sm .sec { font-family: "JetBrains Mono", monospace; font-size: 8px; letter-spacing: .1em; color: #8A94A0; padding: 6px 4px 3px; display: flex; justify-content: space-between; }
+  .sm .row { display: flex; gap: 6px; align-items: center; padding: 4px; border-radius: 6px; }
+  .sm .row.on { background: rgba(217,119,87,.10); }
+  .sm .thumb { width: 40px; aspect-ratio: 16/9; background: #FBF8F2; border-radius: 2px; flex: none; border-top: 1.5px solid #B0562F; }
+  .sm .row .meta { min-width: 0; flex: 1; }
+  .sm .row .title { color: #C6CCD4; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sm .row .st { font-family: "JetBrains Mono", monospace; font-size: 7.5px; color: #8A94A0; display: flex; gap: 5px; align-items: center; }
+  .sm .dotA { width: 5px; height: 5px; border-radius: 99px; background: #5E6AD2; display: inline-block; }
+  .sm .dotW { width: 5px; height: 5px; border-radius: 99px; background: #EFB785; display: inline-block; }
+  .sm .orow { padding: 5px 4px; border-left: 2px solid rgba(94,106,210,.4); margin: 3px 0 3px 4px; }
+  .sm .orow.on { border-left-color: #D97757; background: rgba(217,119,87,.06); }
+  .sm .orow .role { font-family: "JetBrains Mono", monospace; font-size: 7.5px; letter-spacing: .08em; color: #8E97E8; }
+  .sm .orow .claim { font-size: 9.5px; color: #C6CCD4; line-height: 1.35; }
+  .sm .orow .ev { font-family: "JetBrains Mono", monospace; font-size: 7.5px; color: #2E9E6B; }
+  .sm .lrow { display: flex; gap: 6px; align-items: center; padding: 3.5px 4px; font-size: 9.5px; color: #C6CCD4; }
+  .sm .lrow .ic { font-family: "JetBrains Mono", monospace; font-size: 8px; color: #8A94A0; width: 12px; flex: none; }
+  .sm .lrow .lk { margin-left: auto; font-size: 8px; color: #8A94A0; }
+  .sm .canvas { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .sm .cbar { height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 10px; color: #99A3AE; }
+  .sm .cbar .modes { display: flex; gap: 2px; margin-left: auto; }
+  .sm .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 14px; gap: 0; min-height: 0; }
+  .sm .slide { background: #FBF8F2; color: #1F2937; border-radius: 4px; aspect-ratio: 16/9; width: 82%; padding: 4.5% 5.5%; position: relative; border-top: 3px solid #B0562F; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 9px; }
+  .sm .slide .kk { font-size: .68em; letter-spacing: .14em; color: #B0562F; font-weight: 700; font-size: 7px; }
+  .sm .slide .bar { width: 18px; height: 2.5px; background: #B0562F; margin: 10px 0 5px; }
+  .sm .slide h4 { font-family: "Manrope", sans-serif; font-size: 14px; letter-spacing: -0.01em; line-height: 1.15; font-weight: 700; }
+  .sm .slide .bul { display: flex; gap: 5px; font-size: 8px; color: #374151; padding: 3.5px 0; border-bottom: 1px solid rgba(17,24,39,.07); }
+  .sm .slide .bul b { font-family: "JetBrains Mono", monospace; font-size: 6.5px; color: #B0562F; font-weight: 600; }
+  .sm .slide .foot { position: absolute; left: 5.5%; right: 5.5%; bottom: 4%; border-top: 1px solid rgba(17,24,39,.08); padding-top: 3px; display: flex; justify-content: space-between; font-family: "JetBrains Mono", monospace; font-size: 5.5px; color: #6B7280; }
+  .sm .slide .sel { position: absolute; border: 1.5px dashed #5E6AD2; border-radius: 2px; }
+  /* compare mode */
+  .sm .half { width: 44%; }
+  .sm .seam { width: 34px; flex: none; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; position: relative; }
+  .sm .seam::before { content: ""; position: absolute; top: 8%; bottom: 8%; left: 50%; width: 1px; background: rgba(94,106,210,.5); }
+  .sm .opchip { position: relative; z-index: 1; font-family: "JetBrains Mono", monospace; font-size: 7px; background: #111418; border: 1px solid rgba(94,106,210,.5); color: #8E97E8; border-radius: 99px; padding: 2px 6px; white-space: nowrap; }
+  .sm .opchip.add { border-color: rgba(46,158,107,.5); color: #2E9E6B; }
+  .sm .receipt { border-top: 1px dashed rgba(217,119,87,.24); padding: 6px 12px; font-family: "JetBrains Mono", monospace; font-size: 9px; color: #8A94A0; display: flex; gap: 12px; }
+  .sm .receipt .ok { color: #2E9E6B; }
+  .sm .lbl { font-family: "JetBrains Mono", monospace; font-size: 7px; letter-spacing: .1em; color: #8A94A0; text-align: center; margin-bottom: 4px; }
+  .sm .note { font-size: 12px; color: #C6CCD4; line-height: 1.55; padding: 10px 14px; border-left: 2px solid rgba(217,119,87,.24); background: #111418; border-radius: 0 8px 8px 0; margin-top: 14px; max-width: 72ch; }
+  .sm .note strong { color: #F2F4F7; }
+</style>
+<div class="sm">
+  <div class="kicker">NodeSlide · Prototypes · Shell modes</div>
+  <h1>One shell, three questions: navigate · view · decide</h1>
+
+  <div class="shell">
+    <div class="top"><span class="t">Q3 Portfolio Review</span><span class="v">deck v18</span>
+      <span style="margin-left:auto;font-size:10px;color:#8A94A0">Undo · Redo</span>
+      <span style="font-size:10px;color:#E59579">Share · Present · Export</span>
+    </div>
+    <div class="cols">
+      <div class="rail">
+        <div class="tabs">
+          <button class="tab on" data-rt="slides" onclick="smRail('slides',this)">Slides</button>
+          <button class="tab" data-rt="outline" onclick="smRail('outline',this)">Outline</button>
+          <button class="tab" data-rt="layers" onclick="smRail('layers',this)">Layers</button>
+        </div>
+        <div class="railbody" id="sm-rail-slides">
+          <div class="sec">INTRODUCTION <span>2</span></div>
+          <div class="row"><div class="thumb"></div><div class="meta"><div class="title">Cover</div><div class="st">v18</div></div></div>
+          <div class="row"><div class="thumb"></div><div class="meta"><div class="title">Problem</div><div class="st"><span class="dotW"></span>1 warning</div></div></div>
+          <div class="sec">PRODUCT <span>4</span></div>
+          <div class="row on"><div class="thumb"></div><div class="meta"><div class="title">Product thesis</div><div class="st"><span class="dotA"></span>proposal ready · 2 💬</div></div></div>
+          <div class="row"><div class="thumb"></div><div class="meta"><div class="title">Architecture</div><div class="st">3 sources · current</div></div></div>
+          <div style="padding:6px 4px;font-size:9px;color:#8A94A0">+ Add slide</div>
+        </div>
+        <div class="railbody" id="sm-rail-outline" style="display:none">
+          <div class="orow"><div class="role">03 · CONTEXT</div><div class="claim">Current tools fail at shared state.</div><div class="ev">▮ 2 sources</div></div>
+          <div class="orow on"><div class="role">04 · RECOMMENDATION</div><div class="claim">Structured, reviewable authoring is the moat.</div><div class="ev">▮ 3 sources · current</div></div>
+          <div class="orow"><div class="role">05 · PROOF</div><div class="claim">Live collaboration without silent overwrites.</div><div class="ev" style="color:#EFB785">▮ 1 source stale</div></div>
+        </div>
+        <div class="railbody" id="sm-rail-layers" style="display:none">
+          <div class="sec">SLIDE 04 · LAYERS</div>
+          <div class="lrow"><span class="ic">T</span>Headline<span class="lk"></span></div>
+          <div class="lrow" style="background:rgba(94,106,210,.10);border-radius:5px"><span class="ic">T</span>Subtitle<span class="lk" style="color:#8E97E8">● selected</span></div>
+          <div class="lrow"><span class="ic">▦</span>Revenue chart<span class="lk" style="color:#2E9E6B">⛁ bound</span></div>
+          <div class="lrow"><span class="ic">T</span>Citation<span class="lk"></span></div>
+          <div class="lrow"><span class="ic">T</span>Page number<span class="lk">🔒</span></div>
+        </div>
+      </div>
+
+      <div class="canvas">
+        <div class="cbar">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px">04 / 12</span>
+          <span>Product thesis</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#2E9E6B">▮ ok</span>
+          <div class="modes">
+            <button class="tab on" data-cm="edit" onclick="smCanvas('edit',this)">Edit</button>
+            <button class="tab" data-cm="compare" onclick="smCanvas('compare',this)">Compare</button>
+          </div>
+        </div>
+        <div class="stage" id="sm-stage-edit">
+          <div class="slide">
+            <div class="kk">PRODUCT · THESIS</div>
+            <div class="bar"></div>
+            <h4>Not another deck generator.</h4>
+            <div class="sel" style="left:5.5%;right:38%;top:56%;height:10%"></div>
+            <div style="font-size:7px;color:#6B7280;margin-top:4px;max-width:60%">Structured, reviewable authoring — every edit is a patch, every patch has a receipt.</div>
+            <div class="foot"><span>Q3 Portfolio Review</span><span>04 / 12</span></div>
+          </div>
+        </div>
+        <div class="stage" id="sm-stage-compare" style="display:none">
+          <div class="half">
+            <div class="lbl">BASELINE · v18</div>
+            <div class="slide" style="width:100%">
+              <div class="kk">PRODUCT · THESIS</div>
+              <div class="bar"></div>
+              <h4>Our product approach is differentiated.</h4>
+              <div class="foot"><span>Q3 Portfolio Review</span><span>04 / 12</span></div>
+            </div>
+          </div>
+          <div class="seam">
+            <span class="opchip">replace_text · headline</span>
+            <span class="opchip add">add_block · stat</span>
+          </div>
+          <div class="half">
+            <div class="lbl" style="color:#8E97E8">PROPOSAL · p_c4a2 · agent</div>
+            <div class="slide" style="width:100%;outline:1.5px solid rgba(94,106,210,.45);outline-offset:2px">
+              <div class="kk">PRODUCT · THESIS</div>
+              <div class="bar"></div>
+              <h4>Not another deck generator.</h4>
+              <div style="font-family:'Manrope',sans-serif;font-size:13px;color:#B0562F;font-weight:700;margin-top:4px">0 silent edits</div>
+              <div class="foot"><span>Q3 Portfolio Review</span><span>04 / 12</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="receipt"><span>compare · v18 → candidate</span><span class="ok">▮ candidate ok</span><span>2 ops</span><span style="color:#E59579">Accept</span><span>Decline</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><strong>The seam is the signature.</strong> Compare mode doesn't just show before/after — the divider carries the actual patch ops, pinned between the two truths they connect, with the candidate receipt underneath. The diff is the interface. Rail modes answer "where am I navigating" (Slides / Outline with claims + evidence state / Layers with locks and bindings); canvas modes answer "how am I viewing"; the ops on the seam answer "what exactly changes if I say yes."</p>
+</div>
+<script>
+  window.smRail = (mode, btn) => {
+    ['slides','outline','layers'].forEach(m => { document.getElementById('sm-rail-' + m).style.display = m === mode ? '' : 'none'; });
+    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t === btn));
+  };
+  window.smCanvas = (mode, btn) => {
+    ['edit','compare'].forEach(m => { document.getElementById('sm-stage-' + m).style.display = m === mode ? (m === 'compare' ? 'flex' : 'flex') : 'none'; });
+    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t === btn));
+  };
+</script>

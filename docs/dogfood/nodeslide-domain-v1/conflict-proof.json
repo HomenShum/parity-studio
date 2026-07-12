@@ -1,27 +1,27 @@
 {
-  "generatedAt": "2026-07-11T13:18:05.559Z",
-  "deckId": "deck_golden_02cc8tx",
+  "generatedAt": "2026-07-12T21:54:43.187Z",
+  "deckId": "deck_golden_04doz9e",
   "sharedBaseDeckVersion": 1,
   "finalDeckVersion": 3,
   "clientA": {
-    "slideId": "slide_d4cc729320c1b44376561e68fa5b8c9a",
-    "elementId": "element_6dd0a812336904b9d97363d3d2050c43",
+    "slideId": "slide_5af1446e5ded83926166bd09cf693e8d",
+    "elementId": "element_26349db65ec668f48ad847d01d2721be",
     "status": "accepted",
     "rebased": false
   },
   "clientBNonOverlap": {
-    "slideId": "slide_9dc648579c6e5918dd1bd5fab7dd7c2a",
-    "elementId": "element_ddcc989a282185eecb05076ffee44189",
+    "slideId": "slide_30d0ed15481bbefa72d561c05b7c03c3",
+    "elementId": "element_523c41b3b54da366ba2a76b1bd05f7d5",
     "status": "accepted",
     "rebased": true
   },
   "clientBOverlap": {
-    "slideId": "slide_d4cc729320c1b44376561e68fa5b8c9a",
-    "elementId": "element_6dd0a812336904b9d97363d3d2050c43",
+    "slideId": "slide_5af1446e5ded83926166bd09cf693e8d",
+    "elementId": "element_26349db65ec668f48ad847d01d2721be",
     "status": "stale",
     "staleReasons": [
-      "Slide slide_d4cc729320c1b44376561e68fa5b8c9a changed from v1 to v2.",
-      "Element element_6dd0a812336904b9d97363d3d2050c43 changed from v1 to v2."
+      "Slide slide_5af1446e5ded83926166bd09cf693e8d changed from v1 to v2.",
+      "Element element_26349db65ec668f48ad847d01d2721be changed from v1 to v2."
     ]
   },
   "finalContentPreserved": {

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "nodeslide.native-artifact-qa/v1",
+  "generatedAt": "2026-07-12T04:05:59.1155439Z",
+  "method": {
+    "renderer": "presentations/container_tools/render_slides.py",
+    "overflowChecker": "presentations/container_tools/slides_test.py",
+    "visualInspection": "all slides inspected individually at original rendered resolution",
+    "scratchArtifactsCommitted": false
+  },
+  "summary": {
+    "deckCount": 3,
+    "slideCount": 21,
+    "pptxOverflowFailures": 0,
+    "observedClipping": 0,
+    "observedUnintendedOverlap": 0,
+    "observedBrokenWrapping": 0,
+    "observedDuplicateSequenceLabels": 0,
+    "observedPageMarkerDrift": 0,
+    "visualReviewPassed": true
+  },
+  "artifacts": [
+    {
+      "id": "founder",
+      "pptx": {
+        "file": "founder.pptx",
+        "bytes": 137336,
+        "sha256": "1fdb946a25c05c8a1718ae88f55383ef3f5f79b044e33028ea7487b91d1b6494",
+        "renderedSlides": 7,
+        "overflowCheck": "passed"
+      },
+      "html": {
+        "file": "founder.html",
+        "bytes": 78974,
+        "sha256": "68ec08d40320033a4d1fe2f19491198e2186c2f115cf192614e508262fafbe58"
+      },
+      "visualCheck": "passed"
+    },
+    {
+      "id": "investor",
+      "pptx": {
+        "file": "investor.pptx",
+        "bytes": 137277,
+        "sha256": "76344c1eb32efc810685d68fac6d784dbe2415f27793da681825e8cb62bab492",
+        "renderedSlides": 7,
+        "overflowCheck": "passed"
+      },
+      "html": {
+        "file": "investor.html",
+        "bytes": 78873,
+        "sha256": "99bfc945ede429a7a001d3b6a65161ee22989e1820fbd2bdc87fca940535c446"
+      },
+      "visualCheck": "passed"
+    },
+    {
+      "id": "technical",
+      "pptx": {
+        "file": "technical.pptx",
+        "bytes": 137533,
+        "sha256": "40082477554a7e03f145fe845742c10a060dd8dbc1436e1eebbb118850706473",
+        "renderedSlides": 7,
+        "overflowCheck": "passed"
+      },
+      "html": {
+        "file": "technical.html",
+        "bytes": 79351,
+        "sha256": "46d2a35542be91b07a2836c23f77f691db7aa2753439df27f957275c6fe3e12f"
+      },
+      "visualCheck": "passed"
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "id": "duplicate-sequence-labels",
+      "before": "Approach slides rendered duplicated labels such as 01 01.",
+      "resolution": "Removed authored numeric prefixes from deterministic fallback bullets; layout numbering remains singular.",
+      "regressionTest": "convex/lib/nodeslideSeed.test.ts"
+    },
+    {
+      "id": "lowercase-outcome-headlines",
+      "before": "Lowercase brief purpose text appeared verbatim as opening and closing headlines.",
+      "resolution": "Added deterministic sentence-case normalization.",
+      "regressionTest": "convex/lib/nodeslideSeed.test.ts"
+    }
+  ],
+  "qualityCaveat": "The final fallback artifacts are safe, readable, and structurally clean, but repeated composition and generic middle-act copy remain an R2 professional-quality hold."
+}

@@ -1,0 +1,54 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  NODESLIDE_OPENROUTER_EDIT_CONSENT,
+  NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+} from '../../shared/nodeslide';
+import {
+  invokeConsentedNodeSlideProvider,
+  validateNodeSlideProviderChoice,
+} from './nodeslideProviderConsent';
+
+describe('NodeSlide provider consent authority', () => {
+  it('defaults both provider-backed operations to deterministic no-egress', async () => {
+    const invoke = vi.fn(async () => 'provider');
+    const edit = validateNodeSlideProviderChoice('propose_edit', undefined, undefined);
+    const variations = validateNodeSlideProviderChoice('variations', undefined, undefined);
+
+    expect(edit).toEqual({ providerMode: 'deterministic' });
+    expect(variations).toEqual({ providerMode: 'deterministic' });
+    expect(await invokeConsentedNodeSlideProvider(edit, invoke)).toBeNull();
+    expect(await invokeConsentedNodeSlideProvider(variations, invoke)).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('requires exact, non-interchangeable operation consent tokens', () => {
+    expect(
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_EDIT_CONSENT,
+      ),
+    ).toMatchObject({ providerMode: 'openrouter_free' });
+    expect(
+      validateNodeSlideProviderChoice(
+        'variations',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+      ),
+    ).toMatchObject({ providerMode: 'openrouter_free' });
+    expect(() =>
+      validateNodeSlideProviderChoice(
+        'variations',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_EDIT_CONSENT,
+      ),
+    ).toThrow(/Exact variation consent/);
+    expect(() =>
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+      ),
+    ).toThrow(/Exact edit-review consent/);
+  });
+});

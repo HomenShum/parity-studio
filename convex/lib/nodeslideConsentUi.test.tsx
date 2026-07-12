@@ -30,6 +30,27 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('type="password"');
     expect(markup).toContain('name="nodeslide-preview-access-code"');
     expect(markup).toContain('autoComplete="off"');
+    expect(markup).toContain('Add a deck title to continue.');
+    expect(markup).toMatch(/type="submit"[^>]*disabled[^>]*aria-describedby/);
+  });
+
+  it('renders admission failures inside the project dialog', () => {
+    const markup = renderToStaticMarkup(
+      <ProjectDialog
+        open
+        clientSessionId="session-test"
+        recentDecks={[]}
+        creating={false}
+        error="That private-preview access code is not valid."
+        onClearError={() => undefined}
+        onClose={() => undefined}
+        onCreate={() => undefined}
+        onOpenDeck={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('That private-preview access code is not valid.');
   });
 
   it('uses the same versioned OpenRouter consent token in UI and server contracts', () => {

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-11T13:17:37.624Z",
-  "sourceCommit": "5df8c6739e36b77184e4e399538cab561b89e653",
-  "sourceDirty": false,
+  "generatedAt": "2026-07-12T21:55:04.416Z",
+  "sourceCommit": "7bb35830600fd82a5e344bfe6c438211d7dc3085",
+  "sourceDirty": true,
   "contractVersion": "nodeslide.signature-apply/v1",
   "sourceDeck": {
     "id": "deck_golden_1mexhug",
@@ -15,7 +15,7 @@
       "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
       "profileName": "Finance reporting",
       "planId": "signature-plan:deck_golden_1mexhug:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:1lg5t6u",
-      "planElapsedMs": 13.813,
+      "planElapsedMs": 21.671,
       "operationCount": 53,
       "operationKinds": [
         "update_slide",
@@ -120,7 +120,7 @@
       "profileId": "taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800",
       "profileName": "Startup narrative",
       "planId": "signature-plan:deck_golden_1mexhug:taste-pack:startup-narrative:c681139d20341a60fdb37cc5e6edc6f133ae20b463bef9c4a3f74ee155ce0800:v1:0m5rqye",
-      "planElapsedMs": 1.655,
+      "planElapsedMs": 4.573,
       "operationCount": 53,
       "operationKinds": [
         "update_slide",
@@ -233,16 +233,16 @@
     ]
   },
   "productionDogfood": {
-    "deploymentUrl": "https://blissful-pig-998.convex.cloud",
-    "disposableDeckId": "deck_golden_04sgckm",
+    "deploymentUrl": "https://secret-vulture-733.convex.cloud",
+    "disposableDeckId": "deck_golden_0g05pa1",
     "plan": {
-      "id": "signature-plan:deck_golden_04sgckm:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:14vriyg",
-      "elapsedMs": 1.362,
+      "id": "signature-plan:deck_golden_0g05pa1:taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860:v1:0aboc85",
+      "elapsedMs": 2.833,
       "operationCount": 53
     },
     "application": {
-      "elapsedMs": 334.296,
-      "patchId": "patch_w2_signature_mrge34zj",
+      "elapsedMs": 389.342,
+      "patchId": "patch_w2_signature_mric0e7l",
       "baseDeckVersion": 1,
       "resultingDeckVersion": 2,
       "profileId": "taste-pack:finance-ibcs:2cde08daced9c7ccafb12ed7127c62077a91ab127491f08a27bf7a3a4c3cb860",
@@ -264,8 +264,8 @@
       "freshClientReloaded": true
     },
     "history": {
-      "versionReceiptId": "version_d15b25fdbca35752685e896ae76170a8",
-      "linkedCommentId": "comment_w2_signature_mrge34zj",
+      "versionReceiptId": "version_0c129fe6f90b1dda3d6461e88282285b",
+      "linkedCommentId": "comment_w2_signature_mric0e7l",
       "linkedCommentResolved": true,
       "offBrandIssueCodes": [
         "on_brand_color"
@@ -282,7 +282,7 @@
       "rejectionWasAtomic": true,
       "accepted512": true,
       "acceptedOperationCount": 512,
-      "elapsedMs": 367.729
+      "elapsedMs": 342.944
     },
     "tenantIsolation": {
       "wrongOwnerDenied": true,

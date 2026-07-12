@@ -1,6 +1,7 @@
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
   ReactNode,
   PointerEvent as ReactPointerEvent,
 } from 'react';
@@ -17,6 +18,8 @@ interface SlideRendererProps {
   isElementSelected?: (element: SlideElement) => boolean;
   onElementKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>, element: SlideElement) => void;
   onElementPointerDown?: (event: ReactPointerEvent<HTMLDivElement>, element: SlideElement) => void;
+  onElementDoubleClick?: (event: ReactMouseEvent<HTMLDivElement>, element: SlideElement) => void;
+  renderElementContent?: (element: SlideElement, defaultContent: ReactNode) => ReactNode;
 }
 
 export function SlideRenderer({
@@ -30,10 +33,14 @@ export function SlideRenderer({
   isElementSelected,
   onElementKeyDown,
   onElementPointerDown,
+  onElementDoubleClick,
+  renderElementContent,
 }: SlideRendererProps) {
   const orderedElements = slide.elementOrder
     .map((id) => elements.find((element) => element.id === id))
-    .filter((element): element is SlideElement => element !== undefined);
+    .filter(
+      (element): element is SlideElement => element !== undefined && element.visible !== false,
+    );
 
   return (
     <div
@@ -64,6 +71,9 @@ export function SlideRenderer({
           onPointerDown={
             onElementPointerDown ? (event) => onElementPointerDown(event, element) : undefined
           }
+          onDoubleClick={
+            onElementDoubleClick ? (event) => onElementDoubleClick(event, element) : undefined
+          }
           role={onElementKeyDown ? 'button' : undefined}
           style={{
             left: `${element.bbox.x * 100}%`,
@@ -76,7 +86,9 @@ export function SlideRenderer({
           }}
           tabIndex={onElementKeyDown ? 0 : undefined}
         >
-          <ElementContent element={element} theme={theme} />
+          {renderElementContent?.(element, <ElementContent element={element} theme={theme} />) ?? (
+            <ElementContent element={element} theme={theme} />
+          )}
         </div>
       ))}
       {children}

@@ -15,12 +15,19 @@ import {
   sourceFromRow,
 } from './lib/nodeslideData';
 import { nodeslideEventId, nodeslideHash, nodeslideStableId } from './lib/nodeslideIds';
+import {
+  NodeSlideProviderConsentError,
+  validateNodeSlideProviderChoice,
+} from './lib/nodeslideProviderConsent';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   findSignatureProfile,
   parseSignatureProfileFromStorage,
 } from './lib/nodeslideSignatureProfiles';
-import { nodeslideVariationValidator } from './lib/nodeslideValidators';
+import {
+  nodeslideProviderModeValidator,
+  nodeslideVariationValidator,
+} from './lib/nodeslideValidators';
 import {
   NODESLIDE_VARIATION_BATCH_LIMIT,
   NODESLIDE_VARIATION_CANDIDATE_BYTE_LIMIT,
@@ -73,13 +80,29 @@ export const generate = action({
     deckId: v.string(),
     ownerAccessKey: v.string(),
     slideId: v.string(),
+    providerMode: v.optional(nodeslideProviderModeValidator),
+    providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<VariationGenerationReceipt> => {
+    let providerChoice: ReturnType<typeof validateNodeSlideProviderChoice>;
+    try {
+      providerChoice = validateNodeSlideProviderChoice(
+        'variations',
+        args.providerMode,
+        args.providerConsent,
+      );
+    } catch (error) {
+      if (error instanceof NodeSlideProviderConsentError) {
+        throw publicVariationError('invalid_request', error.message);
+      }
+      throw error;
+    }
     const startedAt = Date.now();
-    const generationContext = (await ctx.runQuery(
-      variationInternal.getGenerationContext,
-      args,
-    )) as VariationGenerationContext | null;
+    const generationContext = (await ctx.runQuery(variationInternal.getGenerationContext, {
+      deckId: args.deckId,
+      ownerAccessKey: args.ownerAccessKey,
+      slideId: args.slideId,
+    })) as VariationGenerationContext | null;
     if (!generationContext) throw publicVariationError('invalid_request', 'Slide is unavailable.');
     const snapshot = generationContext.snapshot;
     const signatureProfile: SignatureProfile | undefined = generationContext.signatureProfileJson
@@ -101,9 +124,12 @@ export const generate = action({
       const start = await runWithContentionRetry(
         async () =>
           (await ctx.runMutation(variationInternal.beginGeneration, {
-            ...args,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            slideId: args.slideId,
             batchId: batchIdSeed,
             createdAt: startedAt,
+            providerMode: providerChoice.providerMode,
           })) as VariationGenerationStart,
       );
       if (!start.ok) {
@@ -125,16 +151,20 @@ export const generate = action({
     try {
       const prompt = buildVariationProviderPrompt(snapshot, args.slideId, signatureProfile);
       let provider: VariationProviderOutcome;
-      try {
-        const result = (await ctx.runAction(
-          variationProviderInternal.generateStrictJson,
-          prompt,
-        )) as VariationProviderOutcome;
-        provider = result?.ok
-          ? { ok: true, value: result.value }
-          : { ok: false, reason: cleanDiagnostic(result?.reason ?? 'provider_unavailable') };
-      } catch {
-        provider = { ok: false, reason: 'provider_unavailable' };
+      if (providerChoice.providerMode === 'deterministic') {
+        provider = { ok: false, reason: 'provider_not_requested' };
+      } else {
+        try {
+          const result = (await ctx.runAction(
+            variationProviderInternal.generateStrictJson,
+            prompt,
+          )) as VariationProviderOutcome;
+          provider = result?.ok
+            ? { ok: true, value: result.value }
+            : { ok: false, reason: cleanDiagnostic(result?.reason ?? 'provider_unavailable') };
+        } catch {
+          provider = { ok: false, reason: 'provider_unavailable' };
+        }
       }
       const built = buildSlideVariations({
         snapshot,
@@ -147,7 +177,9 @@ export const generate = action({
       return await runWithContentionRetry(
         async () =>
           (await ctx.runMutation(variationInternal.finishGeneration, {
-            ...args,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            slideId: args.slideId,
             batchId,
             origin: built.origin,
             ...(built.fallbackReason ? { fallbackReason: built.fallbackReason } : {}),
@@ -159,7 +191,9 @@ export const generate = action({
       try {
         await runWithContentionRetry(async () => {
           await ctx.runMutation(variationInternal.failGeneration, {
-            ...args,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            slideId: args.slideId,
             batchId,
             reason: safeGenerationFailure(error),
             elapsedMs: Date.now() - startedAt,
@@ -361,6 +395,7 @@ export const beginGeneration = internalMutation({
     slideId: v.string(),
     batchId: v.string(),
     createdAt: v.number(),
+    providerMode: v.optional(nodeslideProviderModeValidator),
   },
   handler: async (ctx, args): Promise<VariationGenerationStart> => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
@@ -393,7 +428,10 @@ export const beginGeneration = internalMutation({
       slideId: args.slideId,
       requestedCount: 3 as const,
       status: 'generating' as const,
-      origin: 'free_route' as const,
+      origin:
+        args.providerMode === 'openrouter_free'
+          ? ('free_route' as const)
+          : ('deterministic_fallback' as const),
       variationIds: [],
       elapsedMs: 0,
       createdAt: args.createdAt,

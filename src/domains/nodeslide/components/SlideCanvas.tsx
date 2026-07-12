@@ -1,10 +1,11 @@
 import {
+  ArrowDown,
+  ArrowUp,
   Bot,
   ChevronLeft,
   ChevronRight,
   Copy,
   Hand,
-  Layers3,
   MessageSquarePlus,
   Minus,
   Plus,
@@ -29,6 +30,11 @@ import type {
   SlideElement,
   ThemeSpec,
 } from '../../../../shared/nodeslide';
+import {
+  type InlineEditSession,
+  captureInlineEditSession,
+  inlineEditCommit,
+} from '../editorStateIntegrity';
 import { SlideRenderer } from './SlideRenderer';
 
 type ResizeDirection = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
@@ -65,6 +71,9 @@ interface SlideCanvasProps {
   onDuplicateElements: (elementIds: string[]) => void;
   onDeleteElements: (elementIds: string[]) => void;
   onApplyLayoutPatch: (operations: PatchOperation[], elementIds: string[], summary: string) => void;
+  onReplaceText: (elementId: string, text: string, baseElementVersion: number) => void;
+  onReorderElements: (elementIds: string[], direction: 'forward' | 'backward') => void;
+  onCursorChange?: (cursor: { x: number; y: number } | null) => void;
   onPreviousSlide: () => void;
   onNextSlide: () => void;
 }
@@ -88,6 +97,9 @@ export function SlideCanvas({
   onDuplicateElements,
   onDeleteElements,
   onApplyLayoutPatch,
+  onReplaceText,
+  onReorderElements,
+  onCursorChange,
   onPreviousSlide,
   onNextSlide,
 }: SlideCanvasProps) {
@@ -98,6 +110,9 @@ export function SlideCanvas({
   const [optimisticBoxes, setOptimisticBoxes] = useState<Record<string, BoundingBox>>({});
   const [panMode, setPanMode] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
+  const [inlineEditSession, setInlineEditSession] = useState<InlineEditSession | null>(null);
+  const inlineEditSessionRef = useRef<InlineEditSession | null>(null);
+  const editingValueRef = useRef('');
 
   const elementMap = useMemo(
     () => new Map(elements.map((element) => [element.id, element])),
@@ -325,6 +340,33 @@ export function SlideCanvas({
   );
   const slidePresence = presence.filter((person) => person.slideId === slide.id);
 
+  const beginInlineEdit = (element: SlideElement) => {
+    if (readOnly || element.locked || element.kind !== 'text') return;
+    const session = captureInlineEditSession(element);
+    inlineEditSessionRef.current = session;
+    editingValueRef.current = session.initialValue;
+    setInlineEditSession(session);
+    onSelectionChange([element.id]);
+  };
+
+  const finishInlineEdit = (commit: boolean) => {
+    const session = inlineEditSessionRef.current;
+    if (!session) return;
+    inlineEditSessionRef.current = null;
+    if (commit) {
+      const submission = inlineEditCommit(session, editingValueRef.current);
+      if (submission) {
+        onReplaceText(submission.elementId, submission.text, submission.baseElementVersion);
+      }
+    }
+    editingValueRef.current = '';
+    setInlineEditSession(null);
+  };
+
+  const fitSlide = () => {
+    onZoomChange(65);
+  };
+
   return (
     <section
       className="ns-canvas-panel"
@@ -342,6 +384,42 @@ export function SlideCanvas({
         </span>
       </div>
 
+      {selectedUnion && !readOnly ? (
+        <div className="ns-workspace-object-toolbar" role="toolbar" aria-label="Element actions">
+          <button type="button" onClick={onOpenAi}>
+            <Bot size={14} /> Ask AI
+          </button>
+          <button type="button" onClick={onOpenComments}>
+            <MessageSquarePlus size={14} /> Comment
+          </button>
+          <button type="button" onClick={() => onDuplicateElements([...selectedElementIds])}>
+            <Copy size={14} /> Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={() => onReorderElements([...selectedElementIds], 'forward')}
+            title="Bring selected elements forward"
+          >
+            <ArrowUp size={14} /> Forward
+          </button>
+          <button
+            type="button"
+            onClick={() => onReorderElements([...selectedElementIds], 'backward')}
+            title="Send selected elements backward"
+          >
+            <ArrowDown size={14} /> Backward
+          </button>
+          <button
+            type="button"
+            className="is-danger"
+            onClick={() => onDeleteElements([...selectedElementIds])}
+            aria-label="Delete selected elements"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ) : null}
+
       <div
         ref={viewportRef}
         className={`ns-canvas-viewport ${panMode || spacePressed ? 'is-pan-ready' : ''}`}
@@ -355,7 +433,22 @@ export function SlideCanvas({
               onSelectionChange([]);
           }}
         >
-          <div className="ns-slide-shell" style={{ width: `${Math.round(960 * (zoom / 100))}px` }}>
+          <div
+            className="ns-slide-shell"
+            style={{
+              width: `max(min(${Math.round(74 * (zoom / 65))}%, ${Math.round(860 * (zoom / 65))}px), 340px)`,
+            }}
+            onPointerMove={(event) => {
+              if (!onCursorChange) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (rect.width <= 0 || rect.height <= 0) return;
+              onCursorChange({
+                x: clampUnit((event.clientX - rect.left) / rect.width),
+                y: clampUnit((event.clientY - rect.top) / rect.height),
+              });
+            }}
+            onPointerLeave={() => onCursorChange?.(null)}
+          >
             <SlideRenderer
               slide={slide}
               elements={elements}
@@ -368,7 +461,48 @@ export function SlideCanvas({
                 : {
                     onElementKeyDown: selectElementFromKeyboard,
                     onElementPointerDown: beginElementMove,
+                    onElementDoubleClick: (_event, element) => beginInlineEdit(element),
                   })}
+              renderElementContent={(element, defaultContent) =>
+                element.id === inlineEditSession?.elementId ? (
+                  <span
+                    className="ns-element-copy ns-inline-text-editor"
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    tabIndex={0}
+                    aria-label={`Edit ${element.name}`}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onInput={(event) => {
+                      editingValueRef.current = event.currentTarget.textContent ?? '';
+                    }}
+                    onBlur={() => finishInlineEdit(true)}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        finishInlineEdit(false);
+                      } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                        event.preventDefault();
+                        finishInlineEdit(true);
+                      }
+                    }}
+                    ref={(node) => {
+                      if (!node || node.dataset['initialized'] === 'true') return;
+                      node.dataset['initialized'] = 'true';
+                      node.textContent = inlineEditSession.initialValue;
+                      requestAnimationFrame(() => {
+                        node.focus();
+                        const selection = window.getSelection();
+                        selection?.selectAllChildren(node);
+                        selection?.collapseToEnd();
+                      });
+                    }}
+                  />
+                ) : (
+                  defaultContent
+                )
+              }
               getElementStyle={(element) => {
                 const box = displayedBox(element);
                 return {
@@ -424,6 +558,22 @@ export function SlideCanvas({
                 }),
               )}
 
+              {slidePresence.map((person) =>
+                person.cursor ? (
+                  <div
+                    className="ns-presence-cursor"
+                    key={`cursor-${person.id}`}
+                    style={{
+                      left: `${person.cursor.x * 100}%`,
+                      top: `${person.cursor.y * 100}%`,
+                      color: person.color,
+                    }}
+                  >
+                    <span style={{ background: person.color }}>{person.displayName}</span>
+                  </div>
+                ) : null,
+              )}
+
               {slideComments.map((comment, index) => {
                 const box = commentBox(comment, elementMap);
                 if (!box) return null;
@@ -440,46 +590,6 @@ export function SlideCanvas({
                   </button>
                 );
               })}
-
-              {selectedUnion && !readOnly ? (
-                <div
-                  className="ns-context-toolbar"
-                  role="toolbar"
-                  aria-label="Element actions"
-                  style={{
-                    left: `${Math.min(96, Math.max(4, selectedUnion.x * 100 + (selectedUnion.width * 100) / 2))}%`,
-                    top: `${Math.max(1.5, selectedUnion.y * 100)}%`,
-                  }}
-                >
-                  <button type="button" onClick={onOpenAi}>
-                    <Bot size={14} /> Ask AI
-                  </button>
-                  <button type="button" onClick={onOpenComments}>
-                    <MessageSquarePlus size={14} /> Comment
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDuplicateElements([...selectedElementIds])}
-                  >
-                    <Copy size={14} /> Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    title="Element layering is not part of the current patch contract"
-                  >
-                    <Layers3 size={14} /> Arrange
-                  </button>
-                  <button
-                    type="button"
-                    className="is-danger"
-                    onClick={() => onDeleteElements([...selectedElementIds])}
-                    aria-label="Delete selected elements"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ) : null}
             </SlideRenderer>
           </div>
         </div>
@@ -510,7 +620,7 @@ export function SlideCanvas({
       <div className="ns-zoom-controls" aria-label="Canvas zoom and pan controls">
         <button
           type="button"
-          className={panMode ? 'is-active' : ''}
+          className={`ns-pan-toggle ${panMode ? 'is-active' : ''}`}
           onClick={() => setPanMode((value) => !value)}
           aria-pressed={panMode}
           aria-label="Toggle pan tool"
@@ -521,25 +631,26 @@ export function SlideCanvas({
         <i />
         <button
           type="button"
-          onClick={() => onZoomChange(clampZoom(zoom - 10))}
+          onClick={() => onZoomChange(clampZoom(zoom - 5))}
           aria-label="Zoom out"
         >
           <Minus size={14} />
         </button>
+        <span className="ns-zoom-value">{zoom}%</span>
         <button
           type="button"
-          className="ns-zoom-value"
-          onClick={() => onZoomChange(100)}
-          aria-label="Reset zoom to 100 percent"
-        >
-          {zoom}%
-        </button>
-        <button
-          type="button"
-          onClick={() => onZoomChange(clampZoom(zoom + 10))}
+          onClick={() => onZoomChange(clampZoom(zoom + 5))}
           aria-label="Zoom in"
         >
           <Plus size={14} />
+        </button>
+        <button
+          type="button"
+          className="ns-fit-button"
+          onClick={fitSlide}
+          aria-label="Fit slide to workspace"
+        >
+          Fit
         </button>
       </div>
     </section>
@@ -633,7 +744,11 @@ function handleWheelZoom(
 }
 
 function clampZoom(zoom: number) {
-  return Math.min(200, Math.max(25, zoom));
+  return Math.min(120, Math.max(40, zoom));
+}
+
+function clampUnit(value: number) {
+  return clamp(value, 0, 1);
 }
 
 function clamp(value: number, min: number, max: number) {

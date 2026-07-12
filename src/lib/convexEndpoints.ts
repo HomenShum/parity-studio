@@ -1,13 +1,17 @@
-const DEFAULT_CONVEX_URL = 'https://blissful-pig-998.convex.cloud';
-const DEFAULT_CONVEX_HTTP_URL = 'https://blissful-pig-998.convex.site';
-
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/$/, '');
 }
 
+export function resolveConvexWsUrl(configuredUrl: string | undefined): string {
+  const configured = configuredUrl?.trim();
+  if (configured) return trimTrailingSlash(configured);
+  throw new Error(
+    'VITE_CONVEX_URL is required in every environment. NodeSlide is intentionally disconnected rather than falling back to production data.',
+  );
+}
+
 export function convexWsUrl(): string {
-  const fromEnv = import.meta.env['VITE_CONVEX_URL'] as string | undefined;
-  return trimTrailingSlash(fromEnv || DEFAULT_CONVEX_URL);
+  return resolveConvexWsUrl(import.meta.env['VITE_CONVEX_URL'] as string | undefined);
 }
 
 export function convexHttpUrl(): string {
@@ -16,7 +20,9 @@ export function convexHttpUrl(): string {
     (import.meta.env['VITE_CONVEX_SITE_URL'] as string | undefined);
   if (fromEnv) return trimTrailingSlash(fromEnv);
   const wsUrl = convexWsUrl();
-  return (
-    trimTrailingSlash(wsUrl.replace('.convex.cloud', '.convex.site')) || DEFAULT_CONVEX_HTTP_URL
+  const inferred = trimTrailingSlash(wsUrl.replace('.convex.cloud', '.convex.site'));
+  if (inferred !== wsUrl) return inferred;
+  throw new Error(
+    'VITE_CONVEX_SITE_URL is required when VITE_CONVEX_URL is not a convex.cloud endpoint.',
   );
 }

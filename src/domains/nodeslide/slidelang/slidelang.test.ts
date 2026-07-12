@@ -4,9 +4,15 @@ import {
   type DeckSnapshot,
   NODESLIDE_SCHEMA_VERSION,
   NODESLIDE_TOOLCHAIN_VERSION,
+  type SlideElement,
 } from '../../../../shared/nodeslide';
 import { createHostedSlideLangAdapter } from './hosted';
 import { createLocalSlideLangAdapter } from './localAdapter';
+
+const HIDDEN_ELEMENT_ID = 'element:hidden-export-sentinel';
+const HIDDEN_ELEMENT_NAME = 'Hidden export sentinel label';
+const HIDDEN_TEXT = 'HIDDEN_TEXT_MUST_NOT_EXPORT_7F31';
+const HIDDEN_SOURCE_ID = 'source:hidden-export-sentinel';
 
 function cleanSnapshot(): DeckSnapshot {
   const deckId = 'deck:golden';
@@ -161,6 +167,42 @@ function cleanSnapshot(): DeckSnapshot {
   };
 }
 
+function addHiddenTextElement(snapshot: DeckSnapshot): SlideElement {
+  const slide = snapshot.slides[0];
+  if (!slide) throw new Error('Missing slide fixture.');
+  const body = snapshot.elements.find((element) => element.id === 'element:body');
+  if (!body) throw new Error('Missing body fixture.');
+  body.visible = true;
+
+  const hidden: SlideElement = {
+    id: HIDDEN_ELEMENT_ID,
+    slideId: slide.id,
+    name: HIDDEN_ELEMENT_NAME,
+    kind: 'text',
+    role: 'body',
+    bbox: { x: 0.06, y: 0.34, width: 0.58, height: 0.08 },
+    rotation: 0,
+    content: HIDDEN_TEXT,
+    style: { color: '#fb7185', fontFamily: 'Aptos', fontSize: 18 },
+    sourceIds: [HIDDEN_SOURCE_ID],
+    locked: false,
+    visible: false,
+    exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+    version: 1,
+  };
+  snapshot.elements.push(hidden);
+  slide.elementOrder.splice(1, 0, hidden.id);
+  snapshot.sources.push({
+    id: HIDDEN_SOURCE_ID,
+    deckId: snapshot.deck.id,
+    title: HIDDEN_ELEMENT_NAME,
+    sourceType: 'note',
+    retrievedAt: 1_700_000_000_002,
+    citation: HIDDEN_TEXT,
+  });
+  return hidden;
+}
+
 describe('local SlideLangAdapter', () => {
   const adapter = createLocalSlideLangAdapter();
 
@@ -290,9 +332,57 @@ describe('local SlideLangAdapter', () => {
     const deckHtml = adapter.renderDeckHtml(snapshot);
     expect(deckHtml).toContain('Presenter navigation');
     expect(deckHtml).toContain('data-nodeslide-source-records');
-    expect(deckHtml).toContain('data-source-count="2"');
+    expect(deckHtml).toContain('data-source-count="1"');
     expect(deckHtml).toContain('"id":"source:adoption"');
-    expect(deckHtml).toContain('"id":"source:unused"');
+    expect(deckHtml).not.toContain('"id":"source:unused"');
+  });
+
+  it('omits hidden text from HTML visual, semantic, accessibility, and provenance output', () => {
+    const snapshot = cleanSnapshot();
+    const hidden = addHiddenTextElement(snapshot);
+    expect(snapshot.elements.find((element) => element.id === 'element:headline')?.visible).toBe(
+      undefined,
+    );
+    expect(snapshot.elements.find((element) => element.id === 'element:chart')?.visible).toBe(
+      undefined,
+    );
+    const slideHtml = adapter.renderSlideHtml(snapshot, 'slide:overview');
+    const deckHtml = adapter.renderDeckHtml(snapshot);
+
+    for (const html of [slideHtml, deckHtml]) {
+      expect(html).not.toContain(HIDDEN_TEXT);
+      expect(html).not.toContain(HIDDEN_ELEMENT_ID);
+      expect(html).not.toContain(HIDDEN_ELEMENT_NAME);
+      expect(html).not.toContain(HIDDEN_SOURCE_ID);
+      expect(html).toContain('Editable native headline');
+      expect(html).toContain('source:adoption');
+      expect(html).toContain(
+        'Semantic HTML and native Office objects share one canonical snapshot.',
+      );
+    }
+    expect(deckHtml).toContain('data-source-count="1"');
+    expect(deckHtml).toContain('"id":"source:adoption"');
+    expect(deckHtml).not.toContain('"id":"source:unused"');
+
+    const visualMarker = slideHtml.indexOf('data-slide-visual');
+    const visualStart = slideHtml.lastIndexOf('<svg', visualMarker);
+    const visualEnd = slideHtml.indexOf('</svg>', visualMarker);
+    const visualHtml = slideHtml.slice(visualStart, visualEnd);
+    let previousIndex = -1;
+    for (const elementId of [
+      'element:headline',
+      'element:body',
+      'element:accent',
+      'element:chart',
+    ]) {
+      const elementIndex = visualHtml.indexOf(`data-element-id="${elementId}"`);
+      expect(elementIndex).toBeGreaterThan(previousIndex);
+      previousIndex = elementIndex;
+    }
+
+    expect(snapshot.elements).toContain(hidden);
+    expect(hidden.visible).toBe(false);
+    expect(snapshot.slides[0]?.elementOrder).toContain(hidden.id);
   });
 
   it('writes native objects and deduplicated source notes into the PPTX ZIP', async () => {
@@ -312,6 +402,37 @@ describe('local SlideLangAdapter', () => {
     expect(notesXml).toContain('Disclaimer: Internal planning data; not independently audited.');
     expect(notesXml).not.toContain('This source is not referenced by the overview slide.');
     expect(notesXml?.match(/Citation: Internal adoption snapshot, Q4\./g)).toHaveLength(1);
+  });
+
+  it('omits hidden text and its provenance from PPTX while preserving visible object order', async () => {
+    const snapshot = cleanSnapshot();
+    const hidden = addHiddenTextElement(snapshot);
+    const binary = await adapter.buildPptx(snapshot);
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = await zip.file('ppt/slides/slide1.xml')?.async('string');
+    if (!slideXml) throw new Error('Missing exported slide XML.');
+    const packageXml = (
+      await Promise.all(
+        Object.values(zip.files)
+          .filter((file) => !file.dir && file.name.endsWith('.xml'))
+          .map((file) => file.async('string')),
+      )
+    ).join('\n');
+
+    expect(packageXml).not.toContain(HIDDEN_TEXT);
+    expect(packageXml).not.toContain(HIDDEN_ELEMENT_ID);
+    expect(packageXml).not.toContain(HIDDEN_ELEMENT_NAME);
+    expect(packageXml).not.toContain(HIDDEN_SOURCE_ID);
+    const headlineIndex = slideXml.indexOf('<a:t>Editable native headline</a:t>');
+    const bodyIndex = slideXml.indexOf(
+      '<a:t>Semantic HTML and native Office objects share one canonical snapshot.</a:t>',
+    );
+    expect(headlineIndex).toBeGreaterThan(-1);
+    expect(bodyIndex).toBeGreaterThan(headlineIndex);
+
+    expect(snapshot.elements).toContain(hidden);
+    expect(hidden.visible).toBe(false);
+    expect(snapshot.slides[0]?.elementOrder).toContain(hidden.id);
   });
 });
 
