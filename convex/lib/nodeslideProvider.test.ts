@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { callNodeSlideFreeJson } from './nodeslideProvider';
+import {
+  NODESLIDE_EDIT_MODEL,
+  NODESLIDE_EDIT_PROVIDER,
+  type NodeSlideCompletion,
+  type NodeSlideCompletionResult,
+  callNodeSlideFreeJson,
+} from './nodeslideProvider';
 
 const request = {
   systemPrompt: 'Return a bounded NodeSlide patch.',
@@ -15,121 +21,121 @@ const request = {
   },
 };
 
-function providerResponse(
-  content: string,
-  options: { model?: string; finishReason?: string } = {},
-) {
-  return new Response(
-    JSON.stringify({
-      model: options.model ?? 'resolved/free-model',
-      choices: [
-        {
-          finish_reason: options.finishReason ?? 'stop',
-          message: { content },
-        },
-      ],
-      usage: {
-        prompt_tokens: 120,
-        completion_tokens: 30,
-        cost: 0,
-      },
-    }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } },
-  );
+function completion(
+  text: string,
+  options: Partial<Omit<NodeSlideCompletionResult, 'text'>> = {},
+): NodeSlideCompletionResult {
+  return {
+    text,
+    stopReason: options.stopReason ?? 'stop',
+    costMicroUsd: options.costMicroUsd ?? 1_250,
+    inputTokens: options.inputTokens ?? 120,
+    outputTokens: options.outputTokens ?? 30,
+  };
 }
 
-describe('NodeSlide free JSON provider', () => {
-  it('pins a free model and requests strict structured output', async () => {
-    const fetchImpl = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-        providerResponse('{"summary":"Sharper thesis","operations":[{"op":"replace_text"}]}'),
+describe('NodeSlide named pi-ai JSON provider', () => {
+  it('routes the completion through the single named GLM 5.2 constant', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(async () =>
+      completion('{"summary":"Sharper thesis","operations":[{"op":"replace_text"}]}'),
     );
 
-    const result = await callNodeSlideFreeJson(request, {
-      apiKey: 'test-key',
-      fetchImpl: fetchImpl as typeof fetch,
-      modelCandidates: ['primary/free-model'],
-    });
+    const result = await callNodeSlideFreeJson(request, { complete });
 
     expect(result).toMatchObject({
       ok: true,
       telemetry: {
-        provider: 'openrouter',
-        model: 'resolved/free-model',
-        costMicroUsd: 0,
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 1_250,
         inputTokens: 120,
         outputTokens: 30,
       },
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
-    const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({
-      model: 'primary/free-model',
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'nodeslide_test_patch', strict: true },
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[0]).toMatchObject({
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      maxTokens: 500,
+      repairAttempt: false,
+    });
+    expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+  });
+
+  it('makes exactly one repair completion after malformed JSON', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('not-json'))
+      .mockResolvedValueOnce(
+        completion('{"operations":[{"op":"replace_text"}]}', {
+          costMicroUsd: 2_000,
+          inputTokens: 150,
+          outputTokens: 40,
+        }),
+      );
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result).toMatchObject({
+      ok: true,
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 3_250,
+        inputTokens: 270,
+        outputTokens: 70,
       },
-      provider: { require_parameters: true },
-      reasoning: { effort: 'low', exclude: true },
     });
-    expect(body.plugins).toEqual([{ id: 'response-healing' }]);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0].userText).toContain('Prior invalid model response');
   });
 
-  it('fails over to the backup model when the primary is capacity limited', async () => {
-    const fetchImpl = vi
-      .fn(
-        async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-          providerResponse('{"operations":[{"op":"replace_text"}]}'),
-      )
-      .mockResolvedValueOnce(new Response('', { status: 429 }))
-      .mockResolvedValueOnce(providerResponse('{"operations":[{"op":"replace_text"}]}'));
+  it('falls back honestly after the single repair also returns invalid JSON', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('not-json'))
+      .mockResolvedValueOnce(completion('still-not-json'));
 
-    const result = await callNodeSlideFreeJson(request, {
-      apiKey: 'test-key',
-      fetchImpl: fetchImpl as typeof fetch,
-      modelCandidates: ['primary/free-model', 'backup/free-model'],
-    });
-
-    expect(result.ok).toBe(true);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const secondBody = JSON.parse(String((fetchImpl.mock.calls[1]?.[1] as RequestInit).body));
-    expect(secondBody.model).toBe('backup/free-model');
-  });
-
-  it('rejects incomplete and malformed responses without exposing upstream payloads', async () => {
-    const fetchImpl = vi
-      .fn(
-        async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-          providerResponse('not-json'),
-      )
-      .mockResolvedValueOnce(providerResponse('{"operations":', { finishReason: 'length' }))
-      .mockResolvedValueOnce(providerResponse('not-json'));
-
-    const result = await callNodeSlideFreeJson(request, {
-      apiKey: 'test-key',
-      fetchImpl: fetchImpl as typeof fetch,
-      modelCandidates: ['primary/free-model', 'backup/free-model'],
-    });
+    const result = await callNodeSlideFreeJson(request, { complete });
 
     expect(result).toMatchObject({
       ok: false,
-      reason: 'The free route returned malformed JSON.',
+      reason: 'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+      },
     });
-    expect(JSON.stringify(result)).not.toContain('not-json');
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(result)).not.toContain('still-not-json');
   });
 
-  it('does not call the provider without a server-side API key', async () => {
-    const fetchImpl = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-        providerResponse('{}'),
+  it('does not turn a provider error into a fabricated repair success', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(async () =>
+      completion('', { stopReason: 'error' }),
     );
-    const result = await callNodeSlideFreeJson(request, {
-      apiKey: '',
-      fetchImpl: fetchImpl as typeof fetch,
-    });
 
-    expect(result).toEqual({ ok: false, reason: 'The free route was unavailable.' });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'The GLM 5.2 route returned an error.',
+    });
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds model output before attempting the one repair', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('x'.repeat(200_001)))
+      .mockResolvedValueOnce(completion('still-not-json'));
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result.ok).toBe(false);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0].userText).toContain('response omitted');
+    expect(complete.mock.calls[1]?.[0].userText).not.toContain('x'.repeat(1_000));
   });
 });

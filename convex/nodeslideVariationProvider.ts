@@ -31,7 +31,7 @@ export const generateStrictJson = internalAction({
       { timeoutMs: FREE_ROUTE_TOTAL_DEADLINE_MS },
     );
     if (!result.ok) {
-      const timedOut = result.reason === 'The free route was unavailable.';
+      const timedOut = result.reason === 'The GLM 5.2 route timed out.';
       return {
         ok: false as const,
         reason: timedOut ? 'provider_timeout' : 'provider_unavailable',

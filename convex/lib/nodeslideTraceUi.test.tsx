@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { AgentTrace, ValidationResult } from '../../shared/nodeslide';
 import { TraceInspector } from '../../src/domains/nodeslide/inspector/TraceInspector';
+import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 
 describe('NodeSlide trace validation receipts', () => {
   it('separates the current deck receipt from an older selected trace receipt', () => {
@@ -44,6 +45,11 @@ describe('NodeSlide trace validation receipts', () => {
       context: [],
       toolCalls: ['Validated patch'],
       guardrails: ['Explicit scope'],
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      costMicroUsd: 1_250,
+      inputTokens: 120,
+      outputTokens: 30,
       validation: current,
       createdAt: 1_000,
       completedAt: 42_000,
@@ -55,6 +61,7 @@ describe('NodeSlide trace validation receipts', () => {
 
     expect(markup).toContain('Review cycle');
     expect(markup).toContain('41s');
+    expect(markup).toContain(NODESLIDE_EDIT_MODEL);
   });
 });
 

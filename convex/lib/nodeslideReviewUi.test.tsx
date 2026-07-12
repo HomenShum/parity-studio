@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  type AgentTrace,
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
@@ -21,6 +22,7 @@ import {
 } from '../../src/domains/nodeslide/inspector/AiInspector';
 import { CommentsInspector } from '../../src/domains/nodeslide/inspector/CommentsInspector';
 import { InspectorPanel } from '../../src/domains/nodeslide/inspector/InspectorPanel';
+import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 
 describe('NodeSlide AI review inspector', () => {
@@ -74,8 +76,8 @@ describe('NodeSlide AI review inspector', () => {
     const markup = renderAi();
     expect(markup).toContain('Private / deterministic');
     expect(markup).toMatch(/data-testid="ai-provider-deterministic"[^>]*checked=""/);
-    expect(markup).toContain('OpenRouter free — external');
-    expect(markup).toContain('may route it to a third-party model');
+    expect(markup).toContain('OpenRouter · GLM 5.2 — external');
+    expect(markup).toContain('named GLM 5.2 model through OpenRouter');
     expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
@@ -204,11 +206,13 @@ describe('NodeSlide AI review inspector', () => {
   it('shows preview, scope/base/ops evidence, and only candidate-specific validation receipts', () => {
     const snapshot = fixture();
     const patch = proposal(snapshot, true);
-    const withReceipt = renderAi({ patches: [patch] });
+    const withReceipt = renderAi({ patches: [patch], traces: [proposalTrace(patch)] });
     expect(withReceipt).toContain('Preview / Compare');
     expect(withReceipt).toContain('Write scope');
     expect(withReceipt).toContain(`Deck v${snapshot.deck.version}`);
     expect(withReceipt).toContain('1 ops');
+    expect(withReceipt).toContain('Provider · model');
+    expect(withReceipt).toContain(`${NODESLIDE_EDIT_PROVIDER} · ${NODESLIDE_EDIT_MODEL}`);
     expect(withReceipt).toContain('Candidate validation passed');
     expect(withReceipt).toContain('Receipt candidate-validation');
     expect(withReceipt).toContain('data-testid="proposal-accept"');
@@ -274,6 +278,7 @@ interface RenderAiOptions {
   references?: readonly AiReadReference[];
   commands?: readonly AiComposerCommand<string>[];
   patches?: readonly DeckPatch[];
+  traces?: readonly AgentTrace[];
 }
 
 function renderAi({
@@ -284,6 +289,7 @@ function renderAi({
   references = [],
   commands = [],
   patches = [],
+  traces = [],
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -293,7 +299,7 @@ function renderAi({
       slide={slide}
       selectedElements={[]}
       patches={patches}
-      traces={[]}
+      traces={traces}
       variations={[]}
       variationsLoading={false}
       isSubmitting={false}
@@ -352,6 +358,7 @@ function proposal(snapshot: DeckSnapshot, withReceipt: boolean): DeckPatch {
       },
     ],
     source: 'agent',
+    traceId: 'trace-proposal',
     status: 'ready',
     summary: 'Sharpen the review title',
     ...(withReceipt
@@ -374,6 +381,26 @@ function proposal(snapshot: DeckSnapshot, withReceipt: boolean): DeckPatch {
       : {}),
     createdAt: 1_000,
     updatedAt: 1_000,
+  };
+}
+
+function proposalTrace(patch: DeckPatch): AgentTrace {
+  return {
+    id: patch.traceId ?? 'trace-proposal',
+    deckId: patch.deckId,
+    patchId: patch.id,
+    status: 'awaiting_review',
+    summary: patch.summary,
+    plan: ['Draft bounded operations'],
+    context: [],
+    toolCalls: ['Called GLM 5.2 through pi-ai'],
+    guardrails: ['Explicit scope only'],
+    provider: NODESLIDE_EDIT_PROVIDER,
+    model: NODESLIDE_EDIT_MODEL,
+    costMicroUsd: 1_250,
+    inputTokens: 120,
+    outputTokens: 30,
+    createdAt: patch.createdAt,
   };
 }
 

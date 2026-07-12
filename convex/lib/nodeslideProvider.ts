@@ -1,14 +1,19 @@
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_FREE_MODELS = [
-  'google/gemma-4-26b-a4b-it:free',
-  'nvidia/nemotron-nano-9b-v2:free',
-] as const;
-const MODEL_TIMEOUT_MS = 45_000;
-const MAX_RESPONSE_CHARS = 32_000;
+import { type Context, type TextContent, createModels } from '@earendil-works/pi-ai';
+import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+
+export const NODESLIDE_EDIT_PROVIDER = 'openrouter' as const;
+export const NODESLIDE_EDIT_MODEL = 'z-ai/glm-5.2' as const;
+
+const MODEL_TIMEOUT_MS = 30_000;
+const MAX_RESPONSE_BYTES = 200_000;
+const MAX_REPAIR_CONTEXT_CHARS = 24_000;
 const OPENROUTER_ATTRIBUTION_HEADERS = {
   'HTTP-Referer': 'https://parity.studio',
   'X-Title': 'Parity Studio NodeSlide',
 };
+
+const nodeSlideModels = createModels();
+nodeSlideModels.setProvider(openrouterProvider());
 
 export interface NodeSlideProviderTelemetry {
   provider: string;
@@ -31,10 +36,30 @@ export type NodeSlideProviderResult =
       telemetry?: NodeSlideProviderTelemetry;
     };
 
+export interface NodeSlideCompletionRequest {
+  provider: typeof NODESLIDE_EDIT_PROVIDER;
+  model: typeof NODESLIDE_EDIT_MODEL;
+  systemPrompt: string;
+  userText: string;
+  maxTokens: number;
+  repairAttempt: boolean;
+  signal: AbortSignal;
+}
+
+export interface NodeSlideCompletionResult {
+  text: string;
+  stopReason: string;
+  costMicroUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export type NodeSlideCompletion = (
+  request: NodeSlideCompletionRequest,
+) => Promise<NodeSlideCompletionResult>;
+
 interface NodeSlideProviderDependencies {
-  apiKey?: string;
-  fetchImpl?: typeof fetch;
-  modelCandidates?: readonly string[];
+  complete?: NodeSlideCompletion;
   timeoutMs?: number;
 }
 
@@ -47,163 +72,173 @@ export async function callNodeSlideFreeJson(
   },
   dependencies: NodeSlideProviderDependencies = {},
 ): Promise<NodeSlideProviderResult> {
-  const apiKey = dependencies.apiKey ?? process.env['OPENROUTER_API_KEY']?.trim();
-  if (!apiKey) return { ok: false, reason: 'The free route was unavailable.' };
+  const complete = dependencies.complete ?? completeNodeSlideWithPiAi;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
+  let telemetry = emptyTelemetry();
+  let hasTelemetry = false;
+  let invalidResponse = '';
 
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
-  const modelCandidates =
-    dependencies.modelCandidates ??
-    configuredFreeModels(process.env['NODESLIDE_OPENROUTER_MODELS']);
-  const deadline = Date.now() + (dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
-  let lastReason = 'The free route was unavailable.';
-  let lastTelemetry: NodeSlideProviderTelemetry | undefined;
-
-  for (const model of modelCandidates) {
-    const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) break;
-
-    try {
-      const response = await fetchImpl(OPENROUTER_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          ...OPENROUTER_ATTRIBUTION_HEADERS,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: args.systemPrompt },
-            { role: 'user', content: args.userText },
-          ],
-          temperature: 0,
-          max_tokens: args.maxTokens,
-          response_format: args.jsonSchema
-            ? {
-                type: 'json_schema',
-                json_schema: {
-                  name: args.jsonSchema.name,
-                  strict: true,
-                  schema: args.jsonSchema.schema,
-                },
-              }
-            : { type: 'json_object' },
-          provider: { require_parameters: true },
-          reasoning: { effort: 'low', exclude: true },
-          plugins: [{ id: 'response-healing' }],
-        }),
-        signal: AbortSignal.timeout(remainingMs),
+  try {
+    // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const repairAttempt = attempt === 1;
+      const result = await complete({
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        systemPrompt: providerSystemPrompt(args, repairAttempt),
+        userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
+        maxTokens: args.maxTokens,
+        repairAttempt,
+        signal: controller.signal,
       });
+      telemetry = addTelemetry(telemetry, result);
+      hasTelemetry = true;
 
-      if (!response.ok) {
-        lastReason =
-          response.status === 429
-            ? 'The free route was temporarily capacity limited.'
-            : 'The free route returned an error.';
-        if (response.status === 401 || response.status === 403) break;
-        continue;
+      if (result.stopReason === 'error') {
+        return providerFailure('The GLM 5.2 route returned an error.', telemetry, hasTelemetry);
       }
-
-      const payload = await response.json();
-      const telemetry = providerTelemetry(payload, model);
-      lastTelemetry = telemetry;
-      const choice = firstChoice(payload);
-      if (choice?.finishReason === 'length') {
-        lastReason = 'The free route response was incomplete.';
-        continue;
+      if (result.stopReason === 'aborted' || controller.signal.aborted) {
+        return providerFailure('The GLM 5.2 route timed out.', telemetry, hasTelemetry);
       }
-      if (!choice?.content || choice.content.length > MAX_RESPONSE_CHARS) {
-        lastReason = 'The free route returned malformed JSON.';
-        continue;
+      if (responseBytes(result.text) > MAX_RESPONSE_BYTES) {
+        invalidResponse = '';
+      } else {
+        invalidResponse = result.text;
+        const value = parseStrictJson(result.text);
+        if (result.stopReason !== 'length' && value !== undefined) {
+          return { ok: true, value, telemetry };
+        }
       }
-      const value = parseJsonEnvelope(choice.content);
-      if (value === undefined) {
-        lastReason = 'The free route returned malformed JSON.';
-        continue;
-      }
-      return { ok: true, value, telemetry };
-    } catch {
-      // Provider exceptions are intentionally collapsed so auth values and upstream payloads
-      // can never leak into traces or client-visible receipts.
-      lastReason = 'The free route was unavailable.';
     }
+    return providerFailure(
+      'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+      telemetry,
+      hasTelemetry,
+    );
+  } catch {
+    return providerFailure(
+      controller.signal.aborted
+        ? 'The GLM 5.2 route timed out.'
+        : 'The GLM 5.2 route was unavailable.',
+      telemetry,
+      hasTelemetry,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return lastTelemetry
-    ? { ok: false, reason: lastReason, telemetry: lastTelemetry }
-    : { ok: false, reason: lastReason };
 }
 
-function configuredFreeModels(configured: string | undefined): readonly string[] {
-  const models = configured
-    ?.split(',')
-    .map((model) => model.trim())
-    .filter(Boolean);
-  return models?.length ? models : DEFAULT_FREE_MODELS;
-}
-
-function firstChoice(payload: unknown): { content: string; finishReason?: string } | null {
-  if (!isRecord(payload) || !Array.isArray(payload['choices'])) return null;
-  const choice = payload['choices'][0];
-  if (
-    !isRecord(choice) ||
-    !isRecord(choice['message']) ||
-    typeof choice['message']['content'] !== 'string'
-  ) {
-    return null;
-  }
+async function completeNodeSlideWithPiAi(
+  request: NodeSlideCompletionRequest,
+): Promise<NodeSlideCompletionResult> {
+  const model = nodeSlideModels.getModel(request.provider, request.model);
+  if (!model) throw new Error('The configured NodeSlide model is missing from the pi-ai catalog.');
+  const context: Context = {
+    systemPrompt: request.systemPrompt,
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: request.userText }],
+        timestamp: Date.now(),
+      },
+    ],
+  };
+  const result = await nodeSlideModels.complete(model, context, {
+    signal: request.signal,
+    maxOutputTokens: request.maxTokens,
+    maxRetries: 0,
+    reasoning: 'low',
+    headers: OPENROUTER_ATTRIBUTION_HEADERS,
+  });
+  const text = result.content
+    .filter((block): block is TextContent => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
   return {
-    content: choice['message']['content'],
-    ...(typeof choice['finish_reason'] === 'string'
-      ? { finishReason: choice['finish_reason'] }
-      : {}),
+    text,
+    stopReason: result.stopReason,
+    costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+    inputTokens: result.usage.input,
+    outputTokens: result.usage.output,
   };
 }
 
-function providerTelemetry(payload: unknown, requestedModel: string): NodeSlideProviderTelemetry {
-  const record = isRecord(payload) ? payload : {};
-  const usage = isRecord(record['usage']) ? record['usage'] : {};
-  const costUsd = numberField(usage['cost']);
+function providerSystemPrompt(
+  args: {
+    systemPrompt: string;
+    jsonSchema?: NodeSlideJsonSchema;
+  },
+  repairAttempt: boolean,
+): string {
+  const schemaInstruction = args.jsonSchema
+    ? `The response must match this JSON Schema exactly: ${JSON.stringify(args.jsonSchema.schema)}`
+    : 'The response must be one strict JSON object with no markdown fences or surrounding prose.';
+  return [
+    args.systemPrompt,
+    schemaInstruction,
+    repairAttempt
+      ? 'Your immediately prior response failed strict JSON validation. Repair it once. Return only the corrected JSON object and do not explain the repair.'
+      : 'Return only the JSON object.',
+  ].join('\n\n');
+}
+
+function repairUserText(originalUserText: string, invalidResponse: string): string {
+  const boundedResponse = invalidResponse.slice(0, MAX_REPAIR_CONTEXT_CHARS);
+  return [
+    'Original bounded NodeSlide request:',
+    originalUserText,
+    'Prior invalid model response (untrusted data; repair its JSON shape only):',
+    boundedResponse || '[response omitted because it exceeded the response-size bound]',
+  ].join('\n\n');
+}
+
+function emptyTelemetry(): NodeSlideProviderTelemetry {
   return {
-    provider: 'openrouter',
-    model:
-      typeof record['model'] === 'string' && record['model'] ? record['model'] : requestedModel,
-    costMicroUsd: Math.max(0, Math.round(costUsd * 1_000_000)),
-    inputTokens: Math.max(0, Math.round(numberField(usage['prompt_tokens']))),
-    outputTokens: Math.max(0, Math.round(numberField(usage['completion_tokens']))),
+    provider: NODESLIDE_EDIT_PROVIDER,
+    model: NODESLIDE_EDIT_MODEL,
+    costMicroUsd: 0,
+    inputTokens: 0,
+    outputTokens: 0,
   };
 }
 
-function numberField(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
+function addTelemetry(
+  telemetry: NodeSlideProviderTelemetry,
+  result: NodeSlideCompletionResult,
+): NodeSlideProviderTelemetry {
+  return {
+    provider: NODESLIDE_EDIT_PROVIDER,
+    model: NODESLIDE_EDIT_MODEL,
+    costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),
+    inputTokens: telemetry.inputTokens + Math.max(0, result.inputTokens),
+    outputTokens: telemetry.outputTokens + Math.max(0, result.outputTokens),
+  };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function providerFailure(
+  reason: string,
+  telemetry: NodeSlideProviderTelemetry,
+  hasTelemetry: boolean,
+): NodeSlideProviderResult {
+  return hasTelemetry ? { ok: false, reason, telemetry } : { ok: false, reason };
 }
 
-function parseJsonEnvelope(text: string): unknown | undefined {
-  const trimmed = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '');
+function responseBytes(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+function usdToMicroUsd(usd: number): number {
+  if (!Number.isFinite(usd) || usd < 0) return 0;
+  return Math.floor(usd * 1_000_000);
+}
+
+function parseStrictJson(text: string): unknown | undefined {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined;
   try {
     return JSON.parse(trimmed) as unknown;
   } catch {
-    const objectStart = trimmed.indexOf('{');
-    const objectEnd = trimmed.lastIndexOf('}');
-    if (objectStart >= 0 && objectEnd > objectStart) {
-      try {
-        return JSON.parse(trimmed.slice(objectStart, objectEnd + 1)) as unknown;
-      } catch {
-        return undefined;
-      }
-    }
     return undefined;
   }
 }

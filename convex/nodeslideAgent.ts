@@ -32,7 +32,11 @@ import {
 } from './lib/nodeslideEditShadowPlanner';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
-import { callNodeSlideFreeJson } from './lib/nodeslideProvider';
+import {
+  NODESLIDE_EDIT_MODEL,
+  NODESLIDE_EDIT_PROVIDER,
+  callNodeSlideFreeJson,
+} from './lib/nodeslideProvider';
 import {
   NodeSlideProviderConsentError,
   validateNodeSlideProviderChoice,
@@ -171,6 +175,22 @@ export const proposeEdit = action({
     const providerRequested = providerChoice.providerMode === 'openrouter_free';
     const usedFallback = providerRequested && baseline.receipt.origin === 'deterministic_fallback';
     const telemetry = baseline.receipt.providerTelemetry;
+    const traceAttribution = telemetry
+      ? {
+          provider: telemetry.provider,
+          model: usedFallback
+            ? `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`
+            : telemetry.model,
+          costMicroUsd: telemetry.costMicroUsd,
+          inputTokens: telemetry.inputTokens,
+          outputTokens: telemetry.outputTokens,
+        }
+      : providerRequested
+        ? {
+            provider: NODESLIDE_EDIT_PROVIDER,
+            model: `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+          }
+        : { provider: 'deterministic', model: 'bounded-edit-planner/v1' };
     const shadowAuthorization = authorizeNodeSlideAgenticOperation(
       resolveNodeSlideAgenticControls(process.env),
       { operation: 'deck_repl_shadow' },
@@ -225,31 +245,23 @@ export const proposeEdit = action({
         : {}),
       ...(shadowComparison ? { shadowComparison } : {}),
       traceSummary: usedFallback
-        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? 'the free response was invalid'}`
+        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? 'the GLM 5.2 response was invalid'}`
         : providerRequested
-          ? `OpenRouter free route proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
+          ? `OpenRouter GLM 5.2 proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
           : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
         providerRequested
-          ? 'Called a pinned OpenRouter free model with structured output after exact edit consent'
+          ? 'Called GLM 5.2 through the maintained pi-ai OpenRouter provider after exact edit consent'
           : 'Kept review context on the deterministic local route',
         providerRequested
           ? usedFallback
             ? 'Used deterministic bounded edit fallback'
-            : 'Parsed and validated free-route JSON'
+            : 'Parsed and validated GLM 5.2 JSON'
           : 'Produced deterministic bounded edit operations',
         'Persisted proposal and human-readable trace atomically',
       ],
-      ...(telemetry
-        ? {
-            provider: telemetry.provider,
-            model: telemetry.model,
-            costMicroUsd: telemetry.costMicroUsd,
-            inputTokens: telemetry.inputTokens,
-            outputTokens: telemetry.outputTokens,
-          }
-        : { provider: 'deterministic', model: 'bounded-edit-planner/v1' }),
+      ...traceAttribution,
     });
     return proposal;
   },
@@ -547,12 +559,13 @@ export const createDeckFromBrief = action({
     const deckId = nodeslideEventId('deck', now, uniqueness);
     const projectId = nodeslideEventId('project_nodeslide', now, uniqueness);
     const telemetry = provider?.telemetry;
+    const providerSucceeded = provider?.ok === true;
     const traceSummary =
       providerChoice.providerMode === 'deterministic'
         ? 'NodeSlide created the deck with its deterministic brief generator. The brief was not sent to OpenRouter.'
-        : provider?.ok === true
-          ? 'The user consented to send the full brief to OpenRouter. Its zero-cost router supplied the narrative plan; NodeSlide normalized, persisted, and validated the deck deterministically.'
-          : `The user consented to send the full brief to OpenRouter. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : 'the free route was unavailable.'}`;
+        : providerSucceeded
+          ? 'The user consented to send the full brief to OpenRouter. The named GLM 5.2 model supplied the narrative plan through pi-ai; NodeSlide normalized, persisted, and validated the deck deterministically.'
+          : `The user consented to send the full brief to OpenRouter. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : 'the GLM 5.2 route was unavailable.'}`;
     return await ctx.runMutation(nodeslideInternal.createFromBriefInternal, {
       deckId,
       projectId,
@@ -565,7 +578,7 @@ export const createDeckFromBrief = action({
       plan,
       spec: rawSpec,
       traceSummary,
-      ...(telemetry
+      ...(providerSucceeded && telemetry
         ? {
             provider: telemetry.provider,
             model: telemetry.model,
@@ -575,7 +588,17 @@ export const createDeckFromBrief = action({
           }
         : providerChoice.providerMode === 'deterministic'
           ? { provider: 'deterministic', model: 'brief-to-deck/v1' }
-          : { provider: 'openrouter', model: 'openrouter/free (deterministic fallback)' }),
+          : {
+              provider: NODESLIDE_EDIT_PROVIDER,
+              model: `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+              ...(telemetry
+                ? {
+                    costMicroUsd: telemetry.costMicroUsd,
+                    inputTokens: telemetry.inputTokens,
+                    outputTokens: telemetry.outputTokens,
+                  }
+                : {}),
+            }),
     });
   },
 });
