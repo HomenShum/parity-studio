@@ -542,7 +542,7 @@ export const createDeckFromBrief = action({
     const provider = await invokeNodeSlideBriefProvider(providerChoice, async () =>
       callNodeSlideFreeJson({
         systemPrompt:
-          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string}}]}. Produce 6–8 concise slides. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
+          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string},math?:{expression:string,syntax?:"plain"|"latex",description?:string},image?:{url?:string,altText:string,caption?:string},video?:{url:string,posterUrl?:string,title?:string,captionsUrl?:string,captionsLanguage?:string,startAtSeconds?:number,endAtSeconds?:number}}]}. Produce 6–8 concise slides with at least one data-bound chart, one first-class math expression, and one sourced or explicitly illustrative image; use at most one primary image/video per slide. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
         userText: JSON.stringify({
           title,
           brief,

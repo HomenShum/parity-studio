@@ -122,6 +122,48 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
     );
   }
 
+  if (element.kind === 'math') {
+    const expression = element.math?.expression ?? element.content ?? '';
+    return (
+      <div
+        className={`ns-element-math ns-element-math--${element.math?.syntax ?? 'plain'}`}
+        role="math"
+        aria-label={element.math?.description ?? expression}
+      >
+        <span>{expression}</span>
+        {element.math?.syntax === 'latex' ? <small>LaTeX source</small> : null}
+      </div>
+    );
+  }
+
+  if (element.kind === 'video') {
+    const video = element.video;
+    return video?.url ? (
+      // biome-ignore lint/a11y/useMediaCaption: The structured captions track is rendered when the deck supplies one; silent and illustrative clips may omit it.
+      <video
+        className="ns-element-video"
+        src={mediaFragmentUrl(video.url, video.startAtSeconds, video.endAtSeconds)}
+        poster={video.posterUrl}
+        controls
+        preload="metadata"
+        aria-label={video.title ?? element.altText ?? element.name}
+      >
+        {video.captionsUrl ? (
+          <track
+            default
+            kind="captions"
+            src={video.captionsUrl}
+            srcLang={video.captionsLanguage ?? 'en'}
+          />
+        ) : null}
+      </video>
+    ) : (
+      <div className="ns-element-video-placeholder" role="img" aria-label={element.name}>
+        <span>Video unavailable</span>
+      </div>
+    );
+  }
+
   if (element.kind === 'connector') {
     return (
       <svg
@@ -155,6 +197,12 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
   }
 
   return <span className="ns-element-copy">{element.content}</span>;
+}
+
+function mediaFragmentUrl(url: string, start?: number, end?: number): string {
+  if (start === undefined && end === undefined) return url;
+  const fragment = `t=${Math.max(0, start ?? 0)}${end === undefined ? '' : `,${Math.max(0, end)}`}`;
+  return `${url.split('#')[0]}#${fragment}`;
 }
 
 function elementVisualStyle(element: SlideElement): CSSProperties {

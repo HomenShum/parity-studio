@@ -404,7 +404,11 @@ export function InspectorPanel<CommandId extends string = string>({
           <DataInspector sources={workspace.sources} selectedElements={selectedElements} />
         ) : null}
         {activeTab === 'trace' ? (
-          <TraceInspector traces={workspace.traces} validations={workspace.validations} />
+          <TraceInspector
+            traces={workspace.traces}
+            validations={workspace.validations}
+            patches={workspace.patches}
+          />
         ) : null}
       </div>
 

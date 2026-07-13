@@ -14,6 +14,47 @@ describe('NodeSlide seed', () => {
     const snapshot = buildGoldenNodeSlide('theme-and-repair-test', 1_000).snapshot;
 
     expect(validateNodeSlideSnapshot(snapshot, 1_000).issues).toEqual([]);
+    expect(snapshot.elements.map((element) => element.kind)).toEqual(
+      expect.arrayContaining(['text', 'shape', 'image', 'chart', 'math']),
+    );
+    expect(snapshot.elements.find((element) => element.kind === 'math')?.math).toMatchObject({
+      expression: 'authorized change = requested scope ∩ allowed scope',
+      syntax: 'plain',
+      displayMode: 'block',
+    });
+    expect(snapshot.elements.find((element) => element.kind === 'image')?.imageUrl).toMatch(
+      /^data:image\/svg\+xml/,
+    );
+  });
+
+  it('rejects malformed first-class math and video primitives', () => {
+    const snapshot = buildGoldenNodeSlide('primitive-validation-test', 1_000).snapshot;
+    const math = snapshot.elements.find((element) => element.kind === 'math');
+    if (!math?.math) throw new Error('Missing math fixture.');
+    math.math.expression = '';
+    snapshot.elements.push({
+      id: 'element:invalid-video',
+      slideId: snapshot.slides[0]?.id ?? 'missing-slide',
+      name: 'Invalid video',
+      kind: 'video',
+      bbox: { x: 0.5, y: 0.5, width: 0.2, height: 0.2 },
+      rotation: 0,
+      style: {},
+      video: { url: 'javascript:alert(1)' },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_static_fallback'],
+      version: 1,
+    });
+    snapshot.slides[0]?.elementOrder.push('element:invalid-video');
+
+    const issues = validateNodeSlideSnapshot(snapshot, 1_000).issues;
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'schema', elementId: math.id }),
+        expect.objectContaining({ code: 'missing_asset', elementId: 'element:invalid-video' }),
+      ]),
+    );
   });
 
   it('discloses illustrative brief content so a generated deck is publishable', () => {

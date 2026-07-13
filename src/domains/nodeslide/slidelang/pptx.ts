@@ -290,6 +290,36 @@ function addNativeChart(
   });
 }
 
+function addNativeMath(
+  pptxSlide: PptxSlide,
+  snapshot: DeckSnapshot,
+  element: SlideElement,
+  box: PptxBox,
+): void {
+  const expression = element.math?.expression ?? element.content ?? '';
+  addNativeText(pptxSlide, snapshot, element, box, expression, element.id);
+}
+
+function addVideoFallback(
+  pptx: PptxGenJS,
+  pptxSlide: PptxSlide,
+  snapshot: DeckSnapshot,
+  element: SlideElement,
+  box: PptxBox,
+): void {
+  const video = element.video;
+  const title = video?.title?.trim() || element.altText?.trim() || element.name;
+  const source = video?.url.trim() || 'Video URL unavailable';
+  addEditablePlaceholder(
+    pptx,
+    pptxSlide,
+    snapshot,
+    element,
+    box,
+    `${title}\nLinked web video · ${source}`,
+  );
+}
+
 function addElement(
   pptx: PptxGenJS,
   pptxSlide: PptxSlide,
@@ -303,6 +333,10 @@ function addElement(
     addNativeConnector(pptx, pptxSlide, snapshot, element, box);
   } else if (element.kind === 'chart') {
     addNativeChart(pptx, pptxSlide, snapshot, element, box);
+  } else if (element.kind === 'math') {
+    addNativeMath(pptxSlide, snapshot, element, box);
+  } else if (element.kind === 'video') {
+    addVideoFallback(pptx, pptxSlide, snapshot, element, box);
   } else {
     addStaticImage(pptx, pptxSlide, snapshot, element, box);
   }

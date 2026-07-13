@@ -337,6 +337,66 @@ describe('local SlideLangAdapter', () => {
     expect(deckHtml).not.toContain('"id":"source:unused"');
   });
 
+  it('renders first-class math and video with honest export capabilities', () => {
+    const snapshot = cleanSnapshot();
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Missing slide fixture.');
+    const math: SlideElement = {
+      id: 'element:math',
+      slideId: slide.id,
+      name: 'Conversion formula',
+      kind: 'math',
+      role: 'formula',
+      bbox: { x: 0.06, y: 0.87, width: 0.38, height: 0.08 },
+      rotation: 0,
+      content: '172 ÷ 64 = 2.69',
+      style: { color: '#f7f4ec', fontFamily: 'Aptos Mono', fontSize: 20 },
+      math: {
+        expression: '172 ÷ 64 = 2.69',
+        syntax: 'plain',
+        displayMode: 'block',
+        description: 'Goals per match',
+      },
+      sourceIds: ['source:adoption'],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+      version: 1,
+    };
+    const video: SlideElement = {
+      id: 'element:video',
+      slideId: slide.id,
+      name: 'Product walkthrough',
+      kind: 'video',
+      role: 'evidence_video',
+      bbox: { x: 0.5, y: 0.87, width: 0.42, height: 0.08 },
+      rotation: 0,
+      style: {},
+      video: {
+        url: 'https://example.com/walkthrough.mp4',
+        title: 'Product walkthrough',
+        captionsUrl: 'https://example.com/walkthrough.vtt',
+        captionsLanguage: 'en',
+      },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      version: 1,
+    };
+    snapshot.elements.push(math, video);
+    slide.elementOrder.push(math.id, video.id);
+
+    const html = adapter.renderSlideHtml(snapshot, slide.id);
+    expect(html).toContain('data-element-kind="math"');
+    expect(html).toContain('<math aria-label="Goals per match">');
+    expect(html).toContain('172 ÷ 64 = 2.69');
+    expect(html).toContain('data-element-kind="video"');
+    expect(html).toContain('https://example.com/walkthrough.mp4');
+    expect(html).toContain('kind="captions"');
+    expect(html).toContain('https://example.com/walkthrough.vtt');
+    expect(adapter.getElementCapability(math).pptx).toBe('native');
+    expect(adapter.getElementCapability(video).pptx).toBe('static_fallback');
+  });
+
   it('omits hidden text from HTML visual, semantic, accessibility, and provenance output', () => {
     const snapshot = cleanSnapshot();
     const hidden = addHiddenTextElement(snapshot);

@@ -23,6 +23,28 @@ export interface NodeSlidePlannedChart {
   unit?: string;
 }
 
+export interface NodeSlidePlannedMath {
+  expression: string;
+  syntax?: 'plain' | 'latex';
+  description?: string;
+}
+
+export interface NodeSlidePlannedImage {
+  url?: string;
+  altText: string;
+  caption?: string;
+}
+
+export interface NodeSlidePlannedVideo {
+  url: string;
+  posterUrl?: string;
+  title?: string;
+  captionsUrl?: string;
+  captionsLanguage?: string;
+  startAtSeconds?: number;
+  endAtSeconds?: number;
+}
+
 export interface NodeSlidePlannedSlide {
   title: string;
   section: string;
@@ -32,6 +54,9 @@ export interface NodeSlidePlannedSlide {
   metric?: string;
   metricLabel?: string;
   chart?: NodeSlidePlannedChart;
+  math?: NodeSlidePlannedMath;
+  image?: NodeSlidePlannedImage;
+  video?: NodeSlidePlannedVideo;
 }
 
 export interface NodeSlideDeckSpec {
@@ -308,6 +333,10 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
           'Normalized boxes travel across renderers',
           'Locks protect intent',
         ],
+        image: {
+          altText: 'Structured deck graph connecting slides, elements, sources, and versions',
+          caption: 'A canonical deck graph keeps every artifact connected.',
+        },
       },
       {
         title: 'One intent, three guarded passes',
@@ -315,6 +344,12 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
         headline: 'Plan → propose → commit, with scope checked at every boundary.',
         body: 'The agent can reason broadly, but it may only write inside the explicit deck, slide, element, comment, or bounding-box scope.',
         bullets: ['Read context', 'Propose an inspectable patch', 'Validate and accept atomically'],
+        math: {
+          expression: 'authorized change = requested scope ∩ allowed scope',
+          syntax: 'plain',
+          description:
+            'The agent can only mutate the intersection of requested and authorized scope.',
+        },
       },
       {
         title: 'Quality is measurable',
@@ -328,6 +363,11 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
         ],
         metric: '3 gates',
         metricLabel: 'independent validation signals: ok, publishOk, cleanOk',
+        chart: {
+          labels: ['ok', 'publish', 'clean'],
+          values: [1, 1, 1],
+          unit: 'pass',
+        },
       },
       {
         title: 'Human review stays in the loop',
@@ -408,6 +448,10 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         headline: 'A better outcome starts with a sharper point of view.',
         body: nodeslideCleanText(brief.prompt, 260),
         bullets: success,
+        image: {
+          altText: 'Structured evidence map derived from the supplied brief',
+          caption: 'The visual is illustrative and remains replaceable as an image object.',
+        },
       },
       {
         title: 'How the approach works',
@@ -415,6 +459,11 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         headline: 'Turn the idea into a sequence people can understand and own.',
         body: 'Connect intent, action, and feedback in one visible operating path so the audience can see both the destination and the mechanics.',
         bullets: ['Align on intent', 'Execute the critical moves', 'Review measurable outcomes'],
+        math: {
+          expression: 'accepted change = proposal ∩ authorized scope',
+          syntax: 'plain',
+          description: 'Only the authorized portion of a proposal may be accepted.',
+        },
       },
       {
         title: 'What success looks like',
@@ -424,6 +473,11 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         bullets: success,
         metric: `${success.length} signals`,
         metricLabel: 'agreed measures of a successful outcome',
+        chart: {
+          labels: success.map((_, index) => `S${index + 1}`),
+          values: success.map(() => 1),
+          unit: 'defined',
+        },
       },
       {
         title: 'A practical path forward',
@@ -670,7 +724,10 @@ function buildSlide(input: {
   const isOpening = input.index === 0;
   const isClosing = input.index === input.total - 1;
   const hasChart = planned.chart !== undefined;
-  const bodyWidth = hasChart || planned.metric ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
+  const hasPrimaryMedia =
+    planned.math !== undefined || planned.image !== undefined || planned.video !== undefined;
+  const hasVisual = hasChart || planned.metric !== undefined || hasPrimaryMedia;
+  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
   add(
     element('body', {
       name: 'Body copy',
@@ -692,9 +749,9 @@ function buildSlide(input: {
     }),
   );
 
-  const bulletX = isOpening || isClosing ? 0.07 : hasChart || planned.metric ? 0.07 : 0.59;
-  const bulletY = isOpening || isClosing ? 0.72 : hasChart || planned.metric ? 0.62 : 0.42;
-  const bulletWidth = isOpening || isClosing ? 0.8 : hasChart || planned.metric ? 0.39 : 0.33;
+  const bulletX = isOpening || isClosing ? 0.07 : hasVisual ? 0.07 : 0.59;
+  const bulletY = isOpening || isClosing ? 0.72 : hasVisual ? 0.62 : 0.42;
+  const bulletWidth = isOpening || isClosing ? 0.8 : hasVisual ? 0.39 : 0.33;
   planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
     add(
       element(`bullet-${bulletIndex + 1}`, {
@@ -723,7 +780,7 @@ function buildSlide(input: {
     );
   });
 
-  if (planned.metric) {
+  if (planned.metric && !hasPrimaryMedia) {
     add(
       element('metric', {
         name: 'Primary metric',
@@ -770,6 +827,122 @@ function buildSlide(input: {
     );
   }
 
+  if (planned.math) {
+    add(
+      element('math', {
+        name: 'Structured formula',
+        kind: 'math',
+        role: 'formula',
+        bbox: box(0.53, 0.41, 0.39, 0.19),
+        rotation: 0,
+        content: planned.math.expression,
+        style: {
+          fill: theme.colors.insight,
+          color: theme.colors.insightInk,
+          fontFamily: theme.typography.data,
+          fontSize: 25,
+          fontWeight: 680,
+          lineHeight: 1.15,
+          padding: 18,
+          radius: theme.defaultRadius,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+        },
+        math: {
+          expression: planned.math.expression,
+          syntax: planned.math.syntax ?? 'plain',
+          displayMode: 'block',
+          ...(planned.math.description ? { description: planned.math.description } : {}),
+        },
+        sourceIds: [input.sourceEvidenceId],
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+
+  if (planned.image) {
+    add(
+      element('image', {
+        name: 'Evidence image',
+        kind: 'image',
+        role: 'evidence_image',
+        bbox: box(0.53, 0.4, 0.39, 0.25),
+        rotation: 0,
+        style: {
+          fill: theme.colors.accentSoft,
+          stroke: theme.colors.border,
+          strokeWidth: 1,
+          radius: theme.defaultRadius,
+        },
+        imageUrl: planned.image.url ?? structuredImageDataUrl(planned.image.altText, theme),
+        altText: planned.image.altText,
+        sourceIds: [input.sourceEvidenceId],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      }),
+    );
+    if (planned.image.caption) {
+      add(
+        element('image-caption', {
+          name: 'Image caption',
+          kind: 'text',
+          role: 'caption',
+          bbox: box(0.55, 0.66, 0.35, 0.055),
+          rotation: 0,
+          content: planned.image.caption,
+          style: {
+            color: theme.colors.muted,
+            fontFamily: theme.typography.body,
+            fontSize: 13,
+            lineHeight: 1.2,
+            textAlign: 'center',
+          },
+          sourceIds: [input.sourceEvidenceId],
+          locked: false,
+          exportCapabilities: [...EDITABLE_CAPABILITIES],
+        }),
+      );
+    }
+  }
+
+  if (planned.video) {
+    add(
+      element('video', {
+        name: 'Linked video',
+        kind: 'video',
+        role: 'evidence_video',
+        bbox: box(0.53, 0.4, 0.39, 0.28),
+        rotation: 0,
+        style: {
+          fill: '#111318',
+          stroke: theme.colors.border,
+          strokeWidth: 1,
+          radius: theme.defaultRadius,
+        },
+        video: {
+          url: planned.video.url,
+          ...(planned.video.posterUrl ? { posterUrl: planned.video.posterUrl } : {}),
+          ...(planned.video.title ? { title: planned.video.title } : {}),
+          ...(planned.video.captionsUrl ? { captionsUrl: planned.video.captionsUrl } : {}),
+          ...(planned.video.captionsLanguage
+            ? { captionsLanguage: planned.video.captionsLanguage }
+            : {}),
+          ...(planned.video.startAtSeconds !== undefined
+            ? { startAtSeconds: planned.video.startAtSeconds }
+            : {}),
+          ...(planned.video.endAtSeconds !== undefined
+            ? { endAtSeconds: planned.video.endAtSeconds }
+            : {}),
+        },
+        altText: planned.video.title ?? 'Linked video',
+        sourceIds: [input.sourceEvidenceId],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      }),
+    );
+  }
+
   if (planned.chart) {
     const labels = planned.chart.labels.slice(0, 8);
     const values = planned.chart.values.slice(0, labels.length);
@@ -778,7 +951,7 @@ function buildSlide(input: {
         name: 'Evidence chart',
         kind: 'chart',
         role: 'evidence',
-        bbox: box(0.53, 0.7, 0.39, 0.17),
+        bbox: box(0.53, hasPrimaryMedia ? 0.72 : 0.7, 0.39, hasPrimaryMedia ? 0.15 : 0.17),
         rotation: 0,
         style: {
           fill: theme.colors.accentSoft,
@@ -856,6 +1029,16 @@ function buildSlide(input: {
   };
 }
 
+function structuredImageDataUrl(label: string, theme: ThemeSpec): string {
+  const safeLabel = label
+    .replace(/[<>&'\"]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 72);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675"><rect width="1200" height="675" fill="${theme.colors.accentSoft}"/><circle cx="260" cy="338" r="170" fill="${theme.colors.insight}"/><path d="M430 210h520v34H430zm0 88h410v24H430zm0 64h470v24H430zm0 64h330v24H430z" fill="${theme.colors.accent}" opacity=".72"/><text x="600" y="585" text-anchor="middle" font-family="system-ui,sans-serif" font-size="32" fill="${theme.colors.ink}">${safeLabel}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function coercePlannedSlide(
   value: unknown,
   fallback: NodeSlidePlannedSlide | undefined,
@@ -877,7 +1060,10 @@ function coercePlannedSlide(
     typeof value.metric === 'string' ? nodeslideCleanText(value.metric, 24) : undefined;
   const metricLabel =
     typeof value.metricLabel === 'string' ? nodeslideCleanText(value.metricLabel, 100) : undefined;
-  const chart = coerceChart(value.chart);
+  const chart = coerceChart(value.chart) ?? fallback?.chart;
+  const math = coerceMath(value.math) ?? fallback?.math;
+  const image = coerceImage(value.image) ?? fallback?.image;
+  const video = coerceVideo(value.video) ?? fallback?.video;
   return {
     title,
     section,
@@ -887,6 +1073,9 @@ function coercePlannedSlide(
     ...(metric ? { metric } : {}),
     ...(metricLabel ? { metricLabel } : {}),
     ...(chart ? { chart } : {}),
+    ...(math ? { math } : {}),
+    ...(image ? { image } : {}),
+    ...(video ? { video } : {}),
   };
 }
 
@@ -907,6 +1096,73 @@ function coerceChart(value: unknown): NodeSlidePlannedChart | undefined {
     values,
     ...(typeof value.unit === 'string' ? { unit: nodeslideCleanText(value.unit, 16) } : {}),
   };
+}
+
+function coerceMath(value: unknown): NodeSlidePlannedMath | undefined {
+  if (!isRecord(value) || typeof value.expression !== 'string') return undefined;
+  const expression = nodeslideCleanText(value.expression, 4_000);
+  if (!expression) return undefined;
+  const syntax = value.syntax === 'latex' ? 'latex' : 'plain';
+  const description =
+    typeof value.description === 'string' ? nodeslideCleanText(value.description, 320) : undefined;
+  return { expression, syntax, ...(description ? { description } : {}) };
+}
+
+function coerceImage(value: unknown): NodeSlidePlannedImage | undefined {
+  if (!isRecord(value) || typeof value.altText !== 'string') return undefined;
+  const altText = nodeslideCleanText(value.altText, 320);
+  if (!altText) return undefined;
+  const url = safePlannedMediaUrl(value.url, 'image');
+  const caption =
+    typeof value.caption === 'string' ? nodeslideCleanText(value.caption, 240) : undefined;
+  return { altText, ...(url ? { url } : {}), ...(caption ? { caption } : {}) };
+}
+
+function coerceVideo(value: unknown): NodeSlidePlannedVideo | undefined {
+  if (!isRecord(value)) return undefined;
+  const url = safePlannedMediaUrl(value.url, 'video');
+  if (!url) return undefined;
+  const posterUrl = safePlannedMediaUrl(value.posterUrl, 'image');
+  const title = typeof value.title === 'string' ? nodeslideCleanText(value.title, 160) : undefined;
+  const captionsUrl = safePlannedCaptionUrl(value['captionsUrl']);
+  const captionsLanguage =
+    typeof value['captionsLanguage'] === 'string'
+      ? nodeslideCleanText(value['captionsLanguage'], 32)
+      : undefined;
+  const startAtSeconds = boundedMediaTime(value.startAtSeconds);
+  const requestedEnd = boundedMediaTime(value.endAtSeconds);
+  const endAtSeconds =
+    requestedEnd !== undefined && requestedEnd > (startAtSeconds ?? 0) ? requestedEnd : undefined;
+  return {
+    url,
+    ...(posterUrl ? { posterUrl } : {}),
+    ...(title ? { title } : {}),
+    ...(captionsUrl ? { captionsUrl } : {}),
+    ...(captionsLanguage ? { captionsLanguage } : {}),
+    ...(startAtSeconds !== undefined ? { startAtSeconds } : {}),
+    ...(endAtSeconds !== undefined ? { endAtSeconds } : {}),
+  };
+}
+
+function safePlannedCaptionUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim().slice(0, 4_000);
+  const lower = clean.toLowerCase();
+  return lower.startsWith('https://') || lower.startsWith('data:text/vtt') ? clean : undefined;
+}
+
+function safePlannedMediaUrl(value: unknown, kind: 'image' | 'video'): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim().slice(0, 4_000);
+  const lower = clean.toLowerCase();
+  if (lower.startsWith('https://') || lower.startsWith(`data:${kind}/`)) return clean;
+  return undefined;
+}
+
+function boundedMediaTime(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.min(value, 86_400)
+    : undefined;
 }
 
 function cleanField(value: unknown, fallback: string, maxLength: number): string {
@@ -930,6 +1186,18 @@ interface NodeSlideInputRecord extends Record<string, unknown> {
   metric?: unknown;
   metricLabel?: unknown;
   chart?: unknown;
+  math?: unknown;
+  image?: unknown;
+  video?: unknown;
+  expression?: unknown;
+  syntax?: unknown;
+  description?: unknown;
+  altText?: unknown;
+  caption?: unknown;
+  url?: unknown;
+  posterUrl?: unknown;
+  startAtSeconds?: unknown;
+  endAtSeconds?: unknown;
   labels?: unknown;
   values?: unknown;
   unit?: unknown;

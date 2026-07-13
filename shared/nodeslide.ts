@@ -1,5 +1,5 @@
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
-export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.0.0' as const;
+export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
 export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
 export const NODESLIDE_SCOPE_SLIDE_LIMIT = 64 as const;
 export const NODESLIDE_SCOPE_ELEMENT_LIMIT = 256 as const;
@@ -47,7 +47,7 @@ export const SLIDE_WIDTH_IN = 13.333;
 export const SLIDE_HEIGHT_IN = 7.5;
 
 export type StudioDomain = 'parity' | 'nodeslide';
-export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'connector';
+export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'video' | 'connector';
 export type PatchSource = 'human' | 'agent' | 'import' | 'system';
 export type PatchStatus = 'draft' | 'validating' | 'ready' | 'accepted' | 'rejected' | 'stale';
 export type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
@@ -145,6 +145,25 @@ export interface ChartData {
   sourceId?: string;
 }
 
+/** A first-class formula contract. Plain expressions remain editable everywhere; LaTeX is preserved losslessly. */
+export interface MathData {
+  expression: string;
+  syntax: 'plain' | 'latex';
+  displayMode: 'inline' | 'block';
+  description?: string;
+}
+
+/** A first-class web video contract with an explicit non-native PowerPoint fallback. */
+export interface VideoData {
+  url: string;
+  posterUrl?: string;
+  title?: string;
+  captionsUrl?: string;
+  captionsLanguage?: string;
+  startAtSeconds?: number;
+  endAtSeconds?: number;
+}
+
 export interface SlideElement {
   id: string;
   slideId: string;
@@ -156,6 +175,8 @@ export interface SlideElement {
   content?: string;
   style: ElementStyle;
   chart?: ChartData;
+  math?: MathData;
+  video?: VideoData;
   imageUrl?: string;
   altText?: string;
   sourceIds: string[];
@@ -173,6 +194,7 @@ export interface Slide {
   deckId: string;
   title: string;
   section?: string;
+  /** Private speaker notes. Published presenter snapshots intentionally omit this field. */
   notes?: string;
   background: string;
   elementOrder: string[];

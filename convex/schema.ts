@@ -12,6 +12,7 @@ import {
   nodeslideElementStyleValidator,
   nodeslideElementValidator,
   nodeslideExportCapabilityValidator,
+  nodeslideMathDataValidator,
   nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
   nodeslidePatchSourceValidator,
@@ -26,6 +27,7 @@ import {
   nodeslideVariationOriginValidator,
   nodeslideVariationStatusValidator,
   nodeslideVersionClockValidator,
+  nodeslideVideoDataValidator,
 } from './lib/nodeslideValidators';
 
 const nodeslidePreferenceEventTypeValidator = v.union(
@@ -549,6 +551,8 @@ export default defineSchema({
       v.literal('shape'),
       v.literal('image'),
       v.literal('chart'),
+      v.literal('math'),
+      v.literal('video'),
       v.literal('connector'),
     ),
     role: v.optional(v.string()),
@@ -557,6 +561,8 @@ export default defineSchema({
     content: v.optional(v.string()),
     style: nodeslideElementStyleValidator,
     chart: v.optional(nodeslideChartDataValidator),
+    math: v.optional(nodeslideMathDataValidator),
+    video: v.optional(nodeslideVideoDataValidator),
     imageUrl: v.optional(v.string()),
     altText: v.optional(v.string()),
     sourceIds: v.array(v.string()),

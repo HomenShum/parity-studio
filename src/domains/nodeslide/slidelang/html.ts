@@ -175,10 +175,25 @@ function renderSemanticImage(element: SlideElement): string {
   return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(label)}</figcaption></figure>`;
 }
 
+function renderSemanticMath(element: SlideElement): string {
+  const expression =
+    element.math?.expression.trim() || element.content?.trim() || 'Formula unavailable';
+  const description = element.math?.description?.trim();
+  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(description || element.name)}</figcaption><math aria-label="${escapeHtml(description || expression)}"><mtext>${escapeHtml(expression)}</mtext></math></figure>`;
+}
+
+function renderSemanticVideo(element: SlideElement): string {
+  const title = element.video?.title?.trim() || element.altText?.trim() || element.name;
+  const url = element.video?.url.trim();
+  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(title)}</figcaption>${url ? `<p>Video source: ${escapeHtml(url)}</p>` : '<p>Video unavailable.</p>'}</figure>`;
+}
+
 function renderSemanticElement(element: SlideElement): string {
   if (isDecorativeElement(element)) return '';
   if (element.kind === 'chart') return renderSemanticChart(element);
   if (element.kind === 'image') return renderSemanticImage(element);
+  if (element.kind === 'math') return renderSemanticMath(element);
+  if (element.kind === 'video') return renderSemanticVideo(element);
   return renderSemanticTextElement(element);
 }
 
@@ -403,6 +418,30 @@ function renderChart(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
     : renderCartesianChart(snapshot, chart, box);
 }
 
+function renderMath(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+  const expression = element.math?.expression ?? element.content ?? 'Formula unavailable';
+  return renderTextBox(snapshot, element, box, expression);
+}
+
+function mediaFragmentUrl(url: string, start?: number, end?: number): string {
+  if (start === undefined && end === undefined) return url;
+  const fragment = `t=${Math.max(0, start ?? 0)}${end === undefined ? '' : `,${Math.max(0, end)}`}`;
+  return `${url.split('#')[0]}#${fragment}`;
+}
+
+function renderVideo(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+  const video = element.video;
+  if (!video?.url.trim()) {
+    return renderImage(snapshot, { ...element, altText: 'Video unavailable' }, box);
+  }
+  const poster = video.posterUrl?.trim() ? ` poster="${escapeHtml(video.posterUrl.trim())}"` : '';
+  const label = video.title?.trim() || element.altText?.trim() || element.name;
+  const captions = video.captionsUrl?.trim()
+    ? `<track default="default" kind="captions" src="${escapeHtml(video.captionsUrl.trim())}" srclang="${escapeHtml(video.captionsLanguage?.trim() || 'en')}" />`
+    : '';
+  return `<foreignObject x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"><video xmlns="http://www.w3.org/1999/xhtml" controls="controls" preload="metadata" src="${escapeHtml(mediaFragmentUrl(video.url.trim(), video.startAtSeconds, video.endAtSeconds))}"${poster} aria-label="${escapeHtml(label)}" style="display:block;width:100%;height:100%;object-fit:cover;background:#111">${captions}</video></foreignObject>`;
+}
+
 function renderConnector(
   snapshot: DeckSnapshot,
   element: SlideElement,
@@ -421,6 +460,8 @@ function renderElement(snapshot: DeckSnapshot, element: SlideElement, markerId: 
   else if (element.kind === 'shape') body = renderShape(snapshot, element, box);
   else if (element.kind === 'image') body = renderImage(snapshot, element, box);
   else if (element.kind === 'chart') body = renderChart(snapshot, element, box);
+  else if (element.kind === 'math') body = renderMath(snapshot, element, box);
+  else if (element.kind === 'video') body = renderVideo(snapshot, element, box);
   else body = renderConnector(snapshot, element, box, markerId);
   const accessibility = isDecorativeElement(element)
     ? ' aria-hidden="true"'

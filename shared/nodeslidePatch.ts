@@ -334,6 +334,7 @@ export function applyDeckPatch(
       element.bbox = normalizeBox(element.bbox);
     } else if (operation.op === 'replace_text') {
       element.content = operation.text;
+      if (element.kind === 'math' && element.math) element.math.expression = operation.text;
     } else if (operation.op === 'update_style') {
       element.style = { ...element.style, ...operation.properties };
     } else if (operation.op === 'set_visibility_v1') {

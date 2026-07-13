@@ -725,6 +725,45 @@
   justify-content: center;
   width: 100%;
 }
+.ns-element-math {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font-family: var(--font-data, "JetBrains Mono Variable", monospace);
+  gap: 8%;
+  justify-content: center;
+  min-height: 100%;
+  width: 100%;
+}
+.ns-element-math span {
+  font-size: 1em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  white-space: pre-wrap;
+}
+.ns-element-math small {
+  font-size: .28em;
+  letter-spacing: .12em;
+  opacity: 0.58;
+  text-transform: uppercase;
+}
+.ns-element-video,
+.ns-element-video-placeholder {
+  height: 100%;
+  width: 100%;
+}
+.ns-element-video {
+  background: #111;
+  object-fit: cover;
+}
+.ns-element-video-placeholder {
+  align-items: center;
+  background: linear-gradient(135deg, #25282d, #111318);
+  color: #f4f1e9;
+  display: flex;
+  justify-content: center;
+}
 .ns-element-connector {
   color: currentColor;
   height: 100%;

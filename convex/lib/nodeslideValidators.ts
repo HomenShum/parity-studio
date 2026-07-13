@@ -302,6 +302,23 @@ export const nodeslideChartDataValidator = v.object({
   sourceId: v.optional(v.string()),
 });
 
+export const nodeslideMathDataValidator = v.object({
+  expression: v.string(),
+  syntax: v.union(v.literal('plain'), v.literal('latex')),
+  displayMode: v.union(v.literal('inline'), v.literal('block')),
+  description: v.optional(v.string()),
+});
+
+export const nodeslideVideoDataValidator = v.object({
+  url: v.string(),
+  posterUrl: v.optional(v.string()),
+  title: v.optional(v.string()),
+  captionsUrl: v.optional(v.string()),
+  captionsLanguage: v.optional(v.string()),
+  startAtSeconds: v.optional(v.number()),
+  endAtSeconds: v.optional(v.number()),
+});
+
 export const nodeslideExportCapabilityValidator = v.union(
   v.literal('web_native'),
   v.literal('pptx_editable'),
@@ -319,6 +336,8 @@ export const nodeslideElementValidator = v.object({
     v.literal('shape'),
     v.literal('image'),
     v.literal('chart'),
+    v.literal('math'),
+    v.literal('video'),
     v.literal('connector'),
   ),
   role: v.optional(v.string()),
@@ -327,6 +346,8 @@ export const nodeslideElementValidator = v.object({
   content: v.optional(v.string()),
   style: nodeslideElementStyleValidator,
   chart: v.optional(nodeslideChartDataValidator),
+  math: v.optional(nodeslideMathDataValidator),
+  video: v.optional(nodeslideVideoDataValidator),
   imageUrl: v.optional(v.string()),
   altText: v.optional(v.string()),
   sourceIds: v.array(v.string()),
@@ -593,6 +614,8 @@ export const nodeslideDeckReplCommandValidator = v.union(
         v.literal('shape'),
         v.literal('image'),
         v.literal('chart'),
+        v.literal('math'),
+        v.literal('video'),
         v.literal('connector'),
       ),
     ),
