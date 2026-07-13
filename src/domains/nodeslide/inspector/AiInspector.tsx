@@ -1357,10 +1357,16 @@ export function AiInspector<CommandId extends string = string>({
                 onClick={() => openTokenMenu('@')}
                 disabled={references.length === 0}
                 aria-label="Add read context reference"
+                title="Add read context"
               >
                 <AtSign size={12} /> Context
               </button>
-              <button type="button" onClick={() => openTokenMenu('/')} aria-label="Add command">
+              <button
+                type="button"
+                onClick={() => openTokenMenu('/')}
+                aria-label="Add command"
+                title="Add command"
+              >
                 <Command size={12} /> Insert
               </button>
               {onAttachDataFile ? (
@@ -1382,6 +1388,7 @@ export function AiInspector<CommandId extends string = string>({
                     onClick={() => attachmentInputRef.current?.click()}
                     disabled={attachmentBusy}
                     aria-label="Attach data file"
+                    title="Attach CSV, JSON, or text data"
                     data-testid="ai-attach-data"
                   >
                     {attachmentBusy ? (
@@ -1422,44 +1429,44 @@ export function AiInspector<CommandId extends string = string>({
               )}
             </button>
           </div>
+          {providerMode !== 'deterministic' || webResearch ? (
+            <div className="ns-ai-inline-consent" aria-label="External request consent">
+              {providerMode !== 'deterministic' ? (
+                <label className={providerConsent ? 'is-ready' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={providerConsent}
+                    onChange={(event) => setProviderConsent(event.target.checked)}
+                    data-testid="ai-provider-consent"
+                  />
+                  <span>
+                    Allow one {providerNameForMode(providerMode)} request /{' '}
+                    {selectedAgentModel.label} / {effortLabel(providerEffort)}
+                    <small>
+                      Sends this ask and scoped context
+                      {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
+                      Trace.
+                    </small>
+                  </span>
+                </label>
+              ) : null}
+              {webResearch ? (
+                <label className={webResearchConsent ? 'is-ready' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={webResearchConsent}
+                    onChange={(event) => setWebResearchConsent(event.target.checked)}
+                    data-testid="ai-web-research-consent"
+                  />
+                  <span>
+                    Allow web research for this request
+                    <small>Source URLs and excerpts are saved in Data and Trace.</small>
+                  </span>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-
-        {providerMode !== 'deterministic' || webResearch ? (
-          <div className="ns-ai-inline-consent" aria-label="External request consent">
-            {providerMode !== 'deterministic' ? (
-              <label className={providerConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={providerConsent}
-                  onChange={(event) => setProviderConsent(event.target.checked)}
-                  data-testid="ai-provider-consent"
-                />
-                <span>
-                  Allow {selectedAgentModel.label} at {effortLabel(providerEffort)} effort via{' '}
-                  {providerNameForMode(providerMode)} for this request
-                  <small>
-                    Ask, scoped slide context{useMemoryForRun ? ', relevant deck memory' : ''},
-                    token use, and cost are recorded in Trace.
-                  </small>
-                </span>
-              </label>
-            ) : null}
-            {webResearch ? (
-              <label className={webResearchConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={webResearchConsent}
-                  onChange={(event) => setWebResearchConsent(event.target.checked)}
-                  data-testid="ai-web-research-consent"
-                />
-                <span>
-                  Allow web research for this request
-                  <small>Source URLs and bounded excerpts are saved in Data and Trace.</small>
-                </span>
-              </label>
-            ) : null}
-          </div>
-        ) : null}
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
