@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(new URL('./nodeslideV3.css', import.meta.url), 'utf8');
 const studioSource = readFileSync(new URL('./NodeSlideStudio.tsx', import.meta.url), 'utf8');
+const aiInspectorSource = readFileSync(
+  new URL('./inspector/AiInspector.tsx', import.meta.url),
+  'utf8',
+);
 
 describe('NodeSlide v3 visual contract', () => {
   it('loads the v3 contract after the authoritative editor shell styles', () => {
@@ -105,6 +109,45 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
+  it('makes typing the primary composer action', () => {
+    expect(css).toMatch(/\.ns-ai-v3-composer-field[\s\S]*?order: 1;/);
+    expect(css).toMatch(/\.ns-ai-v3-suggested-actions[\s\S]*?order: 3;/);
+    expect(css).toMatch(/\.ns-composer-field:focus-within[\s\S]*?border-color:[\s\S]*?box-shadow:/);
+    expect(css).toMatch(/\.ns-composer-field textarea[\s\S]*?min-height: 92px;/);
+
+    const composerStart = aiInspectorSource.indexOf(
+      'className="ns-composer-field ns-ai-v3-composer-field"',
+    );
+    const consentStart = aiInspectorSource.indexOf(
+      'className="ns-ai-inline-consent"',
+      composerStart,
+    );
+    const composerEnd = aiInspectorSource.indexOf('\n        </div>', consentStart);
+    expect(composerStart).toBeGreaterThanOrEqual(0);
+    expect(consentStart).toBeGreaterThan(composerStart);
+    expect(composerEnd).toBeGreaterThan(consentStart);
+  });
+
+  it('contains narrow inspector rails without horizontal drift', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-inspector[\s\S]*?container-name: nodeslide-inspector;[\s\S]*?container-type: inline-size;[\s\S]*?overflow-x: clip;/,
+    );
+    expect(css).toMatch(
+      /:is\(\.ns-ai-v3-review-scroll, \.ns-ai-v3-composer, \.ns-ai-v3-controls-body\)[\s\S]*?overflow-x: hidden;[\s\S]*?overscroll-behavior-x: none;/,
+    );
+
+    const narrowRail = containerBlock('@container nodeslide-inspector (max-width: 380px)');
+    expect(narrowRail).toMatch(
+      /\.ns-ai-provider-controls > label:not\(\.ns-ai-provider-consent\)[\s\S]*?flex: 1 1 100%;[\s\S]*?min-width: 0;[\s\S]*?width: 100%;/,
+    );
+    expect(narrowRail).toMatch(
+      /\.ns-scope-row \.ns-chip-group[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*?width: 100%;/,
+    );
+    expect(narrowRail).toMatch(
+      /\.ns-ai-policy-grid[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
+    );
+  });
+
   it('keeps the trace receipt surface and dark honesty states readable', () => {
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-trace-summary[\s\S]*?border-radius: 12px;[\s\S]*?padding: 0;/,
@@ -130,6 +173,21 @@ function mediaBlock(start: string, end: string) {
   expect(startIndex, `Missing ${start}`).toBeGreaterThanOrEqual(0);
   expect(endIndex, `Missing ${end} after ${start}`).toBeGreaterThan(startIndex);
   return css.slice(startIndex, endIndex);
+}
+
+function containerBlock(start: string) {
+  const startIndex = css.indexOf(start);
+  expect(startIndex, `Missing ${start}`).toBeGreaterThanOrEqual(0);
+
+  let depth = 0;
+  for (let index = css.indexOf('{', startIndex); index < css.length; index += 1) {
+    const character = css[index];
+    if (character === '{') depth += 1;
+    if (character === '}') depth -= 1;
+    if (depth === 0) return css.slice(startIndex, index + 1);
+  }
+
+  throw new Error(`Unclosed ${start}`);
 }
 
 function contrast(foreground: string, background: string) {
