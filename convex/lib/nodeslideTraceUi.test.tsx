@@ -5,6 +5,40 @@ import { CustodyRail, TraceInspector } from '../../src/domains/nodeslide/inspect
 import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 
 describe('NodeSlide trace validation receipts', () => {
+  it('uses the compact agent-activity hierarchy instead of the legacy trace framing', () => {
+    const current = validation('validation-v2', 2, 2_000);
+    const trace: AgentTrace = {
+      id: 'trace-modern-ui',
+      deckId: 'deck-a',
+      status: 'awaiting_review',
+      summary: 'Proposed a scoped headline edit',
+      plan: ['Read context', 'Draft bounded operation', 'Validate candidate'],
+      context: ['Read context: 1 slide'],
+      toolCalls: ['Validated candidate'],
+      guardrails: ['Human approval required'],
+      provider: 'nebius',
+      model: 'zai-org/GLM-5.2',
+      reasoningEffort: 'high',
+      inputTokens: 120,
+      outputTokens: 30,
+      costMicroUsd: 1_250,
+      validation: current,
+      createdAt: 1_000,
+    };
+
+    const markup = renderToStaticMarkup(
+      <TraceInspector traces={[trace]} validations={[current]} />,
+    );
+
+    expect(markup).toContain('Agent activity');
+    expect(markup).toContain('Run details');
+    expect(markup).toContain('Execution');
+    expect(markup).toContain('6 auditable events');
+    expect(markup).toContain('nebius · zai-org/GLM-5.2 · High effort');
+    expect(markup).not.toContain('What happened');
+    expect(markup).not.toContain('Chain of custody');
+  });
+
   it('separates the current deck receipt from an older selected trace receipt', () => {
     const initial = validation('validation-v1', 1, 1_000);
     const current = validation('validation-v7', 7, 7_000);

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL,
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
@@ -8,11 +9,7 @@ import {
 } from '../../shared/nodeslide';
 import { proposeEdit } from '../nodeslideAgent';
 import { nodeSlideSnapshotDigest } from './nodeslideDeckRepl';
-import {
-  NODESLIDE_EDIT_MODEL,
-  NODESLIDE_EDIT_PROVIDER,
-  callNodeSlideFreeJson,
-} from './nodeslideProvider';
+import { callNodeSlideFreeJson } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 import {
   type NodeSlideShadowComparison,
@@ -31,6 +28,8 @@ const SHADOW_FLAG = 'NODESLIDE_AGENTIC_SHADOW_ENABLED';
 const originalGlobalFlag = process.env[GLOBAL_FLAG];
 const originalShadowFlag = process.env[SHADOW_FLAG];
 const providerMock = vi.mocked(callNodeSlideFreeJson);
+const TEST_PROVIDER = 'openrouter' as const;
+const TEST_MODEL = NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL;
 
 type ProposeContext = {
   runQuery: ReturnType<typeof vi.fn>;
@@ -110,8 +109,8 @@ function providerSuccess(target: { id: string; slideId: string }) {
       ],
     },
     telemetry: {
-      provider: NODESLIDE_EDIT_PROVIDER,
-      model: NODESLIDE_EDIT_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL,
       reasoningEffort: 'high',
       costMicroUsd: 0,
       inputTokens: 100,
@@ -197,8 +196,8 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
       },
     ]);
     expect(proposalArgs).toMatchObject({
-      provider: NODESLIDE_EDIT_PROVIDER,
-      model: NODESLIDE_EDIT_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -217,7 +216,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         designBehavior: 'preserve',
         referenceUse: 'context_only',
         providerMode: args.providerMode,
-        providerModel: NODESLIDE_EDIT_MODEL,
+        providerModel: TEST_MODEL,
         providerEffort: 'high',
       }),
     );
@@ -249,7 +248,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         ],
       },
       telemetry: {
-        provider: NODESLIDE_EDIT_PROVIDER,
+        provider: TEST_PROVIDER,
         model: args.providerModel,
         reasoningEffort: 'high',
         costMicroUsd: 2_400,
@@ -266,7 +265,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     );
     const proposalArgs = test.calls.find((call) => 'operations' in call);
     expect(proposalArgs).toMatchObject({
-      provider: NODESLIDE_EDIT_PROVIDER,
+      provider: TEST_PROVIDER,
       model: args.providerModel,
       costMicroUsd: 2_400,
       inputTokens: 180,
@@ -300,8 +299,8 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
   it('preserves deterministic-fallback persistence attribution after extraction', async () => {
     const { workspace, args } = fixture();
     const telemetry = {
-      provider: NODESLIDE_EDIT_PROVIDER,
-      model: NODESLIDE_EDIT_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL,
       reasoningEffort: 'high' as const,
       costMicroUsd: 0,
       inputTokens: 100,
@@ -319,7 +318,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     const proposalArgs = test.calls.find((call) => 'operations' in call);
     expect(proposalArgs).toMatchObject({
       provider: telemetry.provider,
-      model: `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+      model: `${TEST_MODEL} (deterministic fallback)`,
       costMicroUsd: telemetry.costMicroUsd,
       inputTokens: telemetry.inputTokens,
       outputTokens: telemetry.outputTokens,

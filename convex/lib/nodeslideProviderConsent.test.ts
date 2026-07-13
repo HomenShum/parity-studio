@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  NODESLIDE_NEBIUS_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
 } from '../../shared/nodeslide';
@@ -22,6 +23,19 @@ describe('NodeSlide provider consent authority', () => {
   });
 
   it('requires exact, non-interchangeable operation consent tokens', () => {
+    expect(
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'nebius',
+        NODESLIDE_NEBIUS_REVIEW_CONSENT,
+        'nebius/zai-org/GLM-5.2',
+        'high',
+      ),
+    ).toMatchObject({
+      providerMode: 'nebius',
+      providerModel: 'nebius/zai-org/GLM-5.2',
+      providerEffort: 'high',
+    });
     expect(
       validateNodeSlideProviderChoice(
         'propose_edit',
@@ -83,5 +97,14 @@ describe('NodeSlide provider consent authority', () => {
         'unbounded',
       ),
     ).toThrow(/supported NodeSlide reasoning effort/);
+    expect(() =>
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'nebius',
+        NODESLIDE_NEBIUS_REVIEW_CONSENT,
+        'nebius/zai-org/GLM-5.2',
+        'xhigh',
+      ),
+    ).toThrow(/does not support the selected reasoning effort/);
   });
 });

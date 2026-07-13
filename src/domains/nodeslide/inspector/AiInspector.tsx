@@ -49,6 +49,8 @@ import {
   type SlideElement,
   isNodeSlideAgentModelId,
   nodeSlideAgentModel,
+  nodeSlideModelSupportsReasoningEffort,
+  nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
@@ -67,6 +69,8 @@ import {
   type AiSuggestedAction,
   type AiVariationProviderRequest,
   type AiVariationRequest,
+  NODESLIDE_NEBIUS_REVIEW_CONSENT,
+  NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
@@ -171,7 +175,7 @@ export function AiInspector<CommandId extends string = string>({
   commentContext = null,
   initialInstruction = '',
   initialReadContext = [],
-  initialProviderMode = 'openrouter_free',
+  initialProviderMode = 'nebius',
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
@@ -226,10 +230,19 @@ export function AiInspector<CommandId extends string = string>({
 
   useEffect(() => {
     const stored = window.localStorage.getItem('nodeslide.agent-model');
-    if (isNodeSlideAgentModelId(stored)) setProviderModel(stored);
+    const storedModel = isNodeSlideAgentModelId(stored) ? stored : NODESLIDE_DEFAULT_AGENT_MODEL;
+    if (isNodeSlideAgentModelId(stored)) {
+      setProviderModel(storedModel);
+      setProviderMode(nodeSlideProviderModeForModel(storedModel));
+    }
     const storedEffort = window.localStorage.getItem('nodeslide.agent-effort');
-    if (NODESLIDE_REASONING_EFFORTS.some((effort) => effort.id === storedEffort)) {
+    if (
+      NODESLIDE_REASONING_EFFORTS.some((effort) => effort.id === storedEffort) &&
+      nodeSlideModelSupportsReasoningEffort(storedModel, storedEffort as NodeSlideReasoningEffort)
+    ) {
       setProviderEffort(storedEffort as NodeSlideReasoningEffort);
+    } else {
+      setProviderEffort('high');
     }
   }, []);
 
@@ -405,7 +418,11 @@ export function AiInspector<CommandId extends string = string>({
     }
     if (!isNodeSlideAgentModelId(value)) return;
     setProviderModel(value);
-    setProviderMode('openrouter_free');
+    setProviderMode(nodeSlideProviderModeForModel(value));
+    if (!nodeSlideModelSupportsReasoningEffort(value, providerEffort)) {
+      setProviderEffort('high');
+      window.localStorage.setItem('nodeslide.agent-effort', 'high');
+    }
     window.localStorage.setItem('nodeslide.agent-model', value);
   };
 
@@ -462,7 +479,7 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
-    if (providerMode === 'openrouter_free') setProviderConsent(false);
+    if (providerMode !== 'deterministic') setProviderConsent(false);
   };
 
   const submit = (event: FormEvent) => {
@@ -503,7 +520,7 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
-    if (providerMode === 'openrouter_free') setProviderConsent(false);
+    if (providerMode !== 'deterministic') setProviderConsent(false);
     if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
@@ -816,7 +833,7 @@ export function AiInspector<CommandId extends string = string>({
                 title={
                   providerReady
                     ? 'Generate three bounded directions'
-                    : 'Consent is required before using OpenRouter'
+                    : `Consent is required before using ${providerNameForMode(providerMode)}`
                 }
               >
                 {variationGenerating ? (
@@ -977,7 +994,7 @@ export function AiInspector<CommandId extends string = string>({
             <span>Advanced controls</span>
             <span
               className={`ns-route-pill ${
-                providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
+                providerMode !== 'deterministic' ? 'is-external' : 'is-private'
               }`}
             >
               {providerMode === 'deterministic' ? (
@@ -986,7 +1003,7 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               ) : (
                 <>
-                  <Sparkles size={11} /> OpenRouter
+                  <Sparkles size={11} /> {providerNameForMode(providerMode)}
                 </>
               )}
             </span>
@@ -999,7 +1016,7 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               ) : (
                 <>
-                  <Sparkles size={13} /> External model: on · OpenRouter ·{' '}
+                  <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
                   {selectedAgentModel.label} · {effortLabel(providerEffort)} effort
                   <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
                     {providerConsent ? 'Consent attached' : 'Consent required'}
@@ -1007,7 +1024,7 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               )}
             </div>
-            {providerMode === 'openrouter_free' ? (
+            {providerMode !== 'deterministic' ? (
               <p className="ns-ai-model-guidance">
                 <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
                 {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
@@ -1034,26 +1051,29 @@ export function AiInspector<CommandId extends string = string>({
                   <small>No instruction or context is sent to an external model.</small>
                 </span>
               </label>
-              <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
+              <label className={providerMode !== 'deterministic' ? 'is-active' : ''}>
                 <input
                   type="radio"
                   name={providerName}
-                  value="openrouter_free"
-                  checked={providerMode === 'openrouter_free'}
+                  value={nodeSlideProviderModeForModel(providerModel)}
+                  checked={providerMode !== 'deterministic'}
                   onChange={() => {
-                    setProviderMode('openrouter_free');
+                    setProviderMode(nodeSlideProviderModeForModel(providerModel));
                     setProviderConsent(false);
                   }}
-                  data-testid="ai-provider-openrouter"
+                  data-testid="ai-provider-external"
                 />
                 <Sparkles size={15} />
                 <span>
                   <strong>
-                    OpenRouter · {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
+                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))} ·{' '}
+                    {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
                   </strong>
                   <small>
                     Sends this ask, selected read context, and scoped slide content to the selected
-                    model through OpenRouter. It does not browse or fetch URLs.
+                    model through{' '}
+                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))}. It does not
+                    browse or fetch URLs.
                   </small>
                 </span>
               </label>
@@ -1221,7 +1241,8 @@ export function AiInspector<CommandId extends string = string>({
                 >
                   <optgroup label="Recommended">
                     <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
-                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Recommended
+                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Nebius ·
+                      Recommended
                     </option>
                   </optgroup>
                   <optgroup label="More live models">
@@ -1229,7 +1250,8 @@ export function AiInspector<CommandId extends string = string>({
                       (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
                     ).map((model) => (
                       <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor}
+                        {model.label} · {model.vendor} ·{' '}
+                        {providerNameForMode(nodeSlideProviderModeForModel(model.id))}
                       </option>
                     ))}
                   </optgroup>
@@ -1238,7 +1260,7 @@ export function AiInspector<CommandId extends string = string>({
                   </optgroup>
                 </select>
               </label>
-              {providerMode === 'openrouter_free' ? (
+              {providerMode !== 'deterministic' ? (
                 <label className="ns-ai-model-picker ns-ai-effort-picker">
                   <span className="ns-sr-only">Reasoning effort</span>
                   <select
@@ -1252,7 +1274,9 @@ export function AiInspector<CommandId extends string = string>({
                     aria-label="Reasoning effort"
                     data-testid="ai-effort-select"
                   >
-                    {NODESLIDE_REASONING_EFFORTS.map((effort) => (
+                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
+                    ).map((effort) => (
                       <option key={effort.id} value={effort.id}>
                         {effort.label}
                       </option>
@@ -1354,9 +1378,9 @@ export function AiInspector<CommandId extends string = string>({
           </div>
         </div>
 
-        {providerMode === 'openrouter_free' || webResearch ? (
+        {providerMode !== 'deterministic' || webResearch ? (
           <div className="ns-ai-inline-consent" aria-label="External request consent">
-            {providerMode === 'openrouter_free' ? (
+            {providerMode !== 'deterministic' ? (
               <label className={providerConsent ? 'is-ready' : ''}>
                 <input
                   type="checkbox"
@@ -1365,8 +1389,8 @@ export function AiInspector<CommandId extends string = string>({
                   data-testid="ai-provider-consent"
                 />
                 <span>
-                  Allow {selectedAgentModel.label} at {effortLabel(providerEffort)} effort via
-                  OpenRouter for this request
+                  Allow {selectedAgentModel.label} at {effortLabel(providerEffort)} effort via{' '}
+                  {providerNameForMode(providerMode)} for this request
                   <small>
                     Ask, scoped slide context, token use, and cost are recorded in Trace.
                   </small>
@@ -1521,7 +1545,7 @@ function VariationCard({
       <div className="ns-variation-evidence-row">
         <span className={`is-${variation.origin}`}>
           {variation.origin === 'free_route'
-            ? 'OpenRouter · external model'
+            ? 'External model route'
             : variation.fallbackReason === 'provider_not_requested'
               ? 'Private deterministic'
               : 'Deterministic fallback'}
@@ -1749,12 +1773,13 @@ export function createAiProviderRequest(
   effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted) return null;
+  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
   return {
-    providerMode: 'openrouter_free',
+    providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+    providerConsent:
+      mode === 'nebius' ? NODESLIDE_NEBIUS_REVIEW_CONSENT : NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   };
 }
 
@@ -1765,17 +1790,26 @@ export function createAiVariationProviderRequest(
   effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted) return null;
+  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
   return {
-    providerMode: 'openrouter_free',
+    providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+    providerConsent:
+      mode === 'nebius'
+        ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
+        : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   };
 }
 
 function effortLabel(effort: NodeSlideReasoningEffort): string {
   return NODESLIDE_REASONING_EFFORTS.find((candidate) => candidate.id === effort)?.label ?? 'High';
+}
+
+function providerNameForMode(mode: AiProviderMode): string {
+  if (mode === 'nebius') return 'Nebius';
+  if (mode === 'openrouter_free') return 'OpenRouter';
+  return 'Private';
 }
 
 export function agentPhaseLabel(activity: AiAgentActivity): string {

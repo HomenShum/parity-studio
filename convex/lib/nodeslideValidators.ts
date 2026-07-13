@@ -1,11 +1,13 @@
 import { ConvexError, v } from 'convex/values';
 import {
-  NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_DEFAULT_REASONING_EFFORT,
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
   isNodeSlideAgentModelId,
   isNodeSlideReasoningEffort,
+  nodeSlideAgentModel,
+  nodeSlideDefaultModelForProviderMode,
+  nodeSlideModelSupportsReasoningEffort,
 } from '../../shared/nodeslide';
 import {
   NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
@@ -29,16 +31,19 @@ export const NODESLIDE_CREATE_DECK_LIMITS = {
 } as const;
 
 export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as const;
+export const NODESLIDE_NEBIUS_BRIEF_CONSENT = 'nebius_full_brief_v1' as const;
 
-export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free';
+export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free' | 'nebius';
 
 export type ValidatedNodeSlideBriefProviderChoice =
   | { providerMode: 'deterministic' }
   | {
-      providerMode: 'openrouter_free';
+      providerMode: 'openrouter_free' | 'nebius';
       providerModel: NodeSlideAgentModelId;
       providerEffort: NodeSlideReasoningEffort;
-      providerConsent: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+      providerConsent:
+        | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
+        | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
     };
 
 export interface NodeSlideCreateDeckFields {
@@ -132,23 +137,37 @@ export function validateNodeSlideBriefProviderChoice(
     ) {
       throw nodeslideCreatePublicError(
         'provider_consent_mismatch',
-        'OpenRouter consent, model, and effort must only accompany an OpenRouter request.',
+        'Provider consent, model, and effort must only accompany an external model request.',
       );
     }
     return { providerMode };
   }
-  if (providerMode === 'openrouter_free') {
-    if (providerConsent !== NODESLIDE_OPENROUTER_BRIEF_CONSENT) {
+  if (providerMode === 'openrouter_free' || providerMode === 'nebius') {
+    const providerName = providerMode === 'nebius' ? 'Nebius' : 'OpenRouter';
+    const expectedConsent =
+      providerMode === 'nebius'
+        ? NODESLIDE_NEBIUS_BRIEF_CONSENT
+        : NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+    if (providerConsent !== expectedConsent) {
       throw nodeslideCreatePublicError(
         'provider_consent_required',
-        'Explicit consent is required before sending the full brief to OpenRouter.',
+        `Explicit consent is required before sending the full brief to ${providerName}.`,
       );
     }
-    const selectedModel = providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL;
+    const selectedModel = providerModel ?? nodeSlideDefaultModelForProviderMode(providerMode);
     if (!isNodeSlideAgentModelId(selectedModel)) {
       throw nodeslideCreatePublicError(
         'invalid_request',
         'Choose a supported NodeSlide agent model.',
+      );
+    }
+    if (
+      nodeSlideAgentModel(selectedModel).provider !==
+      (providerMode === 'nebius' ? 'nebius' : 'openrouter')
+    ) {
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        `The selected model is not available through ${providerName}.`,
       );
     }
     const selectedEffort = providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT;
@@ -158,11 +177,17 @@ export function validateNodeSlideBriefProviderChoice(
         'Choose a supported NodeSlide reasoning effort.',
       );
     }
+    if (!nodeSlideModelSupportsReasoningEffort(selectedModel, selectedEffort)) {
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        `${nodeSlideAgentModel(selectedModel).label} does not support the selected reasoning effort through ${providerName}.`,
+      );
+    }
     return {
       providerMode,
       providerModel: selectedModel,
       providerEffort: selectedEffort,
-      providerConsent,
+      providerConsent: expectedConsent,
     };
   }
   throw nodeslideCreatePublicError('invalid_request', 'Choose a supported brief provider mode.');
@@ -528,9 +553,11 @@ export const nodeslideOperationModeValidator = v.union(
 export const nodeslideProviderModeValidator = v.union(
   v.literal('deterministic'),
   v.literal('openrouter_free'),
+  v.literal('nebius'),
 );
 
 export const nodeslideAgentModelValidator = v.union(
+  v.literal('nebius/zai-org/GLM-5.2'),
   v.literal('z-ai/glm-5.2'),
   v.literal('anthropic/claude-sonnet-5'),
   v.literal('anthropic/claude-fable-5'),

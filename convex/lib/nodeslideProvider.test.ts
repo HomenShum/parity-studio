@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   NODESLIDE_EDIT_MODEL,
   NODESLIDE_EDIT_PROVIDER,
+  NODESLIDE_NEBIUS_GLM_MODEL,
   type NodeSlideCompletion,
   type NodeSlideCompletionResult,
   callNodeSlideFreeJson,
@@ -48,7 +49,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       ok: true,
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
-        model: NODESLIDE_EDIT_MODEL,
+        model: NODESLIDE_NEBIUS_GLM_MODEL,
         reasoningEffort: 'high',
         costMicroUsd: 1_250,
         inputTokens: 120,
@@ -58,7 +59,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete).toHaveBeenCalledTimes(1);
     expect(complete.mock.calls[0]?.[0]).toMatchObject({
       provider: NODESLIDE_EDIT_PROVIDER,
-      model: NODESLIDE_EDIT_MODEL,
+      model: NODESLIDE_NEBIUS_GLM_MODEL,
       reasoningEffort: 'high',
       maxTokens: 500,
       jsonSchema: request.jsonSchema,
@@ -80,7 +81,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(result).toMatchObject({
       ok: true,
       telemetry: {
-        provider: NODESLIDE_EDIT_PROVIDER,
+        provider: 'openrouter',
         model: 'anthropic/claude-sonnet-5',
         reasoningEffort: 'xhigh',
       },
@@ -127,7 +128,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       ok: true,
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
-        model: NODESLIDE_EDIT_MODEL,
+        model: NODESLIDE_NEBIUS_GLM_MODEL,
         costMicroUsd: 3_250,
         inputTokens: 270,
         outputTokens: 70,
@@ -162,10 +163,10 @@ describe('NodeSlide named pi-ai JSON provider', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      reason: 'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+      reason: 'The GLM 5.2 via Nebius route returned invalid JSON after one repair attempt.',
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
-        model: NODESLIDE_EDIT_MODEL,
+        model: NODESLIDE_NEBIUS_GLM_MODEL,
       },
     });
     expect(complete).toHaveBeenCalledTimes(2);
@@ -208,7 +209,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      reason: 'The GLM 5.2 route rejected the structured-output schema.',
+      reason: 'The GLM 5.2 via Nebius route rejected the structured-output schema.',
     });
     expect(complete).toHaveBeenCalledTimes(2);
   });
@@ -234,9 +235,24 @@ describe('NodeSlide named pi-ai JSON provider', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'The GLM 5.2 route timed out.',
+      reason: 'The GLM 5.2 via Nebius route timed out.',
     });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
+  });
+
+  it('rejects reasoning efforts that the selected provider does not advertise', async () => {
+    const complete = vi.fn<NodeSlideCompletion>();
+
+    const result = await callNodeSlideFreeJson(
+      { ...request, model: NODESLIDE_EDIT_MODEL, reasoningEffort: 'xhigh' },
+      { complete },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'The GLM 5.2 route does not support the selected reasoning effort.',
+    });
+    expect(complete).not.toHaveBeenCalled();
   });
 });

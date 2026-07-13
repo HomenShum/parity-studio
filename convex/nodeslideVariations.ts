@@ -436,7 +436,7 @@ export const beginGeneration = internalMutation({
       requestedCount: 3 as const,
       status: 'generating' as const,
       origin:
-        args.providerMode === 'openrouter_free'
+        args.providerMode !== undefined && args.providerMode !== 'deterministic'
           ? ('free_route' as const)
           : ('deterministic_fallback' as const),
       variationIds: [],

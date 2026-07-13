@@ -40,11 +40,7 @@ import {
 } from './lib/nodeslideEditShadowPlanner';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
-import {
-  NODESLIDE_EDIT_MODEL,
-  NODESLIDE_EDIT_PROVIDER,
-  callNodeSlideFreeJson,
-} from './lib/nodeslideProvider';
+import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
   NodeSlideProviderConsentError,
   validateNodeSlideProviderChoice,
@@ -186,16 +182,17 @@ export const proposeEdit = action({
     const idempotencyKey =
       args.idempotencyKey?.replace(/\s+/g, '-').trim().slice(0, 160) ||
       nodeslideEventId('agent_request', Date.now(), args.deckId, instruction);
-    const requestedModel =
-      providerChoice.providerMode === 'openrouter_free'
-        ? providerChoice.providerModel
-        : 'bounded-edit-planner/v1';
+    const requestedRoute =
+      providerChoice.providerMode === 'deterministic'
+        ? null
+        : nodeSlideAgentModel(providerChoice.providerModel);
+    const requestedModel = requestedRoute?.upstreamId ?? 'bounded-edit-planner/v1';
     const runStart = await ctx.runMutation(nodeslideInternal.beginAgentRunInternal, {
       deckId: args.deckId,
       ownerAccessKey: args.ownerAccessKey,
       idempotencyKey,
       instruction,
-      provider: providerChoice.providerMode === 'openrouter_free' ? 'openrouter' : 'deterministic',
+      provider: requestedRoute?.provider ?? 'deterministic',
       model: requestedModel,
       webResearch: args.webResearch === true,
     });
@@ -313,7 +310,7 @@ export const proposeEdit = action({
         designBehavior: args.designBehavior ?? 'preserve',
         referenceUse: args.referenceUse ?? 'context_only',
         providerMode: providerChoice.providerMode,
-        ...(providerChoice.providerMode === 'openrouter_free'
+        ...(providerChoice.providerMode !== 'deterministic'
           ? {
               providerModel: providerChoice.providerModel,
               providerEffort: providerChoice.providerEffort,
@@ -326,7 +323,7 @@ export const proposeEdit = action({
           ? null
           : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null);
       // The planner handles an INVALID model response gracefully (deterministic_fallback origin).
-      // But a THROWN provider failure (OpenRouter/GLM timeout, network, or abort after retries)
+      // But a THROWN provider failure (external GLM timeout, network, or abort after retries)
       // would otherwise escape here as a raw Convex "Server Error Called by client". Converge every
       // failure mode on the same graceful deterministic fallback, keeping attribution honest.
       let baseline: Awaited<ReturnType<typeof planNodeSlideEdit>>;
@@ -371,12 +368,15 @@ export const proposeEdit = action({
       });
       const finalOperations = baseline.operations;
       const summary = baseline.summary;
-      const providerRequested = providerChoice.providerMode === 'openrouter_free';
+      const providerRequested = providerChoice.providerMode !== 'deterministic';
       const requestedProviderModel =
-        providerChoice.providerMode === 'openrouter_free'
+        providerChoice.providerMode !== 'deterministic'
           ? providerChoice.providerModel
           : NODESLIDE_EDIT_MODEL;
-      const requestedProviderLabel = nodeSlideAgentModel(requestedProviderModel).label;
+      const requestedProviderRoute = nodeSlideAgentModel(requestedProviderModel);
+      const requestedProviderLabel = requestedProviderRoute.label;
+      const requestedProviderName =
+        requestedProviderRoute.provider === 'nebius' ? 'Nebius' : 'OpenRouter';
       const usedFallback =
         providerRequested &&
         (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
@@ -385,7 +385,7 @@ export const proposeEdit = action({
         ? {
             provider: telemetry.provider,
             model: usedFallback
-              ? `${requestedProviderModel} (deterministic fallback)`
+              ? `${requestedProviderRoute.upstreamId} (deterministic fallback)`
               : telemetry.model,
             reasoningEffort: telemetry.reasoningEffort,
             costMicroUsd: telemetry.costMicroUsd,
@@ -394,9 +394,9 @@ export const proposeEdit = action({
           }
         : providerRequested
           ? {
-              provider: NODESLIDE_EDIT_PROVIDER,
-              model: `${requestedProviderModel} (deterministic fallback)`,
-              ...(providerChoice.providerMode === 'openrouter_free'
+              provider: requestedProviderRoute.provider,
+              model: `${requestedProviderRoute.upstreamId} (deterministic fallback)`,
+              ...(providerChoice.providerMode !== 'deterministic'
                 ? { reasoningEffort: providerChoice.providerEffort }
                 : {}),
             }
@@ -457,7 +457,7 @@ export const proposeEdit = action({
         traceSummary: usedFallback
           ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? `the ${requestedProviderLabel} response was invalid`}`
           : providerRequested
-            ? `OpenRouter ${requestedProviderLabel} proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
+            ? `${requestedProviderName} ${requestedProviderLabel} proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
             : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
         traceContext,
         toolCalls: [
@@ -469,7 +469,7 @@ export const proposeEdit = action({
               ]
             : []),
           providerRequested
-            ? `Called ${requestedProviderLabel} through the maintained pi-ai OpenRouter provider after exact edit consent`
+            ? `Called ${requestedProviderLabel} through the maintained pi-ai ${requestedProviderName} provider after exact edit consent`
             : 'Kept review context on the deterministic local route',
           providerRequested
             ? usedFallback
@@ -996,7 +996,7 @@ export const createDeckFromBrief = action({
           providerMode: providerChoice.providerMode,
         }),
         maxTokens: 5000,
-        ...(providerChoice.providerMode === 'openrouter_free'
+        ...(providerChoice.providerMode !== 'deterministic'
           ? {
               model: providerChoice.providerModel,
               reasoningEffort: providerChoice.providerEffort,
@@ -1080,14 +1080,17 @@ export const createDeckFromBrief = action({
     const telemetry = provider?.telemetry;
     const providerSucceeded = provider?.ok === true;
     const selectedModel =
-      providerChoice.providerMode === 'openrouter_free' ? providerChoice.providerModel : null;
-    const selectedModelLabel = selectedModel ? nodeSlideAgentModel(selectedModel).label : null;
+      providerChoice.providerMode !== 'deterministic' ? providerChoice.providerModel : null;
+    const selectedModelRoute = selectedModel ? nodeSlideAgentModel(selectedModel) : null;
+    const selectedModelLabel = selectedModelRoute?.label ?? null;
+    const selectedProviderName =
+      selectedModelRoute?.provider === 'nebius' ? 'Nebius' : 'OpenRouter';
     const traceSummary =
       providerChoice.providerMode === 'deterministic'
-        ? 'NodeSlide created the deck with its deterministic brief generator. The brief was not sent to OpenRouter.'
+        ? 'NodeSlide created the deck with its deterministic brief generator. The brief was not sent to an external model provider.'
         : providerSucceeded
-          ? `The user consented to send the full brief${attachments.length > 0 ? ` and ${attachments.length} uploaded data source${attachments.length === 1 ? '' : 's'}` : ''} to OpenRouter. The named ${selectedModelLabel} model supplied the narrative plan through pi-ai; NodeSlide normalized, persisted, and validated the deck deterministically.`
-          : `The user consented to send the full brief${attachments.length > 0 ? ' and uploaded data sources' : ''} to OpenRouter. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : `the ${selectedModelLabel} route was unavailable.`}`;
+          ? `The user consented to send the full brief${attachments.length > 0 ? ` and ${attachments.length} uploaded data source${attachments.length === 1 ? '' : 's'}` : ''} to ${selectedProviderName}. The named ${selectedModelLabel} model supplied the narrative plan through pi-ai; NodeSlide normalized, persisted, and validated the deck deterministically.`
+          : `The user consented to send the full brief${attachments.length > 0 ? ' and uploaded data sources' : ''} to ${selectedProviderName}. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : `the ${selectedModelLabel} route was unavailable.`}`;
     return await ctx.runMutation(nodeslideInternal.createFromBriefInternal, {
       deckId,
       projectId,
@@ -1113,8 +1116,8 @@ export const createDeckFromBrief = action({
         : providerChoice.providerMode === 'deterministic'
           ? { provider: 'deterministic', model: 'brief-to-deck/v1' }
           : {
-              provider: NODESLIDE_EDIT_PROVIDER,
-              model: `${selectedModel ?? NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+              provider: selectedModelRoute?.provider ?? 'external',
+              model: `${selectedModelRoute?.upstreamId ?? NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
               reasoningEffort: providerChoice.providerEffort,
               ...(telemetry
                 ? {

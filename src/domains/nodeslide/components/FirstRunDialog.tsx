@@ -50,7 +50,7 @@ export function FirstRunDialog({ open, onCreate, onExplore }: FirstRunDialogProp
         <span>
           <Sparkles size={13} /> Private preview
         </span>
-        <small>Deterministic by default · OpenRouter opt-in</small>
+        <small>Nebius recommended · explicit consent</small>
       </div>
       <header>
         <span className="ns-first-run-mark" aria-hidden="true">
@@ -61,8 +61,8 @@ export function FirstRunDialog({ open, onCreate, onExplore }: FirstRunDialogProp
           <p id="ns-first-run-description">
             NodeSlide creates an editable first draft, keeps AI changes scoped until you approve
             them, and checks the exact deck before presenting or export. Your new-deck brief stays
-            inside NodeSlide by default. OpenRouter is optional and receives the full brief only
-            after you explicitly consent.
+            inside NodeSlide until you choose an external model. The selected provider receives the
+            full brief only after you explicitly consent.
           </p>
         </div>
       </header>

@@ -4,6 +4,7 @@ import { createDeckFromBrief } from '../nodeslideAgent';
 import { callNodeSlideFreeJson } from './nodeslideProvider';
 import {
   NODESLIDE_CREATE_DECK_LIMITS,
+  NODESLIDE_NEBIUS_BRIEF_CONSENT,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT,
   invokeNodeSlideBriefProvider,
   validateNodeSlideBriefAttachments,
@@ -321,6 +322,27 @@ describe('NodeSlide provider consent contract', () => {
     ).toThrow(ConvexError);
   });
 
+  it('requires exact, provider-bound consent and native effort values for Nebius', () => {
+    expect(() => validateNodeSlideBriefProviderChoice('nebius', undefined)).toThrow(ConvexError);
+    expect(validateNodeSlideBriefProviderChoice('nebius', NODESLIDE_NEBIUS_BRIEF_CONSENT)).toEqual({
+      providerMode: 'nebius',
+      providerModel: 'nebius/zai-org/GLM-5.2',
+      providerEffort: 'high',
+      providerConsent: NODESLIDE_NEBIUS_BRIEF_CONSENT,
+    });
+    expect(() =>
+      validateNodeSlideBriefProviderChoice(
+        'nebius',
+        NODESLIDE_NEBIUS_BRIEF_CONSENT,
+        'nebius/zai-org/GLM-5.2',
+        'xhigh',
+      ),
+    ).toThrow(ConvexError);
+    expect(() =>
+      validateNodeSlideBriefProviderChoice('nebius', NODESLIDE_OPENROUTER_BRIEF_CONSENT),
+    ).toThrow(ConvexError);
+  });
+
   it('never invokes the provider callback in deterministic mode', async () => {
     const invokeProvider = vi.fn(async () => ({ ok: true as const }));
     const result = await invokeNodeSlideBriefProvider(
@@ -396,9 +418,11 @@ interface CreateActionArgs {
   };
   themeId: string;
   route: 'free';
-  providerMode: 'deterministic' | 'openrouter_free';
-  providerModel?: 'anthropic/claude-sonnet-5';
-  providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+  providerMode: 'deterministic' | 'openrouter_free' | 'nebius';
+  providerModel?: 'anthropic/claude-sonnet-5' | 'nebius/zai-org/GLM-5.2';
+  providerConsent?:
+    | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
+    | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
   attachments?: Array<{
     title: string;
     format: 'csv' | 'json' | 'txt';

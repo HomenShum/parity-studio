@@ -30,21 +30,26 @@ import {
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
   nodeSlideAgentModel,
+  nodeSlideModelSupportsReasoningEffort,
+  nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
 export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as const;
+export const NODESLIDE_NEBIUS_BRIEF_CONSENT = 'nebius_full_brief_v1' as const;
 
-export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free';
+export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free' | 'nebius';
 
 export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
   accessCode?: string;
   providerMode: NodeSlideBriefProviderMode;
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
-  providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+  providerConsent?:
+    | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
+    | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
 }
 
 export interface RecentDeck {
@@ -134,7 +139,7 @@ export function ProjectDialog({
   const [themeId, setThemeId] = useState(profiles[0]?.id ?? 'editorial-signal');
   const [accessCode, setAccessCode] = useState('');
   const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>(
-    initialDraft?.providerMode ?? 'deterministic',
+    initialDraft?.providerMode ?? nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL),
   );
   const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(
     initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL,
@@ -164,7 +169,7 @@ export function ProjectDialog({
   const openTabRef = useRef<HTMLButtonElement>(null);
   const clearAdmissionAndClose = () => {
     setAccessCode('');
-    setProviderMode('deterministic');
+    setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
     setProviderConsent(false);
@@ -183,7 +188,9 @@ export function ProjectDialog({
       setMode(createEnabled ? initialMode : 'open');
       setTitle(initialDraft?.title ?? '');
       setPrompt(initialDraft?.prompt ?? '');
-      setProviderMode(initialDraft?.providerMode ?? 'deterministic');
+      setProviderMode(
+        initialDraft?.providerMode ?? nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL),
+      );
       setProviderModel(initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL);
       setProviderEffort(initialDraft?.providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT);
       setAttachments(initialDraft?.attachments ?? []);
@@ -192,7 +199,7 @@ export function ProjectDialog({
     wasOpenRef.current = open;
     if (open) return;
     setAccessCode('');
-    setProviderMode('deterministic');
+    setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
     setProviderConsent(false);
@@ -235,7 +242,7 @@ export function ProjectDialog({
       !audience.trim() ||
       !purpose.trim() ||
       !previewAccessCode ||
-      (providerMode === 'openrouter_free' && !providerConsent)
+      (providerMode !== 'deterministic' && !providerConsent)
     ) {
       return;
     }
@@ -256,11 +263,14 @@ export function ProjectDialog({
       route: 'free',
       providerMode,
       attachments,
-      ...(providerMode === 'openrouter_free'
+      ...(providerMode !== 'deterministic'
         ? {
             providerModel,
             providerEffort,
-            providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+            providerConsent:
+              providerMode === 'nebius'
+                ? NODESLIDE_NEBIUS_BRIEF_CONSENT
+                : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
           }
         : {}),
     });
@@ -293,8 +303,8 @@ export function ProjectDialog({
           ? 'Add the deck purpose under Improve the brief.'
           : !accessCode.trim()
             ? 'Enter the private-preview access code to continue.'
-            : providerMode === 'openrouter_free' && !providerConsent
-              ? 'Confirm consent before sending this brief to OpenRouter.'
+            : providerMode !== 'deterministic' && !providerConsent
+              ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
               : null;
 
   if (!open) return null;
@@ -549,47 +559,57 @@ export function ProjectDialog({
                     <span>
                       <strong>Keep the brief inside NodeSlide</strong>
                       <small>
-                        Default. Uses NodeSlide’s deterministic generator; no part of this brief is
-                        sent to OpenRouter.
+                        Uses NodeSlide’s deterministic generator; no part of this brief is sent to
+                        an external model provider.
                       </small>
                     </span>
                     {providerMode === 'deterministic' ? <Check size={14} /> : null}
                   </button>
                   <button
                     type="button"
-                    data-testid="provider-openrouter"
-                    aria-pressed={providerMode === 'openrouter_free'}
-                    className={providerMode === 'openrouter_free' ? 'is-active' : ''}
+                    data-testid="provider-external"
+                    aria-pressed={providerMode !== 'deterministic'}
+                    className={providerMode !== 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
-                      setProviderMode('openrouter_free');
+                      setProviderMode(nodeSlideProviderModeForModel(providerModel));
                       setProviderConsent(false);
                     }}
                   >
                     <Sparkles size={20} aria-hidden="true" />
                     <span>
-                      <strong>Use OpenRouter · {selectedModel.label}</strong>
+                      <strong>
+                        Use {providerDisplayName(nodeSlideProviderModeForModel(providerModel))} ·{' '}
+                        {selectedModel.label}
+                      </strong>
                       <small>
                         Sends the full brief{attachments.length > 0 ? ' and attached files' : ''} to
-                        the selected named model through OpenRouter.
+                        the selected named model through{' '}
+                        {providerDisplayName(nodeSlideProviderModeForModel(providerModel))}.
                       </small>
                     </span>
-                    {providerMode === 'openrouter_free' ? <Check size={14} /> : null}
+                    {providerMode !== 'deterministic' ? <Check size={14} /> : null}
                   </button>
                 </fieldset>
                 <label className="ns-provider-model-select">
-                  <span>OpenRouter model</span>
+                  <span>Model and provider</span>
                   <select
                     data-testid="create-model-select"
                     value={providerModel}
-                    disabled={providerMode !== 'openrouter_free'}
+                    disabled={providerMode === 'deterministic'}
                     onChange={(event) => {
-                      setProviderModel(event.target.value as NodeSlideAgentModelId);
+                      const model = event.target.value as NodeSlideAgentModelId;
+                      setProviderModel(model);
+                      setProviderMode(nodeSlideProviderModeForModel(model));
+                      if (!nodeSlideModelSupportsReasoningEffort(model, providerEffort)) {
+                        setProviderEffort('high');
+                      }
                       setProviderConsent(false);
                     }}
                   >
                     {NODESLIDE_AGENT_MODELS.map((model) => (
                       <option key={model.id} value={model.id}>
-                        {model.vendor} · {model.label}
+                        {model.vendor} · {model.label} ·{' '}
+                        {providerDisplayName(nodeSlideProviderModeForModel(model.id))}
                       </option>
                     ))}
                   </select>
@@ -601,16 +621,17 @@ export function ProjectDialog({
                     aria-label="Reasoning effort"
                     data-testid="create-effort-select"
                     value={providerEffort}
-                    disabled={providerMode !== 'openrouter_free'}
+                    disabled={providerMode === 'deterministic'}
                     onChange={(event) => {
                       setProviderEffort(event.target.value as NodeSlideReasoningEffort);
                       setProviderConsent(false);
                     }}
                   >
-                    {NODESLIDE_REASONING_EFFORTS.map((effort) => (
+                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
+                    ).map((effort) => (
                       <option key={effort.id} value={effort.id}>
                         {effort.label}
-                        {effort.id === NODESLIDE_DEFAULT_REASONING_EFFORT ? ' · Recommended' : ''}
                       </option>
                     ))}
                   </select>
@@ -625,7 +646,7 @@ export function ProjectDialog({
                     display: 'grid',
                     gap: 8,
                     gridTemplateColumns: 'auto 1fr',
-                    opacity: providerMode === 'openrouter_free' ? 1 : 0.62,
+                    opacity: providerMode !== 'deterministic' ? 1 : 0.62,
                     padding: 10,
                   }}
                 >
@@ -633,7 +654,7 @@ export function ProjectDialog({
                     type="checkbox"
                     data-testid="provider-consent"
                     checked={providerConsent}
-                    disabled={providerMode !== 'openrouter_free'}
+                    disabled={providerMode === 'deterministic'}
                     onChange={(event) => setProviderConsent(event.target.checked)}
                     style={{
                       accentColor: 'var(--ns-accent)',
@@ -647,7 +668,7 @@ export function ProjectDialog({
                     {attachments.length > 0
                       ? ` and ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`
                       : ''}{' '}
-                    to OpenRouter
+                    to {providerDisplayName(providerMode)}
                     <small> Required for {selectedModel.label}; applies to this deck only.</small>
                   </span>
                 </label>
@@ -730,8 +751,9 @@ export function ProjectDialog({
                     </>
                   ) : (
                     <>
-                      <Sparkles size={13} /> OpenRouter · {selectedModel.label} · will send the
-                      brief{attachments.length > 0 ? ' and files' : ''} with consent
+                      <Sparkles size={13} /> {providerDisplayName(providerMode)} ·{' '}
+                      {selectedModel.label} · will send the brief
+                      {attachments.length > 0 ? ' and files' : ''} with consent
                     </>
                   )}
                 </span>
@@ -792,4 +814,10 @@ function relativeDate(timestamp: number) {
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   return `${days} days ago`;
+}
+
+function providerDisplayName(mode: NodeSlideBriefProviderMode): string {
+  if (mode === 'nebius') return 'Nebius';
+  if (mode === 'openrouter_free') return 'OpenRouter';
+  return 'Private';
 }

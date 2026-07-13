@@ -4,6 +4,8 @@ import type {
   CandidateValidationReceipt,
   CommentAnchor,
   DeckPatch,
+  NODESLIDE_NEBIUS_REVIEW_CONSENT,
+  NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
@@ -16,6 +18,8 @@ import type {
 } from '../../../../shared/nodeslide';
 
 export {
+  NODESLIDE_NEBIUS_REVIEW_CONSENT,
+  NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
@@ -34,19 +38,23 @@ export type AiReviewablePatch = DeckPatch;
 export type AiProviderRequest =
   | { providerMode: 'deterministic' }
   | {
-      providerMode: 'openrouter_free';
+      providerMode: 'openrouter_free' | 'nebius';
       providerModel: NodeSlideAgentModelId;
       providerEffort: NodeSlideReasoningEffort;
-      providerConsent: typeof NODESLIDE_OPENROUTER_REVIEW_CONSENT;
+      providerConsent:
+        | typeof NODESLIDE_OPENROUTER_REVIEW_CONSENT
+        | typeof NODESLIDE_NEBIUS_REVIEW_CONSENT;
     };
 
 export type AiVariationProviderRequest =
   | { providerMode: 'deterministic' }
   | {
-      providerMode: 'openrouter_free';
+      providerMode: 'openrouter_free' | 'nebius';
       providerModel: NodeSlideAgentModelId;
       providerEffort: NodeSlideReasoningEffort;
-      providerConsent: typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
+      providerConsent:
+        | typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT
+        | typeof NODESLIDE_NEBIUS_VARIATIONS_CONSENT;
     };
 
 export interface AiComposerCommand<CommandId extends string = NodeSlideEditorCommandId> {

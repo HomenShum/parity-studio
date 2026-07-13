@@ -6,6 +6,9 @@ import {
   type DeckPatch,
   type DeckSnapshot,
   NODESLIDE_AGENT_MODELS,
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_NEBIUS_REVIEW_CONSENT,
+  NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_TOOLCHAIN_VERSION,
@@ -107,16 +110,20 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('has-failed');
   });
 
-  it('recommends the live GLM route with inline consent and keeps deterministic fallback available', () => {
+  it('recommends the live Nebius GLM route with provider-native effort controls', () => {
     const markup = renderAi();
-    expect(markup).toContain('External model: on · OpenRouter · GLM 5.2');
-    expect(markup).toMatch(/data-testid="ai-provider-openrouter"[^>]*checked=""/);
-    expect(markup).toContain('OpenRouter · Z.ai · GLM 5.2 — external');
-    expect(markup).toContain('Allow GLM 5.2 at High effort via OpenRouter for this request');
+    expect(markup).toContain('External model: on · Nebius · GLM 5.2');
+    expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
+    expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
+    expect(markup).toContain('Allow GLM 5.2 at High effort via Nebius for this request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
-    expect(markup).toContain('<option value="max">Ultra</option>');
+    expect(markup).toContain('<option value="low">Light</option>');
+    expect(markup).toContain('<option value="medium">Medium</option>');
+    expect(markup).toContain('<option value="high" selected="">High</option>');
+    expect(markup).not.toContain('<option value="xhigh">Extra High</option>');
+    expect(markup).not.toContain('<option value="max">Ultra</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('Claude Sonnet 5 · Anthropic');
     expect(markup).toContain('Claude Fable 5 · Anthropic');
@@ -127,23 +134,41 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toMatch(/<input type="checkbox"[^>]*ai-provider-consent/);
     expect(markup).not.toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
-    expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
-    expect(createAiProviderRequest('openrouter_free', true)).toEqual({
+    expect(createAiProviderRequest('nebius', false)).toBeNull();
+    expect(createAiProviderRequest('nebius', true)).toEqual({
+      providerMode: 'nebius',
+      providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
+      providerEffort: 'high',
+      providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
+    });
+    expect(createAiVariationProviderRequest('nebius', false)).toBeNull();
+    expect(createAiVariationProviderRequest('nebius', true)).toEqual({
+      providerMode: 'nebius',
+      providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
+      providerEffort: 'high',
+      providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
+    });
+    expect(createAiProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
-      providerEffort: 'high',
       providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
     });
-    expect(createAiVariationProviderRequest('openrouter_free', false)).toBeNull();
-    expect(createAiVariationProviderRequest('openrouter_free', true)).toEqual({
-      providerMode: 'openrouter_free',
-      providerModel: 'z-ai/glm-5.2',
-      providerEffort: 'high',
-      providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
-    });
+    expect(createAiVariationProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject(
+      { providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT },
+    );
     expect(
       createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-5'),
     ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
+  });
+
+  it('shows extended effort levels only for models whose provider exposes them', () => {
+    const markup = renderAi({
+      initialProviderMode: 'openrouter_free',
+      initialProviderModel: 'z-ai/glm-5.2',
+    });
+
+    expect(markup).toContain('<option value="xhigh">Extra High</option>');
+    expect(markup).toContain('<option value="max">Ultra</option>');
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
@@ -263,7 +288,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(18 + NODESLIDE_AGENT_MODELS.length);
+    expect(commandMenu.match(/<option value=/g)).toHaveLength(16 + NODESLIDE_AGENT_MODELS.length);
     expect(commandMenu).toContain('Advanced controls');
   });
 
@@ -363,6 +388,8 @@ interface RenderAiOptions {
   patches?: readonly DeckPatch[];
   traces?: readonly AgentTrace[];
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
+  initialProviderMode?: 'deterministic' | 'openrouter_free' | 'nebius';
+  initialProviderModel?: (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
 }
 
 function renderAi({
@@ -375,6 +402,8 @@ function renderAi({
   patches = [],
   traces = [],
   onAttachDataFile,
+  initialProviderMode,
+  initialProviderModel,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -396,6 +425,8 @@ function renderAi({
       commands={commands}
       initialInstruction={initialInstruction}
       initialReadContext={initialReadContext}
+      {...(initialProviderMode ? { initialProviderMode } : {})}
+      {...(initialProviderModel ? { initialProviderModel } : {})}
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
       onPropose={() => undefined}
