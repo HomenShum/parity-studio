@@ -90,6 +90,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     scope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onAttachAiDataFile?: (file: File) => Promise<AiReadReference>;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -153,6 +154,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onToggleCollapsed,
   onWidthChange,
   onProposeEdit,
+  onAttachAiDataFile,
   onAcceptPatch,
   onRejectPatch,
   onPreviewPatch,
@@ -325,6 +327,7 @@ export function InspectorPanel<CommandId extends string = string>({
       >
         {activeTab === 'ai' ? (
           <AiInspector
+            key={workspace.deck.id}
             deck={workspace.deck}
             slide={slide}
             selectedElements={selectedElements}
@@ -347,6 +350,7 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onPreviewPatch ? { onPreviewPatch } : {})}
             {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
             onPropose={onProposeEdit}
+            {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
             onAccept={onAcceptPatch}
             onReject={onRejectPatch}
             onGenerateVariations={onGenerateVariations}

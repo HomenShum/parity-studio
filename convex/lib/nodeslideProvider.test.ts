@@ -5,6 +5,7 @@ import {
   type NodeSlideCompletion,
   type NodeSlideCompletionResult,
   callNodeSlideFreeJson,
+  nodeSlideStructuredOutputPayload,
 } from './nodeslideProvider';
 
 const request = {
@@ -28,6 +29,7 @@ function completion(
   return {
     text,
     stopReason: options.stopReason ?? 'stop',
+    ...(options.errorMessage ? { errorMessage: options.errorMessage } : {}),
     costMicroUsd: options.costMicroUsd ?? 1_250,
     inputTokens: options.inputTokens ?? 120,
     outputTokens: options.outputTokens ?? 30,
@@ -57,9 +59,30 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_EDIT_MODEL,
       maxTokens: 500,
+      jsonSchema: request.jsonSchema,
       repairAttempt: false,
     });
     expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+  });
+
+  it('injects the schema while preserving pi-ai provider routing', () => {
+    expect(
+      nodeSlideStructuredOutputPayload(
+        { model: NODESLIDE_EDIT_MODEL, provider: { data_collection: 'deny' } },
+        request.jsonSchema,
+      ),
+    ).toEqual({
+      model: NODESLIDE_EDIT_MODEL,
+      provider: { data_collection: 'deny' },
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: request.jsonSchema.name,
+          strict: false,
+          schema: request.jsonSchema.schema,
+        },
+      },
+    });
   });
 
   it('makes exactly one repair completion after malformed JSON', async () => {
@@ -91,6 +114,20 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[1]?.[0].userText).toContain('Prior invalid model response');
   });
 
+  it('uses the same single repair attempt for a schema-invalid JSON envelope', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('{"summary":"Missing operations"}'))
+      .mockResolvedValueOnce(completion('{"operations":[{"op":"replace_text"}]}'));
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result.ok).toBe(true);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0].userText).toContain('Missing operations');
+  });
+
   it('falls back honestly after the single repair also returns invalid JSON', async () => {
     const complete = vi
       .fn<NodeSlideCompletion>()
@@ -113,14 +150,17 @@ describe('NodeSlide named pi-ai JSON provider', () => {
 
   it('does not turn a provider error into a fabricated repair success', async () => {
     const complete = vi.fn<NodeSlideCompletion>(async () =>
-      completion('', { stopReason: 'error' }),
+      completion('', {
+        stopReason: 'error',
+        errorMessage: 'response_format JSON schema is not supported by this endpoint',
+      }),
     );
 
     const result = await callNodeSlideFreeJson(request, { complete });
 
     expect(result).toMatchObject({
       ok: false,
-      reason: 'The GLM 5.2 route returned an error.',
+      reason: 'The GLM 5.2 route rejected the structured-output schema.',
     });
     expect(complete).toHaveBeenCalledTimes(1);
   });
@@ -137,5 +177,18 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete).toHaveBeenCalledTimes(2);
     expect(complete.mock.calls[1]?.[0].userText).toContain('response omitted');
     expect(complete.mock.calls[1]?.[0].userText).not.toContain('x'.repeat(1_000));
+  });
+
+  it('enforces the hard deadline even when the completion ignores AbortSignal', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(() => new Promise(() => {}));
+
+    const result = await callNodeSlideFreeJson(request, { complete, timeoutMs: 10 });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'The GLM 5.2 route timed out.',
+    });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
   });
 });

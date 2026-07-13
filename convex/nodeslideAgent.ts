@@ -156,6 +156,13 @@ export const proposeEdit = action({
       writeScope: args.scope,
       ...(args.readContext ? { requested: args.readContext } : {}),
     });
+    const traceContext = [
+      `Read context: ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'}, ${readContext.comments.length} comment${readContext.comments.length === 1 ? '' : 's'}`,
+      ...readContext.sources.map(
+        (source) =>
+          `Source: ${source.title} [${source.id}] · ${source.sourceType} · ${nodeslideContentDigest(source.citation)}`,
+      ),
+    ];
 
     const request = {
       deckId: args.deckId,
@@ -261,6 +268,7 @@ export const proposeEdit = action({
         : providerRequested
           ? `OpenRouter GLM 5.2 proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
           : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
+      traceContext,
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
         providerRequested

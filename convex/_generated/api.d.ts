@@ -32,6 +32,7 @@ import type * as lib_nodeslideAnalysisKernel from "../lib/nodeslideAnalysisKerne
 import type * as lib_nodeslideAuthority from "../lib/nodeslideAuthority.js";
 import type * as lib_nodeslideCandidate from "../lib/nodeslideCandidate.js";
 import type * as lib_nodeslideData from "../lib/nodeslideData.js";
+import type * as lib_nodeslideDataAttachment from "../lib/nodeslideDataAttachment.js";
 import type * as lib_nodeslideDeckRepl from "../lib/nodeslideDeckRepl.js";
 import type * as lib_nodeslideEditPlanner from "../lib/nodeslideEditPlanner.js";
 import type * as lib_nodeslideEditShadowPlanner from "../lib/nodeslideEditShadowPlanner.js";
@@ -108,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideAuthority": typeof lib_nodeslideAuthority;
   "lib/nodeslideCandidate": typeof lib_nodeslideCandidate;
   "lib/nodeslideData": typeof lib_nodeslideData;
+  "lib/nodeslideDataAttachment": typeof lib_nodeslideDataAttachment;
   "lib/nodeslideDeckRepl": typeof lib_nodeslideDeckRepl;
   "lib/nodeslideEditPlanner": typeof lib_nodeslideEditPlanner;
   "lib/nodeslideEditShadowPlanner": typeof lib_nodeslideEditShadowPlanner;

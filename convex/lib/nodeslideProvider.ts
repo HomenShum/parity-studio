@@ -42,6 +42,7 @@ export interface NodeSlideCompletionRequest {
   systemPrompt: string;
   userText: string;
   maxTokens: number;
+  jsonSchema?: NodeSlideJsonSchema;
   repairAttempt: boolean;
   signal: AbortSignal;
 }
@@ -49,6 +50,7 @@ export interface NodeSlideCompletionRequest {
 export interface NodeSlideCompletionResult {
   text: string;
   stopReason: string;
+  errorMessage?: string;
   costMicroUsd: number;
   inputTokens: number;
   outputTokens: number;
@@ -74,7 +76,13 @@ export async function callNodeSlideFreeJson(
 ): Promise<NodeSlideProviderResult> {
   const complete = dependencies.complete ?? completeNodeSlideWithPiAi;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error('nodeslide_provider_timeout'));
+    }, dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
+  });
   let telemetry = emptyTelemetry();
   let hasTelemetry = false;
   let invalidResponse = '';
@@ -83,20 +91,24 @@ export async function callNodeSlideFreeJson(
     // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const repairAttempt = attempt === 1;
-      const result = await complete({
-        provider: NODESLIDE_EDIT_PROVIDER,
-        model: NODESLIDE_EDIT_MODEL,
-        systemPrompt: providerSystemPrompt(args, repairAttempt),
-        userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
-        maxTokens: args.maxTokens,
-        repairAttempt,
-        signal: controller.signal,
-      });
+      const result = await Promise.race([
+        complete({
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          systemPrompt: providerSystemPrompt(args, repairAttempt),
+          userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
+          maxTokens: args.maxTokens,
+          ...(args.jsonSchema ? { jsonSchema: args.jsonSchema } : {}),
+          repairAttempt,
+          signal: controller.signal,
+        }),
+        deadline,
+      ]);
       telemetry = addTelemetry(telemetry, result);
       hasTelemetry = true;
 
       if (result.stopReason === 'error') {
-        return providerFailure('The GLM 5.2 route returned an error.', telemetry, hasTelemetry);
+        return providerFailure(providerErrorReason(result.errorMessage), telemetry, hasTelemetry);
       }
       if (result.stopReason === 'aborted' || controller.signal.aborted) {
         return providerFailure('The GLM 5.2 route timed out.', telemetry, hasTelemetry);
@@ -106,7 +118,11 @@ export async function callNodeSlideFreeJson(
       } else {
         invalidResponse = result.text;
         const value = parseStrictJson(result.text);
-        if (result.stopReason !== 'length' && value !== undefined) {
+        if (
+          result.stopReason !== 'length' &&
+          value !== undefined &&
+          (!args.jsonSchema || matchesJsonSchema(value, args.jsonSchema.schema))
+        ) {
           return { ok: true, value, telemetry };
         }
       }
@@ -125,7 +141,7 @@ export async function callNodeSlideFreeJson(
       hasTelemetry,
     );
   } finally {
-    clearTimeout(timeout);
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
@@ -146,10 +162,12 @@ async function completeNodeSlideWithPiAi(
   };
   const result = await nodeSlideModels.complete(model, context, {
     signal: request.signal,
-    maxOutputTokens: request.maxTokens,
+    maxTokens: request.maxTokens,
     maxRetries: 0,
-    reasoning: 'low',
+    reasoning: 'high',
+    temperature: 0,
     headers: OPENROUTER_ATTRIBUTION_HEADERS,
+    onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
   });
   const text = result.content
     .filter((block): block is TextContent => block.type === 'text')
@@ -158,10 +176,46 @@ async function completeNodeSlideWithPiAi(
   return {
     text,
     stopReason: result.stopReason,
+    ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
     costMicroUsd: usdToMicroUsd(result.usage.cost.total),
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
   };
+}
+
+export function nodeSlideStructuredOutputPayload(
+  payload: unknown,
+  jsonSchema: NodeSlideJsonSchema | undefined,
+): unknown {
+  if (!jsonSchema || !isPlainObject(payload)) return payload;
+  return {
+    ...payload,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: jsonSchema.name,
+        strict: false,
+        schema: jsonSchema.schema,
+      },
+    },
+  };
+}
+
+function providerErrorReason(errorMessage: string | undefined): string {
+  const normalized = errorMessage?.toLowerCase() ?? '';
+  if (normalized.includes('schema') || normalized.includes('response_format')) {
+    return 'The GLM 5.2 route rejected the structured-output schema.';
+  }
+  if (normalized.includes('no endpoints') || normalized.includes('provider')) {
+    return 'The GLM 5.2 route had no compatible OpenRouter provider.';
+  }
+  if (normalized.includes('reasoning')) {
+    return 'The GLM 5.2 route rejected the requested reasoning mode.';
+  }
+  if (normalized.includes('rate') || normalized.includes('quota')) {
+    return 'The GLM 5.2 route was rate limited.';
+  }
+  return 'The GLM 5.2 route returned an error.';
 }
 
 function providerSystemPrompt(
@@ -241,4 +295,80 @@ function parseStrictJson(text: string): unknown | undefined {
   } catch {
     return undefined;
   }
+}
+
+function matchesJsonSchema(value: unknown, schema: Record<string, unknown>): boolean {
+  const constValue = schema['const'];
+  const enumValues = schema['enum'];
+  const oneOf = schema['oneOf'];
+  const schemaType = schema['type'];
+  if ('const' in schema && !Object.is(value, constValue)) return false;
+  if (Array.isArray(enumValues) && !enumValues.some((candidate) => Object.is(candidate, value))) {
+    return false;
+  }
+
+  if (Array.isArray(oneOf)) {
+    return oneOf.some(
+      (candidate) =>
+        isPlainObject(candidate) && matchesJsonSchema(value, candidate as Record<string, unknown>),
+    );
+  }
+
+  if (schemaType === 'object') {
+    if (!isPlainObject(value)) return false;
+    const objectValue = value as Record<string, unknown>;
+    const schemaProperties = schema['properties'];
+    const properties = isPlainObject(schemaProperties)
+      ? (schemaProperties as Record<string, unknown>)
+      : {};
+    const required = schema['required'];
+    if (
+      Array.isArray(required) &&
+      required.some((key) => typeof key !== 'string' || !(key in objectValue))
+    ) {
+      return false;
+    }
+    if (
+      schema['additionalProperties'] === false &&
+      Object.keys(objectValue).some((key) => !(key in properties))
+    ) {
+      return false;
+    }
+    return Object.entries(properties).every(([key, propertySchema]) => {
+      if (!(key in objectValue)) return true;
+      return (
+        isPlainObject(propertySchema) &&
+        matchesJsonSchema(objectValue[key], propertySchema as Record<string, unknown>)
+      );
+    });
+  }
+
+  if (schemaType === 'array') {
+    if (!Array.isArray(value)) return false;
+    const minItems = schema['minItems'];
+    const maxItems = schema['maxItems'];
+    const items = schema['items'];
+    if (typeof minItems === 'number' && value.length < minItems) return false;
+    if (typeof maxItems === 'number' && value.length > maxItems) return false;
+    if (!isPlainObject(items)) return true;
+    return value.every((item) => matchesJsonSchema(item, items as Record<string, unknown>));
+  }
+
+  if (schemaType === 'string') return typeof value === 'string';
+  if (schemaType === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+    const minimum = schema['minimum'];
+    const maximum = schema['maximum'];
+    if (typeof minimum === 'number' && value < minimum) return false;
+    if (typeof maximum === 'number' && value > maximum) return false;
+    return true;
+  }
+  if (schemaType === 'integer') return Number.isInteger(value);
+  if (schemaType === 'boolean') return typeof value === 'boolean';
+  if (schemaType === 'null') return value === null;
+  return true;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

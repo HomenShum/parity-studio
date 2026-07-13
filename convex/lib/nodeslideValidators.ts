@@ -530,6 +530,7 @@ export const nodeslidePatchOperationValidator = v.union(
     slideId: v.string(),
     elementId: v.string(),
     text: v.string(),
+    sourceIds: v.optional(v.array(v.string())),
   }),
   v.object({
     op: v.literal('update_style'),

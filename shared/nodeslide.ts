@@ -293,7 +293,14 @@ export type PatchOperation =
       width: number;
       height: number;
     }
-  | { op: 'replace_text'; slideId: string; elementId: string; text: string }
+  | {
+      op: 'replace_text';
+      slideId: string;
+      elementId: string;
+      text: string;
+      /** Optional provenance rebinding applied atomically with source-grounded copy. */
+      sourceIds?: string[];
+    }
   | {
       op: 'update_style';
       slideId: string;

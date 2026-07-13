@@ -223,6 +223,15 @@ describe('isFallbackTrace — fails closed', () => {
     };
     expect(isFallbackTrace(live)).toBe(false);
   });
+
+  it('fails closed when an awaiting external run has a digest but no positive cost', () => {
+    expect(
+      isFallbackTrace({
+        ...traceLive,
+        costMicroUsd: 0,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('CountersignSeal — state-honest matrix (spec §4a)', () => {
@@ -292,7 +301,7 @@ describe('CountersignSeal — state-honest matrix (spec §4a)', () => {
     expect(html).not.toMatch(/[0-9a-f]{32}/i);
   });
 
-  it('Row: fallback — the invoice reads $0.0000 · no tokens billed', () => {
+  it('Row: fallback — the invoice says no provider billing was recorded', () => {
     const html = renderToStaticMarkup(
       <CustodyRail
         trace={traceFallback}
@@ -303,7 +312,27 @@ describe('CountersignSeal — state-honest matrix (spec §4a)', () => {
         onToggle={() => {}}
       />,
     );
-    expect(html).toContain('$0.0000 · no tokens billed');
+    expect(html).toContain('$0.0000 · no provider billing recorded');
+  });
+
+  it('Row: billed fallback — preserves the real provider-attempt invoice', () => {
+    const html = renderToStaticMarkup(
+      <CustodyRail
+        trace={{
+          ...traceFallback,
+          costMicroUsd: 2400,
+          inputTokens: 2710,
+          outputTokens: 180,
+        }}
+        patch={undefined}
+        validation={validationFallback}
+        density="human"
+        openNode="receipt"
+        onToggle={() => {}}
+      />,
+    );
+    expect(html).toContain('$0.0024 · provider attempt before fallback');
+    expect(html).toContain('2,710 → 180');
   });
 
   it('Row: failed — red seal, issues listed, human blocked, agent shows NO digest', () => {
@@ -497,7 +526,14 @@ describe('node summaries + consent derivation + no mojibake', () => {
     expect(derived.text).toContain('consent');
     const none = consentSentence({ ...traceLive, toolCalls: [] });
     expect(none.verbatim).toBe(false);
-    expect(none.text).toBe('Consent recorded on run start');
+    expect(none.text).toBe('Consent evidence missing');
+    const privateRun = consentSentence({
+      ...traceFallback,
+      provider: 'deterministic',
+      model: 'bounded-edit-planner/v1',
+      toolCalls: [],
+    });
+    expect(privateRun.text).toBe('Consent not required — no external egress');
   });
 
   it('renders the interpunct as itself and emits no replacement characters', () => {

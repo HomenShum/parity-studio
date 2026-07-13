@@ -164,6 +164,16 @@ interface NodeSlideGeneratedApi {
       { deckId: string; ownerAccessKey: string },
       NodeSlideEditorCapabilityRegistry
     >;
+    attachDataSource: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        title: string;
+        format: 'csv' | 'json' | 'txt';
+        content: string;
+      },
+      AiReadReference
+    >;
     listDecks: PublicQuery<
       { access: Array<{ deckId: string; ownerAccessKey: string }> },
       RecentDeck[]
@@ -383,8 +393,8 @@ export function NodeSlideStudio() {
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [clipboardElements, setClipboardElements] = useState<SlideElement[]>([]);
-  const [firstRunOpen, setFirstRunOpen] = useState(
-    () => !requestedDeck && !requestedShare && !hasSeenFirstRun(),
+  const [firstRunOpen, setFirstRunOpen] = useState(() =>
+    shouldShowFirstRun(requestedDeck, requestedShare),
   );
   const bootstrapped = useRef(false);
   const historyDeckRef = useRef<string | null>(null);
@@ -406,6 +416,7 @@ export function NodeSlideStudio() {
   ownerAccessKeyRef.current = ownerAccessKey;
 
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
+  const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
@@ -701,10 +712,11 @@ export function NodeSlideStudio() {
         if (current?.status !== 'running') return current;
         if (elapsedMs >= 20_000) {
           return {
-            status: 'timed_out',
+            status: 'delayed',
             elapsedMs,
             ask: current.ask,
-            message: 'Still working in the background. You can keep reviewing the deck.',
+            message:
+              'The provider is still working. Nothing has changed and you can keep reviewing the deck.',
           };
         }
         return { ...current, elapsedMs };
@@ -1796,6 +1808,31 @@ export function NodeSlideStudio() {
     })();
   };
 
+  const attachAiDataFile = async (file: File): Promise<AiReadReference> => {
+    if (!ownerAccessKey) throw new Error('Open an owned deck before attaching data.');
+    if (file.size > 24_000) throw new Error('Data attachments must be 24 KB or smaller.');
+    const extension = file.name.split('.').pop()?.toLocaleLowerCase() ?? '';
+    if (!['csv', 'json', 'txt'].includes(extension)) {
+      throw new Error('Attach a CSV, JSON, or TXT data file.');
+    }
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('data-upload', requestedDeckId);
+    const content = await file.text();
+    if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
+    const reference = await attachDataSource({
+      deckId: requestedDeckId,
+      ownerAccessKey: requestedOwnerAccessKey,
+      title: file.name,
+      format: extension as 'csv' | 'json' | 'txt',
+      content,
+    });
+    if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
+    setToast({ kind: 'success', message: `${file.name} is attached as agent read context.` });
+    return reference;
+  };
+
   const previewPatch = (patch: DeckPatch | null) => {
     setPreviewedVariation(null);
     setPreviewedSignatureProfile(null);
@@ -2809,6 +2846,7 @@ export function NodeSlideStudio() {
           onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
+          onAttachAiDataFile={attachAiDataFile}
           onAcceptPatch={handleAcceptPatch}
           onRejectPatch={handleRejectPatch}
           onPreviewPatch={previewPatch}
@@ -3561,9 +3599,36 @@ function hasSeenFirstRun() {
   }
 }
 
+const FIRST_RUN_PENDING_KEY = 'nodeslide.firstRun.pending.v1';
+
+function shouldShowFirstRun(requestedDeck: string | null, requestedShare: string | null) {
+  if (requestedShare || hasSeenFirstRun()) {
+    try {
+      window.sessionStorage.removeItem(FIRST_RUN_PENDING_KEY);
+    } catch {
+      // Hardened storage contexts still get the welcome on a direct landing.
+    }
+    return false;
+  }
+  if (!requestedDeck) {
+    try {
+      window.sessionStorage.setItem(FIRST_RUN_PENDING_KEY, 'pending');
+    } catch {
+      // The current mount can still display the welcome without persistence.
+    }
+    return true;
+  }
+  try {
+    return window.sessionStorage.getItem(FIRST_RUN_PENDING_KEY) === 'pending';
+  } catch {
+    return false;
+  }
+}
+
 function markFirstRunSeen() {
   try {
     window.localStorage.setItem('nodeslide.firstRun.v1', 'seen');
+    window.sessionStorage.removeItem(FIRST_RUN_PENDING_KEY);
   } catch {
     // The welcome can reappear in hardened storage contexts without blocking use.
   }

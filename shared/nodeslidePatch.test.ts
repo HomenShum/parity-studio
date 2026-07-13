@@ -198,6 +198,45 @@ describe('NodeSlide patch protocol', () => {
     expect(result.affectedElementIds).toEqual(['headline']);
   });
 
+  it('applies source-grounded copy and provenance atomically', () => {
+    const current = snapshot();
+    current.sources.push({
+      id: 'source-csv',
+      deckId: current.deck.id,
+      title: 'World Cup data.csv',
+      sourceType: 'spreadsheet',
+      retrievedAt: now,
+      citation: 'Uploaded World Cup data',
+    });
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: current.deck.id,
+      slideIds: ['slide-1'],
+      elementIds: ['headline'],
+      operationMode: 'copy',
+    };
+    const operations: PatchOperation[] = [
+      {
+        op: 'replace_text',
+        slideId: 'slide-1',
+        elementId: 'headline',
+        text: 'Argentina won after a 3–3 final and penalties.',
+        sourceIds: ['source-csv'],
+      },
+    ];
+
+    expect(validateNodeSlidePatch(current, serverPatch(current, operations, scope))).toEqual([]);
+    const result = applyDeckPatch(current, {
+      baseDeckVersion: current.deck.version,
+      scope,
+      operations,
+    });
+    expect(result.snapshot.elements.find((element) => element.id === 'headline')).toMatchObject({
+      content: 'Argentina won after a 3–3 final and penalties.',
+      sourceIds: ['source-csv'],
+    });
+  });
+
   it('edits a structured math primitive without dropping its canonical payload', () => {
     const current = snapshot();
     const math: SlideElement = {

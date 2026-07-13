@@ -334,6 +334,7 @@ export function applyDeckPatch(
       element.bbox = normalizeBox(element.bbox);
     } else if (operation.op === 'replace_text') {
       element.content = operation.text;
+      if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];
       if (element.kind === 'math' && element.math) {
         element.math = {
           ...element.math,

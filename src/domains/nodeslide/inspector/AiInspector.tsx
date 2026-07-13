@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Maximize2,
   MessageCircle,
+  Paperclip,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -83,6 +84,13 @@ export type {
 
 type ScopeChoice = 'deck' | 'slide' | 'elements';
 
+const WORLD_CUP_SAMPLE_CSV = `metric,value,unit,source
+total_goals,172,goals,FIFA World Cup Qatar 2022
+matches_played,64,matches,FIFA World Cup Qatar 2022
+goals_per_match,2.69,goals per match,derived from total_goals / matches_played
+top_scorer,Kylian Mbappe,8 goals,FIFA World Cup Qatar 2022
+runner_up,Lionel Messi,7 goals,FIFA World Cup Qatar 2022`;
+
 interface ComposerTrigger {
   kind: 'reference' | 'command';
   query: string;
@@ -118,6 +126,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     writeScope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -152,6 +161,7 @@ export function AiInspector<CommandId extends string = string>({
   initialProviderMode = 'deterministic',
   previewedPatchId = null,
   onPropose,
+  onAttachDataFile,
   onAccept,
   onReject,
   onPreviewPatch,
@@ -179,10 +189,13 @@ export function AiInspector<CommandId extends string = string>({
   const [optimisticAsk, setOptimisticAsk] = useState<string | null>(null);
   const [showPlan, setShowPlan] = useState(true);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const composerId = useId();
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
@@ -385,6 +398,7 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
+    if (providerMode === 'openrouter_free') setProviderConsent(false);
   };
 
   const submit = (event: FormEvent) => {
@@ -415,6 +429,7 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
+    if (providerMode === 'openrouter_free') setProviderConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -461,6 +476,27 @@ export function AiInspector<CommandId extends string = string>({
       updateInstruction(removeVisibleToken(instruction, commandToken(selectedCommand.id)));
     }
     setSelectedCommand(null);
+  };
+
+  const attachDataFile = async (file: File) => {
+    if (!onAttachDataFile || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setAttachmentError(null);
+    try {
+      const reference = await onAttachDataFile(file);
+      setSelectedReadContext((current) =>
+        current.some((candidate) => referenceKey(candidate) === referenceKey(reference))
+          ? current
+          : [...current, reference],
+      );
+      queueMicrotask(() => textareaRef.current?.focus());
+    } catch (error) {
+      setAttachmentError(
+        error instanceof Error ? error.message : 'The data file could not be attached.',
+      );
+    } finally {
+      setAttachmentBusy(false);
+    }
   };
 
   const returnToOriginal = () => {
@@ -547,10 +583,10 @@ export function AiInspector<CommandId extends string = string>({
         {resolvedActivity || activeTrace ? (
           <section
             className={`ns-agent-progress ns-ai-v3-progress ${
-              resolvedActivity && resolvedActivity.status !== 'running' ? 'has-failed' : ''
+              resolvedActivity && isTerminalActivity(resolvedActivity) ? 'has-failed' : ''
             }`}
             aria-live="polite"
-            {...(resolvedActivity && resolvedActivity.status !== 'running'
+            {...(resolvedActivity && isTerminalActivity(resolvedActivity)
               ? { role: 'alert' as const }
               : {})}
           >
@@ -561,7 +597,7 @@ export function AiInspector<CommandId extends string = string>({
               aria-expanded={showPlan}
             >
               <span className="ns-agent-orb">
-                {resolvedActivity && resolvedActivity.status !== 'running' ? (
+                {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
                   <TriangleAlert size={14} />
                 ) : (
                   <LoaderCircle className="ns-spin" size={14} />
@@ -579,16 +615,21 @@ export function AiInspector<CommandId extends string = string>({
               </span>
               <ChevronRight size={14} className={showPlan ? 'is-open' : ''} />
             </button>
-            {resolvedActivity && resolvedActivity.status !== 'running' ? (
+            {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
               <div className="ns-agent-honesty-state">
                 <strong>
-                  {resolvedActivity.message ??
+                  {activityMessage(resolvedActivity) ??
                     (resolvedActivity.status === 'timed_out'
                       ? 'The request timed out before a reviewable proposal was returned.'
                       : 'The agent failed before a reviewable proposal was returned.')}
                 </strong>
                 <p>No proposal was created or applied. Your deck remains unchanged.</p>
               </div>
+            ) : resolvedActivity?.status === 'delayed' ? (
+              <output className="ns-agent-delay-state">
+                <strong>{resolvedActivity.message ?? 'The provider is still working.'}</strong>
+                <p>No proposal has been created or applied yet.</p>
+              </output>
             ) : showPlan && activeTrace?.plan.length ? (
               <ol className="ns-plan-list">
                 {activeTrace.plan.map((step, index) => (
@@ -797,9 +838,12 @@ export function AiInspector<CommandId extends string = string>({
           <span>{referenceUseLabel(referenceUse)}</span>
         </div>
 
-        <details className="ns-ai-v3-controls-disclosure">
-          <summary data-testid="ai-provider-summary">
-            <span>Agent controls</span>
+        <details className="ns-ai-v3-controls-disclosure" data-testid="ai-provider-controls" open>
+          <summary
+            data-testid="ai-provider-summary"
+            aria-label="Provider and privacy controls: private by default, OpenRouter optional"
+          >
+            <span>Provider · privacy</span>
             <span
               className={`ns-route-pill ${
                 providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
@@ -817,80 +861,78 @@ export function AiInspector<CommandId extends string = string>({
             </span>
           </summary>
           <div className="ns-ai-v3-controls-body">
-            <details className="ns-ai-v3-route-disclosure">
-              <summary className="ns-ai-v3-route-summary">
-                {providerMode === 'deterministic' ? (
-                  <>
-                    <ShieldCheck size={13} /> Web: off · Private deterministic
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={13} /> Web: external · OpenRouter · GLM 5.2
-                    <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                      {providerConsent ? 'Consent attached' : 'Consent required'}
-                    </span>
-                  </>
-                )}
-              </summary>
-              <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
-                <legend>Provider and privacy</legend>
-                <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
-                  <input
-                    type="radio"
-                    name={providerName}
-                    value="deterministic"
-                    checked={providerMode === 'deterministic'}
-                    onChange={() => {
-                      setProviderMode('deterministic');
-                      setProviderConsent(false);
-                    }}
-                    data-testid="ai-provider-deterministic"
-                  />
-                  <ShieldCheck size={15} />
-                  <span>
-                    <strong>Deterministic and private</strong>
-                    <small>No instruction or context is sent to an external model.</small>
+            <div className="ns-ai-v3-route-summary" data-testid="ai-provider-route-status">
+              {providerMode === 'deterministic' ? (
+                <>
+                  <ShieldCheck size={13} /> External model: off · Private deterministic
+                </>
+              ) : (
+                <>
+                  <Sparkles size={13} /> External model: on · OpenRouter · GLM 5.2
+                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
+                    {providerConsent ? 'Consent attached' : 'Consent required'}
                   </span>
-                </label>
-                <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
-                  <input
-                    type="radio"
-                    name={providerName}
-                    value="openrouter_free"
-                    checked={providerMode === 'openrouter_free'}
-                    onChange={() => {
-                      setProviderMode('openrouter_free');
-                      setProviderConsent(false);
-                    }}
-                    data-testid="ai-provider-openrouter"
-                  />
-                  <Sparkles size={15} />
-                  <span>
-                    <strong>OpenRouter · GLM 5.2 — external</strong>
-                    <small>
-                      Sends this ask, selected read context, and scoped slide content to the named
-                      GLM 5.2 model through OpenRouter.
-                    </small>
-                  </span>
-                </label>
-                <label className="ns-ai-provider-consent">
-                  <input
-                    type="checkbox"
-                    checked={providerConsent}
-                    disabled={providerMode !== 'openrouter_free'}
-                    onChange={(event) => setProviderConsent(event.target.checked)}
-                    data-testid="ai-provider-consent"
-                  />
-                  <span>
-                    I explicitly consent to this external OpenRouter request
-                    <small>
-                      Required for each selected external mode. The versioned consent token is
-                      attached to propose and variation callbacks.
-                    </small>
-                  </span>
-                </label>
-              </fieldset>
-            </details>
+                </>
+              )}
+            </div>
+            <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
+              <legend>Provider and privacy</legend>
+              <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
+                <input
+                  type="radio"
+                  name={providerName}
+                  value="deterministic"
+                  checked={providerMode === 'deterministic'}
+                  onChange={() => {
+                    setProviderMode('deterministic');
+                    setProviderConsent(false);
+                  }}
+                  data-testid="ai-provider-deterministic"
+                />
+                <ShieldCheck size={15} />
+                <span>
+                  <strong>Deterministic and private</strong>
+                  <small>No instruction or context is sent to an external model.</small>
+                </span>
+              </label>
+              <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
+                <input
+                  type="radio"
+                  name={providerName}
+                  value="openrouter_free"
+                  checked={providerMode === 'openrouter_free'}
+                  onChange={() => {
+                    setProviderMode('openrouter_free');
+                    setProviderConsent(false);
+                  }}
+                  data-testid="ai-provider-openrouter"
+                />
+                <Sparkles size={15} />
+                <span>
+                  <strong>OpenRouter · GLM 5.2 — external</strong>
+                  <small>
+                    Sends this ask, selected read context, and scoped slide content to the named GLM
+                    5.2 model through OpenRouter. It does not browse or fetch URLs.
+                  </small>
+                </span>
+              </label>
+              <label className="ns-ai-provider-consent">
+                <input
+                  type="checkbox"
+                  checked={providerConsent}
+                  disabled={providerMode !== 'openrouter_free'}
+                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  data-testid="ai-provider-consent"
+                />
+                <span>
+                  I explicitly consent to this external OpenRouter request
+                  <small>
+                    Required for each selected external mode. The versioned consent token is
+                    attached to propose and variation callbacks.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
 
             {commentContext ? (
               <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
@@ -1054,6 +1096,52 @@ export function AiInspector<CommandId extends string = string>({
               <button type="button" onClick={() => openTokenMenu('/')} aria-label="Add command">
                 <Command size={12} /> Insert
               </button>
+              {onAttachDataFile ? (
+                <>
+                  <input
+                    ref={attachmentInputRef}
+                    className="ns-sr-only"
+                    type="file"
+                    accept=".csv,.json,.txt,text/csv,application/json,text/plain"
+                    data-testid="ai-data-file-input"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void attachDataFile(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={attachmentBusy}
+                    aria-label="Attach data file"
+                    data-testid="ai-attach-data"
+                  >
+                    {attachmentBusy ? (
+                      <LoaderCircle className="ns-spin" size={12} />
+                    ) : (
+                      <Paperclip size={12} />
+                    )}{' '}
+                    Data
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void attachDataFile(
+                        new File([WORLD_CUP_SAMPLE_CSV], 'world-cup-2022.csv', {
+                          type: 'text/csv',
+                        }),
+                      )
+                    }
+                    disabled={attachmentBusy}
+                    aria-label="Attach sample World Cup CSV"
+                    title="Attach a sample CSV through the same private data-source path"
+                    data-testid="ai-attach-sample-data"
+                  >
+                    Try CSV
+                  </button>
+                </>
+              ) : null}
               <span>
                 {requestedReadContext.length > 0
                   ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
@@ -1084,6 +1172,12 @@ export function AiInspector<CommandId extends string = string>({
             </button>
           </div>
         </div>
+
+        {attachmentError ? (
+          <output className="ns-ai-attachment-error" role="alert">
+            {attachmentError}
+          </output>
+        ) : null}
 
         {menuOpen ? (
           <div
@@ -1440,9 +1534,18 @@ export function createAiVariationProviderRequest(
 }
 
 export function agentPhaseLabel(activity: AiAgentActivity): string {
+  if (activity.status === 'delayed') return 'Still working';
   if (activity.status === 'timed_out') return 'Timed out';
   if (activity.status === 'failed') return 'Failed';
   return activity.elapsedMs >= AI_DRAFTING_PHASE_MS ? 'Drafting proposal' : 'Reading context';
+}
+
+function isTerminalActivity(activity: AiAgentActivity): boolean {
+  return activity.status === 'timed_out' || activity.status === 'failed';
+}
+
+function activityMessage(activity: AiAgentActivity): string | undefined {
+  return 'message' in activity ? activity.message : undefined;
 }
 
 function resolveActivity(

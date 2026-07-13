@@ -52,6 +52,9 @@ describe('NodeSlide v3 visual contract', () => {
     expect(phone).toMatch(/\.ns-inspector:not\(\.is-collapsed\)[\s\S]*position: fixed/);
     expect(phone).toMatch(/\.ns-inspector\.is-collapsed[\s\S]*display: none/);
     expect(phone).toMatch(/\.ns-slide-stepper[\s\S]*display: flex/);
+    expect(phone).toMatch(/\.ns-slide-more[\s\S]*display: flex !important/);
+    expect(phone).toMatch(/\.ns-navigator-footer[\s\S]*display: flex !important/);
+    expect(phone).toMatch(/\.ns-add-slide-button[\s\S]*font-size: 0/);
   });
 
   it('keeps secondary text at AA contrast in both themes', () => {

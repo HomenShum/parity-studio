@@ -61,6 +61,10 @@ import {
   writeNodeSlideSnapshot,
 } from './lib/nodeslideData';
 import {
+  NODESLIDE_DATA_ATTACHMENT_MAX_BYTES,
+  normalizeNodeSlideDataAttachment,
+} from './lib/nodeslideDataAttachment';
+import {
   NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK,
   type NodeSlideExecutionTrace,
   assertExecutionTraceBounds,
@@ -264,6 +268,64 @@ export const getWorkspace = query({
       return null;
     }
     return await loadNodeSlideWorkspace(ctx, deckId, Date.now());
+  },
+});
+
+/**
+ * Stores a bounded user-uploaded data file as an owner-gated source record.
+ * The agent may read it only when the client explicitly includes the returned
+ * source reference in readContext.
+ */
+export const attachDataSource = mutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    title: v.string(),
+    format: v.union(v.literal('csv'), v.literal('json'), v.literal('txt')),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const title = requiredText(args.title, 'data file name', 180);
+    const content = normalizeNodeSlideDataAttachment(
+      args.content,
+      args.format,
+      NODESLIDE_DATA_ATTACHMENT_MAX_BYTES,
+    );
+    const sourceType =
+      args.format === 'csv' ? 'spreadsheet' : args.format === 'json' ? 'document' : 'note';
+    const id = nodeslideStableId(
+      'source',
+      args.deckId,
+      sourceType,
+      title,
+      nodeslideContentDigest(content),
+    );
+    const existing = await ctx.db
+      .query('nodeslide_sources')
+      .withIndex('by_stable_id', (query) => query.eq('id', id))
+      .unique();
+    const source = {
+      id,
+      deckId: args.deckId,
+      title,
+      sourceType,
+      retrievedAt: existing?.retrievedAt ?? Date.now(),
+      citation: `Uploaded file: ${title}\n${content}`,
+      license: 'User supplied',
+    } as const;
+    if (existing) await ctx.db.patch(existing._id, source);
+    else {
+      const sourceCount = (
+        await ctx.db
+          .query('nodeslide_sources')
+          .withIndex('by_deck', (query) => query.eq('deckId', args.deckId))
+          .collect()
+      ).length;
+      if (sourceCount >= 64) throw new Error('This deck has reached its source attachment limit.');
+      await ctx.db.insert('nodeslide_sources', source);
+    }
+    return { id, kind: 'source' as const, label: `Source: ${title}` };
   },
 });
 
@@ -1281,6 +1343,7 @@ export const proposeAgentPatchInternal = internalMutation({
     shadowControlsDigest: v.optional(v.string()),
     shadowComparison: v.optional(nodeslideShadowComparisonValidator),
     traceSummary: v.string(),
+    traceContext: v.array(v.string()),
     toolCalls: v.array(v.string()),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
@@ -1291,6 +1354,12 @@ export const proposeAgentPatchInternal = internalMutation({
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     if (args.toolCalls.length > 16) throw new Error('Too many agent tool calls recorded.');
+    if (
+      args.traceContext.length > 40 ||
+      args.traceContext.some((line) => line.length === 0 || line.length > 500)
+    ) {
+      throw new Error('Agent trace context is invalid or exceeds bounds.');
+    }
     const planningBindingsValid =
       /^turn_sha256:[0-9a-f]{64}$/.test(args.planningInputDigest ?? '') &&
       /^snap_sha256:[0-9a-f]{64}$/.test(args.planningSnapshotDigest ?? '');
@@ -1330,6 +1399,7 @@ export const proposeAgentPatchInternal = internalMutation({
       context: [
         `Instruction: ${requiredText(args.instruction, 'instruction', 4000)}`,
         `Base deck version: ${args.baseDeckVersion}`,
+        ...args.traceContext,
       ],
       toolCalls: args.toolCalls,
       guardrails: [

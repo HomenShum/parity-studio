@@ -65,7 +65,7 @@ export type AiAgentActivity =
       ask: string;
     }
   | {
-      status: 'timed_out' | 'failed';
+      status: 'delayed' | 'timed_out' | 'failed';
       elapsedMs: number;
       ask: string;
       message?: string;

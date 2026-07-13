@@ -228,6 +228,7 @@ function TraceBanner({
   validation: TraceValidation | null;
 }) {
   const fallback = isFallbackTrace(trace);
+  const billedAttempt = hasProviderAttemptTelemetry(trace);
   return (
     <header className="ns-trace-banner">
       <div className="ns-trace-banner-top">
@@ -245,7 +246,11 @@ function TraceBanner({
         <span className="ns-metanum">
           <CircleDollarSign size={11} />
           <b>{formatCost(trace.costMicroUsd)}</b>
-          {fallback ? ' · no tokens' : ''}
+          {fallback
+            ? billedAttempt
+              ? ' · provider attempt billed'
+              : ' · no provider billing recorded'
+            : ''}
         </span>
       </div>
       <div
@@ -340,7 +345,7 @@ function RailNode({
     <div className={`ns-rail-node ${open ? 'is-open' : ''}`} data-node={node}>
       <button
         type="button"
-        className="ns-rail-toggle"
+        className="ns-railnode-toggle"
         aria-expanded={open}
         aria-label={`${meta.label} — ${open ? 'collapse' : 'expand'}`}
         onClick={() => onToggle(node)}
@@ -571,13 +576,18 @@ function NodeDetail({
 }
 
 function Invoice({ trace, fallback }: { trace: AgentTrace; fallback: boolean }) {
+  const billedAttempt = hasProviderAttemptTelemetry(trace);
   return (
     <div className="ns-invoice">
       <span className="ns-invoice-k">tokens</span>
       <span className="ns-invoice-v">{tokenFlow(trace)}</span>
       <span className="ns-invoice-k">cost</span>
       <span className={`ns-invoice-v ${fallback ? 'is-warn' : 'is-live'}`}>
-        {fallback ? '$0.0000 · no tokens billed' : formatCost(trace.costMicroUsd)}
+        {fallback
+          ? billedAttempt
+            ? `${formatCost(trace.costMicroUsd)} · provider attempt before fallback`
+            : '$0.0000 · no provider billing recorded'
+          : formatCost(trace.costMicroUsd)}
       </span>
       <span className="ns-invoice-k">duration</span>
       <span className="ns-invoice-v">{duration(trace)}</span>
@@ -930,7 +940,14 @@ export function nodeSummary(
 export function consentSentence(trace: AgentTrace): { text: string; verbatim: boolean } {
   const line = trace.toolCalls.find((call) => /consent|authoriz/i.test(call));
   if (line) return { text: line, verbatim: true };
-  return { text: 'Consent recorded on run start', verbatim: false };
+  const route = `${trace.provider ?? ''} ${trace.model ?? ''}`;
+  if (/deterministic/i.test(route) && !/openrouter/i.test(route)) {
+    return { text: 'Consent not required — no external egress', verbatim: false };
+  }
+  if (/openrouter/i.test(route)) {
+    return { text: 'Consent evidence missing', verbatim: false };
+  }
+  return { text: 'Consent requirement not recorded', verbatim: false };
 }
 
 function railSealChip(
@@ -1059,12 +1076,24 @@ function ValidationSummary({
 export function isFallbackTrace(trace: AgentTrace): boolean {
   // 1. the marker the pipeline writes into the provider/model label.
   if (/fallback|deterministic/i.test(`${trace.provider ?? ''} ${trace.model ?? ''}`)) return true;
-  // 2. fail closed: a 'completed' run that cost $0 and produced no candidate
-  //    receipt is a deterministic degrade, never a proud live success.
-  if (trace.status === 'completed' && (trace.costMicroUsd ?? 0) === 0 && !trace.candidateDigest) {
+  // 2. Any external run presented as completed/awaiting review must carry the
+  //    complete live receipt. Missing cost, token flow, or candidate binding is
+  //    ambiguous and therefore degrades closed rather than wearing a live badge.
+  const external = /openrouter/i.test(`${trace.provider ?? ''} ${trace.model ?? ''}`);
+  if (
+    external &&
+    (trace.status === 'completed' || trace.status === 'awaiting_review') &&
+    (!hasProviderAttemptTelemetry(trace) || !trace.candidateDigest)
+  ) {
     return true;
   }
   return false;
+}
+
+function hasProviderAttemptTelemetry(trace: AgentTrace): boolean {
+  return (
+    (trace.costMicroUsd ?? 0) > 0 && (trace.inputTokens ?? 0) > 0 && (trace.outputTokens ?? 0) > 0
+  );
 }
 
 /** Session-persisted trace density; SSR/storage-safe (falls back to 'human'). */

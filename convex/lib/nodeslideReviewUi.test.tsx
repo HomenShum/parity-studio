@@ -72,12 +72,30 @@ describe('NodeSlide AI review inspector', () => {
     }
   });
 
+  it('keeps a slow provider nonterminal until the backend actually finishes or times out', () => {
+    const markup = renderAi({
+      agentActivity: {
+        status: 'delayed',
+        elapsedMs: 20_000,
+        ask: 'Try a tighter hierarchy.',
+        message: 'The provider is still working.',
+      },
+    });
+
+    expect(markup).toContain('Still working');
+    expect(markup).toContain('The provider is still working.');
+    expect(markup).toContain('No proposal has been created or applied yet.');
+    expect(markup).not.toContain('has-failed');
+    expect(markup).not.toContain('role="alert"');
+  });
+
   it('defaults to private deterministic processing and uses operation-specific consent tokens', () => {
     const markup = renderAi();
-    expect(markup).toContain('Web: off · Private deterministic');
+    expect(markup).toContain('External model: off · Private deterministic');
     expect(markup).toMatch(/data-testid="ai-provider-deterministic"[^>]*checked=""/);
     expect(markup).toContain('OpenRouter · GLM 5.2 — external');
     expect(markup).toContain('named GLM 5.2 model through OpenRouter');
+    expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
@@ -99,9 +117,26 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Generate 3 directions');
     expect(markup).toContain('Current agent scope and policy');
     expect(markup).toContain('Whole slide');
-    expect(markup).toContain('Agent controls');
+    expect(markup).toContain('Provider · privacy');
+    expect(markup).toContain('data-testid="ai-provider-controls" open=""');
+    expect(markup).toContain('data-testid="ai-provider-route-status"');
+    expect(markup).not.toContain('ns-ai-v3-route-disclosure');
     expect(markup).not.toContain('data-testid="variation-section"');
     expect(markup).not.toContain('No proposal waiting');
+  });
+
+  it('shows a bounded CSV, JSON, or TXT attachment control only when uploads are available', () => {
+    expect(renderAi()).not.toContain('data-testid="ai-attach-data"');
+    const markup = renderAi({
+      onAttachDataFile: async (file) => ({
+        id: `source-${file.name}`,
+        kind: 'source',
+        label: `Source: ${file.name}`,
+      }),
+    });
+    expect(markup).toContain('data-testid="ai-attach-data"');
+    expect(markup).toContain('accept=".csv,.json,.txt,text/csv,application/json,text/plain"');
+    expect(markup).toContain('aria-label="Attach data file"');
   });
 
   it('derives bounded write targets from every comment anchor type', () => {
@@ -193,7 +228,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
     expect(commandMenu.match(/<option value=/g)).toHaveLength(12);
-    expect(commandMenu).toContain('Agent controls');
+    expect(commandMenu).toContain('Provider · privacy');
   });
 
   it('keeps comment-to-AI context implicit when no @ reference was selected', () => {
@@ -291,6 +326,7 @@ interface RenderAiOptions {
   commands?: readonly AiComposerCommand<string>[];
   patches?: readonly DeckPatch[];
   traces?: readonly AgentTrace[];
+  onAttachDataFile?: (file: File) => Promise<AiReadReference>;
 }
 
 function renderAi({
@@ -302,6 +338,7 @@ function renderAi({
   commands = [],
   patches = [],
   traces = [],
+  onAttachDataFile,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -326,6 +363,7 @@ function renderAi({
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
       onPropose={() => undefined}
+      {...(onAttachDataFile ? { onAttachDataFile } : {})}
       onAccept={() => undefined}
       onReject={() => undefined}
       onPreviewPatch={() => undefined}

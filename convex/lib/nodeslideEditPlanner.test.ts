@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DeckComment, DeckSnapshot, PatchScope, SlideElement } from '../../shared/nodeslide';
-import { planNodeSlideEdit } from './nodeslideEditPlanner';
+import {
+  type NodeSlideEditPlanningRequest,
+  type NodeSlideEditProvider,
+  planNodeSlideEdit,
+} from './nodeslideEditPlanner';
 import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 
@@ -28,7 +32,15 @@ function fixture(): {
   };
 }
 
-function input(snapshot: DeckSnapshot, target: SlideElement, scope: PatchScope) {
+function input(
+  snapshot: DeckSnapshot,
+  target: SlideElement,
+  scope: PatchScope,
+): {
+  snapshot: DeckSnapshot;
+  scopedComment: DeckComment | null;
+  request: NodeSlideEditPlanningRequest;
+} {
   const slide = snapshot.slides.find((candidate) => candidate.id === target.slideId);
   if (!slide) throw new Error('Expected target slide fixture.');
   return {
@@ -56,7 +68,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       ...planningInput,
       request: { ...planningInput.request, providerMode: 'deterministic' as const },
     };
-    const provider = vi.fn(async () => ({
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: false as const,
       reason: 'must_not_be_called',
     }));
@@ -187,7 +199,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
   it('accepts valid provider operations and derives its summary from the validated diff', async () => {
     const { snapshot, target, scope } = fixture();
     const before = structuredClone(snapshot);
-    const provider = vi.fn(async () => ({
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true as const,
       value: {
         summary: 'UNTRUSTED_PROVIDER_PROSE',
@@ -227,7 +239,107 @@ describe('NodeSlide baseline edit planner extraction', () => {
     ]);
     expect(result.summary).toContain('replace text');
     expect(JSON.stringify(result)).not.toContain('UNTRUSTED_PROVIDER_PROSE');
+    const providerSchema = JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema);
+    expect(providerSchema).toContain(target.slideId);
+    expect(providerSchema).toContain(target.id);
+    expect(providerSchema).not.toContain('"const":"move"');
+    expect(providerSchema).not.toContain('"const":"update_style"');
+    expect(providerSchema).not.toContain(
+      snapshot.elements.find((element) => element.locked)?.id ?? 'missing-locked-element',
+    );
     expect(snapshot).toEqual(before);
+  });
+
+  it('binds source-grounded replacement copy only to authorized read-context sources', async () => {
+    const { snapshot, target, scope } = fixture();
+    const source = snapshot.sources[0];
+    const slide = snapshot.slides.find((candidate) => candidate.id === target.slideId);
+    if (!source || !slide) throw new Error('Expected source and slide fixtures.');
+    const planningInput = {
+      ...input(snapshot, target, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: [target],
+        sources: [source],
+        comments: [],
+      },
+    };
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true,
+      value: {
+        summary: 'Grounded rewrite',
+        operations: [
+          {
+            op: 'replace_text',
+            slideId: target.slideId,
+            elementId: target.id,
+            text: 'Provider replacement grounded in the uploaded file.',
+            sourceIds: [source.id],
+          },
+        ],
+      },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 1200,
+        inputTokens: 100,
+        outputTokens: 20,
+      },
+    }));
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: target.slideId,
+        elementId: target.id,
+        text: 'Provider replacement grounded in the uploaded file.',
+        sourceIds: [source.id],
+      },
+    ]);
+    expect(JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema)).toContain(source.id);
+  });
+
+  it('rejects provider source bindings outside the authorized read context', async () => {
+    const { snapshot, target, scope } = fixture();
+    const result = await planNodeSlideEdit(input(snapshot, target, scope), {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Untrusted provenance',
+          operations: [
+            {
+              op: 'replace_text',
+              slideId: target.slideId,
+              elementId: target.id,
+              text: 'Provider replacement',
+              sourceIds: ['source-outside-read-context'],
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 1200,
+          inputTokens: 100,
+          outputTokens: 20,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt.origin).toBe('deterministic_fallback');
+    expect(result.receipt.providerOutcome).toBe('invalid');
+    expect(result.operations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceIds: ['source-outside-read-context'] }),
+      ]),
+    );
   });
 
   it('falls back when an otherwise valid provider envelope targets outside scope', async () => {
@@ -264,7 +376,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     if (!result.ok) return;
     expect(result.receipt.origin).toBe('deterministic_fallback');
     expect(result.receipt.providerOutcome).toBe('invalid');
-    expect(result.receipt.fallbackReason).toBe('the GLM 5.2 response was invalid');
+    expect(result.receipt.fallbackReason).toContain('candidate validation rejected');
     expect(result.operations).toEqual([
       {
         op: 'replace_text',
