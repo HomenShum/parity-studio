@@ -20,6 +20,8 @@ import type {
   DeckComment,
   DeckPatch,
   DeckVersion,
+  NodeSlideAgentMemory,
+  NodeSlideAgentMemoryCategory,
   NodeSlideAgentMessage,
   NodeSlideAgentRun,
   NodeSlideAgentTelemetryPage,
@@ -78,6 +80,8 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   aiAgentActivity?: AiAgentActivity | null;
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
+  memories?: readonly NodeSlideAgentMemory[];
+  memoriesLoading?: boolean;
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   agentTelemetryLoadingMore?: boolean;
@@ -100,6 +104,12 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     options: AiProposalOptions<CommandId>,
   ) => void;
   onAttachAiDataFile?: (file: File) => Promise<AiReadReference>;
+  onCreateAiMemory?: (category: NodeSlideAgentMemoryCategory, content: string) => Promise<void>;
+  onUpdateAiMemory?: (
+    memoryId: string,
+    update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
+  ) => Promise<void>;
+  onDeleteAiMemory?: (memoryId: string) => Promise<void>;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
   onSelectAgentRun?: (runId: string) => void;
@@ -156,6 +166,8 @@ export function InspectorPanel<CommandId extends string = string>({
   aiAgentActivity,
   agentRuns = [],
   agentMessages = [],
+  memories = [],
+  memoriesLoading = false,
   agentTelemetry,
   agentTelemetryRunId,
   agentTelemetryLoadingMore = false,
@@ -174,6 +186,9 @@ export function InspectorPanel<CommandId extends string = string>({
   onWidthChange,
   onProposeEdit,
   onAttachAiDataFile,
+  onCreateAiMemory,
+  onUpdateAiMemory,
+  onDeleteAiMemory,
   onDeleteAiDataSource,
   onCancelAiRun,
   onSelectAgentRun,
@@ -359,6 +374,8 @@ export function InspectorPanel<CommandId extends string = string>({
             traces={workspace.traces}
             agentRuns={agentRuns}
             agentMessages={agentMessages}
+            memories={memories}
+            memoriesLoading={memoriesLoading}
             variations={variations}
             variationsLoading={variationsLoading}
             isSubmitting={agentBusy}
@@ -376,6 +393,9 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
             onPropose={onProposeEdit}
             {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
+            {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
+            {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
+            {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
             {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
             onAccept={onAcceptPatch}
             onReject={onRejectPatch}

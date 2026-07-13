@@ -1,6 +1,7 @@
 import {
   ArrowUp,
   AtSign,
+  Brain,
   Check,
   ChevronRight,
   Circle,
@@ -38,6 +39,8 @@ import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_REASONING_EFFORTS,
+  type NodeSlideAgentMemory,
+  type NodeSlideAgentMemoryCategory,
   type NodeSlideAgentMessage,
   type NodeSlideAgentModelId,
   type NodeSlideAgentRun,
@@ -54,6 +57,7 @@ import {
 } from '../../../../shared/nodeslide';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
+import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -118,6 +122,8 @@ export interface AiInspectorProps<CommandId extends string = string> {
   traces: readonly AgentTrace[];
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
+  memories?: readonly NodeSlideAgentMemory[];
+  memoriesLoading?: boolean;
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -141,6 +147,12 @@ export interface AiInspectorProps<CommandId extends string = string> {
     options: AiProposalOptions<CommandId>,
   ) => void;
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
+  onCreateMemory?: (category: NodeSlideAgentMemoryCategory, content: string) => Promise<void>;
+  onUpdateMemory?: (
+    memoryId: string,
+    update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
+  ) => Promise<void>;
+  onDeleteMemory?: (memoryId: string) => Promise<void>;
   onCancelRun?: (runId: string) => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
@@ -161,6 +173,8 @@ export function AiInspector<CommandId extends string = string>({
   traces,
   agentRuns = [],
   agentMessages = [],
+  memories = [],
+  memoriesLoading = false,
   variations,
   variationsLoading,
   isSubmitting,
@@ -180,6 +194,9 @@ export function AiInspector<CommandId extends string = string>({
   previewedPatchId = null,
   onPropose,
   onAttachDataFile,
+  onCreateMemory,
+  onUpdateMemory,
+  onDeleteMemory,
   onCancelRun,
   onAccept,
   onReject,
@@ -218,6 +235,10 @@ export function AiInspector<CommandId extends string = string>({
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryEnabled, setMemoryEnabled] = useState(false);
+  const activeMemoryCount = memories.filter((memory) => memory.status === 'active').length;
+  const useMemoryForRun = memoryEnabled && activeMemoryCount > 0;
   const composerId = useId();
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
@@ -245,6 +266,16 @@ export function AiInspector<CommandId extends string = string>({
       setProviderEffort('high');
     }
   }, []);
+
+  useEffect(() => {
+    const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
+    setMemoryEnabled(enabled);
+  }, [deck.id]);
+
+  const setPersistentMemoryEnabled = (enabled: boolean) => {
+    setMemoryEnabled(enabled);
+    window.localStorage.setItem(`nodeslide.memory-enabled:${deck.id}`, String(enabled));
+  };
 
   useEffect(() => {
     if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
@@ -501,6 +532,7 @@ export function AiInspector<CommandId extends string = string>({
       readContext: requestedReadContext,
       designBehavior,
       referenceUse,
+      memoryMode: useMemoryForRun ? 'relevant' : 'off',
       idempotencyKey:
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
@@ -1306,6 +1338,20 @@ export function AiInspector<CommandId extends string = string>({
               >
                 <Globe2 size={12} /> Web
               </button>
+              {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
+                <button
+                  type="button"
+                  className={useMemoryForRun ? 'is-active' : ''}
+                  onClick={() => setMemoryOpen(true)}
+                  aria-label="Manage deck memory"
+                  aria-pressed={useMemoryForRun}
+                  data-testid="ai-memory"
+                  title="Manage durable deck memory"
+                >
+                  <Brain size={12} /> Memory
+                  {memories.length ? ` ${activeMemoryCount}` : ''}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => openTokenMenu('@')}
@@ -1392,7 +1438,8 @@ export function AiInspector<CommandId extends string = string>({
                   Allow {selectedAgentModel.label} at {effortLabel(providerEffort)} effort via{' '}
                   {providerNameForMode(providerMode)} for this request
                   <small>
-                    Ask, scoped slide context, token use, and cost are recorded in Trace.
+                    Ask, scoped slide context{useMemoryForRun ? ', relevant deck memory' : ''},
+                    token use, and cost are recorded in Trace.
                   </small>
                 </span>
               </label>
@@ -1483,6 +1530,19 @@ export function AiInspector<CommandId extends string = string>({
         onClose={() => setConnectionsOpen(false)}
         deckId={deck.id}
       />
+      {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
+        <NodeSlideMemoryDialog
+          open={memoryOpen}
+          memories={memories}
+          loading={memoriesLoading}
+          enabled={memoryEnabled}
+          onEnabledChange={setPersistentMemoryEnabled}
+          onClose={() => setMemoryOpen(false)}
+          onCreate={onCreateMemory}
+          onUpdate={onUpdateMemory}
+          onDelete={onDeleteMemory}
+        />
+      ) : null}
     </div>
   );
 }

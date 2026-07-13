@@ -58,11 +58,19 @@ function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: s
     span.provider,
     span.model,
     ...(span.sourceIds ?? []),
+    ...span.attributes.map((attribute) => `${attribute.key} ${String(attribute.value)}`),
   ]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase();
   return haystack.includes(query.toLocaleLowerCase());
+}
+
+function spanMemoryCount(span: NodeSlideAgentSpan): number {
+  const value = span.attributes.find(
+    (attribute) => attribute.key === 'nodeslide.memory.count',
+  )?.value;
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
 export function buildWaterfallRows(
@@ -131,7 +139,7 @@ function formatClock(value: number): string {
 
 function spanTone(span: NodeSlideAgentSpan): string {
   if (span.status === 'error') return 'error';
-  if (span.sourceIds?.length) return 'retrieval';
+  if (span.sourceIds?.length || spanMemoryCount(span) > 0) return 'retrieval';
   if (span.operationName === 'chat' || span.model) return 'model';
   if (span.operationName === 'execute_tool' || span.toolName) return 'tool';
   if (/validat/i.test(`${span.operationName} ${span.name}`)) return 'validation';
@@ -341,6 +349,7 @@ export function TraceWaterfall({
         <ol aria-label="Latest trace activity">
           {compactSpans.map((span) => {
             const Icon = spanIcon(span);
+            const memoryCount = spanMemoryCount(span);
             return (
               <li key={span.id} className={`is-${spanTone(span)}`} data-testid="trace-activity-row">
                 <span className="ns-trace-activity-icon">
@@ -356,6 +365,11 @@ export function TraceWaterfall({
                 {span.sourceIds?.length ? (
                   <span className="ns-trace-activity-source" title="Span-bound sources">
                     {span.sourceIds.length} source{span.sourceIds.length === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+                {memoryCount ? (
+                  <span className="ns-trace-activity-source" title="Bounded deck memories used">
+                    {memoryCount} memor{memoryCount === 1 ? 'y' : 'ies'}
                   </span>
                 ) : null}
               </li>
