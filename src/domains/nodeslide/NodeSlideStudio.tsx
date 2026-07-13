@@ -49,7 +49,7 @@ import {
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
-import { FirstRunDialog } from './components/FirstRunDialog';
+import { NodeSlideLanding, type NodeSlideLandingDraft } from './components/NodeSlideLanding';
 import {
   type OwnerCapabilityRecovery,
   OwnerCapabilityRecoveryDialog,
@@ -375,6 +375,9 @@ export function NodeSlideStudio() {
     () => new URLSearchParams(window.location.search).get('present') === '1',
   );
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [projectDraft, setProjectDraft] = useState<NodeSlideLandingDraft | null>(null);
+  const [projectInitialMode, setProjectInitialMode] = useState<'create' | 'open'>('create');
+  const [sampleRequested, setSampleRequested] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -395,9 +398,6 @@ export function NodeSlideStudio() {
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [clipboardElements, setClipboardElements] = useState<SlideElement[]>([]);
-  const [firstRunOpen, setFirstRunOpen] = useState(() =>
-    shouldShowFirstRun(requestedDeck, requestedShare),
-  );
   const bootstrapped = useRef(false);
   const historyDeckRef = useRef<string | null>(null);
   const promptedRecoveryDecks = useRef(new Set<string>());
@@ -416,6 +416,14 @@ export function NodeSlideStudio() {
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
   activeDeckIdRef.current = activeDeckId;
   ownerAccessKeyRef.current = ownerAccessKey;
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const before = url.toString();
+    url.searchParams.delete('qa');
+    if (url.searchParams.get('domain') === 'nodeslide') url.searchParams.delete('domain');
+    if (url.toString() !== before) window.history.replaceState(null, '', url);
+  }, []);
 
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
@@ -612,7 +620,7 @@ export function NodeSlideStudio() {
 
   useEffect(() => {
     void bootstrapAttempt;
-    if (bootstrapped.current || requestedDeck || requestedShare) return;
+    if (bootstrapped.current || !sampleRequested || requestedDeck || requestedShare) return;
     bootstrapped.current = true;
     setBootstrapError(null);
     const storedOwnerAccessKey = getStoredOwnerAccessKey();
@@ -641,6 +649,7 @@ export function NodeSlideStudio() {
     installWorkspace,
     requestedDeck,
     requestedShare,
+    sampleRequested,
   ]);
 
   useEffect(() => {
@@ -1008,6 +1017,8 @@ export function NodeSlideStudio() {
     setActiveDeckId(deckId);
     setLocalWorkspace(null);
     setProjectsOpen(false);
+    setProjectDraft(null);
+    setProjectInitialMode('create');
     writeDeckToUrl(deckId);
   }, []);
 
@@ -1415,9 +1426,8 @@ export function NodeSlideStudio() {
       if (!requestGate.isCurrent(requestToken)) return;
       setCreating(false);
       const accessDurable = installWorkspace(result, undefined, false, true);
-      markFirstRunSeen();
-      setFirstRunOpen(false);
       setProjectsOpen(false);
+      setProjectDraft(null);
       if (accessDurable) {
         setToast({
           kind: 'success',
@@ -1448,9 +1458,13 @@ export function NodeSlideStudio() {
       onClose={() => {
         setProjectError(null);
         setProjectsOpen(false);
+        setProjectDraft(null);
+        setProjectInitialMode('create');
       }}
       onCreate={(request) => void createDeck(request)}
       onOpenDeck={openOwnedDeck}
+      initialDraft={projectDraft}
+      initialMode={projectInitialMode}
     />
   );
 
@@ -1524,6 +1538,37 @@ export function NodeSlideStudio() {
             </button>
           </form>
         </RecoveryScreen>
+        {projectsDialog}
+        {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
+      </>
+    );
+  }
+
+  if (
+    !requestedDeck &&
+    !requestedShare &&
+    !activeDeckId &&
+    !workspace &&
+    !sampleRequested &&
+    !bootstrapError
+  ) {
+    return (
+      <>
+        <NodeSlideLanding
+          recentDecks={recentDecks}
+          onStart={(draft) => {
+            setProjectDraft(draft);
+            setProjectInitialMode('create');
+            setProjectsOpen(true);
+          }}
+          onExploreSample={() => setSampleRequested(true)}
+          onOpenProjects={() => {
+            setProjectDraft(null);
+            setProjectInitialMode('open');
+            setProjectsOpen(true);
+          }}
+          onOpenDeck={openOwnedDeck}
+        />
         {projectsDialog}
         {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
       </>
@@ -2982,24 +3027,13 @@ export function NodeSlideStudio() {
       </div>
 
       {projectsDialog}
-      <FirstRunDialog
-        open={firstRunOpen && !projectsOpen}
-        onCreate={() => {
-          setFirstRunOpen(false);
-          setProjectsOpen(true);
-        }}
-        onExplore={() => {
-          markFirstRunSeen();
-          setFirstRunOpen(false);
-        }}
-      />
       <CommandPalette
         open={commandOpen}
         commands={commands}
         onClose={() => setCommandOpen(false)}
       />
       <OwnerCapabilityRecoveryDialog
-        open={Boolean(ownerRecovery) && !firstRunOpen && !projectsOpen}
+        open={Boolean(ownerRecovery) && !projectsOpen}
         recovery={ownerRecovery}
         onClose={() => setOwnerRecovery(null)}
       />
@@ -3591,49 +3625,6 @@ function writeStudioPreference(key: 'theme', value: string) {
     window.localStorage.setItem(`nodeslide.v3.${key}`, value);
   } catch {
     // Visual preferences remain available for this session when storage is unavailable.
-  }
-}
-
-function hasSeenFirstRun() {
-  try {
-    return window.localStorage.getItem('nodeslide.firstRun.v1') === 'seen';
-  } catch {
-    return false;
-  }
-}
-
-const FIRST_RUN_PENDING_KEY = 'nodeslide.firstRun.pending.v1';
-
-function shouldShowFirstRun(requestedDeck: string | null, requestedShare: string | null) {
-  if (requestedShare || hasSeenFirstRun()) {
-    try {
-      window.sessionStorage.removeItem(FIRST_RUN_PENDING_KEY);
-    } catch {
-      // Hardened storage contexts still get the welcome on a direct landing.
-    }
-    return false;
-  }
-  if (!requestedDeck) {
-    try {
-      window.sessionStorage.setItem(FIRST_RUN_PENDING_KEY, 'pending');
-    } catch {
-      // The current mount can still display the welcome without persistence.
-    }
-    return true;
-  }
-  try {
-    return window.sessionStorage.getItem(FIRST_RUN_PENDING_KEY) === 'pending';
-  } catch {
-    return false;
-  }
-}
-
-function markFirstRunSeen() {
-  try {
-    window.localStorage.setItem('nodeslide.firstRun.v1', 'seen');
-    window.sessionStorage.removeItem(FIRST_RUN_PENDING_KEY);
-  } catch {
-    // The welcome can reappear in hardened storage contexts without blocking use.
   }
 }
 

@@ -2,7 +2,7 @@
 
 **Build challenge:** Slidelang
 
-**Prototype:** [parity-studio.vercel.app/?domain=nodeslide](https://parity-studio.vercel.app/?domain=nodeslide)
+**Prototype:** [parity-studio.vercel.app](https://parity-studio.vercel.app/)
 
 **Product thesis:** A presentation should be a trustworthy, editable program—not an opaque image returned by a prompt.
 

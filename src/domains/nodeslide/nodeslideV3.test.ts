@@ -57,6 +57,18 @@ describe('NodeSlide v3 visual contract', () => {
     expect(phone).toMatch(/\.ns-add-slide-button[\s\S]*font-size: 0/);
   });
 
+  it('gives the root landing a single responsive composer instead of editor chrome', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio\.ns-landing[\s\S]*?display: flex;[\s\S]*?overflow-y: auto;/,
+    );
+    expect(css).toMatch(/\.ns-landing-composer[\s\S]*?border-radius: 22px;[\s\S]*?width: 100%;/);
+    expect(css).toMatch(
+      /@media \(max-width: 699px\)[\s\S]*?\.ns-landing-main[\s\S]*?padding: 48px 15px 30px;/,
+    );
+    expect(studioSource).toContain('<NodeSlideLanding');
+    expect(studioSource).not.toContain('<FirstRunDialog');
+  });
+
   it('keeps secondary text at AA contrast in both themes', () => {
     expect(contrast('#667085', '#fafafa')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#a8583f', '#fafafa')).toBeGreaterThanOrEqual(4.5);

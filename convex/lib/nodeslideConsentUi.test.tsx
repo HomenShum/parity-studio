@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { FirstRunDialog } from '../../src/domains/nodeslide/components/FirstRunDialog';
+import { NodeSlideLanding } from '../../src/domains/nodeslide/components/NodeSlideLanding';
 import {
   ProjectDialog,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT as UI_OPENROUTER_CONSENT,
@@ -61,11 +61,45 @@ describe('NodeSlide informed provider controls', () => {
 
   it('explains the privacy-preserving default before the create dialog opens', () => {
     const markup = renderToStaticMarkup(
-      <FirstRunDialog open onCreate={() => undefined} onExplore={() => undefined} />,
+      <NodeSlideLanding
+        recentDecks={[]}
+        onStart={() => undefined}
+        onExploreSample={() => undefined}
+        onOpenProjects={() => undefined}
+        onOpenDeck={() => undefined}
+      />,
     );
 
-    expect(markup).toContain('Deterministic by default · OpenRouter opt-in');
-    expect(markup).toContain('Your new-deck brief stays');
-    expect(markup).toContain('OpenRouter is optional and receives the full brief only');
+    expect(markup).toContain('data-testid="nodeslide-landing"');
+    expect(markup).toContain('What presentation should we build?');
+    expect(markup).toContain('Private · deterministic');
+    expect(markup).toContain('Your brief stays inside NodeSlide by default.');
+    expect(markup).toContain('Explore the editable sample workspace');
+    expect(markup).not.toContain('NodeSlide inspector');
+  });
+
+  it('carries a root-composer draft into the detailed creation contract', () => {
+    const markup = renderToStaticMarkup(
+      <ProjectDialog
+        open
+        clientSessionId="session-test"
+        recentDecks={[]}
+        creating={false}
+        initialDraft={{
+          title: 'AI 2027 — Scenarios and Decisions',
+          prompt: 'Build an evidence-led AI 2027 scenario deck.',
+          providerMode: 'openrouter_free',
+        }}
+        onClose={() => undefined}
+        onCreate={() => undefined}
+        onOpenDeck={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('value="AI 2027 — Scenarios and Decisions"');
+    expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
+    expect(markup).toMatch(/data-testid="provider-openrouter"[^>]*aria-pressed="true"/);
+    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
+    expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);
   });
 });

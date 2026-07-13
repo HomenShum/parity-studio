@@ -7,8 +7,8 @@ Thanks again for the Slidelang session and for the extra time. Here is my comple
 - **Demo video (2–5 min, core workflow):** https://www.youtube.com/watch?v=FuXXO-1fnZU
 - **PRD:** https://github.com/HomenShum/parity-studio/blob/codex/nodeslide-agentic-authoring/docs/submission/nodeslide-prd.md
 - **TDD:** https://github.com/HomenShum/parity-studio/blob/codex/nodeslide-agentic-authoring/docs/submission/nodeslide-tdd.md
-- **Prototype:** https://parity-studio.vercel.app/?domain=nodeslide
-- **Public example:** https://parity-studio.vercel.app/?domain=nodeslide&share=share-199954660609aeed58c8203cc624753964b0&present=1&slide=slide_ff0bffbd41623c4b139ab1cd56ae4266
+- **Prototype:** https://parity-studio.vercel.app/
+- **Public example:** https://parity-studio.vercel.app/?share=share-199954660609aeed58c8203cc624753964b0&present=1&slide=slide_ff0bffbd41623c4b139ab1cd56ae4266
 - **Source code:** https://github.com/HomenShum/parity-studio/tree/codex/nodeslide-agentic-authoring
 **Access notes / credentials:** The published example needs no login. I will send the private editor preview access code separately rather than placing a credential in the repository.
 

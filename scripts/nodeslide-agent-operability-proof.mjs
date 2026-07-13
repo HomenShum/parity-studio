@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const url = process.env.NODESLIDE_QA_URL ?? 'https://parity-studio.vercel.app/?domain=nodeslide';
+const url = process.env.NODESLIDE_QA_URL ?? 'https://parity-studio.vercel.app/';
 const outDir = process.env.NODESLIDE_QA_OUT;
 
 function assert(condition, message) {

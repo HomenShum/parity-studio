@@ -41,6 +41,12 @@ interface ProjectDialogProps {
   onClose: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onOpenDeck: (deckId: string) => void;
+  initialDraft?: {
+    title: string;
+    prompt: string;
+    providerMode: NodeSlideBriefProviderMode;
+  } | null;
+  initialMode?: 'create' | 'open';
 }
 
 const profiles = [
@@ -88,16 +94,20 @@ export function ProjectDialog({
   onClose,
   onCreate,
   onOpenDeck,
+  initialDraft = null,
+  initialMode = 'create',
 }: ProjectDialogProps) {
-  const [mode, setMode] = useState<'create' | 'open'>('create');
-  const [title, setTitle] = useState('');
-  const [prompt, setPrompt] = useState('');
+  const [mode, setMode] = useState<'create' | 'open'>(initialMode);
+  const [title, setTitle] = useState(initialDraft?.title ?? '');
+  const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [audience, setAudience] = useState('Executive decision-makers');
   const [purpose, setPurpose] = useState('Decision briefing');
   const [successCriteria, setSuccessCriteria] = useState('');
   const [themeId, setThemeId] = useState(profiles[0]?.id ?? 'editorial-signal');
   const [accessCode, setAccessCode] = useState('');
-  const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>('deterministic');
+  const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>(
+    initialDraft?.providerMode ?? 'deterministic',
+  );
   const [providerConsent, setProviderConsent] = useState(false);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
@@ -110,6 +120,7 @@ export function ProjectDialog({
   const accessCodeDescriptionId = `${dialogId}-access-code-description`;
   const createStatusId = `${dialogId}-create-status`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
+  const wasOpenRef = useRef(false);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
   const clearAdmissionAndClose = () => {
@@ -125,11 +136,18 @@ export function ProjectDialog({
   });
 
   useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setMode(initialMode);
+      setTitle(initialDraft?.title ?? '');
+      setPrompt(initialDraft?.prompt ?? '');
+      setProviderMode(initialDraft?.providerMode ?? 'deterministic');
+    }
+    wasOpenRef.current = open;
     if (open) return;
     setAccessCode('');
     setProviderMode('deterministic');
     setProviderConsent(false);
-  }, [open]);
+  }, [initialDraft, initialMode, open]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
