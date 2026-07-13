@@ -115,7 +115,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
     expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
-    expect(markup).toContain('Allow GLM 5.2 at High effort via Nebius for this request');
+    expect(markup).toContain('Allow one Nebius request / GLM 5.2 / High');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
