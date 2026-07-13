@@ -21,9 +21,7 @@
       "s": "trace-live",
       "hasGlm": true,
       "fallback": true,
-      "costLines": [
-        "$0.002"
-      ],
+      "costLines": ["$0.002"],
       "tokenLines": [],
       "digest": null,
       "candValidated": false,
@@ -126,9 +124,7 @@
   "traceLive": {
     "hasGlm": true,
     "fallback": true,
-    "costLines": [
-      "$0.002"
-    ],
+    "costLines": ["$0.002"],
     "tokenLines": [],
     "digest": null,
     "candValidated": false,

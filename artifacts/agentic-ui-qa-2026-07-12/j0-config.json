@@ -8,7 +8,12 @@
       "name": "j0-firstrun",
       "scheme": "light",
       "fullPage": false,
-      "assert": ["From brief to a reviewable deck", "Deterministic by default", "OpenRouter opt-in", "Explore the sample"]
+      "assert": [
+        "From brief to a reviewable deck",
+        "Deterministic by default",
+        "OpenRouter opt-in",
+        "Explore the sample"
+      ]
     },
     {
       "name": "j0-home-light",
