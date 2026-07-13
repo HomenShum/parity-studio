@@ -344,6 +344,27 @@ export function applyDeckPatch(
       }
     } else if (operation.op === 'update_style') {
       element.style = { ...element.style, ...operation.properties };
+    } else if (operation.op === 'update_chart') {
+      if (element.kind !== 'chart') {
+        throw new Error(
+          `update_chart requires a chart element; ${operation.elementId} is ${element.kind}.`,
+        );
+      }
+      element.chart = structuredClone(operation.chart);
+    } else if (operation.op === 'update_image') {
+      if (element.kind !== 'image') {
+        throw new Error(
+          `update_image requires an image element; ${operation.elementId} is ${element.kind}.`,
+        );
+      }
+      element.imageUrl = operation.imageUrl;
+      element.altText = operation.altText;
+      element.image = {
+        placeholder: false,
+        ...(operation.credit ? { credit: operation.credit } : {}),
+        ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
+      };
+      if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];
     } else if (operation.op === 'set_visibility_v1') {
       if ((element.visible ?? true) === operation.visible) {
         throw new Error(`set_visibility_v1 must change element ${operation.elementId}.`);

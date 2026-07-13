@@ -237,6 +237,122 @@ describe('NodeSlide patch protocol', () => {
     });
   });
 
+  it('updates a typed chart while preserving editable structure', () => {
+    const current = snapshot();
+    const operations: PatchOperation[] = [
+      {
+        op: 'update_chart',
+        slideId: 'slide-1',
+        elementId: 'chart',
+        chart: {
+          chartType: 'line',
+          labels: ['2022', '2026', '2030'],
+          series: [{ name: 'Teams', values: [32, 48, 48], color: '#3155d9' }],
+          unit: 'teams',
+        },
+      },
+    ];
+
+    expect(validateNodeSlidePatch(current, serverPatch(current, operations))).toEqual([]);
+    const result = applyDeckPatch(current, {
+      baseDeckVersion: current.deck.version,
+      scope: { kind: 'deck', deckId: current.deck.id, operationMode: 'unrestricted' },
+      operations,
+    });
+
+    expect(result.snapshot.elements.find((element) => element.id === 'chart')).toMatchObject({
+      kind: 'chart',
+      chart: {
+        chartType: 'line',
+        labels: ['2022', '2026', '2030'],
+        series: [{ name: 'Teams', values: [32, 48, 48], color: '#3155d9' }],
+        unit: 'teams',
+      },
+      version: 2,
+    });
+  });
+
+  it('embeds a bounded image asset with alt text and credit', () => {
+    const current = snapshot();
+    current.slides[0]?.elementOrder.push('portrait');
+    current.elements.push({
+      id: 'portrait',
+      slideId: 'slide-1',
+      name: 'Portrait',
+      kind: 'image',
+      bbox: { x: 0.08, y: 0.34, width: 0.84, height: 0.5 },
+      rotation: 0,
+      style: {},
+      altText: 'Portrait placeholder',
+      image: { placeholder: true },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable'],
+      version: 1,
+    });
+    const imageUrl = 'data:image/webp;base64,UklGRgAAAAA=';
+    const operations: PatchOperation[] = [
+      {
+        op: 'update_image',
+        slideId: 'slide-1',
+        elementId: 'portrait',
+        imageUrl,
+        altText: 'Mike Rubino, Head of Talent at AI Fund',
+        credit: 'AI Fund team page',
+      },
+    ];
+
+    expect(validateNodeSlidePatch(current, serverPatch(current, operations))).toEqual([]);
+    const result = applyDeckPatch(current, {
+      baseDeckVersion: current.deck.version,
+      scope: { kind: 'deck', deckId: current.deck.id, operationMode: 'unrestricted' },
+      operations,
+    });
+
+    expect(result.snapshot.elements.find((element) => element.id === 'portrait')).toMatchObject({
+      kind: 'image',
+      imageUrl,
+      altText: 'Mike Rubino, Head of Talent at AI Fund',
+      image: { placeholder: false, credit: 'AI Fund team page' },
+      version: 2,
+    });
+  });
+
+  it('rejects malformed chart data, remote image URLs, and wrong primitive kinds', () => {
+    const current = snapshot();
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(current, [
+          {
+            op: 'update_chart',
+            slideId: 'slide-1',
+            elementId: 'chart',
+            chart: {
+              chartType: 'bar',
+              labels: ['A', 'B'],
+              series: [{ name: 'Mismatched', values: [1] }],
+            },
+          },
+        ]),
+      ),
+    ).toContain('update_chart requires 1-24 labels and 1-6 finite series aligned to those labels.');
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(current, [
+          {
+            op: 'update_image',
+            slideId: 'slide-1',
+            elementId: 'chart',
+            imageUrl: 'https://example.com/remote.jpg',
+            altText: 'Remote image',
+          },
+        ]),
+      ),
+    ).toContain('update_image requires an image element; chart is chart.');
+  });
+
   it('edits a structured math primitive without dropping its canonical payload', () => {
     const current = snapshot();
     const math: SlideElement = {

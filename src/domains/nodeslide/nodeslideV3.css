@@ -221,6 +221,80 @@
   color: var(--ns-muted);
 }
 
+.nodeslide-studio .ns-primitive-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.nodeslide-studio .ns-primitive-editor > label:not(.ns-image-upload-control),
+.nodeslide-studio .ns-primitive-editor-grid > label {
+  display: grid;
+  gap: 5px;
+}
+
+.nodeslide-studio .ns-primitive-editor label > span {
+  color: var(--ns-muted);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nodeslide-studio .ns-primitive-editor input,
+.nodeslide-studio .ns-primitive-editor select {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid var(--ns-border);
+  border-radius: 8px;
+  background: var(--ns-panel);
+  color: var(--ns-ink);
+  font: 12px / 1.35 var(--ns-font-sans);
+  padding: 7px 9px;
+}
+
+.nodeslide-studio .ns-primitive-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.65fr);
+  gap: 8px;
+}
+
+.nodeslide-studio .ns-primitive-editor > button,
+.nodeslide-studio .ns-image-upload-control {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 42%, var(--ns-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ns-accent) 8%, var(--ns-panel));
+  color: var(--ns-accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.nodeslide-studio .ns-image-upload-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.nodeslide-studio .ns-primitive-editor > small {
+  color: var(--ns-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.nodeslide-studio .ns-primitive-editor output {
+  color: var(--ns-danger, #a33a2b);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ns-ai-v3-shell *,
   .ns-trace-inspector * {

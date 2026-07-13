@@ -2165,6 +2165,10 @@ function variationChangedFields(operations: readonly PatchOperation[]) {
       fields.add('position');
     } else if (operation.op === 'resize') {
       fields.add('size');
+    } else if (operation.op === 'update_chart') {
+      fields.add('chart data');
+    } else if (operation.op === 'update_image') {
+      fields.add('image asset');
     } else if (operation.op === 'update_slide') {
       for (const key of Object.keys(operation.properties)) fields.add(`slide ${key}`);
     }
@@ -2230,6 +2234,9 @@ function describeOperation(operation: PatchOperation) {
     return `Replace copy in ${operation.elementId} with “${truncateOperationText(operation.text)}”`;
   if (operation.op === 'update_style')
     return `Update ${Object.keys(operation.properties).join(', ')} on ${operation.elementId}`;
+  if (operation.op === 'update_chart')
+    return `Update ${operation.chart.chartType} chart data on ${operation.elementId}`;
+  if (operation.op === 'update_image') return `Replace image asset in ${operation.elementId}`;
   if (operation.op === 'add_element')
     return `Add ${operation.element.kind} “${operation.element.name}”`;
   if (operation.op === 'remove_element') return `Remove ${operation.elementId}`;
