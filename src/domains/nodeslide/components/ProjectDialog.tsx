@@ -323,6 +323,7 @@ export function ProjectDialog({
                   <span>Deck title</span>
                   <input
                     ref={initialFocusRef}
+                    data-testid="new-deck-title"
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Q3 market narrative"
