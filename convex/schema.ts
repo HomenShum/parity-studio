@@ -824,6 +824,7 @@ export default defineSchema({
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
     costMicroUsd: v.optional(v.number()),
+    sourceIds: v.optional(v.array(v.string())),
     attributes: v.array(
       v.object({ key: v.string(), value: v.union(v.string(), v.number(), v.boolean()) }),
     ),

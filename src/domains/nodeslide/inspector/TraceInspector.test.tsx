@@ -412,7 +412,7 @@ describe('progressive disclosure — depth gates real information', () => {
     expect(tech).toContain('ns-provbox');
   });
 
-  it('round-trips the density through sessionStorage and defaults to human', () => {
+  it('round-trips the density through sessionStorage and defaults new users to the timeline', () => {
     const store = new Map<string, string>();
     vi.stubGlobal('sessionStorage', {
       getItem: (key: string) => store.get(key) ?? null,
@@ -421,13 +421,13 @@ describe('progressive disclosure — depth gates real information', () => {
       },
     });
     try {
-      expect(readDensity()).toBe('human'); // empty store
+      expect(readDensity()).toBe('pro'); // empty store
       persistDensity('tech');
       expect(readDensity()).toBe('tech');
       persistDensity('pro');
       expect(readDensity()).toBe('pro');
       store.set('ns-trace-density', 'bogus');
-      expect(readDensity()).toBe('human'); // invalid value ignored
+      expect(readDensity()).toBe('pro'); // invalid value ignored
     } finally {
       vi.unstubAllGlobals();
     }
@@ -624,7 +624,7 @@ describe('compact durable telemetry projection', () => {
     totalRecorded: 204,
   };
 
-  it('keeps the overview bounded while exposing timestamps and honest truncation', () => {
+  it('lands on the durable waterfall with honest pagination for a large run', () => {
     const html = renderToStaticMarkup(
       <TraceInspector
         traces={[traceLive]}
@@ -633,13 +633,14 @@ describe('compact durable telemetry projection', () => {
         agentRuns={[run]}
         agentMessages={[]}
         agentTelemetry={telemetry}
+        onLoadMoreAgentTelemetry={() => {}}
       />,
     );
     expect(html).toContain('Started ');
-    expect(html).toContain('Latest activity');
+    expect(html).toContain('Trace span waterfall');
     expect(html).toContain('Plan bounded slide edit');
-    expect(html).toContain('latest 2 of 204');
-    expect(html).toContain('paginated API');
-    expect(html).not.toContain('class="ns-custody-rail"');
+    expect(html).toContain('2 of 204');
+    expect(html).toContain('Load older records');
+    expect(html).toContain('Chain of custody and countersigned receipt');
   });
 });

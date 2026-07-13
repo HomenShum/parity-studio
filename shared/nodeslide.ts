@@ -628,6 +628,8 @@ export interface NodeSlideAgentSpan {
   inputTokens?: number;
   outputTokens?: number;
   costMicroUsd?: number;
+  /** Source records read or produced by this exact span. Absent on legacy spans. */
+  sourceIds?: string[];
   attributes: NodeSlideAgentTelemetryAttribute[];
   sequence: number;
   createdAt: number;

@@ -365,6 +365,9 @@ export const proposeEdit = action({
         message: `Validating ${baseline.operations.length} proposed operation${baseline.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
+        ...(readContext.sources.length
+          ? { sourceIds: readContext.sources.map((source) => source.id) }
+          : {}),
       });
       const finalOperations = baseline.operations;
       const summary = baseline.summary;
