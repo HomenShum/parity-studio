@@ -9,6 +9,7 @@ import {
   type SourceRecord,
   type ThemeSpec,
 } from '../../shared/nodeslide';
+import type { NodeSlideDataAttachment } from '../../shared/nodeslideAttachments';
 import {
   nodeslideCleanText,
   nodeslideHash,
@@ -88,6 +89,7 @@ export interface BuildBriefDeckInput {
   themeId: string;
   rawSpec?: unknown;
   plan?: readonly string[];
+  attachments?: readonly NodeSlideDataAttachment[];
   now: number;
 }
 
@@ -632,6 +634,7 @@ export function buildBriefNodeSlide(input: BuildBriefDeckInput): NodeSlideBuildR
     themeId: input.themeId,
     spec,
     plan: plan.length > 0 ? plan : fallbackPlan,
+    ...(input.attachments ? { attachments: input.attachments } : {}),
     now: input.now,
     shareSlug: nodeslideSlug(input.title, nodeslideHash(input.deckId)),
     golden: false,
@@ -646,6 +649,7 @@ function buildNodeSlideDeck(input: {
   themeId: string;
   spec: NodeSlideDeckSpec;
   plan: string[];
+  attachments?: readonly NodeSlideDataAttachment[];
   now: number;
   shareSlug: string;
   golden: boolean;
@@ -654,7 +658,30 @@ function buildNodeSlideDeck(input: {
   const sourceBriefId = nodeslideStableId('source', input.deckId, 'brief');
   const sourceEvidenceId = nodeslideStableId('source', input.deckId, 'evidence');
   const linkedSources = linkedBriefSources(input.deckId, input.brief.prompt, input.now);
-  const linkedSourceIds = linkedSources.map((source) => source.id);
+  const uploadedSources: SourceRecord[] = (input.attachments ?? []).map((attachment) => {
+    const sourceType =
+      attachment.format === 'csv'
+        ? ('spreadsheet' as const)
+        : attachment.format === 'json'
+          ? ('document' as const)
+          : ('note' as const);
+    return {
+      id: nodeslideStableId(
+        'source',
+        input.deckId,
+        sourceType,
+        attachment.title,
+        nodeslideHash(attachment.content),
+      ),
+      deckId: input.deckId,
+      title: attachment.title,
+      sourceType,
+      retrievedAt: input.now,
+      citation: `Uploaded file: ${attachment.title}\n${attachment.content}`,
+      license: 'User supplied',
+    };
+  });
+  const linkedSourceIds = [...linkedSources, ...uploadedSources].map((source) => source.id);
   const sources: SourceRecord[] = [
     {
       id: sourceBriefId,
@@ -677,6 +704,7 @@ function buildNodeSlideDeck(input: {
       license: 'Internal working material',
     },
     ...linkedSources,
+    ...uploadedSources,
   ];
 
   const slides: Slide[] = [];

@@ -1,3 +1,5 @@
+import type { NodeSlideDataAttachment } from './nodeslideAttachments';
+
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
 export const NODESLIDE_AGENT_MODELS = [
@@ -691,7 +693,10 @@ export interface CreateDeckRequest {
   brief: DeckBrief;
   themeId: string;
   route: 'free' | 'balanced' | 'frontier';
+  attachments?: NodeSlideDataAttachment[];
 }
+
+export type { NodeSlideDataAttachment } from './nodeslideAttachments';
 
 export function isElementOperation(
   operation: PatchOperation,

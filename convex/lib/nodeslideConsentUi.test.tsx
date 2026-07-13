@@ -25,8 +25,13 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toMatch(/data-testid="provider-openrouter"[^>]*aria-pressed="false"/);
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"[^>]*disabled/);
     expect(markup).toContain('no part of this brief is sent to OpenRouter');
-    expect(markup).toContain('Sends the full brief—title, prompt, audience, purpose, and success');
+    expect(markup).toContain(
+      'Sends the full brief to the selected named model through OpenRouter.',
+    );
     expect(markup).toContain('I consent to sending this full brief to OpenRouter');
+    expect(markup).toContain('data-testid="create-model-select"');
+    expect(markup.match(/<option value=/g)).toHaveLength(7);
+    expect(markup).toContain('data-testid="create-file-input"');
     expect(markup).toContain('type="password"');
     expect(markup).toContain('name="nodeslide-preview-access-code"');
     expect(markup).toContain('autoComplete="off"');
@@ -73,6 +78,11 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('data-testid="nodeslide-landing"');
     expect(markup).toContain('What presentation should we build?');
     expect(markup).toContain('Private · deterministic');
+    expect(markup).toContain('Anthropic · Claude Sonnet 5');
+    expect(markup).toContain('OpenAI · GPT-5.6 Sol');
+    expect(markup.match(/<option value=/g)).toHaveLength(8);
+    expect(markup).toContain('data-testid="landing-file-input"');
+    expect(markup).toContain('Attach data');
     expect(markup).toContain('Your brief stays inside NodeSlide by default.');
     expect(markup).toContain('Explore the editable sample workspace');
     expect(markup).not.toContain('NodeSlide inspector');
@@ -89,6 +99,8 @@ describe('NodeSlide informed provider controls', () => {
           title: 'AI 2027 — Scenarios and Decisions',
           prompt: 'Build an evidence-led AI 2027 scenario deck.',
           providerMode: 'openrouter_free',
+          providerModel: 'anthropic/claude-sonnet-5',
+          attachments: [{ title: 'evidence.csv', format: 'csv', content: 'year,value\n2027,42' }],
         }}
         onClose={() => undefined}
         onCreate={() => undefined}
@@ -99,6 +111,9 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('value="AI 2027 — Scenarios and Decisions"');
     expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
     expect(markup).toMatch(/data-testid="provider-openrouter"[^>]*aria-pressed="true"/);
+    expect(markup).toContain('value="anthropic/claude-sonnet-5" selected=""');
+    expect(markup).toContain('evidence.csv');
+    expect(markup).toContain('and 1 attached file');
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
     expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);
   });

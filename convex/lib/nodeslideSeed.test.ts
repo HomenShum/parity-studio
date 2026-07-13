@@ -257,6 +257,33 @@ describe('NodeSlide seed', () => {
     expect(night.mode).toBe('dark');
   });
 
+  it('persists creation attachments as user-supplied sources linked to deck elements', () => {
+    const snapshot = buildBriefNodeSlide({
+      deckId: 'deck-uploaded-evidence',
+      projectId: 'project-uploaded-evidence',
+      title: 'Uploaded evidence',
+      brief: {
+        prompt: 'Build an editable data story.',
+        audience: 'Reviewers',
+        purpose: 'Evidence review',
+        successCriteria: ['Keep the data linked'],
+      },
+      themeId: 'quiet-precision',
+      attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
+      now: 1_000,
+    }).snapshot;
+
+    const source = snapshot.sources.find((item) => item.title === 'world-cup.csv');
+    expect(source).toMatchObject({
+      sourceType: 'spreadsheet',
+      license: 'User supplied',
+      citation: 'Uploaded file: world-cup.csv\nmetric,value\ngoals,172',
+    });
+    expect(snapshot.elements.some((element) => element.sourceIds.includes(source?.id ?? ''))).toBe(
+      true,
+    );
+  });
+
   it('repairs only untouched legacy duplicated bullets', () => {
     const canonical = buildGoldenNodeSlide('legacy-repair-test', 1_000).snapshot;
     const legacy = structuredClone(canonical);

@@ -2,16 +2,34 @@ import {
   ArrowRight,
   Check,
   Clock3,
+  FileText,
   FolderOpen,
   Layers3,
   LoaderCircle,
+  Paperclip,
   Plus,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
-import type { CreateDeckRequest } from '../../../../shared/nodeslide';
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import {
+  type CreateDeckRequest,
+  NODESLIDE_AGENT_MODELS,
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentModelId,
+  nodeSlideAgentModel,
+} from '../../../../shared/nodeslide';
+import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
 export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as const;
@@ -21,6 +39,7 @@ export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free';
 export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
   accessCode: string;
   providerMode: NodeSlideBriefProviderMode;
+  providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
 }
 
@@ -45,6 +64,8 @@ interface ProjectDialogProps {
     title: string;
     prompt: string;
     providerMode: NodeSlideBriefProviderMode;
+    providerModel?: NodeSlideAgentModelId;
+    attachments?: NodeSlideDataAttachment[];
   } | null;
   initialMode?: 'create' | 'open';
 }
@@ -108,7 +129,14 @@ export function ProjectDialog({
   const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>(
     initialDraft?.providerMode ?? 'deterministic',
   );
+  const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(
+    initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL,
+  );
   const [providerConsent, setProviderConsent] = useState(false);
+  const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>(
+    initialDraft?.attachments ?? [],
+  );
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
   const createTabId = `${dialogId}-create-tab`;
@@ -120,13 +148,17 @@ export function ProjectDialog({
   const accessCodeDescriptionId = `${dialogId}-access-code-description`;
   const createStatusId = `${dialogId}-create-status`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
   const clearAdmissionAndClose = () => {
     setAccessCode('');
     setProviderMode('deterministic');
+    setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderConsent(false);
+    setAttachments([]);
+    setAttachmentError(null);
     onClose();
   };
   const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
@@ -141,12 +173,18 @@ export function ProjectDialog({
       setTitle(initialDraft?.title ?? '');
       setPrompt(initialDraft?.prompt ?? '');
       setProviderMode(initialDraft?.providerMode ?? 'deterministic');
+      setProviderModel(initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL);
+      setAttachments(initialDraft?.attachments ?? []);
+      setAttachmentError(null);
     }
     wasOpenRef.current = open;
     if (open) return;
     setAccessCode('');
     setProviderMode('deterministic');
+    setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderConsent(false);
+    setAttachments([]);
+    setAttachmentError(null);
   }, [initialDraft, initialMode, open]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -204,12 +242,32 @@ export function ProjectDialog({
       themeId,
       route: 'free',
       providerMode,
+      attachments,
       ...(providerMode === 'openrouter_free'
-        ? { providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT }
+        ? {
+            providerModel,
+            providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+          }
         : {}),
     });
     setAccessCode('');
   };
+
+  const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) return;
+    try {
+      setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
+      setAttachmentError(null);
+    } catch (fileError) {
+      setAttachmentError(
+        fileError instanceof Error ? fileError.message : 'The file could not be attached.',
+      );
+    }
+  };
+
+  const selectedModel = nodeSlideAgentModel(providerModel);
 
   const createBlocker = !title.trim()
     ? 'Add a deck title to continue.'
@@ -360,6 +418,52 @@ export function ProjectDialog({
                     required
                   />
                 </label>
+                <div className="ns-create-attachments">
+                  <input
+                    ref={attachmentInputRef}
+                    className="ns-sr-only"
+                    data-testid="create-file-input"
+                    type="file"
+                    accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown"
+                    multiple
+                    onChange={(event) => void attachFiles(event)}
+                  />
+                  <button
+                    type="button"
+                    className="ns-button ns-button--quiet"
+                    onClick={() => attachmentInputRef.current?.click()}
+                  >
+                    <Paperclip size={13} /> Attach data files
+                  </button>
+                  <small>CSV, JSON, TXT, or Markdown · up to 3 files</small>
+                  {attachmentError ? <output role="alert">{attachmentError}</output> : null}
+                  {attachments.length > 0 ? (
+                    <ul aria-label="Data files included in this deck">
+                      {attachments.map((attachment) => (
+                        <li key={attachment.title}>
+                          <FileText size={13} aria-hidden="true" />
+                          <span>
+                            <strong>{attachment.title}</strong>
+                            <small>
+                              {attachment.format.toLocaleUpperCase()} · included as a source
+                            </small>
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${attachment.title}`}
+                            onClick={() =>
+                              setAttachments((current) =>
+                                current.filter((item) => item.title !== attachment.title),
+                              )
+                            }
+                          >
+                            <X size={12} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
                 <details className="ns-brief-details">
                   <summary>Improve the brief</summary>
                   <div className="ns-form-columns">
@@ -445,16 +549,36 @@ export function ProjectDialog({
                   >
                     <Sparkles size={20} aria-hidden="true" />
                     <span>
-                      <strong>Use OpenRouter · GLM 5.2</strong>
+                      <strong>Use OpenRouter · {selectedModel.label}</strong>
                       <small>
-                        Sends the full brief—title, prompt, audience, purpose, and success
-                        criteria—to the named GLM 5.2 model through OpenRouter.
+                        Sends the full brief{attachments.length > 0 ? ' and attached files' : ''} to
+                        the selected named model through OpenRouter.
                       </small>
                     </span>
                     {providerMode === 'openrouter_free' ? <Check size={14} /> : null}
                   </button>
                 </fieldset>
+                <label className="ns-provider-model-select">
+                  <span>OpenRouter model</span>
+                  <select
+                    data-testid="create-model-select"
+                    value={providerModel}
+                    disabled={providerMode !== 'openrouter_free'}
+                    onChange={(event) => {
+                      setProviderModel(event.target.value as NodeSlideAgentModelId);
+                      setProviderConsent(false);
+                    }}
+                  >
+                    {NODESLIDE_AGENT_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.vendor} · {model.label}
+                      </option>
+                    ))}
+                  </select>
+                  <small>{selectedModel.description}</small>
+                </label>
                 <label
+                  className="ns-provider-consent"
                   style={{
                     alignItems: 'start',
                     background: '#f3f3ef',
@@ -481,11 +605,12 @@ export function ProjectDialog({
                     }}
                   />
                   <span>
-                    I consent to sending this full brief to OpenRouter
-                    <small>
-                      {' '}
-                      Required for the OpenRouter option and applies to this deck only.
-                    </small>
+                    I consent to sending this full brief
+                    {attachments.length > 0
+                      ? ` and ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`
+                      : ''}{' '}
+                    to OpenRouter
+                    <small> Required for {selectedModel.label}; applies to this deck only.</small>
                   </span>
                 </label>
                 <label>
@@ -567,8 +692,8 @@ export function ProjectDialog({
                     </>
                   ) : (
                     <>
-                      <Sparkles size={13} /> OpenRouter · GLM 5.2 · will send full brief with
-                      consent
+                      <Sparkles size={13} /> OpenRouter · {selectedModel.label} · will send the
+                      brief{attachments.length > 0 ? ' and files' : ''} with consent
                     </>
                   )}
                 </span>

@@ -2598,12 +2598,80 @@
   color: #8a9099;
 }
 
+.nodeslide-studio .ns-landing-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 12px 8px;
+}
+
+.nodeslide-studio .ns-landing-attachments > span {
+  align-items: center;
+  background: #f7f5f1;
+  border: 1px solid var(--ns-line-c);
+  border-radius: 9px;
+  color: var(--ns-ink2);
+  display: inline-flex;
+  font-size: 10px;
+  gap: 5px;
+  max-width: 220px;
+  padding: 6px 6px 6px 8px;
+}
+
+.nodeslide-studio .ns-landing-attachments > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-landing-attachments button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ns-faint);
+  display: inline-flex;
+  padding: 1px;
+}
+
 .nodeslide-studio .ns-landing-composer-bar {
   align-items: center;
   display: flex;
   gap: 10px;
   justify-content: space-between;
   padding: 4px;
+}
+
+.nodeslide-studio .ns-landing-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nodeslide-studio .ns-landing-attach,
+.nodeslide-studio .ns-landing-web {
+  align-items: center;
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-b);
+  border-radius: 999px;
+  color: var(--ns-ink2);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 650;
+  gap: 5px;
+  min-height: 32px;
+  padding: 7px 10px;
+}
+
+.nodeslide-studio .ns-landing-attach:hover {
+  background: #fff;
+  border-color: var(--ns-line-d);
+}
+
+.nodeslide-studio .ns-landing-web[data-active="true"] {
+  background: #eef5ff;
+  border-color: #cad9f2;
+  color: #315b9b;
 }
 
 .nodeslide-studio .ns-landing-model {
@@ -2658,6 +2726,118 @@
 .nodeslide-studio .ns-landing-send:disabled {
   background: #d5d7da;
   color: #fff;
+}
+
+.nodeslide-studio .ns-landing-file-error {
+  color: var(--ns-danger);
+  display: block;
+  font-size: 10px;
+  padding: 1px 14px 8px;
+}
+
+.ns-create-attachments {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ns-create-attachments > small {
+  color: var(--ns-faint);
+  font-size: 9px;
+}
+
+.ns-create-attachments > output {
+  color: var(--ns-danger);
+  flex-basis: 100%;
+  font-size: 10px;
+}
+
+.ns-create-attachments ul {
+  display: grid;
+  flex-basis: 100%;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ns-create-attachments li {
+  align-items: center;
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-b);
+  border-radius: 9px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 8px 10px;
+}
+
+.ns-create-attachments li > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ns-create-attachments li strong,
+.ns-create-attachments li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ns-create-attachments li strong {
+  font-size: 10px;
+}
+
+.ns-create-attachments li small {
+  color: var(--ns-faint);
+  font-size: 8px;
+}
+
+.ns-create-attachments li button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ns-faint);
+  display: inline-flex;
+  padding: 4px;
+}
+
+.ns-provider-model-select {
+  background: #f8f8f5;
+  border: 1px solid var(--ns-line-soft);
+  border-radius: 9px;
+  display: grid;
+  gap: 5px;
+  margin-bottom: 9px;
+  padding: 10px;
+}
+
+.ns-provider-model-select select {
+  background: #fff;
+  border: 1px solid var(--ns-line);
+  border-radius: 7px;
+  color: var(--ns-ink);
+  font-size: 9px;
+  padding: 8px;
+  width: 100%;
+}
+
+.ns-provider-model-select small {
+  color: var(--ns-faint);
+  font-size: 9px;
+}
+
+.ns-provider-consent > span {
+  line-height: 1.35;
+}
+
+.ns-provider-consent small {
+  color: var(--ns-faint);
+  display: block;
+  font-size: 8px;
+  margin-top: 3px;
 }
 
 .nodeslide-studio .ns-landing-privacy {
@@ -2803,6 +2983,14 @@
   .nodeslide-studio .ns-landing-composer textarea {
     font-size: 15px;
     min-height: 116px;
+  }
+
+  .nodeslide-studio .ns-landing-composer-bar {
+    align-items: flex-end;
+  }
+
+  .nodeslide-studio .ns-landing-tools {
+    max-width: calc(100% - 50px);
   }
 
   .nodeslide-studio .ns-landing-starters {

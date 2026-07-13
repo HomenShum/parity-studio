@@ -1,11 +1,30 @@
-import { ArrowRight, FolderOpen, Layers3, ShieldCheck, Sparkles } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import {
+  ArrowRight,
+  FileText,
+  FolderOpen,
+  Globe2,
+  Layers3,
+  Paperclip,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { type ChangeEvent, type FormEvent, useRef, useState } from 'react';
+import {
+  NODESLIDE_AGENT_MODELS,
+  type NodeSlideAgentModelId,
+  nodeSlideAgentModel,
+} from '../../../../shared/nodeslide';
+import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
 import type { NodeSlideBriefProviderMode, RecentDeck } from './ProjectDialog';
+import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 
 export interface NodeSlideLandingDraft {
   title: string;
   prompt: string;
   providerMode: NodeSlideBriefProviderMode;
+  providerModel?: NodeSlideAgentModelId;
+  attachments: NodeSlideDataAttachment[];
 }
 
 interface NodeSlideLandingProps {
@@ -45,7 +64,15 @@ export function NodeSlideLanding({
   onOpenDeck,
 }: NodeSlideLandingProps) {
   const [prompt, setPrompt] = useState('');
-  const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>('deterministic');
+  const [generation, setGeneration] = useState<'deterministic' | NodeSlideAgentModelId>(
+    'deterministic',
+  );
+  const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const providerMode: NodeSlideBriefProviderMode =
+    generation === 'deterministic' ? 'deterministic' : 'openrouter_free';
+  const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
 
   const start = (draft?: (typeof starters)[number]) => {
     const nextPrompt = draft?.prompt ?? prompt.trim();
@@ -54,7 +81,23 @@ export function NodeSlideLanding({
       title: draft?.title ?? titleFromPrompt(nextPrompt),
       prompt: nextPrompt,
       providerMode,
+      ...(generation === 'deterministic' ? {} : { providerModel: generation }),
+      attachments,
     });
+  };
+
+  const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) return;
+    try {
+      setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
+      setAttachmentError(null);
+    } catch (error) {
+      setAttachmentError(
+        error instanceof Error ? error.message : 'The file could not be attached.',
+      );
+    }
   };
 
   const submit = (event: FormEvent) => {
@@ -96,25 +139,73 @@ export function NodeSlideLanding({
             rows={4}
             maxLength={4000}
           />
+          {attachments.length > 0 ? (
+            <div className="ns-landing-attachments" aria-label="Attached data files">
+              {attachments.map((attachment) => (
+                <span key={attachment.title}>
+                  <FileText size={12} aria-hidden="true" />
+                  <span>{attachment.title}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${attachment.title}`}
+                    onClick={() =>
+                      setAttachments((current) =>
+                        current.filter((item) => item.title !== attachment.title),
+                      )
+                    }
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <input
+            ref={fileInputRef}
+            className="ns-sr-only"
+            data-testid="landing-file-input"
+            type="file"
+            accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown"
+            multiple
+            onChange={(event) => void attachFiles(event)}
+          />
           <div className="ns-landing-composer-bar">
-            <label className="ns-landing-model">
-              <span className="ns-sr-only">Generation model</span>
-              {providerMode === 'deterministic' ? (
-                <ShieldCheck size={14} aria-hidden="true" />
-              ) : (
-                <Sparkles size={14} aria-hidden="true" />
-              )}
-              <select
-                aria-label="Generation model"
-                value={providerMode}
-                onChange={(event) =>
-                  setProviderMode(event.target.value as NodeSlideBriefProviderMode)
-                }
+            <div className="ns-landing-tools">
+              <button
+                className="ns-landing-attach"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
               >
-                <option value="deterministic">Private · deterministic</option>
-                <option value="openrouter_free">OpenRouter · GLM 5.2</option>
-              </select>
-            </label>
+                <Paperclip size={14} aria-hidden="true" /> Attach data
+              </button>
+              <span className="ns-landing-web" data-active={providerMode === 'openrouter_free'}>
+                <Globe2 size={13} aria-hidden="true" />
+                {providerMode === 'deterministic' ? 'Web off' : 'Web · OpenRouter'}
+              </span>
+              <label className="ns-landing-model">
+                <span className="ns-sr-only">Generation model</span>
+                {providerMode === 'deterministic' ? (
+                  <ShieldCheck size={14} aria-hidden="true" />
+                ) : (
+                  <Sparkles size={14} aria-hidden="true" />
+                )}
+                <select
+                  aria-label="Generation model"
+                  data-testid="landing-model-select"
+                  value={generation}
+                  onChange={(event) =>
+                    setGeneration(event.target.value as 'deterministic' | NodeSlideAgentModelId)
+                  }
+                >
+                  <option value="deterministic">Private · deterministic</option>
+                  {NODESLIDE_AGENT_MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.vendor} · {model.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <button
               className="ns-landing-send"
               type="submit"
@@ -124,6 +215,11 @@ export function NodeSlideLanding({
               <ArrowRight size={18} />
             </button>
           </div>
+          {attachmentError ? (
+            <output className="ns-landing-file-error" role="alert">
+              {attachmentError}
+            </output>
+          ) : null}
         </form>
 
         <p className="ns-landing-privacy" aria-live="polite">
@@ -133,8 +229,11 @@ export function NodeSlideLanding({
             </>
           ) : (
             <>
-              <Sparkles size={13} /> Explicit consent is required before your brief is sent to
-              OpenRouter.
+              <Sparkles size={13} /> {selectedModel?.label ?? 'The selected model'} via OpenRouter
+              {attachments.length > 0
+                ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
+                : ''}
+              . Explicit consent is required next.
             </>
           )}
         </p>

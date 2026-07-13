@@ -105,6 +105,7 @@ import {
 } from './lib/nodeslideSignatureProfiles';
 import { isNormalizedBoundingBox, validateNodeSlideSnapshot } from './lib/nodeslideValidation';
 import {
+  nodeslideBriefAttachmentValidator,
   nodeslideBriefValidator,
   nodeslideCommentAnchorValidator,
   nodeslideCursorValidator,
@@ -1277,6 +1278,7 @@ export const createFromBriefInternal = internalMutation({
     ownerAccessKey: v.string(),
     title: v.string(),
     brief: nodeslideBriefValidator,
+    attachments: v.optional(v.array(nodeslideBriefAttachmentValidator)),
     themeId: v.string(),
     route: v.union(v.literal('free'), v.literal('balanced'), v.literal('frontier')),
     plan: v.array(v.string()),
@@ -1305,6 +1307,7 @@ export const createFromBriefInternal = internalMutation({
       themeId: args.themeId,
       rawSpec: args.spec,
       plan: args.plan,
+      ...(args.attachments ? { attachments: args.attachments } : {}),
       now: Date.now(),
     });
     await createWorkspaceRows(ctx, {
@@ -1315,6 +1318,11 @@ export const createFromBriefInternal = internalMutation({
         summary: args.traceSummary,
         context: [
           `Requested route: ${args.route}`,
+          ...(args.attachments?.length
+            ? [
+                `Read ${args.attachments.length} user-supplied data source${args.attachments.length === 1 ? '' : 's'}`,
+              ]
+            : []),
           'Persisted deterministic plan and deck specification',
         ],
         toolCalls: [
