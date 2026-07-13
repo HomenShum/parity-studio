@@ -78,6 +78,23 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-evidence dd[\s\S]*?font-size: 10px/);
     expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-actions \.ns-button[\s\S]*?height: 34px/);
   });
+
+  it('keeps the trace receipt surface and dark honesty states readable', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-trace-summary[\s\S]*?border-radius: 12px;[\s\S]*?padding: 0;/,
+    );
+    expect(css).toMatch(
+      /\.ns-trace-attrib > span:last-child[\s\S]*?text-overflow: ellipsis;[\s\S]*?white-space: nowrap;/,
+    );
+    expect(css).toMatch(
+      /\[data-ns-theme="dark"\] \.ns-trace-inspector[\s\S]*?--ns-trace-warning: #f6ad55;/,
+    );
+    expect(contrast('#a5b4fc', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#f0a080', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#34d399', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#f6ad55', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#fb7185', '#14181d')).toBeGreaterThanOrEqual(4.5);
+  });
 });
 
 function mediaBlock(start: string, end: string) {
