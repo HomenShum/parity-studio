@@ -341,7 +341,7 @@ export function SlideCanvas({
   const slidePresence = presence.filter((person) => person.slideId === slide.id);
 
   const beginInlineEdit = (element: SlideElement) => {
-    if (readOnly || element.locked || element.kind !== 'text') return;
+    if (readOnly || element.locked || (element.kind !== 'text' && element.kind !== 'math')) return;
     const session = captureInlineEditSession(element);
     inlineEditSessionRef.current = session;
     editingValueRef.current = session.initialValue;

@@ -212,7 +212,9 @@ function addStaticImage(
       snapshot,
       element,
       box,
-      `${element.altText?.trim() || element.name}\nStatic image unavailable`,
+      element.image?.placeholder
+        ? `${element.altText?.trim() || element.name}\nReplace image\n${element.image.credit ?? 'Credit required'}`
+        : `${element.altText?.trim() || element.name}\nStatic image unavailable`,
     );
     return;
   }
@@ -303,6 +305,8 @@ function addElement(
     addNativeConnector(pptx, pptxSlide, snapshot, element, box);
   } else if (element.kind === 'chart') {
     addNativeChart(pptx, pptxSlide, snapshot, element, box);
+  } else if (element.kind === 'math') {
+    addNativeShape(pptx, pptxSlide, snapshot, element, box);
   } else {
     addStaticImage(pptx, pptxSlide, snapshot, element, box);
   }

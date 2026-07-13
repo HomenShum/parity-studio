@@ -24,14 +24,16 @@ export function getElementCapability(element: SlideElement): ElementCapabilityRe
   const warnings: string[] = [];
 
   if (element.kind === 'image') {
-    if (isEmbeddedImageData(element.imageUrl)) {
+    if (element.image?.placeholder && !element.imageUrl?.trim()) {
+      effective = ['web_native', 'pptx_editable', 'google_importable'];
+      web = 'native';
+      pptx = 'native';
+      googleSlides = 'native';
+    } else if (isEmbeddedImageData(element.imageUrl)) {
       effective = ['web_native', 'pptx_static_fallback', 'google_importable'];
       web = 'native';
       pptx = 'static_fallback';
       googleSlides = 'static_fallback';
-      warnings.push(
-        'PPTX and Google Slides preserve this image as an explicit static image; its pixels are not editable.',
-      );
     } else {
       effective = ['pptx_static_fallback'];
       web = 'static_fallback';

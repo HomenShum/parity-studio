@@ -9,6 +9,8 @@ export interface SlideSourceReference {
 export function elementSourceIds(element: SlideElement): string[] {
   const sourceIds = new Set(element.sourceIds);
   if (element.chart?.sourceId) sourceIds.add(element.chart.sourceId);
+  if (element.math?.sourceId) sourceIds.add(element.math.sourceId);
+  if (element.image?.sourceId) sourceIds.add(element.image.sourceId);
   return [...sourceIds];
 }
 

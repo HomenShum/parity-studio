@@ -1822,6 +1822,20 @@ function expectedElementStyle(
     return expected;
   }
 
+  if (element.kind === 'math') {
+    expected.fill = theme.colors.accentSoft;
+    expected.stroke = theme.colors.border;
+    expected.strokeWidth = 1;
+    expected.color = theme.colors.ink;
+    expected.fontFamily = theme.typography.data;
+    expected.fontSize = nearestPointSize(
+      element.style.fontSize,
+      [theme.typography.titlePt, theme.typography.bodyPt],
+      theme.typography.titlePt,
+    );
+    return expected;
+  }
+
   if (element.kind === 'text') {
     if (isTitleRole(role)) {
       expected.color = theme.colors.ink;

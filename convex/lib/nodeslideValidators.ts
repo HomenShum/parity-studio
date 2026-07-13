@@ -302,6 +302,25 @@ export const nodeslideChartDataValidator = v.object({
   sourceId: v.optional(v.string()),
 });
 
+export const nodeslideMathDataValidator = v.object({
+  expression: v.string(),
+  display: v.string(),
+  variables: v.array(
+    v.object({
+      label: v.string(),
+      value: v.number(),
+      unit: v.optional(v.string()),
+    }),
+  ),
+  sourceId: v.optional(v.string()),
+});
+
+export const nodeslideImageDataValidator = v.object({
+  placeholder: v.boolean(),
+  credit: v.optional(v.string()),
+  sourceId: v.optional(v.string()),
+});
+
 export const nodeslideExportCapabilityValidator = v.union(
   v.literal('web_native'),
   v.literal('pptx_editable'),
@@ -319,6 +338,7 @@ export const nodeslideElementValidator = v.object({
     v.literal('shape'),
     v.literal('image'),
     v.literal('chart'),
+    v.literal('math'),
     v.literal('connector'),
   ),
   role: v.optional(v.string()),
@@ -327,6 +347,8 @@ export const nodeslideElementValidator = v.object({
   content: v.optional(v.string()),
   style: nodeslideElementStyleValidator,
   chart: v.optional(nodeslideChartDataValidator),
+  math: v.optional(nodeslideMathDataValidator),
+  image: v.optional(nodeslideImageDataValidator),
   imageUrl: v.optional(v.string()),
   altText: v.optional(v.string()),
   sourceIds: v.array(v.string()),
@@ -593,6 +615,7 @@ export const nodeslideDeckReplCommandValidator = v.union(
         v.literal('shape'),
         v.literal('image'),
         v.literal('chart'),
+        v.literal('math'),
         v.literal('connector'),
       ),
     ),

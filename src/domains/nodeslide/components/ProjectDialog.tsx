@@ -64,6 +64,20 @@ const profiles = [
   },
 ];
 
+const WORLD_CUP_STARTER = {
+  title: 'World Cup 2022 — The Data Story',
+  prompt:
+    'Create a 7-slide evidence-led deck about the 2022 FIFA World Cup. Use only these supplied facts: Argentina won after a 3–3 final and 4–2 penalty shootout; the tournament produced 172 goals across 64 matches; top scorers were Kylian Mbappé 8, Lionel Messi 7, Julián Álvarez 4, and Olivier Giroud 4. Include an editable bar chart, an editable formula showing 172 ÷ 64 = 2.69 goals per match, and an editable Lusail Stadium image placeholder with a visible credit requirement. Cite https://www.fifa.com/en/tournaments/mens/worldcup/qatar2022 and https://www.fifa.com/en/articles/top-goalscorers-leading-marksmen-golden-boot-fifa-world-cup-qatar-2022. Separate supplied, derived, and unverified evidence, validate layout, and finish with three decision-ready takeaways.',
+  audience: 'Build-challenge reviewers and football strategy leaders',
+  purpose: 'Demonstrate a trustworthy, editable data story from prompt through publish',
+  successCriteria: [
+    'Exactly 7 coherent slides',
+    'Chart, formula, and image are real structured primitives',
+    'Every numeric claim has a linked source',
+    'Validation passes and the deck can present, publish, and export',
+  ],
+} as const;
+
 export function ProjectDialog({
   open,
   clientSessionId,
@@ -281,6 +295,29 @@ export function ProjectDialog({
                     <strong>Brief</strong>
                     <small>Give the agent a clear editorial contract.</small>
                   </div>
+                </div>
+                <div className="ns-brief-starter">
+                  <span>
+                    <strong>Need a panel-ready starting point?</strong>
+                    <small>
+                      Prefill a sourced data story, then choose the GLM route below to compose its
+                      chart, formula, and image primitives.
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="world-cup-starter"
+                    onClick={() => {
+                      setTitle(WORLD_CUP_STARTER.title);
+                      setPrompt(WORLD_CUP_STARTER.prompt);
+                      setAudience(WORLD_CUP_STARTER.audience);
+                      setPurpose(WORLD_CUP_STARTER.purpose);
+                      setSuccessCriteria(WORLD_CUP_STARTER.successCriteria.join('\n'));
+                      setThemeId('quiet-precision');
+                    }}
+                  >
+                    Use World Cup data story <ArrowRight size={13} />
+                  </button>
                 </div>
                 <label>
                   <span>Deck title</span>
