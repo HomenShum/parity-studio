@@ -99,6 +99,7 @@ export async function callNodeSlideFreeJson(
   let telemetry = emptyTelemetry(selectedModel);
   let hasTelemetry = false;
   let invalidResponse = '';
+  let nativeSchemaEnabled = Boolean(args.jsonSchema);
 
   try {
     // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
@@ -111,7 +112,7 @@ export async function callNodeSlideFreeJson(
           systemPrompt: providerSystemPrompt(args, repairAttempt),
           userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
           maxTokens: args.maxTokens,
-          ...(args.jsonSchema ? { jsonSchema: args.jsonSchema } : {}),
+          ...(args.jsonSchema && nativeSchemaEnabled ? { jsonSchema: args.jsonSchema } : {}),
           repairAttempt,
           signal: controller.signal,
         }),
@@ -121,6 +122,17 @@ export async function callNodeSlideFreeJson(
       hasTelemetry = true;
 
       if (result.stopReason === 'error') {
+        if (
+          attempt === 0 &&
+          args.jsonSchema &&
+          nativeSchemaEnabled &&
+          isStructuredOutputRejection(result.errorMessage)
+        ) {
+          nativeSchemaEnabled = false;
+          invalidResponse =
+            '[The provider rejected native structured-output mode. Return contract-valid JSON using the schema in the system prompt.]';
+          continue;
+        }
         return providerFailure(
           providerErrorReason(result.errorMessage, routeLabel),
           telemetry,
@@ -220,7 +232,7 @@ export function nodeSlideStructuredOutputPayload(
 
 function providerErrorReason(errorMessage: string | undefined, routeLabel: string): string {
   const normalized = errorMessage?.toLowerCase() ?? '';
-  if (normalized.includes('schema') || normalized.includes('response_format')) {
+  if (isStructuredOutputRejection(errorMessage)) {
     return `The ${routeLabel} route rejected the structured-output schema.`;
   }
   if (normalized.includes('no endpoints') || normalized.includes('provider')) {
@@ -233,6 +245,11 @@ function providerErrorReason(errorMessage: string | undefined, routeLabel: strin
     return `The ${routeLabel} route was rate limited.`;
   }
   return `The ${routeLabel} route returned an error.`;
+}
+
+function isStructuredOutputRejection(errorMessage: string | undefined): boolean {
+  const normalized = errorMessage?.toLowerCase() ?? '';
+  return normalized.includes('schema') || normalized.includes('response_format');
 }
 
 function providerSystemPrompt(

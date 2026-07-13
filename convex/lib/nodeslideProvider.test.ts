@@ -168,7 +168,31 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(JSON.stringify(result)).not.toContain('still-not-json');
   });
 
-  it('does not turn a provider error into a fabricated repair success', async () => {
+  it('uses the single repair attempt without native schema mode when a route rejects it', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(
+        completion('', {
+          stopReason: 'error',
+          errorMessage: 'response_format JSON schema is not supported by this endpoint',
+        }),
+      )
+      .mockResolvedValueOnce(completion('{"operations":[{"op":"replace_text"}]}'));
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result.ok).toBe(true);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[0]?.[0]).toMatchObject({ jsonSchema: request.jsonSchema });
+    expect(complete.mock.calls[1]?.[0]).not.toHaveProperty('jsonSchema');
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0].systemPrompt).toContain('JSON Schema');
+    expect(complete.mock.calls[1]?.[0].userText).toContain(
+      'provider rejected native structured-output mode',
+    );
+  });
+
+  it('falls back honestly when the schema compatibility retry also errors', async () => {
     const complete = vi.fn<NodeSlideCompletion>(async () =>
       completion('', {
         stopReason: 'error',
@@ -182,7 +206,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       ok: false,
       reason: 'The GLM 5.2 route rejected the structured-output schema.',
     });
-    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete).toHaveBeenCalledTimes(2);
   });
 
   it('bounds model output before attempting the one repair', async () => {
