@@ -13,7 +13,7 @@ describe('NodeSlide live search adapter', () => {
     vi.stubEnv('BRAVE_API_KEY', '');
     vi.stubEnv('SERPER_API_KEY', '');
     vi.stubEnv('TAVILY_API_KEY', '');
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -43,8 +43,9 @@ describe('NodeSlide live search adapter', () => {
         provider: 'linkup',
       }),
     ]);
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(JSON.parse(String(request.body))).toMatchObject({
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(request).toBeDefined();
+    expect(JSON.parse(String(request?.body))).toMatchObject({
       outputType: 'sourcedAnswer',
       includeSources: true,
       maxResults: 8,

@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@mariozechner/pi-ai": "^0.73.1",
+    "@earendil-works/pi-ai": "0.80.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.12.29",
     "jszip": "^3.10.1",

@@ -2,10 +2,10 @@
  * pi-ai wrapper for the MCP server. Mirrors convex/lib/piAi.ts so the MCP
  * package and the Convex backend share the same provider abstraction.
  *
- * Source: github.com/badlogic/pi-mono, packages/ai (published as @mariozechner/pi-ai).
+ * Source: github.com/badlogic/pi-mono, packages/ai (maintained as @earendil-works/pi-ai).
  *
  * API surface:
- *   import { getModel, complete } from '@mariozechner/pi-ai';
+ *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
  *   const model = getModel('anthropic', 'claude-sonnet-4-6');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
@@ -38,7 +38,7 @@ import {
   type TextContent,
   getModel,
   complete as piComplete,
-} from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 
 /**
  * pi-ai's Provider type is `KnownProvider | string` (open by design — users
