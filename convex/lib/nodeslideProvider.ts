@@ -2,7 +2,9 @@ import { type Context, type TextContent, createModels } from '@earendil-works/pi
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_DEFAULT_REASONING_EFFORT,
   type NodeSlideAgentModelId,
+  type NodeSlideReasoningEffort,
   isNodeSlideAgentModelId,
   nodeSlideAgentModel,
 } from '../../shared/nodeslide';
@@ -25,6 +27,8 @@ nodeSlideModels.setProvider(openrouterProvider());
 export interface NodeSlideProviderTelemetry {
   provider: string;
   model: string;
+  /** Present for current model calls; optional keeps persisted and fixture telemetry compatible. */
+  reasoningEffort?: NodeSlideReasoningEffort;
   costMicroUsd: number;
   inputTokens: number;
   outputTokens: number;
@@ -46,6 +50,7 @@ export type NodeSlideProviderResult =
 export interface NodeSlideCompletionRequest {
   provider: typeof NODESLIDE_EDIT_PROVIDER;
   model: NodeSlideAgentModelId;
+  reasoningEffort: NodeSlideReasoningEffort;
   systemPrompt: string;
   userText: string;
   maxTokens: number;
@@ -78,12 +83,14 @@ export async function callNodeSlideFreeJson(
     userText: string;
     maxTokens: number;
     model?: NodeSlideAgentModelId;
+    reasoningEffort?: NodeSlideReasoningEffort;
     jsonSchema?: NodeSlideJsonSchema;
   },
   dependencies: NodeSlideProviderDependencies = {},
 ): Promise<NodeSlideProviderResult> {
   const complete = dependencies.complete ?? completeNodeSlideWithPiAi;
   const selectedModel = args.model ?? NODESLIDE_DEFAULT_AGENT_MODEL;
+  const reasoningEffort = args.reasoningEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT;
   if (!isNodeSlideAgentModelId(selectedModel)) {
     return { ok: false, reason: 'Choose a supported NodeSlide agent model.' };
   }
@@ -96,7 +103,7 @@ export async function callNodeSlideFreeJson(
       reject(new Error('nodeslide_provider_timeout'));
     }, dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
   });
-  let telemetry = emptyTelemetry(selectedModel);
+  let telemetry = emptyTelemetry(selectedModel, reasoningEffort);
   let hasTelemetry = false;
   let invalidResponse = '';
   let nativeSchemaEnabled = Boolean(args.jsonSchema);
@@ -109,6 +116,7 @@ export async function callNodeSlideFreeJson(
         complete({
           provider: NODESLIDE_EDIT_PROVIDER,
           model: selectedModel,
+          reasoningEffort,
           systemPrompt: providerSystemPrompt(args, repairAttempt),
           userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
           maxTokens: args.maxTokens,
@@ -193,7 +201,7 @@ async function completeNodeSlideWithPiAi(
     signal: request.signal,
     maxTokens: request.maxTokens,
     maxRetries: 0,
-    reasoning: 'high',
+    reasoning: request.reasoningEffort,
     ...(nodeSlideAgentModel(request.model).supportsTemperature ? { temperature: 0 } : {}),
     headers: OPENROUTER_ATTRIBUTION_HEADERS,
     onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
@@ -281,10 +289,14 @@ function repairUserText(originalUserText: string, invalidResponse: string): stri
   ].join('\n\n');
 }
 
-function emptyTelemetry(model: NodeSlideAgentModelId): NodeSlideProviderTelemetry {
+function emptyTelemetry(
+  model: NodeSlideAgentModelId,
+  reasoningEffort: NodeSlideReasoningEffort,
+): NodeSlideProviderTelemetry {
   return {
     provider: NODESLIDE_EDIT_PROVIDER,
     model,
+    reasoningEffort,
     costMicroUsd: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -298,6 +310,7 @@ function addTelemetry(
   return {
     provider: NODESLIDE_EDIT_PROVIDER,
     model: telemetry.model,
+    ...(telemetry.reasoningEffort ? { reasoningEffort: telemetry.reasoningEffort } : {}),
     costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),
     inputTokens: telemetry.inputTokens + Math.max(0, result.inputTokens),
     outputTokens: telemetry.outputTokens + Math.max(0, result.outputTokens),

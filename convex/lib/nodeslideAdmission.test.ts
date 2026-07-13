@@ -302,6 +302,7 @@ describe('NodeSlide provider consent contract', () => {
     ).toEqual({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
+      providerEffort: 'high',
       providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
     });
     expect(

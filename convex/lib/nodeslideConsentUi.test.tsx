@@ -30,7 +30,8 @@ describe('NodeSlide informed provider controls', () => {
     );
     expect(markup).toContain('I consent to sending this full brief to OpenRouter');
     expect(markup).toContain('data-testid="create-model-select"');
-    expect(markup.match(/<option value=/g)).toHaveLength(7);
+    expect(markup).toContain('data-testid="create-effort-select"');
+    expect(markup.match(/<option value=/g)).toHaveLength(12);
     expect(markup).toContain('data-testid="create-file-input"');
     expect(markup).toContain('type="password"');
     expect(markup).toContain('name="nodeslide-preview-access-code"');
@@ -82,7 +83,9 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('GLM 5.2 · Recommended');
     expect(markup).toContain('Claude Sonnet 5 · Anthropic');
     expect(markup).toContain('GPT-5.6 Sol · OpenAI');
-    expect(markup.match(/<option value=/g)).toHaveLength(8);
+    expect(markup).toContain('data-testid="landing-effort-select"');
+    expect(markup).toContain('<option value="max">Ultra</option>');
+    expect(markup.match(/<option value=/g)).toHaveLength(13);
     expect(markup).toContain('data-testid="landing-file-input"');
     expect(markup).toContain('data-testid="landing-provider-consent"');
     expect(markup).toContain('Attach data');

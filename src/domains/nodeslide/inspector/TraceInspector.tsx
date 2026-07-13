@@ -22,14 +22,15 @@ import {
   X,
 } from 'lucide-react';
 import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
-import type {
-  AgentTrace,
-  CandidateValidationReceipt,
-  DeckPatch,
-  NodeSlideAgentMessage,
-  NodeSlideAgentRun,
-  ValidationIssue,
-  ValidationResult,
+import {
+  type AgentTrace,
+  type CandidateValidationReceipt,
+  type DeckPatch,
+  type NodeSlideAgentMessage,
+  type NodeSlideAgentRun,
+  type ValidationIssue,
+  type ValidationResult,
+  nodeSlideReasoningEffort,
 } from '../../../../shared/nodeslide';
 
 /*
@@ -312,7 +313,7 @@ function TraceBanner({
       </div>
       <div
         className={`ns-trace-attrib ${fallback ? 'is-fallback' : 'is-live'}`}
-        title="provider · model attribution"
+        title="provider · model · reasoning effort attribution"
       >
         <span className="ns-trace-attrib-dot" />
         <Cpu size={11} />
@@ -1226,9 +1227,12 @@ function statusLabel(status: AgentTrace['status']): string {
   return map[status] ?? humanize(status);
 }
 
-function modelAttribution(trace: AgentTrace): string {
+export function modelAttribution(trace: AgentTrace): string {
   const model = trace.model ?? 'Automatic model';
-  return trace.provider ? `${trace.provider} · ${model}` : model;
+  const attribution = trace.provider ? `${trace.provider} · ${model}` : model;
+  return trace.reasoningEffort
+    ? `${attribution} · ${nodeSlideReasoningEffort(trace.reasoningEffort).label} effort`
+    : attribution;
 }
 
 // Kept from the prior component — real sign-off derivation, honest and reused.

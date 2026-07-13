@@ -15,7 +15,10 @@ import { type ChangeEvent, type FormEvent, useRef, useState } from 'react';
 import {
   NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_DEFAULT_REASONING_EFFORT,
+  NODESLIDE_REASONING_EFFORTS,
   type NodeSlideAgentModelId,
+  type NodeSlideReasoningEffort,
   nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
@@ -77,6 +80,9 @@ export function NodeSlideLanding({
   const [generation, setGeneration] = useState<'deterministic' | NodeSlideAgentModelId>(
     NODESLIDE_DEFAULT_AGENT_MODEL,
   );
+  const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
+    NODESLIDE_DEFAULT_REASONING_EFFORT,
+  );
   const [providerConsent, setProviderConsent] = useState(false);
   const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -111,6 +117,7 @@ export function NodeSlideLanding({
         ? {}
         : {
             providerModel: generation,
+            providerEffort: reasoningEffort,
             providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
           }),
     });
@@ -273,6 +280,28 @@ export function NodeSlideLanding({
                   </optgroup>
                 </select>
               </label>
+              {providerMode === 'openrouter_free' ? (
+                <label className="ns-landing-model ns-landing-effort">
+                  <span className="ns-sr-only">Reasoning effort</span>
+                  <select
+                    aria-label="Reasoning effort"
+                    data-testid="landing-effort-select"
+                    value={reasoningEffort}
+                    onChange={(event) => {
+                      setReasoningEffort(event.target.value as NodeSlideReasoningEffort);
+                      setProviderConsent(false);
+                      onClearError?.();
+                    }}
+                  >
+                    {NODESLIDE_REASONING_EFFORTS.map((effort) => (
+                      <option key={effort.id} value={effort.id}>
+                        {effort.label}
+                        {effort.id === NODESLIDE_DEFAULT_REASONING_EFFORT ? ' · Recommended' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
             <button
               className="ns-landing-send"
@@ -302,7 +331,9 @@ export function NodeSlideLanding({
                 data-testid="landing-provider-consent"
               />
               <span>
-                Use {selectedModel?.label ?? 'this model'} through OpenRouter for this deck
+                Use {selectedModel?.label ?? 'this model'} at{' '}
+                {NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === reasoningEffort)?.label}{' '}
+                effort through OpenRouter for this deck
                 <small>
                   Sends this brief{attachments.length ? ' and attached files' : ''}. Trace records
                   the route, tokens, cost, and any fallback.

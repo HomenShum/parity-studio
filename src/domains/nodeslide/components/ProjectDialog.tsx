@@ -25,7 +25,10 @@ import {
   type CreateDeckRequest,
   NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_DEFAULT_REASONING_EFFORT,
+  NODESLIDE_REASONING_EFFORTS,
   type NodeSlideAgentModelId,
+  type NodeSlideReasoningEffort,
   nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
@@ -40,6 +43,7 @@ export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
   accessCode?: string;
   providerMode: NodeSlideBriefProviderMode;
   providerModel?: NodeSlideAgentModelId;
+  providerEffort?: NodeSlideReasoningEffort;
   providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
 }
 
@@ -65,6 +69,7 @@ interface ProjectDialogProps {
     prompt: string;
     providerMode: NodeSlideBriefProviderMode;
     providerModel?: NodeSlideAgentModelId;
+    providerEffort?: NodeSlideReasoningEffort;
     attachments?: NodeSlideDataAttachment[];
   } | null;
   initialMode?: 'create' | 'open';
@@ -134,6 +139,9 @@ export function ProjectDialog({
   const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(
     initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL,
   );
+  const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
+    initialDraft?.providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT,
+  );
   const [providerConsent, setProviderConsent] = useState(false);
   const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>(
     initialDraft?.attachments ?? [],
@@ -158,6 +166,7 @@ export function ProjectDialog({
     setAccessCode('');
     setProviderMode('deterministic');
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
+    setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
     setProviderConsent(false);
     setAttachments([]);
     setAttachmentError(null);
@@ -176,6 +185,7 @@ export function ProjectDialog({
       setPrompt(initialDraft?.prompt ?? '');
       setProviderMode(initialDraft?.providerMode ?? 'deterministic');
       setProviderModel(initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL);
+      setProviderEffort(initialDraft?.providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT);
       setAttachments(initialDraft?.attachments ?? []);
       setAttachmentError(null);
     }
@@ -184,6 +194,7 @@ export function ProjectDialog({
     setAccessCode('');
     setProviderMode('deterministic');
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
+    setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
     setProviderConsent(false);
     setAttachments([]);
     setAttachmentError(null);
@@ -248,6 +259,7 @@ export function ProjectDialog({
       ...(providerMode === 'openrouter_free'
         ? {
             providerModel,
+            providerEffort,
             providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
           }
         : {}),
@@ -582,6 +594,26 @@ export function ProjectDialog({
                     ))}
                   </select>
                   <small>{selectedModel.description}</small>
+                </label>
+                <label className="ns-provider-model-select">
+                  <span>Reasoning effort</span>
+                  <select
+                    aria-label="Reasoning effort"
+                    data-testid="create-effort-select"
+                    value={providerEffort}
+                    disabled={providerMode !== 'openrouter_free'}
+                    onChange={(event) => {
+                      setProviderEffort(event.target.value as NodeSlideReasoningEffort);
+                      setProviderConsent(false);
+                    }}
+                  >
+                    {NODESLIDE_REASONING_EFFORTS.map((effort) => (
+                      <option key={effort.id} value={effort.id}>
+                        {effort.label}
+                        {effort.id === NODESLIDE_DEFAULT_REASONING_EFFORT ? ' · Recommended' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label
                   className="ns-provider-consent"

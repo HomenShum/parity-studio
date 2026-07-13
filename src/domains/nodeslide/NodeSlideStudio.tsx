@@ -284,6 +284,7 @@ interface NodeSlideGeneratedApi {
         slideId: string;
         providerMode?: 'deterministic' | 'openrouter_free';
         providerModel?: NodeSlideAgentModelId;
+        providerEffort?: import('../../../shared/nodeslide').NodeSlideReasoningEffort;
         providerConsent?: string;
       },
       VariationGenerationReceipt
@@ -2205,6 +2206,7 @@ export function NodeSlideStudio() {
         ? {
             providerMode: request.providerMode,
             providerModel: request.providerModel,
+            providerEffort: request.providerEffort,
             providerConsent: request.providerConsent,
           }
         : { providerMode: request.providerMode };

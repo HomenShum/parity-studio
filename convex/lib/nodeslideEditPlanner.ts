@@ -7,6 +7,7 @@ import {
   type NodeSlideAgentModelId,
   type NodeSlideDesignBehavior,
   type NodeSlideProviderMode,
+  type NodeSlideReasoningEffort,
   type NodeSlideReferenceUsePolicy,
   type PatchOperation,
   type PatchScope,
@@ -128,6 +129,7 @@ export interface NodeSlideEditPlanningRequest {
   referenceUse: NodeSlideReferenceUsePolicy;
   providerMode: NodeSlideProviderMode;
   providerModel?: NodeSlideAgentModelId;
+  providerEffort?: NodeSlideReasoningEffort;
 }
 
 export interface NodeSlideEditPlannerReceipt {
@@ -159,6 +161,7 @@ export type NodeSlideEditProvider = (args: {
   userText: string;
   maxTokens: number;
   model?: NodeSlideAgentModelId;
+  reasoningEffort?: NodeSlideReasoningEffort;
   jsonSchema?: { name: string; schema: Record<string, unknown> };
 }) => Promise<NodeSlideProviderResult>;
 
@@ -194,6 +197,7 @@ export async function planNodeSlideEdit(
           userText: providerInput,
           maxTokens: 3000,
           model: providerModel,
+          ...(request.providerEffort ? { reasoningEffort: request.providerEffort } : {}),
           jsonSchema: {
             name: 'nodeslide_edit_patch',
             schema: scopedEditResponseSchema(snapshot, request, readContext),

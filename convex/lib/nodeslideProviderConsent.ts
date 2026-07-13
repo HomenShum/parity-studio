@@ -1,10 +1,13 @@
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   type NodeSlideAgentModelId,
   type NodeSlideProviderMode,
+  type NodeSlideReasoningEffort,
   isNodeSlideAgentModelId,
+  isNodeSlideReasoningEffort,
 } from '../../shared/nodeslide';
 
 export type NodeSlideProviderOperation = 'propose_edit' | 'variations';
@@ -14,6 +17,7 @@ export type ValidatedNodeSlideProviderChoice =
   | {
       providerMode: 'openrouter_free';
       providerModel: NodeSlideAgentModelId;
+      providerEffort: NodeSlideReasoningEffort;
       providerConsent:
         | typeof NODESLIDE_OPENROUTER_EDIT_CONSENT
         | typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
@@ -35,14 +39,19 @@ export function validateNodeSlideProviderChoice(
   providerMode: unknown,
   providerConsent: unknown,
   providerModel?: unknown,
+  providerEffort?: unknown,
 ): ValidatedNodeSlideProviderChoice {
   const mode: NodeSlideProviderMode =
     providerMode === undefined ? 'deterministic' : asMode(providerMode);
   if (mode === 'deterministic') {
-    if (providerConsent !== undefined || providerModel !== undefined) {
+    if (
+      providerConsent !== undefined ||
+      providerModel !== undefined ||
+      providerEffort !== undefined
+    ) {
       throw new NodeSlideProviderConsentError(
         'provider_consent_mismatch',
-        'Provider consent and model selection must only accompany an OpenRouter request.',
+        'Provider consent, model, and effort must only accompany an OpenRouter request.',
       );
     }
     return { providerMode: 'deterministic' };
@@ -65,9 +74,17 @@ export function validateNodeSlideProviderChoice(
       'Choose a supported NodeSlide agent model.',
     );
   }
+  const selectedEffort = providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT;
+  if (!isNodeSlideReasoningEffort(selectedEffort)) {
+    throw new NodeSlideProviderConsentError(
+      'invalid_request',
+      'Choose a supported NodeSlide reasoning effort.',
+    );
+  }
   return {
     providerMode: 'openrouter_free',
     providerModel: selectedModel,
+    providerEffort: selectedEffort,
     providerConsent: expected,
   };
 }

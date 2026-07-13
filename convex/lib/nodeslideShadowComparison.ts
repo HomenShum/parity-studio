@@ -2,6 +2,7 @@ import type {
   NodeSlideAgentModelId,
   NodeSlideDesignBehavior,
   NodeSlideProviderMode,
+  NodeSlideReasoningEffort,
   NodeSlideReferenceUsePolicy,
   PatchOperation,
   PatchScope,
@@ -66,6 +67,7 @@ export function nodeSlideEditTurnInputDigest(input: {
   referenceUse?: NodeSlideReferenceUsePolicy;
   providerMode?: NodeSlideProviderMode;
   providerModel?: NodeSlideAgentModelId;
+  providerEffort?: NodeSlideReasoningEffort;
 }): string {
   return `turn_${nodeslideContentDigest(stableSerialize(input))}`;
 }
