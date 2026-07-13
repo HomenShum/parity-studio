@@ -4,7 +4,7 @@
 
 **Toolchain:** `local-slidelang-adapter/1.1.0`
 
-**Runtime:** React + TypeScript + Vite, Convex, PptxGenJS, pi-ai/OpenRouter
+**Runtime:** React + TypeScript + Vite, Convex, PptxGenJS, pi-ai (managed Nebius / OpenRouter / BYOK), Linkup web research, governed MCP access
 
 ## Architecture
 
@@ -42,11 +42,13 @@ Normalized geometry makes the same specification portable across browser and 16:
 
 ## AI planning and agent execution
 
-Prompt generation produces a bounded JSON plan, coerces it into known primitive contracts, and validates the compiled snapshot. The deterministic path creates a complete, reproducible deck with image, chart, and math examples. The network path requires explicit Web/OpenRouter consent.
+Prompt generation produces a bounded JSON plan, coerces it into known primitive contracts, and validates the compiled snapshot. The deterministic path creates a complete, reproducible deck with image, chart, and math examples. The network path requires explicit external-model consent that names the exact provider, model, and reasoning effort before egress; a model selector offers private-deterministic plus named models, and creators may bring their own key (BYOK).
 
-The edit planner uses the maintained `@earendil-works/pi-ai` package with OpenRouter model constant `NODESLIDE_EDIT_MODEL = 'z-ai/glm-5.2'`. Provider and model attribution come from that single constant and are copied into the proposal and trace. Requests have a 30-second abort deadline, a 200 KB response bound, zero library retries, and one explicit strict-JSON repair attempt. Usage tokens and cost are recorded. Invalid output, timeout, or provider failure produces a labeled deterministic fallback.
+The edit planner uses the maintained `@earendil-works/pi-ai` package with model constant `NODESLIDE_EDIT_MODEL = 'z-ai/glm-5.2'`, routed by default through **managed Nebius** at native reasoning efforts (low / medium / high), with OpenRouter and BYOK as alternate routes. Provider, model, and effort attribution flow from the selected route into the proposal and trace. Requests have an abort deadline, a bounded response read, zero library retries, and one explicit strict-JSON repair attempt. Usage tokens and cost are recorded. Every failure mode—invalid output, timeout, network, or exception—converges on the same labeled deterministic fallback (a reviewable proposal); the exception/timeout path is caught at the provider boundary so a raw Convex server error never surfaces.
 
-The orchestration follows patterns adapted from my NodeRoom/NodeAgent work: authoritative shared state, durable jobs, bounded context reads, stale-work guards, explicit human steering, and reviewable execution receipts. NodeSlide adds domain-specific tools and gates rather than exposing an unrestricted code-execution REPL to the model.
+**Grounding tools.** Consented web research (Linkup) runs bounded searches and URL reads, persists source snapshots, and emits claim-level citations (`{url, retrievedAt, excerpt}`) bound to the elements they support. Data ingestion stores CSV/JSON/TXT uploads as typed source records (digest, columns, row count, size) with per-source retention and deletion, which bind to chart and formula primitives.
+
+The orchestration follows patterns adapted from my NodeRoom/NodeAgent work: authoritative shared state, **durable jobs** (server-persisted runs with live progress, cancellation, idempotency keys, and reload recovery), **multi-turn conversations with persisted deck memory**, bounded context reads, stale-work guards, explicit human steering, and reviewable execution receipts persisted as trace journals. NodeSlide adds domain-specific tools and gates rather than exposing an unrestricted code-execution REPL to the model.
 
 ## Editor state and mutation protocol
 
@@ -77,11 +79,11 @@ Publishing creates an immutable versioned snapshot plus a share slug. Republishi
 
 ## Hosted API, CLI, and extension seams
 
-Convex queries, mutations, and actions provide deck creation, workspace reads, patch planning/acceptance, validation, versioning, export receipts, and publication. The schema and compiler are shared TypeScript modules, so a future CLI or editor plugin can submit the same deck spec and patches without reimplementing the format. Today’s hosted browser workflow is complete; CLI/plugin integration is an intentionally exposed seam rather than a separately shipped client.
+Convex queries, mutations, and actions provide deck creation, workspace reads, patch planning/acceptance, validation, versioning, export receipts, and publication. The schema and compiler are shared TypeScript modules, so a CLI or editor plugin can submit the same deck spec and patches without reimplementing the format. Today's hosted browser workflow is complete, and the CLI/plugin seam is now realized as **governed MCP access**: a coding agent (Claude Code, Codex, Cursor) can drive NodeSlide through tools that mirror the same governed Convex actions—so every MCP write inherits the UI's consent, write-scope, proposal-before-mutate, and receipt gates. Governance parity is the invariant: the second front door has the same locks, and the connected agent submits intent while the server owns policy. Creators may also bring their own provider key (BYOK); keys are masked and never logged, and consent still gates egress independently of key presence.
 
 ## Verification and failure handling
 
-Vitest covers schema coercion, planner attribution, one-repair fallback, acceptance gating, editor-state integrity, shadow comparison, admission policy, publishing privacy, and HTML/PPTX generation. TypeScript compilation and the Vite production build are release gates. Deterministic fixtures make regression tests stable; provider calls are dependency-injected in planner tests.
+Vitest covers schema coercion, planner attribution, one-repair fallback (every provider failure mode converging on a reviewable deterministic proposal), acceptance gating, editor-state integrity, shadow comparison, admission policy, publishing privacy, web-research/ingestion contracts, governed-MCP consent parity, and HTML/PPTX generation—currently 74 files / 500+ tests plus an agent-operability linter (9/9). TypeScript compilation and the Vite production build are release gates. Deterministic fixtures make regression tests stable; provider calls are dependency-injected in planner tests. UI quality is independently audited by the open-source `agentic-ui-qa` protocol (the Agentic UI Bar B1–B11 for surface trust/operability and a conditional Depth tier D1–D11 for agent-product maturity), with findings tracked in an append-only ledger.
 
 Expected failure modes are visible: model unavailability becomes a disclosed fallback; invalid candidates cannot be accepted; stale work cannot overwrite newer state; missing/unsafe media blocks readiness; unsupported export behavior becomes a labeled fallback; and public payload tests protect private fields. The Trace inspector exposes the exact provider/model, plan, tool calls, operations, validation state, digests, token/cost usage, and human decision for panel inspection.
 

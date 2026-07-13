@@ -14,7 +14,7 @@ NodeSlide is for founders, analysts, operators, researchers, and technical teams
 
 ## Core workflow
 
-1. A creator enters a prompt or structured brief, audience, tone, and goals.
+1. A creator lands on a clean, intent-first composer ("What presentation should we build?") and enters a prompt, structured spec, or evidence—choosing the model, effort, web-research, and any uploaded data inside the composer. The navigator, canvas, inspector, validation, and trace are revealed only after creation begins.
 2. NodeSlide plans and compiles a multi-slide `nodeslide.slidelang/v1` deck specification.
 3. The browser editor renders native structured elements: text, shape, image, chart, math, video, and connector primitives. Speaker notes live on the slide as the private `notes` field.
 4. The creator directly edits copy and styling or asks the agent for a scoped change.
@@ -22,7 +22,9 @@ NodeSlide is for founders, analysts, operators, researchers, and technical teams
 6. The creator previews, accepts, or rejects. The canonical deck is unchanged until acceptance.
 7. Validation gates presentation, publishing, and export. A successful deck can be presented in the app, published as an immutable share version, or exported to HTML and PowerPoint.
 
-The product supports a deterministic generation path for reliable demos and an explicitly consented OpenRouter path using `z-ai/glm-5.2` through the pi-ai orchestration library. If the model times out, is unavailable, or produces invalid JSON after one repair attempt, NodeSlide returns a labeled deterministic fallback—not a fabricated AI success.
+The product supports a deterministic generation path for reliable demos and an explicitly consented external-model path. A model selector offers private-deterministic plus named models (GLM 5.2, Claude, Gemini, GPT); the recommended route is managed **Nebius GLM 5.2** through the pi-ai orchestration library at native reasoning efforts (low / medium / high), and creators may bring their own provider key (BYOK). Consent names the exact provider, model, and effort before any egress. Every failure mode—timeout, unavailability, invalid JSON after one repair attempt, or exception—converges on a labeled deterministic fallback that is still a reviewable proposal, never a fabricated AI success or a raw error.
+
+Two capabilities ground the agent in evidence. **Consented web research** (Linkup) runs bounded searches and URL reads, persists source snapshots, and attaches citations to the claims they support. **Data ingestion** accepts CSV/JSON/TXT uploads as typed source records (digest, columns, row count, size) that bind to chart and formula primitives, with per-source retention and deletion controls. Agent runs are **durable**: long jobs persist server-side with live progress, cancellation, idempotency, and reload recovery, and multi-turn conversations carry memory across turns.
 
 ## Why structured authoring wins
 
@@ -43,11 +45,11 @@ Math remains editable by preserving the expression and syntax. Browser video is 
 
 Trust is a product surface, not a hidden backend step. NodeSlide checks schema integrity, element bounds, overlap, text fit, missing assets, source coverage, export capability, and publication readiness. Repairs are explicit proposals. Candidate operations are revalidated on the server and bound to a digest before acceptance. Scope limits, expected version clocks, and stale-candidate checks prevent a delayed agent result from overwriting newer human work.
 
-The Trace inspector has three densities:
+The Trace inspector is a compact run-metrics card (run time, tokens, cost, validation) above an auditable-events chain—authorization → context → plan → actions → validation → approval—closing on a validation seal that is honestly labeled by run type (countersigned for a live run, provisional/"machine only, not signable" for a deterministic one). Three densities control depth:
 
-- **Human:** a chain-of-custody receipt from context read through human decision;
-- **Pro:** plan, tools, guardrails, operations, tokens, cost, and validation status;
-- **Tech:** model/provider, digests, toolchain version, shadow controls, and raw trace/patch JSON.
+- **Overview:** the chain-of-custody summary from context read through human decision, with the seal;
+- **Evidence:** plan, tools, guardrails, operations, tokens, cost, and validation status;
+- **Raw:** model/provider, digests, toolchain version, shadow controls, and raw trace/patch JSON.
 
 Published snapshots are immutable and omit speaker notes. Owner credentials and private source metadata are not included in public payloads.
 
@@ -60,6 +62,9 @@ Published snapshots are immutable and omit speaker notes. Owner credentials and 
 - Validation blocks unsafe present, publish, or export actions.
 - Public links open without owner credentials and do not expose private notes.
 - HTML and PowerPoint exports preserve editable structure where the target supports it and label fallbacks where it does not.
+- Web claims carry a source with URL, retrieval time, and excerpt; uploaded data is deletable and its retention is disclosed.
+- Long agent runs are cancellable and resume after reload without duplicating work.
+- Creators can bring their own provider key (BYOK) and connect their own coding agents over a governed MCP surface that enforces the same consent, write-scope, proposal-before-mutate, and receipt gates as the UI.
 - The core workflow is usable on the hosted deployment and demonstrated end to end.
 
 ## Success metrics
