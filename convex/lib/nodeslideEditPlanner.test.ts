@@ -254,7 +254,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
   it('passes the user-selected catalog model to the pi-ai provider boundary', async () => {
     const { snapshot, target, scope } = fixture();
     const planningInput = input(snapshot, target, scope);
-    planningInput.request.providerModel = 'google/gemini-3.1-pro-preview';
+    planningInput.request.providerModel = 'google/gemini-3.5-flash';
     const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true,
       value: {
@@ -270,7 +270,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
-        model: 'google/gemini-3.1-pro-preview',
+        model: 'google/gemini-3.5-flash',
         costMicroUsd: 900,
         inputTokens: 80,
         outputTokens: 20,
@@ -280,9 +280,9 @@ describe('NodeSlide baseline edit planner extraction', () => {
     const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
 
     expect(result.ok).toBe(true);
-    expect(provider.mock.calls[0]?.[0].model).toBe('google/gemini-3.1-pro-preview');
+    expect(provider.mock.calls[0]?.[0].model).toBe('google/gemini-3.5-flash');
     if (result.ok) {
-      expect(result.receipt.providerTelemetry?.model).toBe('google/gemini-3.1-pro-preview');
+      expect(result.receipt.providerTelemetry?.model).toBe('google/gemini-3.5-flash');
     }
   });
 

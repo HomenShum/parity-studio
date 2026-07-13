@@ -211,7 +211,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
 
   it('persists the exact selected model in the proposal trace attribution', async () => {
     const { workspace, target, args } = fixture();
-    args.providerModel = 'anthropic/claude-sonnet-4.6';
+    args.providerModel = 'anthropic/claude-sonnet-5';
     providerMock.mockResolvedValue({
       ok: true,
       value: {
@@ -248,9 +248,9 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
       inputTokens: 180,
       outputTokens: 44,
     });
-    expect(proposalArgs?.traceSummary).toContain('OpenRouter Claude Sonnet 4.6 proposed');
+    expect(proposalArgs?.traceSummary).toContain('OpenRouter Claude Sonnet 5 proposed');
     expect(proposalArgs?.toolCalls).toContain(
-      'Called Claude Sonnet 4.6 through the maintained pi-ai OpenRouter provider after exact edit consent',
+      'Called Claude Sonnet 5 through the maintained pi-ai OpenRouter provider after exact edit consent',
     );
   });
 

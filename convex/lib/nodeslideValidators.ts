@@ -441,9 +441,12 @@ export const nodeslideProviderModeValidator = v.union(
 
 export const nodeslideAgentModelValidator = v.union(
   v.literal('z-ai/glm-5.2'),
-  v.literal('anthropic/claude-sonnet-4.6'),
+  v.literal('anthropic/claude-sonnet-5'),
+  v.literal('anthropic/claude-fable-5'),
+  v.literal('google/gemini-3.5-flash'),
   v.literal('google/gemini-3.1-pro-preview'),
-  v.literal('openai/gpt-5.4'),
+  v.literal('openai/gpt-5.6-sol'),
+  v.literal('openai/gpt-5.6-terra'),
 );
 
 export const nodeslideDesignBehaviorValidator = v.union(

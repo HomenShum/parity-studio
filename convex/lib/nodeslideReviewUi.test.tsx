@@ -5,6 +5,7 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_AGENT_MODELS,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_TOOLCHAIN_VERSION,
@@ -98,9 +99,12 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('Claude Sonnet 4.6 · Anthropic');
+    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
+    expect(markup).toContain('Claude Fable 5 · Anthropic');
+    expect(markup).toContain('Gemini 3.5 Flash · Google');
     expect(markup).toContain('Gemini 3.1 Pro · Google');
-    expect(markup).toContain('GPT-5.4 · OpenAI');
+    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
+    expect(markup).toContain('GPT-5.6 Terra · OpenAI');
     expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
@@ -116,8 +120,8 @@ describe('NodeSlide AI review inspector', () => {
       providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
     });
     expect(
-      createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-4.6'),
-    ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-4.6' });
+      createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-5'),
+    ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
@@ -237,7 +241,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(17);
+    expect(commandMenu.match(/<option value=/g)).toHaveLength(13 + NODESLIDE_AGENT_MODELS.length);
     expect(commandMenu).toContain('Provider · privacy');
   });
 

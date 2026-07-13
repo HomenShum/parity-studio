@@ -71,7 +71,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     );
 
     const result = await callNodeSlideFreeJson(
-      { ...request, model: 'anthropic/claude-sonnet-4.6' },
+      { ...request, model: 'anthropic/claude-sonnet-5' },
       { complete },
     );
 
@@ -79,10 +79,10 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       ok: true,
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
       },
     });
-    expect(complete.mock.calls[0]?.[0].model).toBe('anthropic/claude-sonnet-4.6');
+    expect(complete.mock.calls[0]?.[0].model).toBe('anthropic/claude-sonnet-5');
   });
 
   it('injects the schema while preserving pi-ai provider routing', () => {

@@ -27,11 +27,11 @@ describe('NodeSlide provider consent authority', () => {
         'propose_edit',
         'openrouter_free',
         NODESLIDE_OPENROUTER_EDIT_CONSENT,
-        'anthropic/claude-sonnet-4.6',
+        'anthropic/claude-sonnet-5',
       ),
     ).toMatchObject({
       providerMode: 'openrouter_free',
-      providerModel: 'anthropic/claude-sonnet-4.6',
+      providerModel: 'anthropic/claude-sonnet-5',
     });
     expect(
       validateNodeSlideProviderChoice(

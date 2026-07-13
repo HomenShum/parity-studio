@@ -182,7 +182,7 @@ async function completeNodeSlideWithPiAi(
     maxTokens: request.maxTokens,
     maxRetries: 0,
     reasoning: 'high',
-    ...(request.model === 'openai/gpt-5.4' ? {} : { temperature: 0 }),
+    ...(nodeSlideAgentModel(request.model).supportsTemperature ? { temperature: 0 } : {}),
     headers: OPENROUTER_ATTRIBUTION_HEADERS,
     onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
   });
