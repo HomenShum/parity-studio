@@ -468,6 +468,21 @@ export type PatchOperation =
       elementId: string;
       properties: Partial<ElementStyle>;
     }
+  | {
+      op: 'update_chart';
+      slideId: string;
+      elementId: string;
+      chart: ChartData;
+    }
+  | {
+      op: 'update_image';
+      slideId: string;
+      elementId: string;
+      imageUrl: string;
+      altText: string;
+      credit?: string;
+      sourceIds?: string[];
+    }
   | { op: 'add_element'; slideId: string; element: SlideElement }
   | { op: 'remove_element'; slideId: string; elementId: string }
   | {

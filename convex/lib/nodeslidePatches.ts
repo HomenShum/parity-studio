@@ -389,6 +389,86 @@ export function validateNodeSlidePatch(
         element.style = { ...element.style, ...operation.properties };
       }
     }
+    if (operation.op === 'update_chart') {
+      if (element.kind !== 'chart') {
+        errors.push(
+          `update_chart requires a chart element; ${operation.elementId} is ${element.kind}.`,
+        );
+      } else {
+        const chart = operation.chart;
+        const validLabels = chart.labels.length > 0 && chart.labels.length <= 24;
+        const validSeries =
+          chart.series.length > 0 &&
+          chart.series.length <= 6 &&
+          chart.series.every(
+            (series) =>
+              series.name.trim().length > 0 &&
+              series.values.length === chart.labels.length &&
+              series.values.every(Number.isFinite),
+          );
+        if (!validLabels || !validSeries) {
+          errors.push(
+            'update_chart requires 1-24 labels and 1-6 finite series aligned to those labels.',
+          );
+        } else if (JSON.stringify(chart) === JSON.stringify(element.chart)) {
+          errors.push(`update_chart must change element ${operation.elementId}.`);
+        } else if (canMutate) {
+          element.chart = structuredClone(chart);
+        }
+      }
+    }
+    if (operation.op === 'update_image') {
+      if (element.kind !== 'image') {
+        errors.push(
+          `update_image requires an image element; ${operation.elementId} is ${element.kind}.`,
+        );
+      } else {
+        const imageUrl = operation.imageUrl.trim();
+        const altText = operation.altText.replace(/\s+/gu, ' ').trim();
+        const isEmbeddedImage =
+          /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/iu.test(imageUrl);
+        if (!isEmbeddedImage || imageUrl.length > 700_000) {
+          errors.push('update_image requires an embedded PNG, JPEG, WebP, or GIF under 700 KB.');
+        }
+        if (!altText || altText.length > 320) {
+          errors.push('update_image requires alt text between 1 and 320 characters.');
+        }
+        if ((operation.credit?.length ?? 0) > 320) {
+          errors.push('update_image credit cannot exceed 320 characters.');
+        }
+        if (
+          operation.sourceIds?.some((sourceId) => !sources.has(sourceId)) ||
+          (operation.sourceIds?.length ?? 0) > NODESLIDE_ELEMENT_SOURCE_LIMIT
+        ) {
+          errors.push('update_image contains an unknown or excessive source binding.');
+        }
+        if (
+          isEmbeddedImage &&
+          altText &&
+          imageUrl.length <= 700_000 &&
+          (operation.credit?.length ?? 0) <= 320 &&
+          (operation.sourceIds?.length ?? 0) <= NODESLIDE_ELEMENT_SOURCE_LIMIT &&
+          !operation.sourceIds?.some((sourceId) => !sources.has(sourceId))
+        ) {
+          const unchanged =
+            imageUrl === (element.imageUrl ?? '') &&
+            altText === (element.altText ?? '') &&
+            (operation.credit ?? '') === (element.image?.credit ?? '');
+          if (unchanged) {
+            errors.push(`update_image must change element ${operation.elementId}.`);
+          } else if (canMutate) {
+            element.imageUrl = imageUrl;
+            element.altText = altText;
+            element.image = {
+              placeholder: false,
+              ...(operation.credit ? { credit: operation.credit.trim() } : {}),
+              ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
+            };
+            if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];
+          }
+        }
+      }
+    }
     if (operation.op === 'set_visibility_v1') {
       if ((element.visible ?? true) === operation.visible) {
         errors.push(`set_visibility_v1 must change element ${operation.elementId}.`);

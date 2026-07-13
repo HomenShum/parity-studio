@@ -2,10 +2,12 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  BarChart3,
   Baseline,
   Bold,
   ChevronDown,
   CornerUpLeft,
+  ImageUp,
   Lock,
   Minus,
   Move,
@@ -14,6 +16,7 @@ import {
   Square,
   Type,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { PatchOperation, Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
 import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
@@ -22,6 +25,7 @@ import { TasteProfileCard } from './TasteProfileCard';
 
 interface DesignInspectorProps {
   slide: Slide;
+  slideElements: readonly SlideElement[];
   selectedElements: readonly SlideElement[];
   theme: ThemeSpec;
   activeTastePackId: NodeSlideTastePackId | null;
@@ -43,6 +47,7 @@ interface DesignInspectorProps {
 
 export function DesignInspector({
   slide,
+  slideElements,
   selectedElements,
   theme,
   activeTastePackId,
@@ -299,6 +304,18 @@ export function DesignInspector({
         </InspectorGroup>
       ) : null}
 
+      {primary.kind === 'chart' && primary.chart ? (
+        <ChartDataEditor element={primary} onApplyPatch={onApplyPatch} />
+      ) : null}
+
+      {primary.kind === 'image' ? (
+        <ImageAssetEditor
+          element={primary}
+          slideElements={slideElements}
+          onApplyPatch={onApplyPatch}
+        />
+      ) : null}
+
       {primary.kind === 'text' || primary.kind === 'math' ? (
         <InspectorGroup icon={<Type size={14} />} title="Typography">
           <label className="ns-select-field">
@@ -456,6 +473,220 @@ function SlideNotesEditor({
       </label>
     </InspectorGroup>
   );
+}
+
+function ChartDataEditor({
+  element,
+  onApplyPatch,
+}: {
+  element: SlideElement;
+  onApplyPatch: DesignInspectorProps['onApplyPatch'];
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const chart = element.chart;
+  if (!chart) return null;
+  const primarySeries = chart.series[0];
+
+  return (
+    <InspectorGroup icon={<BarChart3 size={14} />} title="Chart data">
+      <form
+        className="ns-primitive-editor"
+        key={`${element.id}-${element.version}-chart`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError(null);
+          const form = new FormData(event.currentTarget);
+          const labels = String(form.get('labels') ?? '')
+            .split(/[,\n]/u)
+            .map((value) => value.trim())
+            .filter(Boolean);
+          const values = String(form.get('values') ?? '')
+            .split(/[,\s]+/u)
+            .filter(Boolean)
+            .map(Number);
+          if (labels.length === 0 || labels.length > 24 || labels.length !== values.length) {
+            setError('Use 1-24 labels with exactly one numeric value per label.');
+            return;
+          }
+          if (values.some((value) => !Number.isFinite(value))) {
+            setError('Every chart value must be a finite number.');
+            return;
+          }
+          const chartType = String(form.get('chartType')) as typeof chart.chartType;
+          const seriesName = String(form.get('seriesName') ?? '').trim() || 'Series';
+          const unit = String(form.get('unit') ?? '').trim();
+          onApplyPatch(
+            [
+              {
+                op: 'update_chart',
+                slideId: element.slideId,
+                elementId: element.id,
+                chart: {
+                  chartType,
+                  labels,
+                  series: [
+                    {
+                      name: seriesName,
+                      values,
+                      ...(primarySeries?.color ? { color: primarySeries.color } : {}),
+                    },
+                  ],
+                  ...(unit ? { unit } : {}),
+                  ...(chart.sourceId ? { sourceId: chart.sourceId } : {}),
+                },
+              },
+            ],
+            `Updated chart data for ${element.name}`,
+          );
+        }}
+      >
+        <label>
+          <span>Chart type</span>
+          <select name="chartType" defaultValue={chart.chartType}>
+            <option value="bar">Bar</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="donut">Donut</option>
+          </select>
+        </label>
+        <label>
+          <span>Labels</span>
+          <input name="labels" defaultValue={chart.labels.join(', ')} data-testid="chart-labels" />
+        </label>
+        <label>
+          <span>Values</span>
+          <input
+            name="values"
+            inputMode="decimal"
+            defaultValue={(primarySeries?.values ?? []).join(', ')}
+            data-testid="chart-values"
+          />
+        </label>
+        <div className="ns-primitive-editor-grid">
+          <label>
+            <span>Series</span>
+            <input name="seriesName" defaultValue={primarySeries?.name ?? 'Series'} />
+          </label>
+          <label>
+            <span>Unit</span>
+            <input name="unit" defaultValue={chart.unit ?? ''} />
+          </label>
+        </div>
+        <button type="submit">Apply chart data</button>
+        {error ? <output role="alert">{error}</output> : null}
+      </form>
+    </InspectorGroup>
+  );
+}
+
+function ImageAssetEditor({
+  element,
+  slideElements,
+  onApplyPatch,
+}: {
+  element: SlideElement;
+  slideElements: readonly SlideElement[];
+  onApplyPatch: DesignInspectorProps['onApplyPatch'];
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <InspectorGroup icon={<ImageUp size={14} />} title="Image asset">
+      <form className="ns-primitive-editor" key={`${element.id}-${element.version}-image`}>
+        <label>
+          <span>Alt text</span>
+          <input name="altText" defaultValue={element.altText ?? element.name} maxLength={320} />
+        </label>
+        <label>
+          <span>Credit</span>
+          <input
+            name="credit"
+            defaultValue={element.image?.credit ?? ''}
+            maxLength={320}
+            placeholder="Source, photographer, or license"
+          />
+        </label>
+        <label className="ns-image-upload-control">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            data-testid="image-upload"
+            disabled={busy}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              const form = event.currentTarget.form;
+              if (!file || !form) return;
+              const formData = new FormData(form);
+              const altText = String(formData.get('altText') ?? '').trim() || file.name;
+              const credit = String(formData.get('credit') ?? '').trim();
+              setError(null);
+              setBusy(true);
+              void imageFileToEmbeddedWebp(file)
+                .then((imageUrl) => {
+                  const operations: PatchOperation[] = [
+                    {
+                      op: 'update_image',
+                      slideId: element.slideId,
+                      elementId: element.id,
+                      imageUrl,
+                      altText,
+                      ...(credit ? { credit } : {}),
+                    },
+                  ];
+                  const creditElement = slideElements.find(
+                    (candidate) =>
+                      candidate.kind === 'text' &&
+                      !candidate.locked &&
+                      (candidate.name.toLowerCase().includes('image credit') ||
+                        candidate.role === 'caption'),
+                  );
+                  if (credit && creditElement && creditElement.content !== credit) {
+                    operations.push({
+                      op: 'replace_text',
+                      slideId: creditElement.slideId,
+                      elementId: creditElement.id,
+                      text: credit,
+                    });
+                  }
+                  onApplyPatch(operations, `Replaced image asset for ${element.name}`);
+                })
+                .catch((cause) =>
+                  setError(cause instanceof Error ? cause.message : 'The image could not be read.'),
+                )
+                .finally(() => setBusy(false));
+            }}
+          />
+          <ImageUp size={14} /> {busy ? 'Preparing image…' : 'Upload downloaded image'}
+        </label>
+        <small>PNG, JPEG, WebP, or GIF. NodeSlide embeds a compressed copy in the deck.</small>
+        {error ? <output role="alert">{error}</output> : null}
+      </form>
+    </InspectorGroup>
+  );
+}
+
+async function imageFileToEmbeddedWebp(file: File): Promise<string> {
+  if (file.size > 8_000_000) throw new Error('Choose an image smaller than 8 MB.');
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxEdge = 1_100;
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser cannot prepare image uploads.');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    let dataUrl = canvas.toDataURL('image/webp', 0.8);
+    if (dataUrl.length > 680_000) dataUrl = canvas.toDataURL('image/webp', 0.58);
+    if (dataUrl.length > 680_000) {
+      throw new Error('This image remains too large after compression. Choose a smaller image.');
+    }
+    return dataUrl;
+  } finally {
+    bitmap.close();
+  }
 }
 
 function InspectorGroup({

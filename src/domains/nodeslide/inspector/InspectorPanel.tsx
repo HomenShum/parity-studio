@@ -408,6 +408,7 @@ export function InspectorPanel<CommandId extends string = string>({
         {activeTab === 'design' ? (
           <DesignInspector
             slide={slide}
+            slideElements={workspace.elements.filter((element) => element.slideId === slide.id)}
             selectedElements={selectedElements}
             theme={workspace.deck.theme}
             activeTastePackId={activeTastePackId}

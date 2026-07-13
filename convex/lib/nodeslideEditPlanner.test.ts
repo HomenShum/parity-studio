@@ -406,6 +406,81 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema)).toContain(source.id);
   });
 
+  it('accepts a typed chart update only when its data source is in bounded read context', async () => {
+    const { snapshot } = fixture();
+    const chart = snapshot.elements.find((element) => element.kind === 'chart' && element.chart);
+    const source = snapshot.sources[0];
+    if (!chart || !source) throw new Error('Expected chart and source fixtures.');
+    const slide = snapshot.slides.find((candidate) => candidate.id === chart.slideId);
+    if (!slide) throw new Error('Expected chart slide fixture.');
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: snapshot.deck.id,
+      slideIds: [chart.slideId],
+      elementIds: [chart.id],
+      operationMode: 'unrestricted',
+    };
+    const planningInput = {
+      ...input(snapshot, chart, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: [chart],
+        sources: [source],
+        comments: [],
+      },
+    };
+    planningInput.request.instruction = 'Update this chart from the supplied source.';
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true,
+      value: {
+        summary: 'Updated chart data',
+        operations: [
+          {
+            op: 'update_chart',
+            slideId: chart.slideId,
+            elementId: chart.id,
+            chart: {
+              chartType: 'line',
+              labels: ['2022', '2026'],
+              series: [{ name: 'Teams', values: [32, 48] }],
+              unit: 'teams',
+              sourceId: source.id,
+            },
+          },
+        ],
+      },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 1200,
+        inputTokens: 100,
+        outputTokens: 20,
+      },
+    }));
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt.origin).toBe('free_route');
+    expect(result.operations).toEqual([
+      {
+        op: 'update_chart',
+        slideId: chart.slideId,
+        elementId: chart.id,
+        chart: {
+          chartType: 'line',
+          labels: ['2022', '2026'],
+          series: [{ name: 'Teams', values: [32, 48] }],
+          unit: 'teams',
+          sourceId: source.id,
+        },
+      },
+    ]);
+    expect(JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema)).toContain(source.id);
+  });
+
   it('rejects provider source bindings outside the authorized read context', async () => {
     const { snapshot, target, scope } = fixture();
     const result = await planNodeSlideEdit(input(snapshot, target, scope), {

@@ -675,6 +675,21 @@ export const nodeslidePatchOperationValidator = v.union(
     properties: nodeslideElementStyleValidator,
   }),
   v.object({
+    op: v.literal('update_chart'),
+    slideId: v.string(),
+    elementId: v.string(),
+    chart: nodeslideChartDataValidator,
+  }),
+  v.object({
+    op: v.literal('update_image'),
+    slideId: v.string(),
+    elementId: v.string(),
+    imageUrl: v.string(),
+    altText: v.string(),
+    credit: v.optional(v.string()),
+    sourceIds: v.optional(v.array(v.string())),
+  }),
+  v.object({
     op: v.literal('add_element'),
     slideId: v.string(),
     element: nodeslideElementValidator,
