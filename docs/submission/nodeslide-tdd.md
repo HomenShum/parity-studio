@@ -33,7 +33,8 @@ The shared TypeScript contract defines the wire shape and is mirrored by Convex 
 - **Element:** stable ID, deck/slide IDs, kind, role, normalized bounding box, z-order, lock state, style, content, source IDs, tags, export capabilities, and element version.
 - **Kinds:** `text`, `shape`, `image`, `chart`, `math`, `video`, and `connector`.
 - **Chart:** chart type, categories, named series, values, labels, legend, and source ID.
-- **Math:** expression, `plain` or `latex` syntax, inline/block display mode, and optional description.
+- **Math:** machine-readable expression, presentation display, typed variables (`label`, `value`, optional `unit`), optional source ID, `plain` or `latex` syntax, inline/block display mode, and description.
+- **Image:** optional embedded/HTTPS asset, alt text, and structured placeholder, credit, and source metadata so missing licensed media remains an honest editable object.
 - **Video:** HTTPS or embedded media URL, optional poster/title/caption track, language, and bounded start/end times.
 - **Review records:** comments, sources, patches, candidate validation receipts, agent traces, deck versions, exports, and publications.
 
