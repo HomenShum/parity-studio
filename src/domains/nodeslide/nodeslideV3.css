@@ -2076,7 +2076,7 @@
 .nodeslide-studio .ns-toast {
   bottom: auto;
   left: auto;
-  right: 14px;
+  right: calc(var(--ns-inspector-width) + 14px);
   top: 64px;
   transform: none;
 }

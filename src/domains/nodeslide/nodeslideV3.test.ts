@@ -68,7 +68,7 @@ describe('NodeSlide v3 visual contract', () => {
 
   it('keeps notifications clear of the authoritative bottom decision bar', () => {
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: 14px;[\s\S]*?top: 64px;/,
+      /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: calc\(var\(--ns-inspector-width\) \+ 14px\);[\s\S]*?top: 64px;/,
     );
   });
 
