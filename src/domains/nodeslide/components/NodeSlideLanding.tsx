@@ -4,6 +4,7 @@ import {
   FolderOpen,
   Globe2,
   Layers3,
+  LoaderCircle,
   Paperclip,
   ShieldCheck,
   Sparkles,
@@ -12,24 +13,26 @@ import {
 import { type ChangeEvent, type FormEvent, useRef, useState } from 'react';
 import {
   NODESLIDE_AGENT_MODELS,
+  NODESLIDE_DEFAULT_AGENT_MODEL,
   type NodeSlideAgentModelId,
   nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
-import type { NodeSlideBriefProviderMode, RecentDeck } from './ProjectDialog';
+import {
+  type CreateDeckAdmissionRequest,
+  NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+  type NodeSlideBriefProviderMode,
+  type RecentDeck,
+} from './ProjectDialog';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 
-export interface NodeSlideLandingDraft {
-  title: string;
-  prompt: string;
-  providerMode: NodeSlideBriefProviderMode;
-  providerModel?: NodeSlideAgentModelId;
-  attachments: NodeSlideDataAttachment[];
-}
-
 interface NodeSlideLandingProps {
+  clientSessionId: string;
   recentDecks: readonly RecentDeck[];
-  onStart: (draft: NodeSlideLandingDraft) => void;
+  creating: boolean;
+  error?: string | null;
+  onClearError?: () => void;
+  onCreate: (request: CreateDeckAdmissionRequest) => void;
   onExploreSample: () => void;
   onOpenProjects: () => void;
   onOpenDeck: (deckId: string) => void;
@@ -57,16 +60,22 @@ const starters = [
 ] as const;
 
 export function NodeSlideLanding({
+  clientSessionId,
   recentDecks,
-  onStart,
+  creating,
+  error = null,
+  onClearError,
+  onCreate,
   onExploreSample,
   onOpenProjects,
   onOpenDeck,
 }: NodeSlideLandingProps) {
   const [prompt, setPrompt] = useState('');
+  const [starterTitle, setStarterTitle] = useState<string | null>(null);
   const [generation, setGeneration] = useState<'deterministic' | NodeSlideAgentModelId>(
-    'deterministic',
+    NODESLIDE_DEFAULT_AGENT_MODEL,
   );
+  const [providerConsent, setProviderConsent] = useState(false);
   const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,16 +83,40 @@ export function NodeSlideLanding({
     generation === 'deterministic' ? 'deterministic' : 'openrouter_free';
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
 
-  const start = (draft?: (typeof starters)[number]) => {
-    const nextPrompt = draft?.prompt ?? prompt.trim();
+  const start = () => {
+    const nextPrompt = prompt.trim();
     if (!nextPrompt) return;
-    onStart({
-      title: draft?.title ?? titleFromPrompt(nextPrompt),
-      prompt: nextPrompt,
+    if (providerMode === 'openrouter_free' && !providerConsent) return;
+    onCreate({
+      clientSessionId,
+      title: starterTitle ?? titleFromPrompt(nextPrompt),
+      brief: {
+        prompt: nextPrompt,
+        audience: 'Decision-makers described in the brief',
+        purpose: 'Create an editable, reviewable presentation from this idea',
+        successCriteria: [
+          'A coherent 6–8 slide narrative',
+          'Structured chart, formula, and image primitives where relevant',
+          'Validation passes before presentation or export',
+        ],
+      },
+      themeId: 'editorial-signal',
+      route: 'free',
       providerMode,
-      ...(generation === 'deterministic' ? {} : { providerModel: generation }),
       attachments,
+      ...(generation === 'deterministic'
+        ? {}
+        : {
+            providerModel: generation,
+            providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+          }),
     });
+  };
+
+  const applyStarter = (starter: (typeof starters)[number]) => {
+    setPrompt(starter.prompt);
+    setStarterTitle(starter.title);
+    onClearError?.();
   };
 
   const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -93,6 +126,7 @@ export function NodeSlideLanding({
     try {
       setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
       setAttachmentError(null);
+      onClearError?.();
     } catch (error) {
       setAttachmentError(
         error instanceof Error ? error.message : 'The file could not be attached.',
@@ -104,6 +138,9 @@ export function NodeSlideLanding({
     event.preventDefault();
     start();
   };
+
+  const providerReady = providerMode === 'deterministic' || providerConsent;
+  const canCreate = Boolean(prompt.trim()) && providerReady && !creating;
 
   return (
     <main className="nodeslide-studio ns-landing" data-testid="nodeslide-landing">
@@ -134,8 +171,12 @@ export function NodeSlideLanding({
           <textarea
             id="nodeslide-landing-prompt"
             value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Describe the audience, decision, and evidence this deck needs…"
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              setStarterTitle(null);
+              onClearError?.();
+            }}
+            placeholder="Describe the presentation you want to make…"
             rows={4}
             maxLength={4000}
           />
@@ -180,7 +221,7 @@ export function NodeSlideLanding({
               </button>
               <span className="ns-landing-web" data-active={providerMode === 'openrouter_free'}>
                 <Globe2 size={13} aria-hidden="true" />
-                {providerMode === 'deterministic' ? 'Web off' : 'Web · OpenRouter'}
+                {providerMode === 'deterministic' ? 'Private' : 'OpenRouter'}
               </span>
               <label className="ns-landing-model">
                 <span className="ns-sr-only">Generation model</span>
@@ -193,28 +234,74 @@ export function NodeSlideLanding({
                   aria-label="Generation model"
                   data-testid="landing-model-select"
                   value={generation}
-                  onChange={(event) =>
-                    setGeneration(event.target.value as 'deterministic' | NodeSlideAgentModelId)
-                  }
+                  onChange={(event) => {
+                    setGeneration(event.target.value as 'deterministic' | NodeSlideAgentModelId);
+                    setProviderConsent(false);
+                    onClearError?.();
+                  }}
                 >
-                  <option value="deterministic">Private · deterministic</option>
-                  {NODESLIDE_AGENT_MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.vendor} · {model.label}
-                    </option>
-                  ))}
+                  <optgroup label="Recommended">
+                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>GLM 5.2 · Recommended</option>
+                  </optgroup>
+                  <optgroup label="More live models">
+                    {NODESLIDE_AGENT_MODELS.slice(1).map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label} · {model.vendor}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Private fallback">
+                    <option value="deterministic">Deterministic · no external model</option>
+                  </optgroup>
                 </select>
               </label>
             </div>
             <button
               className="ns-landing-send"
               type="submit"
-              aria-label="Continue with this presentation brief"
-              disabled={!prompt.trim()}
+              aria-label="Create presentation"
+              disabled={!canCreate}
+              title={
+                !prompt.trim()
+                  ? 'Describe a presentation first'
+                  : !providerReady
+                    ? `Consent to ${selectedModel?.label ?? 'the selected model'} or choose private deterministic`
+                    : 'Create presentation'
+              }
             >
-              <ArrowRight size={18} />
+              {creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />}
             </button>
           </div>
+          {providerMode === 'openrouter_free' ? (
+            <label className="ns-landing-consent">
+              <input
+                type="checkbox"
+                checked={providerConsent}
+                onChange={(event) => {
+                  setProviderConsent(event.target.checked);
+                  onClearError?.();
+                }}
+                data-testid="landing-provider-consent"
+              />
+              <span>
+                Use {selectedModel?.label ?? 'this model'} through OpenRouter for this deck
+                <small>
+                  Sends this brief{attachments.length ? ' and attached files' : ''}. Trace records
+                  the route, tokens, cost, and any fallback.
+                </small>
+              </span>
+            </label>
+          ) : null}
+          {creating ? (
+            <output className="ns-landing-create-status" aria-live="polite">
+              <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating
+              your editable deck…
+            </output>
+          ) : error ? (
+            <output className="ns-landing-create-error" role="alert">
+              {error}
+            </output>
+          ) : null}
           {attachmentError ? (
             <output className="ns-landing-file-error" role="alert">
               {attachmentError}
@@ -225,22 +312,24 @@ export function NodeSlideLanding({
         <p className="ns-landing-privacy" aria-live="polite">
           {providerMode === 'deterministic' ? (
             <>
-              <ShieldCheck size={13} /> Your brief stays inside NodeSlide by default.
+              <ShieldCheck size={13} /> Private deterministic generation. No external model egress.
             </>
           ) : (
             <>
-              <Sparkles size={13} /> {selectedModel?.label ?? 'The selected model'} via OpenRouter
+              <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via
+              OpenRouter
               {attachments.length > 0
                 ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
                 : ''}
-              . Explicit consent is required next.
+              . One explicit consent above; then create directly.
             </>
           )}
         </p>
 
         <div className="ns-landing-starters" aria-label="Presentation starters">
+          <span>Try an idea</span>
           {starters.map((starter) => (
-            <button key={starter.label} type="button" onClick={() => start(starter)}>
+            <button key={starter.label} type="button" onClick={() => applyStarter(starter)}>
               {starter.label}
             </button>
           ))}

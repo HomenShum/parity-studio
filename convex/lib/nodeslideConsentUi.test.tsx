@@ -64,11 +64,13 @@ describe('NodeSlide informed provider controls', () => {
     expect(UI_OPENROUTER_CONSENT).toBe(NODESLIDE_OPENROUTER_BRIEF_CONSENT);
   });
 
-  it('explains the privacy-preserving default before the create dialog opens', () => {
+  it('recommends a live model and keeps consent inline before direct creation', () => {
     const markup = renderToStaticMarkup(
       <NodeSlideLanding
+        clientSessionId="session-test"
         recentDecks={[]}
-        onStart={() => undefined}
+        creating={false}
+        onCreate={() => undefined}
         onExploreSample={() => undefined}
         onOpenProjects={() => undefined}
         onOpenDeck={() => undefined}
@@ -77,14 +79,17 @@ describe('NodeSlide informed provider controls', () => {
 
     expect(markup).toContain('data-testid="nodeslide-landing"');
     expect(markup).toContain('What presentation should we build?');
-    expect(markup).toContain('Private · deterministic');
-    expect(markup).toContain('Anthropic · Claude Sonnet 5');
-    expect(markup).toContain('OpenAI · GPT-5.6 Sol');
+    expect(markup).toContain('GLM 5.2 · Recommended');
+    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
+    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
     expect(markup.match(/<option value=/g)).toHaveLength(8);
     expect(markup).toContain('data-testid="landing-file-input"');
+    expect(markup).toContain('data-testid="landing-provider-consent"');
     expect(markup).toContain('Attach data');
-    expect(markup).toContain('Your brief stays inside NodeSlide by default.');
+    expect(markup).toContain('One explicit consent above; then create directly.');
+    expect(markup).toContain('aria-label="Create presentation"');
     expect(markup).toContain('Explore the editable sample workspace');
+    expect(markup).not.toContain('nodeslide-preview-access-code');
     expect(markup).not.toContain('NodeSlide inspector');
   });
 

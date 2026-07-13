@@ -84,6 +84,7 @@ const nodeslideInternal: any = (internal as any).nodeslide;
 
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
 const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
+const NODESLIDE_PUBLIC_CREATION_ENV = 'NODESLIDE_PUBLIC_CREATION';
 
 export const proposeEdit = action({
   args: {
@@ -737,11 +738,16 @@ export const createDeckFromBrief = action({
     attachments: v.optional(v.array(nodeslideBriefAttachmentValidator)),
   },
   handler: async (ctx, args) => {
-    const admissionQuotaSubject = await validateNodeSlidePreviewAdmission({
-      providedAccessCode: args.accessCode,
-      expectedAccessCode: process.env[NODESLIDE_PREVIEW_ACCESS_CODE_ENV],
-      admissionSubject: process.env[NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV],
-    });
+    const clientSessionId = requiredCreateText(args.clientSessionId, 'clientSessionId', 256, 768);
+    const publicCreationEnabled =
+      process.env[NODESLIDE_PUBLIC_CREATION_ENV]?.trim().toLowerCase() === 'true';
+    const admissionQuotaSubject = publicCreationEnabled
+      ? 'public-launch-v1'
+      : await validateNodeSlidePreviewAdmission({
+          providedAccessCode: args.accessCode,
+          expectedAccessCode: process.env[NODESLIDE_PREVIEW_ACCESS_CODE_ENV],
+          admissionSubject: process.env[NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV],
+        });
     if (args.route !== 'free') {
       throw nodeslideCreatePublicError(
         'invalid_request',
@@ -757,7 +763,6 @@ export const createDeckFromBrief = action({
       title: args.title,
       brief: args.brief,
     });
-    const clientSessionId = requiredCreateText(args.clientSessionId, 'clientSessionId', 256, 768);
     const themeId = requiredCreateText(args.themeId, 'themeId', 128, 256);
     const attachments = validateNodeSlideBriefAttachments(args.attachments);
     const previewSessionQuotaSubject = nodeslideContentDigest(
@@ -776,7 +781,7 @@ export const createDeckFromBrief = action({
     if (!quotaResult.ok) {
       throw nodeslideCreatePublicError(
         'quota_exceeded',
-        'NodeSlide private-preview creation quota reached. Try again after the current window.',
+        'NodeSlide creation quota reached. Try again after the current window.',
       );
     }
 

@@ -37,7 +37,7 @@ export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as 
 export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free';
 
 export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
-  accessCode: string;
+  accessCode?: string;
   providerMode: NodeSlideBriefProviderMode;
   providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
@@ -68,6 +68,7 @@ interface ProjectDialogProps {
     attachments?: NodeSlideDataAttachment[];
   } | null;
   initialMode?: 'create' | 'open';
+  createEnabled?: boolean;
 }
 
 const profiles = [
@@ -117,8 +118,9 @@ export function ProjectDialog({
   onOpenDeck,
   initialDraft = null,
   initialMode = 'create',
+  createEnabled = true,
 }: ProjectDialogProps) {
-  const [mode, setMode] = useState<'create' | 'open'>(initialMode);
+  const [mode, setMode] = useState<'create' | 'open'>(createEnabled ? initialMode : 'open');
   const [title, setTitle] = useState(initialDraft?.title ?? '');
   const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [audience, setAudience] = useState('Executive decision-makers');
@@ -169,7 +171,7 @@ export function ProjectDialog({
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
-      setMode(initialMode);
+      setMode(createEnabled ? initialMode : 'open');
       setTitle(initialDraft?.title ?? '');
       setPrompt(initialDraft?.prompt ?? '');
       setProviderMode(initialDraft?.providerMode ?? 'deterministic');
@@ -185,7 +187,7 @@ export function ProjectDialog({
     setProviderConsent(false);
     setAttachments([]);
     setAttachmentError(null);
-  }, [initialDraft, initialMode, open]);
+  }, [createEnabled, initialDraft, initialMode, open]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
@@ -310,7 +312,9 @@ export function ProjectDialog({
           </div>
           <div>
             <span className="ns-eyebrow">NodeSlide workspace</span>
-            <h1 id={titleId}>{mode === 'create' ? 'Shape a new story' : 'Open a deck'}</h1>
+            <h1 id={titleId}>
+              {createEnabled && mode === 'create' ? 'Shape a new story' : 'Open a deck'}
+            </h1>
           </div>
           <button
             className="ns-icon-button"
@@ -321,38 +325,40 @@ export function ProjectDialog({
             <X size={17} />
           </button>
         </header>
-        <div className="ns-project-tabs" role="tablist" aria-label="Project dialog views">
-          <button
-            ref={createTabRef}
-            id={createTabId}
-            type="button"
-            role="tab"
-            aria-controls={createPanelId}
-            aria-selected={mode === 'create'}
-            tabIndex={mode === 'create' ? 0 : -1}
-            className={mode === 'create' ? 'is-active' : ''}
-            onClick={() => setMode('create')}
-            onKeyDown={handleTabKeyDown}
-          >
-            <Plus size={14} /> New deck
-          </button>
-          <button
-            ref={openTabRef}
-            id={openTabId}
-            type="button"
-            role="tab"
-            aria-controls={openPanelId}
-            aria-selected={mode === 'open'}
-            tabIndex={mode === 'open' ? 0 : -1}
-            className={mode === 'open' ? 'is-active' : ''}
-            onClick={() => setMode('open')}
-            onKeyDown={handleTabKeyDown}
-          >
-            <FolderOpen size={14} /> Open
-          </button>
-        </div>
+        {createEnabled ? (
+          <div className="ns-project-tabs" role="tablist" aria-label="Project dialog views">
+            <button
+              ref={createTabRef}
+              id={createTabId}
+              type="button"
+              role="tab"
+              aria-controls={createPanelId}
+              aria-selected={mode === 'create'}
+              tabIndex={mode === 'create' ? 0 : -1}
+              className={mode === 'create' ? 'is-active' : ''}
+              onClick={() => setMode('create')}
+              onKeyDown={handleTabKeyDown}
+            >
+              <Plus size={14} /> New deck
+            </button>
+            <button
+              ref={openTabRef}
+              id={openTabId}
+              type="button"
+              role="tab"
+              aria-controls={openPanelId}
+              aria-selected={mode === 'open'}
+              tabIndex={mode === 'open' ? 0 : -1}
+              className={mode === 'open' ? 'is-active' : ''}
+              onClick={() => setMode('open')}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderOpen size={14} /> Open
+            </button>
+          </div>
+        ) : null}
 
-        {mode === 'create' ? (
+        {createEnabled && mode === 'create' ? (
           <form
             id={createPanelId}
             className="ns-project-form"

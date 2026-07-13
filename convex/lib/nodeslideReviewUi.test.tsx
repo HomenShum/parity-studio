@@ -107,12 +107,12 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('has-failed');
   });
 
-  it('defaults to private deterministic processing and uses operation-specific consent tokens', () => {
+  it('recommends the live GLM route with inline consent and keeps deterministic fallback available', () => {
     const markup = renderAi();
-    expect(markup).toContain('External model: off · Private deterministic');
-    expect(markup).toMatch(/data-testid="ai-provider-deterministic"[^>]*checked=""/);
+    expect(markup).toContain('External model: on · OpenRouter · GLM 5.2');
+    expect(markup).toMatch(/data-testid="ai-provider-openrouter"[^>]*checked=""/);
     expect(markup).toContain('OpenRouter · Z.ai · GLM 5.2 — external');
-    expect(markup).toContain('selected model through OpenRouter');
+    expect(markup).toContain('Allow GLM 5.2 via OpenRouter for this request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
@@ -122,7 +122,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Gemini 3.1 Pro · Google');
     expect(markup).toContain('GPT-5.6 Sol · OpenAI');
     expect(markup).toContain('GPT-5.6 Terra · OpenAI');
-    expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
+    expect(markup).toMatch(/<input type="checkbox"[^>]*ai-provider-consent/);
+    expect(markup).not.toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
     expect(createAiProviderRequest('openrouter_free', true)).toEqual({
@@ -148,7 +149,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Generate 3 directions');
     expect(markup).toContain('Current agent scope and policy');
     expect(markup).toContain('Whole slide');
-    expect(markup).toContain('Provider · privacy');
+    expect(markup).toContain('Advanced controls');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('data-testid="ai-provider-route-status"');
     expect(markup).not.toContain('ns-ai-v3-route-disclosure');
@@ -259,7 +260,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
     expect(commandMenu.match(/<option value=/g)).toHaveLength(13 + NODESLIDE_AGENT_MODELS.length);
-    expect(commandMenu).toContain('Provider · privacy');
+    expect(commandMenu).toContain('Advanced controls');
   });
 
   it('keeps comment-to-AI context implicit when no @ reference was selected', () => {

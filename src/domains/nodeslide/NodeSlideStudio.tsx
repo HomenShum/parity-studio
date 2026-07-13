@@ -51,7 +51,7 @@ import {
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
-import { NodeSlideLanding, type NodeSlideLandingDraft } from './components/NodeSlideLanding';
+import { NodeSlideLanding } from './components/NodeSlideLanding';
 import {
   type OwnerCapabilityRecovery,
   OwnerCapabilityRecoveryDialog,
@@ -393,8 +393,6 @@ export function NodeSlideStudio() {
     () => new URLSearchParams(window.location.search).get('present') === '1',
   );
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [projectDraft, setProjectDraft] = useState<NodeSlideLandingDraft | null>(null);
-  const [projectInitialMode, setProjectInitialMode] = useState<'create' | 'open'>('create');
   const [sampleRequested, setSampleRequested] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1045,8 +1043,6 @@ export function NodeSlideStudio() {
     setActiveDeckId(deckId);
     setLocalWorkspace(null);
     setProjectsOpen(false);
-    setProjectDraft(null);
-    setProjectInitialMode('create');
     writeDeckToUrl(deckId);
   }, []);
 
@@ -1455,7 +1451,6 @@ export function NodeSlideStudio() {
       setCreating(false);
       const accessDurable = installWorkspace(result, undefined, false, true);
       setProjectsOpen(false);
-      setProjectDraft(null);
       if (accessDurable) {
         setToast({
           kind: 'success',
@@ -1486,13 +1481,11 @@ export function NodeSlideStudio() {
       onClose={() => {
         setProjectError(null);
         setProjectsOpen(false);
-        setProjectDraft(null);
-        setProjectInitialMode('create');
       }}
       onCreate={(request) => void createDeck(request)}
       onOpenDeck={openOwnedDeck}
-      initialDraft={projectDraft}
-      initialMode={projectInitialMode}
+      initialMode="open"
+      createEnabled={false}
     />
   );
 
@@ -1583,16 +1576,14 @@ export function NodeSlideStudio() {
     return (
       <>
         <NodeSlideLanding
+          clientSessionId={clientSessionId}
           recentDecks={recentDecks}
-          onStart={(draft) => {
-            setProjectDraft(draft);
-            setProjectInitialMode('create');
-            setProjectsOpen(true);
-          }}
+          creating={creating}
+          error={projectError}
+          onClearError={() => setProjectError(null)}
+          onCreate={(request) => void createDeck(request)}
           onExploreSample={() => setSampleRequested(true)}
           onOpenProjects={() => {
-            setProjectDraft(null);
-            setProjectInitialMode('open');
             setProjectsOpen(true);
           }}
           onOpenDeck={openOwnedDeck}
@@ -2537,10 +2528,10 @@ export function NodeSlideStudio() {
     {
       id: 'new',
       label: 'New deck',
-      detail: 'Create from a structured brief',
+      detail: 'Start from the prompt-first landing composer',
       group: 'Create',
       icon: 'new',
-      run: () => setProjectsOpen(true),
+      run: () => window.location.assign('/'),
     },
   ];
 

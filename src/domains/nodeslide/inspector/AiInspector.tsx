@@ -93,13 +93,6 @@ export type {
 
 type ScopeChoice = 'deck' | 'slide' | 'elements';
 
-const WORLD_CUP_SAMPLE_CSV = `metric,value,unit,source
-total_goals,172,goals,FIFA World Cup Qatar 2022
-matches_played,64,matches,FIFA World Cup Qatar 2022
-goals_per_match,2.69,goals per match,derived from total_goals / matches_played
-top_scorer,Kylian Mbappe,8 goals,FIFA World Cup Qatar 2022
-runner_up,Lionel Messi,7 goals,FIFA World Cup Qatar 2022`;
-
 interface ComposerTrigger {
   kind: 'reference' | 'command';
   query: string;
@@ -173,7 +166,7 @@ export function AiInspector<CommandId extends string = string>({
   commentContext = null,
   initialInstruction = '',
   initialReadContext = [],
-  initialProviderMode = 'deterministic',
+  initialProviderMode = 'openrouter_free',
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
@@ -395,7 +388,6 @@ export function AiInspector<CommandId extends string = string>({
     if (!isNodeSlideAgentModelId(value)) return;
     setProviderModel(value);
     setProviderMode('openrouter_free');
-    setProviderControlsOpen(true);
     window.localStorage.setItem('nodeslide.agent-model', value);
   };
 
@@ -625,7 +617,7 @@ export function AiInspector<CommandId extends string = string>({
               <Sparkles size={14} />
             </span>
             <div>
-              <span className="ns-eyebrow">NodeSlide agent</span>
+              <span className="ns-eyebrow">NodeSlide</span>
               <strong>What should we change?</strong>
               <p>
                 Describe the outcome. I’ll return a scoped, validated patch for review before
@@ -651,8 +643,8 @@ export function AiInspector<CommandId extends string = string>({
                 {message.role === 'user'
                   ? 'You'
                   : message.role === 'tool'
-                    ? (message.toolName ?? 'Tool')
-                    : 'NodeSlide agent'}
+                    ? humanizeToolName(message.toolName)
+                    : 'NodeSlide'}
               </span>
               <p>{message.content}</p>
               {message.sourceIds?.length ? (
@@ -961,9 +953,9 @@ export function AiInspector<CommandId extends string = string>({
         >
           <summary
             data-testid="ai-provider-summary"
-            aria-label="Provider and privacy controls: private by default, OpenRouter optional"
+            aria-label="Advanced provider, privacy, scope, and editing controls"
           >
-            <span>Provider · privacy</span>
+            <span>Advanced controls</span>
             <span
               className={`ns-route-pill ${
                 providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
@@ -1043,38 +1035,6 @@ export function AiInspector<CommandId extends string = string>({
                   <small>
                     Sends this ask, selected read context, and scoped slide content to the selected
                     model through OpenRouter. It does not browse or fetch URLs.
-                  </small>
-                </span>
-              </label>
-              <label className="ns-ai-provider-consent">
-                <input
-                  type="checkbox"
-                  checked={providerConsent}
-                  disabled={providerMode !== 'openrouter_free'}
-                  onChange={(event) => setProviderConsent(event.target.checked)}
-                  data-testid="ai-provider-consent"
-                />
-                <span>
-                  I explicitly consent to this external OpenRouter request
-                  <small>
-                    Required for each selected external mode. The versioned consent token is
-                    attached to propose and variation callbacks.
-                  </small>
-                </span>
-              </label>
-              <label className="ns-ai-provider-consent ns-ai-web-consent">
-                <input
-                  type="checkbox"
-                  checked={webResearchConsent}
-                  disabled={!webResearch}
-                  onChange={(event) => setWebResearchConsent(event.target.checked)}
-                  data-testid="ai-web-research-consent"
-                />
-                <span>
-                  I explicitly consent to this web research request
-                  <small>
-                    Sends only this query to configured search providers. Retained URLs and bounded
-                    excerpts appear in Data and Trace before the model plans an edit.
                   </small>
                 </span>
               </label>
@@ -1240,13 +1200,22 @@ export function AiInspector<CommandId extends string = string>({
                   aria-label="Agent model"
                   data-testid="ai-model-select"
                 >
-                  <option value="deterministic">Private · deterministic</option>
-                  <optgroup label="OpenRouter · external models">
-                    {NODESLIDE_AGENT_MODELS.map((model) => (
+                  <optgroup label="Recommended">
+                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
+                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Recommended
+                    </option>
+                  </optgroup>
+                  <optgroup label="More live models">
+                    {NODESLIDE_AGENT_MODELS.filter(
+                      (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
+                    ).map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.label} · {model.vendor}
                       </option>
                     ))}
+                  </optgroup>
+                  <optgroup label="Private fallback">
+                    <option value="deterministic">Deterministic · no external model</option>
                   </optgroup>
                 </select>
               </label>
@@ -1257,7 +1226,6 @@ export function AiInspector<CommandId extends string = string>({
                 onClick={() => {
                   setWebResearch((enabled) => !enabled);
                   setWebResearchConsent(false);
-                  setProviderControlsOpen(true);
                 }}
                 data-testid="ai-web-research-toggle"
                 title="Search the web and persist source snapshots before planning"
@@ -1303,22 +1271,6 @@ export function AiInspector<CommandId extends string = string>({
                     )}{' '}
                     Data
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void attachDataFile(
-                        new File([WORLD_CUP_SAMPLE_CSV], 'world-cup-2022.csv', {
-                          type: 'text/csv',
-                        }),
-                      )
-                    }
-                    disabled={attachmentBusy}
-                    aria-label="Attach sample World Cup CSV"
-                    title="Attach a sample CSV through the same private data-source path"
-                    data-testid="ai-attach-sample-data"
-                  >
-                    Try CSV
-                  </button>
                 </>
               ) : null}
               <span>
@@ -1351,6 +1303,41 @@ export function AiInspector<CommandId extends string = string>({
             </button>
           </div>
         </div>
+
+        {providerMode === 'openrouter_free' || webResearch ? (
+          <div className="ns-ai-inline-consent" aria-label="External request consent">
+            {providerMode === 'openrouter_free' ? (
+              <label className={providerConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={providerConsent}
+                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  data-testid="ai-provider-consent"
+                />
+                <span>
+                  Allow {selectedAgentModel.label} via OpenRouter for this request
+                  <small>
+                    Ask, scoped slide context, token use, and cost are recorded in Trace.
+                  </small>
+                </span>
+              </label>
+            ) : null}
+            {webResearch ? (
+              <label className={webResearchConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={webResearchConsent}
+                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  data-testid="ai-web-research-consent"
+                />
+                <span>
+                  Allow web research for this request
+                  <small>Source URLs and bounded excerpts are saved in Data and Trace.</small>
+                </span>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
@@ -1418,6 +1405,19 @@ export function AiInspector<CommandId extends string = string>({
       </form>
     </div>
   );
+}
+
+function humanizeToolName(toolName?: string) {
+  if (!toolName) return 'Tool';
+  const knownLabels: Record<string, string> = {
+    candidate_validation: 'Validation',
+    web_research: 'Web research',
+    source_snapshot: 'Source capture',
+  };
+  if (knownLabels[toolName]) return knownLabels[toolName];
+  return toolName
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function VariationCard({

@@ -74,6 +74,27 @@ describe('NodeSlide private-preview admission', () => {
 });
 
 describe('NodeSlide create action admission boundary', () => {
+  it('allows quota-bound public launch creation without a manual access code', async () => {
+    vi.stubEnv('NODESLIDE_PUBLIC_CREATION', 'true');
+    const workspace = { deck: { id: 'deck-public-created' } };
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce(workspace);
+
+    await expect(createDeckHandler({ runMutation }, createActionArgs(undefined))).resolves.toBe(
+      workspace,
+    );
+
+    expect(runMutation).toHaveBeenCalledTimes(2);
+    expect(callNodeSlideFreeJson).not.toHaveBeenCalled();
+    const quotaArgs = runMutation.mock.calls[0]?.[1] as {
+      buckets: Array<{ key: string }>;
+    };
+    expect(quotaArgs.buckets[0]?.key).toMatch(/^create:[a-f0-9]{64}$/);
+    expect(quotaArgs.buckets[0]?.key).not.toContain('rotatable-session');
+  });
+
   it.each([
     ['missing', undefined],
     ['wrong', 'wrong-code'],
