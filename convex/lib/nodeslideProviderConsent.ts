@@ -1,7 +1,10 @@
 import {
+  NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+  type NodeSlideAgentModelId,
   type NodeSlideProviderMode,
+  isNodeSlideAgentModelId,
 } from '../../shared/nodeslide';
 
 export type NodeSlideProviderOperation = 'propose_edit' | 'variations';
@@ -10,6 +13,7 @@ export type ValidatedNodeSlideProviderChoice =
   | { providerMode: 'deterministic' }
   | {
       providerMode: 'openrouter_free';
+      providerModel: NodeSlideAgentModelId;
       providerConsent:
         | typeof NODESLIDE_OPENROUTER_EDIT_CONSENT
         | typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
@@ -30,14 +34,15 @@ export function validateNodeSlideProviderChoice(
   operation: NodeSlideProviderOperation,
   providerMode: unknown,
   providerConsent: unknown,
+  providerModel?: unknown,
 ): ValidatedNodeSlideProviderChoice {
   const mode: NodeSlideProviderMode =
     providerMode === undefined ? 'deterministic' : asMode(providerMode);
   if (mode === 'deterministic') {
-    if (providerConsent !== undefined) {
+    if (providerConsent !== undefined || providerModel !== undefined) {
       throw new NodeSlideProviderConsentError(
         'provider_consent_mismatch',
-        'Provider consent must only accompany an OpenRouter request.',
+        'Provider consent and model selection must only accompany an OpenRouter request.',
       );
     }
     return { providerMode: 'deterministic' };
@@ -53,7 +58,18 @@ export function validateNodeSlideProviderChoice(
       `Exact ${operation === 'propose_edit' ? 'edit-review' : 'variation'} consent is required before sending context to OpenRouter.`,
     );
   }
-  return { providerMode: 'openrouter_free', providerConsent: expected };
+  const selectedModel = providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL;
+  if (!isNodeSlideAgentModelId(selectedModel)) {
+    throw new NodeSlideProviderConsentError(
+      'invalid_request',
+      'Choose a supported NodeSlide agent model.',
+    );
+  }
+  return {
+    providerMode: 'openrouter_free',
+    providerModel: selectedModel,
+    providerConsent: expected,
+  };
 }
 
 export async function invokeConsentedNodeSlideProvider<Result>(

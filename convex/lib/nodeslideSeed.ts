@@ -10,7 +10,12 @@ import {
   type ThemeSpec,
 } from '../../shared/nodeslide';
 import {
+  type NodeSlideDataAttachment,
+  nodeSlideDataAttachmentShape,
+} from '../../shared/nodeslideAttachments';
+import {
   nodeslideCleanText,
+  nodeslideContentDigest,
   nodeslideHash,
   nodeslideSlug,
   nodeslideStableId,
@@ -27,12 +32,26 @@ export interface NodeSlidePlannedFormula {
   expression: string;
   display: string;
   variables: Array<{ label: string; value: number; unit?: string }>;
+  syntax?: 'plain' | 'latex';
+  description?: string;
 }
 
 export interface NodeSlidePlannedImage {
-  altText: string;
-  credit: string;
+  url?: string;
   imageUrl?: string;
+  altText: string;
+  credit?: string;
+  caption?: string;
+}
+
+export interface NodeSlidePlannedVideo {
+  url: string;
+  posterUrl?: string;
+  title?: string;
+  captionsUrl?: string;
+  captionsLanguage?: string;
+  startAtSeconds?: number;
+  endAtSeconds?: number;
 }
 
 export interface NodeSlidePlannedSlide {
@@ -46,6 +65,7 @@ export interface NodeSlidePlannedSlide {
   chart?: NodeSlidePlannedChart;
   formula?: NodeSlidePlannedFormula;
   image?: NodeSlidePlannedImage;
+  video?: NodeSlidePlannedVideo;
 }
 
 export interface NodeSlideDeckSpec {
@@ -73,6 +93,7 @@ export interface BuildBriefDeckInput {
   themeId: string;
   rawSpec?: unknown;
   plan?: readonly string[];
+  attachments?: readonly NodeSlideDataAttachment[];
   now: number;
 }
 
@@ -322,6 +343,10 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
           'Normalized boxes travel across renderers',
           'Locks protect intent',
         ],
+        image: {
+          altText: 'Structured deck graph connecting slides, elements, sources, and versions',
+          caption: 'A canonical deck graph keeps every artifact connected.',
+        },
       },
       {
         title: 'One intent, three guarded passes',
@@ -329,6 +354,14 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
         headline: 'Plan → propose → commit, with scope checked at every boundary.',
         body: 'The agent can reason broadly, but it may only write inside the explicit deck, slide, element, comment, or bounding-box scope.',
         bullets: ['Read context', 'Propose an inspectable patch', 'Validate and accept atomically'],
+        formula: {
+          expression: 'authorized change = requested scope ∩ allowed scope',
+          display: 'authorized change = requested scope ∩ allowed scope',
+          variables: [],
+          syntax: 'plain',
+          description:
+            'The agent can only mutate the intersection of requested and authorized scope.',
+        },
       },
       {
         title: 'Quality is measurable',
@@ -342,6 +375,11 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
         ],
         metric: '3 gates',
         metricLabel: 'independent validation signals: ok, publishOk, cleanOk',
+        chart: {
+          labels: ['ok', 'publish', 'clean'],
+          values: [1, 1, 1],
+          unit: 'pass',
+        },
       },
       {
         title: 'Human review stays in the loop',
@@ -429,6 +467,13 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         headline: 'Turn the idea into a sequence people can understand and own.',
         body: 'Connect intent, action, and feedback in one visible operating path so the audience can see both the destination and the mechanics.',
         bullets: ['Align on intent', 'Execute the critical moves', 'Review measurable outcomes'],
+        formula: {
+          expression: 'accepted change = proposal ∩ authorized scope',
+          display: 'accepted change = proposal ∩ authorized scope',
+          variables: [],
+          syntax: 'plain',
+          description: 'Only the authorized portion of a proposal may be accepted.',
+        },
       },
       {
         title: 'What success looks like',
@@ -438,6 +483,11 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         bullets: success,
         metric: `${success.length} signals`,
         metricLabel: 'agreed measures of a successful outcome',
+        chart: {
+          labels: success.map((_, index) => `S${index + 1}`),
+          values: success.map(() => 1),
+          unit: 'defined',
+        },
       },
       {
         title: 'A practical path forward',
@@ -449,6 +499,10 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
           'Review evidence with stakeholders',
           'Scale what earns confidence',
         ],
+        image: {
+          altText: 'Structured evidence map derived from the supplied brief',
+          caption: 'The visual is illustrative and remains replaceable as an image object.',
+        },
       },
       {
         title: 'The decision',
@@ -464,6 +518,84 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
 }
 
 function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prompt: string): void {
+  const csvRecords = briefMetricCsvRecords(prompt);
+  const csvByMetric = new Map(csvRecords.map((record) => [record.metric, record]));
+  const totalGoals = Number(csvByMetric.get('total_goals')?.value);
+  const matchesPlayed = Number(csvByMetric.get('matches_played')?.value);
+  const suppliedGoalsPerMatch = Number(csvByMetric.get('goals_per_match')?.value);
+  const contextSlide = slides[1];
+  const derivedSlide = slides[2];
+  if (
+    Number.isFinite(totalGoals) &&
+    Number.isFinite(matchesPlayed) &&
+    matchesPlayed > 0 &&
+    contextSlide &&
+    derivedSlide
+  ) {
+    const goalsPerMatch = Number.isFinite(suppliedGoalsPerMatch)
+      ? suppliedGoalsPerMatch
+      : Number((totalGoals / matchesPlayed).toFixed(2));
+    contextSlide.title = 'Tournament at a glance';
+    contextSlide.headline = `${totalGoals} goals across ${matchesPlayed} matches.`;
+    contextSlide.body =
+      'The uploaded tournament data is compiled into editable metrics, not flattened into an image.';
+    contextSlide.bullets = [
+      `Average: ${goalsPerMatch} goals per match`,
+      'Every value remains linked to the uploaded source',
+      'Review or replace the data without rebuilding the slide',
+    ];
+    contextSlide.metric = String(totalGoals);
+    contextSlide.metricLabel = 'total goals in the supplied dataset';
+    derivedSlide.title = 'Scoring rate';
+    derivedSlide.headline = `${goalsPerMatch} goals per match.`;
+    derivedSlide.body =
+      'NodeSlide keeps the result and both inputs as a structured formula for review and native export.';
+    derivedSlide.bullets = ['Editable numerator', 'Editable denominator', 'Recomputable result'];
+    derivedSlide.formula = {
+      expression: 'total_goals / matches_played',
+      display: `${totalGoals} ÷ ${matchesPlayed} = ${goalsPerMatch}`,
+      variables: [
+        { label: 'Total goals', value: totalGoals, unit: 'goals' },
+        { label: 'Matches played', value: matchesPlayed, unit: 'matches' },
+      ],
+      syntax: 'plain',
+      description: 'Goals per match derived from the uploaded tournament totals.',
+    };
+  }
+
+  const scorerRecords = ['top_scorer', 'runner_up'].flatMap((metric) => {
+    const record = csvByMetric.get(metric);
+    if (!record) return [];
+    const goals = Number(record.unit.match(/\d+(?:\.\d+)?/u)?.[0]);
+    return record.value && Number.isFinite(goals) ? [{ label: record.value, value: goals }] : [];
+  });
+  const csvChartRecords =
+    scorerRecords.length >= 2
+      ? scorerRecords
+      : csvRecords.flatMap((record) => {
+          const value = Number(record.value);
+          return Number.isFinite(value) ? [{ label: humanizeMetric(record.metric), value }] : [];
+        });
+  const csvChartSlide = slides[3];
+  if (csvChartRecords.length >= 2 && csvChartSlide) {
+    const { formula: _formula, ...chartOnlySlide } = csvChartSlide;
+    slides[3] = {
+      ...chartOnlySlide,
+      title: scorerRecords.length >= 2 ? 'Golden Boot race' : 'Uploaded comparison',
+      headline:
+        scorerRecords.length >= 2
+          ? 'The top two scorers were separated by one goal.'
+          : 'The uploaded values remain an editable chart.',
+      body: 'Labels and values stay in the canonical deck spec for direct editing, validation, and native export.',
+      bullets: ['Data-bound bars', 'Source-linked values', 'Editable labels'],
+      chart: {
+        labels: csvChartRecords.slice(0, 8).map(({ label }) => label),
+        values: csvChartRecords.slice(0, 8).map(({ value }) => value),
+        unit: scorerRecords.length >= 2 ? 'goals' : 'value',
+      },
+    };
+  }
+
   const formulaMatch = prompt.match(
     /formula[^.;]{0,40}?(\d+(?:\.\d+)?)\s*(?:÷|\/)\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)([^,.;]*)/iu,
   );
@@ -503,14 +635,17 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
     : [];
   const chartSlide = slides[3];
   if (comparisons.length >= 2 && chartSlide) {
-    chartSlide.title = 'Supplied comparison';
-    chartSlide.headline = 'The supplied values remain an editable chart.';
-    chartSlide.body =
-      'Labels and values stay in the canonical deck spec for direct editing and native export.';
-    chartSlide.chart = {
-      labels: comparisons.slice(0, 8).map(({ label }) => label),
-      values: comparisons.slice(0, 8).map(({ value }) => value),
-      unit: 'goals',
+    const { formula: _formula, ...chartOnlySlide } = chartSlide;
+    slides[3] = {
+      ...chartOnlySlide,
+      title: 'Supplied comparison',
+      headline: 'The supplied values remain an editable chart.',
+      body: 'Labels and values stay in the canonical deck spec for direct editing and native export.',
+      chart: {
+        labels: comparisons.slice(0, 8).map(({ label }) => label),
+        values: comparisons.slice(0, 8).map(({ value }) => value),
+        unit: 'goals',
+      },
     };
   }
 
@@ -518,7 +653,7 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
     prompt.match(/editable\s+([^.;]{3,80}?)\s+image placeholder/iu)?.[1] ?? '',
     80,
   );
-  const imageSlide = slides[5];
+  const imageSlide = slides.find((slide) => slide.image) ?? slides[5];
   if (imageLabel && imageSlide) {
     imageSlide.title = `${imageLabel} image placeholder`;
     imageSlide.headline = 'Missing image evidence stays explicit, editable, and credited.';
@@ -529,6 +664,33 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
       credit: 'Licensed image and visible credit required before external use',
     };
   }
+}
+
+function briefMetricCsvRecords(
+  prompt: string,
+): Array<{ metric: string; value: string; unit: string }> {
+  const lines = prompt.split(/\r?\n/u);
+  const headerIndex = lines.findIndex(
+    (line) => line.trim().toLowerCase() === 'metric,value,unit,source',
+  );
+  if (headerIndex < 0) return [];
+  return lines.slice(headerIndex + 1, headerIndex + 101).flatMap((line) => {
+    const [rawMetric = '', rawValue = '', rawUnit = ''] = line.split(',');
+    const metric = rawMetric.trim().toLowerCase();
+    const value = rawValue.trim();
+    const unit = rawUnit.trim();
+    return /^[a-z0-9_ -]{1,80}$/u.test(metric) && value
+      ? [{ metric: metric.replace(/[ -]+/gu, '_'), value, unit }]
+      : [];
+  });
+}
+
+function humanizeMetric(metric: string): string {
+  return metric
+    .split('_')
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toLocaleUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
 }
 
 function sentenceCase(value: string): string {
@@ -584,6 +746,7 @@ export function buildBriefNodeSlide(input: BuildBriefDeckInput): NodeSlideBuildR
     themeId: input.themeId,
     spec,
     plan: plan.length > 0 ? plan : fallbackPlan,
+    ...(input.attachments ? { attachments: input.attachments } : {}),
     now: input.now,
     shareSlug: nodeslideSlug(input.title, nodeslideHash(input.deckId)),
     golden: false,
@@ -598,6 +761,7 @@ function buildNodeSlideDeck(input: {
   themeId: string;
   spec: NodeSlideDeckSpec;
   plan: string[];
+  attachments?: readonly NodeSlideDataAttachment[];
   now: number;
   shareSlug: string;
   golden: boolean;
@@ -606,7 +770,37 @@ function buildNodeSlideDeck(input: {
   const sourceBriefId = nodeslideStableId('source', input.deckId, 'brief');
   const sourceEvidenceId = nodeslideStableId('source', input.deckId, 'evidence');
   const linkedSources = linkedBriefSources(input.deckId, input.brief.prompt, input.now);
-  const linkedSourceIds = linkedSources.map((source) => source.id);
+  const uploadedSources: SourceRecord[] = (input.attachments ?? []).map((attachment) => {
+    const sourceType =
+      attachment.format === 'csv'
+        ? ('spreadsheet' as const)
+        : attachment.format === 'json'
+          ? ('document' as const)
+          : ('note' as const);
+    return {
+      id: nodeslideStableId(
+        'source',
+        input.deckId,
+        sourceType,
+        attachment.title,
+        nodeslideHash(attachment.content),
+      ),
+      deckId: input.deckId,
+      title: attachment.title,
+      sourceType,
+      retrievedAt: input.now,
+      citation: `Uploaded file: ${attachment.title}\n${attachment.content}`,
+      license: 'User supplied',
+      format: attachment.format,
+      contentDigest: nodeslideContentDigest(attachment.content),
+      byteSize: new TextEncoder().encode(attachment.content).byteLength,
+      ...nodeSlideDataAttachmentShape(attachment.content, attachment.format),
+      retention: 'until_deleted',
+      status: 'ready',
+      lastRefreshedAt: input.now,
+    };
+  });
+  const linkedSourceIds = [...linkedSources, ...uploadedSources].map((source) => source.id);
   const sources: SourceRecord[] = [
     {
       id: sourceBriefId,
@@ -629,6 +823,7 @@ function buildNodeSlideDeck(input: {
       license: 'Internal working material',
     },
     ...linkedSources,
+    ...uploadedSources,
   ];
 
   const slides: Slide[] = [];
@@ -758,13 +953,15 @@ function buildSlide(input: {
 
   const isOpening = input.index === 0;
   const isClosing = input.index === input.total - 1;
-  const hasStructuredPrimitive = Boolean(planned.chart || planned.formula || planned.image);
+  const hasPrimaryMedia =
+    planned.formula !== undefined || planned.image !== undefined || planned.video !== undefined;
+  const hasStructuredPrimitive = Boolean(planned.chart || hasPrimaryMedia);
+  const hasVisual = hasStructuredPrimitive || planned.metric !== undefined;
   const claimSourceIds = [input.sourceBriefId, ...input.linkedSourceIds];
   const evidenceSourceIds =
     input.linkedSourceIds.length > 0 ? input.linkedSourceIds : [input.sourceEvidenceId];
   const primaryEvidenceSourceId = evidenceSourceIds[0] ?? input.sourceEvidenceId;
-  const bodyWidth =
-    hasStructuredPrimitive || planned.metric ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
+  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
   add(
     element('body', {
       name: 'Body copy',
@@ -786,12 +983,10 @@ function buildSlide(input: {
     }),
   );
 
-  const bulletX =
-    isOpening || isClosing ? 0.07 : hasStructuredPrimitive || planned.metric ? 0.07 : 0.59;
-  const bulletY =
-    isOpening || isClosing ? 0.72 : hasStructuredPrimitive || planned.metric ? 0.62 : 0.42;
-  const bulletWidth =
-    isOpening || isClosing ? 0.8 : hasStructuredPrimitive || planned.metric ? 0.39 : 0.33;
+  const horizontalBullets = (isOpening || isClosing) && !hasVisual;
+  const bulletX = horizontalBullets ? 0.07 : hasVisual ? 0.07 : 0.59;
+  const bulletY = horizontalBullets ? 0.72 : hasVisual ? 0.62 : 0.42;
+  const bulletWidth = horizontalBullets ? 0.8 : hasVisual ? 0.39 : 0.33;
   planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
     add(
       element(`bullet-${bulletIndex + 1}`, {
@@ -799,17 +994,17 @@ function buildSlide(input: {
         kind: 'text',
         role: 'bullet',
         bbox: box(
-          isOpening || isClosing ? bulletX + bulletIndex * 0.28 : bulletX,
-          isOpening || isClosing ? bulletY : bulletY + bulletIndex * 0.12,
-          isOpening || isClosing ? 0.25 : bulletWidth,
-          isOpening || isClosing ? 0.08 : 0.09,
+          horizontalBullets ? bulletX + bulletIndex * 0.28 : bulletX,
+          horizontalBullets ? bulletY : bulletY + bulletIndex * 0.12,
+          horizontalBullets ? 0.25 : bulletWidth,
+          horizontalBullets ? 0.08 : 0.09,
         ),
         rotation: 0,
-        content: `${isOpening || isClosing ? '•' : `0${bulletIndex + 1}`}  ${bullet}`,
+        content: `${horizontalBullets ? '•' : `0${bulletIndex + 1}`}  ${bullet}`,
         style: {
           color: theme.colors.ink,
           fontFamily: theme.typography.body,
-          fontSize: isOpening || isClosing ? 16 : 17,
+          fontSize: horizontalBullets ? 16 : 17,
           fontWeight: 560,
           lineHeight: 1.2,
         },
@@ -820,7 +1015,7 @@ function buildSlide(input: {
     );
   });
 
-  if (planned.metric && !planned.formula) {
+  if (planned.metric && !hasPrimaryMedia) {
     add(
       element('metric', {
         name: 'Primary metric',
@@ -892,6 +1087,9 @@ function buildSlide(input: {
           expression: planned.formula.expression,
           display: planned.formula.display,
           variables: planned.formula.variables,
+          syntax: planned.formula.syntax ?? 'plain',
+          displayMode: 'block',
+          ...(planned.formula.description ? { description: planned.formula.description } : {}),
           sourceId: primaryEvidenceSourceId,
         },
         sourceIds: evidenceSourceIds,
@@ -902,7 +1100,12 @@ function buildSlide(input: {
   }
 
   if (planned.image) {
-    const hasEmbeddedAsset = Boolean(planned.image.imageUrl);
+    const imageUrl = planned.image.imageUrl ?? planned.image.url;
+    const hasEmbeddedAsset = Boolean(imageUrl);
+    const credit =
+      planned.image.credit ??
+      planned.image.caption ??
+      'Credit required before external publication';
     add(
       element('image', {
         name: 'Editable image',
@@ -919,10 +1122,10 @@ function buildSlide(input: {
         },
         image: {
           placeholder: !hasEmbeddedAsset,
-          credit: planned.image.credit,
+          credit,
           sourceId: primaryEvidenceSourceId,
         },
-        ...(planned.image.imageUrl ? { imageUrl: planned.image.imageUrl } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
         altText: planned.image.altText,
         sourceIds: evidenceSourceIds,
         locked: false,
@@ -938,7 +1141,9 @@ function buildSlide(input: {
         role: 'caption',
         bbox: box(0.55, 0.79, 0.35, 0.07),
         rotation: 0,
-        content: `${hasEmbeddedAsset ? 'Image credit' : 'Replace image before external use'} · ${planned.image.credit}`,
+        content: planned.image.caption
+          ? planned.image.caption
+          : `${hasEmbeddedAsset ? 'Image credit' : 'Replace image before external use'} · ${credit}`,
         style: {
           color: theme.colors.muted,
           fontFamily: theme.typography.body,
@@ -954,6 +1159,43 @@ function buildSlide(input: {
     );
   }
 
+  if (planned.video) {
+    add(
+      element('video', {
+        name: 'Linked video',
+        kind: 'video',
+        role: 'evidence_video',
+        bbox: box(0.53, 0.4, 0.39, 0.28),
+        rotation: 0,
+        style: {
+          fill: '#111318',
+          stroke: theme.colors.border,
+          strokeWidth: 1,
+          radius: theme.defaultRadius,
+        },
+        video: {
+          url: planned.video.url,
+          ...(planned.video.posterUrl ? { posterUrl: planned.video.posterUrl } : {}),
+          ...(planned.video.title ? { title: planned.video.title } : {}),
+          ...(planned.video.captionsUrl ? { captionsUrl: planned.video.captionsUrl } : {}),
+          ...(planned.video.captionsLanguage
+            ? { captionsLanguage: planned.video.captionsLanguage }
+            : {}),
+          ...(planned.video.startAtSeconds !== undefined
+            ? { startAtSeconds: planned.video.startAtSeconds }
+            : {}),
+          ...(planned.video.endAtSeconds !== undefined
+            ? { endAtSeconds: planned.video.endAtSeconds }
+            : {}),
+        },
+        altText: planned.video.title ?? 'Linked video',
+        sourceIds: [input.sourceEvidenceId],
+        locked: false,
+        exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      }),
+    );
+  }
+
   if (planned.chart) {
     const labels = planned.chart.labels.slice(0, 8);
     const values = planned.chart.values.slice(0, labels.length);
@@ -962,7 +1204,12 @@ function buildSlide(input: {
         name: 'Evidence chart',
         kind: 'chart',
         role: 'evidence',
-        bbox: box(0.53, 0.42, 0.39, 0.4),
+        bbox: box(
+          0.53,
+          hasPrimaryMedia || planned.metric ? 0.7 : 0.42,
+          0.39,
+          hasPrimaryMedia || planned.metric ? 0.17 : 0.4,
+        ),
         rotation: 0,
         style: {
           fill: theme.colors.accentSoft,
@@ -1061,9 +1308,17 @@ function coercePlannedSlide(
     typeof value.metric === 'string' ? nodeslideCleanText(value.metric, 24) : undefined;
   const metricLabel =
     typeof value.metricLabel === 'string' ? nodeslideCleanText(value.metricLabel, 100) : undefined;
-  const chart = coerceChart(value.chart);
-  const formula = coerceFormula(value.formula);
-  const image = coerceImage(value.image);
+  const explicitChart = coerceChart(value.chart);
+  const explicitFormula = coerceFormula(value.formula ?? value.math);
+  const explicitImage = coerceImage(value.image);
+  const explicitVideo = coerceVideo(value.video);
+  const hasExplicitPrimary = Boolean(
+    explicitChart || explicitFormula || explicitImage || explicitVideo,
+  );
+  const chart = explicitChart ?? (hasExplicitPrimary ? undefined : fallback?.chart);
+  const formula = explicitFormula ?? (hasExplicitPrimary ? undefined : fallback?.formula);
+  const image = explicitImage ?? (hasExplicitPrimary ? undefined : fallback?.image);
+  const video = explicitVideo ?? (hasExplicitPrimary ? undefined : fallback?.video);
   return {
     title,
     section,
@@ -1075,6 +1330,7 @@ function coercePlannedSlide(
     ...(chart ? { chart } : {}),
     ...(formula ? { formula } : {}),
     ...(image ? { image } : {}),
+    ...(video ? { video } : {}),
   };
 }
 
@@ -1099,42 +1355,92 @@ function coerceChart(value: unknown): NodeSlidePlannedChart | undefined {
 
 function coerceFormula(value: unknown): NodeSlidePlannedFormula | undefined {
   if (!isRecord(value)) return undefined;
-  const expression = cleanField(value.expression, '', 180);
-  const display = cleanField(value.display, expression, 180);
+  const expression = cleanField(value.expression, '', 4_000);
+  const display = cleanField(value.display, expression, 4_000);
   if (!expression || !display) return undefined;
+  const syntax = value.syntax === 'latex' ? 'latex' : 'plain';
+  const description =
+    typeof value.description === 'string' ? nodeslideCleanText(value.description, 320) : undefined;
   const variables = Array.isArray(value.variables)
     ? value.variables.flatMap((candidate) => {
         if (!isRecord(candidate) || typeof candidate.value !== 'number') return [];
         const label = cleanField(candidate.label, '', 48);
         if (!label || !Number.isFinite(candidate.value)) return [];
         const unit = cleanField(candidate.unit, '', 24);
-        return [
-          {
-            label,
-            value: candidate.value,
-            ...(unit ? { unit } : {}),
-          },
-        ];
+        return [{ label, value: candidate.value, ...(unit ? { unit } : {}) }];
       })
     : [];
-  return { expression, display, variables: variables.slice(0, 8) };
+  return {
+    expression,
+    display,
+    variables: variables.slice(0, 8),
+    syntax,
+    ...(description ? { description } : {}),
+  };
 }
 
 function coerceImage(value: unknown): NodeSlidePlannedImage | undefined {
   if (!isRecord(value)) return undefined;
-  const altText = cleanField(value.altText, '', 160);
+  const altText = cleanField(value.altText, '', 320);
   if (!altText) return undefined;
-  const credit = cleanField(value.credit, 'Credit required before external use', 180);
-  const imageUrl =
-    typeof value.imageUrl === 'string' &&
-    /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(value.imageUrl.trim())
-      ? value.imageUrl.trim().slice(0, 200_000)
-      : undefined;
+  const url = safePlannedMediaUrl(value.url ?? value.imageUrl, 'image');
+  const credit =
+    typeof value.credit === 'string' ? nodeslideCleanText(value.credit, 180) : undefined;
+  const caption =
+    typeof value.caption === 'string' ? nodeslideCleanText(value.caption, 240) : undefined;
   return {
     altText,
-    credit,
-    ...(imageUrl ? { imageUrl } : {}),
+    ...(url ? { imageUrl: url } : {}),
+    ...(credit ? { credit } : {}),
+    ...(caption ? { caption } : {}),
   };
+}
+
+function coerceVideo(value: unknown): NodeSlidePlannedVideo | undefined {
+  if (!isRecord(value)) return undefined;
+  const url = safePlannedMediaUrl(value.url, 'video');
+  if (!url) return undefined;
+  const posterUrl = safePlannedMediaUrl(value.posterUrl, 'image');
+  const title = typeof value.title === 'string' ? nodeslideCleanText(value.title, 160) : undefined;
+  const captionsUrl = safePlannedCaptionUrl(value['captionsUrl']);
+  const captionsLanguage =
+    typeof value['captionsLanguage'] === 'string'
+      ? nodeslideCleanText(value['captionsLanguage'], 32)
+      : undefined;
+  const startAtSeconds = boundedMediaTime(value.startAtSeconds);
+  const requestedEnd = boundedMediaTime(value.endAtSeconds);
+  const endAtSeconds =
+    requestedEnd !== undefined && requestedEnd > (startAtSeconds ?? 0) ? requestedEnd : undefined;
+  return {
+    url,
+    ...(posterUrl ? { posterUrl } : {}),
+    ...(title ? { title } : {}),
+    ...(captionsUrl ? { captionsUrl } : {}),
+    ...(captionsLanguage ? { captionsLanguage } : {}),
+    ...(startAtSeconds !== undefined ? { startAtSeconds } : {}),
+    ...(endAtSeconds !== undefined ? { endAtSeconds } : {}),
+  };
+}
+
+function safePlannedCaptionUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim().slice(0, 4_000);
+  const lower = clean.toLowerCase();
+  return lower.startsWith('https://') || lower.startsWith('data:text/vtt') ? clean : undefined;
+}
+
+function safePlannedMediaUrl(value: unknown, kind: 'image' | 'video'): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim().slice(0, 4_000);
+  const lower = clean.toLowerCase();
+  if (lower.startsWith('https://') || lower.startsWith(`data:${kind}/`)) return clean;
+  return undefined;
+}
+
+function boundedMediaTime(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.min(value, 86_400)
+    : undefined;
 }
 
 function linkedBriefSources(deckId: string, prompt: string, now: number): SourceRecord[] {
@@ -1187,15 +1493,26 @@ interface NodeSlideInputRecord extends Record<string, unknown> {
   metricLabel?: unknown;
   chart?: unknown;
   formula?: unknown;
+  math?: unknown;
   image?: unknown;
+  video?: unknown;
   expression?: unknown;
+  syntax?: unknown;
   display?: unknown;
+  description?: unknown;
   variables?: unknown;
   label?: unknown;
   value?: unknown;
   altText?: unknown;
   credit?: unknown;
+  caption?: unknown;
+  url?: unknown;
   imageUrl?: unknown;
+  posterUrl?: unknown;
+  captionsUrl?: unknown;
+  captionsLanguage?: unknown;
+  startAtSeconds?: unknown;
+  endAtSeconds?: unknown;
   labels?: unknown;
   values?: unknown;
   unit?: unknown;

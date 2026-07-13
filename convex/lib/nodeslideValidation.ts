@@ -404,15 +404,23 @@ function validateElement(
   }
   if (element.kind === 'math') {
     const math = element.math;
-    if (!math?.expression.trim() || !math.display.trim()) {
+    if (!math?.expression.trim()) {
       addIssue({
         severity: 'error',
         code: 'schema',
-        message: `Math element ${element.id} has no structured expression and display value.`,
+        message: `Math element ${element.id} has no structured expression.`,
         slideId: element.slideId,
         elementId: element.id,
       });
-    } else if (math.variables.some((variable) => !Number.isFinite(variable.value))) {
+    } else if (math.expression.length > 4_000) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Math element ${element.id} exceeds the expression limit.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if ((math.variables ?? []).some((variable) => !Number.isFinite(variable.value))) {
       addIssue({
         severity: 'error',
         code: 'schema',
@@ -482,6 +490,77 @@ function validateElement(
       });
     }
   }
+  if (element.kind === 'video') {
+    const video = element.video;
+    if (!video?.url.trim()) {
+      addIssue({
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element ${element.id} has no media URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (!isSafeMediaUrl(video.url, 'video')) {
+      addIssue({
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element ${element.id} uses an unsupported media URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (video?.posterUrl && !isSafeMediaUrl(video.posterUrl, 'image')) {
+      addIssue({
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element ${element.id} uses an unsupported poster URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (video?.captionsUrl && !isSafeCaptionUrl(video.captionsUrl)) {
+      addIssue({
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element ${element.id} uses an unsupported caption URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (video?.captionsLanguage && video.captionsLanguage.trim().length > 32) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Video element ${element.id} has an invalid caption language.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (
+      video?.startAtSeconds !== undefined &&
+      (!Number.isFinite(video.startAtSeconds) || video.startAtSeconds < 0)
+    ) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Video element ${element.id} has an invalid start time.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (
+      video?.endAtSeconds !== undefined &&
+      (!Number.isFinite(video.endAtSeconds) || video.endAtSeconds <= (video.startAtSeconds ?? 0))
+    ) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Video element ${element.id} has an invalid end time.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+  }
   for (const sourceId of element.sourceIds) {
     if (!sourceIds.has(sourceId)) {
       addIssue({
@@ -502,6 +581,17 @@ function validateElement(
       elementId: element.id,
     });
   }
+}
+
+function isSafeMediaUrl(value: string, kind: 'image' | 'video'): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith('https://')) return true;
+  return normalized.startsWith(`data:${kind}/`);
+}
+
+function isSafeCaptionUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('https://') || normalized.startsWith('data:text/vtt');
 }
 
 function validateFlatGroups(

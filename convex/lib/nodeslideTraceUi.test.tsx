@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { AgentTrace, ValidationResult } from '../../shared/nodeslide';
-import { TraceInspector } from '../../src/domains/nodeslide/inspector/TraceInspector';
+import { CustodyRail, TraceInspector } from '../../src/domains/nodeslide/inspector/TraceInspector';
 import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 
 describe('NodeSlide trace validation receipts', () => {
@@ -62,6 +62,84 @@ describe('NodeSlide trace validation receipts', () => {
     expect(markup).toContain('Review cycle');
     expect(markup).toContain('41s');
     expect(markup).toContain(NODESLIDE_EDIT_MODEL);
+  });
+
+  it('shows authoritative uploaded-source identity and digest without raw file contents', () => {
+    const current = validation('validation-v3', 3, 3_000);
+    const trace: AgentTrace = {
+      id: 'trace-uploaded-data',
+      deckId: 'deck-a',
+      patchId: 'patch-uploaded-data',
+      status: 'awaiting_review',
+      summary: 'Updated the metric from uploaded data.',
+      plan: ['Read scoped deck context'],
+      context: [
+        'Read context: 1 slide, 8 elements, 1 source, 0 comments',
+        'Source: world-cup.csv [source_123] · spreadsheet · sha256:0123456789abcdef',
+      ],
+      toolCalls: ['Validated patch'],
+      guardrails: ['Explicit scope'],
+      validation: current,
+      createdAt: 2_500,
+    };
+
+    const markup = renderToStaticMarkup(
+      <CustodyRail
+        trace={trace}
+        patch={undefined}
+        validation={current}
+        density="human"
+        openNode="read"
+        onToggle={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('world-cup.csv');
+    expect(markup).toContain('source_123');
+    expect(markup).toContain('sha256:0123456789abcdef');
+    expect(markup).not.toContain('total_goals,172');
+  });
+
+  it('renders the durable run journal and persisted web tool evidence', () => {
+    const markup = renderToStaticMarkup(
+      <TraceInspector
+        traces={[]}
+        validations={[]}
+        agentRuns={[
+          {
+            id: 'run-web',
+            deckId: 'deck-a',
+            idempotencyKey: 'request-1',
+            instruction: 'Research current World Cup data and update this chart.',
+            status: 'researching',
+            provider: 'openrouter',
+            model: 'z-ai/glm-5.2',
+            webResearch: true,
+            attempt: 1,
+            createdAt: 1_000,
+            updatedAt: 2_000,
+          },
+        ]}
+        agentMessages={[
+          {
+            id: 'message-tool',
+            deckId: 'deck-a',
+            runId: 'run-web',
+            role: 'tool',
+            toolName: 'web_search',
+            content: 'Retained 4 web sources from brave and tavily.',
+            sourceIds: ['source-1', 'source-2', 'source-3', 'source-4'],
+            createdAt: 1_500,
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('Run journal');
+    expect(markup).toContain('server persisted');
+    expect(markup).toContain('Web consented');
+    expect(markup).toContain('web_search');
+    expect(markup).toContain('z-ai/glm-5.2');
   });
 });
 

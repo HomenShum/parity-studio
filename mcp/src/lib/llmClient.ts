@@ -2,7 +2,7 @@
  * pi-ai wrapper for the MCP server. Mirrors convex/lib/piAi.ts so the MCP
  * package and the Convex backend share the same provider abstraction.
  *
- * Source: github.com/earendil-works/pi, packages/ai (published as @earendil-works/pi-ai).
+ * Source: github.com/badlogic/pi-mono, packages/ai (maintained as @earendil-works/pi-ai).
  *
  * API surface:
  *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
@@ -71,6 +71,8 @@ export interface CallOptions {
   userImage?: VisionInput;
   maxTokens?: number;
   signal?: AbortSignal;
+  /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
+  baseUrl?: string;
 }
 
 export interface CallResult {
@@ -130,7 +132,8 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   // per-call user input). Runtime validation inside getModel throws for
   // unknown ids — we surface that as a clear error message to the agent.
   // biome-ignore lint/suspicious/noExplicitAny: see comment above
-  const model = (getModel as any)(opts.provider, canonicalId);
+  const registryModel = (getModel as any)(opts.provider, canonicalId);
+  const model = opts.baseUrl ? { ...registryModel, baseUrl: opts.baseUrl } : registryModel;
 
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {

@@ -32,6 +32,7 @@ export function FirstRunDialog({ open, onCreate, onExplore }: FirstRunDialogProp
     <dialog
       ref={dialogRef}
       className="ns-first-run-dialog"
+      data-testid="first-run-dialog"
       aria-labelledby="ns-first-run-title"
       aria-describedby="ns-first-run-description"
       onKeyDown={(event) => {
@@ -93,11 +94,17 @@ export function FirstRunDialog({ open, onCreate, onExplore }: FirstRunDialogProp
           ref={primaryRef}
           className="ns-button ns-button--accent"
           type="button"
+          data-testid="first-run-create"
           onClick={onCreate}
         >
           <FilePlus2 size={15} /> Create my deck <ArrowRight size={14} />
         </button>
-        <button className="ns-button ns-button--quiet" type="button" onClick={onExplore}>
+        <button
+          className="ns-button ns-button--quiet"
+          type="button"
+          data-testid="first-run-explore"
+          onClick={onExplore}
+        >
           <PlayCircle size={15} /> Explore the sample
         </button>
       </div>

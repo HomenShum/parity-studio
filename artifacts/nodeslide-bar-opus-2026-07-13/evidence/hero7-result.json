@@ -1,0 +1,68 @@
+{
+  "steps": [
+    {
+      "s": "provider-default",
+      "det": true,
+      "or": false
+    },
+    {
+      "s": "proposal",
+      "seen": true,
+      "mutatedBeforeAccept": false
+    },
+    {
+      "s": "trace-det",
+      "traceDeterministic": true,
+      "egressCount": 0
+    },
+    {
+      "s": "accept-version",
+      "acceptCount": 2,
+      "accepted": true,
+      "mutatedAfterAccept": true
+    },
+    {
+      "s": "adversarial",
+      "emptyDisabled": true,
+      "egressWithConsentOff": 0
+    }
+  ],
+  "canvasBefore": "N NodeSlide / v1 EN Reset demo Share Present Export Commands Slides Outline Layers NODESLIDE / 01 1 01 NODESLIDE / 01 Build the story. Keep every decision editable. NodeSlide treats a deck as a typed system: narrative, geometry, sources, comments, and changes stay connected from first brief to final room. • Structured canvas • Guarded edits • Traceable claims NODESLIDE · SOURCE-AWARE · EDITABLE 01",
+  "providerState": {
+    "det": true,
+    "or": false
+  },
+  "proposalSeen": true,
+  "canvasAfterPropose": "N NodeSlide / v1 EN Reset demo Share Present Export Commands Slides Outline Layers NODESLIDE / 01 1 01 NODESLIDE / 01 Build the story. Keep every decision editable. NodeSlide treats a deck as a typed system: narrative, geometry, sources, comments, and changes stay connected from first brief to final room. • Structured canvas • Guarded edits • Traceable claims NODESLIDE · SOURCE-AWARE · EDITABLE 01",
+  "mutatedBeforeAccept": false,
+  "traceDeterministic": true,
+  "traceHasCost": false,
+  "traceExcerpt": [
+    "Build the story. Keep every decision editable.",
+    "•  Guarded edits",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "03  Hand off editable structure",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "A beautiful deck still needs deterministic gates.",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE"
+  ],
+  "acceptCount": 2,
+  "accepted": true,
+  "canvasAfterAccept": "N NodeSlide / v2 EN Reset demo Share Present Export Commands Slides Outline Layers NODESLIDE / 01 1 01 NODESLIDE / 01 Build the story. Keep every decision editable. NodeSlide treats a deck as a typed system: narrative, geometry, sources, comments, and cha… • Structured canvas • Guarded edits • Traceable claims NODESLIDE · SOURCE-AWARE · EDITABLE 01 Stories with structure 1 source · current SCENARI",
+  "mutatedAfterAccept": true,
+  "versionsExcerpt": [
+    "v2",
+    "Slides and elements carry stable IDs, normalized geometry, source links, export capability, locks, and independent versions.",
+    "Structured deck graph connecting slides, elements, sources, and versions",
+    "A reviewer can anchor feedback to a deck, slide, element, or region; link the resolution to an accepted patch; and restore any prior snapshot.",
+    "03  Version recovery",
+    "Versions",
+    "Versions",
+    "v2"
+  ],
+  "emptyDisabled": true,
+  "egressWithConsentOff": []
+}

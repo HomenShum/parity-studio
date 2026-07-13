@@ -27,8 +27,12 @@ describe('NodeSlide provider consent authority', () => {
         'propose_edit',
         'openrouter_free',
         NODESLIDE_OPENROUTER_EDIT_CONSENT,
+        'anthropic/claude-sonnet-5',
       ),
-    ).toMatchObject({ providerMode: 'openrouter_free' });
+    ).toMatchObject({
+      providerMode: 'openrouter_free',
+      providerModel: 'anthropic/claude-sonnet-5',
+    });
     expect(
       validateNodeSlideProviderChoice(
         'variations',
@@ -50,5 +54,16 @@ describe('NodeSlide provider consent authority', () => {
         NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
       ),
     ).toThrow(/Exact edit-review consent/);
+    expect(() =>
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_EDIT_CONSENT,
+        'unbounded/provider-model',
+      ),
+    ).toThrow(/supported NodeSlide agent model/);
+    expect(() =>
+      validateNodeSlideProviderChoice('propose_edit', 'deterministic', undefined, 'z-ai/glm-5.2'),
+    ).toThrow(/model selection must only accompany/);
   });
 });

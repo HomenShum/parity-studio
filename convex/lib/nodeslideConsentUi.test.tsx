@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { FirstRunDialog } from '../../src/domains/nodeslide/components/FirstRunDialog';
+import { NodeSlideLanding } from '../../src/domains/nodeslide/components/NodeSlideLanding';
 import {
   ProjectDialog,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT as UI_OPENROUTER_CONSENT,
@@ -25,8 +25,13 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toMatch(/data-testid="provider-openrouter"[^>]*aria-pressed="false"/);
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"[^>]*disabled/);
     expect(markup).toContain('no part of this brief is sent to OpenRouter');
-    expect(markup).toContain('Sends the full brief—title, prompt, audience, purpose, and success');
+    expect(markup).toContain(
+      'Sends the full brief to the selected named model through OpenRouter.',
+    );
     expect(markup).toContain('I consent to sending this full brief to OpenRouter');
+    expect(markup).toContain('data-testid="create-model-select"');
+    expect(markup.match(/<option value=/g)).toHaveLength(7);
+    expect(markup).toContain('data-testid="create-file-input"');
     expect(markup).toContain('type="password"');
     expect(markup).toContain('name="nodeslide-preview-access-code"');
     expect(markup).toContain('autoComplete="off"');
@@ -59,13 +64,62 @@ describe('NodeSlide informed provider controls', () => {
     expect(UI_OPENROUTER_CONSENT).toBe(NODESLIDE_OPENROUTER_BRIEF_CONSENT);
   });
 
-  it('explains the privacy-preserving default before the create dialog opens', () => {
+  it('recommends a live model and keeps consent inline before direct creation', () => {
     const markup = renderToStaticMarkup(
-      <FirstRunDialog open onCreate={() => undefined} onExplore={() => undefined} />,
+      <NodeSlideLanding
+        clientSessionId="session-test"
+        recentDecks={[]}
+        creating={false}
+        onCreate={() => undefined}
+        onExploreSample={() => undefined}
+        onOpenProjects={() => undefined}
+        onOpenDeck={() => undefined}
+      />,
     );
 
-    expect(markup).toContain('Deterministic by default · OpenRouter opt-in');
-    expect(markup).toContain('Your new-deck brief stays');
-    expect(markup).toContain('OpenRouter is optional and receives the full brief only');
+    expect(markup).toContain('data-testid="nodeslide-landing"');
+    expect(markup).toContain('What presentation should we build?');
+    expect(markup).toContain('GLM 5.2 · Recommended');
+    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
+    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
+    expect(markup.match(/<option value=/g)).toHaveLength(8);
+    expect(markup).toContain('data-testid="landing-file-input"');
+    expect(markup).toContain('data-testid="landing-provider-consent"');
+    expect(markup).toContain('Attach data');
+    expect(markup).toContain('One explicit consent above; then create directly.');
+    expect(markup).toContain('aria-label="Create presentation"');
+    expect(markup).toContain('Explore the editable sample workspace');
+    expect(markup).not.toContain('nodeslide-preview-access-code');
+    expect(markup).not.toContain('NodeSlide inspector');
+  });
+
+  it('carries a root-composer draft into the detailed creation contract', () => {
+    const markup = renderToStaticMarkup(
+      <ProjectDialog
+        open
+        clientSessionId="session-test"
+        recentDecks={[]}
+        creating={false}
+        initialDraft={{
+          title: 'AI 2027 — Scenarios and Decisions',
+          prompt: 'Build an evidence-led AI 2027 scenario deck.',
+          providerMode: 'openrouter_free',
+          providerModel: 'anthropic/claude-sonnet-5',
+          attachments: [{ title: 'evidence.csv', format: 'csv', content: 'year,value\n2027,42' }],
+        }}
+        onClose={() => undefined}
+        onCreate={() => undefined}
+        onOpenDeck={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('value="AI 2027 — Scenarios and Decisions"');
+    expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
+    expect(markup).toMatch(/data-testid="provider-openrouter"[^>]*aria-pressed="true"/);
+    expect(markup).toContain('value="anthropic/claude-sonnet-5" selected=""');
+    expect(markup).toContain('evidence.csv');
+    expect(markup).toContain('and 1 attached file');
+    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
+    expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);
   });
 });

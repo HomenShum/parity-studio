@@ -1,4 +1,5 @@
 import type {
+  NodeSlideAgentModelId,
   NodeSlideDesignBehavior,
   NodeSlideProviderMode,
   NodeSlideReferenceUsePolicy,
@@ -60,9 +61,11 @@ export function nodeSlideEditTurnInputDigest(input: {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  focusSlideId?: string;
   designBehavior?: NodeSlideDesignBehavior;
   referenceUse?: NodeSlideReferenceUsePolicy;
   providerMode?: NodeSlideProviderMode;
+  providerModel?: NodeSlideAgentModelId;
 }): string {
   return `turn_${nodeslideContentDigest(stableSerialize(input))}`;
 }

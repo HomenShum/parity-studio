@@ -257,15 +257,25 @@ function validateElementContent(
   }
 
   if (element.kind === 'math') {
-    if (!element.math?.expression.trim() || !element.math.display.trim()) {
+    if (!element.math?.expression.trim()) {
       addIssue(issues, snapshot, {
         severity: 'error',
         code: 'schema',
-        message: `Math element "${element.id}" has no structured expression and display value.`,
+        message: `Math element "${element.id}" has no structured expression.`,
         slideId: element.slideId,
         elementId: element.id,
       });
-    } else if (element.math.variables.some((variable) => !Number.isFinite(variable.value))) {
+    } else if (element.math.expression.length > 4_000) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Math element "${element.id}" exceeds the expression limit.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (
+      (element.math.variables ?? []).some((variable) => !Number.isFinite(variable.value))
+    ) {
       addIssue(issues, snapshot, {
         severity: 'error',
         code: 'schema',
@@ -303,11 +313,85 @@ function validateElementContent(
     }
   }
 
+  if (element.kind === 'video') {
+    if (!element.video?.url.trim()) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element "${element.id}" has no media URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (!isSafeMediaUrl(element.video.url, 'video')) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element "${element.id}" uses an unsupported media URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (element.video?.posterUrl && !isSafeMediaUrl(element.video.posterUrl, 'image')) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element "${element.id}" uses an unsupported poster URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (element.video?.captionsUrl && !isSafeCaptionUrl(element.video.captionsUrl)) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'missing_asset',
+        message: `Video element "${element.id}" uses an unsupported caption URL.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (element.video?.captionsLanguage && element.video.captionsLanguage.trim().length > 32) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Video element "${element.id}" has an invalid caption language.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (
+      element.video?.startAtSeconds !== undefined &&
+      (!Number.isFinite(element.video.startAtSeconds) || element.video.startAtSeconds < 0)
+    ) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Video element "${element.id}" has an invalid start time.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (
+      element.video?.endAtSeconds !== undefined &&
+      (!Number.isFinite(element.video.endAtSeconds) ||
+        element.video.endAtSeconds <= (element.video.startAtSeconds ?? 0))
+    ) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Video element "${element.id}" has an invalid end time.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+  }
+
+  const textLikeContent =
+    element.kind === 'math' ? element.math?.expression : element.content?.trim();
   if (
     (element.kind === 'text' || element.kind === 'shape' || element.kind === 'math') &&
-    element.content?.trim()
+    textLikeContent
   ) {
-    const fit = estimateTextFit(element);
+    const fit = estimateTextFit({ ...element, content: textLikeContent });
     if (fit.overflow) {
       addIssue(issues, snapshot, {
         severity: 'error',
@@ -407,6 +491,17 @@ function sourceWorthy(element: SlideElement): boolean {
   return (
     SOURCE_WORTHY_ROLE.test(element.role ?? '') || QUANTITATIVE_CLAIM.test(element.content ?? '')
   );
+}
+
+function isSafeMediaUrl(value: string, kind: 'image' | 'video'): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith('https://')) return true;
+  return normalized.startsWith(`data:${kind}/`);
+}
+
+function isSafeCaptionUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('https://') || normalized.startsWith('data:text/vtt');
 }
 
 function validateSources(

@@ -1,0 +1,160 @@
+{
+  "steps": [
+    {
+      "s": "armed",
+      "orChecked": true,
+      "cb": [
+        {
+          "c": true,
+          "d": false
+        }
+      ]
+    },
+    {
+      "s": "settle",
+      "sawDrafting": true,
+      "endState": "fallback",
+      "settleMs": 11592,
+      "mutatedBeforeAccept": false
+    },
+    {
+      "s": "trace-live",
+      "hasGlm": true,
+      "fallback": true,
+      "costLines": ["$0.002"],
+      "tokenLines": [],
+      "digest": null,
+      "candValidated": false,
+      "runs": []
+    }
+  ],
+  "poll": [
+    {
+      "i": 0,
+      "drafting": true,
+      "fell": false,
+      "err": false,
+      "proposal": false
+    },
+    {
+      "i": 3,
+      "drafting": true,
+      "fell": false,
+      "err": false,
+      "proposal": false
+    },
+    {
+      "i": 6,
+      "drafting": false,
+      "fell": true,
+      "err": false,
+      "proposal": false
+    }
+  ],
+  "deckUrl": "https://parity-studio.vercel.app/?domain=nodeslide&deck=deck_golden_05g6zge",
+  "canvasBefore": "N NodeSlide / v1 EN Reset demo Share Present Export Commands Slides Outline Layers NODESLIDE / 01 1 01 NODESLIDE / 01 Build the story. Keep every decision editable. NodeSlide treats a deck as a typed system: narrative, geometry, sources, co",
+  "discCount": 1,
+  "armed": {
+    "orChecked": true,
+    "cb": [
+      {
+        "c": true,
+        "d": false
+      }
+    ]
+  },
+  "sawDrafting": true,
+  "settleMs": 11592,
+  "endState": "fallback",
+  "canvasAfterPropose": "N NodeSlide / v1 EN Reset demo Share Present Export Commands Slides Outline Layers NODESLIDE / 01 1 01 NODESLIDE / 01 Build the story. Keep every decision editable. NodeSlide treats a deck as a typed system: narrative, geometry, sources, co",
+  "mutatedBeforeAccept": false,
+  "proposalButtons": [
+    "N NodeSlide",
+    "EN",
+    "Reset demo",
+    "Share",
+    "Present",
+    "Export",
+    "Commands",
+    "Slides",
+    "Outline",
+    "Layers",
+    "NODESLIDE / 01 1",
+    "Stories with structure",
+    "SCENARIO / 02 1",
+    "The handoff tax compounds",
+    "FOUNDATION / 03 1",
+    "A deck is a typed system",
+    "WORKFLOW / 04 1",
+    "One intent, three guarded passes",
+    "PROOF / 05 1",
+    "Quality is measurable",
+    "TRUST / 06 1",
+    "Human review stays in the loop",
+    "NEXT / 07 1",
+    "Ship the story, keep the structure",
+    "Add slide",
+    "Edit",
+    "Overview",
+    "Compare",
+    "Side by side",
+    "Slider",
+    "Overlay",
+    "Blink",
+    "Accept",
+    "Decline",
+    "AI",
+    "Design",
+    "Comments",
+    "Versions",
+    "Data",
+    "Trace",
+    "End compare",
+    "Accept",
+    "Reject",
+    "Generate 3 directions",
+    "Sharpen the story",
+    "Reduce density",
+    "Deck",
+    "This slide",
+    "Selection",
+    "Context",
+    "Insert"
+  ],
+  "traceLive": {
+    "hasGlm": true,
+    "fallback": true,
+    "costLines": ["$0.002"],
+    "tokenLines": [],
+    "digest": null,
+    "candValidated": false,
+    "runs": []
+  },
+  "traceExcerpt": [
+    "Build the story. Keep every decision editable.",
+    "•  Guarded edits",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "03  Hand off editable structure",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "Edit",
+    "NarrativeNarrative role: NodeSlide / 01. Keep the spoken transition focused on “Build the story. Keep every decision editable.” Evidence note: Content is based on the supplied creation brief. Illustrative examples are not independently verified; replace them with measured evidence before external publication.",
+    "Build the story. Keep every decision editable.",
+    "•  Guarded edits",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "Rewrite editable copy on Stories with structure · 6 changes",
+    "TWO CRISP BULLETS THAT STATE SLIDE HANDOFFS LOSE 3 REVIEW CYCLES AND COST 12 HO… / OVERVIEW",
+    "Two crisp bullets that state slide handoffs lose 3 review cycles and cost 12 ho…: from context to clear action",
+    "Two crisp bullets that state slide handoffs lose 3 review cycles and cost 12 ho… becomes a focused narrative: what matters, how it works, and what the audience should do next.",
+    "NODESLIDE  ·  SOURCE-AWARE  ·  EDITABLE",
+    "Compare · Baseline · v1 → Rewrite editable copy on Stories with structure · 6 changes",
+    "Candidate ready",
+    "Candidate for deck v2",
+    "Rewrite editable copy on Stories with structure · 6 changes"
+  ],
+  "consoleErrors": []
+}

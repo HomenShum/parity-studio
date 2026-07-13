@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.3.7 - stdio transport - 19 tools + agent prompts/resource rules
+**Status**: v0.4.0 - stdio transport - Parity Studio + governed NodeSlide tools
 
 ## Install
 
@@ -34,6 +34,8 @@ You need at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_
 The hosted tools (`parity_enhance_prompt`, `parity_chat_*`, `parity_run_*`, `parity_export`) call the hosted Parity Studio Convex deployment at `PARITY_CONVEX_URL` by default. Override the URLs to point at your own deployment.
 
 Local MCP BYOK keeps provider keys in the local MCP process environment. The server only returns which key env vars are present; it never returns key values, writes them into kits, logs them, or uploads them to Parity Studio.
+
+For NodeSlide, see the parent repo’s [`docs/nodeslide-mcp.md`](../docs/nodeslide-mcp.md). The `nodeslide.*` tools expose owner-gated reads, local-BYOK or hosted reviewable proposals, explicit accept/reject, source upload, consented web research, immutable versions, and full traces. A proposal is verified non-mutating before the tool returns success.
 
 Use `parity_agent_runtime_metadata` before child-agent work to get the Claude Code, Codex, Cursor, Windsurf, and generic MCP capability profiles plus OS-specific stdio launch commands and a model-specific provider env allowlist. This prevents agents from forwarding unrelated provider keys to subprocesses and avoids Windows `npx` path failures.
 

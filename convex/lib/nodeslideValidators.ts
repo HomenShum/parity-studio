@@ -1,4 +1,15 @@
 import { ConvexError, v } from 'convex/values';
+import {
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentModelId,
+  isNodeSlideAgentModelId,
+} from '../../shared/nodeslide';
+import {
+  NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
+  NODESLIDE_CREATE_ATTACHMENT_MAX_TOTAL_BYTES,
+  type NodeSlideDataAttachment,
+  normalizeNodeSlideDataAttachment,
+} from '../../shared/nodeslideAttachments';
 
 export const NODESLIDE_CREATE_DECK_LIMITS = {
   title: { maxCharacters: 80, maxBytes: 240 },
@@ -22,6 +33,7 @@ export type ValidatedNodeSlideBriefProviderChoice =
   | { providerMode: 'deterministic' }
   | {
       providerMode: 'openrouter_free';
+      providerModel: NodeSlideAgentModelId;
       providerConsent: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
     };
 
@@ -105,12 +117,13 @@ export function validateNodeSlideCreateDeckFields(
 export function validateNodeSlideBriefProviderChoice(
   providerMode: unknown,
   providerConsent: unknown,
+  providerModel?: unknown,
 ): ValidatedNodeSlideBriefProviderChoice {
   if (providerMode === 'deterministic') {
-    if (providerConsent !== undefined) {
+    if (providerConsent !== undefined || providerModel !== undefined) {
       throw nodeslideCreatePublicError(
         'provider_consent_mismatch',
-        'OpenRouter consent must only accompany an OpenRouter request.',
+        'OpenRouter consent and model selection must only accompany an OpenRouter request.',
       );
     }
     return { providerMode };
@@ -122,9 +135,60 @@ export function validateNodeSlideBriefProviderChoice(
         'Explicit consent is required before sending the full brief to OpenRouter.',
       );
     }
-    return { providerMode, providerConsent };
+    const selectedModel = providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL;
+    if (!isNodeSlideAgentModelId(selectedModel)) {
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        'Choose a supported NodeSlide agent model.',
+      );
+    }
+    return { providerMode, providerModel: selectedModel, providerConsent };
   }
   throw nodeslideCreatePublicError('invalid_request', 'Choose a supported brief provider mode.');
+}
+
+export function validateNodeSlideBriefAttachments(
+  attachments: readonly NodeSlideDataAttachment[] | undefined,
+): NodeSlideDataAttachment[] {
+  if (!attachments?.length) return [];
+  if (attachments.length > NODESLIDE_CREATE_ATTACHMENT_MAX_FILES) {
+    throw nodeslideCreatePublicError(
+      'invalid_request',
+      `Attach at most ${NODESLIDE_CREATE_ATTACHMENT_MAX_FILES} data files to a new deck.`,
+    );
+  }
+
+  let totalBytes = 0;
+  const titles = new Set<string>();
+  const normalized = attachments.map((attachment, index) => {
+    const title = boundedCreateText(attachment.title, `attachments[${index}].title`, {
+      maxCharacters: 180,
+      maxBytes: 540,
+    });
+    const titleKey = title.toLocaleLowerCase();
+    if (titles.has(titleKey)) {
+      throw nodeslideCreatePublicError('invalid_request', `Duplicate attachment: ${title}.`);
+    }
+    titles.add(titleKey);
+    let content: string;
+    try {
+      content = normalizeNodeSlideDataAttachment(attachment.content, attachment.format);
+    } catch (error) {
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        error instanceof Error ? error.message : 'Uploaded data is invalid.',
+      );
+    }
+    totalBytes += utf8ByteLength(content);
+    return { title, format: attachment.format, content };
+  });
+  if (totalBytes > NODESLIDE_CREATE_ATTACHMENT_MAX_TOTAL_BYTES) {
+    throw nodeslideCreatePublicError(
+      'invalid_request',
+      `Uploaded data exceeds ${NODESLIDE_CREATE_ATTACHMENT_MAX_TOTAL_BYTES.toLocaleString()} total bytes.`,
+    );
+  }
+  return normalized;
 }
 
 export async function invokeNodeSlideBriefProvider<Result>(
@@ -246,6 +310,12 @@ export const nodeslideBriefValidator = v.object({
   successCriteria: v.array(v.string()),
 });
 
+export const nodeslideBriefAttachmentValidator = v.object({
+  title: v.string(),
+  format: v.union(v.literal('csv'), v.literal('json'), v.literal('txt')),
+  content: v.string(),
+});
+
 export const nodeslideThemeValidator = v.object({
   id: v.string(),
   name: v.string(),
@@ -304,13 +374,18 @@ export const nodeslideChartDataValidator = v.object({
 
 export const nodeslideMathDataValidator = v.object({
   expression: v.string(),
-  display: v.string(),
-  variables: v.array(
-    v.object({
-      label: v.string(),
-      value: v.number(),
-      unit: v.optional(v.string()),
-    }),
+  syntax: v.optional(v.union(v.literal('plain'), v.literal('latex'))),
+  displayMode: v.optional(v.union(v.literal('inline'), v.literal('block'))),
+  description: v.optional(v.string()),
+  display: v.optional(v.string()),
+  variables: v.optional(
+    v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        unit: v.optional(v.string()),
+      }),
+    ),
   ),
   sourceId: v.optional(v.string()),
 });
@@ -319,6 +394,16 @@ export const nodeslideImageDataValidator = v.object({
   placeholder: v.boolean(),
   credit: v.optional(v.string()),
   sourceId: v.optional(v.string()),
+});
+
+export const nodeslideVideoDataValidator = v.object({
+  url: v.string(),
+  posterUrl: v.optional(v.string()),
+  title: v.optional(v.string()),
+  captionsUrl: v.optional(v.string()),
+  captionsLanguage: v.optional(v.string()),
+  startAtSeconds: v.optional(v.number()),
+  endAtSeconds: v.optional(v.number()),
 });
 
 export const nodeslideExportCapabilityValidator = v.union(
@@ -339,6 +424,7 @@ export const nodeslideElementValidator = v.object({
     v.literal('image'),
     v.literal('chart'),
     v.literal('math'),
+    v.literal('video'),
     v.literal('connector'),
   ),
   role: v.optional(v.string()),
@@ -348,6 +434,7 @@ export const nodeslideElementValidator = v.object({
   style: nodeslideElementStyleValidator,
   chart: v.optional(nodeslideChartDataValidator),
   math: v.optional(nodeslideMathDataValidator),
+  video: v.optional(nodeslideVideoDataValidator),
   image: v.optional(nodeslideImageDataValidator),
   imageUrl: v.optional(v.string()),
   altText: v.optional(v.string()),
@@ -420,6 +507,16 @@ export const nodeslideOperationModeValidator = v.union(
 export const nodeslideProviderModeValidator = v.union(
   v.literal('deterministic'),
   v.literal('openrouter_free'),
+);
+
+export const nodeslideAgentModelValidator = v.union(
+  v.literal('z-ai/glm-5.2'),
+  v.literal('anthropic/claude-sonnet-5'),
+  v.literal('anthropic/claude-fable-5'),
+  v.literal('google/gemini-3.5-flash'),
+  v.literal('google/gemini-3.1-pro-preview'),
+  v.literal('openai/gpt-5.6-sol'),
+  v.literal('openai/gpt-5.6-terra'),
 );
 
 export const nodeslideDesignBehaviorValidator = v.union(
@@ -513,6 +610,7 @@ export const nodeslidePatchOperationValidator = v.union(
     slideId: v.string(),
     elementId: v.string(),
     text: v.string(),
+    sourceIds: v.optional(v.array(v.string())),
   }),
   v.object({
     op: v.literal('update_style'),
@@ -616,6 +714,7 @@ export const nodeslideDeckReplCommandValidator = v.union(
         v.literal('image'),
         v.literal('chart'),
         v.literal('math'),
+        v.literal('video'),
         v.literal('connector'),
       ),
     ),
@@ -663,6 +762,17 @@ export const nodeslideSourceValidator = v.object({
   retrievedAt: v.number(),
   citation: v.string(),
   license: v.optional(v.string()),
+  format: v.optional(
+    v.union(v.literal('csv'), v.literal('json'), v.literal('txt'), v.literal('web')),
+  ),
+  contentDigest: v.optional(v.string()),
+  byteSize: v.optional(v.number()),
+  rowCount: v.optional(v.number()),
+  columns: v.optional(v.array(v.string())),
+  provider: v.optional(v.string()),
+  retention: v.optional(v.union(v.literal('until_deleted'), v.literal('public_snapshot'))),
+  status: v.optional(v.union(v.literal('ready'), v.literal('refreshing'), v.literal('failed'))),
+  lastRefreshedAt: v.optional(v.number()),
 });
 
 export const nodeslideValidationIssueValidator = v.object({

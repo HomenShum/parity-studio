@@ -1923,7 +1923,7 @@ function expectedElementStyle(
     return expected;
   }
 
-  if (element.kind === 'image') {
+  if (element.kind === 'image' || element.kind === 'video') {
     if (element.style.stroke !== undefined) expected.stroke = theme.colors.border;
     if (element.style.color !== undefined) {
       const mappedColor = mappedThemeColor(element.style.color, currentTheme, theme);

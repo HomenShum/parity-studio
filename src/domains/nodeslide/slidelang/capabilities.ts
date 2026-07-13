@@ -49,6 +49,20 @@ export function getElementCapability(element: SlideElement): ElementCapabilityRe
     pptx = 'static_fallback';
     googleSlides = 'static_fallback';
     warnings.push('Chart data is missing, so exports use a labeled editable placeholder.');
+  } else if (element.kind === 'math' && !element.math?.expression.trim()) {
+    effective = ['web_native', 'pptx_static_fallback', 'google_importable'];
+    web = 'static_fallback';
+    pptx = 'static_fallback';
+    googleSlides = 'static_fallback';
+    warnings.push('Math expression is missing, so exports use a labeled editable placeholder.');
+  } else if (element.kind === 'video') {
+    effective = ['web_native', 'pptx_static_fallback', 'google_importable'];
+    web = element.video?.url.trim() ? 'native' : 'static_fallback';
+    pptx = 'static_fallback';
+    googleSlides = 'static_fallback';
+    warnings.push(
+      'Video plays natively on the web; PowerPoint and Google Slides receive an explicit linked-media placeholder.',
+    );
   } else {
     effective = ['web_native', 'pptx_editable', 'google_importable'];
     web = 'native';

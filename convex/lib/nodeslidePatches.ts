@@ -323,7 +323,7 @@ export function validateNodeSlidePatch(
     if (operation.op === 'replace_text' && (element.kind === 'text' || element.kind === 'math')) {
       const currentText =
         element.kind === 'math'
-          ? (element.math?.display ?? element.content ?? '')
+          ? (element.math?.display ?? element.math?.expression ?? element.content ?? '')
           : (element.content ?? '');
       if (operation.text === currentText) {
         errors.push(`replace_text must change element ${operation.elementId}.`);
@@ -561,9 +561,27 @@ export function deterministicAgentOperations(
   snapshot: DeckSnapshot,
   instruction: string,
   scope: PatchScope,
+  options: { preferredSlideId?: string } = {},
 ): PatchOperation[] {
   const eligible = eligibleElements(snapshot, scope);
   const lower = instruction.toLowerCase();
+  const wholeSlideTopic =
+    scope.operationMode === 'copy' || scope.operationMode === 'unrestricted'
+      ? extractWholeSlideTopic(instruction)
+      : null;
+  if (wholeSlideTopic) {
+    const wholeSlideOperations = deterministicWholeSlideRewrite(
+      snapshot,
+      eligible,
+      scope,
+      wholeSlideTopic,
+      options.preferredSlideId,
+    );
+    if (wholeSlideOperations.length > 0) return wholeSlideOperations;
+    throw new Error(
+      'The selected model returned an invalid proposal, and the deterministic whole-slide fallback found no editable semantic copy on the focused slide.',
+    );
+  }
   const inferredMode =
     scope.operationMode !== 'unrestricted'
       ? scope.operationMode
@@ -579,7 +597,7 @@ export function deterministicAgentOperations(
 
   if (inferredMode === null) {
     throw new Error(
-      'The GLM 5.2 route returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
+      'The selected model returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
     );
   }
 
@@ -589,7 +607,7 @@ export function deterministicAgentOperations(
     const text = deterministicRewrite(target.content ?? '', instruction);
     if (text === null) {
       throw new Error(
-        'The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
+        'The selected model returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
       );
     }
     if (text === (target.content ?? '')) {
@@ -617,7 +635,7 @@ export function deterministicAgentOperations(
         ];
       }
       throw new Error(
-        `The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
+        `The selected model returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
       );
     }
     return [
@@ -667,6 +685,24 @@ export function summarizePatchOperations(
   operations: readonly PatchOperation[],
   snapshot?: DeckSnapshot,
 ): string {
+  const copyOperations = operations.filter(
+    (operation): operation is Extract<PatchOperation, { op: 'replace_text' }> =>
+      operation.op === 'replace_text',
+  );
+  const copySlideIds = new Set(copyOperations.map((operation) => operation.slideId));
+  if (
+    operations.length >= 3 &&
+    copyOperations.length === operations.length &&
+    copySlideIds.size === 1
+  ) {
+    const slideId = copyOperations[0]?.slideId ?? '';
+    const slideLabel =
+      snapshot?.slides.find((slide) => slide.id === slideId)?.title ?? (slideId || 'slide');
+    return nodeslideCleanText(
+      `Rewrite editable copy on ${slideLabel} · ${operations.length} changes`,
+      240,
+    );
+  }
   const labels = operations.map((operation) => {
     if (operation.op === 'update_deck') return 'update deck title';
     if (operation.op === 'add_slide') return `add slide ${operation.slide.title}`;
@@ -902,6 +938,142 @@ function selectDeterministicTextTarget(
     const rightScore = rightIndex < 0 ? rolePriority.length : rightIndex;
     return leftScore - rightScore;
   })[0];
+}
+
+type WholeSlideTextRole = 'section' | 'headline' | 'body' | 'bullet';
+
+function extractWholeSlideTopic(instruction: string): string | null {
+  const normalized = nodeslideCleanText(instruction, 500);
+  const topic = normalized
+    .match(
+      /\b(?:make|turn|transform|change|rewrite|reframe|refocus)\b[\s\S]{0,80}?\b(?:the\s+)?(?:entire|whole|full|current|this)\s+slide\b[\s\S]{0,40}?\b(?:about|aout|around|into|on|focus(?:ed)?\s+on)\b\s+(.{2,120}?)(?:[.!?]+|$)/i,
+    )?.[1]
+    ?.replace(/\s+(?:please|for me)$/i, '')
+    .trim();
+  if (
+    !topic ||
+    /^(?:it|this|that|something|anything|better|more compelling|more persuasive)$/i.test(topic)
+  ) {
+    return null;
+  }
+  return normalizeWholeSlideTopic(nodeslideCleanText(topic, 80));
+}
+
+function normalizeWholeSlideTopic(topic: string): string {
+  return topic
+    .replace(/\bai\b/gi, 'AI')
+    .replace(/\bllm\b/gi, 'LLM')
+    .replace(/\bllms\b/gi, 'LLMs');
+}
+
+function deterministicWholeSlideRewrite(
+  snapshot: DeckSnapshot,
+  eligible: readonly SlideElement[],
+  scope: PatchScope,
+  topic: string,
+  preferredSlideId?: string,
+): PatchOperation[] {
+  const semanticBySlide = new Map<
+    string,
+    Array<{ element: SlideElement; role: WholeSlideTextRole }>
+  >();
+  for (const element of eligible) {
+    const role = wholeSlideTextRole(element);
+    if (!role) continue;
+    const current = semanticBySlide.get(element.slideId) ?? [];
+    current.push({ element, role });
+    semanticBySlide.set(element.slideId, current);
+  }
+
+  const scopedSlideId =
+    scope.kind !== 'deck' && scope.slideIds.length === 1 ? scope.slideIds[0] : undefined;
+  const availableSlideIds = snapshot.deck.slideOrder.filter((slideId) =>
+    semanticBySlide.has(slideId),
+  );
+  const targetSlideId =
+    (preferredSlideId && semanticBySlide.has(preferredSlideId) ? preferredSlideId : undefined) ??
+    (scopedSlideId && semanticBySlide.has(scopedSlideId) ? scopedSlideId : undefined) ??
+    (availableSlideIds.length === 1 ? availableSlideIds[0] : undefined);
+  if (!targetSlideId) return [];
+
+  const slide = snapshot.slides.find((candidate) => candidate.id === targetSlideId);
+  if (!slide) return [];
+  const elementRank = new Map(slide.elementOrder.map((elementId, index) => [elementId, index]));
+  const targets = [...(semanticBySlide.get(targetSlideId) ?? [])].sort(
+    (left, right) =>
+      (elementRank.get(left.element.id) ?? Number.MAX_SAFE_INTEGER) -
+        (elementRank.get(right.element.id) ?? Number.MAX_SAFE_INTEGER) ||
+      left.element.id.localeCompare(right.element.id),
+  );
+  const displayTopic = topic.length > 0 ? `${topic[0]?.toUpperCase()}${topic.slice(1)}` : topic;
+  const isAgentTopic = /\b(?:AI\s+)?agents?\b/i.test(topic);
+  const bulletCopy = isAgentTopic
+    ? [
+        'Read only the bounded context it needs',
+        'Plan and use approved tools',
+        'Validate results before human approval',
+        'Return a reviewable, traceable result',
+        'Keep every action inside its write scope',
+      ]
+    : [
+        'Start with the essential context',
+        'Show the system or story in motion',
+        'Make the evidence easy to inspect',
+        'End with the decision or next step',
+        'Keep the result editable and reviewable',
+      ];
+  let bulletIndex = 0;
+  const operations: PatchOperation[] = [];
+  for (const { element, role } of targets) {
+    if (operations.length >= 8) break;
+    const current = element.content ?? '';
+    const text =
+      role === 'section'
+        ? `${topic.toUpperCase()} / OVERVIEW`
+        : role === 'headline'
+          ? `${displayTopic}: from context to clear action`
+          : role === 'body'
+            ? isAgentTopic
+              ? `${displayTopic} turns a goal into a bounded plan, uses approved tools, validates the result, and keeps a human in control.`
+              : `${displayTopic} becomes a focused narrative: what matters, how it works, and what the audience should do next.`
+            : preserveListPrefix(
+                current,
+                bulletCopy[bulletIndex++] ?? 'Keep the outcome reviewable',
+              );
+    const cleaned = nodeslideCleanText(text, 500);
+    if (!cleaned || cleaned === current) continue;
+    operations.push({
+      op: 'replace_text',
+      slideId: element.slideId,
+      elementId: element.id,
+      text: cleaned,
+    });
+  }
+  return operations;
+}
+
+function wholeSlideTextRole(element: SlideElement): WholeSlideTextRole | null {
+  if (element.kind !== 'text' || element.visible === false) return null;
+  const semanticLabel = `${element.role ?? ''} ${element.name}`.toLowerCase();
+  if (
+    /\b(?:footer|page number|slide number|caption|citation|source|metric|statistic)\b/.test(
+      semanticLabel,
+    )
+  ) {
+    return null;
+  }
+  if (/\b(?:section|eyebrow|kicker)\b/.test(semanticLabel)) return 'section';
+  if (/\b(?:headline|title|heading)\b/.test(semanticLabel)) return 'headline';
+  if (/\b(?:body|paragraph|description|summary|subhead|subtitle)\b/.test(semanticLabel)) {
+    return 'body';
+  }
+  if (/\b(?:bullet|key point|takeaway)\b/.test(semanticLabel)) return 'bullet';
+  return null;
+}
+
+function preserveListPrefix(current: string, text: string): string {
+  const prefix = current.match(/^\s*(?:(?:[-•▪–—]|\d{1,2}[.)]?|[A-Z][.)])\s+)/u)?.[0] ?? '';
+  return `${prefix}${text}`;
 }
 
 function deterministicRewrite(current: string, instruction: string): string | null {

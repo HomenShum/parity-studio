@@ -1,5 +1,89 @@
+import type { NodeSlideDataAttachment } from './nodeslideAttachments';
+
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
-export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.0.0' as const;
+export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
+export const NODESLIDE_AGENT_MODELS = [
+  {
+    id: 'z-ai/glm-5.2',
+    provider: 'openrouter',
+    vendor: 'Z.ai',
+    label: 'GLM 5.2',
+    description: 'Long-horizon planning and structured slide edits.',
+    costTier: 'balanced',
+    bestFor: 'Long, structured deck work',
+    supportsTemperature: true,
+  },
+  {
+    id: 'anthropic/claude-sonnet-5',
+    provider: 'openrouter',
+    vendor: 'Anthropic',
+    label: 'Claude Sonnet 5',
+    description: 'Latest balanced Claude for agents and professional writing.',
+    costTier: 'premium',
+    bestFor: 'Executive writing and synthesis',
+    supportsTemperature: false,
+  },
+  {
+    id: 'anthropic/claude-fable-5',
+    provider: 'openrouter',
+    vendor: 'Anthropic',
+    label: 'Claude Fable 5',
+    description: 'Anthropic flagship for ambitious, long-running agent work.',
+    costTier: 'premium',
+    bestFor: 'Complex planning and review',
+    supportsTemperature: false,
+  },
+  {
+    id: 'google/gemini-3.5-flash',
+    provider: 'openrouter',
+    vendor: 'Google',
+    label: 'Gemini 3.5 Flash',
+    description: 'Latest stable Gemini for sustained agentic and coding tasks.',
+    costTier: 'fast',
+    bestFor: 'Fast iteration and large context',
+    supportsTemperature: true,
+  },
+  {
+    id: 'google/gemini-3.1-pro-preview',
+    provider: 'openrouter',
+    vendor: 'Google',
+    label: 'Gemini 3.1 Pro',
+    description: 'Google Pro reasoning for complex, data-heavy presentations.',
+    costTier: 'premium',
+    bestFor: 'Data-heavy analysis',
+    supportsTemperature: true,
+  },
+  {
+    id: 'openai/gpt-5.6-sol',
+    provider: 'openrouter',
+    vendor: 'OpenAI',
+    label: 'GPT-5.6 Sol',
+    description: 'OpenAI flagship for highest-capability production workflows.',
+    costTier: 'premium',
+    bestFor: 'Highest-capability production work',
+    supportsTemperature: false,
+  },
+  {
+    id: 'openai/gpt-5.6-terra',
+    provider: 'openrouter',
+    vendor: 'OpenAI',
+    label: 'GPT-5.6 Terra',
+    description: 'Strong OpenAI reasoning with a balanced cost profile.',
+    costTier: 'balanced',
+    bestFor: 'General professional decks',
+    supportsTemperature: false,
+  },
+] as const;
+export type NodeSlideAgentModelId = (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
+export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
+
+export function isNodeSlideAgentModelId(value: unknown): value is NodeSlideAgentModelId {
+  return NODESLIDE_AGENT_MODELS.some((model) => model.id === value);
+}
+
+export function nodeSlideAgentModel(modelId: NodeSlideAgentModelId) {
+  return NODESLIDE_AGENT_MODELS.find((model) => model.id === modelId) ?? NODESLIDE_AGENT_MODELS[0];
+}
 export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
 export const NODESLIDE_SCOPE_SLIDE_LIMIT = 64 as const;
 export const NODESLIDE_SCOPE_ELEMENT_LIMIT = 256 as const;
@@ -25,6 +109,10 @@ export const NODESLIDE_OPENROUTER_REVIEW_CONSENT =
 export const NODESLIDE_OPENROUTER_EDIT_CONSENT = NODESLIDE_OPENROUTER_REVIEW_CONSENT;
 export const NODESLIDE_OPENROUTER_VARIATIONS_CONSENT =
   'openrouter_nodeslide_variations_context_v1' as const;
+/** Exact consent for sending an edit query to configured third-party web search providers. */
+export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
+/** Exact consent for a local MCP process to send scoped context to a user-selected BYOK model. */
+export const NODESLIDE_LOCAL_BYOK_EDIT_CONSENT = 'nodeslide_local_byok_edit_v1' as const;
 export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
 export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
   'nodeslide.design-behavior-policy/v1' as const;
@@ -48,7 +136,7 @@ export const SLIDE_HEIGHT_IN = 7.5;
 export const NODESLIDE_MIN_READABLE_FONT_SIZE = 14;
 
 export type StudioDomain = 'parity' | 'nodeslide';
-export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'connector';
+export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'video' | 'connector';
 export type PatchSource = 'human' | 'agent' | 'import' | 'system';
 export type PatchStatus = 'draft' | 'validating' | 'ready' | 'accepted' | 'rejected' | 'stale';
 export type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
@@ -152,11 +240,14 @@ export interface MathVariable {
   unit?: string;
 }
 
-/** Structured formula payload retained independently from its visual treatment. */
+/** Structured formula payload retained independently from its visual treatment and source data. */
 export interface MathData {
   expression: string;
-  display: string;
-  variables: MathVariable[];
+  syntax?: 'plain' | 'latex';
+  displayMode?: 'inline' | 'block';
+  description?: string;
+  display?: string;
+  variables?: MathVariable[];
   sourceId?: string;
 }
 
@@ -165,6 +256,17 @@ export interface ImageData {
   placeholder: boolean;
   credit?: string;
   sourceId?: string;
+}
+
+/** A first-class web video contract with an explicit non-native PowerPoint fallback. */
+export interface VideoData {
+  url: string;
+  posterUrl?: string;
+  title?: string;
+  captionsUrl?: string;
+  captionsLanguage?: string;
+  startAtSeconds?: number;
+  endAtSeconds?: number;
 }
 
 export interface SlideElement {
@@ -179,6 +281,7 @@ export interface SlideElement {
   style: ElementStyle;
   chart?: ChartData;
   math?: MathData;
+  video?: VideoData;
   image?: ImageData;
   imageUrl?: string;
   altText?: string;
@@ -197,6 +300,7 @@ export interface Slide {
   deckId: string;
   title: string;
   section?: string;
+  /** Private speaker notes. Published presenter snapshots intentionally omit this field. */
   notes?: string;
   background: string;
   elementOrder: string[];
@@ -277,7 +381,14 @@ export type PatchOperation =
       width: number;
       height: number;
     }
-  | { op: 'replace_text'; slideId: string; elementId: string; text: string }
+  | {
+      op: 'replace_text';
+      slideId: string;
+      elementId: string;
+      text: string;
+      /** Optional provenance rebinding applied atomically with source-grounded copy. */
+      sourceIds?: string[];
+    }
   | {
       op: 'update_style';
       slideId: string;
@@ -364,6 +475,55 @@ export interface SourceRecord {
   retrievedAt: number;
   citation: string;
   license?: string;
+  /** Typed ingestion metadata. Optional for rows created before source-metadata v1. */
+  format?: 'csv' | 'json' | 'txt' | 'web';
+  contentDigest?: string;
+  byteSize?: number;
+  rowCount?: number;
+  columns?: string[];
+  provider?: string;
+  retention?: 'until_deleted' | 'public_snapshot';
+  status?: 'ready' | 'refreshing' | 'failed';
+  lastRefreshedAt?: number;
+}
+
+export type NodeSlideAgentRunStatus =
+  | 'queued'
+  | 'researching'
+  | 'planning'
+  | 'validating'
+  | 'awaiting_review'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface NodeSlideAgentRun {
+  id: string;
+  deckId: string;
+  idempotencyKey: string;
+  instruction: string;
+  status: NodeSlideAgentRunStatus;
+  provider: string;
+  model: string;
+  webResearch: boolean;
+  attempt: number;
+  patchId?: string;
+  traceId?: string;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+}
+
+export interface NodeSlideAgentMessage {
+  id: string;
+  deckId: string;
+  runId: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  toolName?: string;
+  sourceIds?: string[];
+  createdAt: number;
 }
 
 export interface ValidationIssue {
@@ -541,12 +701,20 @@ export interface AgentEditRequest {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  /** Active slide at request time; narrows whole-slide intent without expanding write authority. */
+  focusSlideId?: string;
   readContext?: readonly AgentReadReference[];
   designBehavior?: NodeSlideDesignBehavior;
   referenceUse?: NodeSlideReferenceUsePolicy;
   commandId?: NodeSlideEditorCommandId;
   providerMode?: NodeSlideProviderMode;
+  providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+  /** Stable client-generated key prevents double-submit from creating two proposals. */
+  idempotencyKey?: string;
+  /** Web retrieval is independent from model egress and requires its own exact consent. */
+  webResearch?: boolean;
+  webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
 }
 
 /** Explicit read authority is independent from PatchScope, which remains write authority. */
@@ -597,7 +765,10 @@ export interface CreateDeckRequest {
   brief: DeckBrief;
   themeId: string;
   route: 'free' | 'balanced' | 'frontier';
+  attachments?: NodeSlideDataAttachment[];
 }
+
+export type { NodeSlideDataAttachment } from './nodeslideAttachments';
 
 export function isElementOperation(
   operation: PatchOperation,

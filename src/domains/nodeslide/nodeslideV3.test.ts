@@ -52,6 +52,21 @@ describe('NodeSlide v3 visual contract', () => {
     expect(phone).toMatch(/\.ns-inspector:not\(\.is-collapsed\)[\s\S]*position: fixed/);
     expect(phone).toMatch(/\.ns-inspector\.is-collapsed[\s\S]*display: none/);
     expect(phone).toMatch(/\.ns-slide-stepper[\s\S]*display: flex/);
+    expect(phone).toMatch(/\.ns-slide-more[\s\S]*display: flex !important/);
+    expect(phone).toMatch(/\.ns-navigator-footer[\s\S]*display: flex !important/);
+    expect(phone).toMatch(/\.ns-add-slide-button[\s\S]*font-size: 0/);
+  });
+
+  it('gives the root landing a single responsive composer instead of editor chrome', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio\.ns-landing[\s\S]*?display: flex;[\s\S]*?overflow-y: auto;/,
+    );
+    expect(css).toMatch(/\.ns-landing-composer[\s\S]*?border-radius: 22px;[\s\S]*?width: 100%;/);
+    expect(css).toMatch(
+      /@media \(max-width: 699px\)[\s\S]*?\.ns-landing-main[\s\S]*?padding: 48px 15px 30px;/,
+    );
+    expect(studioSource).toContain('<NodeSlideLanding');
+    expect(studioSource).not.toContain('<FirstRunDialog');
   });
 
   it('keeps secondary text at AA contrast in both themes', () => {
@@ -65,8 +80,46 @@ describe('NodeSlide v3 visual contract', () => {
 
   it('keeps notifications clear of the authoritative bottom decision bar', () => {
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: 14px;[\s\S]*?top: 64px;/,
+      /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: calc\(var\(--ns-inspector-width\) \+ 14px\);[\s\S]*?top: 64px;/,
     );
+  });
+
+  it('keeps consequential AI review text above the readable inspector floor', () => {
+    expect(css).toContain('--ns-chrome-min-font: 11px');
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell \.ns-agent-honesty-state strong[\s\S]*?font-size: 11\.5px/,
+    );
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-card h3[\s\S]*?font-size: 12\.5px/);
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-evidence dd[\s\S]*?font-size: 10px/);
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-actions \.ns-button[\s\S]*?height: 34px/);
+  });
+
+  it('keeps the AI chat primary and advanced controls compact', () => {
+    expect(css).toMatch(/\.ns-ai-v3-welcome[\s\S]*?grid-template-columns: 28px minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.ns-ai-v3-policy-summary[\s\S]*?display: flex;[\s\S]*?flex-wrap: wrap;/);
+    expect(css).toMatch(
+      /\.ns-ai-v3-controls-disclosure[\s\S]*?border-radius: 9px;[\s\S]*?overflow: hidden;/,
+    );
+    expect(css).toMatch(
+      /\.ns-composer-token-toolbar button[\s\S]*?background: transparent;[\s\S]*?width: auto;/,
+    );
+  });
+
+  it('keeps the trace receipt surface and dark honesty states readable', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-trace-summary[\s\S]*?border-radius: 12px;[\s\S]*?padding: 0;/,
+    );
+    expect(css).toMatch(
+      /\.ns-trace-attrib > span:last-child[\s\S]*?text-overflow: ellipsis;[\s\S]*?white-space: nowrap;/,
+    );
+    expect(css).toMatch(
+      /\[data-ns-theme="dark"\] \.ns-trace-inspector[\s\S]*?--ns-trace-warning: #f6ad55;/,
+    );
+    expect(contrast('#a5b4fc', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#f0a080', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#34d399', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#f6ad55', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#fb7185', '#14181d')).toBeGreaterThanOrEqual(4.5);
   });
 });
 

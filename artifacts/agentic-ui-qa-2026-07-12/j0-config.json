@@ -1,0 +1,35 @@
+{
+  "repo": "D:/VSCode Projects/parity-studio",
+  "url": "https://parity-studio.vercel.app/?domain=nodeslide",
+  "outDir": "D:/VSCode Projects/parity-studio/artifacts/agentic-ui-qa-2026-07-12",
+  "viewport": { "width": 1512, "height": 812 },
+  "shots": [
+    {
+      "name": "j0-firstrun",
+      "scheme": "light",
+      "fullPage": false,
+      "assert": [
+        "From brief to a reviewable deck",
+        "Deterministic by default",
+        "OpenRouter opt-in",
+        "Explore the sample"
+      ]
+    },
+    {
+      "name": "j0-home-light",
+      "scheme": "light",
+      "fullPage": false,
+      "clicks": ["text=Explore the sample"],
+      "waitMs": 1200,
+      "assert": ["NodeSlide", "Structure, presentation, and cleanup checks passed", "Trace"]
+    },
+    {
+      "name": "j0-home-dark",
+      "scheme": "light",
+      "fullPage": false,
+      "clicks": ["text=Explore the sample", "[aria-label=\"Switch to dark theme\"]"],
+      "waitMs": 1200,
+      "assert": ["NodeSlide", "Structure, presentation, and cleanup checks passed", "Trace"]
+    }
+  ]
+}

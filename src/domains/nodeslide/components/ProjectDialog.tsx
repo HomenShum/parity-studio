@@ -2,16 +2,34 @@ import {
   ArrowRight,
   Check,
   Clock3,
+  FileText,
   FolderOpen,
   Layers3,
   LoaderCircle,
+  Paperclip,
   Plus,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
-import type { CreateDeckRequest } from '../../../../shared/nodeslide';
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import {
+  type CreateDeckRequest,
+  NODESLIDE_AGENT_MODELS,
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentModelId,
+  nodeSlideAgentModel,
+} from '../../../../shared/nodeslide';
+import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
 export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as const;
@@ -19,8 +37,9 @@ export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as 
 export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free';
 
 export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
-  accessCode: string;
+  accessCode?: string;
   providerMode: NodeSlideBriefProviderMode;
+  providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
 }
 
@@ -41,6 +60,15 @@ interface ProjectDialogProps {
   onClose: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onOpenDeck: (deckId: string) => void;
+  initialDraft?: {
+    title: string;
+    prompt: string;
+    providerMode: NodeSlideBriefProviderMode;
+    providerModel?: NodeSlideAgentModelId;
+    attachments?: NodeSlideDataAttachment[];
+  } | null;
+  initialMode?: 'create' | 'open';
+  createEnabled?: boolean;
 }
 
 const profiles = [
@@ -88,17 +116,29 @@ export function ProjectDialog({
   onClose,
   onCreate,
   onOpenDeck,
+  initialDraft = null,
+  initialMode = 'create',
+  createEnabled = true,
 }: ProjectDialogProps) {
-  const [mode, setMode] = useState<'create' | 'open'>('create');
-  const [title, setTitle] = useState('');
-  const [prompt, setPrompt] = useState('');
+  const [mode, setMode] = useState<'create' | 'open'>(createEnabled ? initialMode : 'open');
+  const [title, setTitle] = useState(initialDraft?.title ?? '');
+  const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [audience, setAudience] = useState('Executive decision-makers');
   const [purpose, setPurpose] = useState('Decision briefing');
   const [successCriteria, setSuccessCriteria] = useState('');
   const [themeId, setThemeId] = useState(profiles[0]?.id ?? 'editorial-signal');
   const [accessCode, setAccessCode] = useState('');
-  const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>('deterministic');
+  const [providerMode, setProviderMode] = useState<NodeSlideBriefProviderMode>(
+    initialDraft?.providerMode ?? 'deterministic',
+  );
+  const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(
+    initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL,
+  );
   const [providerConsent, setProviderConsent] = useState(false);
+  const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>(
+    initialDraft?.attachments ?? [],
+  );
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
   const createTabId = `${dialogId}-create-tab`;
@@ -110,12 +150,17 @@ export function ProjectDialog({
   const accessCodeDescriptionId = `${dialogId}-access-code-description`;
   const createStatusId = `${dialogId}-create-status`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const wasOpenRef = useRef(false);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
   const clearAdmissionAndClose = () => {
     setAccessCode('');
     setProviderMode('deterministic');
+    setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderConsent(false);
+    setAttachments([]);
+    setAttachmentError(null);
     onClose();
   };
   const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
@@ -125,11 +170,24 @@ export function ProjectDialog({
   });
 
   useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setMode(createEnabled ? initialMode : 'open');
+      setTitle(initialDraft?.title ?? '');
+      setPrompt(initialDraft?.prompt ?? '');
+      setProviderMode(initialDraft?.providerMode ?? 'deterministic');
+      setProviderModel(initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL);
+      setAttachments(initialDraft?.attachments ?? []);
+      setAttachmentError(null);
+    }
+    wasOpenRef.current = open;
     if (open) return;
     setAccessCode('');
     setProviderMode('deterministic');
+    setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderConsent(false);
-  }, [open]);
+    setAttachments([]);
+    setAttachmentError(null);
+  }, [createEnabled, initialDraft, initialMode, open]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
@@ -186,12 +244,32 @@ export function ProjectDialog({
       themeId,
       route: 'free',
       providerMode,
+      attachments,
       ...(providerMode === 'openrouter_free'
-        ? { providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT }
+        ? {
+            providerModel,
+            providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+          }
         : {}),
     });
     setAccessCode('');
   };
+
+  const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) return;
+    try {
+      setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
+      setAttachmentError(null);
+    } catch (fileError) {
+      setAttachmentError(
+        fileError instanceof Error ? fileError.message : 'The file could not be attached.',
+      );
+    }
+  };
+
+  const selectedModel = nodeSlideAgentModel(providerModel);
 
   const createBlocker = !title.trim()
     ? 'Add a deck title to continue.'
@@ -234,7 +312,9 @@ export function ProjectDialog({
           </div>
           <div>
             <span className="ns-eyebrow">NodeSlide workspace</span>
-            <h1 id={titleId}>{mode === 'create' ? 'Shape a new story' : 'Open a deck'}</h1>
+            <h1 id={titleId}>
+              {createEnabled && mode === 'create' ? 'Shape a new story' : 'Open a deck'}
+            </h1>
           </div>
           <button
             className="ns-icon-button"
@@ -245,38 +325,40 @@ export function ProjectDialog({
             <X size={17} />
           </button>
         </header>
-        <div className="ns-project-tabs" role="tablist" aria-label="Project dialog views">
-          <button
-            ref={createTabRef}
-            id={createTabId}
-            type="button"
-            role="tab"
-            aria-controls={createPanelId}
-            aria-selected={mode === 'create'}
-            tabIndex={mode === 'create' ? 0 : -1}
-            className={mode === 'create' ? 'is-active' : ''}
-            onClick={() => setMode('create')}
-            onKeyDown={handleTabKeyDown}
-          >
-            <Plus size={14} /> New deck
-          </button>
-          <button
-            ref={openTabRef}
-            id={openTabId}
-            type="button"
-            role="tab"
-            aria-controls={openPanelId}
-            aria-selected={mode === 'open'}
-            tabIndex={mode === 'open' ? 0 : -1}
-            className={mode === 'open' ? 'is-active' : ''}
-            onClick={() => setMode('open')}
-            onKeyDown={handleTabKeyDown}
-          >
-            <FolderOpen size={14} /> Open
-          </button>
-        </div>
+        {createEnabled ? (
+          <div className="ns-project-tabs" role="tablist" aria-label="Project dialog views">
+            <button
+              ref={createTabRef}
+              id={createTabId}
+              type="button"
+              role="tab"
+              aria-controls={createPanelId}
+              aria-selected={mode === 'create'}
+              tabIndex={mode === 'create' ? 0 : -1}
+              className={mode === 'create' ? 'is-active' : ''}
+              onClick={() => setMode('create')}
+              onKeyDown={handleTabKeyDown}
+            >
+              <Plus size={14} /> New deck
+            </button>
+            <button
+              ref={openTabRef}
+              id={openTabId}
+              type="button"
+              role="tab"
+              aria-controls={openPanelId}
+              aria-selected={mode === 'open'}
+              tabIndex={mode === 'open' ? 0 : -1}
+              className={mode === 'open' ? 'is-active' : ''}
+              onClick={() => setMode('open')}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderOpen size={14} /> Open
+            </button>
+          </div>
+        ) : null}
 
-        {mode === 'create' ? (
+        {createEnabled && mode === 'create' ? (
           <form
             id={createPanelId}
             className="ns-project-form"
@@ -323,6 +405,7 @@ export function ProjectDialog({
                   <span>Deck title</span>
                   <input
                     ref={initialFocusRef}
+                    data-testid="new-deck-title"
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Q3 market narrative"
@@ -341,6 +424,52 @@ export function ProjectDialog({
                     required
                   />
                 </label>
+                <div className="ns-create-attachments">
+                  <input
+                    ref={attachmentInputRef}
+                    className="ns-sr-only"
+                    data-testid="create-file-input"
+                    type="file"
+                    accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown"
+                    multiple
+                    onChange={(event) => void attachFiles(event)}
+                  />
+                  <button
+                    type="button"
+                    className="ns-button ns-button--quiet"
+                    onClick={() => attachmentInputRef.current?.click()}
+                  >
+                    <Paperclip size={13} /> Attach data files
+                  </button>
+                  <small>CSV, JSON, TXT, or Markdown · up to 3 files</small>
+                  {attachmentError ? <output role="alert">{attachmentError}</output> : null}
+                  {attachments.length > 0 ? (
+                    <ul aria-label="Data files included in this deck">
+                      {attachments.map((attachment) => (
+                        <li key={attachment.title}>
+                          <FileText size={13} aria-hidden="true" />
+                          <span>
+                            <strong>{attachment.title}</strong>
+                            <small>
+                              {attachment.format.toLocaleUpperCase()} · included as a source
+                            </small>
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${attachment.title}`}
+                            onClick={() =>
+                              setAttachments((current) =>
+                                current.filter((item) => item.title !== attachment.title),
+                              )
+                            }
+                          >
+                            <X size={12} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
                 <details className="ns-brief-details">
                   <summary>Improve the brief</summary>
                   <div className="ns-form-columns">
@@ -426,16 +555,36 @@ export function ProjectDialog({
                   >
                     <Sparkles size={20} aria-hidden="true" />
                     <span>
-                      <strong>Use OpenRouter · GLM 5.2</strong>
+                      <strong>Use OpenRouter · {selectedModel.label}</strong>
                       <small>
-                        Sends the full brief—title, prompt, audience, purpose, and success
-                        criteria—to the named GLM 5.2 model through OpenRouter.
+                        Sends the full brief{attachments.length > 0 ? ' and attached files' : ''} to
+                        the selected named model through OpenRouter.
                       </small>
                     </span>
                     {providerMode === 'openrouter_free' ? <Check size={14} /> : null}
                   </button>
                 </fieldset>
+                <label className="ns-provider-model-select">
+                  <span>OpenRouter model</span>
+                  <select
+                    data-testid="create-model-select"
+                    value={providerModel}
+                    disabled={providerMode !== 'openrouter_free'}
+                    onChange={(event) => {
+                      setProviderModel(event.target.value as NodeSlideAgentModelId);
+                      setProviderConsent(false);
+                    }}
+                  >
+                    {NODESLIDE_AGENT_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.vendor} · {model.label}
+                      </option>
+                    ))}
+                  </select>
+                  <small>{selectedModel.description}</small>
+                </label>
                 <label
+                  className="ns-provider-consent"
                   style={{
                     alignItems: 'start',
                     background: '#f3f3ef',
@@ -462,11 +611,12 @@ export function ProjectDialog({
                     }}
                   />
                   <span>
-                    I consent to sending this full brief to OpenRouter
-                    <small>
-                      {' '}
-                      Required for the OpenRouter option and applies to this deck only.
-                    </small>
+                    I consent to sending this full brief
+                    {attachments.length > 0
+                      ? ` and ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`
+                      : ''}{' '}
+                    to OpenRouter
+                    <small> Required for {selectedModel.label}; applies to this deck only.</small>
                   </span>
                 </label>
                 <label>
@@ -548,8 +698,8 @@ export function ProjectDialog({
                     </>
                   ) : (
                     <>
-                      <Sparkles size={13} /> OpenRouter · GLM 5.2 · will send full brief with
-                      consent
+                      <Sparkles size={13} /> OpenRouter · {selectedModel.label} · will send the
+                      brief{attachments.length > 0 ? ' and files' : ''} with consent
                     </>
                   )}
                 </span>

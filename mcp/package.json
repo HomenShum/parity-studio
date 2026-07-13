@@ -1,9 +1,9 @@
 {
   "name": "parity-studio-mcp",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "private": false,
   "type": "module",
-  "description": "MCP server for Parity Studio. Lets coding agents capture existing app routes, decompose them into ui_kit/ bundles, and import them for iteration.",
+  "description": "MCP server for Parity Studio and NodeSlide. Gives coding agents governed deck reads, reviewable edits, traces, and design-to-code workflows.",
   "license": "MIT",
   "homepage": "https://github.com/HomenShum/parity-studio",
   "repository": {
@@ -38,8 +38,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.80.6",
     "@hono/node-server": "^1.13.0",
+    "@earendil-works/pi-ai": "0.80.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.12.29",
     "jszip": "^3.10.1",

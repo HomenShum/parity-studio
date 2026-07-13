@@ -22,6 +22,7 @@ dist
 
 # Output of npm pack / pnpm pack
 *.tgz
+!public/downloads/parity-studio-mcp-*.tgz
 
 # Local PoC artifacts
 runs/

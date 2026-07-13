@@ -28,6 +28,7 @@ import {
   nodeslideVariationOriginValidator,
   nodeslideVariationStatusValidator,
   nodeslideVersionClockValidator,
+  nodeslideVideoDataValidator,
 } from './lib/nodeslideValidators';
 
 const nodeslidePreferenceEventTypeValidator = v.union(
@@ -552,6 +553,7 @@ export default defineSchema({
       v.literal('image'),
       v.literal('chart'),
       v.literal('math'),
+      v.literal('video'),
       v.literal('connector'),
     ),
     role: v.optional(v.string()),
@@ -561,6 +563,7 @@ export default defineSchema({
     style: nodeslideElementStyleValidator,
     chart: v.optional(nodeslideChartDataValidator),
     math: v.optional(nodeslideMathDataValidator),
+    video: v.optional(nodeslideVideoDataValidator),
     image: v.optional(nodeslideImageDataValidator),
     imageUrl: v.optional(v.string()),
     altText: v.optional(v.string()),
@@ -718,9 +721,71 @@ export default defineSchema({
     retrievedAt: v.number(),
     citation: v.string(),
     license: v.optional(v.string()),
+    format: v.optional(
+      v.union(v.literal('csv'), v.literal('json'), v.literal('txt'), v.literal('web')),
+    ),
+    contentDigest: v.optional(v.string()),
+    byteSize: v.optional(v.number()),
+    rowCount: v.optional(v.number()),
+    columns: v.optional(v.array(v.string())),
+    provider: v.optional(v.string()),
+    retention: v.optional(v.union(v.literal('until_deleted'), v.literal('public_snapshot'))),
+    status: v.optional(v.union(v.literal('ready'), v.literal('refreshing'), v.literal('failed'))),
+    lastRefreshedAt: v.optional(v.number()),
   })
     .index('by_stable_id', ['id'])
     .index('by_deck', ['deckId']),
+
+  nodeslide_agent_runs: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    ownerDigest: v.string(),
+    idempotencyKey: v.string(),
+    instruction: v.string(),
+    status: v.union(
+      v.literal('queued'),
+      v.literal('researching'),
+      v.literal('planning'),
+      v.literal('validating'),
+      v.literal('awaiting_review'),
+      v.literal('completed'),
+      v.literal('failed'),
+      v.literal('cancelled'),
+    ),
+    provider: v.string(),
+    model: v.string(),
+    webResearch: v.boolean(),
+    attempt: v.number(),
+    patchId: v.optional(v.string()),
+    traceId: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_deck_idempotency', ['deckId', 'idempotencyKey'])
+    .index('by_deck_status_updated', ['deckId', 'status', 'updatedAt']),
+
+  nodeslide_agent_messages: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    role: v.union(
+      v.literal('user'),
+      v.literal('assistant'),
+      v.literal('tool'),
+      v.literal('system'),
+    ),
+    content: v.string(),
+    toolName: v.optional(v.string()),
+    sourceIds: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_run_created', ['runId', 'createdAt']),
 
   nodeslide_validations: defineTable({
     id: v.string(),

@@ -6,6 +6,7 @@ import {
   NODESLIDE_CREATE_DECK_LIMITS,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT,
   invokeNodeSlideBriefProvider,
+  validateNodeSlideBriefAttachments,
   validateNodeSlideBriefProviderChoice,
   validateNodeSlideCreateDeckFields,
   validateNodeSlidePreviewAdmission,
@@ -73,6 +74,27 @@ describe('NodeSlide private-preview admission', () => {
 });
 
 describe('NodeSlide create action admission boundary', () => {
+  it('allows quota-bound public launch creation without a manual access code', async () => {
+    vi.stubEnv('NODESLIDE_PUBLIC_CREATION', 'true');
+    const workspace = { deck: { id: 'deck-public-created' } };
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce(workspace);
+
+    await expect(createDeckHandler({ runMutation }, createActionArgs(undefined))).resolves.toBe(
+      workspace,
+    );
+
+    expect(runMutation).toHaveBeenCalledTimes(2);
+    expect(callNodeSlideFreeJson).not.toHaveBeenCalled();
+    const quotaArgs = runMutation.mock.calls[0]?.[1] as {
+      buckets: Array<{ key: string }>;
+    };
+    expect(quotaArgs.buckets[0]?.key).toMatch(/^create:[a-f0-9]{64}$/);
+    expect(quotaArgs.buckets[0]?.key).not.toContain('rotatable-session');
+  });
+
   it.each([
     ['missing', undefined],
     ['wrong', 'wrong-code'],
@@ -107,11 +129,53 @@ describe('NodeSlide create action admission boundary', () => {
       buckets: Array<{ key: string }>;
     };
     expect(quotaArgs.buckets[0]?.key).toMatch(/^create:[a-f0-9]{64}$/);
+    expect(quotaArgs.buckets[0]?.key.length).toBeLessThanOrEqual(128);
     expect(quotaArgs.buckets[0]?.key).not.toContain(PREVIEW_ACCESS_CODE);
     expect(quotaArgs.buckets[0]?.key).not.toContain('rotatable-session');
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).not.toHaveProperty('accessCode');
     expect(persistenceArgs).not.toHaveProperty('providerConsent');
+  });
+
+  it('routes the selected named model and uploaded evidence through the consented path', async () => {
+    stubPreviewAdmission();
+    vi.mocked(callNodeSlideFreeJson).mockResolvedValue({
+      ok: true,
+      value: { title: 'Data deck', narrative: [], plan: [], slides: [] },
+      telemetry: {
+        provider: 'openrouter',
+        model: 'anthropic/claude-sonnet-5',
+        costMicroUsd: 1200,
+        inputTokens: 20,
+        outputTokens: 30,
+      },
+    });
+    const workspace = { deck: { id: 'deck-created' } };
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce(workspace);
+    const args: CreateActionArgs = {
+      ...createActionArgs(PREVIEW_ACCESS_CODE),
+      providerMode: 'openrouter_free',
+      providerModel: 'anthropic/claude-sonnet-5',
+      providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+      attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
+    };
+
+    await expect(createDeckHandler({ runMutation }, args)).resolves.toBe(workspace);
+
+    expect(callNodeSlideFreeJson).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic/claude-sonnet-5' }),
+    );
+    const providerRequest = vi.mocked(callNodeSlideFreeJson).mock.calls[0]?.[0];
+    expect(providerRequest?.userText).toContain('world-cup.csv');
+    expect(providerRequest?.userText).toContain('goals,172');
+    const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(persistenceArgs).toMatchObject({
+      model: 'anthropic/claude-sonnet-5',
+      attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
+    });
   });
 });
 
@@ -237,8 +301,23 @@ describe('NodeSlide provider consent contract', () => {
       validateNodeSlideBriefProviderChoice('openrouter_free', NODESLIDE_OPENROUTER_BRIEF_CONSENT),
     ).toEqual({
       providerMode: 'openrouter_free',
+      providerModel: 'z-ai/glm-5.2',
       providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
     });
+    expect(
+      validateNodeSlideBriefProviderChoice(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+        'anthropic/claude-sonnet-5',
+      ),
+    ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
+    expect(() =>
+      validateNodeSlideBriefProviderChoice(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+        'unknown/model',
+      ),
+    ).toThrow(ConvexError);
   });
 
   it('never invokes the provider callback in deterministic mode', async () => {
@@ -261,6 +340,34 @@ describe('NodeSlide provider consent contract', () => {
 
     expect(result).toEqual({ ok: true });
     expect(invokeProvider).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('NodeSlide create-deck attachment boundary', () => {
+  it('normalizes bounded uploaded evidence for creation', () => {
+    expect(
+      validateNodeSlideBriefAttachments([
+        { title: 'world-cup.csv', format: 'csv', content: '\uFEFFmetric,value\r\ngoals,172\r\n' },
+      ]),
+    ).toEqual([{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }]);
+  });
+
+  it('rejects duplicate names and over-count attachment sets', () => {
+    expect(() =>
+      validateNodeSlideBriefAttachments([
+        { title: 'data.csv', format: 'csv', content: 'a,b' },
+        { title: 'DATA.csv', format: 'csv', content: 'c,d' },
+      ]),
+    ).toThrow(ConvexError);
+    expect(() =>
+      validateNodeSlideBriefAttachments(
+        Array.from({ length: 4 }, (_, index) => ({
+          title: `data-${index}.txt`,
+          format: 'txt' as const,
+          content: 'bounded',
+        })),
+      ),
+    ).toThrow(ConvexError);
   });
 });
 
@@ -288,7 +395,14 @@ interface CreateActionArgs {
   };
   themeId: string;
   route: 'free';
-  providerMode: 'deterministic';
+  providerMode: 'deterministic' | 'openrouter_free';
+  providerModel?: 'anthropic/claude-sonnet-5';
+  providerConsent?: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+  attachments?: Array<{
+    title: string;
+    format: 'csv' | 'json' | 'txt';
+    content: string;
+  }>;
 }
 
 type CreateDeckHandler = (

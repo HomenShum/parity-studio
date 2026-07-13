@@ -90,6 +90,7 @@ export function elementFromRow(row: Doc<'nodeslide_elements'>): SlideElement {
     style: row.style,
     ...(row.chart !== undefined ? { chart: row.chart } : {}),
     ...(row.math !== undefined ? { math: row.math } : {}),
+    ...(row.video !== undefined ? { video: row.video } : {}),
     ...(row.image !== undefined ? { image: row.image } : {}),
     ...(row.imageUrl !== undefined ? { imageUrl: row.imageUrl } : {}),
     ...(row.altText !== undefined ? { altText: row.altText } : {}),
@@ -336,8 +337,13 @@ export function sanitizeNodeSlideSnapshot(snapshot: DeckSnapshot): PublishedDeck
 function sanitizePublishedMath(math: MathData, publicSourceIds: ReadonlySet<string>): MathData {
   return {
     expression: math.expression,
-    display: math.display,
-    variables: math.variables.map((variable) => ({ ...variable })),
+    ...(math.syntax !== undefined ? { syntax: math.syntax } : {}),
+    ...(math.displayMode !== undefined ? { displayMode: math.displayMode } : {}),
+    ...(math.description !== undefined ? { description: math.description } : {}),
+    ...(math.display !== undefined ? { display: math.display } : {}),
+    ...(math.variables !== undefined
+      ? { variables: math.variables.map((variable) => ({ ...variable })) }
+      : {}),
     ...(math.sourceId !== undefined && publicSourceIds.has(math.sourceId)
       ? { sourceId: math.sourceId }
       : {}),
@@ -808,6 +814,7 @@ function elementFields(
     style: element.style,
     ...(element.chart !== undefined ? { chart: element.chart } : {}),
     ...(element.math !== undefined ? { math: element.math } : {}),
+    ...(element.video !== undefined ? { video: element.video } : {}),
     ...(element.image !== undefined ? { image: element.image } : {}),
     ...(element.imageUrl !== undefined ? { imageUrl: element.imageUrl } : {}),
     ...(element.altText !== undefined ? { altText: element.altText } : {}),

@@ -124,17 +124,20 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
     );
   }
 
-  if (element.kind === 'math' && element.math) {
+  if (element.kind === 'math') {
+    const expression = element.math?.expression ?? element.content ?? '';
+    const display = element.math?.display ?? expression;
+    const variables = element.math?.variables ?? [];
     return (
       <div
-        className="ns-math-primitive"
+        className={`ns-element-math ns-math-primitive ns-element-math--${element.math?.syntax ?? 'plain'}`}
         role="math"
-        aria-label={`${element.name}: ${element.math.display}`}
+        aria-label={element.math?.description ?? `${element.name}: ${display}`}
       >
-        <code>{element.math.display}</code>
-        {element.math.variables.length > 0 ? (
+        <code>{display}</code>
+        {variables.length > 0 ? (
           <small>
-            {element.math.variables
+            {variables
               .map(
                 (variable) =>
                   `${variable.label} = ${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`,
@@ -142,6 +145,35 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
               .join(' · ')}
           </small>
         ) : null}
+        {element.math?.syntax === 'latex' ? <small>LaTeX source</small> : null}
+      </div>
+    );
+  }
+
+  if (element.kind === 'video') {
+    const video = element.video;
+    return video?.url ? (
+      // biome-ignore lint/a11y/useMediaCaption: The structured captions track is rendered when the deck supplies one; silent and illustrative clips may omit it.
+      <video
+        className="ns-element-video"
+        src={mediaFragmentUrl(video.url, video.startAtSeconds, video.endAtSeconds)}
+        poster={video.posterUrl}
+        controls
+        preload="metadata"
+        aria-label={video.title ?? element.altText ?? element.name}
+      >
+        {video.captionsUrl ? (
+          <track
+            default
+            kind="captions"
+            src={video.captionsUrl}
+            srcLang={video.captionsLanguage ?? 'en'}
+          />
+        ) : null}
+      </video>
+    ) : (
+      <div className="ns-element-video-placeholder" role="img" aria-label={element.name}>
+        <span>Video unavailable</span>
       </div>
     );
   }
@@ -179,6 +211,12 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
   }
 
   return <span className="ns-element-copy">{element.content}</span>;
+}
+
+function mediaFragmentUrl(url: string, start?: number, end?: number): string {
+  if (start === undefined && end === undefined) return url;
+  const fragment = `t=${Math.max(0, start ?? 0)}${end === undefined ? '' : `,${Math.max(0, end)}`}`;
+  return `${url.split('#')[0]}#${fragment}`;
 }
 
 function elementVisualStyle(element: SlideElement): CSSProperties {

@@ -430,7 +430,11 @@ function executeCommand(
         elementCount: elements.length,
         textElementCount: textElements.length,
         textCharacters: textElements.reduce(
-          (sum, element) => sum + (element.content?.length ?? 0),
+          (sum, element) =>
+            sum +
+            (element.kind === 'math'
+              ? (element.math?.expression.length ?? 0)
+              : (element.content?.length ?? 0)),
           0,
         ),
         lockedElementCount: elements.filter((element) => element.locked).length,

@@ -241,18 +241,24 @@ export function DesignInspector({
         </div>
       </InspectorGroup>
 
-      {primary.kind === 'text' ? (
+      {primary.kind === 'text' || primary.kind === 'math' ? (
         <InspectorGroup icon={<Type size={14} />} title="Content">
           <label className="ns-text-content-field">
-            <span>Text content</span>
+            <span>{primary.kind === 'math' ? 'Math expression' : 'Text content'}</span>
             <textarea
               key={`${primary.id}-${primary.version}-content`}
-              defaultValue={primary.content ?? ''}
+              defaultValue={
+                primary.kind === 'math' ? (primary.math?.expression ?? '') : (primary.content ?? '')
+              }
               rows={5}
               disabled={editable.length === 0}
               onBlur={(event) => {
                 const next = event.currentTarget.value;
-                if (next !== (primary.content ?? '')) {
+                const current =
+                  primary.kind === 'math'
+                    ? (primary.math?.expression ?? '')
+                    : (primary.content ?? '');
+                if (next !== current) {
                   const operations: PatchOperation[] = [
                     {
                       op: 'replace_text',
@@ -280,7 +286,10 @@ export function DesignInspector({
                   event.currentTarget.blur();
                 }
                 if (event.key === 'Escape') {
-                  event.currentTarget.value = primary.content ?? '';
+                  event.currentTarget.value =
+                    primary.kind === 'math'
+                      ? (primary.math?.expression ?? '')
+                      : (primary.content ?? '');
                   event.currentTarget.blur();
                 }
               }}
@@ -290,7 +299,7 @@ export function DesignInspector({
         </InspectorGroup>
       ) : null}
 
-      {primary.kind === 'text' ? (
+      {primary.kind === 'text' || primary.kind === 'math' ? (
         <InspectorGroup icon={<Type size={14} />} title="Typography">
           <label className="ns-select-field">
             <span>Typeface</span>
@@ -367,16 +376,18 @@ export function DesignInspector({
 
       <InspectorGroup icon={<Palette size={14} />} title="Appearance">
         <ColorField
-          label={primary.kind === 'text' ? 'Text' : 'Fill'}
+          label={primary.kind === 'text' || primary.kind === 'math' ? 'Text' : 'Fill'}
           value={
-            primary.kind === 'text'
+            primary.kind === 'text' || primary.kind === 'math'
               ? (primary.style.color ?? theme.colors.ink)
               : (primary.style.fill ?? theme.colors.accentSoft)
           }
           onCommit={(value) =>
             patchStyle(
-              primary.kind === 'text' ? { color: value } : { fill: value },
-              `Updated ${primary.kind === 'text' ? 'text color' : 'fill'}`,
+              primary.kind === 'text' || primary.kind === 'math'
+                ? { color: value }
+                : { fill: value },
+              `Updated ${primary.kind === 'text' || primary.kind === 'math' ? 'text color' : 'fill'}`,
             )
           }
           disabled={editable.length === 0}
