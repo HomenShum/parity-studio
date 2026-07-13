@@ -7,6 +7,8 @@ import type {
   DeckSnapshot,
   DeckVersion,
   ExportArtifact,
+  ImageData,
+  MathData,
   NodeSlidePublication,
   NodeSlideWorkspace,
   Presence,
@@ -89,6 +91,7 @@ export function elementFromRow(row: Doc<'nodeslide_elements'>): SlideElement {
     ...(row.chart !== undefined ? { chart: row.chart } : {}),
     ...(row.math !== undefined ? { math: row.math } : {}),
     ...(row.video !== undefined ? { video: row.video } : {}),
+    ...(row.image !== undefined ? { image: row.image } : {}),
     ...(row.imageUrl !== undefined ? { imageUrl: row.imageUrl } : {}),
     ...(row.altText !== undefined ? { altText: row.altText } : {}),
     sourceIds: row.sourceIds,
@@ -324,8 +327,36 @@ export function sanitizeNodeSlideSnapshot(snapshot: DeckSnapshot): PublishedDeck
       ...structuredClone(element),
       sourceIds: element.sourceIds.filter((sourceId) => publicSourceIds.has(sourceId)),
       ...(element.chart ? { chart: sanitizePublishedChart(element.chart, publicSourceIds) } : {}),
+      ...(element.math ? { math: sanitizePublishedMath(element.math, publicSourceIds) } : {}),
+      ...(element.image ? { image: sanitizePublishedImage(element.image, publicSourceIds) } : {}),
     })),
     sources,
+  };
+}
+
+function sanitizePublishedMath(math: MathData, publicSourceIds: ReadonlySet<string>): MathData {
+  return {
+    expression: math.expression,
+    ...(math.syntax !== undefined ? { syntax: math.syntax } : {}),
+    ...(math.displayMode !== undefined ? { displayMode: math.displayMode } : {}),
+    ...(math.description !== undefined ? { description: math.description } : {}),
+    ...(math.display !== undefined ? { display: math.display } : {}),
+    ...(math.variables !== undefined
+      ? { variables: math.variables.map((variable) => ({ ...variable })) }
+      : {}),
+    ...(math.sourceId !== undefined && publicSourceIds.has(math.sourceId)
+      ? { sourceId: math.sourceId }
+      : {}),
+  };
+}
+
+function sanitizePublishedImage(image: ImageData, publicSourceIds: ReadonlySet<string>): ImageData {
+  return {
+    placeholder: image.placeholder,
+    ...(image.credit !== undefined ? { credit: image.credit } : {}),
+    ...(image.sourceId !== undefined && publicSourceIds.has(image.sourceId)
+      ? { sourceId: image.sourceId }
+      : {}),
   };
 }
 
@@ -784,6 +815,7 @@ function elementFields(
     ...(element.chart !== undefined ? { chart: element.chart } : {}),
     ...(element.math !== undefined ? { math: element.math } : {}),
     ...(element.video !== undefined ? { video: element.video } : {}),
+    ...(element.image !== undefined ? { image: element.image } : {}),
     ...(element.imageUrl !== undefined ? { imageUrl: element.imageUrl } : {}),
     ...(element.altText !== undefined ? { altText: element.altText } : {}),
     sourceIds: element.sourceIds,

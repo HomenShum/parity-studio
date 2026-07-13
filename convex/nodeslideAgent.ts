@@ -542,7 +542,7 @@ export const createDeckFromBrief = action({
     const provider = await invokeNodeSlideBriefProvider(providerChoice, async () =>
       callNodeSlideFreeJson({
         systemPrompt:
-          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string},math?:{expression:string,syntax?:"plain"|"latex",description?:string},image?:{url?:string,altText:string,caption?:string},video?:{url:string,posterUrl?:string,title?:string,captionsUrl?:string,captionsLanguage?:string,startAtSeconds?:number,endAtSeconds?:number}}]}. Produce 6–8 concise slides with at least one data-bound chart, one first-class math expression, and one sourced or explicitly illustrative image; use at most one primary image/video per slide. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
+          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string},formula?:{expression:string,display:string,syntax?:"plain"|"latex",description?:string,variables:{label:string,value:number,unit?:string}[]},image?:{url?:string,altText:string,credit?:string,caption?:string},video?:{url:string,posterUrl?:string,title?:string,captionsUrl?:string,captionsLanguage?:string,startAtSeconds?:number,endAtSeconds?:number}}]}. Produce 6–8 concise slides with at least one data-bound chart, one first-class formula, and one sourced or explicitly illustrative image. Use at most one primary chart, formula, image, or video on a slide. Emit structured primitive objects rather than merely claiming they exist in prose. Formula expression must be machine-readable and display presentation-ready. If no licensed image asset is supplied, emit image metadata without an image URL so NodeSlide creates an honest replace-image placeholder. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
         userText: JSON.stringify({
           title,
           brief,
@@ -550,6 +550,73 @@ export const createDeckFromBrief = action({
           providerMode: providerChoice.providerMode,
         }),
         maxTokens: 5000,
+        jsonSchema: {
+          name: 'nodeslide_deck_spec',
+          schema: {
+            type: 'object',
+            required: ['title', 'narrative', 'plan', 'slides'],
+            properties: {
+              title: { type: 'string' },
+              narrative: { type: 'array', items: { type: 'string' } },
+              plan: { type: 'array', items: { type: 'string' } },
+              slides: {
+                type: 'array',
+                minItems: 6,
+                maxItems: 8,
+                items: {
+                  type: 'object',
+                  required: ['title', 'section', 'headline', 'body', 'bullets'],
+                  properties: {
+                    title: { type: 'string' },
+                    section: { type: 'string' },
+                    headline: { type: 'string' },
+                    body: { type: 'string' },
+                    bullets: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+                    metric: { type: 'string' },
+                    metricLabel: { type: 'string' },
+                    chart: {
+                      type: 'object',
+                      required: ['labels', 'values'],
+                      properties: {
+                        labels: { type: 'array', items: { type: 'string' } },
+                        values: { type: 'array', items: { type: 'number' } },
+                        unit: { type: 'string' },
+                      },
+                    },
+                    formula: {
+                      type: 'object',
+                      required: ['expression', 'display', 'variables'],
+                      properties: {
+                        expression: { type: 'string' },
+                        display: { type: 'string' },
+                        variables: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['label', 'value'],
+                            properties: {
+                              label: { type: 'string' },
+                              value: { type: 'number' },
+                              unit: { type: 'string' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    image: {
+                      type: 'object',
+                      required: ['altText', 'credit'],
+                      properties: {
+                        altText: { type: 'string' },
+                        credit: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       }),
     );
     const rawSpec = provider?.ok === true ? provider.value : fallbackSpec;

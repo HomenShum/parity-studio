@@ -242,7 +242,11 @@ function validateElementContent(
   element: SlideElement,
   issues: ValidationIssue[],
 ): void {
-  if (element.kind === 'image' && !element.imageUrl?.trim()) {
+  if (
+    element.kind === 'image' &&
+    !element.imageUrl?.trim() &&
+    element.image?.placeholder !== true
+  ) {
     addIssue(issues, snapshot, {
       severity: 'error',
       code: 'missing_asset',
@@ -250,6 +254,36 @@ function validateElementContent(
       slideId: element.slideId,
       elementId: element.id,
     });
+  }
+
+  if (element.kind === 'math') {
+    if (!element.math?.expression.trim()) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Math element "${element.id}" has no structured expression.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (element.math.expression.length > 4_000) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Math element "${element.id}" exceeds the expression limit.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (
+      (element.math.variables ?? []).some((variable) => !Number.isFinite(variable.value))
+    ) {
+      addIssue(issues, snapshot, {
+        severity: 'error',
+        code: 'schema',
+        message: `Math element "${element.id}" contains a non-finite variable value.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
   }
 
   if (element.kind === 'chart') {
@@ -276,26 +310,6 @@ function validateElementContent(
           });
         }
       }
-    }
-  }
-
-  if (element.kind === 'math') {
-    if (!element.math?.expression.trim()) {
-      addIssue(issues, snapshot, {
-        severity: 'error',
-        code: 'schema',
-        message: `Math element "${element.id}" has no expression.`,
-        slideId: element.slideId,
-        elementId: element.id,
-      });
-    } else if (element.math.expression.length > 4_000) {
-      addIssue(issues, snapshot, {
-        severity: 'error',
-        code: 'schema',
-        message: `Math element "${element.id}" exceeds the expression limit.`,
-        slideId: element.slideId,
-        elementId: element.id,
-      });
     }
   }
 
@@ -391,6 +405,7 @@ function validateElementContent(
 }
 
 function textBackground(snapshot: DeckSnapshot, slide: Slide, element: SlideElement): string {
+  if (element.style.fill) return element.style.fill;
   const elements = orderedElements(snapshot, slide);
   const textIndex = elements.findIndex((candidate) => candidate.id === element.id);
   const containingShape = elements
@@ -411,7 +426,7 @@ function validateTextQuality(
   element: SlideElement,
   issues: ValidationIssue[],
 ): void {
-  if (element.kind !== 'text' || !element.content?.trim()) return;
+  if ((element.kind !== 'text' && element.kind !== 'math') || !element.content?.trim()) return;
   const fontSize = element.style.fontSize ?? 24;
   if (!Number.isFinite(fontSize) || fontSize <= 0) {
     addIssue(issues, snapshot, {
@@ -519,6 +534,8 @@ function validateSources(
   const illustrative = [
     ...element.sourceIds,
     ...(element.chart?.sourceId ? [element.chart.sourceId] : []),
+    ...(element.math?.sourceId ? [element.math.sourceId] : []),
+    ...(element.image?.sourceId ? [element.image.sourceId] : []),
   ]
     .map((sourceId) => sourcesById.get(sourceId))
     .filter((source): source is NonNullable<typeof source> =>

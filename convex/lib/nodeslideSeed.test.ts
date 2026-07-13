@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { validateSnapshot } from '../../src/domains/nodeslide/slidelang/validation';
 import {
   buildBriefNodeSlide,
   buildGoldenNodeSlide,
@@ -22,9 +23,10 @@ describe('NodeSlide seed', () => {
       syntax: 'plain',
       displayMode: 'block',
     });
-    expect(snapshot.elements.find((element) => element.kind === 'image')?.imageUrl).toMatch(
-      /^data:image\/svg\+xml/,
-    );
+    expect(snapshot.elements.find((element) => element.kind === 'image')).toMatchObject({
+      image: { placeholder: true },
+      altText: 'Structured deck graph connecting slides, elements, sources, and versions',
+    });
   });
 
   it('rejects malformed first-class math and video primitives', () => {
@@ -106,6 +108,87 @@ describe('NodeSlide seed', () => {
     ]);
   });
 
+  it('materializes chart, formula, image-placeholder, and URL evidence as real primitives', () => {
+    const brief = {
+      prompt:
+        'Use https://www.fifa.com/en/tournaments/mens/worldcup/qatar2022 and https://www.fifa.com/en/articles/top-goalscorers-leading-marksmen-golden-boot-fifa-world-cup-qatar-2022.',
+      audience: 'Reviewers',
+      purpose: 'Prove structured primitives',
+      successCriteria: ['Chart, formula, and image stay structured'],
+    };
+    const baseSlide = (index: number) => ({
+      title: `Slide ${index + 1}`,
+      section: `Proof / ${index + 1}`,
+      headline: `Structured proof ${index + 1}`,
+      body: 'A bounded evidence statement.',
+      bullets: ['Supplied evidence', 'Editable output', 'Validated layout'],
+    });
+    const rawSpec = {
+      title: 'World Cup proof',
+      narrative: ['Prove the primitive pipeline.'],
+      slides: [
+        baseSlide(0),
+        {
+          ...baseSlide(1),
+          formula: {
+            expression: 'goals / matches',
+            display: '172 ÷ 64 = 2.69 goals per match',
+            variables: [
+              { label: 'goals', value: 172 },
+              { label: 'matches', value: 64 },
+            ],
+          },
+        },
+        {
+          ...baseSlide(2),
+          image: {
+            altText: 'Lusail Stadium image placeholder',
+            credit: 'Licensed image and credit required',
+          },
+        },
+        {
+          ...baseSlide(3),
+          chart: { labels: ['Mbappé', 'Messi'], values: [8, 7], unit: 'goals' },
+        },
+        baseSlide(4),
+        baseSlide(5),
+      ],
+    };
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-world-cup-primitives',
+      projectId: 'project-world-cup-primitives',
+      title: 'World Cup proof',
+      brief,
+      themeId: 'quiet-precision',
+      rawSpec,
+      now: 1_000,
+    });
+    const formula = built.snapshot.elements.find((element) => element.kind === 'math');
+    const image = built.snapshot.elements.find((element) => element.kind === 'image');
+    const chart = built.snapshot.elements.find((element) => element.kind === 'chart');
+
+    expect(formula?.math).toMatchObject({
+      expression: 'goals / matches',
+      display: '172 ÷ 64 = 2.69 goals per match',
+    });
+    expect(image?.image).toMatchObject({
+      placeholder: true,
+      credit: 'Licensed image and credit required',
+    });
+    expect(chart?.chart?.series[0]?.values).toEqual([8, 7]);
+    expect(built.snapshot.sources.filter((source) => source.sourceType === 'url')).toHaveLength(2);
+    expect(formula?.sourceIds).toEqual(
+      expect.arrayContaining(
+        built.snapshot.sources
+          .filter((source) => source.sourceType === 'url')
+          .map((source) => source.id),
+      ),
+    );
+    expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
+    expect(validateSnapshot(built.snapshot).issues).toEqual([]);
+  });
+
   it('keeps deterministic fallback headlines sentence-cased and sequence labels singular', () => {
     const spec = deterministicBriefSpec('Pilot story', {
       prompt: 'Explain a bounded pilot.',
@@ -120,6 +203,44 @@ describe('NodeSlide seed', () => {
       'Execute the critical moves',
       'Review measurable outcomes',
     ]);
+  });
+
+  it('retains requested structured primitives when the named model falls back', () => {
+    const brief = {
+      prompt:
+        'Create a World Cup data story; top scorers were Kylian Mbappé 8, Lionel Messi 7, Julián Álvarez 4, and Olivier Giroud 4. Include an editable formula showing 172 ÷ 64 = 2.69 goals per match and an editable Lusail Stadium image placeholder.',
+      audience: 'Reviewers',
+      purpose: 'Demonstrate a trustworthy data story',
+      successCriteria: ['Keep primitives structured'],
+    };
+
+    const spec = deterministicBriefSpec('World Cup fallback', brief);
+    expect(spec.slides.find((slide) => slide.formula)?.formula).toMatchObject({
+      expression: '172 / 64',
+      display: '172 ÷ 64 = 2.69 goals per match',
+    });
+    expect(spec.slides.find((slide) => slide.chart)?.chart).toMatchObject({
+      labels: ['Kylian Mbappé', 'Lionel Messi', 'Julián Álvarez', 'Olivier Giroud'],
+      values: [8, 7, 4, 4],
+      unit: 'goals',
+    });
+    expect(spec.slides.find((slide) => slide.image)?.image).toMatchObject({
+      altText: 'Lusail Stadium — replace with a licensed image',
+    });
+
+    const snapshot = buildBriefNodeSlide({
+      deckId: 'deck-fallback-primitives',
+      projectId: 'project-fallback-primitives',
+      title: 'World Cup fallback',
+      brief,
+      themeId: 'quiet-precision',
+      rawSpec: null,
+      now: 1_000,
+    }).snapshot;
+    expect(snapshot.elements.some((element) => element.kind === 'math')).toBe(true);
+    expect(snapshot.elements.some((element) => element.kind === 'chart')).toBe(true);
+    expect(snapshot.elements.some((element) => element.kind === 'image')).toBe(true);
+    expect(validateSnapshot(snapshot).issues).toEqual([]);
   });
 
   it('maps every advertised design profile to genuinely distinct tokens', () => {

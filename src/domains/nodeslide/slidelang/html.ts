@@ -172,14 +172,28 @@ function renderSemanticChart(element: SlideElement): string {
 
 function renderSemanticImage(element: SlideElement): string {
   const label = element.altText?.trim() || element.name;
-  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(label)}</figcaption></figure>`;
+  const credit = element.image?.credit?.trim()
+    ? `<p data-image-credit>${escapeHtml(element.image.credit.trim())}</p>`
+    : '';
+  const status = element.image?.placeholder ? '<p data-image-placeholder>Replace image</p>' : '';
+  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(label)}</figcaption>${status}${credit}</figure>`;
 }
 
 function renderSemanticMath(element: SlideElement): string {
-  const expression =
-    element.math?.expression.trim() || element.content?.trim() || 'Formula unavailable';
-  const description = element.math?.description?.trim();
-  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(description || element.name)}</figcaption><math aria-label="${escapeHtml(description || expression)}"><mtext>${escapeHtml(expression)}</mtext></math></figure>`;
+  const math = element.math;
+  if (!math) {
+    return `<div ${semanticElementAttributes(element)} role="math">Formula data unavailable.</div>`;
+  }
+  const expression = math.expression.trim() || element.content?.trim() || 'Formula unavailable';
+  const description = math.description?.trim();
+  const display = math.display?.trim() || description || expression;
+  const variables = (math.variables ?? [])
+    .map(
+      (variable) =>
+        `<div><dt>${escapeHtml(variable.label)}</dt><dd>${escapeHtml(`${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`)}</dd></div>`,
+    )
+    .join('');
+  return `<figure ${semanticElementAttributes(element)} role="math" data-expression="${escapeHtml(expression)}"><figcaption>${escapeHtml(display)}</figcaption><math aria-label="${escapeHtml(description || expression)}"><mtext>${escapeHtml(expression)}</mtext></math>${variables ? `<dl>${variables}</dl>` : ''}</figure>`;
 }
 
 function renderSemanticVideo(element: SlideElement): string {

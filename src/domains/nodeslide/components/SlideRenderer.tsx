@@ -111,7 +111,9 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
         role="img"
         aria-label={element.altText ?? element.name}
       >
-        <span>{element.altText ?? 'Image'}</span>
+        <strong>{element.altText ?? 'Image'}</strong>
+        <span>Replace image</span>
+        {element.image?.credit ? <small>{element.image.credit}</small> : null}
       </div>
     );
   }
@@ -124,13 +126,25 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
 
   if (element.kind === 'math') {
     const expression = element.math?.expression ?? element.content ?? '';
+    const display = element.math?.display ?? expression;
+    const variables = element.math?.variables ?? [];
     return (
       <div
-        className={`ns-element-math ns-element-math--${element.math?.syntax ?? 'plain'}`}
+        className={`ns-element-math ns-math-primitive ns-element-math--${element.math?.syntax ?? 'plain'}`}
         role="math"
-        aria-label={element.math?.description ?? expression}
+        aria-label={element.math?.description ?? `${element.name}: ${display}`}
       >
-        <span>{expression}</span>
+        <code>{display}</code>
+        {variables.length > 0 ? (
+          <small>
+            {variables
+              .map(
+                (variable) =>
+                  `${variable.label} = ${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`,
+              )
+              .join(' · ')}
+          </small>
+        ) : null}
         {element.math?.syntax === 'latex' ? <small>LaTeX source</small> : null}
       </div>
     );

@@ -322,12 +322,17 @@ export function validateNodeSlidePatch(
     }
     if (operation.op === 'replace_text' && (element.kind === 'text' || element.kind === 'math')) {
       const currentText =
-        element.kind === 'math' ? (element.math?.expression ?? '') : (element.content ?? '');
+        element.kind === 'math'
+          ? (element.math?.display ?? element.math?.expression ?? element.content ?? '')
+          : (element.content ?? '');
       if (operation.text === currentText) {
         errors.push(`replace_text must change element ${operation.elementId}.`);
       } else if (canMutate) {
         element.content = operation.text;
-        if (element.kind === 'math' && element.math) element.math.expression = operation.text;
+        if (element.kind === 'math' && element.math) {
+          element.math.display = operation.text;
+          element.math.expression = operation.text;
+        }
       }
     }
     if (operation.op === 'move') {

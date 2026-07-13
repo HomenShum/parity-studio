@@ -304,9 +304,26 @@ export const nodeslideChartDataValidator = v.object({
 
 export const nodeslideMathDataValidator = v.object({
   expression: v.string(),
-  syntax: v.union(v.literal('plain'), v.literal('latex')),
-  displayMode: v.union(v.literal('inline'), v.literal('block')),
+  syntax: v.optional(v.union(v.literal('plain'), v.literal('latex'))),
+  displayMode: v.optional(v.union(v.literal('inline'), v.literal('block'))),
   description: v.optional(v.string()),
+  display: v.optional(v.string()),
+  variables: v.optional(
+    v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        unit: v.optional(v.string()),
+      }),
+    ),
+  ),
+  sourceId: v.optional(v.string()),
+});
+
+export const nodeslideImageDataValidator = v.object({
+  placeholder: v.boolean(),
+  credit: v.optional(v.string()),
+  sourceId: v.optional(v.string()),
 });
 
 export const nodeslideVideoDataValidator = v.object({
@@ -348,6 +365,7 @@ export const nodeslideElementValidator = v.object({
   chart: v.optional(nodeslideChartDataValidator),
   math: v.optional(nodeslideMathDataValidator),
   video: v.optional(nodeslideVideoDataValidator),
+  image: v.optional(nodeslideImageDataValidator),
   imageUrl: v.optional(v.string()),
   altText: v.optional(v.string()),
   sourceIds: v.array(v.string()),

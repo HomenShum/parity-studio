@@ -212,7 +212,9 @@ function addStaticImage(
       snapshot,
       element,
       box,
-      `${element.altText?.trim() || element.name}\nStatic image unavailable`,
+      element.image?.placeholder
+        ? `${element.altText?.trim() || element.name}\nReplace image\n${element.image.credit ?? 'Credit required'}`
+        : `${element.altText?.trim() || element.name}\nStatic image unavailable`,
     );
     return;
   }
@@ -296,7 +298,7 @@ function addNativeMath(
   element: SlideElement,
   box: PptxBox,
 ): void {
-  const expression = element.math?.expression ?? element.content ?? '';
+  const expression = element.math?.display ?? element.math?.expression ?? element.content ?? '';
   addNativeText(pptxSlide, snapshot, element, box, expression, element.id);
 }
 

@@ -45,6 +45,7 @@ export const NODESLIDE_LAYER_OPERATION_VERSION = 'nodeslide.layers/v1' as const;
 export const NODESLIDE_PROPAGATION_OPERATION_LIMIT = 128 as const;
 export const SLIDE_WIDTH_IN = 13.333;
 export const SLIDE_HEIGHT_IN = 7.5;
+export const NODESLIDE_MIN_READABLE_FONT_SIZE = 14;
 
 export type StudioDomain = 'parity' | 'nodeslide';
 export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'video' | 'connector';
@@ -145,12 +146,28 @@ export interface ChartData {
   sourceId?: string;
 }
 
-/** A first-class formula contract. Plain expressions remain editable everywhere; LaTeX is preserved losslessly. */
+export interface MathVariable {
+  label: string;
+  value: number;
+  unit?: string;
+}
+
+/** Structured formula payload retained independently from its visual treatment and source data. */
 export interface MathData {
   expression: string;
-  syntax: 'plain' | 'latex';
-  displayMode: 'inline' | 'block';
+  syntax?: 'plain' | 'latex';
+  displayMode?: 'inline' | 'block';
   description?: string;
+  display?: string;
+  variables?: MathVariable[];
+  sourceId?: string;
+}
+
+/** Image metadata also models intentional, editable replace-image placeholders. */
+export interface ImageData {
+  placeholder: boolean;
+  credit?: string;
+  sourceId?: string;
 }
 
 /** A first-class web video contract with an explicit non-native PowerPoint fallback. */
@@ -177,6 +194,7 @@ export interface SlideElement {
   chart?: ChartData;
   math?: MathData;
   video?: VideoData;
+  image?: ImageData;
   imageUrl?: string;
   altText?: string;
   sourceIds: string[];

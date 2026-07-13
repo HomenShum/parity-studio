@@ -397,6 +397,85 @@ describe('local SlideLangAdapter', () => {
     expect(adapter.getElementCapability(video).pptx).toBe('static_fallback');
   });
 
+  it('exports structured math and an editable replace-image placeholder without rasterizing them', async () => {
+    const snapshot = cleanSnapshot();
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Missing slide fixture.');
+    const capabilities = ['web_native', 'pptx_editable', 'google_importable'] as const;
+    snapshot.elements = [
+      {
+        id: 'element:formula',
+        slideId: slide.id,
+        name: 'Goals per match formula',
+        kind: 'math',
+        role: 'formula',
+        bbox: { x: 0.08, y: 0.14, width: 0.84, height: 0.24 },
+        rotation: 0,
+        content: '172 ÷ 64 = 2.69 goals per match',
+        style: {
+          fill: '#d9f99d',
+          color: '#17210b',
+          fontFamily: 'Aptos Mono',
+          fontSize: 28,
+          fontWeight: 700,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+        },
+        math: {
+          expression: 'goals / matches',
+          display: '172 ÷ 64 = 2.69 goals per match',
+          variables: [
+            { label: 'goals', value: 172 },
+            { label: 'matches', value: 64 },
+          ],
+          sourceId: 'source:adoption',
+        },
+        sourceIds: ['source:adoption'],
+        locked: false,
+        exportCapabilities: [...capabilities],
+        version: 1,
+      },
+      {
+        id: 'element:image-placeholder',
+        slideId: slide.id,
+        name: 'Lusail Stadium image',
+        kind: 'image',
+        role: 'image',
+        bbox: { x: 0.08, y: 0.5, width: 0.84, height: 0.34 },
+        rotation: 0,
+        style: { fill: '#3b3222', stroke: '#f6b94a', strokeWidth: 2 },
+        image: {
+          placeholder: true,
+          credit: 'Licensed FIFA image and photographer credit required',
+          sourceId: 'source:adoption',
+        },
+        altText: 'Lusail Stadium image placeholder',
+        sourceIds: ['source:adoption'],
+        locked: false,
+        exportCapabilities: [...capabilities],
+        version: 1,
+      },
+    ];
+    slide.elementOrder = snapshot.elements.map((element) => element.id);
+
+    const validation = adapter.validate(snapshot);
+    expect(validation.issues).toEqual([]);
+
+    const html = adapter.renderSlideHtml(snapshot, slide.id);
+    expect(html).toContain('data-element-kind="math"');
+    expect(html).toContain('role="math"');
+    expect(html).toContain('data-expression="goals / matches"');
+    expect(html).toContain('data-image-placeholder>Replace image</p>');
+    expect(html).toContain('Licensed FIFA image and photographer credit required');
+
+    const binary = await adapter.buildPptx(snapshot);
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = await zip.file('ppt/slides/slide1.xml')?.async('string');
+    expect(slideXml).toContain('<a:t>172 ÷ 64 = 2.69 goals per match</a:t>');
+    expect(slideXml).toContain('<a:t>Replace image</a:t>');
+    expect(slideXml).toContain('<a:t>Licensed FIFA image and photographer credit required</a:t>');
+  });
+
   it('omits hidden text from HTML visual, semantic, accessibility, and provenance output', () => {
     const snapshot = cleanSnapshot();
     const hidden = addHiddenTextElement(snapshot);

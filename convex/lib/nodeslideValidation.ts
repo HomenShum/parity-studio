@@ -4,6 +4,7 @@ import {
   NODESLIDE_ELEMENT_SOURCE_LIMIT,
   NODESLIDE_GROUP_ID_LIMIT,
   NODESLIDE_GROUP_MEMBER_LIMIT,
+  NODESLIDE_MIN_READABLE_FONT_SIZE,
   NODESLIDE_SCHEMA_VERSION,
   NODESLIDE_TOOLCHAIN_VERSION,
   type SlideElement,
@@ -344,32 +345,32 @@ function validateElement(
       elementId: element.id,
     });
   }
-  if (element.kind === 'text' && !element.content?.trim()) {
+  if ((element.kind === 'text' || element.kind === 'math') && !element.content?.trim()) {
     addIssue({
       severity: 'warning',
       code: 'schema',
-      message: `Text element ${element.id} is empty.`,
+      message: `${element.kind === 'math' ? 'Math' : 'Text'} element ${element.id} is empty.`,
       slideId: element.slideId,
       elementId: element.id,
     });
   }
   if (
-    element.kind === 'text' &&
+    (element.kind === 'text' || element.kind === 'math') &&
     element.style.fontSize !== undefined &&
-    element.style.fontSize < 12 &&
+    element.style.fontSize < NODESLIDE_MIN_READABLE_FONT_SIZE &&
     element.role !== 'footer' &&
     element.role !== 'page_number'
   ) {
     addIssue({
       severity: 'warning',
       code: 'font_size',
-      message: `Text element ${element.id} is below the 12pt readability floor.`,
+      message: `Text element ${element.id} is below the ${NODESLIDE_MIN_READABLE_FONT_SIZE}pt readability floor.`,
       slideId: element.slideId,
       elementId: element.id,
     });
   }
   if (
-    element.kind === 'text' &&
+    (element.kind === 'text' || element.kind === 'math') &&
     element.style.color !== undefined &&
     contrastRatio(element.style.color, element.style.fill ?? slideBackground) !== null
   ) {
@@ -388,11 +389,65 @@ function validateElement(
       });
     }
   }
-  if (element.kind === 'image' && !element.imageUrl?.trim()) {
+  if (
+    element.kind === 'image' &&
+    !element.imageUrl?.trim() &&
+    element.image?.placeholder !== true
+  ) {
     addIssue({
       severity: 'error',
       code: 'missing_asset',
       message: `Image element ${element.id} has no asset URL.`,
+      slideId: element.slideId,
+      elementId: element.id,
+    });
+  }
+  if (element.kind === 'math') {
+    const math = element.math;
+    if (!math?.expression.trim()) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Math element ${element.id} has no structured expression.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if (math.expression.length > 4_000) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Math element ${element.id} exceeds the expression limit.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    } else if ((math.variables ?? []).some((variable) => !Number.isFinite(variable.value))) {
+      addIssue({
+        severity: 'error',
+        code: 'schema',
+        message: `Math element ${element.id} contains a non-finite variable value.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+    if (math?.sourceId && !sourceIds.has(math.sourceId)) {
+      addIssue({
+        severity: 'error',
+        code: 'source',
+        message: `Math element ${element.id} references unknown source ${math.sourceId}.`,
+        slideId: element.slideId,
+        elementId: element.id,
+      });
+    }
+  }
+  if (
+    element.kind === 'image' &&
+    element.image?.sourceId &&
+    !sourceIds.has(element.image.sourceId)
+  ) {
+    addIssue({
+      severity: 'error',
+      code: 'source',
+      message: `Image element ${element.id} references unknown source ${element.image.sourceId}.`,
       slideId: element.slideId,
       elementId: element.id,
     });
@@ -430,26 +485,6 @@ function validateElement(
         severity: 'error',
         code: 'source',
         message: `Chart element ${element.id} references unknown source ${chart.sourceId}.`,
-        slideId: element.slideId,
-        elementId: element.id,
-      });
-    }
-  }
-  if (element.kind === 'math') {
-    const math = element.math;
-    if (!math?.expression.trim()) {
-      addIssue({
-        severity: 'error',
-        code: 'schema',
-        message: `Math element ${element.id} has no expression.`,
-        slideId: element.slideId,
-        elementId: element.id,
-      });
-    } else if (math.expression.length > 4_000) {
-      addIssue({
-        severity: 'error',
-        code: 'schema',
-        message: `Math element ${element.id} exceeds the expression limit.`,
         slideId: element.slideId,
         elementId: element.id,
       });

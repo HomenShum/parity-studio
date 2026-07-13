@@ -1,4 +1,15 @@
-import { Database, ExternalLink, FileText, Link2, Quote, Sheet, StickyNote } from 'lucide-react';
+import {
+  BarChart3,
+  Calculator,
+  Database,
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  Quote,
+  Sheet,
+  StickyNote,
+} from 'lucide-react';
 import type { SlideElement, SourceRecord } from '../../../../shared/nodeslide';
 
 interface DataInspectorProps {
@@ -7,8 +18,18 @@ interface DataInspectorProps {
 }
 
 export function DataInspector({ sources, selectedElements }: DataInspectorProps) {
-  const dependencyIds = new Set(selectedElements.flatMap((element) => element.sourceIds));
+  const dependencyIds = new Set(
+    selectedElements.flatMap((element) => [
+      ...element.sourceIds,
+      ...(element.chart?.sourceId ? [element.chart.sourceId] : []),
+      ...(element.math?.sourceId ? [element.math.sourceId] : []),
+      ...(element.image?.sourceId ? [element.image.sourceId] : []),
+    ]),
+  );
   const dependencies = sources.filter((source) => dependencyIds.has(source.id));
+  const structuredElements = selectedElements.filter(
+    (element) => element.kind === 'chart' || element.kind === 'math' || element.kind === 'image',
+  );
 
   return (
     <div className="ns-inspector-scroll ns-data-inspector">
@@ -50,6 +71,20 @@ export function DataInspector({ sources, selectedElements }: DataInspectorProps)
               {selectedElements.length === 1 ? 'this element' : 'these elements'}.
             </p>
           )}
+        </section>
+      ) : null}
+
+      {structuredElements.length > 0 ? (
+        <section className="ns-dependency-card ns-primitive-card">
+          <div className="ns-section-heading">
+            <span>
+              <Database size={13} /> Structured primitive
+            </span>
+            <small>{structuredElements.length}</small>
+          </div>
+          {structuredElements.map((element) => (
+            <PrimitiveDetails element={element} key={element.id} />
+          ))}
         </section>
       ) : null}
 
@@ -97,6 +132,62 @@ export function DataInspector({ sources, selectedElements }: DataInspectorProps)
       </section>
     </div>
   );
+}
+
+function PrimitiveDetails({ element }: { element: SlideElement }) {
+  if (element.kind === 'chart' && element.chart) {
+    return (
+      <div>
+        <BarChart3 size={15} />
+        <span>
+          <strong>{element.chart.chartType} chart · editable data</strong>
+          <small>
+            {element.chart.labels
+              .map((label, index) => `${label}: ${element.chart?.series[0]?.values[index] ?? '—'}`)
+              .join(' · ')}
+          </small>
+        </span>
+      </div>
+    );
+  }
+  if (element.kind === 'math' && element.math) {
+    return (
+      <div>
+        <Calculator size={15} />
+        <span>
+          <strong>{element.math.display ?? element.math.expression}</strong>
+          <small>
+            expression: {element.math.expression}
+            {(element.math.variables ?? []).length > 0
+              ? ` · ${(element.math.variables ?? [])
+                  .map(
+                    (variable) =>
+                      `${variable.label}=${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`,
+                  )
+                  .join(' · ')}`
+              : ''}
+          </small>
+        </span>
+      </div>
+    );
+  }
+  if (element.kind === 'image') {
+    return (
+      <div>
+        <ImageIcon size={15} />
+        <span>
+          <strong>
+            {element.image?.placeholder ? 'Replace-image placeholder' : 'Image asset'}
+          </strong>
+          <small>
+            {element.altText ?? element.name}
+            {element.image?.credit ? ` · ${element.image.credit}` : ''}
+          </small>
+        </span>
+      </div>
+    );
+  }
+  return null;
 }
 
 function SourceIcon({ type }: { type: SourceRecord['sourceType'] }) {

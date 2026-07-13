@@ -720,7 +720,38 @@
   background: linear-gradient(135deg, #e9eae7, #d9dbd5);
   color: #8a8d87;
   display: flex;
-  font-size: 2.2cqw;
+  flex-direction: column;
+  font-size: 1.8cqw;
+  gap: .7cqw;
+  height: 100%;
+  justify-content: center;
+  padding: 2cqw;
+  text-align: center;
+  width: 100%;
+}
+.ns-element-image-placeholder strong {
+  color: currentColor;
+  font-size: 2.1cqw;
+  line-height: 1.1;
+}
+.ns-element-image-placeholder span {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 1.05cqw;
+  font-weight: 700;
+  padding: .45cqw 1cqw;
+  text-transform: uppercase;
+}
+.ns-element-image-placeholder small {
+  font-size: .95cqw;
+  line-height: 1.2;
+  max-width: 88%;
+}
+.ns-math-primitive {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1cqw;
   height: 100%;
   justify-content: center;
   width: 100%;
@@ -736,10 +767,16 @@
   min-height: 100%;
   width: 100%;
 }
+.ns-element-math code,
 .ns-element-math span {
+  color: inherit;
+  font: inherit;
   font-size: 1em;
   font-variant-numeric: tabular-nums;
   letter-spacing: -.03em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
   white-space: pre-wrap;
 }
 .ns-element-math small {
@@ -763,6 +800,19 @@
   color: #f4f1e9;
   display: flex;
   justify-content: center;
+}
+.ns-math-primitive code {
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.ns-math-primitive small {
+  font-size: 1.05cqw;
+  font-weight: 520;
+  opacity: 0.72;
 }
 .ns-element-connector {
   color: currentColor;
@@ -2543,6 +2593,37 @@
   border-radius: 9px;
   margin-top: 2px;
   padding: 0 10px;
+}
+.ns-brief-starter {
+  align-items: center;
+  background: color-mix(in srgb, var(--ns-accent) 8%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 24%, var(--ns-line-soft));
+  border-radius: 10px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 11px 12px;
+}
+.ns-brief-starter > span {
+  display: grid;
+  gap: 3px;
+}
+.ns-brief-starter small {
+  color: var(--ns-muted);
+  line-height: 1.35;
+}
+.ns-brief-starter button {
+  align-items: center;
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line);
+  border-radius: 8px;
+  color: var(--ns-ink);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  padding: 8px 10px;
 }
 .ns-brief-details summary {
   color: var(--ns-accent-dark);
