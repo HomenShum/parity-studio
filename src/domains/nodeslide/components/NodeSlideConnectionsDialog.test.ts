@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -32,5 +33,17 @@ describe('NodeSlide coding-agent connection config', () => {
     expect(config).toContain(`PARITY_CONVEX_URL = "${NODESLIDE_CONVEX_URL}"`);
     expect(config).toContain('PARITY_DASHBOARD = "disabled"');
     expect(config).not.toContain('parity-studio-mcp@latest');
+  });
+
+  it('keeps the pinned MCP tarball in Vercel deployments', () => {
+    const vercelIgnore = readFileSync(
+      new URL('../../../../.vercelignore', import.meta.url),
+      'utf8',
+    );
+    const archiveIgnore = vercelIgnore.indexOf('*.tgz');
+    const packageInclude = vercelIgnore.indexOf('!public/downloads/parity-studio-mcp-*.tgz');
+
+    expect(archiveIgnore).toBeGreaterThanOrEqual(0);
+    expect(packageInclude).toBeGreaterThan(archiveIgnore);
   });
 });
