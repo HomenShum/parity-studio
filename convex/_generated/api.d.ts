@@ -40,6 +40,7 @@ import type * as lib_nodeslideExecutionTrace from "../lib/nodeslideExecutionTrac
 import type * as lib_nodeslideExecutionTraceValidator from "../lib/nodeslideExecutionTraceValidator.js";
 import type * as lib_nodeslideIds from "../lib/nodeslideIds.js";
 import type * as lib_nodeslideManagedKernel from "../lib/nodeslideManagedKernel.js";
+import type * as lib_nodeslideOtlp from "../lib/nodeslideOtlp.js";
 import type * as lib_nodeslidePatches from "../lib/nodeslidePatches.js";
 import type * as lib_nodeslidePreferenceEtl from "../lib/nodeslidePreferenceEtl.js";
 import type * as lib_nodeslidePreferenceRetention from "../lib/nodeslidePreferenceRetention.js";
@@ -69,6 +70,7 @@ import type * as nodeslide from "../nodeslide.js";
 import type * as nodeslideAgent from "../nodeslideAgent.js";
 import type * as nodeslidePreferences from "../nodeslidePreferences.js";
 import type * as nodeslideSignatures from "../nodeslideSignatures.js";
+import type * as nodeslideTelemetry from "../nodeslideTelemetry.js";
 import type * as nodeslideVariationProof from "../nodeslideVariationProof.js";
 import type * as nodeslideVariationProvider from "../nodeslideVariationProvider.js";
 import type * as nodeslideVariations from "../nodeslideVariations.js";
@@ -117,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideExecutionTraceValidator": typeof lib_nodeslideExecutionTraceValidator;
   "lib/nodeslideIds": typeof lib_nodeslideIds;
   "lib/nodeslideManagedKernel": typeof lib_nodeslideManagedKernel;
+  "lib/nodeslideOtlp": typeof lib_nodeslideOtlp;
   "lib/nodeslidePatches": typeof lib_nodeslidePatches;
   "lib/nodeslidePreferenceEtl": typeof lib_nodeslidePreferenceEtl;
   "lib/nodeslidePreferenceRetention": typeof lib_nodeslidePreferenceRetention;
@@ -146,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   nodeslideAgent: typeof nodeslideAgent;
   nodeslidePreferences: typeof nodeslidePreferences;
   nodeslideSignatures: typeof nodeslideSignatures;
+  nodeslideTelemetry: typeof nodeslideTelemetry;
   nodeslideVariationProof: typeof nodeslideVariationProof;
   nodeslideVariationProvider: typeof nodeslideVariationProvider;
   nodeslideVariations: typeof nodeslideVariations;

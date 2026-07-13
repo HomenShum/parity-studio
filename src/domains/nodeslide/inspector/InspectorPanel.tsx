@@ -22,6 +22,7 @@ import type {
   DeckVersion,
   NodeSlideAgentMessage,
   NodeSlideAgentRun,
+  NodeSlideAgentTelemetryPage,
   NodeSlideWorkspace,
   PatchOperation,
   PatchScope,
@@ -77,6 +78,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   aiAgentActivity?: AiAgentActivity | null;
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
+  agentTelemetry?: NodeSlideAgentTelemetryPage;
   aiCommentContext?: AiCommentContext | null;
   previewedPatchId?: string | null;
   activeTastePackId: NodeSlideTastePackId | null;
@@ -149,6 +151,7 @@ export function InspectorPanel<CommandId extends string = string>({
   aiAgentActivity,
   agentRuns = [],
   agentMessages = [],
+  agentTelemetry,
   aiCommentContext = null,
   previewedPatchId = null,
   activeTastePackId,
@@ -431,6 +434,7 @@ export function InspectorPanel<CommandId extends string = string>({
             patches={workspace.patches}
             agentRuns={agentRuns}
             agentMessages={agentMessages}
+            {...(agentTelemetry ? { agentTelemetry } : {})}
           />
         ) : null}
       </div>

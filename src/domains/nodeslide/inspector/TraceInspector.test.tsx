@@ -3,12 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentTrace,
   DeckPatch,
+  NodeSlideAgentRun,
+  NodeSlideAgentTelemetryPage,
   ValidationIssue,
   ValidationResult,
 } from '../../../../shared/nodeslide';
 import {
   CountersignSeal,
   CustodyRail,
+  TraceInspector,
   buildSealModel,
   consentSentence,
   copyDigest,
@@ -553,5 +556,90 @@ describe('node summaries + consent derivation + no mojibake', () => {
     );
     expect(html).toContain('·'); // U+00B7 in "machine countersigned · human has not"
     expect(html).not.toContain('�');
+  });
+});
+
+describe('compact durable telemetry projection', () => {
+  const run: NodeSlideAgentRun = {
+    id: 'run_otel',
+    deckId: 'deck_wc',
+    idempotencyKey: 'request_1',
+    instruction: 'Update the title',
+    status: 'awaiting_review',
+    provider: 'openrouter',
+    model: 'z-ai/glm-5.2',
+    webResearch: false,
+    attempt: 1,
+    patchId: traceLive.patchId,
+    traceId: traceLive.id,
+    otelTraceId: '0123456789abcdef0123456789abcdef',
+    rootSpanId: '0123456789abcdef',
+    checkpoint: 'awaiting_review',
+    nextTelemetrySequence: 205,
+    telemetryVersion: 'nodeslide-otel/v1',
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_006_000,
+  };
+  const telemetry: NodeSlideAgentTelemetryPage = {
+    spans: [
+      {
+        id: 'span_chat',
+        deckId: 'deck_wc',
+        runId: run.id,
+        traceId: run.otelTraceId as string,
+        spanId: 'fedcba9876543210',
+        parentSpanId: run.rootSpanId,
+        name: 'Plan bounded slide edit',
+        operationName: 'chat',
+        kind: 'client',
+        status: 'ok',
+        startTime: run.createdAt,
+        endTime: run.updatedAt,
+        durationMs: 6000,
+        provider: run.provider,
+        model: run.model,
+        attributes: [],
+        sequence: 203,
+        createdAt: run.updatedAt,
+        updatedAt: run.updatedAt,
+      },
+    ],
+    events: [
+      {
+        id: 'event_review',
+        deckId: 'deck_wc',
+        runId: run.id,
+        traceId: run.otelTraceId as string,
+        spanId: 'fedcba9876543210',
+        name: 'agent.status.awaiting_review',
+        severity: 'info',
+        timestamp: run.updatedAt,
+        body: 'Durable checkpoint advanced to awaiting_review.',
+        attributes: [],
+        sequence: 204,
+      },
+    ],
+    hasMore: true,
+    nextBeforeSequence: 203,
+    totalRecorded: 204,
+  };
+
+  it('keeps the overview bounded while exposing timestamps and honest truncation', () => {
+    const html = renderToStaticMarkup(
+      <TraceInspector
+        traces={[traceLive]}
+        validations={[validationLive]}
+        patches={[patchLive]}
+        agentRuns={[run]}
+        agentMessages={[]}
+        agentTelemetry={telemetry}
+      />,
+    );
+    expect(html).toContain('Started ');
+    expect(html).toContain('Latest activity');
+    expect(html).toContain('Plan bounded slide edit');
+    expect(html).toContain('latest 2 of 204');
+    expect(html).toContain('paginated API');
+    expect(html).not.toContain('class="ns-custody-rail"');
   });
 });
