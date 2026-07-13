@@ -18,6 +18,7 @@ import type {
   DeckPatch,
   DeckSnapshot,
   DeckVersion,
+  NodeSlideAgentModelId,
   NodeSlideEditorCapabilityRegistry,
   NodeSlideEditorCommandId,
   NodeSlidePublication,
@@ -264,6 +265,7 @@ interface NodeSlideGeneratedApi {
         ownerAccessKey: string;
         slideId: string;
         providerMode?: 'deterministic' | 'openrouter_free';
+        providerModel?: NodeSlideAgentModelId;
         providerConsent?: string;
       },
       VariationGenerationReceipt
@@ -2105,6 +2107,7 @@ export function NodeSlideStudio() {
       request.providerMode === 'openrouter_free'
         ? {
             providerMode: request.providerMode,
+            providerModel: request.providerModel,
             providerConsent: request.providerConsent,
           }
         : { providerMode: request.providerMode };

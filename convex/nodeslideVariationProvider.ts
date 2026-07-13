@@ -3,16 +3,18 @@
 import { v } from 'convex/values';
 import { internalAction } from './_generated/server';
 import { callNodeSlideFreeJson } from './lib/nodeslideProvider';
+import { nodeslideAgentModelValidator } from './lib/nodeslideValidators';
 
-const FREE_ROUTE_TOTAL_DEADLINE_MS = 7_000;
+const FREE_ROUTE_TOTAL_DEADLINE_MS = 30_000;
 const MAX_PROMPT_CHARS = 100_000;
 
 export const generateStrictJson = internalAction({
   args: {
     systemPrompt: v.string(),
     userText: v.string(),
+    model: nodeslideAgentModelValidator,
   },
-  handler: async (_ctx, { systemPrompt, userText }) => {
+  handler: async (_ctx, { systemPrompt, userText, model }) => {
     if (
       !systemPrompt ||
       systemPrompt.length > 4_000 ||
@@ -27,11 +29,12 @@ export const generateStrictJson = internalAction({
         systemPrompt,
         userText,
         maxTokens: 6_000,
+        model,
       },
       { timeoutMs: FREE_ROUTE_TOTAL_DEADLINE_MS },
     );
     if (!result.ok) {
-      const timedOut = result.reason === 'The GLM 5.2 route timed out.';
+      const timedOut = result.reason.endsWith(' route timed out.');
       return {
         ok: false as const,
         reason: timedOut ? 'provider_timeout' : 'provider_unavailable',

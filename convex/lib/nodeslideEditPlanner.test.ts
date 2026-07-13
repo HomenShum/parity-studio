@@ -247,7 +247,43 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(providerSchema).not.toContain(
       snapshot.elements.find((element) => element.locked)?.id ?? 'missing-locked-element',
     );
+    expect(provider.mock.calls[0]?.[0].model).toBe(NODESLIDE_EDIT_MODEL);
     expect(snapshot).toEqual(before);
+  });
+
+  it('passes the user-selected catalog model to the pi-ai provider boundary', async () => {
+    const { snapshot, target, scope } = fixture();
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.providerModel = 'google/gemini-3.1-pro-preview';
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true,
+      value: {
+        summary: 'Data-aware rewrite',
+        operations: [
+          {
+            op: 'replace_text',
+            slideId: target.slideId,
+            elementId: target.id,
+            text: 'After',
+          },
+        ],
+      },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: 'google/gemini-3.1-pro-preview',
+        costMicroUsd: 900,
+        inputTokens: 80,
+        outputTokens: 20,
+      },
+    }));
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    expect(provider.mock.calls[0]?.[0].model).toBe('google/gemini-3.1-pro-preview');
+    if (result.ok) {
+      expect(result.receipt.providerTelemetry?.model).toBe('google/gemini-3.1-pro-preview');
+    }
   });
 
   it('binds source-grounded replacement copy only to authorized read-context sources', async () => {

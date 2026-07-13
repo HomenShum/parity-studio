@@ -1555,11 +1555,52 @@
 
 .nodeslide-studio .ns-ai-v3-composer-toolbar {
   flex: 1;
+  flex-wrap: wrap;
   margin: 0;
   min-width: 0;
+  row-gap: 2px;
+}
+
+.nodeslide-studio .ns-ai-model-picker {
+  align-items: center;
+  background: color-mix(in srgb, var(--ns-accent) 9%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 28%, var(--ns-line-c));
+  border-radius: 7px;
+  color: var(--ns-accent-dark);
+  display: inline-flex;
+  flex: 0 0 100%;
+  gap: 3px;
+  min-height: 27px;
+  min-width: 0;
+  padding: 2px 4px 2px 6px;
+}
+
+.nodeslide-studio .ns-ai-model-picker:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ns-accent) 22%, transparent);
+}
+
+.nodeslide-studio .ns-ai-model-picker select {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: 600 10px / 1.2 var(--ns-font-sans);
+  min-width: 0;
+  outline: 0;
+  overflow: hidden;
+  padding: 0;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-ai-model-picker option,
+.nodeslide-studio .ns-ai-model-picker optgroup {
+  background: var(--ns-surface);
+  color: var(--ns-ink);
 }
 
 .nodeslide-studio .ns-ai-v3-composer-field .ns-composer-meta {
+  align-items: flex-end;
   display: flex;
 }
 

@@ -25,6 +25,7 @@ import {
   parseSignatureProfileFromStorage,
 } from './lib/nodeslideSignatureProfiles';
 import {
+  nodeslideAgentModelValidator,
   nodeslideProviderModeValidator,
   nodeslideVariationValidator,
 } from './lib/nodeslideValidators';
@@ -81,6 +82,7 @@ export const generate = action({
     ownerAccessKey: v.string(),
     slideId: v.string(),
     providerMode: v.optional(nodeslideProviderModeValidator),
+    providerModel: v.optional(nodeslideAgentModelValidator),
     providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<VariationGenerationReceipt> => {
@@ -90,6 +92,7 @@ export const generate = action({
         'variations',
         args.providerMode,
         args.providerConsent,
+        args.providerModel,
       );
     } catch (error) {
       if (error instanceof NodeSlideProviderConsentError) {
@@ -155,10 +158,10 @@ export const generate = action({
         provider = { ok: false, reason: 'provider_not_requested' };
       } else {
         try {
-          const result = (await ctx.runAction(
-            variationProviderInternal.generateStrictJson,
-            prompt,
-          )) as VariationProviderOutcome;
+          const result = (await ctx.runAction(variationProviderInternal.generateStrictJson, {
+            ...prompt,
+            model: providerChoice.providerModel,
+          })) as VariationProviderOutcome;
           provider = result?.ok
             ? { ok: true, value: result.value }
             : { ok: false, reason: cleanDiagnostic(result?.reason ?? 'provider_unavailable') };

@@ -6,6 +6,7 @@ import type {
   DeckPatch,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+  NodeSlideAgentModelId,
   NodeSlideDesignBehavior,
   NodeSlideEditorCommandId,
   NodeSlideProviderMode,
@@ -31,6 +32,7 @@ export type AiProviderRequest =
   | { providerMode: 'deterministic' }
   | {
       providerMode: 'openrouter_free';
+      providerModel: NodeSlideAgentModelId;
       providerConsent: typeof NODESLIDE_OPENROUTER_REVIEW_CONSENT;
     };
 
@@ -38,6 +40,7 @@ export type AiVariationProviderRequest =
   | { providerMode: 'deterministic' }
   | {
       providerMode: 'openrouter_free';
+      providerModel: NodeSlideAgentModelId;
       providerConsent: typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
     };
 

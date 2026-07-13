@@ -93,21 +93,31 @@ describe('NodeSlide AI review inspector', () => {
     const markup = renderAi();
     expect(markup).toContain('External model: off · Private deterministic');
     expect(markup).toMatch(/data-testid="ai-provider-deterministic"[^>]*checked=""/);
-    expect(markup).toContain('OpenRouter · GLM 5.2 — external');
-    expect(markup).toContain('named GLM 5.2 model through OpenRouter');
+    expect(markup).toContain('OpenRouter · Z.ai · GLM 5.2 — external');
+    expect(markup).toContain('selected model through OpenRouter');
     expect(markup).toContain('It does not browse or fetch URLs');
+    expect(markup).toContain('data-testid="ai-model-select"');
+    expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
+    expect(markup).toContain('Claude Sonnet 4.6 · Anthropic');
+    expect(markup).toContain('Gemini 3.1 Pro · Google');
+    expect(markup).toContain('GPT-5.4 · OpenAI');
     expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('openrouter_free', false)).toBeNull();
     expect(createAiProviderRequest('openrouter_free', true)).toEqual({
       providerMode: 'openrouter_free',
+      providerModel: 'z-ai/glm-5.2',
       providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
     });
     expect(createAiVariationProviderRequest('openrouter_free', false)).toBeNull();
     expect(createAiVariationProviderRequest('openrouter_free', true)).toEqual({
       providerMode: 'openrouter_free',
+      providerModel: 'z-ai/glm-5.2',
       providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
     });
+    expect(
+      createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-4.6'),
+    ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-4.6' });
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
@@ -118,7 +128,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Current agent scope and policy');
     expect(markup).toContain('Whole slide');
     expect(markup).toContain('Provider · privacy');
-    expect(markup).toContain('data-testid="ai-provider-controls" open=""');
+    expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('data-testid="ai-provider-route-status"');
     expect(markup).not.toContain('ns-ai-v3-route-disclosure');
     expect(markup).not.toContain('data-testid="variation-section"');
@@ -227,7 +237,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(12);
+    expect(commandMenu.match(/<option value=/g)).toHaveLength(17);
     expect(commandMenu).toContain('Provider · privacy');
   });
 

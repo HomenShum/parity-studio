@@ -579,7 +579,7 @@ export function deterministicAgentOperations(
     );
     if (wholeSlideOperations.length > 0) return wholeSlideOperations;
     throw new Error(
-      'The GLM 5.2 route returned an invalid proposal, and the deterministic whole-slide fallback found no editable semantic copy on the focused slide.',
+      'The selected model returned an invalid proposal, and the deterministic whole-slide fallback found no editable semantic copy on the focused slide.',
     );
   }
   const inferredMode =
@@ -597,7 +597,7 @@ export function deterministicAgentOperations(
 
   if (inferredMode === null) {
     throw new Error(
-      'The GLM 5.2 route returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
+      'The selected model returned an invalid proposal, and the deterministic fallback could not safely infer a copy, style, or layout operation.',
     );
   }
 
@@ -607,7 +607,7 @@ export function deterministicAgentOperations(
     const text = deterministicRewrite(target.content ?? '', instruction);
     if (text === null) {
       throw new Error(
-        'The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
+        'The selected model returned an invalid proposal, and the deterministic copy fallback could not safely infer new wording. Retry with exact replacement copy in quotation marks.',
       );
     }
     if (text === (target.content ?? '')) {
@@ -635,7 +635,7 @@ export function deterministicAgentOperations(
         ];
       }
       throw new Error(
-        `The GLM 5.2 route returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
+        `The selected model returned an invalid proposal, and the deterministic copy fallback would not change ${target.name}.`,
       );
     }
     return [

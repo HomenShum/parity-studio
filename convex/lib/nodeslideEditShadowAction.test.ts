@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
+  type NodeSlideAgentModelId,
   type NodeSlideWorkspace,
   type PatchScope,
 } from '../../shared/nodeslide';
@@ -44,6 +45,7 @@ type ProposeArgs = {
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
   providerMode: 'openrouter_free';
+  providerModel?: NodeSlideAgentModelId;
   providerConsent: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
 };
 
@@ -193,6 +195,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         designBehavior: 'preserve',
         referenceUse: 'context_only',
         providerMode: args.providerMode,
+        providerModel: NODESLIDE_EDIT_MODEL,
       }),
     );
     expect(comparison.baseline.outcome).toBe('proposed');
@@ -204,6 +207,51 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     expect(JSON.stringify(comparison)).not.toContain('BASELINE_ONLY');
     expect(JSON.stringify(comparison)).not.toContain('CANDIDATE_ONLY');
     expect(JSON.stringify(comparison)).not.toContain('PROVIDER_PROSE_MUST_NOT_PERSIST');
+  });
+
+  it('persists the exact selected model in the proposal trace attribution', async () => {
+    const { workspace, target, args } = fixture();
+    args.providerModel = 'anthropic/claude-sonnet-4.6';
+    providerMock.mockResolvedValue({
+      ok: true,
+      value: {
+        summary: 'Provider copy',
+        operations: [
+          {
+            op: 'replace_text',
+            slideId: target.slideId,
+            elementId: target.id,
+            text: 'Claude-selected copy',
+          },
+        ],
+      },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: args.providerModel,
+        costMicroUsd: 2_400,
+        inputTokens: 180,
+        outputTokens: 44,
+      },
+    });
+    const test = harness(workspace);
+
+    await proposeHandler(test.context, args);
+
+    expect(providerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: args.providerModel }),
+    );
+    const proposalArgs = test.calls.find((call) => 'operations' in call);
+    expect(proposalArgs).toMatchObject({
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: args.providerModel,
+      costMicroUsd: 2_400,
+      inputTokens: 180,
+      outputTokens: 44,
+    });
+    expect(proposalArgs?.traceSummary).toContain('OpenRouter Claude Sonnet 4.6 proposed');
+    expect(proposalArgs?.toolCalls).toContain(
+      'Called Claude Sonnet 4.6 through the maintained pi-ai OpenRouter provider after exact edit consent',
+    );
   });
 
   it('leaves the baseline call and response unchanged when shadow flags are off', async () => {

@@ -1,8 +1,15 @@
 import { type Context, type TextContent, createModels } from '@earendil-works/pi-ai';
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
+import {
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentModelId,
+  isNodeSlideAgentModelId,
+  nodeSlideAgentModel,
+} from '../../shared/nodeslide';
 
 export const NODESLIDE_EDIT_PROVIDER = 'openrouter' as const;
-export const NODESLIDE_EDIT_MODEL = 'z-ai/glm-5.2' as const;
+/** Backwards-compatible name for the default; requests may select any catalog model. */
+export const NODESLIDE_EDIT_MODEL = NODESLIDE_DEFAULT_AGENT_MODEL;
 
 const MODEL_TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BYTES = 200_000;
@@ -38,7 +45,7 @@ export type NodeSlideProviderResult =
 
 export interface NodeSlideCompletionRequest {
   provider: typeof NODESLIDE_EDIT_PROVIDER;
-  model: typeof NODESLIDE_EDIT_MODEL;
+  model: NodeSlideAgentModelId;
   systemPrompt: string;
   userText: string;
   maxTokens: number;
@@ -70,11 +77,17 @@ export async function callNodeSlideFreeJson(
     systemPrompt: string;
     userText: string;
     maxTokens: number;
+    model?: NodeSlideAgentModelId;
     jsonSchema?: NodeSlideJsonSchema;
   },
   dependencies: NodeSlideProviderDependencies = {},
 ): Promise<NodeSlideProviderResult> {
   const complete = dependencies.complete ?? completeNodeSlideWithPiAi;
+  const selectedModel = args.model ?? NODESLIDE_DEFAULT_AGENT_MODEL;
+  if (!isNodeSlideAgentModelId(selectedModel)) {
+    return { ok: false, reason: 'Choose a supported NodeSlide agent model.' };
+  }
+  const routeLabel = nodeSlideAgentModel(selectedModel).label;
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -83,7 +96,7 @@ export async function callNodeSlideFreeJson(
       reject(new Error('nodeslide_provider_timeout'));
     }, dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
   });
-  let telemetry = emptyTelemetry();
+  let telemetry = emptyTelemetry(selectedModel);
   let hasTelemetry = false;
   let invalidResponse = '';
 
@@ -94,7 +107,7 @@ export async function callNodeSlideFreeJson(
       const result = await Promise.race([
         complete({
           provider: NODESLIDE_EDIT_PROVIDER,
-          model: NODESLIDE_EDIT_MODEL,
+          model: selectedModel,
           systemPrompt: providerSystemPrompt(args, repairAttempt),
           userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
           maxTokens: args.maxTokens,
@@ -108,10 +121,14 @@ export async function callNodeSlideFreeJson(
       hasTelemetry = true;
 
       if (result.stopReason === 'error') {
-        return providerFailure(providerErrorReason(result.errorMessage), telemetry, hasTelemetry);
+        return providerFailure(
+          providerErrorReason(result.errorMessage, routeLabel),
+          telemetry,
+          hasTelemetry,
+        );
       }
       if (result.stopReason === 'aborted' || controller.signal.aborted) {
-        return providerFailure('The GLM 5.2 route timed out.', telemetry, hasTelemetry);
+        return providerFailure(`The ${routeLabel} route timed out.`, telemetry, hasTelemetry);
       }
       if (responseBytes(result.text) > MAX_RESPONSE_BYTES) {
         invalidResponse = '';
@@ -128,15 +145,15 @@ export async function callNodeSlideFreeJson(
       }
     }
     return providerFailure(
-      'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+      `The ${routeLabel} route returned invalid JSON after one repair attempt.`,
       telemetry,
       hasTelemetry,
     );
   } catch {
     return providerFailure(
       controller.signal.aborted
-        ? 'The GLM 5.2 route timed out.'
-        : 'The GLM 5.2 route was unavailable.',
+        ? `The ${routeLabel} route timed out.`
+        : `The ${routeLabel} route was unavailable.`,
       telemetry,
       hasTelemetry,
     );
@@ -165,7 +182,7 @@ async function completeNodeSlideWithPiAi(
     maxTokens: request.maxTokens,
     maxRetries: 0,
     reasoning: 'high',
-    temperature: 0,
+    ...(request.model === 'openai/gpt-5.4' ? {} : { temperature: 0 }),
     headers: OPENROUTER_ATTRIBUTION_HEADERS,
     onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
   });
@@ -201,21 +218,21 @@ export function nodeSlideStructuredOutputPayload(
   };
 }
 
-function providerErrorReason(errorMessage: string | undefined): string {
+function providerErrorReason(errorMessage: string | undefined, routeLabel: string): string {
   const normalized = errorMessage?.toLowerCase() ?? '';
   if (normalized.includes('schema') || normalized.includes('response_format')) {
-    return 'The GLM 5.2 route rejected the structured-output schema.';
+    return `The ${routeLabel} route rejected the structured-output schema.`;
   }
   if (normalized.includes('no endpoints') || normalized.includes('provider')) {
-    return 'The GLM 5.2 route had no compatible OpenRouter provider.';
+    return `The ${routeLabel} route had no compatible OpenRouter provider.`;
   }
   if (normalized.includes('reasoning')) {
-    return 'The GLM 5.2 route rejected the requested reasoning mode.';
+    return `The ${routeLabel} route rejected the requested reasoning mode.`;
   }
   if (normalized.includes('rate') || normalized.includes('quota')) {
-    return 'The GLM 5.2 route was rate limited.';
+    return `The ${routeLabel} route was rate limited.`;
   }
-  return 'The GLM 5.2 route returned an error.';
+  return `The ${routeLabel} route returned an error.`;
 }
 
 function providerSystemPrompt(
@@ -247,10 +264,10 @@ function repairUserText(originalUserText: string, invalidResponse: string): stri
   ].join('\n\n');
 }
 
-function emptyTelemetry(): NodeSlideProviderTelemetry {
+function emptyTelemetry(model: NodeSlideAgentModelId): NodeSlideProviderTelemetry {
   return {
     provider: NODESLIDE_EDIT_PROVIDER,
-    model: NODESLIDE_EDIT_MODEL,
+    model,
     costMicroUsd: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -263,7 +280,7 @@ function addTelemetry(
 ): NodeSlideProviderTelemetry {
   return {
     provider: NODESLIDE_EDIT_PROVIDER,
-    model: NODESLIDE_EDIT_MODEL,
+    model: telemetry.model,
     costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),
     inputTokens: telemetry.inputTokens + Math.max(0, result.inputTokens),
     outputTokens: telemetry.outputTokens + Math.max(0, result.outputTokens),

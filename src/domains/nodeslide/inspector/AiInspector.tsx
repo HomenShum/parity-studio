@@ -28,15 +28,20 @@ import {
   useRef,
   useState,
 } from 'react';
-import type {
-  AgentTrace,
-  Deck,
-  DeckPatch,
-  OperationMode,
-  PatchOperation,
-  PatchScope,
-  Slide,
-  SlideElement,
+import {
+  type AgentTrace,
+  type Deck,
+  type DeckPatch,
+  NODESLIDE_AGENT_MODELS,
+  NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentModelId,
+  type OperationMode,
+  type PatchOperation,
+  type PatchScope,
+  type Slide,
+  type SlideElement,
+  isNodeSlideAgentModelId,
+  nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import {
@@ -120,6 +125,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   initialInstruction?: string;
   initialReadContext?: readonly AiReadReference[];
   initialProviderMode?: AiProviderMode;
+  initialProviderModel?: NodeSlideAgentModelId;
   previewedPatchId?: string | null;
   onPropose: (
     instruction: string,
@@ -159,6 +165,7 @@ export function AiInspector<CommandId extends string = string>({
   initialInstruction = '',
   initialReadContext = [],
   initialProviderMode = 'deterministic',
+  initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
   onAttachDataFile,
@@ -179,7 +186,9 @@ export function AiInspector<CommandId extends string = string>({
   const [designBehavior, setDesignBehavior] = useState<AiDesignBehaviorPolicy>('refine');
   const [referenceUse, setReferenceUse] = useState<AiReferenceUsePolicy>('context_only');
   const [providerMode, setProviderMode] = useState<AiProviderMode>(initialProviderMode);
+  const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(initialProviderModel);
   const [providerConsent, setProviderConsent] = useState(false);
+  const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
   const [selectedCommand, setSelectedCommand] = useState<AiComposerCommand<CommandId> | null>(null);
@@ -200,6 +209,11 @@ export function AiInspector<CommandId extends string = string>({
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
   const lastPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem('nodeslide.agent-model');
+    if (isNodeSlideAgentModelId(stored)) setProviderModel(stored);
+  }, []);
 
   useEffect(() => {
     if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
@@ -313,7 +327,8 @@ export function AiInspector<CommandId extends string = string>({
     return [...deduped.values()];
   }, [selectedReadContext]);
 
-  const provider = createAiProviderRequest(providerMode, providerConsent);
+  const selectedAgentModel = nodeSlideAgentModel(providerModel);
+  const provider = createAiProviderRequest(providerMode, providerConsent, providerModel);
   const providerReady = providerMode === 'deterministic' || providerConsent;
   const resolvedActivity = resolveActivity(
     agentActivity,
@@ -348,6 +363,20 @@ export function AiInspector<CommandId extends string = string>({
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
     setMenuIndex(0);
+  };
+
+  const chooseProviderModel = (value: string) => {
+    setProviderConsent(false);
+    if (value === 'deterministic') {
+      setProviderMode('deterministic');
+      setProviderControlsOpen(false);
+      return;
+    }
+    if (!isNodeSlideAgentModelId(value)) return;
+    setProviderModel(value);
+    setProviderMode('openrouter_free');
+    setProviderControlsOpen(true);
+    window.localStorage.setItem('nodeslide.agent-model', value);
   };
 
   const insertToken = (token: string) => {
@@ -385,7 +414,11 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const requestVariations = (source: AiVariationRequest['source'], ask?: string) => {
-    const variationProvider = createAiVariationProviderRequest(providerMode, providerConsent);
+    const variationProvider = createAiVariationProviderRequest(
+      providerMode,
+      providerConsent,
+      providerModel,
+    );
     if (!variationProvider || variationBusy) return;
     focusGeneratedBatch.current = true;
     batchBeforeGeneration.current = latestBatchId;
@@ -736,7 +769,7 @@ export function AiInspector<CommandId extends string = string>({
                 <Sparkles size={13} />
                 <span>
                   {hasProviderFallback
-                    ? 'The external GLM 5.2 route could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
+                    ? 'The selected external model could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
                     : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
                 </span>
               </output>
@@ -838,7 +871,12 @@ export function AiInspector<CommandId extends string = string>({
           <span>{referenceUseLabel(referenceUse)}</span>
         </div>
 
-        <details className="ns-ai-v3-controls-disclosure" data-testid="ai-provider-controls" open>
+        <details
+          className="ns-ai-v3-controls-disclosure"
+          data-testid="ai-provider-controls"
+          open={providerControlsOpen}
+          onToggle={(event) => setProviderControlsOpen(event.currentTarget.open)}
+        >
           <summary
             data-testid="ai-provider-summary"
             aria-label="Provider and privacy controls: private by default, OpenRouter optional"
@@ -868,7 +906,8 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               ) : (
                 <>
-                  <Sparkles size={13} /> External model: on · OpenRouter · GLM 5.2
+                  <Sparkles size={13} /> External model: on · OpenRouter ·{' '}
+                  {selectedAgentModel.label}
                   <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
                     {providerConsent ? 'Consent attached' : 'Consent required'}
                   </span>
@@ -909,10 +948,12 @@ export function AiInspector<CommandId extends string = string>({
                 />
                 <Sparkles size={15} />
                 <span>
-                  <strong>OpenRouter · GLM 5.2 — external</strong>
+                  <strong>
+                    OpenRouter · {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
+                  </strong>
                   <small>
-                    Sends this ask, selected read context, and scoped slide content to the named GLM
-                    5.2 model through OpenRouter. It does not browse or fetch URLs.
+                    Sends this ask, selected read context, and scoped slide content to the selected
+                    model through OpenRouter. It does not browse or fetch URLs.
                   </small>
                 </span>
               </label>
@@ -1085,6 +1126,25 @@ export function AiInspector<CommandId extends string = string>({
           />
           <div className="ns-composer-meta">
             <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
+              <label className="ns-ai-model-picker">
+                <Sparkles size={12} aria-hidden="true" />
+                <span className="ns-sr-only">Agent model</span>
+                <select
+                  value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                  onChange={(event) => chooseProviderModel(event.target.value)}
+                  aria-label="Agent model"
+                  data-testid="ai-model-select"
+                >
+                  <option value="deterministic">Private · deterministic</option>
+                  <optgroup label="OpenRouter · external models">
+                    {NODESLIDE_AGENT_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label} · {model.vendor}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => openTokenMenu('@')}
@@ -1233,8 +1293,8 @@ export function AiInspector<CommandId extends string = string>({
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
             : providerConsent
-              ? 'external OpenRouter consent attached'
-              : 'external OpenRouter consent required'}
+              ? `${selectedAgentModel.label} through OpenRouter · consent attached`
+              : `${selectedAgentModel.label} through OpenRouter · consent required`}
         </small>
       </form>
     </div>
@@ -1288,7 +1348,7 @@ function VariationCard({
       <div className="ns-variation-evidence-row">
         <span className={`is-${variation.origin}`}>
           {variation.origin === 'free_route'
-            ? 'OpenRouter · GLM 5.2 · external'
+            ? 'OpenRouter · external model'
             : variation.fallbackReason === 'provider_not_requested'
               ? 'Private deterministic'
               : 'Deterministic fallback'}
@@ -1512,11 +1572,13 @@ function ProposalCard({
 export function createAiProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
+  model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted) return null;
   return {
     providerMode: 'openrouter_free',
+    providerModel: model,
     providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   };
 }
@@ -1524,11 +1586,13 @@ export function createAiProviderRequest(
 export function createAiVariationProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
+  model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted) return null;
   return {
     providerMode: 'openrouter_free',
+    providerModel: model,
     providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   };
 }

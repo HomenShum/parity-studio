@@ -37,7 +37,7 @@ function completion(
 }
 
 describe('NodeSlide named pi-ai JSON provider', () => {
-  it('routes the completion through the single named GLM 5.2 constant', async () => {
+  it('routes through the named default model', async () => {
     const complete = vi.fn<NodeSlideCompletion>(async () =>
       completion('{"summary":"Sharper thesis","operations":[{"op":"replace_text"}]}'),
     );
@@ -63,6 +63,26 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       repairAttempt: false,
     });
     expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+  });
+
+  it('routes an allowlisted model selection and attributes telemetry to that exact model', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(async () =>
+      completion('{"summary":"Sharper thesis","operations":[{"op":"replace_text"}]}'),
+    );
+
+    const result = await callNodeSlideFreeJson(
+      { ...request, model: 'anthropic/claude-sonnet-4.6' },
+      { complete },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: 'anthropic/claude-sonnet-4.6',
+      },
+    });
+    expect(complete.mock.calls[0]?.[0].model).toBe('anthropic/claude-sonnet-4.6');
   });
 
   it('injects the schema while preserving pi-ai provider routing', () => {

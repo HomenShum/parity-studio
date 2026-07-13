@@ -1,5 +1,45 @@
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
+export const NODESLIDE_AGENT_MODELS = [
+  {
+    id: 'z-ai/glm-5.2',
+    provider: 'openrouter',
+    vendor: 'Z.ai',
+    label: 'GLM 5.2',
+    description: 'Long-horizon planning and structured slide edits.',
+  },
+  {
+    id: 'anthropic/claude-sonnet-4.6',
+    provider: 'openrouter',
+    vendor: 'Anthropic',
+    label: 'Claude Sonnet 4.6',
+    description: 'Strong writing, document reasoning, and nuanced revisions.',
+  },
+  {
+    id: 'google/gemini-3.1-pro-preview',
+    provider: 'openrouter',
+    vendor: 'Google',
+    label: 'Gemini 3.1 Pro',
+    description: 'High-context planning and data-heavy presentation work.',
+  },
+  {
+    id: 'openai/gpt-5.4',
+    provider: 'openrouter',
+    vendor: 'OpenAI',
+    label: 'GPT-5.4',
+    description: 'Frontier reasoning and precise structured transformations.',
+  },
+] as const;
+export type NodeSlideAgentModelId = (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
+export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
+
+export function isNodeSlideAgentModelId(value: unknown): value is NodeSlideAgentModelId {
+  return NODESLIDE_AGENT_MODELS.some((model) => model.id === value);
+}
+
+export function nodeSlideAgentModel(modelId: NodeSlideAgentModelId) {
+  return NODESLIDE_AGENT_MODELS.find((model) => model.id === modelId) ?? NODESLIDE_AGENT_MODELS[0];
+}
 export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
 export const NODESLIDE_SCOPE_SLIDE_LIMIT = 64 as const;
 export const NODESLIDE_SCOPE_ELEMENT_LIMIT = 256 as const;
@@ -571,6 +611,7 @@ export interface AgentEditRequest {
   referenceUse?: NodeSlideReferenceUsePolicy;
   commandId?: NodeSlideEditorCommandId;
   providerMode?: NodeSlideProviderMode;
+  providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
 }
 

@@ -1,7 +1,12 @@
 'use node';
 
 import { ConvexError, v } from 'convex/values';
-import type { DeckSnapshot, NodeSlideWorkspace, PatchOperation } from '../shared/nodeslide';
+import {
+  type DeckSnapshot,
+  type NodeSlideWorkspace,
+  type PatchOperation,
+  nodeSlideAgentModel,
+} from '../shared/nodeslide';
 import { internal } from './_generated/api';
 import { action } from './_generated/server';
 import { createOwnerAccessKey, isOwnerAccessKey } from './lib/nodeslideAccess';
@@ -51,8 +56,8 @@ import {
 } from './lib/nodeslideShadowComparison';
 import {
   invokeNodeSlideBriefProvider,
-  nodeslideAgentReadReferenceValidator,
   nodeslideAgentModelValidator,
+  nodeslideAgentReadReferenceValidator,
   nodeslideBriefValidator,
   nodeslideCreatePublicError,
   nodeslideDeckReplCommandValidator,
@@ -221,8 +226,10 @@ export const proposeEdit = action({
       providerChoice.providerMode === 'openrouter_free'
         ? providerChoice.providerModel
         : NODESLIDE_EDIT_MODEL;
+    const requestedProviderLabel = nodeSlideAgentModel(requestedProviderModel).label;
     const usedFallback =
-      providerRequested && (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
+      providerRequested &&
+      (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
     const telemetry = baseline.receipt.providerTelemetry;
     const traceAttribution = telemetry
       ? {
@@ -294,20 +301,20 @@ export const proposeEdit = action({
         : {}),
       ...(shadowComparison ? { shadowComparison } : {}),
       traceSummary: usedFallback
-        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? 'the GLM 5.2 response was invalid'}`
+        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? `the ${requestedProviderLabel} response was invalid`}`
         : providerRequested
-          ? `OpenRouter GLM 5.2 proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
+          ? `OpenRouter ${requestedProviderLabel} proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
           : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
       traceContext,
       toolCalls: [
         `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
         providerRequested
-          ? 'Called GLM 5.2 through the maintained pi-ai OpenRouter provider after exact edit consent'
+          ? `Called ${requestedProviderLabel} through the maintained pi-ai OpenRouter provider after exact edit consent`
           : 'Kept review context on the deterministic local route',
         providerRequested
           ? usedFallback
             ? 'Used deterministic bounded edit fallback'
-            : 'Parsed and validated GLM 5.2 JSON'
+            : `Parsed and validated ${requestedProviderLabel} JSON`
           : 'Produced deterministic bounded edit operations',
         'Persisted proposal and human-readable trace atomically',
       ],

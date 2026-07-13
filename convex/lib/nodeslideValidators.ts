@@ -439,6 +439,13 @@ export const nodeslideProviderModeValidator = v.union(
   v.literal('openrouter_free'),
 );
 
+export const nodeslideAgentModelValidator = v.union(
+  v.literal('z-ai/glm-5.2'),
+  v.literal('anthropic/claude-sonnet-4.6'),
+  v.literal('google/gemini-3.1-pro-preview'),
+  v.literal('openai/gpt-5.4'),
+);
+
 export const nodeslideDesignBehaviorValidator = v.union(
   v.literal('preserve'),
   v.literal('refine'),
