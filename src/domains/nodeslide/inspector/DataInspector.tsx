@@ -9,15 +9,20 @@ import {
   Quote,
   Sheet,
   StickyNote,
+  Trash2,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { SlideElement, SourceRecord } from '../../../../shared/nodeslide';
 
 interface DataInspectorProps {
   sources: readonly SourceRecord[];
   selectedElements: readonly SlideElement[];
+  onDeleteSource?: (sourceId: string) => Promise<void>;
 }
 
-export function DataInspector({ sources, selectedElements }: DataInspectorProps) {
+export function DataInspector({ sources, selectedElements, onDeleteSource }: DataInspectorProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const dependencyIds = new Set(
     selectedElements.flatMap((element) => [
       ...element.sourceIds,
@@ -114,8 +119,24 @@ export function DataInspector({ sources, selectedElements }: DataInspectorProps)
                 </div>
                 <blockquote>
                   <Quote size={11} />
-                  {source.citation}
+                  {source.citation.length > 420
+                    ? `${source.citation.slice(0, 420)}…`
+                    : source.citation}
                 </blockquote>
+                {source.format || source.rowCount !== undefined || source.columns?.length ? (
+                  <div className="ns-source-metadata" aria-label={`${source.title} data shape`}>
+                    {source.format ? <span>{source.format.toUpperCase()}</span> : null}
+                    {source.rowCount !== undefined ? (
+                      <span>{source.rowCount.toLocaleString()} rows</span>
+                    ) : null}
+                    {source.byteSize !== undefined ? (
+                      <span>{formatBytes(source.byteSize)}</span>
+                    ) : null}
+                    {source.columns?.slice(0, 6).map((column) => (
+                      <span key={column}>{column}</span>
+                    ))}
+                  </div>
+                ) : null}
                 <small>
                   Retrieved {formatDate(source.retrievedAt)}
                   {source.license ? ` · ${source.license}` : ''}
@@ -125,10 +146,34 @@ export function DataInspector({ sources, selectedElements }: DataInspectorProps)
                     Open source <ExternalLink size={11} />
                   </a>
                 ) : null}
+                {source.retention === 'until_deleted' && onDeleteSource ? (
+                  <button
+                    type="button"
+                    className="ns-source-delete"
+                    disabled={deletingId === source.id}
+                    onClick={() => {
+                      setDeleteError(null);
+                      setDeletingId(source.id);
+                      void onDeleteSource(source.id)
+                        .catch((error) =>
+                          setDeleteError(
+                            error instanceof Error
+                              ? error.message
+                              : 'The source could not be deleted.',
+                          ),
+                        )
+                        .finally(() => setDeletingId(null));
+                    }}
+                    aria-label={`Delete private source ${source.title}`}
+                  >
+                    <Trash2 size={12} /> {deletingId === source.id ? 'Deleting…' : 'Delete data'}
+                  </button>
+                ) : null}
               </div>
             </article>
           ))
         )}
+        {deleteError ? <output role="alert">{deleteError}</output> : null}
       </section>
     </div>
   );
@@ -203,4 +248,9 @@ function formatDate(timestamp: number) {
     day: 'numeric',
     year: 'numeric',
   }).format(timestamp);
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }

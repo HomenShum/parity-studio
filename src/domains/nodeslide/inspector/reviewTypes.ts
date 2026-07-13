@@ -6,6 +6,7 @@ import type {
   DeckPatch,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+  NODESLIDE_WEB_RESEARCH_CONSENT,
   NodeSlideAgentModelId,
   NodeSlideDesignBehavior,
   NodeSlideEditorCommandId,
@@ -16,6 +17,7 @@ import type {
 export {
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+  NODESLIDE_WEB_RESEARCH_CONSENT,
 } from '../../../../shared/nodeslide';
 
 export const AI_DRAFTING_PHASE_MS = 900 as const;
@@ -68,7 +70,7 @@ export type AiAgentActivity =
       ask: string;
     }
   | {
-      status: 'delayed' | 'timed_out' | 'failed';
+      status: 'delayed' | 'timed_out' | 'failed' | 'cancelled';
       elapsedMs: number;
       ask: string;
       message?: string;
@@ -85,6 +87,9 @@ interface AiProposalContext {
   designBehavior: AiDesignBehaviorPolicy;
   referenceUse: AiReferenceUsePolicy;
   commentContext?: AiCommentContext;
+  idempotencyKey?: string;
+  webResearch?: boolean;
+  webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
 }
 
 export type AiProposalOptions<CommandId extends string = NodeSlideEditorCommandId> =

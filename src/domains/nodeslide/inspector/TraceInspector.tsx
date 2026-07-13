@@ -26,6 +26,8 @@ import type {
   AgentTrace,
   CandidateValidationReceipt,
   DeckPatch,
+  NodeSlideAgentMessage,
+  NodeSlideAgentRun,
   ValidationIssue,
   ValidationResult,
 } from '../../../../shared/nodeslide';
@@ -49,6 +51,8 @@ interface TraceInspectorProps {
   traces: readonly AgentTrace[];
   validations: readonly ValidationResult[];
   patches?: readonly DeckPatch[];
+  agentRuns?: readonly NodeSlideAgentRun[];
+  agentMessages?: readonly NodeSlideAgentMessage[];
 }
 
 const DENSITY_KEY = 'ns-trace-density';
@@ -67,7 +71,13 @@ const NODE_META: Record<TraceNodeId, { label: string; ink: NodeInk; Icon: Lucide
 // Top-level inspector
 // ---------------------------------------------------------------------------
 
-export function TraceInspector({ traces, validations, patches = [] }: TraceInspectorProps) {
+export function TraceInspector({
+  traces,
+  validations,
+  patches = [],
+  agentRuns = [],
+  agentMessages = [],
+}: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
   const latestValidation = useMemo(
     () =>
@@ -140,6 +150,52 @@ export function TraceInspector({ traces, validations, patches = [] }: TraceInspe
 
       {latestValidation ? (
         <ValidationSummary validation={latestValidation} label="Current deck validation" />
+      ) : null}
+
+      {agentRuns.length > 0 ? (
+        <section className="ns-run-journal" aria-label="Durable agent run journal">
+          <div className="ns-section-heading">
+            <span>
+              <Activity size={13} /> Run journal
+            </span>
+            <small>server persisted</small>
+          </div>
+          {[...agentRuns].slice(0, 6).map((run) => {
+            const tools = agentMessages.filter(
+              (message) => message.runId === run.id && message.role === 'tool',
+            );
+            return (
+              <article key={run.id} className={`ns-run-journal-row is-${run.status}`}>
+                <div>
+                  <span className={`ns-status-dot ns-status-dot--${run.status}`} />
+                  <strong>{humanize(run.status)}</strong>
+                  <time dateTime={new Date(run.updatedAt).toISOString()}>
+                    {formatRunTime(run.updatedAt)}
+                  </time>
+                </div>
+                <p>{run.instruction}</p>
+                <div className="ns-run-journal-meta">
+                  <span>
+                    {run.provider} · {run.model}
+                  </span>
+                  <span>{run.webResearch ? 'Web consented' : 'No web egress'}</span>
+                  <span>
+                    {tools.length} tool event{tools.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {tools.length > 0 ? (
+                  <ul>
+                    {tools.map((message) => (
+                      <li key={message.id}>
+                        {message.toolName ?? 'tool'} · {message.content}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            );
+          })}
+        </section>
       ) : null}
 
       {sorted.length === 0 ? (
@@ -1227,4 +1283,10 @@ function duration(trace: AgentTrace): string {
 
 function humanize(value: string): string {
   return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatRunTime(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+    timestamp,
+  );
 }

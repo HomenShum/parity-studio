@@ -9,9 +9,13 @@ import {
   type SourceRecord,
   type ThemeSpec,
 } from '../../shared/nodeslide';
-import type { NodeSlideDataAttachment } from '../../shared/nodeslideAttachments';
+import {
+  type NodeSlideDataAttachment,
+  nodeSlideDataAttachmentShape,
+} from '../../shared/nodeslideAttachments';
 import {
   nodeslideCleanText,
+  nodeslideContentDigest,
   nodeslideHash,
   nodeslideSlug,
   nodeslideStableId,
@@ -514,6 +518,84 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
 }
 
 function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prompt: string): void {
+  const csvRecords = briefMetricCsvRecords(prompt);
+  const csvByMetric = new Map(csvRecords.map((record) => [record.metric, record]));
+  const totalGoals = Number(csvByMetric.get('total_goals')?.value);
+  const matchesPlayed = Number(csvByMetric.get('matches_played')?.value);
+  const suppliedGoalsPerMatch = Number(csvByMetric.get('goals_per_match')?.value);
+  const contextSlide = slides[1];
+  const derivedSlide = slides[2];
+  if (
+    Number.isFinite(totalGoals) &&
+    Number.isFinite(matchesPlayed) &&
+    matchesPlayed > 0 &&
+    contextSlide &&
+    derivedSlide
+  ) {
+    const goalsPerMatch = Number.isFinite(suppliedGoalsPerMatch)
+      ? suppliedGoalsPerMatch
+      : Number((totalGoals / matchesPlayed).toFixed(2));
+    contextSlide.title = 'Tournament at a glance';
+    contextSlide.headline = `${totalGoals} goals across ${matchesPlayed} matches.`;
+    contextSlide.body =
+      'The uploaded tournament data is compiled into editable metrics, not flattened into an image.';
+    contextSlide.bullets = [
+      `Average: ${goalsPerMatch} goals per match`,
+      'Every value remains linked to the uploaded source',
+      'Review or replace the data without rebuilding the slide',
+    ];
+    contextSlide.metric = String(totalGoals);
+    contextSlide.metricLabel = 'total goals in the supplied dataset';
+    derivedSlide.title = 'Scoring rate';
+    derivedSlide.headline = `${goalsPerMatch} goals per match.`;
+    derivedSlide.body =
+      'NodeSlide keeps the result and both inputs as a structured formula for review and native export.';
+    derivedSlide.bullets = ['Editable numerator', 'Editable denominator', 'Recomputable result'];
+    derivedSlide.formula = {
+      expression: 'total_goals / matches_played',
+      display: `${totalGoals} ÷ ${matchesPlayed} = ${goalsPerMatch}`,
+      variables: [
+        { label: 'Total goals', value: totalGoals, unit: 'goals' },
+        { label: 'Matches played', value: matchesPlayed, unit: 'matches' },
+      ],
+      syntax: 'plain',
+      description: 'Goals per match derived from the uploaded tournament totals.',
+    };
+  }
+
+  const scorerRecords = ['top_scorer', 'runner_up'].flatMap((metric) => {
+    const record = csvByMetric.get(metric);
+    if (!record) return [];
+    const goals = Number(record.unit.match(/\d+(?:\.\d+)?/u)?.[0]);
+    return record.value && Number.isFinite(goals) ? [{ label: record.value, value: goals }] : [];
+  });
+  const csvChartRecords =
+    scorerRecords.length >= 2
+      ? scorerRecords
+      : csvRecords.flatMap((record) => {
+          const value = Number(record.value);
+          return Number.isFinite(value) ? [{ label: humanizeMetric(record.metric), value }] : [];
+        });
+  const csvChartSlide = slides[3];
+  if (csvChartRecords.length >= 2 && csvChartSlide) {
+    const { formula: _formula, ...chartOnlySlide } = csvChartSlide;
+    slides[3] = {
+      ...chartOnlySlide,
+      title: scorerRecords.length >= 2 ? 'Golden Boot race' : 'Uploaded comparison',
+      headline:
+        scorerRecords.length >= 2
+          ? 'The top two scorers were separated by one goal.'
+          : 'The uploaded values remain an editable chart.',
+      body: 'Labels and values stay in the canonical deck spec for direct editing, validation, and native export.',
+      bullets: ['Data-bound bars', 'Source-linked values', 'Editable labels'],
+      chart: {
+        labels: csvChartRecords.slice(0, 8).map(({ label }) => label),
+        values: csvChartRecords.slice(0, 8).map(({ value }) => value),
+        unit: scorerRecords.length >= 2 ? 'goals' : 'value',
+      },
+    };
+  }
+
   const formulaMatch = prompt.match(
     /formula[^.;]{0,40}?(\d+(?:\.\d+)?)\s*(?:÷|\/)\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)([^,.;]*)/iu,
   );
@@ -553,14 +635,17 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
     : [];
   const chartSlide = slides[3];
   if (comparisons.length >= 2 && chartSlide) {
-    chartSlide.title = 'Supplied comparison';
-    chartSlide.headline = 'The supplied values remain an editable chart.';
-    chartSlide.body =
-      'Labels and values stay in the canonical deck spec for direct editing and native export.';
-    chartSlide.chart = {
-      labels: comparisons.slice(0, 8).map(({ label }) => label),
-      values: comparisons.slice(0, 8).map(({ value }) => value),
-      unit: 'goals',
+    const { formula: _formula, ...chartOnlySlide } = chartSlide;
+    slides[3] = {
+      ...chartOnlySlide,
+      title: 'Supplied comparison',
+      headline: 'The supplied values remain an editable chart.',
+      body: 'Labels and values stay in the canonical deck spec for direct editing and native export.',
+      chart: {
+        labels: comparisons.slice(0, 8).map(({ label }) => label),
+        values: comparisons.slice(0, 8).map(({ value }) => value),
+        unit: 'goals',
+      },
     };
   }
 
@@ -579,6 +664,33 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
       credit: 'Licensed image and visible credit required before external use',
     };
   }
+}
+
+function briefMetricCsvRecords(
+  prompt: string,
+): Array<{ metric: string; value: string; unit: string }> {
+  const lines = prompt.split(/\r?\n/u);
+  const headerIndex = lines.findIndex(
+    (line) => line.trim().toLowerCase() === 'metric,value,unit,source',
+  );
+  if (headerIndex < 0) return [];
+  return lines.slice(headerIndex + 1, headerIndex + 101).flatMap((line) => {
+    const [rawMetric = '', rawValue = '', rawUnit = ''] = line.split(',');
+    const metric = rawMetric.trim().toLowerCase();
+    const value = rawValue.trim();
+    const unit = rawUnit.trim();
+    return /^[a-z0-9_ -]{1,80}$/u.test(metric) && value
+      ? [{ metric: metric.replace(/[ -]+/gu, '_'), value, unit }]
+      : [];
+  });
+}
+
+function humanizeMetric(metric: string): string {
+  return metric
+    .split('_')
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toLocaleUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
 }
 
 function sentenceCase(value: string): string {
@@ -679,6 +791,13 @@ function buildNodeSlideDeck(input: {
       retrievedAt: input.now,
       citation: `Uploaded file: ${attachment.title}\n${attachment.content}`,
       license: 'User supplied',
+      format: attachment.format,
+      contentDigest: nodeslideContentDigest(attachment.content),
+      byteSize: new TextEncoder().encode(attachment.content).byteLength,
+      ...nodeSlideDataAttachmentShape(attachment.content, attachment.format),
+      retention: 'until_deleted',
+      status: 'ready',
+      lastRefreshedAt: input.now,
     };
   });
   const linkedSourceIds = [...linkedSources, ...uploadedSources].map((source) => source.id);

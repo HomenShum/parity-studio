@@ -108,6 +108,7 @@ describe('NodeSlide create action admission boundary', () => {
       buckets: Array<{ key: string }>;
     };
     expect(quotaArgs.buckets[0]?.key).toMatch(/^create:[a-f0-9]{64}$/);
+    expect(quotaArgs.buckets[0]?.key.length).toBeLessThanOrEqual(128);
     expect(quotaArgs.buckets[0]?.key).not.toContain(PREVIEW_ACCESS_CODE);
     expect(quotaArgs.buckets[0]?.key).not.toContain('rotatable-session');
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;

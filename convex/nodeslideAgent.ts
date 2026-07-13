@@ -3,12 +3,14 @@
 import { ConvexError, v } from 'convex/values';
 import {
   type DeckSnapshot,
+  NODESLIDE_WEB_RESEARCH_CONSENT,
   type NodeSlideWorkspace,
   type PatchOperation,
   nodeSlideAgentModel,
 } from '../shared/nodeslide';
 import { internal } from './_generated/api';
 import { action } from './_generated/server';
+import { configuredSearchProviders, searchExternalReferences } from './inspirationSearch';
 import { createOwnerAccessKey, isOwnerAccessKey } from './lib/nodeslideAccess';
 import {
   authorizeNodeSlideAgenticOperation,
@@ -100,6 +102,9 @@ export const proposeEdit = action({
     providerMode: v.optional(nodeslideProviderModeValidator),
     providerModel: v.optional(nodeslideAgentModelValidator),
     providerConsent: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
+    webResearch: v.optional(v.boolean()),
+    webResearchConsent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const instruction = args.instruction.replace(/\s+/g, ' ').trim();
@@ -128,7 +133,20 @@ export const proposeEdit = action({
       }
       throw error;
     }
-    const workspace = await authorizeBeforeConsumingQuota({
+    if (args.webResearch) {
+      if (args.webResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT) {
+        throw publicAgentError(
+          'invalid_request',
+          'Explicit web research consent is required before sending this query to search providers.',
+        );
+      }
+    } else if (args.webResearchConsent !== undefined) {
+      throw publicAgentError(
+        'invalid_request',
+        'Web research consent must only accompany a web research request.',
+      );
+    }
+    let workspace = await authorizeBeforeConsumingQuota({
       authorize: async () =>
         (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
           deckId: args.deckId,
@@ -159,170 +177,328 @@ export const proposeEdit = action({
         'The focused slide is outside the authorized write scope.',
       );
     }
-    const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
-    const snapshot = snapshotOf(workspace);
-    const readContext = resolveNodeSlideReadContext({
-      workspace,
-      writeScope: args.scope,
-      ...(args.readContext ? { requested: args.readContext } : {}),
-    });
-    const traceContext = [
-      `Read context: ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'}, ${readContext.comments.length} comment${readContext.comments.length === 1 ? '' : 's'}`,
-      ...readContext.sources.map(
-        (source) =>
-          `Source: ${source.title} [${source.id}] · ${source.sourceType} · ${nodeslideContentDigest(source.citation)}`,
-      ),
-    ];
-
-    const request = {
-      deckId: args.deckId,
-      instruction,
-      baseDeckVersion: args.baseDeckVersion,
-      baseSlideVersions: args.baseSlideVersions,
-      baseElementVersions: args.baseElementVersions,
-      scope: args.scope,
-      ...(args.focusSlideId ? { focusSlideId: args.focusSlideId } : {}),
-      designBehavior: args.designBehavior ?? 'preserve',
-      referenceUse: args.referenceUse ?? 'context_only',
-      providerMode: providerChoice.providerMode,
-      ...(providerChoice.providerMode === 'openrouter_free'
-        ? { providerModel: providerChoice.providerModel }
-        : {}),
-    };
-    const planningStartedAt = Date.now();
-    const scopedComment =
-      scopedCommentId === undefined
-        ? null
-        : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null);
-    // The planner handles an INVALID model response gracefully (deterministic_fallback origin).
-    // But a THROWN provider failure (OpenRouter/GLM timeout, network, or abort after retries)
-    // would otherwise escape here as a raw Convex "Server Error Called by client". Converge every
-    // failure mode on the same graceful deterministic fallback, keeping attribution honest.
-    let baseline: Awaited<ReturnType<typeof planNodeSlideEdit>>;
-    let providerErrored = false;
-    try {
-      baseline = await planNodeSlideEdit({ snapshot, scopedComment, readContext, request });
-    } catch {
-      providerErrored = true;
-      try {
-        baseline = await planNodeSlideEdit({
-          snapshot,
-          scopedComment,
-          readContext,
-          request: { ...request, providerMode: 'deterministic' },
-        });
-      } catch {
-        throw publicAgentError(
-          'fallback_unavailable',
-          'The edit planner was unavailable. No proposal was created and your deck is unchanged.',
-        );
-      }
-    }
-
-    const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
-    if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
-    const finalOperations = baseline.operations;
-    const summary = baseline.summary;
-    const providerRequested = providerChoice.providerMode === 'openrouter_free';
-    const requestedProviderModel =
+    const idempotencyKey =
+      args.idempotencyKey?.replace(/\s+/g, '-').trim().slice(0, 160) ||
+      nodeslideEventId('agent_request', Date.now(), args.deckId, instruction);
+    const requestedModel =
       providerChoice.providerMode === 'openrouter_free'
         ? providerChoice.providerModel
-        : NODESLIDE_EDIT_MODEL;
-    const requestedProviderLabel = nodeSlideAgentModel(requestedProviderModel).label;
-    const usedFallback =
-      providerRequested &&
-      (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
-    const telemetry = baseline.receipt.providerTelemetry;
-    const traceAttribution = telemetry
-      ? {
-          provider: telemetry.provider,
-          model: usedFallback
-            ? `${requestedProviderModel} (deterministic fallback)`
-            : telemetry.model,
-          costMicroUsd: telemetry.costMicroUsd,
-          inputTokens: telemetry.inputTokens,
-          outputTokens: telemetry.outputTokens,
-        }
-      : providerRequested
-        ? {
-            provider: NODESLIDE_EDIT_PROVIDER,
-            model: `${requestedProviderModel} (deterministic fallback)`,
-          }
-        : { provider: 'deterministic', model: 'bounded-edit-planner/v1' };
-    const shadowAuthorization = authorizeNodeSlideAgenticOperation(
-      resolveNodeSlideAgenticControls(process.env),
-      { operation: 'deck_repl_shadow' },
-    );
-    const shadowBinding = shadowAuthorization.allowed
-      ? {
-          planningInputDigest: nodeSlideEditTurnInputDigest(request),
-          planningSnapshotDigest: nodeSlideSnapshotDigest(snapshot),
-        }
-      : null;
-    const now = Date.now();
-    const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
-    const traceId = nodeslideStableId('trace', patchId);
-    const shadowComparison = shadowBinding
-      ? buildEditShadowComparisonBestEffort({
-          deckId: args.deckId,
-          ownerAccessKey: args.ownerAccessKey,
-          patchId,
-          traceId,
-          turnId: nodeslideStableId('turn', patchId),
-          snapshot,
-          request,
-          planningInputDigest: shadowBinding.planningInputDigest,
-          planningSnapshotDigest: shadowBinding.planningSnapshotDigest,
-          controlsDigest: shadowAuthorization.controlsDigest,
-          baselineOperations: finalOperations,
-          baselineReceipt: baseline.receipt,
-          baselineElapsedMs,
-          createdAt: planningStartedAt,
-        })
-      : null;
-    const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
-      id: patchId,
-      traceId,
+        : 'bounded-edit-planner/v1';
+    const runStart = await ctx.runMutation(nodeslideInternal.beginAgentRunInternal, {
       deckId: args.deckId,
       ownerAccessKey: args.ownerAccessKey,
-      baseDeckVersion: args.baseDeckVersion,
-      baseSlideVersions: args.baseSlideVersions,
-      baseElementVersions: args.baseElementVersions,
-      scope: args.scope,
-      operations: finalOperations,
-      source: 'agent',
-      summary,
-      ...(scopedCommentId !== undefined ? { linkedCommentId: scopedCommentId } : {}),
+      idempotencyKey,
       instruction,
-      shadowComparisonRequested: shadowAuthorization.allowed,
-      ...(shadowBinding
-        ? {
-            ...shadowBinding,
-            shadowControlsDigest: shadowAuthorization.controlsDigest,
-          }
-        : {}),
-      ...(shadowComparison ? { shadowComparison } : {}),
-      traceSummary: usedFallback
-        ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? `the ${requestedProviderLabel} response was invalid`}`
-        : providerRequested
-          ? `OpenRouter ${requestedProviderLabel} proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
-          : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
-      traceContext,
-      toolCalls: [
-        `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
-        providerRequested
-          ? `Called ${requestedProviderLabel} through the maintained pi-ai OpenRouter provider after exact edit consent`
-          : 'Kept review context on the deterministic local route',
-        providerRequested
-          ? usedFallback
-            ? 'Used deterministic bounded edit fallback'
-            : `Parsed and validated ${requestedProviderLabel} JSON`
-          : 'Produced deterministic bounded edit operations',
-        'Persisted proposal and human-readable trace atomically',
-      ],
-      ...traceAttribution,
+      provider: providerChoice.providerMode === 'openrouter_free' ? 'openrouter' : 'deterministic',
+      model: requestedModel,
+      webResearch: args.webResearch === true,
     });
-    return proposal;
+    const runId = runStart.run.id as string;
+    if (!runStart.created) {
+      if (runStart.run.patchId) {
+        const current = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+        })) as NodeSlideWorkspace | null;
+        const patch = current?.patches.find(
+          (candidate: { id: string }) => candidate.id === runStart.run.patchId,
+        );
+        if (current && patch) return { patch, workspace: current };
+      }
+      throw publicAgentError(
+        'invalid_request',
+        runStart.run.status === 'cancelled'
+          ? 'This request was cancelled. Retry it to create a new run.'
+          : 'This request is already running. Its durable status is available in the agent conversation.',
+      );
+    }
+
+    try {
+      let webSourceIds: string[] = [];
+      let webProvidersUsed: string[] = [];
+      if (args.webResearch) {
+        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'researching',
+          message: `Searching the web for: ${instruction}`,
+          role: 'tool',
+          toolName: 'web_search',
+        });
+        const configured = configuredSearchProviders();
+        if (configured.length === 0) {
+          throw publicAgentError(
+            'fallback_unavailable',
+            'Web research is not configured on this deployment. No search request was sent.',
+          );
+        }
+        const search = await searchExternalReferences(instruction, 'mixed');
+        webProvidersUsed = search.providers;
+        const webRefs = await ctx.runMutation(nodeslideInternal.attachWebSourcesInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          sources: search.references
+            .filter((reference) => reference.mediaType === 'website')
+            .slice(0, 10)
+            .map((reference) => ({
+              title: reference.title,
+              url: reference.sourceUrl,
+              snippet: reference.snippet || `Search result from ${reference.provider}.`,
+              provider: reference.provider,
+            })),
+        });
+        webSourceIds = webRefs.map((reference: { id: string }) => reference.id);
+        if (webSourceIds.length === 0) {
+          throw publicAgentError(
+            'fallback_unavailable',
+            'The web search returned no usable sources. No proposal was created.',
+          );
+        }
+        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'planning',
+          message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
+          role: 'tool',
+          toolName: 'source_snapshot',
+          sourceIds: webSourceIds,
+        });
+        workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+        })) as NodeSlideWorkspace;
+      } else {
+        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'planning',
+        });
+      }
+      const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
+      const snapshot = snapshotOf(workspace);
+      const requestedReadContext = [
+        ...(args.readContext ?? []),
+        ...webSourceIds.map((id) => ({ id, kind: 'source' as const, label: 'Web source' })),
+      ];
+      const readContext = resolveNodeSlideReadContext({
+        workspace,
+        writeScope: args.scope,
+        ...(requestedReadContext.length ? { requested: requestedReadContext } : {}),
+      });
+      const traceContext = [
+        `Read context: ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'}, ${readContext.comments.length} comment${readContext.comments.length === 1 ? '' : 's'}`,
+        ...readContext.sources.map(
+          (source) =>
+            `Source: ${source.title} [${source.id}] · ${source.sourceType} · ${nodeslideContentDigest(source.citation)}`,
+        ),
+      ];
+
+      const request = {
+        deckId: args.deckId,
+        instruction,
+        baseDeckVersion: args.baseDeckVersion,
+        baseSlideVersions: args.baseSlideVersions,
+        baseElementVersions: args.baseElementVersions,
+        scope: args.scope,
+        ...(args.focusSlideId ? { focusSlideId: args.focusSlideId } : {}),
+        designBehavior: args.designBehavior ?? 'preserve',
+        referenceUse: args.referenceUse ?? 'context_only',
+        providerMode: providerChoice.providerMode,
+        ...(providerChoice.providerMode === 'openrouter_free'
+          ? { providerModel: providerChoice.providerModel }
+          : {}),
+      };
+      const planningStartedAt = Date.now();
+      const scopedComment =
+        scopedCommentId === undefined
+          ? null
+          : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null);
+      // The planner handles an INVALID model response gracefully (deterministic_fallback origin).
+      // But a THROWN provider failure (OpenRouter/GLM timeout, network, or abort after retries)
+      // would otherwise escape here as a raw Convex "Server Error Called by client". Converge every
+      // failure mode on the same graceful deterministic fallback, keeping attribution honest.
+      let baseline: Awaited<ReturnType<typeof planNodeSlideEdit>>;
+      let providerErrored = false;
+      try {
+        baseline = await planNodeSlideEdit({ snapshot, scopedComment, readContext, request });
+      } catch {
+        providerErrored = true;
+        try {
+          baseline = await planNodeSlideEdit({
+            snapshot,
+            scopedComment,
+            readContext,
+            request: { ...request, providerMode: 'deterministic' },
+          });
+        } catch {
+          throw publicAgentError(
+            'fallback_unavailable',
+            'The edit planner was unavailable. No proposal was created and your deck is unchanged.',
+          );
+        }
+      }
+
+      const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
+      if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
+      const runBeforeValidation = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+      });
+      if (runBeforeValidation?.status === 'cancelled') {
+        throw publicAgentError('invalid_request', 'The agent run was cancelled before validation.');
+      }
+      await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'validating',
+        message: `Validating ${baseline.operations.length} proposed operation${baseline.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
+        role: 'tool',
+        toolName: 'candidate_validation',
+      });
+      const finalOperations = baseline.operations;
+      const summary = baseline.summary;
+      const providerRequested = providerChoice.providerMode === 'openrouter_free';
+      const requestedProviderModel =
+        providerChoice.providerMode === 'openrouter_free'
+          ? providerChoice.providerModel
+          : NODESLIDE_EDIT_MODEL;
+      const requestedProviderLabel = nodeSlideAgentModel(requestedProviderModel).label;
+      const usedFallback =
+        providerRequested &&
+        (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
+      const telemetry = baseline.receipt.providerTelemetry;
+      const traceAttribution = telemetry
+        ? {
+            provider: telemetry.provider,
+            model: usedFallback
+              ? `${requestedProviderModel} (deterministic fallback)`
+              : telemetry.model,
+            costMicroUsd: telemetry.costMicroUsd,
+            inputTokens: telemetry.inputTokens,
+            outputTokens: telemetry.outputTokens,
+          }
+        : providerRequested
+          ? {
+              provider: NODESLIDE_EDIT_PROVIDER,
+              model: `${requestedProviderModel} (deterministic fallback)`,
+            }
+          : { provider: 'deterministic', model: 'bounded-edit-planner/v1' };
+      const shadowAuthorization = authorizeNodeSlideAgenticOperation(
+        resolveNodeSlideAgenticControls(process.env),
+        { operation: 'deck_repl_shadow' },
+      );
+      const shadowBinding = shadowAuthorization.allowed
+        ? {
+            planningInputDigest: nodeSlideEditTurnInputDigest(request),
+            planningSnapshotDigest: nodeSlideSnapshotDigest(snapshot),
+          }
+        : null;
+      const now = Date.now();
+      const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
+      const traceId = nodeslideStableId('trace', patchId);
+      const shadowComparison = shadowBinding
+        ? buildEditShadowComparisonBestEffort({
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            patchId,
+            traceId,
+            turnId: nodeslideStableId('turn', patchId),
+            snapshot,
+            request,
+            planningInputDigest: shadowBinding.planningInputDigest,
+            planningSnapshotDigest: shadowBinding.planningSnapshotDigest,
+            controlsDigest: shadowAuthorization.controlsDigest,
+            baselineOperations: finalOperations,
+            baselineReceipt: baseline.receipt,
+            baselineElapsedMs,
+            createdAt: planningStartedAt,
+          })
+        : null;
+      const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
+        id: patchId,
+        traceId,
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        baseDeckVersion: args.baseDeckVersion,
+        baseSlideVersions: args.baseSlideVersions,
+        baseElementVersions: args.baseElementVersions,
+        scope: args.scope,
+        operations: finalOperations,
+        source: 'agent',
+        summary,
+        ...(scopedCommentId !== undefined ? { linkedCommentId: scopedCommentId } : {}),
+        instruction,
+        shadowComparisonRequested: shadowAuthorization.allowed,
+        ...(shadowBinding
+          ? {
+              ...shadowBinding,
+              shadowControlsDigest: shadowAuthorization.controlsDigest,
+            }
+          : {}),
+        ...(shadowComparison ? { shadowComparison } : {}),
+        traceSummary: usedFallback
+          ? `Deterministic fallback proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} because ${baseline.receipt.fallbackReason ?? `the ${requestedProviderLabel} response was invalid`}`
+          : providerRequested
+            ? `OpenRouter ${requestedProviderLabel} proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} for review.`
+            : `Deterministic local planning proposed ${finalOperations.length} scoped operation${finalOperations.length === 1 ? '' : 's'} without provider egress.`,
+        traceContext,
+        toolCalls: [
+          `Loaded deck ${args.deckId} at v${workspace.deck.version}`,
+          ...(args.webResearch
+            ? [
+                `Searched the web through ${webProvidersUsed.join(', ') || 'configured search providers'} after exact consent`,
+                `Persisted ${webSourceIds.length} bounded source snapshots`,
+              ]
+            : []),
+          providerRequested
+            ? `Called ${requestedProviderLabel} through the maintained pi-ai OpenRouter provider after exact edit consent`
+            : 'Kept review context on the deterministic local route',
+          providerRequested
+            ? usedFallback
+              ? 'Used deterministic bounded edit fallback'
+              : `Parsed and validated ${requestedProviderLabel} JSON`
+            : 'Produced deterministic bounded edit operations',
+          'Persisted proposal and human-readable trace atomically',
+        ],
+        ...traceAttribution,
+      });
+      await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'awaiting_review',
+        patchId,
+        traceId,
+        message: `${summary} Review the validated proposal before it can change the deck.`,
+        role: 'assistant',
+        ...(webSourceIds.length ? { sourceIds: webSourceIds } : {}),
+      });
+      return proposal;
+    } catch (error) {
+      const current = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+      });
+      if (current?.status !== 'cancelled') {
+        const message = agentRunErrorMessage(error);
+        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'failed',
+          error: message.slice(0, 600),
+          message: `No deck changes were applied. ${message}`.slice(0, 4000),
+          role: 'assistant',
+        });
+      }
+      throw error;
+    }
   },
 });
 
@@ -584,10 +760,13 @@ export const createDeckFromBrief = action({
     const clientSessionId = requiredCreateText(args.clientSessionId, 'clientSessionId', 256, 768);
     const themeId = requiredCreateText(args.themeId, 'themeId', 128, 256);
     const attachments = validateNodeSlideBriefAttachments(args.attachments);
+    const previewSessionQuotaSubject = nodeslideContentDigest(
+      `${admissionQuotaSubject}:${clientSessionId}`,
+    ).slice('sha256:'.length);
     const quotaResult = (await ctx.runMutation(nodeslideInternal.consumePreviewQuotaResult, {
       buckets: [
         {
-          key: `create:${admissionQuotaSubject}`,
+          key: `create:${previewSessionQuotaSubject}`,
           limit: 10,
           windowMs: 86_400_000,
         },
@@ -785,6 +964,19 @@ function publicAgentError(
     code,
     message: message.replace(/\s+/g, ' ').trim().slice(0, 360),
   });
+}
+
+function agentRunErrorMessage(error: unknown): string {
+  if (error instanceof ConvexError) {
+    const data = error.data;
+    if (typeof data === 'string') return data.replace(/\s+/g, ' ').trim();
+    if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+      return data.message.replace(/\s+/g, ' ').trim();
+    }
+  }
+  return error instanceof Error
+    ? error.message.replace(/\s+/g, ' ').trim()
+    : 'The agent run failed safely.';
 }
 
 function requiredCreateText(

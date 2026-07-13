@@ -99,6 +99,48 @@ describe('NodeSlide trace validation receipts', () => {
     expect(markup).toContain('sha256:0123456789abcdef');
     expect(markup).not.toContain('total_goals,172');
   });
+
+  it('renders the durable run journal and persisted web tool evidence', () => {
+    const markup = renderToStaticMarkup(
+      <TraceInspector
+        traces={[]}
+        validations={[]}
+        agentRuns={[
+          {
+            id: 'run-web',
+            deckId: 'deck-a',
+            idempotencyKey: 'request-1',
+            instruction: 'Research current World Cup data and update this chart.',
+            status: 'researching',
+            provider: 'openrouter',
+            model: 'z-ai/glm-5.2',
+            webResearch: true,
+            attempt: 1,
+            createdAt: 1_000,
+            updatedAt: 2_000,
+          },
+        ]}
+        agentMessages={[
+          {
+            id: 'message-tool',
+            deckId: 'deck-a',
+            runId: 'run-web',
+            role: 'tool',
+            toolName: 'web_search',
+            content: 'Retained 4 web sources from brave and tavily.',
+            sourceIds: ['source-1', 'source-2', 'source-3', 'source-4'],
+            createdAt: 1_500,
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('Run journal');
+    expect(markup).toContain('server persisted');
+    expect(markup).toContain('Web consented');
+    expect(markup).toContain('web_search');
+    expect(markup).toContain('z-ai/glm-5.2');
+  });
 });
 
 function validation(id: string, deckVersion: number, checkedAt: number): ValidationResult {

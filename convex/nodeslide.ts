@@ -62,6 +62,7 @@ import {
 } from './lib/nodeslideData';
 import {
   NODESLIDE_DATA_ATTACHMENT_MAX_BYTES,
+  nodeSlideDataAttachmentShape,
   normalizeNodeSlideDataAttachment,
 } from './lib/nodeslideDataAttachment';
 import {
@@ -314,6 +315,13 @@ export const attachDataSource = mutation({
       retrievedAt: existing?.retrievedAt ?? Date.now(),
       citation: `Uploaded file: ${title}\n${content}`,
       license: 'User supplied',
+      format: args.format,
+      contentDigest: nodeslideContentDigest(content),
+      byteSize: new TextEncoder().encode(content).byteLength,
+      ...nodeSlideDataAttachmentShape(content, args.format),
+      retention: 'until_deleted' as const,
+      status: 'ready' as const,
+      lastRefreshedAt: Date.now(),
     } as const;
     if (existing) await ctx.db.patch(existing._id, source);
     else {
@@ -327,6 +335,81 @@ export const attachDataSource = mutation({
       await ctx.db.insert('nodeslide_sources', source);
     }
     return { id, kind: 'source' as const, label: `Source: ${title}` };
+  },
+});
+
+/** Owner-controlled deletion for private uploaded evidence. Linked data fails closed. */
+export const deleteDataSource = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string(), sourceId: v.string() },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const source = await ctx.db
+      .query('nodeslide_sources')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.sourceId))
+      .unique();
+    if (!source || source.deckId !== args.deckId) return false;
+    if (source.sourceType === 'url' || source.license !== 'User supplied') {
+      throw new Error('Only private user-uploaded sources can be deleted from this control.');
+    }
+    const elements = await ctx.db
+      .query('nodeslide_elements')
+      .withIndex('by_deck', (query) => query.eq('deckId', args.deckId))
+      .collect();
+    if (elements.some((element) => element.sourceIds.includes(args.sourceId))) {
+      throw new Error('This source is still bound to slide content. Remove those bindings first.');
+    }
+    await ctx.db.delete(source._id);
+    return true;
+  },
+});
+
+export const listAgentRuns = query({
+  args: { deckId: v.string(), ownerAccessKey: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const limit = Math.max(1, Math.min(100, Math.floor(args.limit ?? 40)));
+    const rows = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+      .order('desc')
+      .take(limit);
+    return rows.map(({ _id, _creationTime, ownerDigest: _ownerDigest, ...run }) => run);
+  },
+});
+
+export const listAgentMessages = query({
+  args: { deckId: v.string(), ownerAccessKey: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const limit = Math.max(1, Math.min(200, Math.floor(args.limit ?? 80)));
+    const rows = await ctx.db
+      .query('nodeslide_agent_messages')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+      .order('desc')
+      .take(limit);
+    return rows.reverse().map(({ _id, _creationTime, ...message }) => message);
+  },
+});
+
+export const cancelAgentRun = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string(), runId: v.string() },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const row = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!row || row.deckId !== args.deckId) return null;
+    if (['completed', 'failed', 'cancelled', 'awaiting_review'].includes(row.status)) {
+      const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = row;
+      return run;
+    }
+    const now = Date.now();
+    await ctx.db.patch(row._id, { status: 'cancelled', updatedAt: now, completedAt: now });
+    const updated = await ctx.db.get(row._id);
+    if (!updated) return null;
+    const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = updated;
+    return run;
   },
 });
 
@@ -1259,6 +1342,191 @@ export const consumePreviewQuotaResult = internalMutation({
       }
       throw error;
     }
+  },
+});
+
+export const beginAgentRunInternal = internalMutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    idempotencyKey: v.string(),
+    instruction: v.string(),
+    provider: v.string(),
+    model: v.string(),
+    webResearch: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const idempotencyKey = requiredText(args.idempotencyKey, 'idempotency key', 160);
+    const instruction = requiredText(args.instruction, 'instruction', 4000);
+    const existing = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_deck_idempotency', (query) =>
+        query.eq('deckId', args.deckId).eq('idempotencyKey', idempotencyKey),
+      )
+      .first();
+    if (existing) {
+      const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = existing;
+      return { created: false, run };
+    }
+    const now = Date.now();
+    const id = nodeslideStableId('agent_run', args.deckId, idempotencyKey);
+    const run = {
+      id,
+      deckId: args.deckId,
+      ownerDigest: `actor_${nodeslideContentDigest(args.ownerAccessKey)}`,
+      idempotencyKey,
+      instruction,
+      status: 'queued' as const,
+      provider: requiredText(args.provider, 'provider', 80),
+      model: requiredText(args.model, 'model', 180),
+      webResearch: args.webResearch,
+      attempt: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await ctx.db.insert('nodeslide_agent_runs', run);
+    await ctx.db.insert('nodeslide_agent_messages', {
+      id: nodeslideStableId('agent_message', id, 'user'),
+      deckId: args.deckId,
+      runId: id,
+      role: 'user',
+      content: instruction,
+      createdAt: now,
+    });
+    const { ownerDigest: _ownerDigest, ...publicRun } = run;
+    return { created: true, run: publicRun };
+  },
+});
+
+export const getAgentRunInternal = internalQuery({
+  args: { deckId: v.string(), ownerAccessKey: v.string(), runId: v.string() },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const row = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!row || row.deckId !== args.deckId) return null;
+    const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = row;
+    return run;
+  },
+});
+
+export const advanceAgentRunInternal = internalMutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    runId: v.string(),
+    status: v.union(
+      v.literal('researching'),
+      v.literal('planning'),
+      v.literal('validating'),
+      v.literal('awaiting_review'),
+      v.literal('completed'),
+      v.literal('failed'),
+      v.literal('cancelled'),
+    ),
+    patchId: v.optional(v.string()),
+    traceId: v.optional(v.string()),
+    error: v.optional(v.string()),
+    message: v.optional(v.string()),
+    role: v.optional(v.union(v.literal('assistant'), v.literal('tool'), v.literal('system'))),
+    toolName: v.optional(v.string()),
+    sourceIds: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const row = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!row || row.deckId !== args.deckId) throw new Error('Agent run not found.');
+    if (row.status === 'cancelled' && args.status !== 'cancelled') return null;
+    const now = Date.now();
+    const terminal = ['completed', 'failed', 'cancelled'].includes(args.status);
+    await ctx.db.patch(row._id, {
+      status: args.status,
+      updatedAt: now,
+      ...(terminal ? { completedAt: now } : {}),
+      ...(args.patchId ? { patchId: args.patchId } : {}),
+      ...(args.traceId ? { traceId: args.traceId } : {}),
+      ...(args.error ? { error: requiredText(args.error, 'run error', 600) } : {}),
+    });
+    if (args.message) {
+      const message = requiredText(args.message, 'run message', 4000);
+      const role = args.role ?? 'system';
+      await ctx.db.insert('nodeslide_agent_messages', {
+        id: nodeslideStableId('agent_message', args.runId, role, String(now), message),
+        deckId: args.deckId,
+        runId: args.runId,
+        role,
+        content: message,
+        ...(args.toolName ? { toolName: requiredText(args.toolName, 'tool name', 120) } : {}),
+        ...(args.sourceIds ? { sourceIds: args.sourceIds.slice(0, 32) } : {}),
+        createdAt: now,
+      });
+    }
+    return args.runId;
+  },
+});
+
+export const attachWebSourcesInternal = internalMutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    sources: v.array(
+      v.object({
+        title: v.string(),
+        url: v.string(),
+        snippet: v.string(),
+        provider: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const now = Date.now();
+    const refs: Array<{ id: string; kind: 'source'; label: string }> = [];
+    for (const input of args.sources.slice(0, 12)) {
+      const title = requiredText(input.title, 'web source title', 180);
+      const snippet = requiredText(input.snippet, 'web source excerpt', 1000);
+      const provider = requiredText(input.provider, 'web source provider', 80);
+      let url: string;
+      try {
+        const parsed = new URL(input.url);
+        if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('unsupported');
+        url = parsed.toString().slice(0, 900);
+      } catch {
+        continue;
+      }
+      const id = nodeslideStableId('source_web', args.deckId, url);
+      const existing = await ctx.db
+        .query('nodeslide_sources')
+        .withIndex('by_stable_id', (query) => query.eq('id', id))
+        .unique();
+      const source = {
+        id,
+        deckId: args.deckId,
+        title,
+        url,
+        sourceType: 'url' as const,
+        retrievedAt: existing?.retrievedAt ?? now,
+        citation: snippet,
+        license: 'Web source; verify reuse rights',
+        format: 'web' as const,
+        contentDigest: nodeslideContentDigest(snippet),
+        byteSize: new TextEncoder().encode(snippet).byteLength,
+        provider,
+        retention: 'public_snapshot' as const,
+        status: 'ready' as const,
+        lastRefreshedAt: now,
+      };
+      if (existing) await ctx.db.patch(existing._id, source);
+      else await ctx.db.insert('nodeslide_sources', source);
+      refs.push({ id, kind: 'source', label: `Web: ${title}` });
+    }
+    return refs;
   },
 });
 
@@ -2338,6 +2606,39 @@ async function finishPatchTrace(
     ...(validation ? { validation } : {}),
     completedAt: now,
   });
+  const run = (
+    await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', patch.deckId))
+      .order('desc')
+      .take(100)
+  ).find((candidate) => candidate.patchId === patch.id);
+  if (run) {
+    const runStatus =
+      status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'failed';
+    await ctx.db.patch(run._id, { status: runStatus, updatedAt: now, completedAt: now });
+    const content =
+      status === 'completed'
+        ? 'Accepted and applied as a new deck version.'
+        : status === 'cancelled'
+          ? 'Proposal declined. The deck remains unchanged.'
+          : 'Proposal could not be applied. The deck remains unchanged.';
+    const messageId = nodeslideStableId('agent_message', run.id, 'decision', status);
+    const existingMessage = await ctx.db
+      .query('nodeslide_agent_messages')
+      .withIndex('by_stable_id', (query) => query.eq('id', messageId))
+      .unique();
+    if (!existingMessage) {
+      await ctx.db.insert('nodeslide_agent_messages', {
+        id: messageId,
+        deckId: patch.deckId,
+        runId: run.id,
+        role: 'system',
+        content,
+        createdAt: now,
+      });
+    }
+  }
   return true;
 }
 

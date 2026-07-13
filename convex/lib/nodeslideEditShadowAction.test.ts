@@ -47,6 +47,8 @@ type ProposeArgs = {
   providerMode: 'openrouter_free';
   providerModel?: NodeSlideAgentModelId;
   providerConsent: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+  webResearch?: boolean;
+  webResearchConsent?: string;
 };
 
 type ProposeHandler = (context: ProposeContext, args: ProposeArgs) => Promise<unknown>;
@@ -122,6 +124,13 @@ function harness(workspace: NodeSlideWorkspace) {
   };
   const calls: Record<string, unknown>[] = [];
   const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+    if ('idempotencyKey' in args) {
+      return {
+        created: true,
+        run: { id: 'agent-run-test', status: 'queued' },
+      };
+    }
+    if ('runId' in args && 'status' in args) return args.runId;
     calls.push(args);
     if ('operations' in args) return baselineResponse;
     return true;
@@ -137,6 +146,16 @@ function harness(workspace: NodeSlideWorkspace) {
 }
 
 describe('NodeSlide same-turn edit shadow comparison isolation', () => {
+  it('requires separate exact consent before any web research or deck read', async () => {
+    const { args } = fixture();
+    const context = { runQuery: vi.fn(), runMutation: vi.fn() };
+    await expect(proposeHandler(context, { ...args, webResearch: true })).rejects.toMatchObject({
+      data: { code: 'invalid_request' },
+    });
+    expect(context.runQuery).not.toHaveBeenCalled();
+    expect(context.runMutation).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     process.env[GLOBAL_FLAG] = 'true';
     process.env[SHADOW_FLAG] = 'true';

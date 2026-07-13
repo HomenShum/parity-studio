@@ -20,6 +20,8 @@ import type {
   DeckComment,
   DeckPatch,
   DeckVersion,
+  NodeSlideAgentMessage,
+  NodeSlideAgentRun,
   NodeSlideWorkspace,
   PatchOperation,
   PatchScope,
@@ -73,6 +75,8 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   aiCommands?: readonly AiComposerCommand<CommandId>[];
   aiSuggestedActions?: readonly AiSuggestedAction[];
   aiAgentActivity?: AiAgentActivity | null;
+  agentRuns?: readonly NodeSlideAgentRun[];
+  agentMessages?: readonly NodeSlideAgentMessage[];
   aiCommentContext?: AiCommentContext | null;
   previewedPatchId?: string | null;
   activeTastePackId: NodeSlideTastePackId | null;
@@ -91,6 +95,8 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     options: AiProposalOptions<CommandId>,
   ) => void;
   onAttachAiDataFile?: (file: File) => Promise<AiReadReference>;
+  onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
+  onCancelAiRun?: (runId: string) => void;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -141,6 +147,8 @@ export function InspectorPanel<CommandId extends string = string>({
   aiCommands = [],
   aiSuggestedActions,
   aiAgentActivity,
+  agentRuns = [],
+  agentMessages = [],
   aiCommentContext = null,
   previewedPatchId = null,
   activeTastePackId,
@@ -155,6 +163,8 @@ export function InspectorPanel<CommandId extends string = string>({
   onWidthChange,
   onProposeEdit,
   onAttachAiDataFile,
+  onDeleteAiDataSource,
+  onCancelAiRun,
   onAcceptPatch,
   onRejectPatch,
   onPreviewPatch,
@@ -334,6 +344,8 @@ export function InspectorPanel<CommandId extends string = string>({
             workspaceElements={workspace.elements}
             patches={workspace.patches}
             traces={workspace.traces}
+            agentRuns={agentRuns}
+            agentMessages={agentMessages}
             variations={variations}
             variationsLoading={variationsLoading}
             isSubmitting={agentBusy}
@@ -351,6 +363,7 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
             onPropose={onProposeEdit}
             {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
+            {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
             onAccept={onAcceptPatch}
             onReject={onRejectPatch}
             onGenerateVariations={onGenerateVariations}
@@ -405,13 +418,19 @@ export function InspectorPanel<CommandId extends string = string>({
           />
         ) : null}
         {activeTab === 'data' ? (
-          <DataInspector sources={workspace.sources} selectedElements={selectedElements} />
+          <DataInspector
+            sources={workspace.sources}
+            selectedElements={selectedElements}
+            {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
+          />
         ) : null}
         {activeTab === 'trace' ? (
           <TraceInspector
             traces={workspace.traces}
             validations={workspace.validations}
             patches={workspace.patches}
+            agentRuns={agentRuns}
+            agentMessages={agentMessages}
           />
         ) : null}
       </div>

@@ -33,3 +33,39 @@ export function normalizeNodeSlideDataAttachment(
   }
   return normalized;
 }
+
+export function nodeSlideDataAttachmentShape(
+  content: string,
+  format: NodeSlideDataAttachmentFormat,
+): { rowCount?: number; columns?: string[] } {
+  if (format === 'csv') {
+    const rows = content.split(/\r?\n/).filter((row) => row.trim().length > 0);
+    const columns = (rows[0] ?? '')
+      .split(',')
+      .map((column) => column.replace(/^\s*["']|["']\s*$/g, '').trim())
+      .filter(Boolean)
+      .slice(0, 64);
+    return { rowCount: Math.max(0, rows.length - 1), ...(columns.length ? { columns } : {}) };
+  }
+  if (format === 'json') {
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      const records = Array.isArray(parsed) ? parsed : [parsed];
+      const columns = Array.from(
+        new Set(
+          records
+            .slice(0, 100)
+            .flatMap((record) =>
+              record && typeof record === 'object' && !Array.isArray(record)
+                ? Object.keys(record as Record<string, unknown>)
+                : [],
+            ),
+        ),
+      ).slice(0, 64);
+      return { rowCount: records.length, ...(columns.length ? { columns } : {}) };
+    } catch {
+      return {};
+    }
+  }
+  return { rowCount: content.split(/\r?\n/).filter((line) => line.trim().length > 0).length };
+}

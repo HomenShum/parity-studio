@@ -7,7 +7,7 @@ import { action } from './_generated/server';
 type MediaPreference = 'auto' | 'images' | 'videos' | 'mixed';
 type ExternalMediaType = 'image' | 'video' | 'website';
 
-interface ExternalReference {
+export interface ExternalReference {
   product: string;
   title: string;
   sourceUrl: string;
@@ -27,11 +27,21 @@ interface RawSearchSource {
   imageUrl?: string;
 }
 
+interface LinkupResponseSource {
+  name?: string;
+  title?: string;
+  url?: string;
+  content?: string;
+  snippet?: string;
+}
+
+const MAX_SEARCH_RESPONSE_BYTES = 200_000;
+
 function env(name: string): string {
   return process.env[name]?.trim() ?? '';
 }
 
-function configuredProviders(): string[] {
+export function configuredSearchProviders(): string[] {
   const providers: string[] = [];
   if (env('LINKUP_API_KEY')) providers.push('linkup');
   if (env('BRAVE_SEARCH_API_KEY') || env('BRAVE_API_KEY')) providers.push('brave');
@@ -89,6 +99,30 @@ async function withTimeout<T>(
   }
 }
 
+async function readBoundedJson<T>(response: Response): Promise<T | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_SEARCH_RESPONSE_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  try {
+    const decoder = new TextDecoder();
+    const text = `${chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('')}${decoder.decode()}`;
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function searchLinkup(query: string): Promise<RawSearchSource[]> {
   const key = env('LINKUP_API_KEY');
   if (!key) return [];
@@ -96,17 +130,27 @@ async function searchLinkup(query: string): Promise<RawSearchSource[]> {
     const response = await fetch('https://api.linkup.so/v1/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ q: query, depth: 'standard', outputType: 'sourcedAnswer' }),
+      body: JSON.stringify({
+        q: query,
+        depth: 'standard',
+        outputType: 'sourcedAnswer',
+        includeInlineCitations: true,
+        includeSources: true,
+        maxResults: 8,
+      }),
       signal,
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as {
-      results?: Array<{ name?: string; url?: string; content?: string }>;
-    };
-    return (data.results ?? []).map((item) => ({
-      title: item.name ?? item.url ?? 'Live web result',
+    const data = await readBoundedJson<{
+      answer?: string;
+      results?: LinkupResponseSource[];
+      sources?: LinkupResponseSource[];
+    }>(response);
+    if (!data) return [];
+    return (data.results ?? data.sources ?? []).map((item) => ({
+      title: item.name ?? item.title ?? item.url ?? 'Live web result',
       url: item.url ?? '',
-      snippet: item.content ?? '',
+      snippet: item.content ?? item.snippet ?? data.answer?.slice(0, 1000) ?? '',
       provider: 'linkup',
       mediaType: 'website' as const,
     }));
@@ -126,9 +170,10 @@ async function searchBraveWeb(query: string): Promise<RawSearchSource[]> {
       },
     );
     if (!response.ok) return [];
-    const data = (await response.json()) as {
+    const data = await readBoundedJson<{
       web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
-    };
+    }>(response);
+    if (!data) return [];
     return (data.web?.results ?? []).map((item) => ({
       title: item.title ?? item.url ?? 'Brave web result',
       url: item.url ?? '',
@@ -152,7 +197,7 @@ async function searchBraveImages(query: string): Promise<RawSearchSource[]> {
       },
     );
     if (!response.ok) return [];
-    const data = (await response.json()) as {
+    const data = await readBoundedJson<{
       results?: Array<{
         title?: string;
         url?: string;
@@ -161,7 +206,8 @@ async function searchBraveImages(query: string): Promise<RawSearchSource[]> {
         properties?: { url?: string; placeholder?: string };
         thumbnail?: { src?: string };
       }>;
-    };
+    }>(response);
+    if (!data) return [];
     return (data.results ?? []).map((item) => {
       const sourceUrl =
         item.page_url ??
@@ -196,7 +242,7 @@ async function searchBraveVideos(query: string): Promise<RawSearchSource[]> {
       },
     );
     if (!response.ok) return [];
-    const data = (await response.json()) as {
+    const data = await readBoundedJson<{
       results?: Array<{
         title?: string;
         url?: string;
@@ -204,7 +250,8 @@ async function searchBraveVideos(query: string): Promise<RawSearchSource[]> {
         thumbnail?: { src?: string };
         video?: { thumbnail?: string };
       }>;
-    };
+    }>(response);
+    if (!data) return [];
     return (data.results ?? []).map((item) => {
       const imageUrl = item.thumbnail?.src ?? item.video?.thumbnail;
       return {
@@ -231,9 +278,10 @@ async function searchSerper(query: string): Promise<RawSearchSource[]> {
       signal,
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as {
+    const data = await readBoundedJson<{
       organic?: Array<{ title?: string; link?: string; snippet?: string }>;
-    };
+    }>(response);
+    if (!data) return [];
     return (data.organic ?? []).map((item) => ({
       title: item.title ?? item.link ?? 'Serper result',
       url: item.link ?? '',
@@ -267,7 +315,7 @@ async function searchTavily(
       signal,
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as {
+    const data = await readBoundedJson<{
       results?: Array<{
         title?: string;
         url?: string;
@@ -276,7 +324,8 @@ async function searchTavily(
         images?: string[];
       }>;
       images?: Array<string | { url?: string; description?: string }>;
-    };
+    }>(response);
+    if (!data) return [];
     const web = (data.results ?? []).map((item) => {
       const imageUrl = item.images?.[0];
       return {
@@ -338,7 +387,7 @@ function toExternalReference(source: RawSearchSource): ExternalReference {
   };
 }
 
-async function multiSearch(
+export async function searchExternalReferences(
   query: string,
   mediaPreference: MediaPreference,
 ): Promise<{
@@ -397,10 +446,10 @@ export const runLiveSearch = action({
       filePaths: context.filePaths,
       mediaPreference,
     });
-    const configured = configuredProviders();
+    const configured = configuredSearchProviders();
     const live =
       configured.length > 0
-        ? await multiSearch(query, mediaPreference)
+        ? await searchExternalReferences(query, mediaPreference)
         : { references: [], providers: [] };
     const reportId = (await ctx.runMutation(internal.inspiration.saveLiveReportInternal, {
       runId: args.runId,

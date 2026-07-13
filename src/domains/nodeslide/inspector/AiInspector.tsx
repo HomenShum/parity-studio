@@ -7,6 +7,7 @@ import {
   Command,
   Eye,
   GitCompareArrows,
+  Globe2,
   Layers3,
   LoaderCircle,
   Maximize2,
@@ -34,7 +35,9 @@ import {
   type DeckPatch,
   NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  type NodeSlideAgentMessage,
   type NodeSlideAgentModelId,
+  type NodeSlideAgentRun,
   type OperationMode,
   type PatchOperation,
   type PatchScope,
@@ -61,6 +64,7 @@ import {
   type AiVariationRequest,
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+  NODESLIDE_WEB_RESEARCH_CONSENT,
 } from './reviewTypes';
 
 export {
@@ -110,6 +114,8 @@ export interface AiInspectorProps<CommandId extends string = string> {
   workspaceElements?: readonly SlideElement[];
   patches: readonly AiReviewablePatch[];
   traces: readonly AgentTrace[];
+  agentRuns?: readonly NodeSlideAgentRun[];
+  agentMessages?: readonly NodeSlideAgentMessage[];
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -133,6 +139,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     options: AiProposalOptions<CommandId>,
   ) => void;
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
+  onCancelRun?: (runId: string) => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -150,6 +157,8 @@ export function AiInspector<CommandId extends string = string>({
   workspaceElements = [],
   patches,
   traces,
+  agentRuns = [],
+  agentMessages = [],
   variations,
   variationsLoading,
   isSubmitting,
@@ -169,6 +178,7 @@ export function AiInspector<CommandId extends string = string>({
   previewedPatchId = null,
   onPropose,
   onAttachDataFile,
+  onCancelRun,
   onAccept,
   onReject,
   onPreviewPatch,
@@ -188,6 +198,8 @@ export function AiInspector<CommandId extends string = string>({
   const [providerMode, setProviderMode] = useState<AiProviderMode>(initialProviderMode);
   const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(initialProviderModel);
   const [providerConsent, setProviderConsent] = useState(false);
+  const [webResearch, setWebResearch] = useState(false);
+  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -329,7 +341,11 @@ export function AiInspector<CommandId extends string = string>({
 
   const selectedAgentModel = nodeSlideAgentModel(providerModel);
   const provider = createAiProviderRequest(providerMode, providerConsent, providerModel);
-  const providerReady = providerMode === 'deterministic' || providerConsent;
+  const providerReady =
+    (providerMode === 'deterministic' || providerConsent) && (!webResearch || webResearchConsent);
+  const activeDurableRun = agentRuns.find((run) =>
+    ['queued', 'researching', 'planning', 'validating'].includes(run.status),
+  );
   const resolvedActivity = resolveActivity(
     agentActivity,
     isSubmitting,
@@ -357,6 +373,10 @@ export function AiInspector<CommandId extends string = string>({
       : scopeChoice === 'elements'
         ? `${selectedElements.length} selected`
         : 'Whole slide';
+  const recentMessages = agentMessages.slice(-24);
+  const latestPersistedUserAsk = [...recentMessages]
+    .reverse()
+    .find((message) => message.role === 'user')?.content;
 
   const updateInstruction = (value: string, cursor = value.length) => {
     setInstruction(value);
@@ -453,6 +473,16 @@ export function AiInspector<CommandId extends string = string>({
       readContext: requestedReadContext,
       designBehavior,
       referenceUse,
+      idempotencyKey:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...(webResearch
+        ? {
+            webResearch: true,
+            webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
+          }
+        : {}),
       ...(commentContext ? { commentContext } : {}),
       ...(command && !isVariationsCommand(command.id)
         ? {
@@ -463,6 +493,7 @@ export function AiInspector<CommandId extends string = string>({
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
     if (providerMode === 'openrouter_free') setProviderConsent(false);
+    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -587,7 +618,8 @@ export function AiInspector<CommandId extends string = string>({
         !resolvedActivity &&
         !activeTrace &&
         proposals.length === 0 &&
-        !showDirectionThread ? (
+        !showDirectionThread &&
+        recentMessages.length === 0 ? (
           <section className="ns-ai-v3-chat-turn is-agent ns-ai-v3-welcome">
             <span className="ns-ai-v3-agent-mark" aria-hidden="true">
               <Sparkles size={14} />
@@ -603,7 +635,37 @@ export function AiInspector<CommandId extends string = string>({
           </section>
         ) : null}
 
-        {visibleAsk ? (
+        {recentMessages.map((message) => (
+          <section
+            key={message.id}
+            className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
+            data-testid={`agent-message-${message.role}`}
+          >
+            {message.role !== 'user' ? (
+              <span className="ns-ai-v3-agent-mark" aria-hidden="true">
+                {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
+              </span>
+            ) : null}
+            <div>
+              <span className="ns-eyebrow">
+                {message.role === 'user'
+                  ? 'You'
+                  : message.role === 'tool'
+                    ? (message.toolName ?? 'Tool')
+                    : 'NodeSlide agent'}
+              </span>
+              <p>{message.content}</p>
+              {message.sourceIds?.length ? (
+                <small>
+                  {message.sourceIds.length} persisted source snapshot
+                  {message.sourceIds.length === 1 ? '' : 's'}
+                </small>
+              ) : null}
+            </div>
+          </section>
+        ))}
+
+        {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
           <section
             className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
             data-testid="optimistic-user-ask"
@@ -616,10 +678,14 @@ export function AiInspector<CommandId extends string = string>({
         {resolvedActivity || activeTrace ? (
           <section
             className={`ns-agent-progress ns-ai-v3-progress ${
-              resolvedActivity && isTerminalActivity(resolvedActivity) ? 'has-failed' : ''
+              resolvedActivity?.status === 'cancelled'
+                ? 'has-cancelled'
+                : resolvedActivity && isFailureActivity(resolvedActivity)
+                  ? 'has-failed'
+                  : ''
             }`}
             aria-live="polite"
-            {...(resolvedActivity && isTerminalActivity(resolvedActivity)
+            {...(resolvedActivity && isFailureActivity(resolvedActivity)
               ? { role: 'alert' as const }
               : {})}
           >
@@ -630,7 +696,9 @@ export function AiInspector<CommandId extends string = string>({
               aria-expanded={showPlan}
             >
               <span className="ns-agent-orb">
-                {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
+                {resolvedActivity?.status === 'cancelled' ? (
+                  <X size={14} />
+                ) : resolvedActivity && isFailureActivity(resolvedActivity) ? (
                   <TriangleAlert size={14} />
                 ) : (
                   <LoaderCircle className="ns-spin" size={14} />
@@ -638,23 +706,37 @@ export function AiInspector<CommandId extends string = string>({
               </span>
               <span>
                 <strong>
-                  {resolvedActivity
-                    ? agentPhaseLabel(resolvedActivity)
-                    : activeTrace?.status === 'working'
-                      ? 'Drafting proposal'
-                      : 'Reading context'}
+                  {activeDurableRun
+                    ? durableRunLabel(activeDurableRun.status)
+                    : resolvedActivity
+                      ? agentPhaseLabel(resolvedActivity)
+                      : activeTrace?.status === 'working'
+                        ? 'Drafting proposal'
+                        : 'Reading context'}
                 </strong>
                 <small>{activeTrace?.summary ?? 'Preparing a bounded, reviewable patch'}</small>
               </span>
               <ChevronRight size={14} className={showPlan ? 'is-open' : ''} />
             </button>
+            {activeDurableRun && onCancelRun ? (
+              <button
+                type="button"
+                className="ns-agent-cancel"
+                onClick={() => onCancelRun(activeDurableRun.id)}
+                data-testid="ai-cancel-run"
+              >
+                <X size={12} /> Cancel run
+              </button>
+            ) : null}
             {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
               <div className="ns-agent-honesty-state">
                 <strong>
                   {activityMessage(resolvedActivity) ??
-                    (resolvedActivity.status === 'timed_out'
-                      ? 'The request timed out before a reviewable proposal was returned.'
-                      : 'The agent failed before a reviewable proposal was returned.')}
+                    (resolvedActivity.status === 'cancelled'
+                      ? 'Run cancelled. No deck changes were applied.'
+                      : resolvedActivity.status === 'timed_out'
+                        ? 'The request timed out before a reviewable proposal was returned.'
+                        : 'The agent failed before a reviewable proposal was returned.')}
                 </strong>
                 <p>No proposal was created or applied. Your deck remains unchanged.</p>
               </div>
@@ -914,6 +996,13 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               )}
             </div>
+            {providerMode === 'openrouter_free' ? (
+              <p className="ns-ai-model-guidance">
+                <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
+                {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
+                Trace.
+              </p>
+            ) : null}
             <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
               <legend>Provider and privacy</legend>
               <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
@@ -970,6 +1059,22 @@ export function AiInspector<CommandId extends string = string>({
                   <small>
                     Required for each selected external mode. The versioned consent token is
                     attached to propose and variation callbacks.
+                  </small>
+                </span>
+              </label>
+              <label className="ns-ai-provider-consent ns-ai-web-consent">
+                <input
+                  type="checkbox"
+                  checked={webResearchConsent}
+                  disabled={!webResearch}
+                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  data-testid="ai-web-research-consent"
+                />
+                <span>
+                  I explicitly consent to this web research request
+                  <small>
+                    Sends only this query to configured search providers. Retained URLs and bounded
+                    excerpts appear in Data and Trace before the model plans an edit.
                   </small>
                 </span>
               </label>
@@ -1145,6 +1250,20 @@ export function AiInspector<CommandId extends string = string>({
                   </optgroup>
                 </select>
               </label>
+              <button
+                type="button"
+                className={webResearch ? 'is-active' : ''}
+                aria-pressed={webResearch}
+                onClick={() => {
+                  setWebResearch((enabled) => !enabled);
+                  setWebResearchConsent(false);
+                  setProviderControlsOpen(true);
+                }}
+                data-testid="ai-web-research-toggle"
+                title="Search the web and persist source snapshots before planning"
+              >
+                <Globe2 size={12} /> Web
+              </button>
               <button
                 type="button"
                 onClick={() => openTokenMenu('@')}
@@ -1600,16 +1719,29 @@ export function createAiVariationProviderRequest(
 export function agentPhaseLabel(activity: AiAgentActivity): string {
   if (activity.status === 'delayed') return 'Still working';
   if (activity.status === 'timed_out') return 'Timed out';
+  if (activity.status === 'cancelled') return 'Cancelled';
   if (activity.status === 'failed') return 'Failed';
   return activity.elapsedMs >= AI_DRAFTING_PHASE_MS ? 'Drafting proposal' : 'Reading context';
 }
 
 function isTerminalActivity(activity: AiAgentActivity): boolean {
+  return isFailureActivity(activity) || activity.status === 'cancelled';
+}
+
+function isFailureActivity(activity: AiAgentActivity): boolean {
   return activity.status === 'timed_out' || activity.status === 'failed';
 }
 
 function activityMessage(activity: AiAgentActivity): string | undefined {
   return 'message' in activity ? activity.message : undefined;
+}
+
+function durableRunLabel(status: NodeSlideAgentRun['status']) {
+  if (status === 'queued') return 'Queued';
+  if (status === 'researching') return 'Researching sources';
+  if (status === 'planning') return 'Planning edit';
+  if (status === 'validating') return 'Validating candidate';
+  return 'Working';
 }
 
 function resolveActivity(

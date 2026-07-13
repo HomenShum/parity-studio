@@ -90,6 +90,23 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('role="alert"');
   });
 
+  it('renders user cancellation as a distinct non-error terminal state', () => {
+    const markup = renderAi({
+      agentActivity: {
+        status: 'cancelled',
+        elapsedMs: 420,
+        ask: 'Stop this run.',
+        message: 'Run cancelled. No deck changes were applied.',
+      },
+    });
+
+    expect(markup).toContain('Cancelled');
+    expect(markup).toContain('has-cancelled');
+    expect(markup).toContain('Run cancelled. No deck changes were applied.');
+    expect(markup).not.toContain('role="alert"');
+    expect(markup).not.toContain('has-failed');
+  });
+
   it('defaults to private deterministic processing and uses operation-specific consent tokens', () => {
     const markup = renderAi();
     expect(markup).toContain('External model: off · Private deterministic');

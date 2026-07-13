@@ -9,6 +9,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'Z.ai',
     label: 'GLM 5.2',
     description: 'Long-horizon planning and structured slide edits.',
+    costTier: 'balanced',
+    bestFor: 'Long, structured deck work',
     supportsTemperature: true,
   },
   {
@@ -17,6 +19,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'Anthropic',
     label: 'Claude Sonnet 5',
     description: 'Latest balanced Claude for agents and professional writing.',
+    costTier: 'premium',
+    bestFor: 'Executive writing and synthesis',
     supportsTemperature: false,
   },
   {
@@ -25,6 +29,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'Anthropic',
     label: 'Claude Fable 5',
     description: 'Anthropic flagship for ambitious, long-running agent work.',
+    costTier: 'premium',
+    bestFor: 'Complex planning and review',
     supportsTemperature: false,
   },
   {
@@ -33,6 +39,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'Google',
     label: 'Gemini 3.5 Flash',
     description: 'Latest stable Gemini for sustained agentic and coding tasks.',
+    costTier: 'fast',
+    bestFor: 'Fast iteration and large context',
     supportsTemperature: true,
   },
   {
@@ -41,6 +49,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'Google',
     label: 'Gemini 3.1 Pro',
     description: 'Google Pro reasoning for complex, data-heavy presentations.',
+    costTier: 'premium',
+    bestFor: 'Data-heavy analysis',
     supportsTemperature: true,
   },
   {
@@ -49,6 +59,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'OpenAI',
     label: 'GPT-5.6 Sol',
     description: 'OpenAI flagship for highest-capability production workflows.',
+    costTier: 'premium',
+    bestFor: 'Highest-capability production work',
     supportsTemperature: false,
   },
   {
@@ -57,6 +69,8 @@ export const NODESLIDE_AGENT_MODELS = [
     vendor: 'OpenAI',
     label: 'GPT-5.6 Terra',
     description: 'Strong OpenAI reasoning with a balanced cost profile.',
+    costTier: 'balanced',
+    bestFor: 'General professional decks',
     supportsTemperature: false,
   },
 ] as const;
@@ -95,6 +109,8 @@ export const NODESLIDE_OPENROUTER_REVIEW_CONSENT =
 export const NODESLIDE_OPENROUTER_EDIT_CONSENT = NODESLIDE_OPENROUTER_REVIEW_CONSENT;
 export const NODESLIDE_OPENROUTER_VARIATIONS_CONSENT =
   'openrouter_nodeslide_variations_context_v1' as const;
+/** Exact consent for sending an edit query to configured third-party web search providers. */
+export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
 export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
 export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
   'nodeslide.design-behavior-policy/v1' as const;
@@ -457,6 +473,55 @@ export interface SourceRecord {
   retrievedAt: number;
   citation: string;
   license?: string;
+  /** Typed ingestion metadata. Optional for rows created before source-metadata v1. */
+  format?: 'csv' | 'json' | 'txt' | 'web';
+  contentDigest?: string;
+  byteSize?: number;
+  rowCount?: number;
+  columns?: string[];
+  provider?: string;
+  retention?: 'until_deleted' | 'public_snapshot';
+  status?: 'ready' | 'refreshing' | 'failed';
+  lastRefreshedAt?: number;
+}
+
+export type NodeSlideAgentRunStatus =
+  | 'queued'
+  | 'researching'
+  | 'planning'
+  | 'validating'
+  | 'awaiting_review'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface NodeSlideAgentRun {
+  id: string;
+  deckId: string;
+  idempotencyKey: string;
+  instruction: string;
+  status: NodeSlideAgentRunStatus;
+  provider: string;
+  model: string;
+  webResearch: boolean;
+  attempt: number;
+  patchId?: string;
+  traceId?: string;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+}
+
+export interface NodeSlideAgentMessage {
+  id: string;
+  deckId: string;
+  runId: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  toolName?: string;
+  sourceIds?: string[];
+  createdAt: number;
 }
 
 export interface ValidationIssue {
@@ -643,6 +708,11 @@ export interface AgentEditRequest {
   providerMode?: NodeSlideProviderMode;
   providerModel?: NodeSlideAgentModelId;
   providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+  /** Stable client-generated key prevents double-submit from creating two proposals. */
+  idempotencyKey?: string;
+  /** Web retrieval is independent from model egress and requires its own exact consent. */
+  webResearch?: boolean;
+  webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
 }
 
 /** Explicit read authority is independent from PatchScope, which remains write authority. */

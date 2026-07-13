@@ -762,6 +762,17 @@ export const nodeslideSourceValidator = v.object({
   retrievedAt: v.number(),
   citation: v.string(),
   license: v.optional(v.string()),
+  format: v.optional(
+    v.union(v.literal('csv'), v.literal('json'), v.literal('txt'), v.literal('web')),
+  ),
+  contentDigest: v.optional(v.string()),
+  byteSize: v.optional(v.number()),
+  rowCount: v.optional(v.number()),
+  columns: v.optional(v.array(v.string())),
+  provider: v.optional(v.string()),
+  retention: v.optional(v.union(v.literal('until_deleted'), v.literal('public_snapshot'))),
+  status: v.optional(v.union(v.literal('ready'), v.literal('refreshing'), v.literal('failed'))),
+  lastRefreshedAt: v.optional(v.number()),
 });
 
 export const nodeslideValidationIssueValidator = v.object({

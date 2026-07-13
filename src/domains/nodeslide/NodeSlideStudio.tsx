@@ -18,7 +18,9 @@ import type {
   DeckPatch,
   DeckSnapshot,
   DeckVersion,
+  NodeSlideAgentMessage,
   NodeSlideAgentModelId,
+  NodeSlideAgentRun,
   NodeSlideEditorCapabilityRegistry,
   NodeSlideEditorCommandId,
   NodeSlidePublication,
@@ -174,6 +176,22 @@ interface NodeSlideGeneratedApi {
         content: string;
       },
       AiReadReference
+    >;
+    deleteDataSource: PublicMutation<
+      { deckId: string; ownerAccessKey: string; sourceId: string },
+      boolean
+    >;
+    listAgentRuns: PublicQuery<
+      { deckId: string; ownerAccessKey: string; limit?: number },
+      NodeSlideAgentRun[]
+    >;
+    listAgentMessages: PublicQuery<
+      { deckId: string; ownerAccessKey: string; limit?: number },
+      NodeSlideAgentMessage[]
+    >;
+    cancelAgentRun: PublicMutation<
+      { deckId: string; ownerAccessKey: string; runId: string },
+      NodeSlideAgentRun | null
     >;
     listDecks: PublicQuery<
       { access: Array<{ deckId: string; ownerAccessKey: string }> },
@@ -439,6 +457,8 @@ export function NodeSlideStudio() {
   const publishDeck = useMutation(nodeslideApi.nodeslide.publishDeck);
   const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
   const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
+  const deleteDataSource = useMutation(nodeslideApi.nodeslide.deleteDataSource);
+  const cancelAgentRun = useMutation(nodeslideApi.nodeslide.cancelAgentRun);
   const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
@@ -493,6 +513,14 @@ export function NodeSlideStudio() {
   const tasteProfile = useQuery(
     nodeslideApi.nodeslidePreferences.getTasteProfile,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  const agentRuns = useQuery(
+    nodeslideApi.nodeslide.listAgentRuns,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 40 } : 'skip',
+  );
+  const agentMessages = useQuery(
+    nodeslideApi.nodeslide.listAgentMessages,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 100 } : 'skip',
   );
   const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
   const localReceiptMarker =
@@ -1880,6 +1908,30 @@ export function NodeSlideStudio() {
     return reference;
   };
 
+  const deleteAiDataSource = async (sourceId: string) => {
+    if (!ownerAccessKey) throw new Error('Open an owned deck before deleting data.');
+    const deleted = await deleteDataSource({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      sourceId,
+    });
+    if (deleted) setToast({ kind: 'success', message: 'Private uploaded source deleted.' });
+  };
+
+  const cancelAiRun = async (runId: string) => {
+    if (!ownerAccessKey) return;
+    const cancelled = await cancelAgentRun({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      runId,
+    });
+    if (cancelled?.status === 'cancelled') {
+      setAgentBusy(false);
+      setAiAgentActivity(null);
+      setToast({ kind: 'success', message: 'Agent run cancelled. No changes were applied.' });
+    }
+  };
+
   const previewPatch = (patch: DeckPatch | null) => {
     setPreviewedVariation(null);
     setPreviewedSignatureProfile(null);
@@ -2133,8 +2185,17 @@ export function NodeSlideStudio() {
       } catch (error) {
         if (!requestGate.isCurrent(requestToken)) return;
         const message = errorMessage(error, 'The agent could not create a proposal.');
-        setAiAgentActivity({ status: 'failed', elapsedMs: 0, ask: instruction, message });
-        setToast({ kind: 'error', message });
+        const cancelled = /cancelled before validation|run was cancelled/iu.test(message);
+        setAiAgentActivity({
+          status: cancelled ? 'cancelled' : 'failed',
+          elapsedMs: 0,
+          ask: instruction,
+          message: cancelled ? 'Run cancelled. No deck changes were applied.' : message,
+        });
+        setToast({
+          kind: cancelled ? 'success' : 'error',
+          message: cancelled ? 'Run cancelled. No deck changes were applied.' : message,
+        });
       } finally {
         if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
       }
@@ -2487,6 +2548,14 @@ export function NodeSlideStudio() {
     <main
       className="nodeslide-studio"
       data-testid="nodeslide-studio"
+      data-app-id="nodeslide"
+      data-agent-surface="deck-editor"
+      data-mcp-compat="webmcp chrome-devtools-mcp"
+      data-screen-id="nodeslide:editor"
+      data-screen-title="NodeSlide editor"
+      data-screen-path="/?domain=nodeslide"
+      data-screen-state={agentBusy ? 'agent-running' : 'ready'}
+      data-main-content="true"
       data-ns-theme={studioTheme}
       style={
         {
@@ -2877,6 +2946,8 @@ export function NodeSlideStudio() {
           aiReferences={aiReferences}
           aiCommands={aiCommands}
           aiAgentActivity={aiAgentActivity}
+          agentRuns={agentRuns ?? []}
+          agentMessages={agentMessages ?? []}
           aiCommentContext={aiCommentContext}
           previewedPatchId={previewedPatchId}
           activeTastePackId={activeTastePackId}
@@ -2895,6 +2966,8 @@ export function NodeSlideStudio() {
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
           onAttachAiDataFile={attachAiDataFile}
+          onDeleteAiDataSource={deleteAiDataSource}
+          onCancelAiRun={(runId) => void cancelAiRun(runId)}
           onAcceptPatch={handleAcceptPatch}
           onRejectPatch={handleRejectPatch}
           onPreviewPatch={previewPatch}
