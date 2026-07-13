@@ -4,7 +4,20 @@ export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
 export const NODESLIDE_AGENT_MODELS = [
   {
+    id: 'nebius/zai-org/GLM-5.2',
+    upstreamId: 'zai-org/GLM-5.2',
+    provider: 'nebius',
+    vendor: 'Z.ai',
+    label: 'GLM 5.2',
+    description: 'Direct managed Nebius route for long-horizon planning and structured edits.',
+    costTier: 'balanced',
+    bestFor: 'Recommended direct agent route',
+    supportsTemperature: true,
+    supportedEfforts: ['low', 'medium', 'high'],
+  },
+  {
     id: 'z-ai/glm-5.2',
+    upstreamId: 'z-ai/glm-5.2',
     provider: 'openrouter',
     vendor: 'Z.ai',
     label: 'GLM 5.2',
@@ -12,9 +25,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'balanced',
     bestFor: 'Long, structured deck work',
     supportsTemperature: true,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'anthropic/claude-sonnet-5',
+    upstreamId: 'anthropic/claude-sonnet-5',
     provider: 'openrouter',
     vendor: 'Anthropic',
     label: 'Claude Sonnet 5',
@@ -22,9 +37,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Executive writing and synthesis',
     supportsTemperature: false,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'anthropic/claude-fable-5',
+    upstreamId: 'anthropic/claude-fable-5',
     provider: 'openrouter',
     vendor: 'Anthropic',
     label: 'Claude Fable 5',
@@ -32,9 +49,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Complex planning and review',
     supportsTemperature: false,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'google/gemini-3.5-flash',
+    upstreamId: 'google/gemini-3.5-flash',
     provider: 'openrouter',
     vendor: 'Google',
     label: 'Gemini 3.5 Flash',
@@ -42,9 +61,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'fast',
     bestFor: 'Fast iteration and large context',
     supportsTemperature: true,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'google/gemini-3.1-pro-preview',
+    upstreamId: 'google/gemini-3.1-pro-preview',
     provider: 'openrouter',
     vendor: 'Google',
     label: 'Gemini 3.1 Pro',
@@ -52,9 +73,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Data-heavy analysis',
     supportsTemperature: true,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'openai/gpt-5.6-sol',
+    upstreamId: 'openai/gpt-5.6-sol',
     provider: 'openrouter',
     vendor: 'OpenAI',
     label: 'GPT-5.6 Sol',
@@ -62,9 +85,11 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Highest-capability production work',
     supportsTemperature: false,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'openai/gpt-5.6-terra',
+    upstreamId: 'openai/gpt-5.6-terra',
     provider: 'openrouter',
     vendor: 'OpenAI',
     label: 'GPT-5.6 Terra',
@@ -72,10 +97,13 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'balanced',
     bestFor: 'General professional decks',
     supportsTemperature: false,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
 ] as const;
 export type NodeSlideAgentModelId = (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
-export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
+export type NodeSlideExternalProvider = (typeof NODESLIDE_AGENT_MODELS)[number]['provider'];
+export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'nebius/zai-org/GLM-5.2';
+export const NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
 
 export const NODESLIDE_REASONING_EFFORTS = [
   { id: 'low', label: 'Light', description: 'Faster responses for straightforward work.' },
@@ -105,6 +133,27 @@ export function isNodeSlideAgentModelId(value: unknown): value is NodeSlideAgent
 export function nodeSlideAgentModel(modelId: NodeSlideAgentModelId) {
   return NODESLIDE_AGENT_MODELS.find((model) => model.id === modelId) ?? NODESLIDE_AGENT_MODELS[0];
 }
+
+export function nodeSlideModelSupportsReasoningEffort(
+  modelId: NodeSlideAgentModelId,
+  effort: NodeSlideReasoningEffort,
+): boolean {
+  return (nodeSlideAgentModel(modelId).supportedEfforts as readonly string[]).includes(effort);
+}
+
+export function nodeSlideProviderModeForModel(
+  modelId: NodeSlideAgentModelId,
+): NodeSlideProviderMode {
+  return nodeSlideAgentModel(modelId).provider === 'nebius' ? 'nebius' : 'openrouter_free';
+}
+
+export function nodeSlideDefaultModelForProviderMode(
+  mode: Exclude<NodeSlideProviderMode, 'deterministic'>,
+): NodeSlideAgentModelId {
+  return mode === 'nebius'
+    ? NODESLIDE_DEFAULT_AGENT_MODEL
+    : NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL;
+}
 export const NODESLIDE_PATCH_OPERATION_LIMIT = 512 as const;
 export const NODESLIDE_SCOPE_SLIDE_LIMIT = 64 as const;
 export const NODESLIDE_SCOPE_ELEMENT_LIMIT = 256 as const;
@@ -130,6 +179,9 @@ export const NODESLIDE_OPENROUTER_REVIEW_CONSENT =
 export const NODESLIDE_OPENROUTER_EDIT_CONSENT = NODESLIDE_OPENROUTER_REVIEW_CONSENT;
 export const NODESLIDE_OPENROUTER_VARIATIONS_CONSENT =
   'openrouter_nodeslide_variations_context_v1' as const;
+export const NODESLIDE_NEBIUS_REVIEW_CONSENT = 'nebius_nodeslide_review_context_v1' as const;
+export const NODESLIDE_NEBIUS_VARIATIONS_CONSENT =
+  'nebius_nodeslide_variations_context_v1' as const;
 /** Exact consent for sending an edit query to configured third-party web search providers. */
 export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
 /** Exact consent for a local MCP process to send scoped context to a user-selected BYOK model. */
@@ -161,7 +213,7 @@ export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'video
 export type PatchSource = 'human' | 'agent' | 'import' | 'system';
 export type PatchStatus = 'draft' | 'validating' | 'ready' | 'accepted' | 'rejected' | 'stale';
 export type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
-export type NodeSlideProviderMode = 'deterministic' | 'openrouter_free';
+export type NodeSlideProviderMode = 'deterministic' | 'openrouter_free' | 'nebius';
 export type NodeSlideDesignBehavior = (typeof NODESLIDE_DESIGN_BEHAVIORS)[number];
 export type NodeSlideReferenceUsePolicy = (typeof NODESLIDE_REFERENCE_USE_POLICIES)[number];
 export type NodeSlideEditorCommandId = (typeof NODESLIDE_EDITOR_COMMAND_IDS)[number];
@@ -732,7 +784,9 @@ export interface AgentEditRequest {
   providerMode?: NodeSlideProviderMode;
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
-  providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+  providerConsent?:
+    | typeof NODESLIDE_OPENROUTER_EDIT_CONSENT
+    | typeof NODESLIDE_NEBIUS_REVIEW_CONSENT;
   /** Stable client-generated key prevents double-submit from creating two proposals. */
   idempotencyKey?: string;
   /** Web retrieval is independent from model egress and requires its own exact consent. */

@@ -282,7 +282,7 @@ interface NodeSlideGeneratedApi {
         deckId: string;
         ownerAccessKey: string;
         slideId: string;
-        providerMode?: 'deterministic' | 'openrouter_free';
+        providerMode?: 'deterministic' | 'openrouter_free' | 'nebius';
         providerModel?: NodeSlideAgentModelId;
         providerEffort?: import('../../../shared/nodeslide').NodeSlideReasoningEffort;
         providerConsent?: string;
@@ -1458,7 +1458,7 @@ export function NodeSlideStudio() {
           message:
             request.providerMode === 'deterministic'
               ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
-              : 'Deck created after your consented OpenRouter attempt. Trace shows whether OpenRouter or the deterministic fallback produced it.',
+              : `Deck created after your consented ${request.providerMode === 'nebius' ? 'Nebius' : 'OpenRouter'} attempt. Trace shows the provider result and any deterministic fallback.`,
         });
       }
     } catch (error) {
@@ -2202,7 +2202,7 @@ export function NodeSlideStudio() {
     const requestGate = editorRequestGateRef.current;
     const requestToken = requestGate.begin('variation-generation', requestedDeckId);
     const providerRequest =
-      request.providerMode === 'openrouter_free'
+      request.providerMode !== 'deterministic'
         ? {
             providerMode: request.providerMode,
             providerModel: request.providerModel,

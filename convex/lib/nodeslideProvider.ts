@@ -1,17 +1,29 @@
-import { type Context, type TextContent, createModels } from '@earendil-works/pi-ai';
+import {
+  type Context,
+  type Model,
+  type TextContent,
+  createModels,
+  createProvider,
+  envApiKeyAuth,
+} from '@earendil-works/pi-ai';
+import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openrouterProvider } from '@earendil-works/pi-ai/providers/openrouter';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_DEFAULT_REASONING_EFFORT,
   type NodeSlideAgentModelId,
+  type NodeSlideExternalProvider,
   type NodeSlideReasoningEffort,
   isNodeSlideAgentModelId,
   nodeSlideAgentModel,
+  nodeSlideModelSupportsReasoningEffort,
 } from '../../shared/nodeslide';
 
-export const NODESLIDE_EDIT_PROVIDER = 'openrouter' as const;
+export const NODESLIDE_NEBIUS_PROVIDER = 'nebius' as const;
+export const NODESLIDE_EDIT_PROVIDER = NODESLIDE_NEBIUS_PROVIDER;
 /** Backwards-compatible name for the default; requests may select any catalog model. */
 export const NODESLIDE_EDIT_MODEL = NODESLIDE_DEFAULT_AGENT_MODEL;
+export const NODESLIDE_NEBIUS_GLM_MODEL = 'zai-org/GLM-5.2' as const;
 
 const MODEL_TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BYTES = 200_000;
@@ -21,8 +33,45 @@ const OPENROUTER_ATTRIBUTION_HEADERS = {
   'X-Title': 'Parity Studio NodeSlide',
 };
 
+const NODESLIDE_NEBIUS_GLM: Model<'openai-completions'> = {
+  id: NODESLIDE_NEBIUS_GLM_MODEL,
+  name: 'Z.ai GLM 5.2',
+  api: 'openai-completions',
+  provider: NODESLIDE_NEBIUS_PROVIDER,
+  baseUrl: 'https://api.tokenfactory.nebius.com/v1',
+  reasoning: true,
+  input: ['text'],
+  cost: { input: 1.4, output: 4.4, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 1_048_576,
+  maxTokens: 131_072,
+  compat: {
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: true,
+    thinkingFormat: 'openai',
+    maxTokensField: 'max_tokens',
+  },
+};
+
+function nebiusProvider() {
+  return createProvider({
+    id: NODESLIDE_NEBIUS_PROVIDER,
+    name: 'Nebius Token Factory',
+    baseUrl: NODESLIDE_NEBIUS_GLM.baseUrl,
+    auth: {
+      apiKey: envApiKeyAuth('Nebius Token Factory API key', ['NEBIUS_API_KEY']),
+    },
+    models: [NODESLIDE_NEBIUS_GLM],
+    api: openAICompletionsApi(),
+  });
+}
+
+function providerDisplayName(provider: NodeSlideExternalProvider): string {
+  return provider === 'nebius' ? 'Nebius' : 'OpenRouter';
+}
+
 const nodeSlideModels = createModels();
 nodeSlideModels.setProvider(openrouterProvider());
+nodeSlideModels.setProvider(nebiusProvider());
 
 export interface NodeSlideProviderTelemetry {
   provider: string;
@@ -48,8 +97,9 @@ export type NodeSlideProviderResult =
     };
 
 export interface NodeSlideCompletionRequest {
-  provider: typeof NODESLIDE_EDIT_PROVIDER;
-  model: NodeSlideAgentModelId;
+  provider: NodeSlideExternalProvider;
+  model: string;
+  supportsTemperature: boolean;
   reasoningEffort: NodeSlideReasoningEffort;
   systemPrompt: string;
   userText: string;
@@ -94,7 +144,14 @@ export async function callNodeSlideFreeJson(
   if (!isNodeSlideAgentModelId(selectedModel)) {
     return { ok: false, reason: 'Choose a supported NodeSlide agent model.' };
   }
-  const routeLabel = nodeSlideAgentModel(selectedModel).label;
+  if (!nodeSlideModelSupportsReasoningEffort(selectedModel, reasoningEffort)) {
+    return {
+      ok: false,
+      reason: `The ${nodeSlideAgentModel(selectedModel).label} route does not support the selected reasoning effort.`,
+    };
+  }
+  const selectedRoute = nodeSlideAgentModel(selectedModel);
+  const routeLabel = `${selectedRoute.label} via ${providerDisplayName(selectedRoute.provider)}`;
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -114,8 +171,9 @@ export async function callNodeSlideFreeJson(
       const repairAttempt = attempt === 1;
       const result = await Promise.race([
         complete({
-          provider: NODESLIDE_EDIT_PROVIDER,
-          model: selectedModel,
+          provider: selectedRoute.provider,
+          model: selectedRoute.upstreamId,
+          supportsTemperature: selectedRoute.supportsTemperature,
           reasoningEffort,
           systemPrompt: providerSystemPrompt(args, repairAttempt),
           userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
@@ -202,8 +260,8 @@ async function completeNodeSlideWithPiAi(
     maxTokens: request.maxTokens,
     maxRetries: 0,
     reasoning: request.reasoningEffort,
-    ...(nodeSlideAgentModel(request.model).supportsTemperature ? { temperature: 0 } : {}),
-    headers: OPENROUTER_ATTRIBUTION_HEADERS,
+    ...(request.supportsTemperature ? { temperature: 0 } : {}),
+    ...(request.provider === 'openrouter' ? { headers: OPENROUTER_ATTRIBUTION_HEADERS } : {}),
     onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
   });
   const text = result.content
@@ -244,7 +302,7 @@ function providerErrorReason(errorMessage: string | undefined, routeLabel: strin
     return `The ${routeLabel} route rejected the structured-output schema.`;
   }
   if (normalized.includes('no endpoints') || normalized.includes('provider')) {
-    return `The ${routeLabel} route had no compatible OpenRouter provider.`;
+    return `The ${routeLabel} route had no compatible provider endpoint.`;
   }
   if (normalized.includes('reasoning')) {
     return `The ${routeLabel} route rejected the requested reasoning mode.`;
@@ -294,8 +352,8 @@ function emptyTelemetry(
   reasoningEffort: NodeSlideReasoningEffort,
 ): NodeSlideProviderTelemetry {
   return {
-    provider: NODESLIDE_EDIT_PROVIDER,
-    model,
+    provider: nodeSlideAgentModel(model).provider,
+    model: nodeSlideAgentModel(model).upstreamId,
     reasoningEffort,
     costMicroUsd: 0,
     inputTokens: 0,
@@ -308,7 +366,7 @@ function addTelemetry(
   result: NodeSlideCompletionResult,
 ): NodeSlideProviderTelemetry {
   return {
-    provider: NODESLIDE_EDIT_PROVIDER,
+    provider: telemetry.provider,
     model: telemetry.model,
     ...(telemetry.reasoningEffort ? { reasoningEffort: telemetry.reasoningEffort } : {}),
     costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),

@@ -20,11 +20,14 @@ import {
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
   nodeSlideAgentModel,
+  nodeSlideModelSupportsReasoningEffort,
+  nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
+  NODESLIDE_NEBIUS_BRIEF_CONSENT,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT,
   type NodeSlideBriefProviderMode,
   type RecentDeck,
@@ -89,13 +92,13 @@ export function NodeSlideLanding({
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const providerMode: NodeSlideBriefProviderMode =
-    generation === 'deterministic' ? 'deterministic' : 'openrouter_free';
+    generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
 
   const start = () => {
     const nextPrompt = prompt.trim();
     if (!nextPrompt) return;
-    if (providerMode === 'openrouter_free' && !providerConsent) return;
+    if (providerMode !== 'deterministic' && !providerConsent) return;
     onCreate({
       clientSessionId,
       title: starterTitle ?? titleFromPrompt(nextPrompt),
@@ -118,7 +121,10 @@ export function NodeSlideLanding({
         : {
             providerModel: generation,
             providerEffort: reasoningEffort,
-            providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+            providerConsent:
+              providerMode === 'nebius'
+                ? NODESLIDE_NEBIUS_BRIEF_CONSENT
+                : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
           }),
     });
   };
@@ -244,9 +250,9 @@ export function NodeSlideLanding({
               >
                 <Paperclip size={14} aria-hidden="true" /> Attach data
               </button>
-              <span className="ns-landing-web" data-active={providerMode === 'openrouter_free'}>
+              <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
                 <Globe2 size={13} aria-hidden="true" />
-                {providerMode === 'deterministic' ? 'Private' : 'OpenRouter'}
+                {providerDisplayName(providerMode)}
               </span>
               <label className="ns-landing-model">
                 <span className="ns-sr-only">Generation model</span>
@@ -260,18 +266,28 @@ export function NodeSlideLanding({
                   data-testid="landing-model-select"
                   value={generation}
                   onChange={(event) => {
-                    setGeneration(event.target.value as 'deterministic' | NodeSlideAgentModelId);
+                    const model = event.target.value as 'deterministic' | NodeSlideAgentModelId;
+                    setGeneration(model);
+                    if (
+                      model !== 'deterministic' &&
+                      !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
+                    ) {
+                      setReasoningEffort('high');
+                    }
                     setProviderConsent(false);
                     onClearError?.();
                   }}
                 >
                   <optgroup label="Recommended">
-                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>GLM 5.2 · Recommended</option>
+                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
+                      GLM 5.2 · Nebius · Recommended
+                    </option>
                   </optgroup>
                   <optgroup label="More live models">
                     {NODESLIDE_AGENT_MODELS.slice(1).map((model) => (
                       <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor}
+                        {model.label} · {model.vendor} ·{' '}
+                        {providerDisplayName(nodeSlideProviderModeForModel(model.id))}
                       </option>
                     ))}
                   </optgroup>
@@ -280,7 +296,7 @@ export function NodeSlideLanding({
                   </optgroup>
                 </select>
               </label>
-              {providerMode === 'openrouter_free' ? (
+              {providerMode !== 'deterministic' ? (
                 <label className="ns-landing-model ns-landing-effort">
                   <span className="ns-sr-only">Reasoning effort</span>
                   <select
@@ -293,10 +309,13 @@ export function NodeSlideLanding({
                       onClearError?.();
                     }}
                   >
-                    {NODESLIDE_REASONING_EFFORTS.map((effort) => (
+                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+                      generation !== 'deterministic'
+                        ? nodeSlideModelSupportsReasoningEffort(generation, effort.id)
+                        : false,
+                    ).map((effort) => (
                       <option key={effort.id} value={effort.id}>
                         {effort.label}
-                        {effort.id === NODESLIDE_DEFAULT_REASONING_EFFORT ? ' · Recommended' : ''}
                       </option>
                     ))}
                   </select>
@@ -319,7 +338,7 @@ export function NodeSlideLanding({
               {creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />}
             </button>
           </div>
-          {providerMode === 'openrouter_free' ? (
+          {providerMode !== 'deterministic' ? (
             <label className="ns-landing-consent">
               <input
                 type="checkbox"
@@ -333,7 +352,7 @@ export function NodeSlideLanding({
               <span>
                 Use {selectedModel?.label ?? 'this model'} at{' '}
                 {NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === reasoningEffort)?.label}{' '}
-                effort through OpenRouter for this deck
+                effort through {providerDisplayName(providerMode)} for this deck
                 <small>
                   Sends this brief{attachments.length ? ' and attached files' : ''}. Trace records
                   the route, tokens, cost, and any fallback.
@@ -365,8 +384,8 @@ export function NodeSlideLanding({
             </>
           ) : (
             <>
-              <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via
-              OpenRouter
+              <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via{' '}
+              {providerDisplayName(providerMode)}
               {attachments.length > 0
                 ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
                 : ''}
@@ -430,4 +449,10 @@ function titleFromPrompt(prompt: string): string {
   const compact = prompt.replace(/\s+/g, ' ').trim();
   const sentence = compact.split(/[.!?]/, 1)[0]?.trim() || compact;
   return sentence.length <= 72 ? sentence : `${sentence.slice(0, 69).trimEnd()}…`;
+}
+
+function providerDisplayName(mode: NodeSlideBriefProviderMode): string {
+  if (mode === 'nebius') return 'Nebius';
+  if (mode === 'openrouter_free') return 'OpenRouter';
+  return 'Private';
 }

@@ -468,7 +468,7 @@ describe('custody rail — fixed order and honest break', () => {
         onToggle={() => {}}
       />,
     );
-    const order = ['Consent', 'Read', 'Plan', 'Edits', 'Validate', 'Receipt'];
+    const order = ['Authorization', 'Context', 'Plan', 'Actions', 'Validation', 'Approval'];
     let cursor = -1;
     for (const label of order) {
       const at = html.indexOf(label, cursor + 1);

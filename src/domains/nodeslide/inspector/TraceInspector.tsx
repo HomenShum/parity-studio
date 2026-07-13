@@ -34,7 +34,7 @@ import {
 } from '../../../../shared/nodeslide';
 
 /*
- * NodeSlide Trace tab — chain-of-custody rail + Countersigned tri-signature seal.
+ * NodeSlide Trace tab — compact run activity with expandable evidence and receipts.
  * Presentational refactor over the existing AgentTrace / ValidationResult /
  * CandidateValidationReceipt / DeckPatch props. No schema or backend change.
  * Visual language (rail spine, typed badges, color-handoff) is inspired by
@@ -60,12 +60,12 @@ const DENSITY_KEY = 'ns-trace-density';
 
 const NODE_ORDER: TraceNodeId[] = ['consent', 'read', 'plan', 'edits', 'validate', 'receipt'];
 const NODE_META: Record<TraceNodeId, { label: string; ink: NodeInk; Icon: LucideIcon }> = {
-  consent: { label: 'Consent', ink: 'human', Icon: CheckCircle2 },
-  read: { label: 'Read', ink: 'agent', Icon: BookOpen },
+  consent: { label: 'Authorization', ink: 'human', Icon: CheckCircle2 },
+  read: { label: 'Context', ink: 'agent', Icon: BookOpen },
   plan: { label: 'Plan', ink: 'agent', Icon: ListTree },
-  edits: { label: 'Edits', ink: 'agent', Icon: Pencil },
-  validate: { label: 'Validate', ink: 'human', Icon: ShieldCheck },
-  receipt: { label: 'Receipt', ink: 'human', Icon: Receipt },
+  edits: { label: 'Actions', ink: 'agent', Icon: Pencil },
+  validate: { label: 'Validation', ink: 'human', Icon: ShieldCheck },
+  receipt: { label: 'Approval', ink: 'human', Icon: Receipt },
 };
 
 // ---------------------------------------------------------------------------
@@ -114,90 +114,38 @@ export function TraceInspector({
 
   return (
     <div className="ns-inspector-scroll ns-trace-inspector">
-      <section className="ns-inspector-section ns-trace-intro">
+      <section className="ns-inspector-section ns-trace-intro ns-trace-header">
         <div className="ns-section-title-row">
           <div>
-            <span className="ns-eyebrow">Run trace</span>
-            <h2>What happened</h2>
+            <span className="ns-eyebrow">Agent activity</span>
+            <h2>Run details</h2>
           </div>
           <div className="ns-trace-density" role="tablist" aria-label="Trace detail level">
             <DensityButton
               active={density === 'human'}
               icon={<Eye size={11} />}
-              label="Summary"
+              label="Overview"
               onClick={() => setDensity('human')}
             />
             <DensityButton
               active={density === 'pro'}
               icon={<Gauge size={11} />}
-              label="Details"
+              label="Evidence"
               onClick={() => setDensity('pro')}
             />
             <DensityButton
               active={density === 'tech'}
               icon={<Braces size={11} />}
-              label="Tech"
+              label="Raw"
               onClick={() => setDensity('tech')}
             />
           </div>
         </div>
-        <p>
-          Follow one chain of custody — who authorized, what the agent read, planned and wrote, and
-          the human-owned proof that binds it. A degraded link never hides.
-        </p>
+        <p>Provider, work performed, validation, and human approval in one auditable run.</p>
       </section>
 
       {latestValidation ? (
         <ValidationSummary validation={latestValidation} label="Current deck validation" />
-      ) : null}
-
-      {agentRuns.length > 0 ? (
-        <details className="ns-run-journal" aria-label="Durable agent run journal">
-          <summary className="ns-section-heading">
-            <span>
-              <Activity size={13} /> Run journal
-            </span>
-            <small>{agentRuns.length} server persisted</small>
-            <ChevronRight size={13} />
-          </summary>
-          <div className="ns-run-journal-list">
-            {[...agentRuns].slice(0, 6).map((run) => {
-              const tools = agentMessages.filter(
-                (message) => message.runId === run.id && message.role === 'tool',
-              );
-              return (
-                <article key={run.id} className={`ns-run-journal-row is-${run.status}`}>
-                  <div>
-                    <span className={`ns-status-dot ns-status-dot--${run.status}`} />
-                    <strong>{humanize(run.status)}</strong>
-                    <time dateTime={new Date(run.updatedAt).toISOString()}>
-                      {formatRunTime(run.updatedAt)}
-                    </time>
-                  </div>
-                  <p>{run.instruction}</p>
-                  <div className="ns-run-journal-meta">
-                    <span>
-                      {run.provider} · {run.model}
-                    </span>
-                    <span>{run.webResearch ? 'Web consented' : 'No web egress'}</span>
-                    <span>
-                      {tools.length} tool event{tools.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  {tools.length > 0 ? (
-                    <ul>
-                      {tools.map((message) => (
-                        <li key={message.id}>
-                          {message.toolName ?? 'tool'} · {message.content}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        </details>
       ) : null}
 
       {sorted.length === 0 ? (
@@ -230,6 +178,10 @@ export function TraceInspector({
               className={`ns-trace-summary ${isFallbackTrace(selected) ? 'is-fallback' : ''}`}
             >
               <TraceBanner trace={selected} validation={traceValidation} />
+              <div className="ns-trace-section-label">
+                <span>Execution</span>
+                <small>{NODE_ORDER.length} auditable events</small>
+              </div>
               <CustodyRail
                 trace={selected}
                 patch={patch}
@@ -245,7 +197,67 @@ export function TraceInspector({
           ) : null}
         </>
       )}
+
+      <RunJournal runs={agentRuns} messages={agentMessages} />
     </div>
+  );
+}
+
+function RunJournal({
+  runs,
+  messages,
+}: {
+  runs: readonly NodeSlideAgentRun[];
+  messages: readonly NodeSlideAgentMessage[];
+}) {
+  if (runs.length === 0) return null;
+  return (
+    <details className="ns-run-journal" aria-label="Durable agent run journal">
+      <summary className="ns-section-heading">
+        <span>
+          <Activity size={13} /> Run journal
+        </span>
+        <small>{runs.length} server persisted</small>
+        <ChevronRight size={13} />
+      </summary>
+      <div className="ns-run-journal-list">
+        {[...runs].slice(0, 6).map((run) => {
+          const tools = messages.filter(
+            (message) => message.runId === run.id && message.role === 'tool',
+          );
+          return (
+            <article key={run.id} className={`ns-run-journal-row is-${run.status}`}>
+              <div>
+                <span className={`ns-status-dot ns-status-dot--${run.status}`} />
+                <strong>{humanize(run.status)}</strong>
+                <time dateTime={new Date(run.updatedAt).toISOString()}>
+                  {formatRunTime(run.updatedAt)}
+                </time>
+              </div>
+              <p>{run.instruction}</p>
+              <div className="ns-run-journal-meta">
+                <span>
+                  {run.provider} · {run.model}
+                </span>
+                <span>{run.webResearch ? 'Web consented' : 'No web egress'}</span>
+                <span>
+                  {tools.length} tool event{tools.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {tools.length > 0 ? (
+                <ul>
+                  {tools.map((message) => (
+                    <li key={message.id}>
+                      {message.toolName ?? 'tool'} · {message.content}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 
@@ -290,27 +302,15 @@ function TraceBanner({
   return (
     <header className="ns-trace-banner">
       <div className="ns-trace-banner-top">
-        <span className={`ns-status-dot ns-status-dot--${trace.status}`} />
-        <span className="ns-trace-banner-title">{statusLabel(trace.status)}</span>
+        <span className={`ns-trace-state is-${trace.status}`}>
+          <span className={`ns-status-dot ns-status-dot--${trace.status}`} />
+          {statusLabel(trace.status)}
+        </span>
         <span className="ns-trace-banner-ver">
           deck {validation ? `v${validation.deckVersion}` : 'unversioned'}
         </span>
       </div>
-      <div className="ns-trace-banner-meta">
-        <span className="ns-metanum">
-          <Clock3 size={11} />
-          <b>{duration(trace)}</b> {trace.patchId ? 'Review cycle' : 'Run'}
-        </span>
-        <span className="ns-metanum">
-          <CircleDollarSign size={11} />
-          <b>{formatCost(trace.costMicroUsd)}</b>
-          {fallback
-            ? billedAttempt
-              ? ' · provider attempt billed'
-              : ' · no provider billing recorded'
-            : ''}
-        </span>
-      </div>
+      <h3 className="ns-trace-run-title">{trace.summary}</h3>
       <div
         className={`ns-trace-attrib ${fallback ? 'is-fallback' : 'is-live'}`}
         title="provider · model · reasoning effort attribution"
@@ -319,6 +319,37 @@ function TraceBanner({
         <Cpu size={11} />
         <span>{modelAttribution(trace)}</span>
       </div>
+      <div className="ns-trace-kpis" aria-label="Run metrics">
+        <span>
+          <small>{trace.patchId ? 'Review cycle' : 'Run time'}</small>
+          <strong>
+            <Clock3 size={11} /> {duration(trace)}
+          </strong>
+        </span>
+        <span>
+          <small>Tokens</small>
+          <strong>{tokenFlow(trace)}</strong>
+        </span>
+        <span>
+          <small>Cost</small>
+          <strong>
+            <CircleDollarSign size={11} /> {formatCost(trace.costMicroUsd)}
+          </strong>
+        </span>
+        <span>
+          <small>Validation</small>
+          <strong className={validation?.ok ? 'is-pass' : 'is-blocked'}>
+            {validation ? (validation.ok ? 'Passed' : 'Blocked') : 'Pending'}
+          </strong>
+        </span>
+      </div>
+      {fallback ? (
+        <p className="ns-trace-degraded-note">
+          {billedAttempt
+            ? 'The external attempt was billed before the deterministic fallback.'
+            : 'No external provider billing was recorded for this fallback.'}
+        </p>
+      ) : null}
     </header>
   );
 }
@@ -344,7 +375,7 @@ export function CustodyRail({
 }) {
   const fallback = isFallbackTrace(trace);
   return (
-    <div className="ns-custody-rail" aria-label="Chain of custody">
+    <div className="ns-custody-rail" aria-label="Run events">
       {NODE_ORDER.map((node, index) => (
         <RailNode
           key={node}

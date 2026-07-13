@@ -2000,6 +2000,264 @@
   color: color-mix(in srgb, var(--ns-faint) 82%, var(--ns-ink));
 }
 
+/* Agent activity v5: compact, evidence-first run UI for the narrow inspector. */
+.nodeslide-studio .ns-trace-header {
+  background: var(--ns-surface);
+  padding: 14px 12px 11px;
+}
+
+.nodeslide-studio .ns-trace-header .ns-section-title-row {
+  align-items: end;
+}
+
+.nodeslide-studio .ns-trace-header h2 {
+  font-size: 16px;
+  font-weight: 720;
+}
+
+.nodeslide-studio .ns-trace-header > p {
+  font-size: 10.5px;
+  margin: 5px 0 0;
+  max-width: none;
+}
+
+.nodeslide-studio .ns-trace-density {
+  background: var(--ns-raised);
+  border: 0;
+  gap: 1px;
+}
+
+.nodeslide-studio .ns-trace-density button {
+  border-radius: 6px;
+  font-size: 9px;
+  padding: 4px 5px;
+}
+
+.nodeslide-studio .ns-validation-summary {
+  margin: 9px 10px 0;
+}
+
+.nodeslide-studio .ns-trace-picker {
+  gap: 7px;
+  padding: 10px 10px 7px;
+}
+
+.nodeslide-studio .ns-trace-picker select {
+  border-color: var(--ns-line-c);
+  border-radius: 8px;
+  font-size: 10.5px;
+  height: 32px;
+  padding-inline: 9px 28px;
+}
+
+.nodeslide-studio .ns-trace-summary {
+  border-color: var(--ns-line-c);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+  margin: 0 10px 10px;
+}
+
+.nodeslide-studio .ns-trace-banner {
+  background: var(--ns-surface);
+  gap: 9px;
+  padding: 12px;
+}
+
+.nodeslide-studio .ns-trace-summary.is-fallback .ns-trace-banner {
+  background: color-mix(in srgb, var(--ns-trace-warning) 5%, var(--ns-surface));
+}
+
+.nodeslide-studio .ns-trace-state {
+  align-items: center;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.nodeslide-studio .ns-trace-run-title {
+  color: var(--ns-ink);
+  font-size: 12.5px;
+  font-weight: 680;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nodeslide-studio .ns-trace-attrib {
+  align-self: stretch;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 5px 7px;
+  width: auto;
+}
+
+.nodeslide-studio .ns-trace-kpis {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--ns-line-b);
+  border-radius: 9px;
+  background: var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-trace-kpis > span {
+  background: var(--ns-surface);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.nodeslide-studio .ns-trace-kpis small {
+  color: var(--ns-faint);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.nodeslide-studio .ns-trace-kpis strong {
+  align-items: center;
+  color: var(--ns-ink);
+  display: inline-flex;
+  font-family: var(--ns-mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nodeslide-studio .ns-trace-kpis strong.is-pass {
+  color: var(--ns-positive);
+}
+
+.nodeslide-studio .ns-trace-kpis strong.is-blocked {
+  color: var(--ns-danger);
+}
+
+.nodeslide-studio .ns-trace-degraded-note {
+  color: var(--ns-warning);
+  font-size: 10px;
+  margin: 0;
+}
+
+.nodeslide-studio .ns-trace-section-label {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 11px 6px;
+}
+
+.nodeslide-studio .ns-trace-section-label > span {
+  color: var(--ns-ink);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.nodeslide-studio .ns-trace-section-label small {
+  color: var(--ns-faint);
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-custody-rail {
+  display: grid;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.nodeslide-studio .ns-rail-node {
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line-b);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-rail-node:hover {
+  background: var(--ns-hover);
+}
+
+.nodeslide-studio .ns-rail-node.is-open {
+  background: var(--ns-surface);
+  border-color: color-mix(in srgb, var(--ns-collaboration) 28%, var(--ns-line-c));
+}
+
+.nodeslide-studio .ns-railnode-toggle {
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+
+.nodeslide-studio .ns-rail-seg {
+  display: none;
+}
+
+.nodeslide-studio .ns-rail-marker,
+.nodeslide-studio .ns-rail-marker.is-terminal {
+  background: var(--ns-trace-agent);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ns-trace-agent) 12%, transparent);
+  height: 7px;
+  left: 10px;
+  top: 15px;
+  transform: none;
+  width: 7px;
+}
+
+.nodeslide-studio .ns-rail-marker.is-human,
+.nodeslide-studio .ns-rail-marker.is-outline {
+  background: var(--ns-trace-human);
+  border: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ns-trace-human) 12%, transparent);
+}
+
+.nodeslide-studio .ns-rail-content {
+  padding: 8px 9px 8px 2px;
+}
+
+.nodeslide-studio .ns-rail-head {
+  min-height: 20px;
+}
+
+.nodeslide-studio .ns-rail-badge {
+  background: transparent;
+  color: var(--ns-ink);
+  font-size: 10.5px;
+  padding: 0;
+}
+
+.nodeslide-studio .ns-rail-badge svg {
+  color: var(--ns-faint);
+}
+
+.nodeslide-studio .ns-rail-chip {
+  font-size: 8.5px;
+  max-width: 94px;
+}
+
+.nodeslide-studio .ns-rail-summary {
+  color: var(--ns-faint);
+  font-size: 10px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.nodeslide-studio .ns-rail-detail {
+  border-top: 1px solid var(--ns-line-b);
+  margin: 0;
+  padding: 9px 10px 10px;
+}
+
+.nodeslide-studio .ns-run-journal {
+  background: transparent;
+  border-color: var(--ns-line-b);
+  border-radius: 9px;
+  margin: 10px;
+  padding: 9px 10px;
+}
+
 .nodeslide-studio .ns-route-pill {
   background: var(--ns-chip);
   border-color: var(--ns-line-c);
