@@ -637,10 +637,11 @@ describe('compact durable telemetry projection', () => {
       />,
     );
     expect(html).toContain('Started ');
-    expect(html).toContain('Trace span waterfall');
+    expect(html).toContain('Compact trace activity');
+    expect(html).toContain('Full timeline');
     expect(html).toContain('Plan bounded slide edit');
-    expect(html).toContain('2 of 204');
-    expect(html).toContain('Load older records');
+    expect(html).toContain('204');
+    expect(html).toContain('Older telemetry is available on the server');
     expect(html).toContain('Chain of custody and countersigned receipt');
   });
 });

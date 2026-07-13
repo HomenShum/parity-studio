@@ -251,6 +251,8 @@ export function TraceInspector({
                     messages={agentMessages}
                     sources={sources}
                     loadingMore={agentTelemetryLoadingMore}
+                    compact={!expanded}
+                    onExpand={() => setExpanded(true)}
                     {...(agentTelemetryLoadError ? { loadError: agentTelemetryLoadError } : {})}
                     {...(onLoadMoreAgentTelemetry ? { onLoadMore: onLoadMoreAgentTelemetry } : {})}
                   />

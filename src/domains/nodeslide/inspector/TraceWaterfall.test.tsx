@@ -67,7 +67,47 @@ const source: SourceRecord = {
   contentDigest: 'sha256:1234567890abcdef',
 };
 
+function telemetryFor(count: number): NodeSlideAgentTelemetryPage {
+  return {
+    spans: Array.from({ length: count }, (_, index) => span(index)),
+    events: [],
+    hasMore: false,
+    totalRecorded: count,
+  };
+}
+
 describe('TraceWaterfall', () => {
+  it.each([4, 10, 100])(
+    'adapts compact and expanded activity safely for a %i-span run',
+    (count) => {
+      const fixture = telemetryFor(count);
+      expect(buildWaterfallRows(fixture.spans)).toHaveLength(count);
+
+      const compactHtml = renderToStaticMarkup(
+        <TraceWaterfall
+          compact
+          run={run}
+          telemetry={fixture}
+          messages={[]}
+          sources={[source]}
+          onExpand={() => {}}
+        />,
+      );
+      const compactRows = compactHtml.match(/data-testid="trace-activity-row"/g)?.length ?? 0;
+      expect(compactRows).toBe(count <= 6 ? count : 6);
+      expect(compactHtml).toContain('Full timeline');
+      if (count > 6) expect(compactHtml).toContain(`${count - 6} earlier step`);
+
+      const expandedHtml = renderToStaticMarkup(
+        <TraceWaterfall run={run} telemetry={fixture} messages={[]} sources={[source]} />,
+      );
+      const expandedRows = expandedHtml.match(/data-testid="trace-waterfall-row"/g)?.length ?? 0;
+      expect(expandedRows).toBeGreaterThan(0);
+      expect(expandedRows).toBeLessThanOrEqual(count);
+      if (count === 100) expect(expandedRows).toBeLessThan(40);
+    },
+  );
+
   it('retains hierarchy and ancestors when filtering a large run', () => {
     expect(buildWaterfallRows(spans)).toHaveLength(260);
     const errors = buildWaterfallRows(spans, new Set(), 'errors');

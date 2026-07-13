@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Globe2,
+  Maximize2,
   Search,
   Wrench,
 } from 'lucide-react';
@@ -37,6 +38,8 @@ interface TraceWaterfallProps {
   sources: readonly SourceRecord[];
   loadingMore?: boolean;
   loadError?: string;
+  compact?: boolean;
+  onExpand?: () => void;
   onLoadMore?: (runId: string, beforeSequence: number) => void | Promise<void>;
 }
 
@@ -229,6 +232,8 @@ export function TraceWaterfall({
   sources,
   loadingMore = false,
   loadError,
+  compact = false,
+  onExpand,
   onLoadMore,
 }: TraceWaterfallProps) {
   const [filter, setFilter] = useState<WaterfallFilter>('all');
@@ -287,6 +292,91 @@ export function TraceWaterfall({
     .map((id) => sources.find((source) => source.id === id))
     .filter((source): source is SourceRecord => Boolean(source));
   const selectedEvents = selected ? (eventsBySpan.get(selected.spanId) ?? []) : [];
+
+  if (compact) {
+    const orderedSpans = [...spans].sort((left, right) => left.sequence - right.sequence);
+    const compactSpans =
+      orderedSpans.length <= 6
+        ? orderedSpans
+        : [orderedSpans[0], ...orderedSpans.slice(-5)].filter((span): span is NodeSlideAgentSpan =>
+            Boolean(span),
+          );
+    const hiddenCount = Math.max(0, orderedSpans.length - compactSpans.length);
+    const errorCount = spans.filter((span) => span.status === 'error').length;
+    const citedCount = spans.filter((span) => span.sourceIds?.length).length;
+
+    return (
+      <section
+        className="ns-trace-activity-compact"
+        data-testid="trace-waterfall"
+        aria-label="Compact trace activity"
+      >
+        <header>
+          <div>
+            <span className={`ns-waterfall-status is-${run.status}`} />
+            <div>
+              <strong>Activity</strong>
+              <small>
+                {spans.length} span{spans.length === 1 ? '' : 's'} · {formatDuration(rangeDuration)}
+              </small>
+            </div>
+          </div>
+          <button type="button" onClick={onExpand} aria-label="Open full trace timeline">
+            <Maximize2 size={12} /> Full timeline
+          </button>
+        </header>
+
+        <div className="ns-trace-activity-health" aria-label="Trace health summary">
+          <span>
+            <b>{telemetry.totalRecorded}</b> records
+          </span>
+          <span className={errorCount ? 'has-error' : ''}>
+            <b>{errorCount}</b> errors
+          </span>
+          <span>
+            <b>{citedCount}</b> cited
+          </span>
+        </div>
+
+        <ol aria-label="Latest trace activity">
+          {compactSpans.map((span) => {
+            const Icon = spanIcon(span);
+            return (
+              <li key={span.id} className={`is-${spanTone(span)}`} data-testid="trace-activity-row">
+                <span className="ns-trace-activity-icon">
+                  <Icon size={12} />
+                </span>
+                <div>
+                  <strong>{span.name}</strong>
+                  <small>{span.toolName ?? span.operationName}</small>
+                </div>
+                <time dateTime={new Date(span.startTime).toISOString()}>
+                  {formatDuration(span.durationMs)}
+                </time>
+                {span.sourceIds?.length ? (
+                  <span className="ns-trace-activity-source" title="Span-bound sources">
+                    {span.sourceIds.length} source{span.sourceIds.length === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+
+        {hiddenCount ? (
+          <p className="ns-trace-activity-more">
+            {hiddenCount} earlier step{hiddenCount === 1 ? '' : 's'} available in the full timeline.
+          </p>
+        ) : null}
+        {telemetry.hasMore ? (
+          <p className="ns-trace-activity-more">Older telemetry is available on the server.</p>
+        ) : null}
+        {loadError ? (
+          <p className="ns-waterfall-error">Telemetry unavailable: {loadError}</p>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="ns-waterfall" data-testid="trace-waterfall">
