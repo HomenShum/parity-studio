@@ -557,6 +557,8 @@ export interface AgentEditRequest {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  /** Active slide at request time; narrows whole-slide intent without expanding write authority. */
+  focusSlideId?: string;
   readContext?: readonly AgentReadReference[];
   designBehavior?: NodeSlideDesignBehavior;
   referenceUse?: NodeSlideReferenceUsePolicy;

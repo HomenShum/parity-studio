@@ -60,6 +60,7 @@ export function nodeSlideEditTurnInputDigest(input: {
   baseSlideVersions: Record<string, number>;
   baseElementVersions: Record<string, number>;
   scope: PatchScope;
+  focusSlideId?: string;
   designBehavior?: NodeSlideDesignBehavior;
   referenceUse?: NodeSlideReferenceUsePolicy;
   providerMode?: NodeSlideProviderMode;

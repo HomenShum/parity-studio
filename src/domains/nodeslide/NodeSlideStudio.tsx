@@ -2019,6 +2019,10 @@ export function NodeSlideStudio() {
     }
 
     const clocks = clocksForScope(workspace, scope, []);
+    const focusSlideId =
+      scope.kind === 'deck' || scope.slideIds.includes(activeSlide.id)
+        ? activeSlide.id
+        : scope.slideIds[0];
     const { commentContext: _commentContext, ...requestOptions } = options;
     void (async () => {
       try {
@@ -2029,6 +2033,7 @@ export function NodeSlideStudio() {
           baseDeckVersion: workspace.deck.version,
           ...clocks,
           scope,
+          ...(focusSlideId ? { focusSlideId } : {}),
           ...requestOptions,
         });
         if (!requestGate.isCurrent(requestToken)) return;

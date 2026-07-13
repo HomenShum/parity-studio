@@ -918,6 +918,23 @@ describe('NodeSlide deck-level operations and clocks', () => {
         snapshot(),
       ),
     ).toBe('replace text Headline');
+    const copySummarySnapshot = snapshot();
+    const copyTemplate = copySummarySnapshot.elements[0];
+    if (!copyTemplate) throw new Error('Expected a copy summary fixture.');
+    copySummarySnapshot.elements.push(
+      { ...copyTemplate, id: 'section', name: 'Section label', role: 'section' },
+      { ...copyTemplate, id: 'body', name: 'Body copy', role: 'body' },
+    );
+    expect(
+      summarizePatchOperations(
+        [
+          { op: 'replace_text', slideId: 'slide-1', elementId: 'section', text: 'AI AGENTS' },
+          { op: 'replace_text', slideId: 'slide-1', elementId: 'headline', text: 'AI agents' },
+          { op: 'replace_text', slideId: 'slide-1', elementId: 'body', text: 'Reviewable' },
+        ],
+        copySummarySnapshot,
+      ),
+    ).toBe('Rewrite editable copy on The selected insight · 3 changes');
   });
 
   it('rejects operations that claim a change but materialize as a no-op', () => {
@@ -1051,6 +1068,49 @@ describe('NodeSlide deck-level operations and clocks', () => {
         },
       ),
     ).toThrow('could not safely infer a copy, style, or layout operation');
+  });
+
+  it('turns a typo-tolerant whole-slide topic request into a focused reviewable copy patch', () => {
+    const current = snapshotWithSecondSlide();
+    const headline = current.elements.find((element) => element.id === 'headline');
+    const firstSlide = current.slides.find((slide) => slide.id === 'slide-1');
+    if (!headline || !firstSlide) throw new Error('Expected the primary slide fixture.');
+    headline.role = 'headline';
+    const semanticElements: SlideElement[] = [
+      { ...headline, id: 'section', name: 'Section label', role: 'section', content: 'STORIES' },
+      { ...headline, id: 'body', name: 'Body copy', role: 'body', content: 'Original body.' },
+      { ...headline, id: 'bullet-1', name: 'Key point 1', role: 'bullet', content: '01  First' },
+      { ...headline, id: 'bullet-2', name: 'Key point 2', role: 'bullet', content: '02  Second' },
+      { ...headline, id: 'bullet-3', name: 'Key point 3', role: 'bullet', content: '03  Third' },
+    ];
+    current.elements.push(...semanticElements);
+    firstSlide.elementOrder = [
+      'section',
+      'headline',
+      'body',
+      'bullet-1',
+      'bullet-2',
+      'bullet-3',
+      'chart',
+    ];
+
+    const operations = deterministicAgentOperations(
+      current,
+      'What if I wanted to make the entire slide aout AI agents?',
+      { kind: 'deck', deckId: current.deck.id, operationMode: 'unrestricted' },
+      { preferredSlideId: 'slide-1' },
+    );
+
+    expect(operations).toHaveLength(6);
+    expect(operations.every((operation) => operation.op === 'replace_text')).toBe(true);
+    expect(
+      operations.every(
+        (operation) => operation.op === 'replace_text' && operation.slideId === 'slide-1',
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(operations)).toContain('AI agents');
+    expect(JSON.stringify(operations)).toContain('bounded context');
+    expect(JSON.stringify(operations)).not.toContain('slide-2');
   });
 
   it('uses the new value in an old/new quoted replacement and rejects mismatches', () => {

@@ -68,6 +68,16 @@ describe('NodeSlide v3 visual contract', () => {
       /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: 14px;[\s\S]*?top: 64px;/,
     );
   });
+
+  it('keeps consequential AI review text above the readable inspector floor', () => {
+    expect(css).toContain('--ns-chrome-min-font: 11px');
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell \.ns-agent-honesty-state strong[\s\S]*?font-size: 11\.5px/,
+    );
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-card h3[\s\S]*?font-size: 12\.5px/);
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-evidence dd[\s\S]*?font-size: 10px/);
+    expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-actions \.ns-button[\s\S]*?height: 34px/);
+  });
 });
 
 function mediaBlock(start: string, end: string) {

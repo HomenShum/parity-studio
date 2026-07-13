@@ -84,6 +84,7 @@ export const proposeEdit = action({
     baseSlideVersions: nodeslideVersionClockValidator,
     baseElementVersions: nodeslideVersionClockValidator,
     scope: nodeslidePatchScopeValidator,
+    focusSlideId: v.optional(v.string()),
     readContext: v.optional(v.array(nodeslideAgentReadReferenceValidator)),
     designBehavior: v.optional(nodeslideDesignBehaviorValidator),
     referenceUse: v.optional(nodeslideReferenceUseValidator),
@@ -138,6 +139,16 @@ export const proposeEdit = action({
     });
     if (!workspace) throw new Error(`Deck ${args.deckId} not found.`);
     if (args.scope.deckId !== args.deckId) throw new Error('Patch scope deckId mismatch.');
+    if (
+      args.focusSlideId &&
+      (!workspace.slides.some((slide) => slide.id === args.focusSlideId) ||
+        (args.scope.kind !== 'deck' && !args.scope.slideIds.includes(args.focusSlideId)))
+    ) {
+      throw publicAgentError(
+        'invalid_request',
+        'The focused slide is outside the authorized write scope.',
+      );
+    }
     const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
     const snapshot = snapshotOf(workspace);
     const readContext = resolveNodeSlideReadContext({
@@ -153,6 +164,7 @@ export const proposeEdit = action({
       baseSlideVersions: args.baseSlideVersions,
       baseElementVersions: args.baseElementVersions,
       scope: args.scope,
+      ...(args.focusSlideId ? { focusSlideId: args.focusSlideId } : {}),
       designBehavior: args.designBehavior ?? 'preserve',
       referenceUse: args.referenceUse ?? 'context_only',
       providerMode: providerChoice.providerMode,

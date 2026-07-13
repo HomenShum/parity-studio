@@ -39,7 +39,7 @@
   --ns-shadow-lg: 0 12px 32px rgb(15 23 42 / 12%);
   --ns-nav-width: 300px;
   --ns-inspector-width: 340px;
-  --ns-chrome-min-font: 10px;
+  --ns-chrome-min-font: 11px;
   background: radial-gradient(circle at 8% 0%, rgb(217 119 87 / 5%), transparent 30%),
     radial-gradient(circle at 92% 0%, rgb(94 106 210 / 5%), transparent 32%), var(--ns-bg);
   color: var(--ns-ink);
@@ -1329,7 +1329,7 @@
 .nodeslide-studio .ns-ai-v3-context-policy {
   color: var(--ns-faint);
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 8.5px;
+  font-size: 10px;
 }
 
 .nodeslide-studio .ns-ai-v3-context-chips {
@@ -1364,7 +1364,7 @@
 
 .nodeslide-studio .ns-ai-v3-context-note {
   color: var(--ns-faint);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
   margin: 6px 0 0;
 }
@@ -1482,6 +1482,23 @@
   display: none;
 }
 
+.nodeslide-studio .ns-trace-inspector .ns-rail-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-trace-intro > p {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .nodeslide-studio .ns-route-pill {
   background: var(--ns-chip);
   border-color: var(--ns-line-c);
@@ -1500,7 +1517,8 @@
 
 .nodeslide-studio .ns-variation-explainer {
   color: var(--ns-faint);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .nodeslide-studio .ns-variation-generate {
@@ -1508,7 +1526,7 @@
   border: 1px solid rgb(217 119 87 / 36%);
   color: var(--ns-accent-dark);
   font-size: 11.5px;
-  height: 26px;
+  height: 32px;
 }
 
 .nodeslide-studio .ns-variation-list {
@@ -1573,10 +1591,190 @@
   display: none;
 }
 
+/* The AI/review lane is decision UI, not metadata. Keep every consequential
+ * label readable at the fixed 340px desktop inspector width. */
+.nodeslide-studio .ns-ai-v3-shell .ns-ai-optimistic-ask {
+  padding: 12px 14px 0;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-ai-optimistic-ask > span {
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-ai-optimistic-ask p {
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-progress,
+.nodeslide-studio .ns-ai-v3-shell .ns-proposals {
+  padding: 12px 14px 0;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-progress-heading {
+  gap: 10px;
+  min-height: 46px;
+  padding: 9px 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-progress-heading strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-progress-heading small {
+  font-size: 10.5px;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-orb {
+  height: 31px;
+  width: 31px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state {
+  padding: 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state strong {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state p {
+  font-size: 10.5px;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-plan-list {
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-section-heading {
+  font-size: 10.5px;
+  margin-bottom: 9px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-section-heading small {
+  font-size: 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-card {
+  padding: 12px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-topline {
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-topline small {
+  font-size: 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-card h3 {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 9px 0;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-evidence {
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 9px 0;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-evidence > div {
+  padding: 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-evidence dt {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-evidence dd {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-diff-summary span {
+  font-size: 10px;
+  padding: 4px 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-candidate-validation {
+  font-size: 10.5px;
+  gap: 4px;
+  line-height: 1.45;
+  padding: 9px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-candidate-validation :is(small, span) {
+  font-size: 9.5px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-card details {
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-actions {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-actions .ns-button {
+  font-size: 11.5px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-variation-heading-row h2 {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-empty-state strong {
+  font-size: 12px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-empty-state p {
+  font-size: 10.5px;
+}
+
 .nodeslide-studio .ns-ai-composer {
   background: var(--ns-surface);
   margin-top: auto;
   padding: 10px 14px 12px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-ai-provider-consent {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-ai-provider-consent small {
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-scope-row > span {
+  font-size: 10.5px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-chip-group button {
+  font-size: 10.5px;
+  height: 28px;
+  padding: 0 10px;
 }
 
 .nodeslide-studio .ns-ai-policy-grid {
@@ -1586,14 +1784,15 @@
 
 .nodeslide-studio .ns-ai-policy-grid label > span {
   color: var(--ns-faint);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .nodeslide-studio .ns-ai-policy-grid select {
   background: var(--ns-surface);
   border-color: var(--ns-line-c);
   border-radius: 7px;
-  font-size: 10px;
+  font-size: 11px;
+  height: 32px;
 }
 
 .nodeslide-studio .ns-ai-suggested-actions > span {
@@ -1608,7 +1807,8 @@
   border: 1px solid var(--ns-line-c);
   border-radius: 999px;
   color: var(--ns-ink2);
-  font-size: 11px;
+  font-size: 11.5px;
+  min-height: 30px;
   padding: 4px 10px;
 }
 
@@ -1624,7 +1824,12 @@
 
 .nodeslide-studio .ns-composer-token-toolbar button {
   color: var(--ns-ink2);
-  font-size: 11px;
+  font-size: 11.5px;
+  min-height: 29px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-composer-token-toolbar > span {
+  font-size: 10px;
 }
 
 .nodeslide-studio .ns-composer-field {
@@ -1650,7 +1855,7 @@
 
 .nodeslide-studio .ns-composer-meta > span {
   color: var(--ns-faint);
-  font-size: 9px;
+  font-size: 10.5px;
 }
 
 .nodeslide-studio .ns-composer-meta > button {

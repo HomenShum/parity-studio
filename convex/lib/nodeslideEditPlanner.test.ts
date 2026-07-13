@@ -299,6 +299,60 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.receipt.providerTelemetry).toEqual(telemetry);
   });
 
+  it('recovers an invalid GLM envelope with a validated focused whole-slide rewrite', async () => {
+    const { snapshot, target } = fixture();
+    const focusedSlide = snapshot.slides.find((slide) => slide.id === target.slideId);
+    if (!focusedSlide) throw new Error('Expected a focused slide fixture.');
+    const scope: PatchScope = {
+      kind: 'deck',
+      deckId: snapshot.deck.id,
+      operationMode: 'unrestricted',
+    };
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.instruction = 'What if I wanted to make the entire slide aout AI agents?';
+    planningInput.request.focusSlideId = focusedSlide.id;
+    planningInput.request.baseSlideVersions = Object.fromEntries(
+      snapshot.slides.map((slide) => [slide.id, slide.version]),
+    );
+    planningInput.request.baseElementVersions = Object.fromEntries(
+      snapshot.elements.map((element) => [element.id, element.version]),
+    );
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: { summary: 'invalid', operations: [{ op: 'invented_operation' }] },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 24,
+          inputTokens: 120,
+          outputTokens: 30,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt).toMatchObject({
+      adapterVersion: '1.1.0',
+      origin: 'deterministic_fallback',
+      providerOutcome: 'invalid',
+      terminalOutcome: 'completed',
+      providerTelemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+      },
+    });
+    expect(result.operations.length).toBeGreaterThanOrEqual(4);
+    expect(
+      result.operations.every(
+        (operation) => operation.op === 'replace_text' && operation.slideId === focusedSlide.id,
+      ),
+    ).toBe(true);
+    expect(result.summary).toMatch(/^Rewrite editable copy on .+ · \d+ changes$/);
+  });
+
   it('preserves the public fallback-unavailable mapping for unsupported intent', async () => {
     const { snapshot, target, scope } = fixture();
     scope.operationMode = 'unrestricted';
