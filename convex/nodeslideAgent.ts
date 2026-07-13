@@ -52,6 +52,7 @@ import {
 import {
   invokeNodeSlideBriefProvider,
   nodeslideAgentReadReferenceValidator,
+  nodeslideAgentModelValidator,
   nodeslideBriefValidator,
   nodeslideCreatePublicError,
   nodeslideDeckReplCommandValidator,
@@ -90,6 +91,7 @@ export const proposeEdit = action({
     referenceUse: v.optional(nodeslideReferenceUseValidator),
     commandId: v.optional(nodeslideEditorCommandIdValidator),
     providerMode: v.optional(nodeslideProviderModeValidator),
+    providerModel: v.optional(nodeslideAgentModelValidator),
     providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -111,6 +113,7 @@ export const proposeEdit = action({
         'propose_edit',
         args.providerMode,
         args.providerConsent,
+        args.providerModel,
       );
     } catch (error) {
       if (error instanceof NodeSlideProviderConsentError) {
@@ -175,30 +178,57 @@ export const proposeEdit = action({
       designBehavior: args.designBehavior ?? 'preserve',
       referenceUse: args.referenceUse ?? 'context_only',
       providerMode: providerChoice.providerMode,
+      ...(providerChoice.providerMode === 'openrouter_free'
+        ? { providerModel: providerChoice.providerModel }
+        : {}),
     };
     const planningStartedAt = Date.now();
-    const baseline = await planNodeSlideEdit({
-      snapshot,
-      scopedComment:
-        scopedCommentId === undefined
-          ? null
-          : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null),
-      readContext,
-      request,
-    });
+    const scopedComment =
+      scopedCommentId === undefined
+        ? null
+        : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null);
+    // The planner handles an INVALID model response gracefully (deterministic_fallback origin).
+    // But a THROWN provider failure (OpenRouter/GLM timeout, network, or abort after retries)
+    // would otherwise escape here as a raw Convex "Server Error Called by client". Converge every
+    // failure mode on the same graceful deterministic fallback, keeping attribution honest.
+    let baseline: Awaited<ReturnType<typeof planNodeSlideEdit>>;
+    let providerErrored = false;
+    try {
+      baseline = await planNodeSlideEdit({ snapshot, scopedComment, readContext, request });
+    } catch {
+      providerErrored = true;
+      try {
+        baseline = await planNodeSlideEdit({
+          snapshot,
+          scopedComment,
+          readContext,
+          request: { ...request, providerMode: 'deterministic' },
+        });
+      } catch {
+        throw publicAgentError(
+          'fallback_unavailable',
+          'The edit planner was unavailable. No proposal was created and your deck is unchanged.',
+        );
+      }
+    }
 
     const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
     if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
     const finalOperations = baseline.operations;
     const summary = baseline.summary;
     const providerRequested = providerChoice.providerMode === 'openrouter_free';
-    const usedFallback = providerRequested && baseline.receipt.origin === 'deterministic_fallback';
+    const requestedProviderModel =
+      providerChoice.providerMode === 'openrouter_free'
+        ? providerChoice.providerModel
+        : NODESLIDE_EDIT_MODEL;
+    const usedFallback =
+      providerRequested && (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
     const telemetry = baseline.receipt.providerTelemetry;
     const traceAttribution = telemetry
       ? {
           provider: telemetry.provider,
           model: usedFallback
-            ? `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`
+            ? `${requestedProviderModel} (deterministic fallback)`
             : telemetry.model,
           costMicroUsd: telemetry.costMicroUsd,
           inputTokens: telemetry.inputTokens,
@@ -207,7 +237,7 @@ export const proposeEdit = action({
       : providerRequested
         ? {
             provider: NODESLIDE_EDIT_PROVIDER,
-            model: `${NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+            model: `${requestedProviderModel} (deterministic fallback)`,
           }
         : { provider: 'deterministic', model: 'bounded-edit-planner/v1' };
     const shadowAuthorization = authorizeNodeSlideAgenticOperation(
