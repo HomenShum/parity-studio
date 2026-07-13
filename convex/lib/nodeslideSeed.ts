@@ -1308,10 +1308,17 @@ function coercePlannedSlide(
     typeof value.metric === 'string' ? nodeslideCleanText(value.metric, 24) : undefined;
   const metricLabel =
     typeof value.metricLabel === 'string' ? nodeslideCleanText(value.metricLabel, 100) : undefined;
-  const chart = coerceChart(value.chart) ?? fallback?.chart;
-  const formula = coerceFormula(value.formula ?? value.math) ?? fallback?.formula;
-  const image = coerceImage(value.image) ?? fallback?.image;
-  const video = coerceVideo(value.video) ?? fallback?.video;
+  const explicitChart = coerceChart(value.chart);
+  const explicitFormula = coerceFormula(value.formula ?? value.math);
+  const explicitImage = coerceImage(value.image);
+  const explicitVideo = coerceVideo(value.video);
+  const hasExplicitPrimary = Boolean(
+    explicitChart || explicitFormula || explicitImage || explicitVideo,
+  );
+  const chart = explicitChart ?? (hasExplicitPrimary ? undefined : fallback?.chart);
+  const formula = explicitFormula ?? (hasExplicitPrimary ? undefined : fallback?.formula);
+  const image = explicitImage ?? (hasExplicitPrimary ? undefined : fallback?.image);
+  const video = explicitVideo ?? (hasExplicitPrimary ? undefined : fallback?.video);
   return {
     title,
     section,

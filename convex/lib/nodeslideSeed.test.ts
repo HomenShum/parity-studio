@@ -319,6 +319,29 @@ runner_up,Lionel Messi,7 goals,FIFA`,
       unit: 'goals',
     });
     expect(chartSlide?.formula).toBeUndefined();
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-world-cup-csv-primitives',
+      projectId: 'project-world-cup-csv-primitives',
+      title: 'World Cup data story',
+      brief: {
+        prompt: 'Create an evidence-led World Cup presentation.',
+        audience: 'Reviewers',
+        purpose: 'Explain the tournament data',
+        successCriteria: ['Keep evidence editable'],
+      },
+      themeId: 'editorial-signal',
+      rawSpec: spec,
+      now: 1_000,
+    });
+    const compiledChartSlide = built.snapshot.slides.find(
+      (slide) => slide.title === 'Golden Boot race',
+    );
+    const compiledPrimaryKinds = built.snapshot.elements
+      .filter((element) => element.slideId === compiledChartSlide?.id)
+      .map((element) => element.kind)
+      .filter((kind) => ['chart', 'math', 'image', 'video'].includes(kind));
+    expect(compiledPrimaryKinds).toEqual(['chart']);
   });
 
   it('repairs only untouched legacy duplicated bullets', () => {
