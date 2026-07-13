@@ -1376,14 +1376,41 @@
   scrollbar-width: thin;
 }
 
-.nodeslide-studio .ns-ai-v3-intro {
-  display: none;
+.nodeslide-studio .ns-ai-v3-welcome {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 16px 14px 10px;
 }
 
-.nodeslide-studio .ns-ai-v3-empty-review {
-  border: 0;
+.nodeslide-studio .ns-ai-v3-agent-mark {
+  align-items: center;
+  background: var(--ns-accent-soft);
+  border: 1px solid rgb(217 119 87 / 24%);
+  border-radius: 8px;
+  color: var(--ns-accent-dark);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.nodeslide-studio .ns-ai-v3-welcome > div {
+  display: grid;
+  gap: 4px;
+}
+
+.nodeslide-studio .ns-ai-v3-welcome strong {
+  color: var(--ns-ink);
+  font-size: 12.5px;
+}
+
+.nodeslide-studio .ns-ai-v3-welcome p {
+  color: var(--ns-ink2);
+  font-size: 11.5px;
+  line-height: 1.55;
   margin: 0;
-  min-height: 108px;
 }
 
 .nodeslide-studio .ns-ai-v3-directions {
@@ -1391,8 +1418,8 @@
 }
 
 .nodeslide-studio .ns-ai-v3-suggested-actions {
-  border-top: 1px solid var(--ns-line-b);
-  padding: 10px 14px 12px;
+  border: 0;
+  padding: 0 0 8px;
 }
 
 .nodeslide-studio .ns-ai-v3-suggested-actions > div {
@@ -1412,8 +1439,81 @@
   max-height: 70vh;
 }
 
-.nodeslide-studio .ns-ai-v3-route-disclosure {
+.nodeslide-studio .ns-ai-v3-policy-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
   margin-bottom: 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-policy-summary span {
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  color: var(--ns-ink2);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.nodeslide-studio .ns-ai-v3-policy-summary .is-scope {
+  background: var(--ns-ink);
+  border-color: var(--ns-ink);
+  color: var(--ns-bg);
+  font-weight: 600;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure {
+  border: 1px solid var(--ns-line-c);
+  border-radius: 9px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure > summary {
+  align-items: center;
+  color: var(--ns-ink2);
+  cursor: pointer;
+  display: flex;
+  font-size: 10.5px;
+  font-weight: 600;
+  gap: 6px;
+  list-style: none;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure > summary::before {
+  color: var(--ns-faint);
+  content: "›";
+  font-size: 16px;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure > summary .ns-route-pill {
+  margin-left: auto;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-body {
+  background: var(--ns-raised);
+  border-top: 1px solid var(--ns-line-b);
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.nodeslide-studio .ns-ai-v3-route-disclosure {
+  margin: 0;
 }
 
 .nodeslide-studio .ns-ai-v3-route-summary {
@@ -1454,7 +1554,9 @@
 }
 
 .nodeslide-studio .ns-ai-v3-composer-toolbar {
-  margin-top: 6px;
+  flex: 1;
+  margin: 0;
+  min-width: 0;
 }
 
 .nodeslide-studio .ns-ai-v3-composer-field .ns-composer-meta {
@@ -1859,13 +1961,26 @@
 }
 
 .nodeslide-studio .ns-composer-token-toolbar button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
   color: var(--ns-ink2);
+  flex: none;
   font-size: 11.5px;
-  min-height: 29px;
+  height: 27px;
+  min-height: 27px;
+  padding: 3px 6px;
+  width: auto;
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-composer-token-toolbar > span {
+  flex: 1;
   font-size: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nodeslide-studio .ns-composer-field {

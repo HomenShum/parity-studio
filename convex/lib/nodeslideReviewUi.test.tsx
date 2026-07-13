@@ -74,7 +74,7 @@ describe('NodeSlide AI review inspector', () => {
 
   it('defaults to private deterministic processing and uses operation-specific consent tokens', () => {
     const markup = renderAi();
-    expect(markup).toContain('Private / deterministic');
+    expect(markup).toContain('Web: off · Private deterministic');
     expect(markup).toMatch(/data-testid="ai-provider-deterministic"[^>]*checked=""/);
     expect(markup).toContain('OpenRouter · GLM 5.2 — external');
     expect(markup).toContain('named GLM 5.2 model through OpenRouter');
@@ -90,6 +90,18 @@ describe('NodeSlide AI review inspector', () => {
       providerMode: 'openrouter_free',
       providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
     });
+  });
+
+  it('keeps the idle AI surface conversational while preserving advanced controls', () => {
+    const markup = renderAi();
+
+    expect(markup).toContain('What should we change?');
+    expect(markup).toContain('Generate 3 directions');
+    expect(markup).toContain('Current agent scope and policy');
+    expect(markup).toContain('Whole slide');
+    expect(markup).toContain('Agent controls');
+    expect(markup).not.toContain('data-testid="variation-section"');
+    expect(markup).not.toContain('No proposal waiting');
   });
 
   it('derives bounded write targets from every comment anchor type', () => {
@@ -170,7 +182,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(referenceMenu).toContain('role="menu"');
     expect(referenceMenu).toContain('Quarterly source');
     expect(referenceMenu).toContain('@Quarterly source');
-    expect(referenceMenu).toContain('Read context is separate from locked write scope');
+    expect(referenceMenu).toContain('Read context · locked write scope');
 
     const commands: readonly AiComposerCommand<string>[] = [
       { id: '/edit', label: 'Edit the current scope' },
@@ -181,7 +193,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
     expect(commandMenu.match(/<option value=/g)).toHaveLength(12);
-    expect(commandMenu).toContain('Suggestions only prefill the composer');
+    expect(commandMenu).toContain('Agent controls');
   });
 
   it('keeps comment-to-AI context implicit when no @ reference was selected', () => {

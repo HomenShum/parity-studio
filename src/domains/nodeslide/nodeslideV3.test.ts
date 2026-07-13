@@ -79,6 +79,17 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(/\.ns-ai-v3-shell \.ns-proposal-actions \.ns-button[\s\S]*?height: 34px/);
   });
 
+  it('keeps the AI chat primary and advanced controls compact', () => {
+    expect(css).toMatch(/\.ns-ai-v3-welcome[\s\S]*?grid-template-columns: 28px minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.ns-ai-v3-policy-summary[\s\S]*?display: flex;[\s\S]*?flex-wrap: wrap;/);
+    expect(css).toMatch(
+      /\.ns-ai-v3-controls-disclosure[\s\S]*?border-radius: 9px;[\s\S]*?overflow: hidden;/,
+    );
+    expect(css).toMatch(
+      /\.ns-composer-token-toolbar button[\s\S]*?background: transparent;[\s\S]*?width: auto;/,
+    );
+  });
+
   it('keeps the trace receipt surface and dark honesty states readable', () => {
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-trace-summary[\s\S]*?border-radius: 12px;[\s\S]*?padding: 0;/,

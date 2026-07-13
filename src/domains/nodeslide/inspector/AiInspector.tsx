@@ -1,7 +1,6 @@
 import {
   ArrowUp,
   AtSign,
-  Bot,
   Check,
   ChevronRight,
   Circle,
@@ -313,6 +312,23 @@ export function AiInspector<CommandId extends string = string>({
   const visibleAsk = resolvedActivity?.ask.trim() || optimisticAsk?.trim() || '';
   const contextSuggestions =
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
+  const showSuggested =
+    !instruction.trim() &&
+    proposals.length === 0 &&
+    !resolvedActivity &&
+    !activeTrace &&
+    !menuOpen &&
+    !composerExpanded;
+  const showDirectionThread = Boolean(
+    variationGenerating || variationsLoading || variationError || directions.length > 0,
+  );
+  const scopeSummary = commentContext
+    ? commentContext.label
+    : scopeChoice === 'deck'
+      ? 'Whole deck'
+      : scopeChoice === 'elements'
+        ? `${selectedElements.length} selected`
+        : 'Whole slide';
 
   const updateInstruction = (value: string, cursor = value.length) => {
     setInstruction(value);
@@ -427,7 +443,7 @@ export function AiInspector<CommandId extends string = string>({
       setDismissedMenuKey(rawTriggerKey);
       return;
     }
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
@@ -498,31 +514,25 @@ export function AiInspector<CommandId extends string = string>({
       </section>
 
       <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll">
-        <section className="ns-inspector-section ns-ai-intro ns-ai-v3-intro">
-          <div className="ns-section-title-row">
-            <div>
-              <span className="ns-eyebrow">Scoped copilot</span>
-              <h2>Ask NodeSlide</h2>
-            </div>
-            <span
-              className={`ns-route-pill ${
-                providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
-              }`}
-              data-testid="ai-provider-summary"
-            >
-              {providerMode === 'deterministic' ? (
-                <>
-                  <ShieldCheck size={11} /> Private / deterministic
-                </>
-              ) : (
-                <>
-                  <Sparkles size={11} /> External / OpenRouter
-                </>
-              )}
+        {!visibleAsk &&
+        !resolvedActivity &&
+        !activeTrace &&
+        proposals.length === 0 &&
+        !showDirectionThread ? (
+          <section className="ns-ai-v3-chat-turn is-agent ns-ai-v3-welcome">
+            <span className="ns-ai-v3-agent-mark" aria-hidden="true">
+              <Sparkles size={14} />
             </span>
-          </div>
-          <p>Describe the outcome. You’ll review a structured patch before anything changes.</p>
-        </section>
+            <div>
+              <span className="ns-eyebrow">NodeSlide agent</span>
+              <strong>What should we change?</strong>
+              <p>
+                Describe the outcome. I’ll return a scoped, validated patch for review before
+                anything changes.
+              </p>
+            </div>
+          </section>
+        ) : null}
 
         {visibleAsk ? (
           <section
@@ -616,146 +626,155 @@ export function AiInspector<CommandId extends string = string>({
               />
             ))}
           </section>
-        ) : (
-          <div className="ns-empty-state ns-empty-state--compact ns-ai-v3-empty-review">
-            <span>
-              <Sparkles size={17} />
-            </span>
-            <strong>No proposal waiting</strong>
-            <p>Ask for a change below. The agent will return a reviewable diff.</p>
-          </div>
-        )}
+        ) : null}
 
-        <section
-          className="ns-variation-section ns-ai-v3-directions"
-          aria-labelledby="ns-variation-heading"
-          data-testid="variation-section"
-        >
-          <div className="ns-variation-heading-row">
-            <div>
-              <span className="ns-eyebrow">Slide directions</span>
-              <h2 id="ns-variation-heading">Explore before editing</h2>
-            </div>
-            <button
-              type="button"
-              className="ns-button ns-button--accent ns-variation-generate"
-              disabled={variationBusy || !providerReady}
-              onClick={() => requestVariations('button')}
-              aria-controls="ns-variation-results"
-              data-testid="variation-generate"
-              title={
-                providerReady
-                  ? 'Generate three bounded directions'
-                  : 'Consent is required before using OpenRouter'
-              }
-            >
-              {variationGenerating ? (
-                <LoaderCircle className="ns-spin" size={14} />
-              ) : (
-                <Layers3 size={14} />
-              )}
-              {variationGenerating ? 'Generating...' : 'Generate 3 directions'}
-            </button>
-          </div>
-          <p className="ns-variation-explainer">
-            Each direction is materialized and validated. Your slide stays unchanged until Accept.
-          </p>
-
-          {previewedVariation ? (
-            <div className="ns-variation-preview-banner" aria-live="polite">
-              <Eye size={14} />
-              <span>
-                Previewing <strong>{axesLabel(previewedVariation)}</strong>
-              </span>
-              <button type="button" onClick={returnToOriginal}>
-                Return to original
-              </button>
-            </div>
-          ) : null}
-
-          {variationError ? (
-            <div className="ns-variation-error" role="alert">
-              <strong>Directions unavailable</strong>
-              <span>{variationError}</span>
+        {showDirectionThread ? (
+          <section
+            className="ns-variation-section ns-ai-v3-directions"
+            aria-labelledby="ns-variation-heading"
+            data-testid="variation-section"
+          >
+            <div className="ns-variation-heading-row">
+              <div>
+                <span className="ns-eyebrow">Slide directions</span>
+                <h2 id="ns-variation-heading">Explore before editing</h2>
+              </div>
               <button
                 type="button"
-                onClick={() => requestVariations('button')}
+                className="ns-button ns-button--accent ns-variation-generate"
                 disabled={variationBusy || !providerReady}
+                onClick={() => requestVariations('button')}
+                aria-controls="ns-variation-results"
+                data-testid="variation-generate"
+                title={
+                  providerReady
+                    ? 'Generate three bounded directions'
+                    : 'Consent is required before using OpenRouter'
+                }
               >
-                Try again
+                {variationGenerating ? (
+                  <LoaderCircle className="ns-spin" size={14} />
+                ) : (
+                  <Layers3 size={14} />
+                )}
+                {variationGenerating ? 'Generating...' : 'Generate 3 directions'}
               </button>
             </div>
-          ) : null}
+            <p className="ns-variation-explainer">
+              Each direction is materialized and validated. Your slide stays unchanged until Accept.
+            </p>
 
-          {hasProviderFallback || hasPrivateDeterministicDirections ? (
-            <output className="ns-variation-fallback-note">
-              <Sparkles size={13} />
-              <span>
-                {hasProviderFallback
-                  ? 'The external GLM 5.2 route could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
-                  : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
-              </span>
-            </output>
-          ) : null}
-
-          <div id="ns-variation-results" aria-busy={variationBusy || variationsLoading}>
-            {variationGenerating ? (
-              <div className="ns-variation-loading" aria-live="polite">
-                <LoaderCircle className="ns-spin" size={16} />
-                <span>Generating, materializing, and validating three bounded directions...</span>
-              </div>
-            ) : variationsLoading ? (
-              <div className="ns-variation-loading" aria-live="polite">
-                <LoaderCircle className="ns-spin" size={16} />
-                <span>Loading saved directions...</span>
-              </div>
-            ) : directions.length > 0 ? (
-              <ul className="ns-variation-list" aria-label="Generated slide directions">
-                {directions.map((variation, index) => (
-                  <VariationCard
-                    key={variation.id}
-                    focusRef={index === 0 ? firstVariationRef : null}
-                    variation={variation}
-                    previewed={variation.id === previewedVariationId}
-                    {...(variation.id === previewedVariationId
-                      ? {
-                          previewButtonRef: (node: HTMLButtonElement | null) => {
-                            if (node) lastPreviewButtonRef.current = node;
-                          },
-                        }
-                      : {})}
-                    busy={variationBusy}
-                    onPreview={onPreviewVariation}
-                    onAccept={onAcceptVariation}
-                    onReject={onRejectVariation}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <div className="ns-variation-empty">
-                <Layers3 size={17} />
+            {previewedVariation ? (
+              <div className="ns-variation-preview-banner" aria-live="polite">
+                <Eye size={14} />
                 <span>
-                  <strong>No directions yet</strong>
-                  Generate three reviewable options for this slide.
+                  Previewing <strong>{axesLabel(previewedVariation)}</strong>
                 </span>
+                <button type="button" onClick={returnToOriginal}>
+                  Return to original
+                </button>
               </div>
-            )}
-          </div>
+            ) : null}
 
-          {allRejected ? (
-            <output className="ns-variation-all-rejected">
-              All three directions were rejected. The original slide remains unchanged.
-            </output>
-          ) : null}
-        </section>
+            {variationError ? (
+              <div className="ns-variation-error" role="alert">
+                <strong>Directions unavailable</strong>
+                <span>{variationError}</span>
+                <button
+                  type="button"
+                  onClick={() => requestVariations('button')}
+                  disabled={variationBusy || !providerReady}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : null}
 
-        {contextSuggestions.length > 0 ? (
+            {hasProviderFallback || hasPrivateDeterministicDirections ? (
+              <output className="ns-variation-fallback-note">
+                <Sparkles size={13} />
+                <span>
+                  {hasProviderFallback
+                    ? 'The external GLM 5.2 route could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
+                    : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
+                </span>
+              </output>
+            ) : null}
+
+            <div id="ns-variation-results" aria-busy={variationBusy || variationsLoading}>
+              {variationGenerating ? (
+                <div className="ns-variation-loading" aria-live="polite">
+                  <LoaderCircle className="ns-spin" size={16} />
+                  <span>Generating, materializing, and validating three bounded directions...</span>
+                </div>
+              ) : variationsLoading ? (
+                <div className="ns-variation-loading" aria-live="polite">
+                  <LoaderCircle className="ns-spin" size={16} />
+                  <span>Loading saved directions...</span>
+                </div>
+              ) : directions.length > 0 ? (
+                <ul className="ns-variation-list" aria-label="Generated slide directions">
+                  {directions.map((variation, index) => (
+                    <VariationCard
+                      key={variation.id}
+                      focusRef={index === 0 ? firstVariationRef : null}
+                      variation={variation}
+                      previewed={variation.id === previewedVariationId}
+                      {...(variation.id === previewedVariationId
+                        ? {
+                            previewButtonRef: (node: HTMLButtonElement | null) => {
+                              if (node) lastPreviewButtonRef.current = node;
+                            },
+                          }
+                        : {})}
+                      busy={variationBusy}
+                      onPreview={onPreviewVariation}
+                      onAccept={onAcceptVariation}
+                      onReject={onRejectVariation}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <div className="ns-variation-empty">
+                  <Layers3 size={17} />
+                  <span>
+                    <strong>No directions yet</strong>
+                    Generate three reviewable options for this slide.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {allRejected ? (
+              <output className="ns-variation-all-rejected">
+                All three directions were rejected. The original slide remains unchanged.
+              </output>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
+
+      <form
+        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
+        onSubmit={submit}
+        data-testid="ai-composer"
+      >
+        {showSuggested ? (
           <section
             className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
             aria-label="Suggested prompts"
           >
             <span>Suggested actions</span>
             <div>
+              <button
+                type="button"
+                className="is-primary"
+                onClick={() => requestVariations('button')}
+                disabled={variationBusy || !providerReady}
+                data-testid="ai-generate-directions"
+              >
+                <Layers3 size={12} /> Generate 3 directions
+              </button>
               {contextSuggestions.map((action) => (
                 <button
                   key={action.id}
@@ -770,195 +789,201 @@ export function AiInspector<CommandId extends string = string>({
             <small>Suggestions only prefill the composer; they never send automatically.</small>
           </section>
         ) : null}
-      </div>
 
-      <form
-        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
-        onSubmit={submit}
-        data-testid="ai-composer"
-      >
-        <details className="ns-ai-v3-route-disclosure">
-          <summary className="ns-ai-v3-route-summary">
-            {providerMode === 'deterministic' ? (
-              <>
-                <ShieldCheck size={13} /> Web: off · Private deterministic
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} /> Web: external · OpenRouter · GLM 5.2
-                <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                  {providerConsent ? 'Consent attached' : 'Consent required'}
-                </span>
-              </>
-            )}
-          </summary>
-          <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
-            <legend>Provider and privacy</legend>
-            <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
-              <input
-                type="radio"
-                name={providerName}
-                value="deterministic"
-                checked={providerMode === 'deterministic'}
-                onChange={() => {
-                  setProviderMode('deterministic');
-                  setProviderConsent(false);
-                }}
-                data-testid="ai-provider-deterministic"
-              />
-              <ShieldCheck size={15} />
-              <span>
-                <strong>Deterministic and private</strong>
-                <small>No instruction or context is sent to an external model.</small>
-              </span>
-            </label>
-            <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
-              <input
-                type="radio"
-                name={providerName}
-                value="openrouter_free"
-                checked={providerMode === 'openrouter_free'}
-                onChange={() => {
-                  setProviderMode('openrouter_free');
-                  setProviderConsent(false);
-                }}
-                data-testid="ai-provider-openrouter"
-              />
-              <Sparkles size={15} />
-              <span>
-                <strong>OpenRouter · GLM 5.2 — external</strong>
-                <small>
-                  Sends this ask, selected read context, and scoped slide content to the named GLM
-                  5.2 model through OpenRouter.
-                </small>
-              </span>
-            </label>
-            <label className="ns-ai-provider-consent">
-              <input
-                type="checkbox"
-                checked={providerConsent}
-                disabled={providerMode !== 'openrouter_free'}
-                onChange={(event) => setProviderConsent(event.target.checked)}
-                data-testid="ai-provider-consent"
-              />
-              <span>
-                I explicitly consent to this external OpenRouter request
-                <small>
-                  Required for each selected external mode. The versioned consent token is attached
-                  to propose and variation callbacks.
-                </small>
-              </span>
-            </label>
-          </fieldset>
-        </details>
+        <div className="ns-ai-v3-policy-summary" aria-label="Current agent scope and policy">
+          <span className="is-scope">{scopeSummary}</span>
+          <span>{operationModeLabel(operationMode)}</span>
+          <span>{designBehaviorLabel(designBehavior)}</span>
+          <span>{referenceUseLabel(referenceUse)}</span>
+        </div>
 
-        {commentContext ? (
-          <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
-            <MessageCircle size={14} />
-            <span>
-              <small>Comment write scope</small>
-              <strong>{commentContext.label}</strong>
+        <details className="ns-ai-v3-controls-disclosure">
+          <summary data-testid="ai-provider-summary">
+            <span>Agent controls</span>
+            <span
+              className={`ns-route-pill ${
+                providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
+              }`}
+            >
+              {providerMode === 'deterministic' ? (
+                <>
+                  <ShieldCheck size={11} /> Private
+                </>
+              ) : (
+                <>
+                  <Sparkles size={11} /> OpenRouter
+                </>
+              )}
             </span>
-            {onClearCommentContext ? (
-              <button
-                type="button"
-                onClick={onClearCommentContext}
-                aria-label={`Remove comment scope ${commentContext.label}`}
-              >
-                <X size={13} />
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="ns-scope-row" aria-label="AI write scope">
-            <span>Write</span>
-            <div className="ns-chip-group">
-              <button
-                type="button"
-                className={scopeChoice === 'deck' ? 'is-active' : ''}
-                onClick={() => setScopeChoice('deck')}
-              >
-                Deck
-              </button>
-              <button
-                type="button"
-                className={scopeChoice === 'slide' ? 'is-active' : ''}
-                onClick={() => setScopeChoice('slide')}
-              >
-                This slide
-              </button>
-              <button
-                type="button"
-                className={scopeChoice === 'elements' ? 'is-active' : ''}
-                disabled={selectedElements.length === 0}
-                onClick={() => setScopeChoice('elements')}
-              >
-                Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
-              </button>
+          </summary>
+          <div className="ns-ai-v3-controls-body">
+            <details className="ns-ai-v3-route-disclosure">
+              <summary className="ns-ai-v3-route-summary">
+                {providerMode === 'deterministic' ? (
+                  <>
+                    <ShieldCheck size={13} /> Web: off · Private deterministic
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} /> Web: external · OpenRouter · GLM 5.2
+                    <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
+                      {providerConsent ? 'Consent attached' : 'Consent required'}
+                    </span>
+                  </>
+                )}
+              </summary>
+              <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
+                <legend>Provider and privacy</legend>
+                <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={providerName}
+                    value="deterministic"
+                    checked={providerMode === 'deterministic'}
+                    onChange={() => {
+                      setProviderMode('deterministic');
+                      setProviderConsent(false);
+                    }}
+                    data-testid="ai-provider-deterministic"
+                  />
+                  <ShieldCheck size={15} />
+                  <span>
+                    <strong>Deterministic and private</strong>
+                    <small>No instruction or context is sent to an external model.</small>
+                  </span>
+                </label>
+                <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={providerName}
+                    value="openrouter_free"
+                    checked={providerMode === 'openrouter_free'}
+                    onChange={() => {
+                      setProviderMode('openrouter_free');
+                      setProviderConsent(false);
+                    }}
+                    data-testid="ai-provider-openrouter"
+                  />
+                  <Sparkles size={15} />
+                  <span>
+                    <strong>OpenRouter · GLM 5.2 — external</strong>
+                    <small>
+                      Sends this ask, selected read context, and scoped slide content to the named
+                      GLM 5.2 model through OpenRouter.
+                    </small>
+                  </span>
+                </label>
+                <label className="ns-ai-provider-consent">
+                  <input
+                    type="checkbox"
+                    checked={providerConsent}
+                    disabled={providerMode !== 'openrouter_free'}
+                    onChange={(event) => setProviderConsent(event.target.checked)}
+                    data-testid="ai-provider-consent"
+                  />
+                  <span>
+                    I explicitly consent to this external OpenRouter request
+                    <small>
+                      Required for each selected external mode. The versioned consent token is
+                      attached to propose and variation callbacks.
+                    </small>
+                  </span>
+                </label>
+              </fieldset>
+            </details>
+
+            {commentContext ? (
+              <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
+                <MessageCircle size={14} />
+                <span>
+                  <small>Comment write scope</small>
+                  <strong>{commentContext.label}</strong>
+                </span>
+                {onClearCommentContext ? (
+                  <button
+                    type="button"
+                    onClick={onClearCommentContext}
+                    aria-label={`Remove comment scope ${commentContext.label}`}
+                  >
+                    <X size={13} />
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="ns-scope-row" aria-label="AI write scope">
+                <span>Write</span>
+                <div className="ns-chip-group">
+                  <button
+                    type="button"
+                    className={scopeChoice === 'deck' ? 'is-active' : ''}
+                    onClick={() => setScopeChoice('deck')}
+                  >
+                    Deck
+                  </button>
+                  <button
+                    type="button"
+                    className={scopeChoice === 'slide' ? 'is-active' : ''}
+                    onClick={() => setScopeChoice('slide')}
+                  >
+                    This slide
+                  </button>
+                  <button
+                    type="button"
+                    className={scopeChoice === 'elements' ? 'is-active' : ''}
+                    disabled={selectedElements.length === 0}
+                    onClick={() => setScopeChoice('elements')}
+                  >
+                    Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="ns-ai-policy-grid">
+              <label>
+                <span>Operation mode</span>
+                <select
+                  value={operationMode}
+                  onChange={(event) => setOperationMode(event.target.value as OperationMode)}
+                  aria-label="Operation mode"
+                >
+                  <option value="unrestricted">Full edit</option>
+                  <option value="copy">Copy only</option>
+                  <option value="style">Style only</option>
+                  <option value="layout">Layout only</option>
+                </select>
+              </label>
+              <label>
+                <span>Design behavior</span>
+                <select
+                  value={designBehavior}
+                  onChange={(event) =>
+                    setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
+                  }
+                  data-testid="ai-design-behavior"
+                >
+                  <option value="preserve">Preserve exactly</option>
+                  <option value="refine">Refine subtly</option>
+                  <option value="rebalance">Rebalance hierarchy</option>
+                  <option value="reinterpret">Explore a new direction</option>
+                  <option value="reimagine">Reimagine boldly</option>
+                </select>
+              </label>
+              <label>
+                <span>Reference use</span>
+                <select
+                  value={referenceUse}
+                  onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
+                  data-testid="ai-reference-use"
+                >
+                  <option value="context_only">Context only</option>
+                  <option value="inspiration">Use as inspiration</option>
+                  <option value="style_direction">Follow style direction</option>
+                </select>
+              </label>
             </div>
           </div>
-        )}
-
-        <div className="ns-ai-policy-grid">
-          <label>
-            <span>Operation mode</span>
-            <select
-              value={operationMode}
-              onChange={(event) => setOperationMode(event.target.value as OperationMode)}
-              aria-label="Operation mode"
-            >
-              <option value="unrestricted">Full edit</option>
-              <option value="copy">Copy only</option>
-              <option value="style">Style only</option>
-              <option value="layout">Layout only</option>
-            </select>
-          </label>
-          <label>
-            <span>Design behavior</span>
-            <select
-              value={designBehavior}
-              onChange={(event) => setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)}
-              data-testid="ai-design-behavior"
-            >
-              <option value="preserve">Preserve exactly</option>
-              <option value="refine">Refine subtly</option>
-              <option value="rebalance">Rebalance hierarchy</option>
-              <option value="reinterpret">Explore a new direction</option>
-              <option value="reimagine">Reimagine boldly</option>
-            </select>
-          </label>
-          <label>
-            <span>Reference use</span>
-            <select
-              value={referenceUse}
-              onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
-              data-testid="ai-reference-use"
-            >
-              <option value="context_only">Context only</option>
-              <option value="inspiration">Use as inspiration</option>
-              <option value="style_direction">Follow style direction</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
-          <button
-            type="button"
-            onClick={() => openTokenMenu('@')}
-            disabled={references.length === 0}
-            aria-label="Add read context reference"
-          >
-            <AtSign size={12} /> Context
-          </button>
-          <button type="button" onClick={() => openTokenMenu('/')} aria-label="Add command">
-            <Command size={12} /> Insert
-          </button>
-          <span>
-            {requestedReadContext.length > 0
-              ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
-              : 'Scoped context by default'}
-          </span>
-        </div>
+        </details>
 
         {commentContext || selectedReadContext.length > 0 || selectedCommand ? (
           <div className="ns-composer-tokens" aria-label="Composer tokens">
@@ -1017,9 +1042,24 @@ export function AiInspector<CommandId extends string = string>({
             aria-haspopup="menu"
           />
           <div className="ns-composer-meta">
-            <span>
-              <Bot size={12} /> Read context is separate from locked write scope
-            </span>
+            <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
+              <button
+                type="button"
+                onClick={() => openTokenMenu('@')}
+                disabled={references.length === 0}
+                aria-label="Add read context reference"
+              >
+                <AtSign size={12} /> Context
+              </button>
+              <button type="button" onClick={() => openTokenMenu('/')} aria-label="Add command">
+                <Command size={12} /> Insert
+              </button>
+              <span>
+                {requestedReadContext.length > 0
+                  ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
+                  : 'Scoped context'}
+              </span>
+            </div>
             <button
               type="button"
               className="ns-ai-v3-expand-composer"
@@ -1094,8 +1134,8 @@ export function AiInspector<CommandId extends string = string>({
         ) : null}
 
         <small className="ns-shortcut-hint">
-          <kbd>⌘</kbd>
-          <kbd>↵</kbd> to propose ·{' '}
+          <kbd>↵</kbd> to propose · <kbd>⇧</kbd>
+          <kbd>↵</kbd> for a new line ·{' '}
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
             : providerConsent
@@ -1630,6 +1670,27 @@ function axesLabel(variation: SlideVariation) {
 
 function humanizeAxis(value: string) {
   return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function operationModeLabel(value: OperationMode) {
+  if (value === 'copy') return 'Copy only';
+  if (value === 'style') return 'Style only';
+  if (value === 'layout') return 'Layout only';
+  return 'Full edit';
+}
+
+function designBehaviorLabel(value: AiDesignBehaviorPolicy) {
+  if (value === 'preserve') return 'Preserve exactly';
+  if (value === 'refine') return 'Refine subtly';
+  if (value === 'rebalance') return 'Rebalance hierarchy';
+  if (value === 'reinterpret') return 'Explore direction';
+  return 'Reimagine boldly';
+}
+
+function referenceUseLabel(value: AiReferenceUsePolicy) {
+  if (value === 'inspiration') return 'Use references as inspiration';
+  if (value === 'style_direction') return 'Follow reference style';
+  return 'Context only';
 }
 
 function variationStatusLabel(status: SlideVariation['status']) {
