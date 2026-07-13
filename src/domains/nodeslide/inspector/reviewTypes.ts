@@ -11,6 +11,7 @@ import type {
   NodeSlideDesignBehavior,
   NodeSlideEditorCommandId,
   NodeSlideProviderMode,
+  NodeSlideReasoningEffort,
   NodeSlideReferenceUsePolicy,
 } from '../../../../shared/nodeslide';
 
@@ -35,6 +36,7 @@ export type AiProviderRequest =
   | {
       providerMode: 'openrouter_free';
       providerModel: NodeSlideAgentModelId;
+      providerEffort: NodeSlideReasoningEffort;
       providerConsent: typeof NODESLIDE_OPENROUTER_REVIEW_CONSENT;
     };
 
@@ -43,6 +45,7 @@ export type AiVariationProviderRequest =
   | {
       providerMode: 'openrouter_free';
       providerModel: NodeSlideAgentModelId;
+      providerEffort: NodeSlideReasoningEffort;
       providerConsent: typeof NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
     };
 

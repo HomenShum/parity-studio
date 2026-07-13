@@ -77,6 +77,27 @@ export const NODESLIDE_AGENT_MODELS = [
 export type NodeSlideAgentModelId = (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
 export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
 
+export const NODESLIDE_REASONING_EFFORTS = [
+  { id: 'low', label: 'Light', description: 'Faster responses for straightforward work.' },
+  { id: 'medium', label: 'Medium', description: 'Balanced reasoning for routine deck work.' },
+  { id: 'high', label: 'High', description: 'Deeper reasoning for complex edits and synthesis.' },
+  { id: 'xhigh', label: 'Extra High', description: 'More deliberation for difficult decisions.' },
+  { id: 'max', label: 'Ultra', description: 'Maximum reasoning; consumes usage limits faster.' },
+] as const;
+export type NodeSlideReasoningEffort = (typeof NODESLIDE_REASONING_EFFORTS)[number]['id'];
+export const NODESLIDE_DEFAULT_REASONING_EFFORT: NodeSlideReasoningEffort = 'high';
+
+export function isNodeSlideReasoningEffort(value: unknown): value is NodeSlideReasoningEffort {
+  return NODESLIDE_REASONING_EFFORTS.some((effort) => effort.id === value);
+}
+
+export function nodeSlideReasoningEffort(effortId: NodeSlideReasoningEffort) {
+  return (
+    NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === effortId) ??
+    NODESLIDE_REASONING_EFFORTS[2]
+  );
+}
+
 export function isNodeSlideAgentModelId(value: unknown): value is NodeSlideAgentModelId {
   return NODESLIDE_AGENT_MODELS.some((model) => model.id === value);
 }
@@ -589,6 +610,7 @@ export interface AgentTrace {
   candidateDigest?: string;
   provider?: string;
   model?: string;
+  reasoningEffort?: NodeSlideReasoningEffort;
   costMicroUsd?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -709,6 +731,7 @@ export interface AgentEditRequest {
   commandId?: NodeSlideEditorCommandId;
   providerMode?: NodeSlideProviderMode;
   providerModel?: NodeSlideAgentModelId;
+  providerEffort?: NodeSlideReasoningEffort;
   providerConsent?: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
   /** Stable client-generated key prevents double-submit from creating two proposals. */
   idempotencyKey?: string;

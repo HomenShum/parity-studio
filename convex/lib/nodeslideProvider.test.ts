@@ -49,6 +49,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
         model: NODESLIDE_EDIT_MODEL,
+        reasoningEffort: 'high',
         costMicroUsd: 1_250,
         inputTokens: 120,
         outputTokens: 30,
@@ -58,6 +59,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[0]?.[0]).toMatchObject({
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_EDIT_MODEL,
+      reasoningEffort: 'high',
       maxTokens: 500,
       jsonSchema: request.jsonSchema,
       repairAttempt: false,
@@ -71,7 +73,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     );
 
     const result = await callNodeSlideFreeJson(
-      { ...request, model: 'anthropic/claude-sonnet-5' },
+      { ...request, model: 'anthropic/claude-sonnet-5', reasoningEffort: 'xhigh' },
       { complete },
     );
 
@@ -80,9 +82,11 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
         model: 'anthropic/claude-sonnet-5',
+        reasoningEffort: 'xhigh',
       },
     });
     expect(complete.mock.calls[0]?.[0].model).toBe('anthropic/claude-sonnet-5');
+    expect(complete.mock.calls[0]?.[0].reasoningEffort).toBe('xhigh');
   });
 
   it('injects the schema while preserving pi-ai provider routing', () => {

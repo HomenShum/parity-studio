@@ -14,6 +14,7 @@ import {
   copyDigest,
   isFallbackTrace,
   isSelfToggleKey,
+  modelAttribution,
   nodeSummary,
   persistDensity,
   readDensity,
@@ -87,6 +88,7 @@ const traceLive: AgentTrace = {
   summary: 'OpenRouter GLM 5.2 proposed 5 scoped operations for review.',
   provider: 'openrouter',
   model: 'z-ai/glm-5.2',
+  reasoningEffort: 'xhigh',
   costMicroUsd: 2000,
   inputTokens: 2650,
   outputTokens: 150,
@@ -502,6 +504,10 @@ describe('custody rail — fixed order and honest break', () => {
 });
 
 describe('node summaries + consent derivation + no mojibake', () => {
+  it('shows the persisted reasoning effort beside provider and model', () => {
+    expect(modelAttribution(traceLive)).toBe('openrouter · z-ai/glm-5.2 · Extra High effort');
+  });
+
   it('binds every node summary to a real field', () => {
     expect(nodeSummary('read', traceLive, patchLive, validationLive, false)).toBe(
       '2 context references read',

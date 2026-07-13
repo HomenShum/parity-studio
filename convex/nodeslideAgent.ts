@@ -70,6 +70,7 @@ import {
   nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
   nodeslideProviderModeValidator,
+  nodeslideReasoningEffortValidator,
   nodeslideReferenceUseValidator,
   nodeslideVersionClockValidator,
   validateNodeSlideBriefAttachments,
@@ -104,6 +105,7 @@ export const proposeEdit = action({
     commandId: v.optional(nodeslideEditorCommandIdValidator),
     providerMode: v.optional(nodeslideProviderModeValidator),
     providerModel: v.optional(nodeslideAgentModelValidator),
+    providerEffort: v.optional(nodeslideReasoningEffortValidator),
     providerConsent: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
     webResearch: v.optional(v.boolean()),
@@ -129,6 +131,7 @@ export const proposeEdit = action({
         args.providerMode,
         args.providerConsent,
         args.providerModel,
+        args.providerEffort,
       );
     } catch (error) {
       if (error instanceof NodeSlideProviderConsentError) {
@@ -311,7 +314,10 @@ export const proposeEdit = action({
         referenceUse: args.referenceUse ?? 'context_only',
         providerMode: providerChoice.providerMode,
         ...(providerChoice.providerMode === 'openrouter_free'
-          ? { providerModel: providerChoice.providerModel }
+          ? {
+              providerModel: providerChoice.providerModel,
+              providerEffort: providerChoice.providerEffort,
+            }
           : {}),
       };
       const planningStartedAt = Date.now();
@@ -381,6 +387,7 @@ export const proposeEdit = action({
             model: usedFallback
               ? `${requestedProviderModel} (deterministic fallback)`
               : telemetry.model,
+            reasoningEffort: telemetry.reasoningEffort,
             costMicroUsd: telemetry.costMicroUsd,
             inputTokens: telemetry.inputTokens,
             outputTokens: telemetry.outputTokens,
@@ -389,6 +396,9 @@ export const proposeEdit = action({
           ? {
               provider: NODESLIDE_EDIT_PROVIDER,
               model: `${requestedProviderModel} (deterministic fallback)`,
+              ...(providerChoice.providerMode === 'openrouter_free'
+                ? { reasoningEffort: providerChoice.providerEffort }
+                : {}),
             }
           : { provider: 'deterministic', model: 'bounded-edit-planner/v1' };
       const shadowAuthorization = authorizeNodeSlideAgenticOperation(
@@ -908,6 +918,7 @@ export const createDeckFromBrief = action({
     route: v.union(v.literal('free'), v.literal('balanced'), v.literal('frontier')),
     providerMode: v.optional(v.string()),
     providerModel: v.optional(nodeslideAgentModelValidator),
+    providerEffort: v.optional(nodeslideReasoningEffortValidator),
     providerConsent: v.optional(v.string()),
     attachments: v.optional(v.array(nodeslideBriefAttachmentValidator)),
   },
@@ -932,6 +943,7 @@ export const createDeckFromBrief = action({
       args.providerMode,
       args.providerConsent,
       args.providerModel,
+      args.providerEffort,
     );
     const { title, brief } = validateNodeSlideCreateDeckFields({
       title: args.title,
@@ -985,7 +997,10 @@ export const createDeckFromBrief = action({
         }),
         maxTokens: 5000,
         ...(providerChoice.providerMode === 'openrouter_free'
-          ? { model: providerChoice.providerModel }
+          ? {
+              model: providerChoice.providerModel,
+              reasoningEffort: providerChoice.providerEffort,
+            }
           : {}),
         jsonSchema: {
           name: 'nodeslide_deck_spec',
@@ -1090,6 +1105,7 @@ export const createDeckFromBrief = action({
         ? {
             provider: telemetry.provider,
             model: telemetry.model,
+            reasoningEffort: telemetry.reasoningEffort,
             costMicroUsd: telemetry.costMicroUsd,
             inputTokens: telemetry.inputTokens,
             outputTokens: telemetry.outputTokens,
@@ -1099,6 +1115,7 @@ export const createDeckFromBrief = action({
           : {
               provider: NODESLIDE_EDIT_PROVIDER,
               model: `${selectedModel ?? NODESLIDE_EDIT_MODEL} (deterministic fallback)`,
+              reasoningEffort: providerChoice.providerEffort,
               ...(telemetry
                 ? {
                     costMicroUsd: telemetry.costMicroUsd,

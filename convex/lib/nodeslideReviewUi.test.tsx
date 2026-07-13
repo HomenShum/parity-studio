@@ -112,9 +112,11 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('External model: on · OpenRouter · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-openrouter"[^>]*checked=""/);
     expect(markup).toContain('OpenRouter · Z.ai · GLM 5.2 — external');
-    expect(markup).toContain('Allow GLM 5.2 via OpenRouter for this request');
+    expect(markup).toContain('Allow GLM 5.2 at High effort via OpenRouter for this request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
+    expect(markup).toContain('data-testid="ai-effort-select"');
+    expect(markup).toContain('<option value="max">Ultra</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('Claude Sonnet 5 · Anthropic');
     expect(markup).toContain('Claude Fable 5 · Anthropic');
@@ -129,12 +131,14 @@ describe('NodeSlide AI review inspector', () => {
     expect(createAiProviderRequest('openrouter_free', true)).toEqual({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
+      providerEffort: 'high',
       providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
     });
     expect(createAiVariationProviderRequest('openrouter_free', false)).toBeNull();
     expect(createAiVariationProviderRequest('openrouter_free', true)).toEqual({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
+      providerEffort: 'high',
       providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
     });
     expect(
@@ -259,7 +263,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(13 + NODESLIDE_AGENT_MODELS.length);
+    expect(commandMenu.match(/<option value=/g)).toHaveLength(18 + NODESLIDE_AGENT_MODELS.length);
     expect(commandMenu).toContain('Advanced controls');
   });
 

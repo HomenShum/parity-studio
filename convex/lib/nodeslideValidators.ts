@@ -1,8 +1,11 @@
 import { ConvexError, v } from 'convex/values';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
+  NODESLIDE_DEFAULT_REASONING_EFFORT,
   type NodeSlideAgentModelId,
+  type NodeSlideReasoningEffort,
   isNodeSlideAgentModelId,
+  isNodeSlideReasoningEffort,
 } from '../../shared/nodeslide';
 import {
   NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
@@ -34,6 +37,7 @@ export type ValidatedNodeSlideBriefProviderChoice =
   | {
       providerMode: 'openrouter_free';
       providerModel: NodeSlideAgentModelId;
+      providerEffort: NodeSlideReasoningEffort;
       providerConsent: typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT;
     };
 
@@ -118,12 +122,17 @@ export function validateNodeSlideBriefProviderChoice(
   providerMode: unknown,
   providerConsent: unknown,
   providerModel?: unknown,
+  providerEffort?: unknown,
 ): ValidatedNodeSlideBriefProviderChoice {
   if (providerMode === 'deterministic') {
-    if (providerConsent !== undefined || providerModel !== undefined) {
+    if (
+      providerConsent !== undefined ||
+      providerModel !== undefined ||
+      providerEffort !== undefined
+    ) {
       throw nodeslideCreatePublicError(
         'provider_consent_mismatch',
-        'OpenRouter consent and model selection must only accompany an OpenRouter request.',
+        'OpenRouter consent, model, and effort must only accompany an OpenRouter request.',
       );
     }
     return { providerMode };
@@ -142,7 +151,19 @@ export function validateNodeSlideBriefProviderChoice(
         'Choose a supported NodeSlide agent model.',
       );
     }
-    return { providerMode, providerModel: selectedModel, providerConsent };
+    const selectedEffort = providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT;
+    if (!isNodeSlideReasoningEffort(selectedEffort)) {
+      throw nodeslideCreatePublicError(
+        'invalid_request',
+        'Choose a supported NodeSlide reasoning effort.',
+      );
+    }
+    return {
+      providerMode,
+      providerModel: selectedModel,
+      providerEffort: selectedEffort,
+      providerConsent,
+    };
   }
   throw nodeslideCreatePublicError('invalid_request', 'Choose a supported brief provider mode.');
 }
@@ -517,6 +538,14 @@ export const nodeslideAgentModelValidator = v.union(
   v.literal('google/gemini-3.1-pro-preview'),
   v.literal('openai/gpt-5.6-sol'),
   v.literal('openai/gpt-5.6-terra'),
+);
+
+export const nodeslideReasoningEffortValidator = v.union(
+  v.literal('low'),
+  v.literal('medium'),
+  v.literal('high'),
+  v.literal('xhigh'),
+  v.literal('max'),
 );
 
 export const nodeslideDesignBehaviorValidator = v.union(

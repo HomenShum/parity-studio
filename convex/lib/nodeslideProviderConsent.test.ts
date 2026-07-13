@@ -64,6 +64,24 @@ describe('NodeSlide provider consent authority', () => {
     ).toThrow(/supported NodeSlide agent model/);
     expect(() =>
       validateNodeSlideProviderChoice('propose_edit', 'deterministic', undefined, 'z-ai/glm-5.2'),
-    ).toThrow(/model selection must only accompany/);
+    ).toThrow(/model, and effort must only accompany/);
+    expect(
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_EDIT_CONSENT,
+        'z-ai/glm-5.2',
+        'xhigh',
+      ),
+    ).toMatchObject({ providerEffort: 'xhigh' });
+    expect(() =>
+      validateNodeSlideProviderChoice(
+        'propose_edit',
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_EDIT_CONSENT,
+        'z-ai/glm-5.2',
+        'unbounded',
+      ),
+    ).toThrow(/supported NodeSlide reasoning effort/);
   });
 });

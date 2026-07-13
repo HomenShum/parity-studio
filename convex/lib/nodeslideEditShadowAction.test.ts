@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NODESLIDE_OPENROUTER_EDIT_CONSENT,
   type NodeSlideAgentModelId,
+  type NodeSlideReasoningEffort,
   type NodeSlideWorkspace,
   type PatchScope,
 } from '../../shared/nodeslide';
@@ -46,6 +47,7 @@ type ProposeArgs = {
   scope: PatchScope;
   providerMode: 'openrouter_free';
   providerModel?: NodeSlideAgentModelId;
+  providerEffort?: NodeSlideReasoningEffort;
   providerConsent: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
   webResearch?: boolean;
   webResearchConsent?: string;
@@ -110,6 +112,7 @@ function providerSuccess(target: { id: string; slideId: string }) {
     telemetry: {
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_EDIT_MODEL,
+      reasoningEffort: 'high',
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -215,6 +218,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         referenceUse: 'context_only',
         providerMode: args.providerMode,
         providerModel: NODESLIDE_EDIT_MODEL,
+        providerEffort: 'high',
       }),
     );
     expect(comparison.baseline.outcome).toBe('proposed');
@@ -247,6 +251,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
         model: args.providerModel,
+        reasoningEffort: 'high',
         costMicroUsd: 2_400,
         inputTokens: 180,
         outputTokens: 44,
@@ -297,6 +302,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     const telemetry = {
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_EDIT_MODEL,
+      reasoningEffort: 'high' as const,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,

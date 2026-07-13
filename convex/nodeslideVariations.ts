@@ -27,6 +27,7 @@ import {
 import {
   nodeslideAgentModelValidator,
   nodeslideProviderModeValidator,
+  nodeslideReasoningEffortValidator,
   nodeslideVariationValidator,
 } from './lib/nodeslideValidators';
 import {
@@ -83,6 +84,7 @@ export const generate = action({
     slideId: v.string(),
     providerMode: v.optional(nodeslideProviderModeValidator),
     providerModel: v.optional(nodeslideAgentModelValidator),
+    providerEffort: v.optional(nodeslideReasoningEffortValidator),
     providerConsent: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<VariationGenerationReceipt> => {
@@ -93,6 +95,7 @@ export const generate = action({
         args.providerMode,
         args.providerConsent,
         args.providerModel,
+        args.providerEffort,
       );
     } catch (error) {
       if (error instanceof NodeSlideProviderConsentError) {
@@ -161,6 +164,7 @@ export const generate = action({
           const result = (await ctx.runAction(variationProviderInternal.generateStrictJson, {
             ...prompt,
             model: providerChoice.providerModel,
+            reasoningEffort: providerChoice.providerEffort,
           })) as VariationProviderOutcome;
           provider = result?.ok
             ? { ok: true, value: result.value }

@@ -828,6 +828,15 @@ export default defineSchema({
     candidateDigest: v.optional(v.string()),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
+    reasoningEffort: v.optional(
+      v.union(
+        v.literal('low'),
+        v.literal('medium'),
+        v.literal('high'),
+        v.literal('xhigh'),
+        v.literal('max'),
+      ),
+    ),
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),

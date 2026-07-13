@@ -1770,6 +1770,10 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ns-accent) 22%, transparent);
 }
 
+.nodeslide-studio .ns-ai-effort-picker {
+  flex: 0 1 96px;
+}
+
 .nodeslide-studio .ns-ai-model-picker select {
   background: transparent;
   border: 0;
@@ -3311,6 +3315,14 @@
   content: "";
   margin-left: -16px;
   pointer-events: none;
+}
+
+.nodeslide-studio .ns-landing-effort {
+  padding-left: 7px;
+}
+
+.nodeslide-studio .ns-landing-effort select {
+  max-width: 118px;
 }
 
 .nodeslide-studio .ns-landing-send {

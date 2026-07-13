@@ -112,6 +112,7 @@ import {
   nodeslideCursorValidator,
   nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
+  nodeslideReasoningEffortValidator,
   nodeslideVersionClockValidator,
 } from './lib/nodeslideValidators';
 import {
@@ -1554,6 +1555,7 @@ export const createFromBriefInternal = internalMutation({
     traceSummary: v.string(),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
+    reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
@@ -1600,6 +1602,7 @@ export const createFromBriefInternal = internalMutation({
         ],
         ...(args.provider ? { provider: args.provider } : {}),
         ...(args.model ? { model: args.model } : {}),
+        ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
         ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
         ...(args.inputTokens !== undefined ? { inputTokens: args.inputTokens } : {}),
         ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
@@ -1623,6 +1626,7 @@ export const proposeAgentPatchInternal = internalMutation({
     toolCalls: v.array(v.string()),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
+    reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
@@ -1696,6 +1700,7 @@ export const proposeAgentPatchInternal = internalMutation({
         : {}),
       ...(args.provider ? { provider: args.provider } : {}),
       ...(args.model ? { model: args.model } : {}),
+      ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
       ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
       ...(args.inputTokens !== undefined ? { inputTokens: args.inputTokens } : {}),
       ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
@@ -2388,6 +2393,7 @@ async function createWorkspaceRows(
       toolCalls: string[];
       provider?: string;
       model?: string;
+      reasoningEffort?: import('../shared/nodeslide').NodeSlideReasoningEffort;
       costMicroUsd?: number;
       inputTokens?: number;
       outputTokens?: number;
@@ -2444,6 +2450,7 @@ async function createWorkspaceRows(
     validation,
     ...(args.trace.provider ? { provider: args.trace.provider } : {}),
     ...(args.trace.model ? { model: args.trace.model } : {}),
+    ...(args.trace.reasoningEffort ? { reasoningEffort: args.trace.reasoningEffort } : {}),
     ...(args.trace.costMicroUsd !== undefined ? { costMicroUsd: args.trace.costMicroUsd } : {}),
     ...(args.trace.inputTokens !== undefined ? { inputTokens: args.trace.inputTokens } : {}),
     ...(args.trace.outputTokens !== undefined ? { outputTokens: args.trace.outputTokens } : {}),
