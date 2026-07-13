@@ -669,6 +669,34 @@ export interface NodeSlideAgentMessage {
   createdAt: number;
 }
 
+export type NodeSlideAgentMemoryCategory =
+  | 'preference'
+  | 'fact'
+  | 'decision'
+  | 'instruction'
+  | 'context';
+
+export type NodeSlideAgentMemoryStatus = 'active' | 'archived';
+
+/**
+ * Owner-only, deck-scoped durable memory. Memory is never part of a published
+ * snapshot and is only added to a provider request when the user enables it.
+ */
+export interface NodeSlideAgentMemory {
+  id: string;
+  deckId: string;
+  category: NodeSlideAgentMemoryCategory;
+  content: string;
+  status: NodeSlideAgentMemoryStatus;
+  source: 'user' | 'agent';
+  sourceRunId?: string;
+  contentDigest: string;
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt?: number;
+  useCount: number;
+}
+
 export interface ValidationIssue {
   id: string;
   severity: 'error' | 'warning' | 'info';
@@ -862,6 +890,8 @@ export interface AgentEditRequest {
   /** Web retrieval is independent from model egress and requires its own exact consent. */
   webResearch?: boolean;
   webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
+  /** Durable deck memory is opt-in per request and defaults to off server-side. */
+  memoryMode?: 'off' | 'relevant';
 }
 
 /** Explicit read authority is independent from PatchScope, which remains write authority. */

@@ -68,6 +68,7 @@ import type * as lib_staticLint from "../lib/staticLint.js";
 import type * as lib_uiKitParser from "../lib/uiKitParser.js";
 import type * as nodeslide from "../nodeslide.js";
 import type * as nodeslideAgent from "../nodeslideAgent.js";
+import type * as nodeslideMemory from "../nodeslideMemory.js";
 import type * as nodeslidePreferences from "../nodeslidePreferences.js";
 import type * as nodeslideSignatures from "../nodeslideSignatures.js";
 import type * as nodeslideTelemetry from "../nodeslideTelemetry.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   "lib/uiKitParser": typeof lib_uiKitParser;
   nodeslide: typeof nodeslide;
   nodeslideAgent: typeof nodeslideAgent;
+  nodeslideMemory: typeof nodeslideMemory;
   nodeslidePreferences: typeof nodeslidePreferences;
   nodeslideSignatures: typeof nodeslideSignatures;
   nodeslideTelemetry: typeof nodeslideTelemetry;

@@ -5,6 +5,7 @@ import {
   type DeckSnapshot,
   NODESLIDE_LOCAL_BYOK_EDIT_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
+  type NodeSlideAgentMemory,
   type NodeSlideWorkspace,
   type PatchOperation,
   nodeSlideAgentModel,
@@ -80,6 +81,8 @@ import {
 // validators; keep the escape hatch confined to this generated function-reference proxy.
 // biome-ignore lint/suspicious/noExplicitAny: generated Convex self-reference described above
 const nodeslideInternal: any = (internal as any).nodeslide;
+// biome-ignore lint/suspicious/noExplicitAny: breaks generated Convex action self-reference recursion
+const nodeslideMemoryInternal: any = (internal as any).nodeslideMemory;
 
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
 const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
@@ -106,6 +109,7 @@ export const proposeEdit = action({
     idempotencyKey: v.optional(v.string()),
     webResearch: v.optional(v.boolean()),
     webResearchConsent: v.optional(v.string()),
+    memoryMode: v.optional(v.union(v.literal('off'), v.literal('relevant'))),
   },
   handler: async (ctx, args) => {
     const instruction = args.instruction.replace(/\s+/g, ' ').trim();
@@ -280,6 +284,33 @@ export const proposeEdit = action({
           status: 'planning',
         });
       }
+      const memories: NodeSlideAgentMemory[] =
+        args.memoryMode === 'relevant'
+          ? ((await ctx.runQuery(nodeslideMemoryInternal.retrieveRelevantInternal, {
+              deckId: args.deckId,
+              ownerAccessKey: args.ownerAccessKey,
+              instruction,
+            })) as NodeSlideAgentMemory[])
+          : [];
+      if (memories.length > 0) {
+        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'planning',
+          activity: 'memory_retrieval',
+          message: `Retrieved ${memories.length} relevant deck memor${memories.length === 1 ? 'y' : 'ies'} for this run.`,
+          role: 'tool',
+          toolName: 'memory_retrieval',
+          memoryIds: memories.map((memory) => memory.id),
+          memoryDigests: memories.map((memory) => memory.contentDigest),
+        });
+        await ctx.runMutation(nodeslideMemoryInternal.markUsedInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          memoryIds: memories.map((memory) => memory.id),
+        });
+      }
       const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
       const snapshot = snapshotOf(workspace);
       const requestedReadContext = [
@@ -299,7 +330,7 @@ export const proposeEdit = action({
         ),
       ];
 
-      const request = {
+      const request: NodeSlideEditPlanningRequest = {
         deckId: args.deckId,
         instruction,
         baseDeckVersion: args.baseDeckVersion,
@@ -310,6 +341,7 @@ export const proposeEdit = action({
         designBehavior: args.designBehavior ?? 'preserve',
         referenceUse: args.referenceUse ?? 'context_only',
         providerMode: providerChoice.providerMode,
+        ...(memories.length ? { memories } : {}),
         ...(providerChoice.providerMode !== 'deterministic'
           ? {
               providerModel: providerChoice.providerModel,

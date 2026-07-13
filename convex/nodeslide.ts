@@ -1406,11 +1406,21 @@ function agentSpanId(traceId: string, label: string, sequence: number): string {
   return nodeslideIdDigest(`${traceId}\u001f${label}\u001f${sequence}`).slice(0, 16);
 }
 
-function agentOperation(status: Doc<'nodeslide_agent_runs'>['status']): {
+function agentOperation(
+  status: Doc<'nodeslide_agent_runs'>['status'],
+  activity?: 'memory_retrieval',
+): {
   name: string;
   operationName: string;
   toolName?: string;
 } {
+  if (activity === 'memory_retrieval') {
+    return {
+      name: 'Retrieve relevant deck memory',
+      operationName: 'execute_tool',
+      toolName: 'memory_retrieval',
+    };
+  }
   switch (status) {
     case 'queued':
       return { name: 'Queue and authorize', operationName: 'agent.queue' };
@@ -1688,6 +1698,9 @@ export const advanceAgentRunInternal = internalMutation({
     role: v.optional(v.union(v.literal('assistant'), v.literal('tool'), v.literal('system'))),
     toolName: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
+    memoryIds: v.optional(v.array(v.string())),
+    memoryDigests: v.optional(v.array(v.string())),
+    activity: v.optional(v.literal('memory_retrieval')),
   },
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
@@ -1702,7 +1715,7 @@ export const advanceAgentRunInternal = internalMutation({
     const sequence = row.nextTelemetrySequence ?? 3;
     const traceId = row.otelTraceId ?? agentTraceId(args.deckId, args.runId);
     const rootSpanId = row.rootSpanId ?? agentSpanId(traceId, 'invoke_agent', 1);
-    const phase = agentOperation(row.status);
+    const phase = agentOperation(row.status, args.activity);
     const phaseSpanId = agentSpanId(traceId, phase.operationName, sequence);
     const phaseStatus = args.status === 'failed' ? 'error' : 'ok';
     await ctx.db.insert('nodeslide_agent_spans', {
@@ -1733,6 +1746,20 @@ export const advanceAgentRunInternal = internalMutation({
         ...(args.sourceIds?.length
           ? [{ key: 'nodeslide.source.ids', value: args.sourceIds.slice(0, 32).join(',') }]
           : []),
+        ...(args.memoryIds?.length
+          ? [
+              { key: 'nodeslide.memory.count', value: Math.min(6, args.memoryIds.length) },
+              { key: 'nodeslide.memory.ids', value: args.memoryIds.slice(0, 6).join(',') },
+            ]
+          : []),
+        ...(args.memoryDigests?.length
+          ? [
+              {
+                key: 'nodeslide.memory.digests',
+                value: args.memoryDigests.slice(0, 6).join(','),
+              },
+            ]
+          : []),
       ],
       sequence,
       createdAt: now,
@@ -1754,6 +1781,9 @@ export const advanceAgentRunInternal = internalMutation({
       attributes: [
         { key: 'nodeslide.checkpoint', value: args.status },
         { key: 'nodeslide.run.attempt', value: row.attempt },
+        ...(args.memoryIds?.length
+          ? [{ key: 'nodeslide.memory.count', value: Math.min(6, args.memoryIds.length) }]
+          : []),
       ],
       sequence: sequence + 1,
     });

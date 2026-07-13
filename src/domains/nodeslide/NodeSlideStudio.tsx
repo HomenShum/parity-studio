@@ -18,6 +18,8 @@ import type {
   DeckPatch,
   DeckSnapshot,
   DeckVersion,
+  NodeSlideAgentMemory,
+  NodeSlideAgentMemoryCategory,
   NodeSlideAgentMessage,
   NodeSlideAgentModelId,
   NodeSlideAgentRun,
@@ -283,6 +285,33 @@ interface NodeSlideGeneratedApi {
       NodeSlideWorkspace['presence']
     >;
   };
+  nodeslideMemory: {
+    list: PublicQuery<
+      { deckId: string; ownerAccessKey: string; status?: 'active' | 'archived' },
+      NodeSlideAgentMemory[]
+    >;
+    create: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        category: NodeSlideAgentMemoryCategory;
+        content: string;
+      },
+      NodeSlideAgentMemory
+    >;
+    update: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        memoryId: string;
+        category?: NodeSlideAgentMemoryCategory;
+        content?: string;
+        status?: 'active' | 'archived';
+      },
+      NodeSlideAgentMemory
+    >;
+    remove: PublicMutation<{ deckId: string; ownerAccessKey: string; memoryId: string }, boolean>;
+  };
   nodeslideAgent: {
     createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
     proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, PatchReceipt>;
@@ -504,6 +533,9 @@ export function NodeSlideStudio() {
   const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
   const deleteDataSource = useMutation(nodeslideApi.nodeslide.deleteDataSource);
   const cancelAgentRun = useMutation(nodeslideApi.nodeslide.cancelAgentRun);
+  const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
+  const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
+  const removeAgentMemory = useMutation(nodeslideApi.nodeslideMemory.remove);
   const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
@@ -566,6 +598,10 @@ export function NodeSlideStudio() {
   const agentMessages = useQuery(
     nodeslideApi.nodeslide.listAgentMessages,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 100 } : 'skip',
+  );
+  const agentMemories = useQuery(
+    nodeslideApi.nodeslideMemory.list,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const latestAgentRunId = agentRuns?.[0]?.id;
   const selectedTelemetryRunId =
@@ -3035,6 +3071,8 @@ export function NodeSlideStudio() {
           aiAgentActivity={aiAgentActivity}
           agentRuns={agentRuns ?? []}
           agentMessages={agentMessages ?? []}
+          memories={agentMemories ?? []}
+          memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           {...(selectedTelemetryRunId ? { agentTelemetryRunId: selectedTelemetryRunId } : {})}
           agentTelemetryLoadingMore={telemetryLoadingRunId === selectedTelemetryRunId}
           {...(telemetryLoadError ? { agentTelemetryLoadError: telemetryLoadError } : {})}
@@ -3062,6 +3100,23 @@ export function NodeSlideStudio() {
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
           onAttachAiDataFile={attachAiDataFile}
+          onCreateAiMemory={async (category, content) => {
+            if (!activeDeckId || !ownerAccessKey) throw new Error('Open an owned deck first.');
+            await createAgentMemory({ deckId: activeDeckId, ownerAccessKey, category, content });
+          }}
+          onUpdateAiMemory={async (memoryId, update) => {
+            if (!activeDeckId || !ownerAccessKey) throw new Error('Open an owned deck first.');
+            await updateAgentMemory({
+              deckId: activeDeckId,
+              ownerAccessKey,
+              memoryId,
+              ...update,
+            });
+          }}
+          onDeleteAiMemory={async (memoryId) => {
+            if (!activeDeckId || !ownerAccessKey) throw new Error('Open an owned deck first.');
+            await removeAgentMemory({ deckId: activeDeckId, ownerAccessKey, memoryId });
+          }}
           onDeleteAiDataSource={deleteAiDataSource}
           onCancelAiRun={(runId) => void cancelAiRun(runId)}
           onAcceptPatch={handleAcceptPatch}

@@ -804,6 +804,30 @@ export default defineSchema({
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_run_created', ['runId', 'createdAt']),
 
+  nodeslide_agent_memories: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    category: v.union(
+      v.literal('preference'),
+      v.literal('fact'),
+      v.literal('decision'),
+      v.literal('instruction'),
+      v.literal('context'),
+    ),
+    content: v.string(),
+    status: v.union(v.literal('active'), v.literal('archived')),
+    source: v.union(v.literal('user'), v.literal('agent')),
+    sourceRunId: v.optional(v.string()),
+    contentDigest: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    useCount: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_updated', ['deckId', 'updatedAt'])
+    .index('by_deck_status_updated', ['deckId', 'status', 'updatedAt']),
+
   nodeslide_agent_spans: defineTable({
     id: v.string(),
     deckId: v.string(),
