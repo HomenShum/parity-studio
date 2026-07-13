@@ -79,6 +79,9 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
   agentTelemetry?: NodeSlideAgentTelemetryPage;
+  agentTelemetryRunId?: string;
+  agentTelemetryLoadingMore?: boolean;
+  agentTelemetryLoadError?: string;
   aiCommentContext?: AiCommentContext | null;
   previewedPatchId?: string | null;
   activeTastePackId: NodeSlideTastePackId | null;
@@ -99,6 +102,8 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onAttachAiDataFile?: (file: File) => Promise<AiReadReference>;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
+  onSelectAgentRun?: (runId: string) => void;
+  onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -152,6 +157,9 @@ export function InspectorPanel<CommandId extends string = string>({
   agentRuns = [],
   agentMessages = [],
   agentTelemetry,
+  agentTelemetryRunId,
+  agentTelemetryLoadingMore = false,
+  agentTelemetryLoadError,
   aiCommentContext = null,
   previewedPatchId = null,
   activeTastePackId,
@@ -168,6 +176,8 @@ export function InspectorPanel<CommandId extends string = string>({
   onAttachAiDataFile,
   onDeleteAiDataSource,
   onCancelAiRun,
+  onSelectAgentRun,
+  onLoadMoreAgentTelemetry,
   onAcceptPatch,
   onRejectPatch,
   onPreviewPatch,
@@ -434,6 +444,12 @@ export function InspectorPanel<CommandId extends string = string>({
             patches={workspace.patches}
             agentRuns={agentRuns}
             agentMessages={agentMessages}
+            sources={workspace.sources}
+            {...(agentTelemetryRunId ? { agentTelemetryRunId } : {})}
+            agentTelemetryLoadingMore={agentTelemetryLoadingMore}
+            {...(agentTelemetryLoadError ? { agentTelemetryLoadError } : {})}
+            {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
+            {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
             {...(agentTelemetry ? { agentTelemetry } : {})}
           />
         ) : null}

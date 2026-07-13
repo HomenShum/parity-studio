@@ -15,6 +15,8 @@ import {
   Gauge,
   ListTree,
   type LucideIcon,
+  Maximize2,
+  Minimize2,
   Pencil,
   Receipt,
   ShieldCheck,
@@ -29,10 +31,12 @@ import {
   type NodeSlideAgentMessage,
   type NodeSlideAgentRun,
   type NodeSlideAgentTelemetryPage,
+  type SourceRecord,
   type ValidationIssue,
   type ValidationResult,
   nodeSlideReasoningEffort,
 } from '../../../../shared/nodeslide';
+import { TraceWaterfall } from './TraceWaterfall';
 
 /*
  * NodeSlide Trace tab — compact run activity with expandable evidence and receipts.
@@ -56,6 +60,12 @@ interface TraceInspectorProps {
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
   agentTelemetry?: NodeSlideAgentTelemetryPage;
+  agentTelemetryRunId?: string;
+  sources?: readonly SourceRecord[];
+  agentTelemetryLoadingMore?: boolean;
+  agentTelemetryLoadError?: string;
+  onSelectAgentRun?: (runId: string) => void;
+  onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
 }
 
 const DENSITY_KEY = 'ns-trace-density';
@@ -81,6 +91,12 @@ export function TraceInspector({
   agentRuns = [],
   agentMessages = [],
   agentTelemetry,
+  agentTelemetryRunId,
+  sources = [],
+  agentTelemetryLoadingMore = false,
+  agentTelemetryLoadError,
+  onSelectAgentRun,
+  onLoadMoreAgentTelemetry,
 }: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
   const latestValidation = useMemo(
@@ -93,6 +109,7 @@ export function TraceInspector({
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [density, setDensityState] = useState<TraceDensity>(() => readDensity());
   const [openByTrace, setOpenByTrace] = useState<Record<string, TraceNodeId | null>>({});
+  const [expanded, setExpanded] = useState(false);
 
   const setDensity = (next: TraceDensity) => {
     setDensityState(next);
@@ -104,7 +121,8 @@ export function TraceInspector({
     ? (agentRuns.find((run) => run.traceId === selected.id) ??
       (selected.id === sorted[0]?.id ? agentRuns[0] : undefined))
     : undefined;
-  const selectedTelemetry = selectedRun?.id === agentRuns[0]?.id ? agentTelemetry : undefined;
+  const telemetryRunId = agentTelemetryRunId ?? agentRuns[0]?.id;
+  const selectedTelemetry = selectedRun?.id === telemetryRunId ? agentTelemetry : undefined;
   const patch = selected?.patchId
     ? patches.find((candidate) => candidate.id === selected.patchId)
     : undefined;
@@ -121,7 +139,7 @@ export function TraceInspector({
   };
 
   return (
-    <div className="ns-inspector-scroll ns-trace-inspector">
+    <div className={`ns-inspector-scroll ns-trace-inspector ${expanded ? 'is-expanded' : ''}`}>
       <section className="ns-inspector-section ns-trace-intro ns-trace-header">
         <div className="ns-section-title-row">
           <div>
@@ -132,13 +150,13 @@ export function TraceInspector({
             <DensityButton
               active={density === 'human'}
               icon={<Eye size={11} />}
-              label="Overview"
+              label="Summary"
               onClick={() => setDensity('human')}
             />
             <DensityButton
               active={density === 'pro'}
               icon={<Gauge size={11} />}
-              label="Evidence"
+              label="Timeline"
               onClick={() => setDensity('pro')}
             />
             <DensityButton
@@ -148,6 +166,15 @@ export function TraceInspector({
               onClick={() => setDensity('tech')}
             />
           </div>
+          <button
+            type="button"
+            className="ns-trace-expand"
+            onClick={() => setExpanded((value) => !value)}
+            aria-label={expanded ? 'Exit expanded trace view' : 'Expand trace view'}
+            aria-pressed={expanded}
+          >
+            {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
         </div>
         <p>Provider, work performed, validation, and human approval in one auditable run.</p>
       </section>
@@ -170,7 +197,16 @@ export function TraceInspector({
             <span>Run</span>
             <select
               value={selected?.id ?? ''}
-              onChange={(event) => setSelectedTraceId(event.target.value)}
+              onChange={(event) => {
+                const traceId = event.target.value;
+                setSelectedTraceId(traceId);
+                const nextTrace = sorted.find((trace) => trace.id === traceId);
+                const nextRun = nextTrace
+                  ? (agentRuns.find((run) => run.traceId === nextTrace.id) ??
+                    (nextTrace.id === sorted[0]?.id ? agentRuns[0] : undefined))
+                  : undefined;
+                if (nextRun) onSelectAgentRun?.(nextRun.id);
+              }}
             >
               {sorted.map((trace) => (
                 <option key={trace.id} value={trace.id}>
@@ -207,15 +243,45 @@ export function TraceInspector({
                   {...(selectedRun ? { run: selectedRun } : {})}
                   {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
                 />
+              ) : selectedRun && selectedTelemetry ? (
+                <div className="ns-trace-timeline-stack">
+                  <TraceWaterfall
+                    run={selectedRun}
+                    telemetry={selectedTelemetry}
+                    messages={agentMessages}
+                    sources={sources}
+                    loadingMore={agentTelemetryLoadingMore}
+                    compact={!expanded}
+                    onExpand={() => setExpanded(true)}
+                    {...(agentTelemetryLoadError ? { loadError: agentTelemetryLoadError } : {})}
+                    {...(onLoadMoreAgentTelemetry ? { onLoadMore: onLoadMoreAgentTelemetry } : {})}
+                  />
+                  <details className="ns-trace-custody-disclosure">
+                    <summary>Chain of custody and countersigned receipt</summary>
+                    <CustodyRail
+                      trace={selected}
+                      patch={patch}
+                      validation={traceValidation}
+                      density={density}
+                      openNode={openNode}
+                      onToggle={toggleNode}
+                    />
+                  </details>
+                </div>
               ) : (
-                <CustodyRail
-                  trace={selected}
-                  patch={patch}
-                  validation={traceValidation}
-                  density={density}
-                  openNode={openNode}
-                  onToggle={toggleNode}
-                />
+                <div className="ns-trace-timeline-empty">
+                  <Clock3 size={16} />
+                  <strong>Structured timeline unavailable</strong>
+                  <p>Legacy runs keep their custody receipt but do not invent span timing.</p>
+                  <CustodyRail
+                    trace={selected}
+                    patch={patch}
+                    validation={traceValidation}
+                    density={density}
+                    openNode={openNode}
+                    onToggle={toggleNode}
+                  />
+                </div>
               )}
               {traceValidation && traceValidation.id !== latestValidation?.id ? (
                 <ValidationSummary validation={traceValidation} label="Selected trace validation" />
@@ -1358,14 +1424,14 @@ function hasProviderAttemptTelemetry(trace: AgentTrace): boolean {
   );
 }
 
-/** Session-persisted trace density; SSR/storage-safe (falls back to 'human'). */
+/** Session-persisted trace density; SSR/storage-safe (new users land on the timeline). */
 export function readDensity(): TraceDensity {
   try {
     const value =
       typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(DENSITY_KEY) : null;
-    return value === 'human' || value === 'pro' || value === 'tech' ? value : 'human';
+    return value === 'human' || value === 'pro' || value === 'tech' ? value : 'pro';
   } catch {
-    return 'human';
+    return 'pro';
   }
 }
 

@@ -1,4 +1,4 @@
-import { useAction, useMutation, useQuery } from 'convex/react';
+import { useAction, useConvex, useMutation, useQuery } from 'convex/react';
 import type { DefaultFunctionArgs, FunctionReference } from 'convex/server';
 import {
   AlertCircle,
@@ -358,7 +358,36 @@ interface NodeSlideGeneratedApi {
 
 const nodeslideApi = api as unknown as NodeSlideGeneratedApi;
 
+function mergeAgentTelemetryPages(
+  ...pages: Array<NodeSlideAgentTelemetryPage | undefined>
+): NodeSlideAgentTelemetryPage | undefined {
+  const available = pages.filter((page): page is NodeSlideAgentTelemetryPage => page !== undefined);
+  if (!available.length) return undefined;
+  const spans = [
+    ...new Map(available.flatMap((page) => page.spans).map((span) => [span.id, span])).values(),
+  ].sort((left, right) => right.sequence - left.sequence);
+  const events = [
+    ...new Map(available.flatMap((page) => page.events).map((event) => [event.id, event])).values(),
+  ].sort((left, right) => right.sequence - left.sequence);
+  const oldestPage = available.reduce((oldest, page) =>
+    (page.nextBeforeSequence ?? Number.MAX_SAFE_INTEGER) <
+    (oldest.nextBeforeSequence ?? Number.MAX_SAFE_INTEGER)
+      ? page
+      : oldest,
+  );
+  return {
+    spans,
+    events,
+    hasMore: oldestPage.hasMore,
+    ...(oldestPage.nextBeforeSequence !== undefined
+      ? { nextBeforeSequence: oldestPage.nextBeforeSequence }
+      : {}),
+    totalRecorded: Math.max(...available.map((page) => page.totalRecorded)),
+  };
+}
+
 export function NodeSlideStudio() {
+  const convex = useConvex();
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
   const requestedDeck = useMemo(() => new URLSearchParams(window.location.search).get('deck'), []);
   const requestedShare = useMemo(
@@ -387,6 +416,12 @@ export function NodeSlideStudio() {
   const [previewedPatchId, setPreviewedPatchId] = useState<string | null>(null);
   const [aiCommentContext, setAiCommentContext] = useState<AiCommentContext | null>(null);
   const [aiAgentActivity, setAiAgentActivity] = useState<AiAgentActivity | null>(null);
+  const [traceTelemetryRunId, setTraceTelemetryRunId] = useState<string | null>(null);
+  const [olderTelemetryByRun, setOlderTelemetryByRun] = useState<
+    Record<string, NodeSlideAgentTelemetryPage | undefined>
+  >({});
+  const [telemetryLoadingRunId, setTelemetryLoadingRunId] = useState<string | null>(null);
+  const [telemetryLoadError, setTelemetryLoadError] = useState<string | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>('ai');
   const [studioTheme, setStudioTheme] = useState<StudioThemeMode>(() =>
     readStudioPreference('theme') === 'dark' ? 'dark' : 'light',
@@ -533,16 +568,52 @@ export function NodeSlideStudio() {
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 100 } : 'skip',
   );
   const latestAgentRunId = agentRuns?.[0]?.id;
-  const agentTelemetry = useQuery(
+  const selectedTelemetryRunId =
+    traceTelemetryRunId && agentRuns?.some((run) => run.id === traceTelemetryRunId)
+      ? traceTelemetryRunId
+      : latestAgentRunId;
+  const agentTelemetryHead = useQuery(
     nodeslideApi.nodeslide.listAgentTelemetryPage,
-    activeDeckId && ownerAccessKey && latestAgentRunId
+    activeDeckId && ownerAccessKey && selectedTelemetryRunId
       ? {
           deckId: activeDeckId,
           ownerAccessKey,
-          runId: latestAgentRunId,
-          limit: 80,
+          runId: selectedTelemetryRunId,
+          limit: 200,
         }
       : 'skip',
+  );
+  const agentTelemetry = useMemo(
+    () =>
+      selectedTelemetryRunId
+        ? mergeAgentTelemetryPages(agentTelemetryHead, olderTelemetryByRun[selectedTelemetryRunId])
+        : undefined,
+    [agentTelemetryHead, olderTelemetryByRun, selectedTelemetryRunId],
+  );
+  const loadOlderAgentTelemetry = useCallback(
+    async (runId: string, beforeSequence: number) => {
+      if (!activeDeckId || !ownerAccessKey || telemetryLoadingRunId) return;
+      setTelemetryLoadingRunId(runId);
+      setTelemetryLoadError(null);
+      try {
+        const page = await convex.query(nodeslideApi.nodeslide.listAgentTelemetryPage, {
+          deckId: activeDeckId,
+          ownerAccessKey,
+          runId,
+          beforeSequence,
+          limit: 200,
+        });
+        setOlderTelemetryByRun((current) => ({
+          ...current,
+          [runId]: mergeAgentTelemetryPages(current[runId], page),
+        }));
+      } catch (error) {
+        setTelemetryLoadError(error instanceof Error ? error.message : 'Unknown telemetry error');
+      } finally {
+        setTelemetryLoadingRunId(null);
+      }
+    },
+    [activeDeckId, convex, ownerAccessKey, telemetryLoadingRunId],
   );
   const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
   const localReceiptMarker =
@@ -2964,6 +3035,14 @@ export function NodeSlideStudio() {
           aiAgentActivity={aiAgentActivity}
           agentRuns={agentRuns ?? []}
           agentMessages={agentMessages ?? []}
+          {...(selectedTelemetryRunId ? { agentTelemetryRunId: selectedTelemetryRunId } : {})}
+          agentTelemetryLoadingMore={telemetryLoadingRunId === selectedTelemetryRunId}
+          {...(telemetryLoadError ? { agentTelemetryLoadError: telemetryLoadError } : {})}
+          onSelectAgentRun={(runId) => {
+            setTraceTelemetryRunId(runId);
+            setTelemetryLoadError(null);
+          }}
+          onLoadMoreAgentTelemetry={loadOlderAgentTelemetry}
           {...(agentTelemetry ? { agentTelemetry } : {})}
           aiCommentContext={aiCommentContext}
           previewedPatchId={previewedPatchId}

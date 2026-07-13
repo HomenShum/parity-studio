@@ -434,7 +434,7 @@ export const listAgentTelemetryPage = query({
       events: page
         .filter((item) => item.kind === 'event')
         .map(({ row: { _id, _creationTime, ...event } }) => event),
-      hasMore: nextBeforeSequence !== undefined && nextBeforeSequence > 1,
+      hasMore: page.length === limit && nextBeforeSequence !== undefined && nextBeforeSequence > 1,
       ...(nextBeforeSequence !== undefined ? { nextBeforeSequence } : {}),
       totalRecorded: Math.max(0, (run.nextTelemetrySequence ?? 1) - 1),
     };
@@ -1722,6 +1722,7 @@ export const advanceAgentRunInternal = internalMutation({
       provider: row.provider,
       model: row.model,
       ...(phase.toolName ? { toolName: phase.toolName } : {}),
+      ...(args.sourceIds ? { sourceIds: args.sourceIds.slice(0, 32) } : {}),
       attributes: [
         { key: 'gen_ai.operation.name', value: phase.operationName },
         { key: 'gen_ai.provider.name', value: row.provider },
@@ -1729,6 +1730,9 @@ export const advanceAgentRunInternal = internalMutation({
         { key: 'nodeslide.run.status.from', value: row.status },
         { key: 'nodeslide.run.status.to', value: args.status },
         { key: 'nodeslide.checkpoint', value: args.status },
+        ...(args.sourceIds?.length
+          ? [{ key: 'nodeslide.source.ids', value: args.sourceIds.slice(0, 32).join(',') }]
+          : []),
       ],
       sequence,
       createdAt: now,
