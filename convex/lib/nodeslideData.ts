@@ -207,6 +207,7 @@ export function traceFromRow(row: Doc<'nodeslide_traces'>): AgentTrace {
     ...(row.candidateDigest !== undefined ? { candidateDigest: row.candidateDigest } : {}),
     ...(row.provider !== undefined ? { provider: row.provider } : {}),
     ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.reasoningEffort !== undefined ? { reasoningEffort: row.reasoningEffort } : {}),
     ...(row.costMicroUsd !== undefined ? { costMicroUsd: row.costMicroUsd } : {}),
     ...(row.inputTokens !== undefined ? { inputTokens: row.inputTokens } : {}),
     ...(row.outputTokens !== undefined ? { outputTokens: row.outputTokens } : {}),

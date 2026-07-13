@@ -733,7 +733,10 @@ describe('NodeSlide release security', () => {
       });
     }
 
-    database.seed('nodeslide_traces', traceRow(deckId, 'old-patch', 'old-review-trace', 1));
+    database.seed('nodeslide_traces', {
+      ...traceRow(deckId, 'old-patch', 'old-review-trace', 1),
+      reasoningEffort: 'xhigh',
+    });
     for (let index = 0; index < 20; index += 1) {
       database.seed('nodeslide_traces', {
         ...traceRow(deckId, `planning-patch-${index}`, `planning-trace-${index}`, 2 + index),
@@ -794,6 +797,9 @@ describe('NodeSlide release security', () => {
     expect(workspace.comments.some((row) => row.id === 'old-open-comment')).toBe(true);
     expect(workspace.patches.some((row) => row.id === 'old-ready-patch')).toBe(true);
     expect(workspace.traces.some((row) => row.id === 'old-review-trace')).toBe(true);
+    expect(workspace.traces.find((row) => row.id === 'old-review-trace')?.reasoningEffort).toBe(
+      'xhigh',
+    );
     expect(workspace.exports.some((row) => row.id === 'old-rendering-export')).toBe(true);
     expect(workspace.comments.at(-1)?.id).toBe(
       `comment-${NODESLIDE_WORKSPACE_LIMITS.comments + 19}`,
