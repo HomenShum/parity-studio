@@ -33,7 +33,7 @@ describe('NodeSlide trace validation receipts', () => {
     expect(markup).toContain('Agent activity');
     expect(markup).toContain('Run details');
     expect(markup).toContain('Execution');
-    expect(markup).toContain('6 auditable events');
+    expect(markup).toContain('6 auditable records');
     expect(markup).toContain('nebius · zai-org/GLM-5.2 · High effort');
     expect(markup).not.toContain('What happened');
     expect(markup).not.toContain('Chain of custody');

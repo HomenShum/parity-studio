@@ -21,6 +21,7 @@ import type {
   NodeSlideAgentMessage,
   NodeSlideAgentModelId,
   NodeSlideAgentRun,
+  NodeSlideAgentTelemetryPage,
   NodeSlideEditorCapabilityRegistry,
   NodeSlideEditorCommandId,
   NodeSlidePublication,
@@ -188,6 +189,16 @@ interface NodeSlideGeneratedApi {
     listAgentMessages: PublicQuery<
       { deckId: string; ownerAccessKey: string; limit?: number },
       NodeSlideAgentMessage[]
+    >;
+    listAgentTelemetryPage: PublicQuery<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        runId: string;
+        beforeSequence?: number;
+        limit?: number;
+      },
+      NodeSlideAgentTelemetryPage
     >;
     cancelAgentRun: PublicMutation<
       { deckId: string; ownerAccessKey: string; runId: string },
@@ -520,6 +531,18 @@ export function NodeSlideStudio() {
   const agentMessages = useQuery(
     nodeslideApi.nodeslide.listAgentMessages,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey, limit: 100 } : 'skip',
+  );
+  const latestAgentRunId = agentRuns?.[0]?.id;
+  const agentTelemetry = useQuery(
+    nodeslideApi.nodeslide.listAgentTelemetryPage,
+    activeDeckId && ownerAccessKey && latestAgentRunId
+      ? {
+          deckId: activeDeckId,
+          ownerAccessKey,
+          runId: latestAgentRunId,
+          limit: 80,
+        }
+      : 'skip',
   );
   const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
   const localReceiptMarker =
@@ -2941,6 +2964,7 @@ export function NodeSlideStudio() {
           aiAgentActivity={aiAgentActivity}
           agentRuns={agentRuns ?? []}
           agentMessages={agentMessages ?? []}
+          {...(agentTelemetry ? { agentTelemetry } : {})}
           aiCommentContext={aiCommentContext}
           previewedPatchId={previewedPatchId}
           activeTastePackId={activeTastePackId}

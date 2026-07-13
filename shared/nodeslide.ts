@@ -580,12 +580,80 @@ export interface NodeSlideAgentRun {
   model: string;
   webResearch: boolean;
   attempt: number;
+  /** W3C-compatible 32-hex trace identifier for this durable run. */
+  otelTraceId?: string;
+  /** Root invoke_agent span identifier (16 hex characters). */
+  rootSpanId?: string;
+  /** Last durable progress checkpoint written by the worker. */
+  checkpoint?: string;
+  lastHeartbeatAt?: number;
+  leaseExpiresAt?: number;
+  nextTelemetrySequence?: number;
+  telemetryVersion?: string;
+  otelExportStatus?: 'pending' | 'exported' | 'skipped' | 'failed';
+  otelExportedAt?: number;
+  otelExportError?: string;
   patchId?: string;
   traceId?: string;
   error?: string;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+}
+
+export type NodeSlideAgentTelemetryValue = string | number | boolean;
+
+export interface NodeSlideAgentTelemetryAttribute {
+  key: string;
+  value: NodeSlideAgentTelemetryValue;
+}
+
+export interface NodeSlideAgentSpan {
+  id: string;
+  deckId: string;
+  runId: string;
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  operationName: string;
+  kind: 'internal' | 'client';
+  status: 'unset' | 'ok' | 'error';
+  startTime: number;
+  endTime?: number;
+  durationMs?: number;
+  provider?: string;
+  model?: string;
+  toolName?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  costMicroUsd?: number;
+  attributes: NodeSlideAgentTelemetryAttribute[];
+  sequence: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NodeSlideAgentEvent {
+  id: string;
+  deckId: string;
+  runId: string;
+  traceId: string;
+  spanId: string;
+  name: string;
+  severity: 'info' | 'warn' | 'error';
+  timestamp: number;
+  body: string;
+  attributes: NodeSlideAgentTelemetryAttribute[];
+  sequence: number;
+}
+
+export interface NodeSlideAgentTelemetryPage {
+  spans: NodeSlideAgentSpan[];
+  events: NodeSlideAgentEvent[];
+  nextBeforeSequence?: number;
+  hasMore: boolean;
+  totalRecorded: number;
 }
 
 export interface NodeSlideAgentMessage {

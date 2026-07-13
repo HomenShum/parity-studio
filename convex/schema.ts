@@ -756,6 +756,23 @@ export default defineSchema({
     model: v.string(),
     webResearch: v.boolean(),
     attempt: v.number(),
+    otelTraceId: v.optional(v.string()),
+    rootSpanId: v.optional(v.string()),
+    checkpoint: v.optional(v.string()),
+    lastHeartbeatAt: v.optional(v.number()),
+    leaseExpiresAt: v.optional(v.number()),
+    nextTelemetrySequence: v.optional(v.number()),
+    telemetryVersion: v.optional(v.string()),
+    otelExportStatus: v.optional(
+      v.union(
+        v.literal('pending'),
+        v.literal('exported'),
+        v.literal('skipped'),
+        v.literal('failed'),
+      ),
+    ),
+    otelExportedAt: v.optional(v.number()),
+    otelExportError: v.optional(v.string()),
     patchId: v.optional(v.string()),
     traceId: v.optional(v.string()),
     error: v.optional(v.string()),
@@ -786,6 +803,58 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_run_created', ['runId', 'createdAt']),
+
+  nodeslide_agent_spans: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    parentSpanId: v.optional(v.string()),
+    name: v.string(),
+    operationName: v.string(),
+    kind: v.union(v.literal('internal'), v.literal('client')),
+    status: v.union(v.literal('unset'), v.literal('ok'), v.literal('error')),
+    startTime: v.number(),
+    endTime: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    provider: v.optional(v.string()),
+    model: v.optional(v.string()),
+    toolName: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    costMicroUsd: v.optional(v.number()),
+    attributes: v.array(
+      v.object({ key: v.string(), value: v.union(v.string(), v.number(), v.boolean()) }),
+    ),
+    sequence: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_run_sequence', ['runId', 'sequence'])
+    .index('by_trace_sequence', ['traceId', 'sequence'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_agent_events: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    name: v.string(),
+    severity: v.union(v.literal('info'), v.literal('warn'), v.literal('error')),
+    timestamp: v.number(),
+    body: v.string(),
+    attributes: v.array(
+      v.object({ key: v.string(), value: v.union(v.string(), v.number(), v.boolean()) }),
+    ),
+    sequence: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_run_sequence', ['runId', 'sequence'])
+    .index('by_trace_sequence', ['traceId', 'sequence'])
+    .index('by_deck_timestamp', ['deckId', 'timestamp']),
 
   nodeslide_validations: defineTable({
     id: v.string(),

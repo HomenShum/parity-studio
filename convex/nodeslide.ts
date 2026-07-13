@@ -76,6 +76,7 @@ import {
   nodeslideContentDigest,
   nodeslideEventId,
   nodeslideHash,
+  nodeslideIdDigest,
   nodeslideStableId,
 } from './lib/nodeslideIds';
 import {
@@ -389,6 +390,54 @@ export const listAgentMessages = query({
       .order('desc')
       .take(limit);
     return rows.reverse().map(({ _id, _creationTime, ...message }) => message);
+  },
+});
+
+export const listAgentTelemetryPage = query({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    runId: v.string(),
+    beforeSequence: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const run = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!run || run.deckId !== args.deckId) throw new Error('Agent run not found.');
+    const limit = Math.max(1, Math.min(200, Math.floor(args.limit ?? 60)));
+    const before = Math.max(1, Math.floor(args.beforeSequence ?? Number.MAX_SAFE_INTEGER));
+    const spans = await ctx.db
+      .query('nodeslide_agent_spans')
+      .withIndex('by_run_sequence', (query) => query.eq('runId', args.runId).lt('sequence', before))
+      .order('desc')
+      .take(limit + 1);
+    const events = await ctx.db
+      .query('nodeslide_agent_events')
+      .withIndex('by_run_sequence', (query) => query.eq('runId', args.runId).lt('sequence', before))
+      .order('desc')
+      .take(limit + 1);
+    const page = [
+      ...spans.map((row) => ({ kind: 'span' as const, row })),
+      ...events.map((row) => ({ kind: 'event' as const, row })),
+    ]
+      .sort((left, right) => right.row.sequence - left.row.sequence)
+      .slice(0, limit);
+    const nextBeforeSequence = page.at(-1)?.row.sequence;
+    return {
+      spans: page
+        .filter((item) => item.kind === 'span')
+        .map(({ row: { _id, _creationTime, ...span } }) => span),
+      events: page
+        .filter((item) => item.kind === 'event')
+        .map(({ row: { _id, _creationTime, ...event } }) => event),
+      hasMore: nextBeforeSequence !== undefined && nextBeforeSequence > 1,
+      ...(nextBeforeSequence !== undefined ? { nextBeforeSequence } : {}),
+      totalRecorded: Math.max(0, (run.nextTelemetrySequence ?? 1) - 1),
+    };
   },
 });
 
@@ -1346,6 +1395,46 @@ export const consumePreviewQuotaResult = internalMutation({
   },
 });
 
+const NODESLIDE_AGENT_TELEMETRY_VERSION = 'nodeslide-otel/v1';
+const NODESLIDE_AGENT_LEASE_MS = 5 * 60 * 1000;
+
+function agentTraceId(deckId: string, runId: string): string {
+  return nodeslideIdDigest(`nodeslide-agent-trace\u001f${deckId}\u001f${runId}`);
+}
+
+function agentSpanId(traceId: string, label: string, sequence: number): string {
+  return nodeslideIdDigest(`${traceId}\u001f${label}\u001f${sequence}`).slice(0, 16);
+}
+
+function agentOperation(status: Doc<'nodeslide_agent_runs'>['status']): {
+  name: string;
+  operationName: string;
+  toolName?: string;
+} {
+  switch (status) {
+    case 'queued':
+      return { name: 'Queue and authorize', operationName: 'agent.queue' };
+    case 'researching':
+      return {
+        name: 'Search external references',
+        operationName: 'execute_tool',
+        toolName: 'web_search',
+      };
+    case 'planning':
+      return { name: 'Plan bounded slide edit', operationName: 'chat' };
+    case 'validating':
+      return {
+        name: 'Validate candidate',
+        operationName: 'execute_tool',
+        toolName: 'candidate_validation',
+      };
+    case 'awaiting_review':
+      return { name: 'Await human approval', operationName: 'agent.await_approval' };
+    default:
+      return { name: 'Finalize agent run', operationName: 'agent.finalize' };
+  }
+}
+
 export const beginAgentRunInternal = internalMutation({
   args: {
     deckId: v.string(),
@@ -1367,11 +1456,82 @@ export const beginAgentRunInternal = internalMutation({
       )
       .first();
     if (existing) {
+      if (existing.status === 'failed' && !existing.patchId && existing.attempt < 3) {
+        const now = Date.now();
+        const traceId = existing.otelTraceId ?? agentTraceId(args.deckId, existing.id);
+        const sequence = existing.nextTelemetrySequence ?? 3;
+        const attempt = existing.attempt + 1;
+        const rootSpanId = agentSpanId(traceId, `invoke_agent_retry_${attempt}`, sequence);
+        await ctx.db.insert('nodeslide_agent_spans', {
+          id: nodeslideStableId('agent_span', existing.id, rootSpanId),
+          deckId: args.deckId,
+          runId: existing.id,
+          traceId,
+          spanId: rootSpanId,
+          name: `Invoke NodeSlide agent (attempt ${attempt})`,
+          operationName: 'invoke_agent',
+          kind: 'internal',
+          status: 'unset',
+          startTime: now,
+          provider: existing.provider,
+          model: existing.model,
+          attributes: [
+            { key: 'gen_ai.operation.name', value: 'invoke_agent' },
+            { key: 'nodeslide.run.attempt', value: attempt },
+            { key: 'nodeslide.retry.reason', value: 'prior_attempt_failed' },
+          ],
+          sequence,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert('nodeslide_agent_events', {
+          id: nodeslideStableId('agent_event', existing.id, 'retry', String(attempt)),
+          deckId: args.deckId,
+          runId: existing.id,
+          traceId,
+          spanId: rootSpanId,
+          name: 'agent.retry.started',
+          severity: 'warn',
+          timestamp: now,
+          body: `Retry attempt ${attempt} started from the durable request boundary.`,
+          attributes: [{ key: 'nodeslide.run.attempt', value: attempt }],
+          sequence: sequence + 1,
+        });
+        await ctx.db.patch(existing._id, {
+          status: 'queued',
+          attempt,
+          rootSpanId,
+          checkpoint: 'queued',
+          error: undefined,
+          completedAt: undefined,
+          updatedAt: now,
+          lastHeartbeatAt: now,
+          leaseExpiresAt: now + NODESLIDE_AGENT_LEASE_MS,
+          nextTelemetrySequence: sequence + 2,
+          otelExportStatus: 'pending',
+          otelExportedAt: undefined,
+          otelExportError: undefined,
+        });
+        await ctx.db.insert('nodeslide_agent_messages', {
+          id: nodeslideStableId('agent_message', existing.id, 'retry', String(attempt)),
+          deckId: args.deckId,
+          runId: existing.id,
+          role: 'system',
+          content: `Retrying the same idempotent request (attempt ${attempt} of 3).`,
+          createdAt: now,
+        });
+        const retried = await ctx.db.get(existing._id);
+        if (!retried) throw new Error('Agent run retry could not be loaded.');
+        const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = retried;
+        return { created: true, run };
+      }
       const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = existing;
       return { created: false, run };
     }
     const now = Date.now();
     const id = nodeslideStableId('agent_run', args.deckId, idempotencyKey);
+    const otelTraceId = agentTraceId(args.deckId, id);
+    const rootSpanId = agentSpanId(otelTraceId, 'invoke_agent', 1);
     const run = {
       id,
       deckId: args.deckId,
@@ -1383,10 +1543,55 @@ export const beginAgentRunInternal = internalMutation({
       model: requiredText(args.model, 'model', 180),
       webResearch: args.webResearch,
       attempt: 1,
+      otelTraceId,
+      rootSpanId,
+      checkpoint: 'queued',
+      lastHeartbeatAt: now,
+      leaseExpiresAt: now + NODESLIDE_AGENT_LEASE_MS,
+      nextTelemetrySequence: 3,
+      telemetryVersion: NODESLIDE_AGENT_TELEMETRY_VERSION,
+      otelExportStatus: 'pending' as const,
       createdAt: now,
       updatedAt: now,
     };
     await ctx.db.insert('nodeslide_agent_runs', run);
+    await ctx.db.insert('nodeslide_agent_spans', {
+      id: nodeslideStableId('agent_span', id, rootSpanId),
+      deckId: args.deckId,
+      runId: id,
+      traceId: otelTraceId,
+      spanId: rootSpanId,
+      name: 'Invoke NodeSlide agent',
+      operationName: 'invoke_agent',
+      kind: 'internal',
+      status: 'unset',
+      startTime: now,
+      provider: run.provider,
+      model: run.model,
+      attributes: [
+        { key: 'gen_ai.operation.name', value: 'invoke_agent' },
+        { key: 'gen_ai.provider.name', value: run.provider },
+        { key: 'gen_ai.request.model', value: run.model },
+        { key: 'nodeslide.web_research', value: run.webResearch },
+        { key: 'nodeslide.run.attempt', value: 1 },
+      ],
+      sequence: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert('nodeslide_agent_events', {
+      id: nodeslideStableId('agent_event', id, 'request_accepted'),
+      deckId: args.deckId,
+      runId: id,
+      traceId: otelTraceId,
+      spanId: rootSpanId,
+      name: 'agent.request.accepted',
+      severity: 'info',
+      timestamp: now,
+      body: 'Agent request accepted and durably queued.',
+      attributes: [{ key: 'nodeslide.checkpoint', value: 'queued' }],
+      sequence: 2,
+    });
     await ctx.db.insert('nodeslide_agent_messages', {
       id: nodeslideStableId('agent_message', id, 'user'),
       deckId: args.deckId,
@@ -1411,6 +1616,54 @@ export const getAgentRunInternal = internalQuery({
     if (!row || row.deckId !== args.deckId) return null;
     const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = row;
     return run;
+  },
+});
+
+export const getAgentTelemetryForExportInternal = internalQuery({
+  args: { runId: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!row) return null;
+    const spans = await ctx.db
+      .query('nodeslide_agent_spans')
+      .withIndex('by_run_sequence', (query) => query.eq('runId', args.runId))
+      .collect();
+    const events = await ctx.db
+      .query('nodeslide_agent_events')
+      .withIndex('by_run_sequence', (query) => query.eq('runId', args.runId))
+      .collect();
+    const { _id, _creationTime, ownerDigest: _ownerDigest, ...run } = row;
+    return {
+      run,
+      spans: spans.map(({ _id, _creationTime, ...span }) => span),
+      events: events.map(({ _id, _creationTime, ...event }) => event),
+    };
+  },
+});
+
+export const markAgentTelemetryExportInternal = internalMutation({
+  args: {
+    runId: v.string(),
+    status: v.union(v.literal('exported'), v.literal('skipped'), v.literal('failed')),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', args.runId))
+      .unique();
+    if (!row) return false;
+    await ctx.db.patch(row._id, {
+      otelExportStatus: args.status,
+      otelExportedAt: Date.now(),
+      ...(args.error
+        ? { otelExportError: requiredText(args.error, 'OTLP export error', 300) }
+        : {}),
+    });
+    return true;
   },
 });
 
@@ -1446,14 +1699,94 @@ export const advanceAgentRunInternal = internalMutation({
     if (row.status === 'cancelled' && args.status !== 'cancelled') return null;
     const now = Date.now();
     const terminal = ['completed', 'failed', 'cancelled'].includes(args.status);
+    const sequence = row.nextTelemetrySequence ?? 3;
+    const traceId = row.otelTraceId ?? agentTraceId(args.deckId, args.runId);
+    const rootSpanId = row.rootSpanId ?? agentSpanId(traceId, 'invoke_agent', 1);
+    const phase = agentOperation(row.status);
+    const phaseSpanId = agentSpanId(traceId, phase.operationName, sequence);
+    const phaseStatus = args.status === 'failed' ? 'error' : 'ok';
+    await ctx.db.insert('nodeslide_agent_spans', {
+      id: nodeslideStableId('agent_span', args.runId, phaseSpanId),
+      deckId: args.deckId,
+      runId: args.runId,
+      traceId,
+      spanId: phaseSpanId,
+      parentSpanId: rootSpanId,
+      name: phase.name,
+      operationName: phase.operationName,
+      kind: phase.operationName === 'chat' ? 'client' : 'internal',
+      status: phaseStatus,
+      startTime: row.updatedAt,
+      endTime: now,
+      durationMs: Math.max(0, now - row.updatedAt),
+      provider: row.provider,
+      model: row.model,
+      ...(phase.toolName ? { toolName: phase.toolName } : {}),
+      attributes: [
+        { key: 'gen_ai.operation.name', value: phase.operationName },
+        { key: 'gen_ai.provider.name', value: row.provider },
+        { key: 'gen_ai.request.model', value: row.model },
+        { key: 'nodeslide.run.status.from', value: row.status },
+        { key: 'nodeslide.run.status.to', value: args.status },
+        { key: 'nodeslide.checkpoint', value: args.status },
+      ],
+      sequence,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert('nodeslide_agent_events', {
+      id: nodeslideStableId('agent_event', args.runId, String(sequence + 1), args.status),
+      deckId: args.deckId,
+      runId: args.runId,
+      traceId,
+      spanId: phaseSpanId,
+      name: `agent.status.${args.status}`,
+      severity: args.status === 'failed' ? 'error' : 'info',
+      timestamp: now,
+      body:
+        args.status === 'failed'
+          ? 'Agent run failed without applying deck changes.'
+          : `Durable checkpoint advanced to ${args.status}.`,
+      attributes: [
+        { key: 'nodeslide.checkpoint', value: args.status },
+        { key: 'nodeslide.run.attempt', value: row.attempt },
+      ],
+      sequence: sequence + 1,
+    });
     await ctx.db.patch(row._id, {
       status: args.status,
       updatedAt: now,
+      checkpoint: args.status,
+      lastHeartbeatAt: now,
+      leaseExpiresAt: terminal ? now : now + NODESLIDE_AGENT_LEASE_MS,
+      nextTelemetrySequence: sequence + 2,
+      telemetryVersion: NODESLIDE_AGENT_TELEMETRY_VERSION,
+      otelTraceId: traceId,
+      rootSpanId,
       ...(terminal ? { completedAt: now } : {}),
       ...(args.patchId ? { patchId: args.patchId } : {}),
       ...(args.traceId ? { traceId: args.traceId } : {}),
       ...(args.error ? { error: requiredText(args.error, 'run error', 600) } : {}),
     });
+    if (terminal) {
+      const root = await ctx.db
+        .query('nodeslide_agent_spans')
+        .withIndex('by_stable_id', (query) =>
+          query.eq('id', nodeslideStableId('agent_span', args.runId, rootSpanId)),
+        )
+        .unique();
+      if (root) {
+        await ctx.db.patch(root._id, {
+          status: args.status === 'failed' ? 'error' : 'ok',
+          endTime: now,
+          durationMs: Math.max(0, now - root.startTime),
+          updatedAt: now,
+        });
+      }
+      await ctx.scheduler.runAfter(0, internal.nodeslideTelemetry.exportRunOtlpInternal, {
+        runId: args.runId,
+      });
+    }
     if (args.message) {
       const message = requiredText(args.message, 'run message', 4000);
       const role = args.role ?? 'system';
@@ -1469,6 +1802,107 @@ export const advanceAgentRunInternal = internalMutation({
       });
     }
     return args.runId;
+  },
+});
+
+/** Fails abandoned active runs honestly so a crashed action never spins forever in the UI. */
+export const recoverStaleAgentRunsInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const stale = await ctx.db
+      .query('nodeslide_agent_runs')
+      .filter((query) =>
+        query.and(
+          query.lt(query.field('leaseExpiresAt'), now),
+          query.or(
+            query.eq(query.field('status'), 'queued'),
+            query.eq(query.field('status'), 'researching'),
+            query.eq(query.field('status'), 'planning'),
+            query.eq(query.field('status'), 'validating'),
+          ),
+        ),
+      )
+      .take(100);
+    for (const run of stale) {
+      const sequence = run.nextTelemetrySequence ?? 3;
+      const traceId = run.otelTraceId ?? agentTraceId(run.deckId, run.id);
+      const rootSpanId = run.rootSpanId ?? agentSpanId(traceId, 'invoke_agent', 1);
+      const recoverySpanId = agentSpanId(traceId, 'stale_recovery', sequence);
+      await ctx.db.insert('nodeslide_agent_spans', {
+        id: nodeslideStableId('agent_span', run.id, recoverySpanId),
+        deckId: run.deckId,
+        runId: run.id,
+        traceId,
+        spanId: recoverySpanId,
+        parentSpanId: rootSpanId,
+        name: 'Recover expired worker lease',
+        operationName: 'agent.recover',
+        kind: 'internal',
+        status: 'error',
+        startTime: run.leaseExpiresAt ?? run.updatedAt,
+        endTime: now,
+        durationMs: Math.max(0, now - (run.leaseExpiresAt ?? run.updatedAt)),
+        provider: run.provider,
+        model: run.model,
+        attributes: [
+          { key: 'nodeslide.recovery.reason', value: 'worker_lease_expired' },
+          { key: 'nodeslide.last_checkpoint', value: run.checkpoint ?? run.status },
+        ],
+        sequence,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert('nodeslide_agent_events', {
+        id: nodeslideStableId('agent_event', run.id, 'worker_lease_expired'),
+        deckId: run.deckId,
+        runId: run.id,
+        traceId,
+        spanId: recoverySpanId,
+        name: 'agent.worker_lease_expired',
+        severity: 'error',
+        timestamp: now,
+        body: 'The worker lease expired. The run was failed without applying deck changes.',
+        attributes: [{ key: 'nodeslide.last_checkpoint', value: run.checkpoint ?? run.status }],
+        sequence: sequence + 1,
+      });
+      await ctx.db.patch(run._id, {
+        status: 'failed',
+        checkpoint: 'failed',
+        error: 'Worker lease expired before the run reached a safe checkpoint.',
+        updatedAt: now,
+        completedAt: now,
+        lastHeartbeatAt: now,
+        leaseExpiresAt: now,
+        nextTelemetrySequence: sequence + 2,
+      });
+      const root = await ctx.db
+        .query('nodeslide_agent_spans')
+        .withIndex('by_stable_id', (query) =>
+          query.eq('id', nodeslideStableId('agent_span', run.id, rootSpanId)),
+        )
+        .unique();
+      if (root) {
+        await ctx.db.patch(root._id, {
+          status: 'error',
+          endTime: now,
+          durationMs: Math.max(0, now - root.startTime),
+          updatedAt: now,
+        });
+      }
+      await ctx.scheduler.runAfter(0, internal.nodeslideTelemetry.exportRunOtlpInternal, {
+        runId: run.id,
+      });
+      await ctx.db.insert('nodeslide_agent_messages', {
+        id: nodeslideStableId('agent_message', run.id, 'worker_lease_expired'),
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'system',
+        content: 'The worker stopped responding. No deck changes were applied; retry the request.',
+        createdAt: now,
+      });
+    }
+    return stale.length;
   },
 });
 
@@ -2623,7 +3057,76 @@ async function finishPatchTrace(
   if (run) {
     const runStatus =
       status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'failed';
-    await ctx.db.patch(run._id, { status: runStatus, updatedAt: now, completedAt: now });
+    const sequence = run.nextTelemetrySequence ?? 3;
+    const otelTraceId = run.otelTraceId ?? agentTraceId(run.deckId, run.id);
+    const rootSpanId = run.rootSpanId ?? agentSpanId(otelTraceId, 'invoke_agent', 1);
+    const decisionSpanId = agentSpanId(otelTraceId, 'human_decision', sequence);
+    await ctx.db.insert('nodeslide_agent_spans', {
+      id: nodeslideStableId('agent_span', run.id, decisionSpanId),
+      deckId: run.deckId,
+      runId: run.id,
+      traceId: otelTraceId,
+      spanId: decisionSpanId,
+      parentSpanId: rootSpanId,
+      name: status === 'completed' ? 'Accept proposal' : 'Decline proposal',
+      operationName: 'agent.human_decision',
+      kind: 'internal',
+      status: status === 'failed' ? 'error' : 'ok',
+      startTime: now,
+      endTime: now,
+      durationMs: 0,
+      provider: run.provider,
+      model: run.model,
+      attributes: [
+        { key: 'nodeslide.human_decision', value: status },
+        { key: 'nodeslide.patch.id', value: patch.id },
+      ],
+      sequence,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert('nodeslide_agent_events', {
+      id: nodeslideStableId('agent_event', run.id, 'human_decision', status),
+      deckId: run.deckId,
+      runId: run.id,
+      traceId: otelTraceId,
+      spanId: decisionSpanId,
+      name: `agent.human_decision.${status}`,
+      severity: status === 'failed' ? 'error' : 'info',
+      timestamp: now,
+      body:
+        status === 'completed'
+          ? 'Human accepted the validated proposal.'
+          : 'Human declined or could not apply the proposal; the deck remains unchanged.',
+      attributes: [{ key: 'nodeslide.human_decision', value: status }],
+      sequence: sequence + 1,
+    });
+    await ctx.db.patch(run._id, {
+      status: runStatus,
+      checkpoint: runStatus,
+      updatedAt: now,
+      completedAt: now,
+      lastHeartbeatAt: now,
+      leaseExpiresAt: now,
+      nextTelemetrySequence: sequence + 2,
+    });
+    const root = await ctx.db
+      .query('nodeslide_agent_spans')
+      .withIndex('by_stable_id', (query) =>
+        query.eq('id', nodeslideStableId('agent_span', run.id, rootSpanId)),
+      )
+      .unique();
+    if (root) {
+      await ctx.db.patch(root._id, {
+        status: status === 'failed' ? 'error' : 'ok',
+        endTime: now,
+        durationMs: Math.max(0, now - root.startTime),
+        updatedAt: now,
+      });
+    }
+    await ctx.scheduler.runAfter(0, internal.nodeslideTelemetry.exportRunOtlpInternal, {
+      runId: run.id,
+    });
     const content =
       status === 'completed'
         ? 'Accepted and applied as a new deck version.'

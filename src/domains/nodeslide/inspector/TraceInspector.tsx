@@ -28,6 +28,7 @@ import {
   type DeckPatch,
   type NodeSlideAgentMessage,
   type NodeSlideAgentRun,
+  type NodeSlideAgentTelemetryPage,
   type ValidationIssue,
   type ValidationResult,
   nodeSlideReasoningEffort,
@@ -54,6 +55,7 @@ interface TraceInspectorProps {
   patches?: readonly DeckPatch[];
   agentRuns?: readonly NodeSlideAgentRun[];
   agentMessages?: readonly NodeSlideAgentMessage[];
+  agentTelemetry?: NodeSlideAgentTelemetryPage;
 }
 
 const DENSITY_KEY = 'ns-trace-density';
@@ -78,6 +80,7 @@ export function TraceInspector({
   patches = [],
   agentRuns = [],
   agentMessages = [],
+  agentTelemetry,
 }: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
   const latestValidation = useMemo(
@@ -97,6 +100,11 @@ export function TraceInspector({
   };
 
   const selected = sorted.find((trace) => trace.id === selectedTraceId) ?? sorted[0];
+  const selectedRun = selected
+    ? (agentRuns.find((run) => run.traceId === selected.id) ??
+      (selected.id === sorted[0]?.id ? agentRuns[0] : undefined))
+    : undefined;
+  const selectedTelemetry = selectedRun?.id === agentRuns[0]?.id ? agentTelemetry : undefined;
   const patch = selected?.patchId
     ? patches.find((candidate) => candidate.id === selected.patchId)
     : undefined;
@@ -177,19 +185,38 @@ export function TraceInspector({
             <article
               className={`ns-trace-summary ${isFallbackTrace(selected) ? 'is-fallback' : ''}`}
             >
-              <TraceBanner trace={selected} validation={traceValidation} />
+              <TraceBanner
+                trace={selected}
+                validation={traceValidation}
+                {...(selectedRun ? { run: selectedRun } : {})}
+              />
               <div className="ns-trace-section-label">
                 <span>Execution</span>
-                <small>{NODE_ORDER.length} auditable events</small>
+                <small>
+                  {selectedTelemetry?.totalRecorded ?? NODE_ORDER.length} auditable records
+                </small>
               </div>
-              <CustodyRail
-                trace={selected}
-                patch={patch}
-                validation={traceValidation}
-                density={density}
-                openNode={openNode}
-                onToggle={toggleNode}
-              />
+              {density === 'human' ? (
+                <TraceOverview
+                  trace={selected}
+                  {...(selectedRun ? { run: selectedRun } : {})}
+                  {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
+                />
+              ) : density === 'tech' ? (
+                <RawTelemetry
+                  {...(selectedRun ? { run: selectedRun } : {})}
+                  {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
+                />
+              ) : (
+                <CustodyRail
+                  trace={selected}
+                  patch={patch}
+                  validation={traceValidation}
+                  density={density}
+                  openNode={openNode}
+                  onToggle={toggleNode}
+                />
+              )}
               {traceValidation && traceValidation.id !== latestValidation?.id ? (
                 <ValidationSummary validation={traceValidation} label="Selected trace validation" />
               ) : null}
@@ -293,9 +320,11 @@ function DensityButton({
 function TraceBanner({
   trace,
   validation,
+  run,
 }: {
   trace: AgentTrace;
   validation: TraceValidation | null;
+  run?: NodeSlideAgentRun;
 }) {
   const fallback = isFallbackTrace(trace);
   const billedAttempt = hasProviderAttemptTelemetry(trace);
@@ -310,6 +339,13 @@ function TraceBanner({
           deck {validation ? `v${validation.deckVersion}` : 'unversioned'}
         </span>
       </div>
+      <time
+        className="ns-trace-started-at"
+        dateTime={new Date(run?.createdAt ?? trace.createdAt).toISOString()}
+        title={new Date(run?.createdAt ?? trace.createdAt).toLocaleString()}
+      >
+        Started {formatTimestamp(run?.createdAt ?? trace.createdAt)}
+      </time>
       <h3 className="ns-trace-run-title">{trace.summary}</h3>
       <div
         className={`ns-trace-attrib ${fallback ? 'is-fallback' : 'is-live'}`}
@@ -351,6 +387,143 @@ function TraceBanner({
         </p>
       ) : null}
     </header>
+  );
+}
+
+function TraceOverview({
+  trace,
+  run,
+  telemetry,
+}: {
+  trace: AgentTrace;
+  run?: NodeSlideAgentRun;
+  telemetry?: NodeSlideAgentTelemetryPage;
+}) {
+  const activity = [
+    ...(telemetry?.spans.map((span) => ({
+      key: span.id,
+      sequence: span.sequence,
+      label: span.name,
+      timestamp: span.endTime ?? span.startTime,
+      meta: span.durationMs === undefined ? span.status : formatDurationMs(span.durationMs),
+      status: span.status,
+    })) ?? []),
+    ...(telemetry?.events.map((event) => ({
+      key: event.id,
+      sequence: event.sequence,
+      label: event.body,
+      timestamp: event.timestamp,
+      meta: event.name,
+      status: event.severity === 'error' ? 'error' : 'ok',
+    })) ?? []),
+  ]
+    .sort((left, right) => right.sequence - left.sequence)
+    .slice(0, 4);
+  const activeIndex = trace.status === 'awaiting_review' ? 5 : trace.status === 'failed' ? 4 : 5;
+  return (
+    <div className="ns-trace-overview">
+      <ol className="ns-trace-phase-strip" aria-label="Run progress">
+        {NODE_ORDER.map((node, index) => (
+          <li
+            key={node}
+            className={index <= activeIndex ? 'is-complete' : ''}
+            title={NODE_META[node].label}
+          >
+            <span />
+            <small>{NODE_META[node].label}</small>
+          </li>
+        ))}
+      </ol>
+      <div className="ns-trace-activity-head">
+        <strong>Latest activity</strong>
+        <span>
+          {run?.checkpoint ? `Checkpoint: ${humanize(run.checkpoint)}` : 'Aggregate trace'}
+        </span>
+      </div>
+      {activity.length ? (
+        <ol className="ns-trace-activity-list">
+          {activity.map((item) => (
+            <li key={item.key} className={`is-${item.status}`}>
+              <span className="ns-trace-activity-dot" />
+              <div>
+                <strong>{item.label}</strong>
+                <small>{item.meta}</small>
+              </div>
+              <time
+                dateTime={new Date(item.timestamp).toISOString()}
+                title={new Date(item.timestamp).toLocaleString()}
+              >
+                {formatTimestamp(item.timestamp)}
+              </time>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="ns-trace-legacy-note">Detailed spans begin with the next agent run.</p>
+      )}
+      {telemetry?.hasMore ? (
+        <p className="ns-trace-truncated">
+          Showing the latest {telemetry.spans.length + telemetry.events.length} of{' '}
+          {telemetry.totalRecorded}. The complete run remains available through the paginated API.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RawTelemetry({
+  run,
+  telemetry,
+}: {
+  run?: NodeSlideAgentRun;
+  telemetry?: NodeSlideAgentTelemetryPage;
+}) {
+  if (!run || !telemetry) {
+    return (
+      <p className="ns-trace-legacy-note">Structured telemetry begins with the next agent run.</p>
+    );
+  }
+  return (
+    <div className="ns-trace-raw">
+      <dl>
+        <div>
+          <dt>trace_id</dt>
+          <dd>{run.otelTraceId ?? 'not recorded'}</dd>
+        </div>
+        <div>
+          <dt>root_span_id</dt>
+          <dd>{run.rootSpanId ?? 'not recorded'}</dd>
+        </div>
+        <div>
+          <dt>schema</dt>
+          <dd>{run.telemetryVersion ?? 'legacy'}</dd>
+        </div>
+        <div>
+          <dt>records</dt>
+          <dd>{telemetry.totalRecorded}</dd>
+        </div>
+      </dl>
+      <ol>
+        {[...telemetry.spans]
+          .sort((left, right) => right.sequence - left.sequence)
+          .map((span) => (
+            <li key={span.id}>
+              <time dateTime={new Date(span.startTime).toISOString()}>
+                {formatTimestamp(span.startTime)}
+              </time>
+              <code>{span.operationName}</code>
+              <span>{span.name}</span>
+              <small>
+                {span.status} ·{' '}
+                {span.durationMs === undefined ? 'open' : formatDurationMs(span.durationMs)}
+              </small>
+            </li>
+          ))}
+      </ol>
+      {telemetry.hasMore ? (
+        <p className="ns-trace-truncated">More records are available by cursor.</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1322,7 +1495,19 @@ function humanize(value: string): string {
 }
 
 function formatRunTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
-    timestamp,
-  );
+  return formatTimestamp(timestamp);
+}
+
+function formatTimestamp(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(timestamp);
+}
+
+function formatDurationMs(durationMs: number): string {
+  if (durationMs < 1000) return `${Math.round(durationMs)}ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
+  return `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1000)}s`;
 }
