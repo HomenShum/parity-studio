@@ -941,6 +941,7 @@ function elementKindGlyph(element: SlideElement) {
   if (element.kind === 'text') return 'T';
   if (element.kind === 'image') return '▧';
   if (element.kind === 'chart') return '▥';
+  if (element.kind === 'math') return 'ƒ';
   if (element.kind === 'connector') return '↗';
   return '◇';
 }

@@ -542,7 +542,7 @@ export const createDeckFromBrief = action({
     const provider = await invokeNodeSlideBriefProvider(providerChoice, async () =>
       callNodeSlideFreeJson({
         systemPrompt:
-          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string}}]}. Produce 6–8 concise slides. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
+          'You are NodeSlide’s presentation strategist. Return JSON only with {title,narrative:string[],plan:string[],slides:[{title,section,headline,body,bullets:string[],metric?:string,metricLabel?:string,chart?:{labels:string[],values:number[],unit?:string},formula?:{expression:string,display:string,variables:{label:string,value:number,unit?:string}[]},image?:{altText:string,credit:string}}]}. Produce 6–8 concise slides. Use at most one chart, formula, or image primitive on a slide. When the brief requests one of those primitives, emit its structured object; never merely claim in prose that a primitive exists. Formula expression must be machine-readable and display must be presentation-ready. If no licensed image asset is supplied, emit image metadata without an image URL so NodeSlide creates an honest replace-image placeholder. Claims must stay grounded in the supplied brief; label illustrative evidence honestly.',
         userText: JSON.stringify({
           title,
           brief,
@@ -550,6 +550,73 @@ export const createDeckFromBrief = action({
           providerMode: providerChoice.providerMode,
         }),
         maxTokens: 5000,
+        jsonSchema: {
+          name: 'nodeslide_deck_spec',
+          schema: {
+            type: 'object',
+            required: ['title', 'narrative', 'plan', 'slides'],
+            properties: {
+              title: { type: 'string' },
+              narrative: { type: 'array', items: { type: 'string' } },
+              plan: { type: 'array', items: { type: 'string' } },
+              slides: {
+                type: 'array',
+                minItems: 6,
+                maxItems: 8,
+                items: {
+                  type: 'object',
+                  required: ['title', 'section', 'headline', 'body', 'bullets'],
+                  properties: {
+                    title: { type: 'string' },
+                    section: { type: 'string' },
+                    headline: { type: 'string' },
+                    body: { type: 'string' },
+                    bullets: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+                    metric: { type: 'string' },
+                    metricLabel: { type: 'string' },
+                    chart: {
+                      type: 'object',
+                      required: ['labels', 'values'],
+                      properties: {
+                        labels: { type: 'array', items: { type: 'string' } },
+                        values: { type: 'array', items: { type: 'number' } },
+                        unit: { type: 'string' },
+                      },
+                    },
+                    formula: {
+                      type: 'object',
+                      required: ['expression', 'display', 'variables'],
+                      properties: {
+                        expression: { type: 'string' },
+                        display: { type: 'string' },
+                        variables: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['label', 'value'],
+                            properties: {
+                              label: { type: 'string' },
+                              value: { type: 'number' },
+                              unit: { type: 'string' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    image: {
+                      type: 'object',
+                      required: ['altText', 'credit'],
+                      properties: {
+                        altText: { type: 'string' },
+                        credit: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       }),
     );
     const rawSpec = provider?.ok === true ? provider.value : fallbackSpec;

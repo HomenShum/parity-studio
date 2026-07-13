@@ -198,6 +198,65 @@ describe('NodeSlide patch protocol', () => {
     expect(result.affectedElementIds).toEqual(['headline']);
   });
 
+  it('edits a structured math primitive without dropping its canonical payload', () => {
+    const current = snapshot();
+    const math: SlideElement = {
+      id: 'formula',
+      slideId: 'slide-1',
+      name: 'Goals per match',
+      kind: 'math',
+      role: 'formula',
+      bbox: { x: 0.08, y: 0.34, width: 0.84, height: 0.28 },
+      rotation: 0,
+      content: '172 ÷ 64 = 2.69',
+      style: { color: '#13233f', fontSize: 34 },
+      math: {
+        expression: '172 / 64',
+        display: '172 ÷ 64 = 2.69',
+        variables: [
+          { label: 'Goals', value: 172 },
+          { label: 'Matches', value: 64 },
+        ],
+      },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable'],
+      version: 1,
+    };
+    current.elements.push(math);
+    current.slides[0]?.elementOrder.push(math.id);
+
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: current.deck.id,
+      slideIds: ['slide-1'],
+      elementIds: [math.id],
+      operationMode: 'copy',
+    };
+    const operations: PatchOperation[] = [
+      {
+        op: 'replace_text',
+        slideId: 'slide-1',
+        elementId: math.id,
+        text: '172 goals ÷ 64 matches = 2.69',
+      },
+    ];
+
+    expect(validateNodeSlidePatch(current, serverPatch(current, operations, scope))).toEqual([]);
+    const result = applyDeckPatch(current, {
+      baseDeckVersion: current.deck.version,
+      scope,
+      operations,
+    });
+    const updated = result.snapshot.elements.find((element) => element.id === math.id);
+    expect(updated?.content).toBe('172 goals ÷ 64 matches = 2.69');
+    expect(updated?.math).toMatchObject({
+      expression: '172 goals ÷ 64 matches = 2.69',
+      display: '172 goals ÷ 64 matches = 2.69',
+      variables: math.math?.variables,
+    });
+  });
+
   it('rejects stale patches before mutation', () => {
     expect(() =>
       applyDeckPatch(snapshot(), {

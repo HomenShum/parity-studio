@@ -45,9 +45,10 @@ export const NODESLIDE_LAYER_OPERATION_VERSION = 'nodeslide.layers/v1' as const;
 export const NODESLIDE_PROPAGATION_OPERATION_LIMIT = 128 as const;
 export const SLIDE_WIDTH_IN = 13.333;
 export const SLIDE_HEIGHT_IN = 7.5;
+export const NODESLIDE_MIN_READABLE_FONT_SIZE = 14;
 
 export type StudioDomain = 'parity' | 'nodeslide';
-export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'connector';
+export type ElementKind = 'text' | 'shape' | 'image' | 'chart' | 'math' | 'connector';
 export type PatchSource = 'human' | 'agent' | 'import' | 'system';
 export type PatchStatus = 'draft' | 'validating' | 'ready' | 'accepted' | 'rejected' | 'stale';
 export type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
@@ -145,6 +146,27 @@ export interface ChartData {
   sourceId?: string;
 }
 
+export interface MathVariable {
+  label: string;
+  value: number;
+  unit?: string;
+}
+
+/** Structured formula payload retained independently from its visual treatment. */
+export interface MathData {
+  expression: string;
+  display: string;
+  variables: MathVariable[];
+  sourceId?: string;
+}
+
+/** Image metadata also models intentional, editable replace-image placeholders. */
+export interface ImageData {
+  placeholder: boolean;
+  credit?: string;
+  sourceId?: string;
+}
+
 export interface SlideElement {
   id: string;
   slideId: string;
@@ -156,6 +178,8 @@ export interface SlideElement {
   content?: string;
   style: ElementStyle;
   chart?: ChartData;
+  math?: MathData;
+  image?: ImageData;
   imageUrl?: string;
   altText?: string;
   sourceIds: string[];

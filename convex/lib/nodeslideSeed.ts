@@ -23,6 +23,18 @@ export interface NodeSlidePlannedChart {
   unit?: string;
 }
 
+export interface NodeSlidePlannedFormula {
+  expression: string;
+  display: string;
+  variables: Array<{ label: string; value: number; unit?: string }>;
+}
+
+export interface NodeSlidePlannedImage {
+  altText: string;
+  credit: string;
+  imageUrl?: string;
+}
+
 export interface NodeSlidePlannedSlide {
   title: string;
   section: string;
@@ -32,6 +44,8 @@ export interface NodeSlidePlannedSlide {
   metric?: string;
   metricLabel?: string;
   chart?: NodeSlidePlannedChart;
+  formula?: NodeSlidePlannedFormula;
+  image?: NodeSlidePlannedImage;
 }
 
 export interface NodeSlideDeckSpec {
@@ -380,7 +394,7 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   const success =
     criteria.length > 0 ? criteria : ['Make the decision clear', 'Show credible evidence'];
 
-  return {
+  const spec: NodeSlideDeckSpec = {
     title: cleanTitle,
     narrative: [
       `Orient ${audience} around the central promise.`,
@@ -445,6 +459,76 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
       },
     ],
   };
+  applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
+  return spec;
+}
+
+function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prompt: string): void {
+  const formulaMatch = prompt.match(
+    /formula[^.;]{0,40}?(\d+(?:\.\d+)?)\s*(?:÷|\/)\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)([^,.;]*)/iu,
+  );
+  const formulaSlide = slides[2];
+  if (formulaMatch && formulaSlide) {
+    const numerator = Number(formulaMatch[1]);
+    const denominator = Number(formulaMatch[2]);
+    const result = Number(formulaMatch[3]);
+    const suffix = nodeslideCleanText(
+      (formulaMatch[4] ?? '').split(/\s+and\s+an?\s+editable\b/iu)[0] ?? '',
+      80,
+    );
+    const display = `${numerator} ÷ ${denominator} = ${result}${suffix ? ` ${suffix}` : ''}`;
+    formulaSlide.title = 'Derived measure';
+    formulaSlide.headline = display;
+    formulaSlide.body =
+      'This formula remains structured with editable inputs, a presentation value, and linked evidence.';
+    formulaSlide.formula = {
+      expression: `${numerator} / ${denominator}`,
+      display,
+      variables: [
+        { label: 'Numerator', value: numerator },
+        { label: 'Denominator', value: denominator },
+      ],
+    };
+  }
+
+  const comparisonText = prompt.match(/top scorers were\s+([^.;]+)/iu)?.[1];
+  const comparisons = comparisonText
+    ? comparisonText.split(/,\s*(?:and\s+)?|\s+and\s+/iu).flatMap((part) => {
+        const match = part.trim().match(/^(.+?)\s+(\d+(?:\.\d+)?)$/u);
+        if (!match) return [];
+        const label = nodeslideCleanText(match[1] ?? '', 60);
+        const value = Number(match[2]);
+        return label && Number.isFinite(value) ? [{ label, value }] : [];
+      })
+    : [];
+  const chartSlide = slides[3];
+  if (comparisons.length >= 2 && chartSlide) {
+    chartSlide.title = 'Supplied comparison';
+    chartSlide.headline = 'The supplied values remain an editable chart.';
+    chartSlide.body =
+      'Labels and values stay in the canonical deck spec for direct editing and native export.';
+    chartSlide.chart = {
+      labels: comparisons.slice(0, 8).map(({ label }) => label),
+      values: comparisons.slice(0, 8).map(({ value }) => value),
+      unit: 'goals',
+    };
+  }
+
+  const imageLabel = nodeslideCleanText(
+    prompt.match(/editable\s+([^.;]{3,80}?)\s+image placeholder/iu)?.[1] ?? '',
+    80,
+  );
+  const imageSlide = slides[5];
+  if (imageLabel && imageSlide) {
+    imageSlide.title = `${imageLabel} image placeholder`;
+    imageSlide.headline = 'Missing image evidence stays explicit, editable, and credited.';
+    imageSlide.body =
+      'NodeSlide keeps an honest replace-image primitive until a licensed asset is supplied.';
+    imageSlide.image = {
+      altText: `${imageLabel} — replace with a licensed image`,
+      credit: 'Licensed image and visible credit required before external use',
+    };
+  }
 }
 
 function sentenceCase(value: string): string {
@@ -521,6 +605,8 @@ function buildNodeSlideDeck(input: {
   const theme = nodeslideTheme(input.themeId);
   const sourceBriefId = nodeslideStableId('source', input.deckId, 'brief');
   const sourceEvidenceId = nodeslideStableId('source', input.deckId, 'evidence');
+  const linkedSources = linkedBriefSources(input.deckId, input.brief.prompt, input.now);
+  const linkedSourceIds = linkedSources.map((source) => source.id);
   const sources: SourceRecord[] = [
     {
       id: sourceBriefId,
@@ -542,6 +628,7 @@ function buildNodeSlideDeck(input: {
         : input.brief.successCriteria.join('; ') || 'No explicit success criteria supplied.',
       license: 'Internal working material',
     },
+    ...linkedSources,
   ];
 
   const slides: Slide[] = [];
@@ -559,6 +646,7 @@ function buildNodeSlideDeck(input: {
       theme,
       sourceBriefId,
       sourceEvidenceId,
+      linkedSourceIds,
     });
     slides.push(built.slide);
     elements.push(...built.elements);
@@ -595,6 +683,7 @@ function buildSlide(input: {
   theme: ThemeSpec;
   sourceBriefId: string;
   sourceEvidenceId: string;
+  linkedSourceIds: string[];
 }): { slide: Slide; elements: SlideElement[] } {
   const { planned, theme } = input;
   const elements: SlideElement[] = [];
@@ -669,8 +758,13 @@ function buildSlide(input: {
 
   const isOpening = input.index === 0;
   const isClosing = input.index === input.total - 1;
-  const hasChart = planned.chart !== undefined;
-  const bodyWidth = hasChart || planned.metric ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
+  const hasStructuredPrimitive = Boolean(planned.chart || planned.formula || planned.image);
+  const claimSourceIds = [input.sourceBriefId, ...input.linkedSourceIds];
+  const evidenceSourceIds =
+    input.linkedSourceIds.length > 0 ? input.linkedSourceIds : [input.sourceEvidenceId];
+  const primaryEvidenceSourceId = evidenceSourceIds[0] ?? input.sourceEvidenceId;
+  const bodyWidth =
+    hasStructuredPrimitive || planned.metric ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
   add(
     element('body', {
       name: 'Body copy',
@@ -686,15 +780,18 @@ function buildSlide(input: {
         fontWeight: 430,
         lineHeight: 1.35,
       },
-      sourceIds: [input.sourceBriefId],
+      sourceIds: claimSourceIds,
       locked: false,
       exportCapabilities: [...EDITABLE_CAPABILITIES],
     }),
   );
 
-  const bulletX = isOpening || isClosing ? 0.07 : hasChart || planned.metric ? 0.07 : 0.59;
-  const bulletY = isOpening || isClosing ? 0.72 : hasChart || planned.metric ? 0.62 : 0.42;
-  const bulletWidth = isOpening || isClosing ? 0.8 : hasChart || planned.metric ? 0.39 : 0.33;
+  const bulletX =
+    isOpening || isClosing ? 0.07 : hasStructuredPrimitive || planned.metric ? 0.07 : 0.59;
+  const bulletY =
+    isOpening || isClosing ? 0.72 : hasStructuredPrimitive || planned.metric ? 0.62 : 0.42;
+  const bulletWidth =
+    isOpening || isClosing ? 0.8 : hasStructuredPrimitive || planned.metric ? 0.39 : 0.33;
   planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
     add(
       element(`bullet-${bulletIndex + 1}`, {
@@ -716,14 +813,14 @@ function buildSlide(input: {
           fontWeight: 560,
           lineHeight: 1.2,
         },
-        sourceIds: [input.sourceBriefId],
+        sourceIds: claimSourceIds,
         locked: false,
         exportCapabilities: [...EDITABLE_CAPABILITIES],
       }),
     );
   });
 
-  if (planned.metric) {
+  if (planned.metric && !planned.formula) {
     add(
       element('metric', {
         name: 'Primary metric',
@@ -742,7 +839,7 @@ function buildSlide(input: {
           padding: 20,
           radius: theme.defaultRadius,
         },
-        sourceIds: [input.sourceEvidenceId],
+        sourceIds: evidenceSourceIds,
         locked: false,
         exportCapabilities: [...EDITABLE_CAPABILITIES],
       }),
@@ -763,7 +860,94 @@ function buildSlide(input: {
           lineHeight: 1.25,
           textAlign: 'center',
         },
-        sourceIds: [input.sourceEvidenceId],
+        sourceIds: evidenceSourceIds,
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+
+  if (planned.formula) {
+    add(
+      element('formula', {
+        name: 'Editable formula',
+        kind: 'math',
+        role: 'formula',
+        bbox: box(0.53, 0.42, 0.39, 0.24),
+        rotation: 0,
+        content: planned.formula.display,
+        style: {
+          fill: theme.colors.insight,
+          color: theme.colors.insightInk,
+          fontFamily: theme.typography.data,
+          fontSize: 30,
+          fontWeight: 720,
+          lineHeight: 1.15,
+          padding: 20,
+          radius: theme.defaultRadius,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+        },
+        math: {
+          expression: planned.formula.expression,
+          display: planned.formula.display,
+          variables: planned.formula.variables,
+          sourceId: primaryEvidenceSourceId,
+        },
+        sourceIds: evidenceSourceIds,
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+
+  if (planned.image) {
+    const hasEmbeddedAsset = Boolean(planned.image.imageUrl);
+    add(
+      element('image', {
+        name: 'Editable image',
+        kind: 'image',
+        role: 'image',
+        bbox: box(0.53, 0.39, 0.39, 0.38),
+        rotation: 0,
+        style: {
+          fill: theme.colors.accentSoft,
+          stroke: theme.colors.border,
+          strokeWidth: 2,
+          color: theme.colors.muted,
+          radius: theme.defaultRadius,
+        },
+        image: {
+          placeholder: !hasEmbeddedAsset,
+          credit: planned.image.credit,
+          sourceId: primaryEvidenceSourceId,
+        },
+        ...(planned.image.imageUrl ? { imageUrl: planned.image.imageUrl } : {}),
+        altText: planned.image.altText,
+        sourceIds: evidenceSourceIds,
+        locked: false,
+        exportCapabilities: hasEmbeddedAsset
+          ? ['web_native', 'pptx_static_fallback', 'google_importable']
+          : [...EDITABLE_CAPABILITIES],
+      }),
+    );
+    add(
+      element('image-credit', {
+        name: 'Image credit',
+        kind: 'text',
+        role: 'caption',
+        bbox: box(0.55, 0.79, 0.35, 0.07),
+        rotation: 0,
+        content: `${hasEmbeddedAsset ? 'Image credit' : 'Replace image before external use'} · ${planned.image.credit}`,
+        style: {
+          color: theme.colors.muted,
+          fontFamily: theme.typography.body,
+          fontSize: 14,
+          fontWeight: 520,
+          lineHeight: 1.2,
+          textAlign: 'center',
+        },
+        sourceIds: evidenceSourceIds,
         locked: false,
         exportCapabilities: [...EDITABLE_CAPABILITIES],
       }),
@@ -778,7 +962,7 @@ function buildSlide(input: {
         name: 'Evidence chart',
         kind: 'chart',
         role: 'evidence',
-        bbox: box(0.53, 0.7, 0.39, 0.17),
+        bbox: box(0.53, 0.42, 0.39, 0.4),
         rotation: 0,
         style: {
           fill: theme.colors.accentSoft,
@@ -791,9 +975,9 @@ function buildSlide(input: {
           labels,
           series: [{ name: 'Signal', values, color: theme.colors.accent }],
           ...(planned.chart.unit ? { unit: planned.chart.unit } : {}),
-          sourceId: input.sourceEvidenceId,
+          sourceId: primaryEvidenceSourceId,
         },
-        sourceIds: [input.sourceEvidenceId],
+        sourceIds: evidenceSourceIds,
         locked: false,
         exportCapabilities: [...EDITABLE_CAPABILITIES],
       }),
@@ -878,6 +1062,8 @@ function coercePlannedSlide(
   const metricLabel =
     typeof value.metricLabel === 'string' ? nodeslideCleanText(value.metricLabel, 100) : undefined;
   const chart = coerceChart(value.chart);
+  const formula = coerceFormula(value.formula);
+  const image = coerceImage(value.image);
   return {
     title,
     section,
@@ -887,6 +1073,8 @@ function coercePlannedSlide(
     ...(metric ? { metric } : {}),
     ...(metricLabel ? { metricLabel } : {}),
     ...(chart ? { chart } : {}),
+    ...(formula ? { formula } : {}),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -907,6 +1095,74 @@ function coerceChart(value: unknown): NodeSlidePlannedChart | undefined {
     values,
     ...(typeof value.unit === 'string' ? { unit: nodeslideCleanText(value.unit, 16) } : {}),
   };
+}
+
+function coerceFormula(value: unknown): NodeSlidePlannedFormula | undefined {
+  if (!isRecord(value)) return undefined;
+  const expression = cleanField(value.expression, '', 180);
+  const display = cleanField(value.display, expression, 180);
+  if (!expression || !display) return undefined;
+  const variables = Array.isArray(value.variables)
+    ? value.variables.flatMap((candidate) => {
+        if (!isRecord(candidate) || typeof candidate.value !== 'number') return [];
+        const label = cleanField(candidate.label, '', 48);
+        if (!label || !Number.isFinite(candidate.value)) return [];
+        const unit = cleanField(candidate.unit, '', 24);
+        return [
+          {
+            label,
+            value: candidate.value,
+            ...(unit ? { unit } : {}),
+          },
+        ];
+      })
+    : [];
+  return { expression, display, variables: variables.slice(0, 8) };
+}
+
+function coerceImage(value: unknown): NodeSlidePlannedImage | undefined {
+  if (!isRecord(value)) return undefined;
+  const altText = cleanField(value.altText, '', 160);
+  if (!altText) return undefined;
+  const credit = cleanField(value.credit, 'Credit required before external use', 180);
+  const imageUrl =
+    typeof value.imageUrl === 'string' &&
+    /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(value.imageUrl.trim())
+      ? value.imageUrl.trim().slice(0, 200_000)
+      : undefined;
+  return {
+    altText,
+    credit,
+    ...(imageUrl ? { imageUrl } : {}),
+  };
+}
+
+function linkedBriefSources(deckId: string, prompt: string, now: number): SourceRecord[] {
+  const urls = [
+    ...new Set(
+      (prompt.match(/https:\/\/[^\s<>()]+/g) ?? []).map((url) =>
+        url.replace(/[.,;:!?]+$/u, '').slice(0, 900),
+      ),
+    ),
+  ].slice(0, 8);
+  return urls.map((url, index) => {
+    let hostname = 'Linked source';
+    try {
+      hostname = new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      // The source still remains an explicit user-supplied URL.
+    }
+    return {
+      id: nodeslideStableId('source', deckId, 'url', String(index + 1), url),
+      deckId,
+      title: `${hostname} · supplied source ${index + 1}`,
+      url,
+      sourceType: 'url' as const,
+      retrievedAt: now,
+      citation: url,
+      license: 'User-supplied linked evidence; verify reuse rights before external publication.',
+    };
+  });
 }
 
 function cleanField(value: unknown, fallback: string, maxLength: number): string {
@@ -930,6 +1186,16 @@ interface NodeSlideInputRecord extends Record<string, unknown> {
   metric?: unknown;
   metricLabel?: unknown;
   chart?: unknown;
+  formula?: unknown;
+  image?: unknown;
+  expression?: unknown;
+  display?: unknown;
+  variables?: unknown;
+  label?: unknown;
+  value?: unknown;
+  altText?: unknown;
+  credit?: unknown;
+  imageUrl?: unknown;
   labels?: unknown;
   values?: unknown;
   unit?: unknown;

@@ -31,6 +31,8 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('name="nodeslide-preview-access-code"');
     expect(markup).toContain('autoComplete="off"');
     expect(markup).toContain('Add a deck title to continue.');
+    expect(markup).toContain('Use World Cup data story');
+    expect(markup).toContain('chart, formula, and image primitives');
     expect(markup).toMatch(/type="submit"[^>]*disabled[^>]*aria-describedby/);
   });
 

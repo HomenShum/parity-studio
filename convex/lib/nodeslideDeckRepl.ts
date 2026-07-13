@@ -417,7 +417,9 @@ function executeCommand(
         if (a && b && boundingBoxesIntersect(a.bbox, b.bbox)) overlaps += 1;
       }
     }
-    const textElements = elements.filter((element) => element.kind === 'text');
+    const textElements = elements.filter(
+      (element) => element.kind === 'text' || element.kind === 'math',
+    );
     const sourceLinked = elements.filter((element) => element.sourceIds.length > 0).length;
     return {
       ok: true,

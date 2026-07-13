@@ -172,13 +172,32 @@ function renderSemanticChart(element: SlideElement): string {
 
 function renderSemanticImage(element: SlideElement): string {
   const label = element.altText?.trim() || element.name;
-  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(label)}</figcaption></figure>`;
+  const credit = element.image?.credit?.trim()
+    ? `<p data-image-credit>${escapeHtml(element.image.credit.trim())}</p>`
+    : '';
+  const status = element.image?.placeholder ? '<p data-image-placeholder>Replace image</p>' : '';
+  return `<figure ${semanticElementAttributes(element)}><figcaption>${escapeHtml(label)}</figcaption>${status}${credit}</figure>`;
+}
+
+function renderSemanticMath(element: SlideElement): string {
+  const math = element.math;
+  if (!math) {
+    return `<div ${semanticElementAttributes(element)} role="math">Formula data unavailable.</div>`;
+  }
+  const variables = math.variables
+    .map(
+      (variable) =>
+        `<div><dt>${escapeHtml(variable.label)}</dt><dd>${escapeHtml(`${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`)}</dd></div>`,
+    )
+    .join('');
+  return `<figure ${semanticElementAttributes(element)} role="math" data-expression="${escapeHtml(math.expression)}"><figcaption>${escapeHtml(math.display)}</figcaption>${variables ? `<dl>${variables}</dl>` : ''}</figure>`;
 }
 
 function renderSemanticElement(element: SlideElement): string {
   if (isDecorativeElement(element)) return '';
   if (element.kind === 'chart') return renderSemanticChart(element);
   if (element.kind === 'image') return renderSemanticImage(element);
+  if (element.kind === 'math') return renderSemanticMath(element);
   return renderSemanticTextElement(element);
 }
 
@@ -421,6 +440,7 @@ function renderElement(snapshot: DeckSnapshot, element: SlideElement, markerId: 
   else if (element.kind === 'shape') body = renderShape(snapshot, element, box);
   else if (element.kind === 'image') body = renderImage(snapshot, element, box);
   else if (element.kind === 'chart') body = renderChart(snapshot, element, box);
+  else if (element.kind === 'math') body = renderShape(snapshot, element, box);
   else body = renderConnector(snapshot, element, box, markerId);
   const accessibility = isDecorativeElement(element)
     ? ' aria-hidden="true"'

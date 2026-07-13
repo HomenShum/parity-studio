@@ -111,7 +111,9 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
         role="img"
         aria-label={element.altText ?? element.name}
       >
-        <span>{element.altText ?? 'Image'}</span>
+        <strong>{element.altText ?? 'Image'}</strong>
+        <span>Replace image</span>
+        {element.image?.credit ? <small>{element.image.credit}</small> : null}
       </div>
     );
   }
@@ -119,6 +121,28 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
   if (element.kind === 'chart' && element.chart) {
     return (
       <ChartGraphic chart={element.chart} accent={element.style.color ?? theme.colors.accent} />
+    );
+  }
+
+  if (element.kind === 'math' && element.math) {
+    return (
+      <div
+        className="ns-math-primitive"
+        role="math"
+        aria-label={`${element.name}: ${element.math.display}`}
+      >
+        <code>{element.math.display}</code>
+        {element.math.variables.length > 0 ? (
+          <small>
+            {element.math.variables
+              .map(
+                (variable) =>
+                  `${variable.label} = ${variable.value}${variable.unit ? ` ${variable.unit}` : ''}`,
+              )
+              .join(' · ')}
+          </small>
+        ) : null}
+      </div>
     );
   }
 

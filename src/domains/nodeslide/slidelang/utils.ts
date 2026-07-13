@@ -1,8 +1,14 @@
-import type { BoundingBox, DeckSnapshot, Slide, SlideElement } from '../../../../shared/nodeslide';
+import {
+  type BoundingBox,
+  type DeckSnapshot,
+  NODESLIDE_MIN_READABLE_FONT_SIZE,
+  type Slide,
+  type SlideElement,
+} from '../../../../shared/nodeslide';
 
 export const SVG_WIDTH = 1600;
 export const SVG_HEIGHT = 900;
-export const MIN_READABLE_FONT_SIZE = 14;
+export const MIN_READABLE_FONT_SIZE = NODESLIDE_MIN_READABLE_FONT_SIZE;
 
 const STABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const DATA_IMAGE_PATTERN =
