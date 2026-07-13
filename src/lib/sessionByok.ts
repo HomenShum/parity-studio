@@ -25,6 +25,8 @@ export const SESSION_BYOK_KEYS: SessionByokKey[] = [
 ];
 
 const STORAGE_PREFIX = 'parity.studio.byok.';
+const MODEL_KEY = `${STORAGE_PREFIX}NODESLIDE_BYOK_MODEL`;
+const BASE_URL_KEY = `${STORAGE_PREFIX}NODESLIDE_BYOK_BASE_URL`;
 
 export function readSessionByok(): Record<string, string> {
   if (typeof window === 'undefined') return {};
@@ -51,10 +53,30 @@ export function clearSessionByok(): void {
   for (const key of SESSION_BYOK_KEYS) {
     window.sessionStorage.removeItem(`${STORAGE_PREFIX}${key.envVar}`);
   }
+  window.sessionStorage.removeItem(MODEL_KEY);
+  window.sessionStorage.removeItem(BASE_URL_KEY);
+}
+
+export function readSessionByokRouting(): { model: string; baseUrl: string } {
+  if (typeof window === 'undefined') return { model: 'z-ai/glm-5.2', baseUrl: '' };
+  return {
+    model: window.sessionStorage.getItem(MODEL_KEY) || 'z-ai/glm-5.2',
+    baseUrl: window.sessionStorage.getItem(BASE_URL_KEY) || '',
+  };
+}
+
+export function writeSessionByokRouting(values: { model: string; baseUrl: string }): void {
+  if (typeof window === 'undefined') return;
+  const model = values.model.trim();
+  const baseUrl = values.baseUrl.trim();
+  if (model) window.sessionStorage.setItem(MODEL_KEY, model);
+  else window.sessionStorage.removeItem(MODEL_KEY);
+  if (baseUrl) window.sessionStorage.setItem(BASE_URL_KEY, baseUrl);
+  else window.sessionStorage.removeItem(BASE_URL_KEY);
 }
 
 export function maskKey(value: string | undefined, t?: (key: string) => string): string {
   if (!value) return t ? t('byok.notSet') : 'not set';
-  if (value.length <= 8) return t ? t('byok.set') : 'set';
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+  if (value.length <= 4) return t ? t('byok.set') : 'set';
+  return `•••• ${value.slice(-4)}`;
 }

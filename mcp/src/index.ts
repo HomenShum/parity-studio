@@ -63,6 +63,7 @@ import {
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
+import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
 import { redactSensitiveValues } from './lib/privacy.js';
@@ -109,7 +110,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.3.6';
+const VERSION = '0.4.0';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 
@@ -1919,6 +1920,8 @@ async function main() {
     name: 'parity-studio',
     version: VERSION,
   });
+
+  registerNodeSlideTools(server, convexCall);
 
   server.registerResource(
     'parity-studio-agent-rules',

@@ -102,13 +102,11 @@ export function TraceInspector({
   const traceValidation: TraceValidation | null =
     selected?.validation ?? patch?.candidateValidation ?? null;
 
-  const openNode: TraceNodeId | null = selected
-    ? (openByTrace[selected.id] ?? 'receipt')
-    : 'receipt';
+  const openNode: TraceNodeId | null = selected ? (openByTrace[selected.id] ?? null) : null;
   const toggleNode = (id: TraceNodeId) => {
     if (!selected) return;
     setOpenByTrace((prev) => {
-      const current = prev[selected.id] ?? 'receipt';
+      const current = prev[selected.id] ?? null;
       return { ...prev, [selected.id]: current === id ? null : id };
     });
   };
@@ -118,20 +116,20 @@ export function TraceInspector({
       <section className="ns-inspector-section ns-trace-intro">
         <div className="ns-section-title-row">
           <div>
-            <span className="ns-eyebrow">Accountability</span>
-            <h2>Agent trace</h2>
+            <span className="ns-eyebrow">Run trace</span>
+            <h2>What happened</h2>
           </div>
           <div className="ns-trace-density" role="tablist" aria-label="Trace detail level">
             <DensityButton
               active={density === 'human'}
               icon={<Eye size={11} />}
-              label="Human"
+              label="Summary"
               onClick={() => setDensity('human')}
             />
             <DensityButton
               active={density === 'pro'}
               icon={<Gauge size={11} />}
-              label="Pro"
+              label="Details"
               onClick={() => setDensity('pro')}
             />
             <DensityButton
@@ -153,49 +151,52 @@ export function TraceInspector({
       ) : null}
 
       {agentRuns.length > 0 ? (
-        <section className="ns-run-journal" aria-label="Durable agent run journal">
-          <div className="ns-section-heading">
+        <details className="ns-run-journal" aria-label="Durable agent run journal">
+          <summary className="ns-section-heading">
             <span>
               <Activity size={13} /> Run journal
             </span>
-            <small>server persisted</small>
+            <small>{agentRuns.length} server persisted</small>
+            <ChevronRight size={13} />
+          </summary>
+          <div className="ns-run-journal-list">
+            {[...agentRuns].slice(0, 6).map((run) => {
+              const tools = agentMessages.filter(
+                (message) => message.runId === run.id && message.role === 'tool',
+              );
+              return (
+                <article key={run.id} className={`ns-run-journal-row is-${run.status}`}>
+                  <div>
+                    <span className={`ns-status-dot ns-status-dot--${run.status}`} />
+                    <strong>{humanize(run.status)}</strong>
+                    <time dateTime={new Date(run.updatedAt).toISOString()}>
+                      {formatRunTime(run.updatedAt)}
+                    </time>
+                  </div>
+                  <p>{run.instruction}</p>
+                  <div className="ns-run-journal-meta">
+                    <span>
+                      {run.provider} · {run.model}
+                    </span>
+                    <span>{run.webResearch ? 'Web consented' : 'No web egress'}</span>
+                    <span>
+                      {tools.length} tool event{tools.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {tools.length > 0 ? (
+                    <ul>
+                      {tools.map((message) => (
+                        <li key={message.id}>
+                          {message.toolName ?? 'tool'} · {message.content}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
-          {[...agentRuns].slice(0, 6).map((run) => {
-            const tools = agentMessages.filter(
-              (message) => message.runId === run.id && message.role === 'tool',
-            );
-            return (
-              <article key={run.id} className={`ns-run-journal-row is-${run.status}`}>
-                <div>
-                  <span className={`ns-status-dot ns-status-dot--${run.status}`} />
-                  <strong>{humanize(run.status)}</strong>
-                  <time dateTime={new Date(run.updatedAt).toISOString()}>
-                    {formatRunTime(run.updatedAt)}
-                  </time>
-                </div>
-                <p>{run.instruction}</p>
-                <div className="ns-run-journal-meta">
-                  <span>
-                    {run.provider} · {run.model}
-                  </span>
-                  <span>{run.webResearch ? 'Web consented' : 'No web egress'}</span>
-                  <span>
-                    {tools.length} tool event{tools.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                {tools.length > 0 ? (
-                  <ul>
-                    {tools.map((message) => (
-                      <li key={message.id}>
-                        {message.toolName ?? 'tool'} · {message.content}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </article>
-            );
-          })}
-        </section>
+        </details>
       ) : null}
 
       {sorted.length === 0 ? (
@@ -209,7 +210,7 @@ export function TraceInspector({
       ) : (
         <>
           <label className="ns-trace-picker">
-            <span>Trace</span>
+            <span>Run</span>
             <select
               value={selected?.id ?? ''}
               onChange={(event) => setSelectedTraceId(event.target.value)}

@@ -13,6 +13,7 @@ import {
   Maximize2,
   MessageCircle,
   Paperclip,
+  PlugZap,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -47,6 +48,7 @@ import {
   nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
+import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -205,6 +207,7 @@ export function AiInspector<CommandId extends string = string>({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const composerId = useId();
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
@@ -1221,6 +1224,15 @@ export function AiInspector<CommandId extends string = string>({
               </label>
               <button
                 type="button"
+                onClick={() => setConnectionsOpen(true)}
+                aria-label="Connect BYOK model or coding agent"
+                title="Connect BYOK model or coding agent"
+                data-testid="ai-connect-agent"
+              >
+                <PlugZap size={12} /> Connect
+              </button>
+              <button
+                type="button"
                 className={webResearch ? 'is-active' : ''}
                 aria-pressed={webResearch}
                 onClick={() => {
@@ -1403,6 +1415,11 @@ export function AiInspector<CommandId extends string = string>({
               : `${selectedAgentModel.label} through OpenRouter · consent required`}
         </small>
       </form>
+      <NodeSlideConnectionsDialog
+        open={connectionsOpen}
+        onClose={() => setConnectionsOpen(false)}
+        deckId={deck.id}
+      />
     </div>
   );
 }
@@ -1415,9 +1432,7 @@ function humanizeToolName(toolName?: string) {
     source_snapshot: 'Source capture',
   };
   if (knownLabels[toolName]) return knownLabels[toolName];
-  return toolName
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  return toolName.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function VariationCard({

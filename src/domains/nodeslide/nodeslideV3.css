@@ -148,6 +148,37 @@
   background: var(--ns-surface);
 }
 
+.ns-run-journal > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  list-style: none;
+}
+
+.ns-run-journal > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ns-run-journal > summary > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ns-run-journal > summary > svg {
+  color: var(--ns-faint);
+  transition: transform 140ms ease;
+}
+
+.ns-run-journal[open] > summary > svg {
+  transform: rotate(90deg);
+}
+
+.ns-run-journal-list {
+  margin-top: 8px;
+}
+
 .ns-run-journal-row {
   padding: 10px 0;
   border-top: 1px solid var(--ns-line-soft);
@@ -1867,9 +1898,9 @@
 .nodeslide-studio .ns-trace-summary {
   background: var(--ns-surface);
   border: 1px solid var(--ns-line-c);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--ns-ink) 6%, transparent);
-  margin: 0 15px 13px;
+  border-radius: 10px;
+  box-shadow: none;
+  margin: 0 12px 13px;
   overflow: hidden;
   padding: 0;
 }
@@ -1889,8 +1920,68 @@
 }
 
 .nodeslide-studio .ns-trace-intro > p {
-  font-size: 11px;
-  line-height: 1.55;
+  color: var(--ns-faint);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.nodeslide-studio .ns-trace-intro {
+  padding: 12px 14px 10px;
+}
+
+.nodeslide-studio .ns-trace-intro h2 {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.nodeslide-studio .ns-trace-density button {
+  font-size: 9px;
+  gap: 3px;
+  padding: 4px 6px;
+}
+
+.nodeslide-studio .ns-trace-picker {
+  padding: 9px 12px 7px;
+}
+
+.nodeslide-studio .ns-trace-banner {
+  background: var(--ns-surface);
+  gap: 6px;
+  padding: 11px 12px;
+}
+
+.nodeslide-studio .ns-trace-banner-meta {
+  gap: 5px 11px;
+}
+
+.nodeslide-studio .ns-trace-attrib {
+  align-self: flex-start;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  font-size: 9.5px;
+  max-width: 100%;
+  padding: 3px 7px;
+  width: auto;
+}
+
+.nodeslide-studio .ns-custody-rail {
+  padding: 3px 0 7px;
+}
+
+.nodeslide-studio .ns-railnode-toggle {
+  grid-template-columns: 27px minmax(0, 1fr);
+}
+
+.nodeslide-studio .ns-rail-head {
+  min-height: 27px;
+}
+
+.nodeslide-studio .ns-rail-summary {
+  font-size: 10px;
+  line-height: 1.35;
+  padding-bottom: 6px;
 }
 
 .nodeslide-studio[data-ns-theme="dark"] .ns-trace-inspector {
@@ -2735,7 +2826,14 @@
   letter-spacing: -0.01em;
 }
 
+.nodeslide-studio .ns-landing-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
 .nodeslide-studio .ns-landing-open,
+.nodeslide-studio .ns-landing-connect,
 .nodeslide-studio .ns-landing-sample {
   align-items: center;
   background: rgb(255 255 255 / 72%);
@@ -2749,9 +2847,291 @@
 }
 
 .nodeslide-studio .ns-landing-open:hover,
+.nodeslide-studio .ns-landing-connect:hover,
 .nodeslide-studio .ns-landing-sample:hover {
   background: #fff;
   border-color: var(--ns-line-f);
+}
+
+.nodeslide-studio .ns-landing-connect {
+  color: var(--ns-muted);
+}
+
+/* Local BYOK + coding-agent connection surface. The dialog keeps secrets out
+   of the editor hierarchy and uses progressive disclosure instead of adding
+   another permanent settings rail to the primary authoring flow. */
+.nodeslide-studio .ns-connections-dialog {
+  background: transparent;
+  border: 0;
+  color: var(--ns-ink);
+  margin: auto;
+  max-height: min(88dvh, 820px);
+  max-width: min(780px, calc(100vw - 28px));
+  padding: 0;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-connections-dialog::backdrop {
+  background: rgb(15 23 42 / 38%);
+  backdrop-filter: blur(6px);
+}
+
+.nodeslide-studio .ns-connections-shell {
+  background: var(--ns-paper);
+  border: 1px solid color-mix(in srgb, var(--ns-line-d) 78%, transparent);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 22%);
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-connections-header {
+  align-items: center;
+  border-bottom: 1px solid var(--ns-line);
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  padding: 17px 19px;
+}
+
+.nodeslide-studio .ns-connections-header h1 {
+  font-family: "Fraunces Variable", Fraunces, Georgia, serif;
+  font-size: 21px;
+  font-weight: 560;
+  letter-spacing: -0.025em;
+  margin: 1px 0 0;
+}
+
+.nodeslide-studio .ns-connections-mark {
+  align-items: center;
+  background: var(--ns-ink);
+  border-radius: 10px;
+  color: var(--ns-paper);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.nodeslide-studio .ns-connections-body {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  max-height: calc(min(88dvh, 820px) - 72px);
+  overflow: auto;
+  padding: 14px;
+}
+
+.nodeslide-studio .ns-connection-section {
+  background: color-mix(in srgb, var(--ns-panel) 56%, var(--ns-paper));
+  border: 1px solid var(--ns-line);
+  border-radius: 13px;
+  min-width: 0;
+  padding: 15px;
+}
+
+.nodeslide-studio .ns-connection-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.nodeslide-studio .ns-connection-heading > span {
+  align-items: center;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 720;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.nodeslide-studio .ns-connection-heading small {
+  color: var(--ns-faint);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-connection-section h2 {
+  font-size: 15px;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  margin: 12px 0 5px;
+}
+
+.nodeslide-studio .ns-connection-section > p {
+  color: var(--ns-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  margin: 0 0 13px;
+}
+
+.nodeslide-studio .ns-byok-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.nodeslide-studio .ns-byok-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-byok-grid label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.nodeslide-studio .ns-byok-grid label > span {
+  align-items: center;
+  color: var(--ns-muted);
+  display: flex;
+  font-size: 9px;
+  font-weight: 680;
+  justify-content: space-between;
+}
+
+.nodeslide-studio .ns-byok-grid label small {
+  color: var(--ns-faint);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.nodeslide-studio .ns-byok-grid input {
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line-d);
+  border-radius: 8px;
+  color: var(--ns-ink);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  height: 36px;
+  min-width: 0;
+  outline: none;
+  padding: 0 9px;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-byok-grid input:focus {
+  border-color: color-mix(in srgb, var(--ns-collaboration) 62%, var(--ns-line-d));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ns-collaboration) 11%, transparent);
+}
+
+.nodeslide-studio .ns-connection-actions,
+.nodeslide-studio .ns-agent-client-tabs {
+  display: flex;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.nodeslide-studio .ns-connection-actions button,
+.nodeslide-studio .ns-agent-client-tabs button,
+.nodeslide-studio .ns-agent-connect-card button {
+  align-items: center;
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line-d);
+  border-radius: 8px;
+  color: var(--ns-muted);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 650;
+  gap: 5px;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.nodeslide-studio .ns-connection-actions button.is-danger {
+  color: var(--ns-danger);
+}
+
+.nodeslide-studio .ns-agent-client-tabs button {
+  flex: 1;
+}
+
+.nodeslide-studio .ns-agent-client-tabs button.is-active {
+  background: var(--ns-ink);
+  border-color: var(--ns-ink);
+  color: var(--ns-paper);
+}
+
+.nodeslide-studio .ns-agent-connect-card {
+  align-items: center;
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line);
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 10px;
+}
+
+.nodeslide-studio .ns-agent-connect-card > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-agent-connect-card strong {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-agent-connect-card small {
+  color: var(--ns-faint);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.nodeslide-studio .ns-agent-connect-card button {
+  flex: 0 0 auto;
+}
+
+.nodeslide-studio .ns-connection-doc-link {
+  align-items: center;
+  color: var(--ns-muted);
+  display: inline-flex;
+  font-size: 10px;
+  gap: 4px;
+  margin-top: 11px;
+  text-decoration: none;
+}
+
+.nodeslide-studio .ns-connection-doc-link:hover {
+  color: var(--ns-ink);
+}
+
+.nodeslide-studio .ns-connection-trust {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--ns-positive) 8%, var(--ns-paper));
+  border: 1px solid color-mix(in srgb, var(--ns-positive) 24%, var(--ns-line));
+  border-radius: 11px;
+  color: var(--ns-muted);
+  display: flex;
+  font-size: 10px;
+  gap: 8px;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.nodeslide-studio .ns-connection-trust svg {
+  color: var(--ns-positive);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.nodeslide-studio .ns-connection-trust strong {
+  color: var(--ns-ink);
+  display: block;
+}
+
+.nodeslide-studio .ns-connection-notice {
+  color: var(--ns-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  padding: 0 3px;
 }
 
 .nodeslide-studio .ns-landing-main {
@@ -3249,6 +3629,29 @@
 @media (max-width: 699px) {
   .nodeslide-studio .ns-landing-header {
     padding: 15px 17px;
+  }
+
+  .nodeslide-studio .ns-landing-connect {
+    font-size: 0;
+    gap: 0;
+    padding: 9px;
+  }
+
+  .nodeslide-studio .ns-landing-connect svg {
+    height: 15px;
+    width: 15px;
+  }
+
+  .nodeslide-studio .ns-connections-body {
+    grid-template-columns: 1fr;
+  }
+
+  .nodeslide-studio .ns-byok-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nodeslide-studio .ns-byok-grid label.is-wide {
+    grid-column: auto;
   }
 
   .nodeslide-studio .ns-landing-main {

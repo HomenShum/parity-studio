@@ -3,6 +3,7 @@
 import { ConvexError, v } from 'convex/values';
 import {
   type DeckSnapshot,
+  NODESLIDE_LOCAL_BYOK_EDIT_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
   type NodeSlideWorkspace,
   type PatchOperation,
@@ -66,6 +67,7 @@ import {
   nodeslideDeckReplCommandValidator,
   nodeslideDesignBehaviorValidator,
   nodeslideEditorCommandIdValidator,
+  nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
   nodeslideProviderModeValidator,
   nodeslideReferenceUseValidator,
@@ -498,6 +500,178 @@ export const proposeEdit = action({
           role: 'assistant',
         });
       }
+      throw error;
+    }
+  },
+});
+
+/**
+ * Second-front-door authority for a local MCP/BYOK planner.
+ *
+ * The provider call happens in the user's local MCP process, so no provider
+ * credential crosses Convex. This action accepts only the bounded candidate
+ * plus metering, then reuses the same owner authorization, quota, scope/CAS,
+ * candidate validation, proposal persistence, and trace receipt path as the UI.
+ * It never applies the proposal.
+ */
+export const proposeExternalAgentEdit = action({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    instruction: v.string(),
+    baseDeckVersion: v.number(),
+    baseSlideVersions: nodeslideVersionClockValidator,
+    baseElementVersions: nodeslideVersionClockValidator,
+    scope: nodeslidePatchScopeValidator,
+    operations: v.array(nodeslidePatchOperationValidator),
+    summary: v.string(),
+    provider: v.string(),
+    model: v.string(),
+    providerConsent: v.string(),
+    costMicroUsd: v.optional(v.number()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    idempotencyKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.providerConsent !== NODESLIDE_LOCAL_BYOK_EDIT_CONSENT) {
+      throw publicAgentError(
+        'invalid_request',
+        'Explicit per-request consent is required before a local BYOK model may receive NodeSlide context.',
+      );
+    }
+    const instruction = requiredCreateText(args.instruction, 'instruction', 4000, 12_000);
+    const summary = requiredCreateText(args.summary, 'summary', 500, 1_500);
+    const provider = requiredCreateText(args.provider, 'provider', 80, 240);
+    const model = requiredCreateText(args.model, 'model', 180, 540);
+    if (args.operations.length === 0 || args.operations.length > 8) {
+      throw publicAgentError(
+        'invalid_request',
+        'A local BYOK proposal must contain 1 to 8 operations.',
+      );
+    }
+    for (const value of [args.costMicroUsd, args.inputTokens, args.outputTokens]) {
+      if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+        throw publicAgentError(
+          'invalid_request',
+          'Local BYOK metering must be finite and non-negative.',
+        );
+      }
+    }
+    const workspace = await authorizeBeforeConsumingQuota({
+      authorize: async () =>
+        (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+        })) as NodeSlideWorkspace | null,
+      consume: async () => {
+        await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
+          buckets: [
+            {
+              key: nodeSlideActorQuotaKey('edit', args.ownerAccessKey),
+              limit: 60,
+              windowMs: 86_400_000,
+            },
+            { key: 'edit:global', limit: 500, windowMs: 3_600_000 },
+          ],
+        });
+      },
+    });
+    if (!workspace) throw new Error(`Deck ${args.deckId} not found.`);
+    if (args.scope.deckId !== args.deckId) throw new Error('Patch scope deckId mismatch.');
+
+    const idempotencyKey =
+      args.idempotencyKey?.replace(/\s+/g, '-').trim().slice(0, 160) ||
+      nodeslideEventId('external_agent_request', Date.now(), args.deckId, instruction);
+    const runStart = await ctx.runMutation(nodeslideInternal.beginAgentRunInternal, {
+      deckId: args.deckId,
+      ownerAccessKey: args.ownerAccessKey,
+      idempotencyKey,
+      instruction,
+      provider,
+      model,
+      webResearch: false,
+    });
+    const runId = runStart.run.id as string;
+    if (!runStart.created) {
+      if (runStart.run.patchId) {
+        const current = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+        })) as NodeSlideWorkspace | null;
+        const patch = current?.patches.find(
+          (candidate: { id: string }) => candidate.id === runStart.run.patchId,
+        );
+        if (current && patch) return { patch, workspace: current };
+      }
+      throw publicAgentError('invalid_request', 'This local agent request is already running.');
+    }
+
+    try {
+      await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'validating',
+        message: `Validating ${args.operations.length} local-agent operation${args.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
+        role: 'tool',
+        toolName: 'candidate_validation',
+      });
+      const now = Date.now();
+      const patchId = nodeslideEventId('patch_external_agent', now, args.deckId, instruction);
+      const traceId = nodeslideStableId('trace', patchId);
+      const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
+        id: patchId,
+        traceId,
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        baseDeckVersion: args.baseDeckVersion,
+        baseSlideVersions: args.baseSlideVersions,
+        baseElementVersions: args.baseElementVersions,
+        scope: args.scope,
+        operations: args.operations,
+        source: 'agent',
+        summary,
+        instruction,
+        shadowComparisonRequested: false,
+        traceSummary: `${provider} ${model} proposed ${args.operations.length} scoped operation${args.operations.length === 1 ? '' : 's'} through local BYOK for review.`,
+        traceContext: [
+          'Provider credential stayed in the local MCP process',
+          'Exact local BYOK consent attached for this request',
+          `Base deck version: ${args.baseDeckVersion}`,
+        ],
+        toolCalls: [
+          `Received a bounded candidate from ${provider} ${model}`,
+          'Revalidated scope, clocks, locks, provenance, and layout server-side',
+          'Persisted an unapplied proposal and trace receipt atomically',
+        ],
+        provider,
+        model,
+        ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
+        ...(args.inputTokens !== undefined ? { inputTokens: args.inputTokens } : {}),
+        ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
+      });
+      await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'awaiting_review',
+        patchId,
+        traceId,
+        message: `${summary} Review the validated proposal before it can change the deck.`,
+        role: 'assistant',
+      });
+      return proposal;
+    } catch (error) {
+      await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'failed',
+        error: agentRunErrorMessage(error).slice(0, 600),
+        message: `No deck changes were applied. ${agentRunErrorMessage(error)}`.slice(0, 4000),
+        role: 'assistant',
+      });
       throw error;
     }
   },

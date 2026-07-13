@@ -6,6 +6,7 @@ import {
   Layers3,
   LoaderCircle,
   Paperclip,
+  PlugZap,
   ShieldCheck,
   Sparkles,
   X,
@@ -18,6 +19,7 @@ import {
   nodeSlideAgentModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT,
@@ -78,6 +80,7 @@ export function NodeSlideLanding({
   const [providerConsent, setProviderConsent] = useState(false);
   const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : 'openrouter_free';
@@ -143,15 +146,30 @@ export function NodeSlideLanding({
   const canCreate = Boolean(prompt.trim()) && providerReady && !creating;
 
   return (
-    <main className="nodeslide-studio ns-landing" data-testid="nodeslide-landing">
+    <main
+      className="nodeslide-studio ns-landing"
+      data-testid="nodeslide-landing"
+      data-app-id="nodeslide"
+      data-agent-surface="prompt-first-deck-authoring"
+      data-mcp-compat="stdio webmcp"
+    >
       <header className="ns-landing-header">
         <a className="ns-landing-brand" href="/" aria-label="NodeSlide home">
           <span aria-hidden="true">N</span>
           <strong>NodeSlide</strong>
         </a>
-        <button className="ns-landing-open" type="button" onClick={onOpenProjects}>
-          <FolderOpen size={15} /> Open deck
-        </button>
+        <div className="ns-landing-header-actions">
+          <button
+            className="ns-landing-connect"
+            type="button"
+            onClick={() => setConnectionsOpen(true)}
+          >
+            <PlugZap size={14} /> BYOK / Agents
+          </button>
+          <button className="ns-landing-open" type="button" onClick={onOpenProjects}>
+            <FolderOpen size={15} /> Open deck
+          </button>
+        </div>
       </header>
 
       <section className="ns-landing-main" aria-labelledby="nodeslide-landing-title">
@@ -369,6 +387,10 @@ export function NodeSlideLanding({
       <footer className="ns-landing-footer">
         Editable primitives · scoped AI changes · validation before publish
       </footer>
+      <NodeSlideConnectionsDialog
+        open={connectionsOpen}
+        onClose={() => setConnectionsOpen(false)}
+      />
     </main>
   );
 }

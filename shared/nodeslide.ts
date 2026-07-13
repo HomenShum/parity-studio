@@ -111,6 +111,8 @@ export const NODESLIDE_OPENROUTER_VARIATIONS_CONSENT =
   'openrouter_nodeslide_variations_context_v1' as const;
 /** Exact consent for sending an edit query to configured third-party web search providers. */
 export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
+/** Exact consent for a local MCP process to send scoped context to a user-selected BYOK model. */
+export const NODESLIDE_LOCAL_BYOK_EDIT_CONSENT = 'nodeslide_local_byok_edit_v1' as const;
 export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
 export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
   'nodeslide.design-behavior-policy/v1' as const;
