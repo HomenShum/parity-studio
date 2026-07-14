@@ -54,17 +54,6 @@ beforeAll(() => {
     configurable: true,
     value: () => undefined,
   });
-  if (!globalThis.ResizeObserver) {
-    vi.stubGlobal(
-      'ResizeObserver',
-      class ResizeObserver {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-  }
-  if (!globalThis.PointerEvent) vi.stubGlobal('PointerEvent', MouseEvent);
   if (!File.prototype.text) {
     Object.defineProperty(File.prototype, 'text', {
       configurable: true,
@@ -78,6 +67,15 @@ beforeAll(() => {
 beforeEach(() => {
   blobUrls.clear();
   window.localStorage.clear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal('PointerEvent', globalThis.PointerEvent ?? MouseEvent);
   vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
     const blob = blobUrls.get(String(input));
     if (!blob) throw new Error(`Unexpected test fetch: ${String(input)}`);
@@ -91,6 +89,16 @@ afterEach(() => {
 });
 
 describe('NodeSlide AI Elements composer interactions', () => {
+  it('lets a fresh user attach evidence before the instruction is submittable', () => {
+    const sessionKey = 'editor:attachment-first';
+    clearNodeSlideComposerSession(sessionKey);
+    render(<ComposerPanel disabled sessionKey={sessionKey} />);
+
+    expect(screen.getByRole('button', { name: 'Send instruction' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Attach data file' })).toBeEnabled();
+    expect(screen.getByTestId('test-file-input')).toBeEnabled();
+  });
+
   it('selects a model and exposes only provider-native effort names supported by it', async () => {
     const sessionKey = 'editor:model-selection';
     clearNodeSlideComposerSession(sessionKey);
@@ -238,10 +246,12 @@ function ComposerPanel({
   sessionKey,
   onSubmit = async () => undefined,
   insideDialog = false,
+  disabled = false,
 }: {
   sessionKey: string;
   onSubmit?: (message: NodeSlidePromptComposerSubmit) => void | Promise<void>;
   insideDialog?: boolean;
+  disabled?: boolean;
 }) {
   const session = useNodeSlideComposerSession(sessionKey);
   const [model, setModel] = useState<NodeSlideComposerModelValue>(NODESLIDE_DEFAULT_AGENT_MODEL);
@@ -265,6 +275,7 @@ function ComposerPanel({
       <NodeSlidePromptComposer
         attachmentInputTestId="test-file-input"
         clearAttachmentsOnSubmit={false}
+        disabled={disabled}
         effort={effort}
         effortOptions={effortOptions}
         effortTestId="test-effort-select"

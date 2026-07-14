@@ -106,6 +106,11 @@ export interface NodeSlidePromptComposerProps {
   formId?: string;
   clearAttachmentsOnSubmit?: boolean;
   allowAttachments?: boolean;
+  /**
+   * Attachment availability is intentionally independent from submit readiness.
+   * A fresh user must be able to begin with evidence before writing an instruction.
+   */
+  attachmentDisabled?: boolean;
   attachmentInputTestId?: string;
   attachButtonTestId?: string;
   attachLabel?: string;
@@ -165,6 +170,7 @@ export function NodeSlidePromptComposer({
   formId,
   clearAttachmentsOnSubmit = true,
   allowAttachments = true,
+  attachmentDisabled,
   attachmentInputTestId,
   attachButtonTestId,
   attachLabel = 'Attach data file',
@@ -178,6 +184,7 @@ export function NodeSlidePromptComposer({
   className,
   composerClassName,
 }: NodeSlidePromptComposerProps) {
+  const attachmentControlDisabled = attachmentDisabled ?? status === 'submitted';
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -252,7 +259,7 @@ export function NodeSlidePromptComposer({
             {allowAttachments ? (
               <PromptInputAttachmentButton
                 ariaLabel={attachLabel}
-                disabled={disabled}
+                disabled={attachmentControlDisabled}
                 {...(attachButtonTestId ? { testId: attachButtonTestId } : {})}
               />
             ) : null}
