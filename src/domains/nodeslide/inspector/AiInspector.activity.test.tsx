@@ -195,6 +195,63 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(onPropose).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidates consent when a keyboard-activated suggestion rewrites the request', async () => {
+    const snapshot = fixture('keyboard-suggestion-consent');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    const consent = screen.getByTestId('ai-provider-consent');
+    consent.focus();
+    await user.keyboard('[Space]');
+    expect(consent).toBeChecked();
+
+    const suggestion = screen.getByRole('button', { name: 'Sharpen the story' });
+    suggestion.focus();
+    await user.keyboard('{Enter}');
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    expect((instruction as HTMLTextAreaElement).value).toContain('Sharpen this slide');
+    expect(consent).not.toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    instruction.focus();
+    await user.keyboard('{Enter}');
+    expect(onPropose).not.toHaveBeenCalled();
+
+    consent.focus();
+    await user.keyboard('[Space]');
+    instruction.focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[2]).toMatchObject({
+      providerMode: 'nebius',
+      providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
+    });
+  });
+
+  it('invalidates consent when editor scope changes after approval', async () => {
+    const snapshot = fixture('scope-consent');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'AI instruction' }),
+      'Tighten the decision narrative.',
+    );
+    const consent = screen.getByTestId('ai-provider-consent');
+    await user.click(consent);
+    expect(consent).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Deck' }));
+
+    expect(consent).not.toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('ai-submit'));
+    expect(onPropose).not.toHaveBeenCalled();
+  });
+
   it('keeps deterministic requests private without requiring or minting consent', async () => {
     const snapshot = fixture('deterministic');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();

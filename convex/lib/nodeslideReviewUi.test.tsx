@@ -128,30 +128,50 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="ai-provider-consent"/);
 
-    expect(createAiProviderRequest('nebius', false)).toBeNull();
-    expect(createAiProviderRequest('nebius', true)).toEqual({
+    expect(createAiProviderRequest('nebius', null)).toBeNull();
+    expect(createAiProviderRequest('nebius', NODESLIDE_OPENROUTER_REVIEW_CONSENT)).toBeNull();
+    expect(createAiProviderRequest('nebius', NODESLIDE_NEBIUS_REVIEW_CONSENT)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
       providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
     });
-    expect(createAiVariationProviderRequest('nebius', false)).toBeNull();
-    expect(createAiVariationProviderRequest('nebius', true)).toEqual({
-      providerMode: 'nebius',
-      providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'medium',
-      providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
-    });
-    expect(createAiProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject({
+    expect(createAiVariationProviderRequest('nebius', null)).toBeNull();
+    expect(
+      createAiVariationProviderRequest('nebius', NODESLIDE_OPENROUTER_VARIATIONS_CONSENT),
+    ).toBeNull();
+    expect(createAiVariationProviderRequest('nebius', NODESLIDE_NEBIUS_VARIATIONS_CONSENT)).toEqual(
+      {
+        providerMode: 'nebius',
+        providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
+        providerEffort: 'medium',
+        providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
+      },
+    );
+    expect(
+      createAiProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+        'z-ai/glm-5.2',
+      ),
+    ).toMatchObject({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
       providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
     });
-    expect(createAiVariationProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject(
-      { providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT },
-    );
     expect(
-      createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-5'),
+      createAiVariationProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+        'z-ai/glm-5.2',
+      ),
+    ).toMatchObject({ providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT });
+    expect(
+      createAiProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+        'anthropic/claude-sonnet-5',
+      ),
     ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
   });
 

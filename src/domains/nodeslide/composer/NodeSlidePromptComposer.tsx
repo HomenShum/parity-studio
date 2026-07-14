@@ -117,6 +117,7 @@ export interface NodeSlidePromptComposerProps {
   attachmentAccept?: string;
   attachmentMaxFiles?: number;
   onAttachmentError?: (message: string | null) => void;
+  onAttachmentsChange?: () => void;
   tools?: ReactNode;
   submitTools?: ReactNode;
   footerStatus?: ReactNode;
@@ -177,6 +178,7 @@ export function NodeSlidePromptComposer({
   attachmentAccept = DATA_FILE_ACCEPT,
   attachmentMaxFiles = NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
   onAttachmentError,
+  onAttachmentsChange,
   tools,
   submitTools,
   footerStatus,
@@ -232,6 +234,7 @@ export function NodeSlidePromptComposer({
         <AttachmentSessionBridge
           session={session}
           {...(onAttachmentError ? { onError: onAttachmentError } : {})}
+          {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
         />
         {header ? <PromptInputHeader>{header}</PromptInputHeader> : null}
         <PromptInputAttachmentShelf />
@@ -472,9 +475,11 @@ function PromptInputAttachmentShelf() {
 function AttachmentSessionBridge({
   session,
   onError,
+  onAttachmentsChange,
 }: {
   session: NodeSlideComposerSessionController;
   onError?: (message: string | null) => void;
+  onAttachmentsChange?: () => void;
 }) {
   const attachments = usePromptInputAttachments();
   const { add, files } = attachments;
@@ -496,6 +501,7 @@ function AttachmentSessionBridge({
 
   useEffect(() => {
     if (hydration.current !== 'ready') return;
+    onAttachmentsChange?.();
     const version = ++syncVersion.current;
     const currentFiles = [...files];
     if (currentFiles.length === 0) {
@@ -513,7 +519,7 @@ function AttachmentSessionBridge({
         if (version !== syncVersion.current) return;
         onError?.(error instanceof Error ? error.message : 'The attached file could not be saved.');
       });
-  }, [files, onError, setSessionAttachments]);
+  }, [files, onAttachmentsChange, onError, setSessionAttachments]);
 
   return null;
 }

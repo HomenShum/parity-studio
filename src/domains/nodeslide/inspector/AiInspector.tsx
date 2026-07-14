@@ -30,7 +30,16 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, type Ref, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type Ref,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type AgentTrace,
   type Deck,
@@ -66,6 +75,7 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
+import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -114,6 +124,20 @@ export type {
 } from './reviewTypes';
 
 type ScopeChoice = 'deck' | 'slide' | 'selected_slides' | 'elements';
+type AiReviewProviderConsent = Exclude<
+  AiProviderRequest,
+  { providerMode: 'deterministic' }
+>['providerConsent'];
+type AiVariationProviderConsent = Exclude<
+  AiVariationProviderRequest,
+  { providerMode: 'deterministic' }
+>['providerConsent'];
+
+interface AiProviderConsentGrant {
+  providerMode: Exclude<AiProviderMode, 'deterministic'>;
+  reviewConsent: AiReviewProviderConsent;
+  variationConsent: AiVariationProviderConsent;
+}
 
 interface ComposerTrigger {
   kind: 'reference' | 'command';
@@ -234,9 +258,7 @@ export function AiInspector<CommandId extends string = string>({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
   const [webResearch, setWebResearch] = useState(false);
-  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -286,8 +308,6 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
-    setProviderConsent(false);
-    setWebResearchConsent(false);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -409,14 +429,64 @@ export function AiInspector<CommandId extends string = string>({
     return [...deduped.values()];
   }, [selectedReadContext]);
 
+  const externalRequestConsentKey = createExternalProviderRequestKey('editor-action', {
+    deck: { id: deck.id, version: deck.version },
+    slide: { id: slide.id, version: slide.version },
+    instruction,
+    attachments: composerSession.attachments,
+    scopeChoice,
+    selectedSlideIds,
+    selectedElements: selectedElements.map((element) => ({
+      id: element.id,
+      slideId: element.slideId,
+      version: element.version,
+    })),
+    operationMode,
+    designBehavior,
+    referenceUse,
+    readContext: requestedReadContext,
+    commandId: selectedCommand?.id ?? null,
+    commentContext,
+    providerMode,
+    providerModel,
+    providerEffort,
+    webResearch,
+    memory: useMemoryForRun
+      ? memories
+          .filter((memory) => memory.status === 'active')
+          .map((memory) => ({
+            id: memory.id,
+            contentDigest: memory.contentDigest,
+            updatedAt: memory.updatedAt,
+          }))
+      : [],
+  });
+  const {
+    consent: providerConsent,
+    setConsent: setProviderConsent,
+    consumeConsent: consumeProviderConsent,
+    clearConsent: clearProviderConsent,
+  } = usePerRequestConsent<AiProviderConsentGrant>(externalRequestConsentKey);
+  const {
+    consent: webResearchConsent,
+    setConsent: setWebResearchConsent,
+    consumeConsent: consumeWebResearchConsent,
+    clearConsent: clearWebResearchConsent,
+  } = usePerRequestConsent<typeof NODESLIDE_WEB_RESEARCH_CONSENT>(externalRequestConsentKey);
+  const clearExternalConsent = useCallback(() => {
+    clearProviderConsent();
+    clearWebResearchConsent();
+  }, [clearProviderConsent, clearWebResearchConsent]);
+
   const selectedAgentModel = nodeSlideAgentModel(providerModel);
   const provider = createAiProviderRequest(
     providerMode,
-    providerConsent,
+    providerConsent?.reviewConsent ?? null,
     providerModel,
     providerEffort,
   );
-  const providerReady = provider !== null && (!webResearch || webResearchConsent);
+  const providerReady =
+    provider !== null && (!webResearch || webResearchConsent === NODESLIDE_WEB_RESEARCH_CONSENT);
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -470,6 +540,7 @@ export function AiInspector<CommandId extends string = string>({
         : 'is-idle';
 
   const updateInstruction = (value: string, cursor = value.length) => {
+    clearExternalConsent();
     composerSession.setText(value);
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
@@ -477,7 +548,7 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
-    setProviderConsent(false);
+    clearExternalConsent();
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -532,13 +603,22 @@ export function AiInspector<CommandId extends string = string>({
     ask?: string,
     readContext: readonly AiReadReference[] = requestedReadContext,
   ) => {
+    if (variationBusy || !providerReady) return;
+    const consumedProviderConsent =
+      providerMode === 'deterministic' ? null : consumeProviderConsent();
+    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
     const variationProvider = createAiVariationProviderRequest(
       providerMode,
-      providerConsent,
+      consumedProviderConsent?.variationConsent ?? null,
       providerModel,
       providerEffort,
     );
-    if (!variationProvider || variationBusy) return;
+    if (
+      !variationProvider ||
+      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
+    ) {
+      return;
+    }
     focusGeneratedBatch.current = true;
     batchBeforeGeneration.current = latestBatchId;
     if (ask) setOptimisticAsk(ask);
@@ -550,8 +630,6 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    setWebResearchConsent(false);
   };
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
@@ -605,8 +683,23 @@ export function AiInspector<CommandId extends string = string>({
       return;
     }
     setScopeError(null);
+    const consumedProviderConsent =
+      providerMode === 'deterministic' ? null : consumeProviderConsent();
+    const submittedProvider = createAiProviderRequest(
+      providerMode,
+      consumedProviderConsent?.reviewConsent ?? null,
+      providerModel,
+      providerEffort,
+    );
+    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
+    if (
+      !submittedProvider ||
+      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
+    ) {
+      return;
+    }
     const options: AiProposalOptions<CommandId> = {
-      ...provider,
+      ...submittedProvider,
       readContext: submittedReadContext,
       designBehavior,
       referenceUse,
@@ -615,10 +708,10 @@ export function AiInspector<CommandId extends string = string>({
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      ...(webResearch && webResearchConsent
+      ...(webResearch && consumedWebResearchConsent
         ? {
             webResearch: true,
-            webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
+            webResearchConsent: consumedWebResearchConsent,
           }
         : {}),
       ...(commentContext ? { commentContext } : {}),
@@ -632,8 +725,6 @@ export function AiInspector<CommandId extends string = string>({
     onPropose(text, writeScope, options);
     setProviderControlsOpen(false);
     setComposerExpanded(false);
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -1125,7 +1216,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode === 'deterministic'}
                   onChange={() => {
                     setProviderMode('deterministic');
-                    setProviderConsent(false);
+                    clearExternalConsent();
                   }}
                   data-testid="ai-provider-deterministic"
                 />
@@ -1143,7 +1234,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode !== 'deterministic'}
                   onChange={() => {
                     setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                    setProviderConsent(false);
+                    clearExternalConsent();
                   }}
                   data-testid="ai-provider-external"
                 />
@@ -1333,10 +1424,11 @@ export function AiInspector<CommandId extends string = string>({
           modelLabel="Agent model"
           modelTestId="ai-model-select"
           onAttachmentError={setAttachmentError}
+          onAttachmentsChange={clearExternalConsent}
           onEffortChange={(effort) => {
             setProviderEffort(effort);
             window.localStorage.setItem('nodeslide.agent-effort', effort);
-            setProviderConsent(false);
+            clearExternalConsent();
           }}
           onModelChange={chooseProviderModel}
           onSubmit={({ text, files }) => submit(text, files)}
@@ -1399,7 +1491,7 @@ export function AiInspector<CommandId extends string = string>({
                   data-testid="ai-web-research-toggle"
                   onClick={() => {
                     setWebResearch((enabled) => !enabled);
-                    setWebResearchConsent(false);
+                    clearExternalConsent();
                   }}
                   title="Search the web and persist source snapshots before planning"
                   variant={webResearch ? 'default' : 'ghost'}
@@ -1454,8 +1546,12 @@ export function AiInspector<CommandId extends string = string>({
               <label className={providerConsent ? 'is-ready' : ''}>
                 <input
                   type="checkbox"
-                  checked={providerConsent}
-                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  checked={providerConsent !== null}
+                  onChange={(event) =>
+                    setProviderConsent(
+                      event.target.checked ? aiProviderConsentGrant(providerMode) : null,
+                    )
+                  }
                   data-testid="ai-provider-consent"
                 />
                 <span>
@@ -1473,8 +1569,12 @@ export function AiInspector<CommandId extends string = string>({
               <label className={webResearchConsent ? 'is-ready' : ''}>
                 <input
                   type="checkbox"
-                  checked={webResearchConsent}
-                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  checked={webResearchConsent !== null}
+                  onChange={(event) =>
+                    setWebResearchConsent(
+                      event.target.checked ? NODESLIDE_WEB_RESEARCH_CONSENT : null,
+                    )
+                  }
                   data-testid="ai-web-research-consent"
                 />
                 <span>
@@ -1943,38 +2043,70 @@ function ProposalCard({
 
 export function createAiProviderRequest(
   mode: AiProviderMode,
-  consentGranted: boolean,
+  providerConsent: AiReviewProviderConsent | null,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
   effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
+  const expectedConsent =
+    mode === 'nebius' ? NODESLIDE_NEBIUS_REVIEW_CONSENT : NODESLIDE_OPENROUTER_REVIEW_CONSENT;
+  if (
+    providerConsent === null ||
+    providerConsent !== expectedConsent ||
+    !nodeSlideModelSupportsReasoningEffort(model, effort)
+  ) {
+    return null;
+  }
   return {
     providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent:
-      mode === 'nebius' ? NODESLIDE_NEBIUS_REVIEW_CONSENT : NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+    providerConsent,
   };
 }
 
 export function createAiVariationProviderRequest(
   mode: AiProviderMode,
-  consentGranted: boolean,
+  providerConsent: AiVariationProviderConsent | null,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
   effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
+  const expectedConsent =
+    mode === 'nebius'
+      ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
+      : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
+  if (
+    providerConsent === null ||
+    providerConsent !== expectedConsent ||
+    !nodeSlideModelSupportsReasoningEffort(model, effort)
+  ) {
+    return null;
+  }
   return {
     providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent:
-      mode === 'nebius'
-        ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
-        : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+    providerConsent,
   };
+}
+
+function aiProviderConsentGrant(mode: AiProviderMode): AiProviderConsentGrant | null {
+  if (mode === 'nebius') {
+    return {
+      providerMode: mode,
+      reviewConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
+      variationConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
+    };
+  }
+  if (mode === 'openrouter_free') {
+    return {
+      providerMode: mode,
+      reviewConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+      variationConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+    };
+  }
+  return null;
 }
 
 function providerNameForMode(mode: AiProviderMode): string {

@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_REASONING_EFFORTS,
@@ -27,12 +27,15 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
+import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
+  type NodeSlideBriefProviderConsent,
   type NodeSlideBriefProviderMode,
   type RecentDeck,
   createDeckProviderAdmission,
+  nodeSlideBriefProviderConsent,
 } from './ProjectDialog';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 
@@ -91,17 +94,26 @@ export function NodeSlideLanding({
   const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
-  const providerConsentRef = useRef(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
-  const setPerRequestProviderConsent = (consented: boolean) => {
-    providerConsentRef.current = consented;
-    setProviderConsent(consented);
-  };
+  const providerConsentRequestKey = createExternalProviderRequestKey('landing-create', {
+    clientSessionId,
+    prompt,
+    starterTitle,
+    generation,
+    providerMode,
+    reasoningEffort,
+    attachments: composerSession.attachments,
+  });
+  const {
+    consent: providerConsent,
+    setConsent: setProviderConsent,
+    consumeConsent: consumeProviderConsent,
+    clearConsent: clearProviderConsent,
+  } = usePerRequestConsent<NodeSlideBriefProviderConsent>(providerConsentRequestKey);
 
   const start = async (submittedPrompt: string, files: readonly File[]) => {
     const nextPrompt = submittedPrompt.trim();
@@ -111,10 +123,9 @@ export function NodeSlideLanding({
       providerMode,
       generation === 'deterministic' ? NODESLIDE_DEFAULT_AGENT_MODEL : generation,
       reasoningEffort,
-      providerConsentRef.current,
+      providerMode === 'deterministic' ? null : consumeProviderConsent(),
     );
     if (!providerAdmission) return;
-    setPerRequestProviderConsent(false);
     try {
       const attachments = await readNodeSlideAttachmentFiles(files, []);
       setAttachmentError(null);
@@ -147,13 +158,16 @@ export function NodeSlideLanding({
   };
 
   const applyStarter = (starter: (typeof starters)[number]) => {
+    clearProviderConsent();
     composerSession.setText(starter.prompt);
     setStarterTitle(starter.title);
     onClearError?.();
   };
 
   const canCreate =
-    Boolean(prompt.trim()) && !creating && (providerMode === 'deterministic' || providerConsent);
+    Boolean(prompt.trim()) &&
+    !creating &&
+    (providerMode === 'deterministic' || providerConsent !== null);
 
   return (
     <main
@@ -210,9 +224,10 @@ export function NodeSlideLanding({
           modelLabel="Generation model"
           modelTestId="landing-model-select"
           onAttachmentError={setAttachmentError}
+          onAttachmentsChange={clearProviderConsent}
           onEffortChange={(effort) => {
             setReasoningEffort(effort);
-            setPerRequestProviderConsent(false);
+            clearProviderConsent();
             onClearError?.();
           }}
           onModelChange={(model) => {
@@ -223,11 +238,12 @@ export function NodeSlideLanding({
             ) {
               setReasoningEffort('high');
             }
-            setPerRequestProviderConsent(false);
+            clearProviderConsent();
             onClearError?.();
           }}
           onSubmit={({ text, files }) => start(text, files)}
           onTextChange={() => {
+            clearProviderConsent();
             setStarterTitle(null);
             onClearError?.();
           }}
@@ -267,8 +283,12 @@ export function NodeSlideLanding({
             <input
               type="checkbox"
               data-testid="landing-provider-consent"
-              checked={providerConsent}
-              onChange={(event) => setPerRequestProviderConsent(event.target.checked)}
+              checked={providerConsent !== null}
+              onChange={(event) =>
+                setProviderConsent(
+                  event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,
+                )
+              }
               style={{
                 accentColor: 'var(--ns-accent)',
                 marginTop: 2,
@@ -342,7 +362,10 @@ export function NodeSlideLanding({
           className="ns-landing-sample"
           type="button"
           style={{ marginTop: 10, minHeight: 24 }}
-          onClick={onExploreSample}
+          onClick={() => {
+            clearProviderConsent();
+            onExploreSample();
+          }}
         >
           <Layers3 size={15} /> Explore the editable sample workspace
         </button>
