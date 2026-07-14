@@ -31,7 +31,7 @@ import type {
 
 type WaterfallFilter = 'all' | 'errors' | 'sources' | 'models';
 
-const ROW_HEIGHT = 38;
+const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
 
 export interface TraceWaterfallRow {
@@ -493,7 +493,7 @@ export function TraceWaterfall({
   const [query, setQuery] = useState('');
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(430);
+  const [viewportHeight, setViewportHeight] = useState(360);
 
   const spans = useMemo(
     () => [...telemetry.spans].sort((left, right) => left.startTime - right.startTime),
@@ -681,7 +681,7 @@ export function TraceWaterfall({
           setScrollTop(event.currentTarget.scrollTop);
           setViewportHeight(event.currentTarget.clientHeight);
         }}
-        style={{ height: Math.min(430, Math.max(152, rows.length * ROW_HEIGHT)) }}
+        style={{ height: Math.min(360, Math.max(120, rows.length * ROW_HEIGHT)) }}
       >
         <O11ySpanTimeline
           spans={filteredSpans}

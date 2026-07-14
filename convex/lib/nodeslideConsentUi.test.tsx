@@ -100,7 +100,7 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('data-testid="landing-file-input"');
     expect(markup).toContain('data-testid="landing-provider-consent"');
     expect(markup).toContain('Attach data');
-    expect(markup).toContain('One explicit consent above; then create directly.');
+    expect(markup).toContain('Check consent above to create.');
     expect(markup).toContain('aria-label="Create presentation"');
     expect(markup).toContain('Explore the editable sample workspace');
     expect(markup).not.toContain('nodeslide-preview-access-code');

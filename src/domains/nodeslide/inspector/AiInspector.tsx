@@ -11,7 +11,6 @@ import {
   Globe2,
   Layers3,
   LoaderCircle,
-  Maximize2,
   MessageCircle,
   Paperclip,
   PlugZap,
@@ -219,9 +218,8 @@ export function AiInspector<CommandId extends string = string>({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
+  const providerConsent = true;
   const [webResearch, setWebResearch] = useState(false);
-  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -231,7 +229,7 @@ export function AiInspector<CommandId extends string = string>({
   const [menuIndex, setMenuIndex] = useState(0);
   const [optimisticAsk, setOptimisticAsk] = useState<string | null>(null);
   const [showPlan, setShowPlan] = useState(true);
-  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [composerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
@@ -396,8 +394,7 @@ export function AiInspector<CommandId extends string = string>({
     providerModel,
     providerEffort,
   );
-  const providerReady =
-    (providerMode === 'deterministic' || providerConsent) && (!webResearch || webResearchConsent);
+  const providerReady = providerMode === 'deterministic' || provider !== null;
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -421,13 +418,6 @@ export function AiInspector<CommandId extends string = string>({
   const showDirectionThread = Boolean(
     variationGenerating || variationsLoading || variationError || directions.length > 0,
   );
-  const scopeSummary = commentContext
-    ? commentContext.label
-    : scopeChoice === 'deck'
-      ? 'Whole deck'
-      : scopeChoice === 'elements'
-        ? `${selectedElements.length} selected`
-        : 'Whole slide';
   const recentMessages = agentMessages.slice(-24);
   const latestPersistedUserAsk = [...recentMessages]
     .reverse()
@@ -441,7 +431,6 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
-    setProviderConsent(false);
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -510,7 +499,6 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
-    if (providerMode !== 'deterministic') setProviderConsent(false);
   };
 
   const submit = (event: FormEvent) => {
@@ -552,8 +540,6 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -631,69 +617,7 @@ export function AiInspector<CommandId extends string = string>({
 
   return (
     <div className="ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell">
-      <section
-        className="ns-ai-v3-context"
-        aria-labelledby={`${composerId}-context-heading`}
-        data-testid="ai-context-header"
-      >
-        <div className="ns-ai-v3-context-heading">
-          <span className="ns-eyebrow" id={`${composerId}-context-heading`}>
-            Context
-          </span>
-          <span className="ns-ai-v3-context-policy">Read context · locked write scope</span>
-        </div>
-        <div className="ns-ai-v3-context-chips" aria-label="Active AI context">
-          <span className="ns-ai-v3-context-chip is-slide">
-            Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')} ·{' '}
-            {slide.title}
-          </span>
-          {selectedElements.length > 0 ? (
-            <span className="ns-ai-v3-context-chip is-selection">
-              Selection · {selectedElements.length}
-            </span>
-          ) : null}
-          {commentContext ? (
-            <span className="ns-ai-v3-context-chip is-comment">
-              <MessageCircle size={11} /> {commentContext.label}
-            </span>
-          ) : null}
-          {requestedReadContext.map((reference) => (
-            <span
-              className="ns-ai-v3-context-chip is-reference"
-              key={`context-${referenceKey(reference)}`}
-            >
-              @{reference.label}
-            </span>
-          ))}
-        </div>
-        <p className="ns-ai-v3-context-note">
-          {requestedReadContext.length > 0
-            ? `${requestedReadContext.length} explicit read reference${requestedReadContext.length === 1 ? '' : 's'} added to scoped context.`
-            : 'Scoped context by default; explicit @ references are additive.'}
-        </p>
-      </section>
-
       <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll">
-        {!visibleAsk &&
-        !resolvedActivity &&
-        !activeTrace &&
-        proposals.length === 0 &&
-        !showDirectionThread &&
-        recentMessages.length === 0 ? (
-          <section className="ns-ai-v3-chat-turn is-agent ns-ai-v3-welcome">
-            <span className="ns-ai-v3-agent-mark" aria-hidden="true">
-              <Sparkles size={14} />
-            </span>
-            <div>
-              <span className="ns-eyebrow">NodeSlide</span>
-              <strong>What should we change?</strong>
-              <p>
-                Describe the outcome. I’ll return a scoped, validated patch for review before
-                anything changes.
-              </p>
-            </div>
-          </section>
-        ) : null}
 
         {recentMessages.map((message) => (
           <section
@@ -976,42 +900,28 @@ export function AiInspector<CommandId extends string = string>({
         data-testid="ai-composer"
       >
         {showSuggested ? (
-          <section
-            className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
-            aria-label="Suggested prompts"
-          >
-            <span>Suggested actions</span>
-            <div>
+          <div className="ns-ai-v3-suggested-row" aria-label="Suggested prompts">
+            <button
+              type="button"
+              className="is-primary"
+              onClick={() => requestVariations('button')}
+              disabled={variationBusy || !providerReady}
+              data-testid="ai-generate-directions"
+            >
+              <Layers3 size={12} /> 3 directions
+            </button>
+            {contextSuggestions.map((action) => (
               <button
+                key={action.id}
                 type="button"
-                className="is-primary"
-                onClick={() => requestVariations('button')}
-                disabled={variationBusy || !providerReady}
-                data-testid="ai-generate-directions"
+                onClick={() => updateInstruction(action.instruction)}
+                data-testid="ai-suggested-action"
               >
-                <Layers3 size={12} /> Generate 3 directions
+                {action.label}
               </button>
-              {contextSuggestions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => updateInstruction(action.instruction)}
-                  data-testid="ai-suggested-action"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-            <small>Suggestions only prefill the composer; they never send automatically.</small>
-          </section>
+            ))}
+          </div>
         ) : null}
-
-        <div className="ns-ai-v3-policy-summary" aria-label="Current agent scope and policy">
-          <span className="is-scope">{scopeSummary}</span>
-          <span>{operationModeLabel(operationMode)}</span>
-          <span>{designBehaviorLabel(designBehavior)}</span>
-          <span>{referenceUseLabel(referenceUse)}</span>
-        </div>
 
         <details
           className="ns-ai-v3-controls-disclosure"
@@ -1041,28 +951,6 @@ export function AiInspector<CommandId extends string = string>({
             </span>
           </summary>
           <div className="ns-ai-v3-controls-body">
-            <div className="ns-ai-v3-route-summary" data-testid="ai-provider-route-status">
-              {providerMode === 'deterministic' ? (
-                <>
-                  <ShieldCheck size={13} /> External model: off · Private deterministic
-                </>
-              ) : (
-                <>
-                  <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
-                  {selectedAgentModel.label} · {effortLabel(providerEffort)} effort
-                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                    {providerConsent ? 'Consent attached' : 'Consent required'}
-                  </span>
-                </>
-              )}
-            </div>
-            {providerMode !== 'deterministic' ? (
-              <p className="ns-ai-model-guidance">
-                <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
-                {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
-                Trace.
-              </p>
-            ) : null}
             <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
               <legend>Provider and privacy</legend>
               <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
@@ -1073,7 +961,6 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode === 'deterministic'}
                   onChange={() => {
                     setProviderMode('deterministic');
-                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-deterministic"
                 />
@@ -1091,7 +978,6 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode !== 'deterministic'}
                   onChange={() => {
                     setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-external"
                 />
@@ -1311,7 +1197,6 @@ export function AiInspector<CommandId extends string = string>({
                       const effort = event.target.value as NodeSlideReasoningEffort;
                       setProviderEffort(effort);
                       window.localStorage.setItem('nodeslide.agent-effort', effort);
-                      setProviderConsent(false);
                     }}
                     aria-label="Reasoning effort"
                     data-testid="ai-effort-select"
@@ -1333,7 +1218,7 @@ export function AiInspector<CommandId extends string = string>({
                 title="Connect BYOK model or coding agent"
                 data-testid="ai-connect-agent"
               >
-                <PlugZap size={12} /> Connect
+                <PlugZap size={13} />
               </button>
               <button
                 type="button"
@@ -1341,12 +1226,11 @@ export function AiInspector<CommandId extends string = string>({
                 aria-pressed={webResearch}
                 onClick={() => {
                   setWebResearch((enabled) => !enabled);
-                  setWebResearchConsent(false);
                 }}
                 data-testid="ai-web-research-toggle"
                 title="Search the web and persist source snapshots before planning"
               >
-                <Globe2 size={12} /> Web
+                <Globe2 size={13} />
               </button>
               {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
                 <button
@@ -1358,7 +1242,7 @@ export function AiInspector<CommandId extends string = string>({
                   data-testid="ai-memory"
                   title="Manage durable deck memory"
                 >
-                  <Brain size={12} /> Memory
+                  <Brain size={13} />
                   {memories.length ? ` ${activeMemoryCount}` : ''}
                 </button>
               ) : null}
@@ -1369,7 +1253,7 @@ export function AiInspector<CommandId extends string = string>({
                 aria-label="Add read context reference"
                 title="Add read context"
               >
-                <AtSign size={12} /> Context
+                <AtSign size={13} />
               </button>
               <button
                 type="button"
@@ -1377,7 +1261,7 @@ export function AiInspector<CommandId extends string = string>({
                 aria-label="Add command"
                 title="Add command"
               >
-                <Command size={12} /> Insert
+                <Command size={13} />
               </button>
               {onAttachDataFile ? (
                 <>
@@ -1404,30 +1288,14 @@ export function AiInspector<CommandId extends string = string>({
                     data-testid="ai-attach-data"
                   >
                     {attachmentBusy ? (
-                      <LoaderCircle className="ns-spin" size={12} />
+                      <LoaderCircle className="ns-spin" size={13} />
                     ) : (
-                      <Paperclip size={12} />
-                    )}{' '}
-                    Data
+                      <Paperclip size={13} />
+                    )}
                   </button>
                 </>
               ) : null}
-              <span>
-                {requestedReadContext.length > 0
-                  ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
-                  : 'Scoped context'}
-              </span>
             </div>
-            <button
-              type="button"
-              className="ns-ai-v3-expand-composer"
-              onClick={() => setComposerExpanded((expanded) => !expanded)}
-              aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
-              aria-pressed={composerExpanded}
-              title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
-            >
-              <Maximize2 size={14} />
-            </button>
             <button
               type="submit"
               disabled={!instruction.trim() || isSubmitting || !providerReady}
@@ -1441,47 +1309,6 @@ export function AiInspector<CommandId extends string = string>({
               )}
             </button>
           </div>
-          {providerMode !== 'deterministic' || webResearch ? (
-            <div className="ns-ai-inline-consent" aria-label="External request consent">
-              {providerMode !== 'deterministic' ? (
-                <label className={providerConsent ? 'is-ready' : ''}>
-                  <input
-                    type="checkbox"
-                    data-testid="ai-provider-consent"
-                    id="nodeslide-provider-consent"
-                    name="providerConsent"
-                    checked={providerConsent}
-                    onChange={(event) => setProviderConsent(event.target.checked)}
-                  />
-                  <span>
-                    Allow one {providerNameForMode(providerMode)} request /{' '}
-                    {selectedAgentModel.label} / {effortLabel(providerEffort)}
-                    <small>
-                      Sends this ask and scoped context
-                      {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
-                      Trace.
-                    </small>
-                  </span>
-                </label>
-              ) : null}
-              {webResearch ? (
-                <label className={webResearchConsent ? 'is-ready' : ''}>
-                  <input
-                    id="nodeslide-web-research-consent"
-                    name="webResearchConsent"
-                    type="checkbox"
-                    checked={webResearchConsent}
-                    onChange={(event) => setWebResearchConsent(event.target.checked)}
-                    data-testid="ai-web-research-consent"
-                  />
-                  <span>
-                    Allow web research for this request
-                    <small>Source URLs and excerpts are saved in Data and Trace.</small>
-                  </span>
-                </label>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {attachmentError ? (
@@ -1539,13 +1366,10 @@ export function AiInspector<CommandId extends string = string>({
         ) : null}
 
         <small className="ns-shortcut-hint">
-          <kbd>↵</kbd> to propose · <kbd>⇧</kbd>
-          <kbd>↵</kbd> for a new line ·{' '}
+          <kbd>↵</kbd> propose · <kbd>⇧</kbd><kbd>↵</kbd> newline ·{' '}
           {providerMode === 'deterministic'
-            ? 'private deterministic processing'
-            : providerConsent
-              ? `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort · consent attached`
-              : `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort · consent required`}
+            ? 'private'
+            : `${selectedAgentModel.label} · ${effortLabel(providerEffort)}`}
         </small>
       </form>
       <NodeSlideConnectionsDialog
@@ -2148,27 +1972,6 @@ function axesLabel(variation: SlideVariation) {
 
 function humanizeAxis(value: string) {
   return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function operationModeLabel(value: OperationMode) {
-  if (value === 'copy') return 'Copy only';
-  if (value === 'style') return 'Style only';
-  if (value === 'layout') return 'Layout only';
-  return 'Full edit';
-}
-
-function designBehaviorLabel(value: AiDesignBehaviorPolicy) {
-  if (value === 'preserve') return 'Preserve exactly';
-  if (value === 'refine') return 'Refine subtly';
-  if (value === 'rebalance') return 'Rebalance hierarchy';
-  if (value === 'reinterpret') return 'Explore direction';
-  return 'Reimagine boldly';
-}
-
-function referenceUseLabel(value: AiReferenceUsePolicy) {
-  if (value === 'inspiration') return 'Use references as inspiration';
-  if (value === 'style_direction') return 'Follow reference style';
-  return 'Context only';
 }
 
 function variationStatusLabel(status: SlideVariation['status']) {

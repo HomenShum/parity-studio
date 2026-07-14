@@ -339,7 +339,7 @@ export function NodeSlideLanding({
             </button>
           </div>
           {providerMode !== 'deterministic' ? (
-            <label className="ns-landing-consent">
+            <label className="ns-landing-consent ns-landing-consent-compact" title={`Sends this brief${attachments.length ? ' and attached files' : ''}. Trace records the route, tokens, cost, and any fallback.`}>
               <input
                 type="checkbox"
                 checked={providerConsent}
@@ -350,13 +350,8 @@ export function NodeSlideLanding({
                 data-testid="landing-provider-consent"
               />
               <span>
-                Use {selectedModel?.label ?? 'this model'} at{' '}
-                {NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === reasoningEffort)?.label}{' '}
-                effort through {providerDisplayName(providerMode)} for this deck
-                <small>
-                  Sends this brief{attachments.length ? ' and attached files' : ''}. Trace records
-                  the route, tokens, cost, and any fallback.
-                </small>
+                Allow {providerDisplayName(providerMode)} · {selectedModel?.label ?? 'this model'} ·{' '}
+                {NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === reasoningEffort)?.label}
               </span>
             </label>
           ) : null}
@@ -384,12 +379,12 @@ export function NodeSlideLanding({
             </>
           ) : (
             <>
-              <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via{' '}
+              <Sparkles size={13} /> {selectedModel?.label ?? 'Selected model'} via{' '}
               {providerDisplayName(providerMode)}
               {attachments.length > 0
                 ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
                 : ''}
-              . One explicit consent above; then create directly.
+              . Check consent above to create.
             </>
           )}
         </p>

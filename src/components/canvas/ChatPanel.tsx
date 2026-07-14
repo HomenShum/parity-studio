@@ -4,7 +4,9 @@ import {
   Bot,
   Check,
   CheckCircle2,
+  ChevronRight,
   Circle,
+  Copy,
   FileEdit,
   FilePlus2,
   FileText,
@@ -156,10 +158,10 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: variant === 'rail' ? 'var(--space-4)' : 'var(--space-6) var(--space-7)',
+          padding: variant === 'rail' ? 'var(--space-3)' : 'var(--space-4) var(--space-6)',
           display: 'flex',
           flexDirection: 'column',
-          gap: variant === 'rail' ? 'var(--space-3)' : 'var(--space-4)',
+          gap: variant === 'rail' ? 'var(--space-2)' : 'var(--space-3)',
         }}
       >
         {messages === undefined ? (
@@ -182,8 +184,8 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 8,
-              fontSize: 'var(--font-size-body-sm)',
+              gap: 6,
+              fontSize: 11,
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-mono)',
             }}
@@ -191,8 +193,8 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
             <span
               aria-hidden
               style={{
-                width: 6,
-                height: 6,
+                width: 5,
+                height: 5,
                 borderRadius: '50%',
                 background: 'var(--color-accent)',
                 animation: 'pulse 1.2s ease-in-out infinite',
@@ -207,7 +209,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
         style={{
           borderTop: '1px solid var(--color-border-subtle)',
           padding:
-            variant === 'rail' ? 'var(--space-3) var(--space-4)' : 'var(--space-4) var(--space-7)',
+            variant === 'rail' ? 'var(--space-2) var(--space-3)' : 'var(--space-3) var(--space-6)',
           background: 'var(--color-background-secondary)',
         }}
       >
@@ -216,10 +218,10 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border-subtle)',
             borderRadius: 'var(--radius-lg)',
-            padding: variant === 'rail' ? 10 : 12,
+            padding: variant === 'rail' ? 8 : 10,
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
+            gap: 8,
           }}
         >
           <textarea
@@ -233,7 +235,7 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
             }}
             placeholder={t('chat.placeholder')}
             aria-label={t('chat.aria')}
-            rows={3}
+            rows={2}
             disabled={busy}
             style={{
               resize: 'none',
@@ -241,10 +243,10 @@ export function ChatPanel({ runId, variant = 'workspace' }: ChatPanelProps) {
               outline: 'none',
               background: 'transparent',
               fontFamily: 'var(--font-sans)',
-              fontSize: 'var(--font-size-body)',
+              fontSize: 'var(--font-size-body-sm)',
               color: 'var(--color-text-primary)',
               lineHeight: 'var(--leading-snug)',
-              minHeight: variant === 'rail' ? 48 : 60,
+              minHeight: variant === 'rail' ? 36 : 44,
             }}
           />
           <div
@@ -360,10 +362,10 @@ function Turn({ message }: { message: MessageRow }) {
           maxWidth: '75%',
           background: 'var(--color-accent-soft)',
           border: '1px solid color-mix(in srgb, var(--color-accent) 25%, transparent)',
-          padding: '10px 14px',
+          padding: '8px 12px',
           borderRadius: 'var(--radius-lg)',
           fontFamily: 'var(--font-sans)',
-          fontSize: 'var(--font-size-body)',
+          fontSize: 'var(--font-size-body-sm)',
           color: 'var(--color-text-primary)',
           lineHeight: 'var(--leading-snug)',
           whiteSpace: 'pre-wrap',
@@ -380,13 +382,16 @@ function Turn({ message }: { message: MessageRow }) {
 }
 
 function AssistantRow({ message }: { message: MessageRow }) {
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const hasTools = message.toolCalls && message.toolCalls.length > 0;
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
       <span
         aria-hidden
         style={{
-          width: 28,
-          height: 28,
+          width: 24,
+          height: 24,
           borderRadius: 'var(--radius-sm)',
           background: 'var(--color-accent)',
           color: 'var(--color-on-accent)',
@@ -396,14 +401,94 @@ function AssistantRow({ message }: { message: MessageRow }) {
           marginTop: 2,
         }}
       >
-        <Bot size={14} />
+        <Bot size={12} />
       </span>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {message.content.length > 0 ? <MarkdownContent text={message.content} /> : null}
-        {message.toolCalls && message.toolCalls.length > 0
-          ? message.toolCalls.map((tc) => <ToolCallCard key={tc.id} call={tc} />)
-          : null}
+        {hasTools ? (
+          <ToolGroup
+            calls={message.toolCalls!}
+            expanded={toolsExpanded}
+            onToggle={() => setToolsExpanded((v) => !v)}
+          />
+        ) : null}
+        {message.content.length > 0 ? (
+          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(message.content);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              aria-label="Copy"
+              style={{
+                display: 'inline-grid',
+                placeItems: 'center',
+                width: 24,
+                height: 24,
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                background: 'transparent',
+                color: copied ? 'var(--color-success)' : 'var(--color-text-faint)',
+                cursor: 'pointer',
+              }}
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function ToolGroup({
+  calls,
+  expanded,
+  onToggle,
+}: {
+  calls: Array<{ id: string; name: string; args: string }>;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  if (calls.length === 1) {
+    return <ToolCallCard call={calls[0]!} />;
+  }
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 8px',
+          background: 'var(--color-surface-hover)',
+          border: '1px solid var(--color-border-subtle)',
+          borderRadius: 'var(--radius-sm)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--color-text-secondary)',
+          cursor: 'pointer',
+        }}
+      >
+        <ChevronRight
+          size={11}
+          style={{
+            transform: expanded ? 'rotate(90deg)' : 'none',
+            transition: 'transform 120ms ease',
+          }}
+        />
+        <Wrench size={11} />
+        <span>{calls.length} tool calls</span>
+      </button>
+      {expanded ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+          {calls.map((tc) => <ToolCallCard key={tc.id} call={tc} />)}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -593,24 +678,24 @@ function ToolCallCard({ call }: { call: { id: string; name: string; args: string
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 10px',
+        gap: 6,
+        padding: '3px 8px',
         background: 'var(--color-surface-hover)',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-sm)',
         fontFamily: 'var(--font-mono)',
-        fontSize: 11,
+        fontSize: 10,
         color: 'var(--color-text-secondary)',
         alignSelf: 'flex-start',
       }}
     >
-      <ToolIcon size={12} />
+      <ToolIcon size={11} />
       <span style={{ color: 'var(--color-text-primary)' }}>{label}</span>
       {path ? (
         <span
           style={{
             color: 'var(--color-accent)',
-            maxWidth: 360,
+            maxWidth: 280,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -625,7 +710,6 @@ function ToolCallCard({ call }: { call: { id: string; name: string; args: string
 
 function ToolResultRow({ message }: { message: MessageRow }) {
   const t = useT();
-  // Set_todos special-case: render an inline checklist instead of plain text.
   if (message.toolName === 'set_todos' && message.content.startsWith('__todos__:')) {
     try {
       const items = JSON.parse(message.content.slice('__todos__:'.length)) as Array<{
@@ -644,16 +728,16 @@ function ToolResultRow({ message }: { message: MessageRow }) {
   return (
     <div
       style={{
-        marginLeft: 38,
+        marginLeft: 32,
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
         fontFamily: 'var(--font-mono)',
-        fontSize: 10,
+        fontSize: 9,
         color: 'var(--color-text-faint)',
       }}
     >
-      <Icon size={11} />
+      <Icon size={10} />
       <span>{label}</span>
       <span>{t('chat.toolComplete')}</span>
     </div>
@@ -666,9 +750,9 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
     return (
       <div
         style={{
-          marginLeft: 38,
+          marginLeft: 32,
           fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+          fontSize: 10,
           color: 'var(--color-text-faint)',
         }}
       >
@@ -679,30 +763,30 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
   return (
     <div
       style={{
-        marginLeft: 38,
+        marginLeft: 32,
         background: 'var(--color-surface-hover)',
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 'var(--radius-md)',
-        padding: '10px 12px',
+        padding: '8px 10px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 4,
       }}
     >
       <div
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 5,
           fontFamily: 'var(--font-mono)',
-          fontSize: 10,
+          fontSize: 9,
           letterSpacing: 'var(--tracking-eyebrow)',
           textTransform: 'uppercase',
           color: 'var(--color-text-secondary)',
-          marginBottom: 2,
+          marginBottom: 1,
         }}
       >
-        <ListChecks size={11} />
+        <ListChecks size={10} />
         {t('chat.agentPlan')} ({items.filter((i) => i.checked).length}/{items.length})
       </div>
       {items.map((it, i) => (
@@ -711,12 +795,12 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
           style={{
             display: 'flex',
             alignItems: 'flex-start',
-            gap: 8,
+            gap: 6,
             fontFamily: 'var(--font-sans)',
             fontSize: 'var(--font-size-body-sm)',
             color: it.checked ? 'var(--color-text-faint)' : 'var(--color-text-primary)',
             textDecoration: it.checked ? 'line-through' : 'none',
-            lineHeight: 1.5,
+            lineHeight: 1.4,
           }}
         >
           <span
@@ -727,7 +811,7 @@ function TodosChecklist({ items }: { items: Array<{ text: string; checked: boole
               color: it.checked ? 'var(--color-success)' : 'var(--color-text-faint)',
             }}
           >
-            {it.checked ? <Check size={13} /> : <Circle size={13} />}
+            {it.checked ? <Check size={11} /> : <Circle size={11} />}
           </span>
           <span>{it.text}</span>
         </div>
@@ -743,21 +827,21 @@ function EmptyHint() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
-        padding: 'var(--space-6)',
+        gap: 8,
+        padding: 'var(--space-4)',
         background: 'var(--color-surface)',
         border: '1px dashed var(--color-border-subtle)',
         borderRadius: 'var(--radius-lg)',
         fontFamily: 'var(--font-sans)',
         fontSize: 'var(--font-size-body-sm)',
         color: 'var(--color-text-secondary)',
-        lineHeight: 1.6,
+        lineHeight: 1.5,
       }}
     >
       <div
         style={{
           fontFamily: 'var(--font-display)',
-          fontSize: 22,
+          fontSize: 18,
           color: 'var(--color-text-primary)',
           fontWeight: 400,
         }}

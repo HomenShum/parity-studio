@@ -112,10 +112,10 @@ describe('NodeSlide AI review inspector', () => {
 
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
     const markup = renderAi();
-    expect(markup).toContain('External model: on · Nebius · GLM 5.2');
+    expect(markup).not.toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
     expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
-    expect(markup).toContain('Allow one Nebius request / GLM 5.2 / High');
+    expect(markup).not.toContain('Allow one Nebius request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
@@ -131,8 +131,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Gemini 3.1 Pro · Google');
     expect(markup).toContain('GPT-5.6 Sol · OpenAI');
     expect(markup).toContain('GPT-5.6 Terra · OpenAI');
-    expect(markup).toMatch(/<input type="checkbox"[^>]*ai-provider-consent/);
-    expect(markup).not.toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
+    expect(markup).not.toMatch(/ai-provider-consent/);
 
     expect(createAiProviderRequest('nebius', false)).toBeNull();
     expect(createAiProviderRequest('nebius', true)).toEqual({
@@ -174,13 +173,12 @@ describe('NodeSlide AI review inspector', () => {
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
     const markup = renderAi();
 
-    expect(markup).toContain('What should we change?');
-    expect(markup).toContain('Generate 3 directions');
-    expect(markup).toContain('Current agent scope and policy');
-    expect(markup).toContain('Whole slide');
+    expect(markup).not.toContain('What should we change?');
+    expect(markup).toContain('3 directions');
+    expect(markup).not.toContain('Current agent scope and policy');
     expect(markup).toContain('Advanced controls');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('data-testid="ai-provider-route-status"');
+    expect(markup).not.toContain('data-testid="ai-provider-route-status"');
     expect(markup).not.toContain('ns-ai-v3-route-disclosure');
     expect(markup).not.toContain('data-testid="variation-section"');
     expect(markup).not.toContain('No proposal waiting');
@@ -278,7 +276,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(referenceMenu).toContain('role="menu"');
     expect(referenceMenu).toContain('Quarterly source');
     expect(referenceMenu).toContain('@Quarterly source');
-    expect(referenceMenu).toContain('Read context · locked write scope');
+    expect(referenceMenu).not.toContain('Read context · locked write scope');
 
     const commands: readonly AiComposerCommand<string>[] = [
       { id: '/edit', label: 'Edit the current scope' },
@@ -306,7 +304,7 @@ describe('NodeSlide AI review inspector', () => {
 
     const markup = renderAi({ commentContext });
 
-    expect(markup).toContain('Scoped context by default');
+    expect(markup).not.toContain('Scoped context by default');
     expect(markup).toContain(`@${commentContext.label}`);
     expect(markup).not.toContain('1 explicit reference');
   });
@@ -354,7 +352,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(markup).not.toContain('Resolved review request');
   });
 
-  it('exposes slide and selection context chips and all six collapsed tabs', () => {
+  it('exposes slide and selection context chips and all seven collapsed tabs', () => {
     const snapshot = fixture();
     const slide = requiredSlide(snapshot);
     const element = snapshot.elements.find((candidate) => candidate.slideId === slide.id);
@@ -365,14 +363,14 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'trace', 'json']) {
+    for (const tab of ['design', 'comments', 'versions', 'data', 'json', 'trace']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
     const collapsed = renderPanel(workspace, slide, true, []);
-    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'Trace', 'Spec']) {
+    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'JSON', 'Trace']) {
       expect(collapsed).toContain(`aria-label="Open ${tab}"`);
     }
   });
@@ -599,7 +597,6 @@ function renderPanel(
       onApplyTastePack={() => undefined}
       onClearTastePack={() => undefined}
       onApplyDesignPatch={() => undefined}
-      onApplyJsonPatch={() => undefined}
       onAddComment={() => undefined}
       onReply={() => undefined}
       onSetCommentStatus={() => undefined}
