@@ -186,10 +186,42 @@ describe('postdeploy runtime source checker', () => {
     });
 
     expect(requests[0]?.headers.get('x-vercel-protection-bypass')).toBe(bypassSecret);
-    expect(requests[0]?.headers.get('x-vercel-set-bypass-cookie')).toBe('true');
+    expect(requests[0]?.headers.get('x-vercel-set-bypass-cookie')).toBeNull();
     expect(requests[0]?.redirect).toBe('manual');
     expect(requests[1]?.headers.get('x-vercel-protection-bypass')).toBeNull();
     expect(requests[1]?.headers.get('x-vercel-set-bypass-cookie')).toBeNull();
     expect(requests[1]?.redirect).toBe('follow');
+  });
+
+  it('fails closed instead of forwarding a bypass header across a redirect', async () => {
+    const requests = [];
+    const fetchImpl = async (url, init) => {
+      requests.push({
+        url: String(url),
+        bypass: new Headers(init?.headers).get('x-vercel-protection-bypass'),
+        redirect: init?.redirect,
+      });
+      return new Response(null, {
+        status: 307,
+        headers: { location: 'https://attacker.example/runtime-source.json' },
+      });
+    };
+
+    await expect(
+      checkRuntimeSourceOnce({
+        frontendUrl: 'https://protected-preview.example',
+        expectedSha: sourceSha,
+        fetchImpl,
+        vercelBypassSecret: 'never-forward-me',
+      }),
+    ).rejects.toThrow(/HTTP 307/);
+
+    expect(requests).toEqual([
+      {
+        url: 'https://protected-preview.example/runtime-source.json',
+        bypass: 'never-forward-me',
+        redirect: 'manual',
+      },
+    ]);
   });
 });
