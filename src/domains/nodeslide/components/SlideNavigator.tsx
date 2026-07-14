@@ -26,9 +26,9 @@ import {
   useState,
 } from 'react';
 import {
-  NODESLIDE_SCOPE_SLIDE_LIMIT,
   type DeckComment,
   type DeckPatch,
+  NODESLIDE_SCOPE_SLIDE_LIMIT,
   type Slide,
   type SlideElement,
   type SourceRecord,
@@ -201,10 +201,7 @@ export function SlideNavigator({
     );
   };
 
-  const activateOrToggleSlide = (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    slideId: string,
-  ) => {
+  const activateOrToggleSlide = (event: ReactMouseEvent<HTMLButtonElement>, slideId: string) => {
     if ((event.metaKey || event.ctrlKey) && onSelectedSlideIdsChange) {
       event.preventDefault();
       toggleSlideSelection(slideId);
@@ -547,11 +544,10 @@ export function SlideNavigator({
               })}
             </div>
             {onSelectedSlideIdsChange ? (
-              <div
+              <output
                 className={`ns-slide-selection-summary ${
                   selectedSlideIds.length > 0 ? 'has-selection' : ''
                 }`}
-                role="status"
                 aria-live="polite"
               >
                 {selectedSlideIds.length > 0 ? (
@@ -570,7 +566,7 @@ export function SlideNavigator({
                     <small>Ctrl/⌘-click slides, or use the slide actions menu.</small>
                   </span>
                 )}
-              </div>
+              </output>
             ) : null}
             <div className="ns-navigator-footer">
               <button

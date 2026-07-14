@@ -446,9 +446,9 @@ export function AiInspector<CommandId extends string = string>({
       ? 'Whole deck'
       : scopeChoice === 'selected_slides'
         ? `${selectedSlideIds.length} selected slides`
-      : scopeChoice === 'elements'
-        ? `${selectedElements.length} selected`
-        : 'Whole slide';
+        : scopeChoice === 'elements'
+          ? `${selectedElements.length} selected`
+          : 'Whole slide';
   const recentMessages = agentMessages.slice(-24);
   const latestPersistedUserAsk = [...recentMessages]
     .reverse()
@@ -1342,9 +1342,7 @@ export function AiInspector<CommandId extends string = string>({
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
               <Maximize2 size={14} />
-              <span className="ns-ai-tool-label">
-                {composerExpanded ? 'Collapse' : 'Expand'}
-              </span>
+              <span className="ns-ai-tool-label">{composerExpanded ? 'Collapse' : 'Expand'}</span>
             </PromptInputButton>
           }
           textareaAria={{
@@ -2029,11 +2027,7 @@ function createScope(
   if (choice === 'deck') return { kind: 'deck', deckId, operationMode };
   if (choice === 'selected_slides') {
     const exactSlideIds = [...new Set(selectedSlideIds)];
-    if (
-      exactSlideIds.length < 2 ||
-      exactSlideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT
-    )
-      return null;
+    if (exactSlideIds.length < 2 || exactSlideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT) return null;
     return { kind: 'slide', deckId, slideIds: exactSlideIds, operationMode };
   }
   if (choice === 'elements') {

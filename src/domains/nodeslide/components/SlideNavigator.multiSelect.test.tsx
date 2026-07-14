@@ -8,9 +8,9 @@ import { buildGoldenNodeSlide } from '../../../../convex/lib/nodeslideSeed';
 import { NODESLIDE_SCOPE_SLIDE_LIMIT, type Slide } from '../../../../shared/nodeslide';
 import {
   SlideNavigator,
+  type SlideNavigatorProps,
   normalizeSelectedSlideIds,
   toggleBoundedSlideSelection,
-  type SlideNavigatorProps,
 } from './SlideNavigator';
 
 afterEach(cleanup);
@@ -110,7 +110,12 @@ describe('NodeSlide bounded multi-slide selection', () => {
       atCap,
     );
     expect(
-      normalizeSelectedSlideIds(slideOrder, [slideOrder[2] as string, 'deleted', slideOrder[0] as string, slideOrder[2] as string]),
+      normalizeSelectedSlideIds(slideOrder, [
+        slideOrder[2] as string,
+        'deleted',
+        slideOrder[0] as string,
+        slideOrder[2] as string,
+      ]),
     ).toEqual([slideOrder[0], slideOrder[2]]);
 
     const snapshot = buildGoldenNodeSlide('multi-slide-prune', 1_000).snapshot;
@@ -139,10 +144,7 @@ describe('NodeSlide bounded multi-slide selection', () => {
   });
 });
 
-function renderNavigator(
-  slides: readonly Slide[],
-  overrides: Partial<SlideNavigatorProps> = {},
-) {
+function renderNavigator(slides: readonly Slide[], overrides: Partial<SlideNavigatorProps> = {}) {
   return render(
     <div className="nodeslide-studio">
       <SlideNavigator {...navigatorProps(slides)} {...overrides} />
