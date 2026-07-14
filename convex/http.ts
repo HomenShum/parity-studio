@@ -5,6 +5,7 @@ import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
 import { buildDesignSystemShowcaseFiles } from './lib/designSystemShowcase';
 import { buildFigmaBridgeFiles } from './lib/figmaBridge';
+import { RUNTIME_SOURCE_SCHEMA, convexRuntimeSourcePayload } from './lib/runtimeSource';
 
 const http = httpRouter();
 
@@ -47,6 +48,32 @@ http.route({
         'referrer-policy': 'no-referrer',
       },
     });
+  }),
+});
+
+http.route({
+  path: '/api/runtime-source',
+  method: 'GET',
+  handler: httpAction(async () => {
+    const payload = convexRuntimeSourcePayload(process.env['RUNTIME_SOURCE_SHA']);
+    return new Response(
+      JSON.stringify(
+        payload ?? {
+          schema: RUNTIME_SOURCE_SCHEMA,
+          layer: 'convex',
+          error: 'runtime_source_unavailable',
+        },
+      ),
+      {
+        status: payload ? 200 : 503,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store, max-age=0',
+          'access-control-allow-origin': '*',
+          'x-content-type-options': 'nosniff',
+        },
+      },
+    );
   }),
 });
 

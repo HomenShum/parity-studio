@@ -7,13 +7,16 @@
       ".playwright-mcp",
       ".tmp",
       ".vercel",
+      "blob-report",
       "dist",
       "docs/dogfood",
       "docs/plans/assets",
       "convex/_generated",
       "mcp/dist",
       "node_modules",
+      "playwright-report",
       "runs",
+      "test-results",
       "*.log",
       "*.tsbuildinfo"
     ]

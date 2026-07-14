@@ -1,0 +1,304 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import type { MutationCtx } from '../_generated/server';
+import { deleteDeck } from '../nodeslide';
+import { NODESLIDE_DECK_ERASURE_TABLES } from './nodeslideDeckDeletion';
+
+const OWNER_ACCESS_KEY = 'a'.repeat(43);
+const OTHER_ACCESS_KEY = 'b'.repeat(43);
+
+type StoredRow = Record<string, unknown> & { _id: string; _creationTime: number };
+type Filter = { field: string; value: unknown };
+
+class MemoryIndex {
+  readonly filters: Filter[] = [];
+
+  eq(field: string, value: unknown): this {
+    this.filters.push({ field, value });
+    return this;
+  }
+}
+
+class MemoryQuery {
+  private filters: readonly Filter[] = [];
+
+  constructor(
+    private readonly database: MemoryDatabase,
+    private readonly tableName: string,
+  ) {}
+
+  withIndex(_indexName: string, configure: (index: MemoryIndex) => unknown): this {
+    const index = new MemoryIndex();
+    configure(index);
+    this.filters = index.filters;
+    return this;
+  }
+
+  async first(): Promise<StoredRow | null> {
+    return this.evaluate()[0] ?? null;
+  }
+
+  async collect(): Promise<StoredRow[]> {
+    this.database.collectCalls.push(this.tableName);
+    return this.evaluate();
+  }
+
+  private evaluate(): StoredRow[] {
+    return this.database
+      .rows(this.tableName)
+      .filter((row) => this.filters.every((filter) => row[filter.field] === filter.value));
+  }
+}
+
+class MemoryDatabase {
+  private readonly tables = new Map<string, StoredRow[]>();
+  private sequence = 0;
+  readonly collectCalls: string[] = [];
+  readonly writes: Array<{ kind: 'delete'; tableName: string; rowId: string }> = [];
+
+  query(tableName: string): MemoryQuery {
+    return new MemoryQuery(this, tableName);
+  }
+
+  async get(rowId: string): Promise<StoredRow | null> {
+    return this.find(rowId)?.row ?? null;
+  }
+
+  async delete(rowId: string): Promise<void> {
+    const located = this.find(rowId);
+    if (!located) throw new Error(`Memory row ${rowId} was not found.`);
+    located.rows.splice(located.index, 1);
+    this.writes.push({ kind: 'delete', tableName: located.tableName, rowId });
+  }
+
+  seed(tableName: string, value: Record<string, unknown>): StoredRow {
+    this.sequence += 1;
+    const row = {
+      ...structuredClone(value),
+      _id: `${tableName}:${this.sequence}`,
+      _creationTime: this.sequence,
+    };
+    const rows = this.tables.get(tableName) ?? [];
+    rows.push(row);
+    this.tables.set(tableName, rows);
+    return row;
+  }
+
+  rows(tableName: string): StoredRow[] {
+    return [...(this.tables.get(tableName) ?? [])];
+  }
+
+  private find(
+    rowId: string,
+  ): { tableName: string; rows: StoredRow[]; row: StoredRow; index: number } | undefined {
+    for (const [tableName, rows] of this.tables) {
+      const index = rows.findIndex((row) => row._id === rowId);
+      const row = rows[index];
+      if (row) return { tableName, rows, row, index };
+    }
+    return undefined;
+  }
+}
+
+type DeleteDeckHandler = (
+  ctx: MutationCtx,
+  args: { deckId: string; ownerAccessKey: string },
+) => Promise<{ deleted: true; deckId: string; deletedRecords: number }>;
+
+const deleteDeckHandler = (deleteDeck as unknown as { _handler: DeleteDeckHandler })._handler;
+
+function seedDeck(
+  database: MemoryDatabase,
+  options: {
+    deckId: string;
+    clientSessionId: string;
+    ownerAccessKey: string;
+    projectDomain?: 'nodeslide' | 'parity';
+  },
+) {
+  const project = database.seed('projects', {
+    clientSessionId: options.clientSessionId,
+    domain: options.projectDomain ?? 'nodeslide',
+    title: `${options.deckId} project`,
+  });
+  const deck = database.seed('nodeslide_decks', {
+    id: options.deckId,
+    projectId: `${options.deckId}:tenant`,
+    projectRowId: project._id,
+    clientSessionId: options.clientSessionId,
+    ownerAccessKey: options.ownerAccessKey,
+  });
+  return { deck, project };
+}
+
+function mutationContext(database: MemoryDatabase): MutationCtx {
+  return { db: database } as unknown as MutationCtx;
+}
+
+describe('deleteDeck', () => {
+  it('keeps the deletion manifest exhaustive for every deck-bound schema table', () => {
+    const schema = readFileSync(new URL('../schema.ts', import.meta.url), 'utf8');
+    const starts = [...schema.matchAll(/^ {2}(nodeslide_[a-z_]+): defineTable/gm)];
+    const deckBoundTables = starts
+      .filter((match, index) => {
+        const start = match.index;
+        const end = starts[index + 1]?.index ?? schema.length;
+        const definition = schema.slice(start, end);
+        return (
+          /\bdeckId:\s*v\.string\(\)/.test(definition) ||
+          /\.index\([^\n]+\['deckId'/.test(definition)
+        );
+      })
+      .map((match) => match[1]);
+    const expected = [
+      ...deckBoundTables,
+      'nodeslide_signature_profiles',
+      'nodeslide_taste_profiles',
+    ].sort();
+
+    expect([...NODESLIDE_DECK_ERASURE_TABLES].sort()).toEqual(expected);
+  });
+
+  it('denies a wrong owner capability before reading or deleting child data', async () => {
+    const database = new MemoryDatabase();
+    seedDeck(database, {
+      deckId: 'deck:private',
+      clientSessionId: 'session:private',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:private',
+        ownerAccessKey: OTHER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow('NodeSlide owner access denied.');
+
+    expect(database.writes).toEqual([]);
+    expect(database.collectCalls).toEqual([]);
+  });
+
+  it('fails closed without writes when the linked project cannot be verified', async () => {
+    const database = new MemoryDatabase();
+    seedDeck(database, {
+      deckId: 'deck:private',
+      clientSessionId: 'session:private',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      projectDomain: 'parity',
+    });
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:private',
+        ownerAccessKey: OWNER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow('failed closed');
+
+    expect(database.writes).toEqual([]);
+  });
+
+  it('fails closed without writes when a non-NodeSlide run shares the project', async () => {
+    const database = new MemoryDatabase();
+    const { project } = seedDeck(database, {
+      deckId: 'deck:private',
+      clientSessionId: 'session:private',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    database.seed('runs', { projectId: project._id, status: 'completed' });
+    database.seed('nodeslide_sources', { id: 'source:private', deckId: 'deck:private' });
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:private',
+        ownerAccessKey: OWNER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow('linked runs');
+
+    expect(database.writes).toEqual([]);
+    expect(database.rows('nodeslide_sources')).toHaveLength(1);
+  });
+
+  it('fails closed before profile erasure when the data tenant is shared by another deck', async () => {
+    const database = new MemoryDatabase();
+    const target = seedDeck(database, {
+      deckId: 'deck:private',
+      clientSessionId: 'session:private',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    const other = seedDeck(database, {
+      deckId: 'deck:other',
+      clientSessionId: 'session:other',
+      ownerAccessKey: OTHER_ACCESS_KEY,
+    });
+    other.deck.projectId = target.deck.projectId;
+    database.seed('nodeslide_signature_profiles', {
+      id: 'profile:shared',
+      tenantId: target.deck.projectId,
+    });
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:private',
+        ownerAccessKey: OWNER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow('data tenant binding is ambiguous');
+
+    expect(database.writes).toEqual([]);
+    expect(database.rows('nodeslide_signature_profiles')).toHaveLength(1);
+  });
+
+  it('deletes every deck-scoped row plus its deck and project while preserving other data', async () => {
+    const database = new MemoryDatabase();
+    const target = seedDeck(database, {
+      deckId: 'deck:target',
+      clientSessionId: 'session:target',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    const other = seedDeck(database, {
+      deckId: 'deck:other',
+      clientSessionId: 'session:other',
+      ownerAccessKey: OTHER_ACCESS_KEY,
+    });
+    for (const tableName of NODESLIDE_DECK_ERASURE_TABLES) {
+      const key =
+        tableName === 'nodeslide_signature_profiles' || tableName === 'nodeslide_taste_profiles'
+          ? 'tenantId'
+          : 'deckId';
+      database.seed(tableName, {
+        id: `${tableName}:target`,
+        [key]: key === 'tenantId' ? 'deck:target:tenant' : 'deck:target',
+      });
+      database.seed(tableName, {
+        id: `${tableName}:other`,
+        [key]: key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+      });
+    }
+
+    const result = await deleteDeckHandler(mutationContext(database), {
+      deckId: 'deck:target',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+
+    expect(result).toEqual({
+      deleted: true,
+      deckId: 'deck:target',
+      deletedRecords: NODESLIDE_DECK_ERASURE_TABLES.length + 2,
+    });
+    expect(new Set(database.collectCalls)).toEqual(
+      new Set(['nodeslide_decks', 'runs', ...NODESLIDE_DECK_ERASURE_TABLES]),
+    );
+    for (const tableName of NODESLIDE_DECK_ERASURE_TABLES) {
+      const key =
+        tableName === 'nodeslide_signature_profiles' || tableName === 'nodeslide_taste_profiles'
+          ? 'tenantId'
+          : 'deckId';
+      expect(database.rows(tableName).map((row) => row[key])).toEqual([
+        key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+      ]);
+    }
+    expect(database.rows('nodeslide_decks')).toEqual([other.deck]);
+    expect(database.rows('projects')).toEqual([other.project]);
+    expect(database.rows('nodeslide_decks')).not.toContain(target.deck);
+    expect(database.rows('projects')).not.toContain(target.project);
+  });
+});

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "parity.qa-journeys/v1",
+  "profile": "NodeSlide wave release quality",
+  "journeys": [
+    {
+      "id": "fresh-landing",
+      "coverage": ["canonical root URL", "fresh storage", "single landing landmark"],
+      "tests": ["tests/e2e/fresh-landing.spec.ts"]
+    },
+    {
+      "id": "model-and-input",
+      "coverage": ["model picker", "typing", "Enter submit", "Shift+Enter newline"],
+      "tests": ["tests/e2e/fresh-landing.spec.ts", "tests/e2e/editor-review-journey.spec.ts"]
+    },
+    {
+      "id": "attachment-lifecycle",
+      "coverage": ["attach local file", "remove before mutation"],
+      "tests": ["tests/e2e/fresh-landing.spec.ts"]
+    },
+    {
+      "id": "proposal-review-boundary",
+      "coverage": ["proposal before deck version mutation", "candidate validation", "compare"],
+      "tests": ["tests/e2e/editor-review-journey.spec.ts"]
+    },
+    {
+      "id": "exactly-once-and-recovery",
+      "coverage": ["double accept", "one version bump", "reload recovery"],
+      "tests": ["tests/e2e/editor-review-journey.spec.ts"]
+    },
+    {
+      "id": "privacy-and-attribution",
+      "coverage": [
+        "deterministic consent-off route",
+        "no provider browser egress",
+        "trace attribution"
+      ],
+      "tests": [
+        "tests/e2e/editor-review-journey.spec.ts",
+        "convex/lib/nodeslideEditPlanner.test.ts"
+      ]
+    },
+    {
+      "id": "visual-and-accessibility",
+      "coverage": ["light", "dark", "desktop", "tablet", "mobile", "basic accessibility"],
+      "tests": ["tests/e2e/fresh-landing.spec.ts", "tests/e2e/editor-review-journey.spec.ts"]
+    }
+  ],
+  "traceFixtures": {
+    "counts": [4, 10, 100],
+    "test": "src/domains/nodeslide/inspector/TraceWaterfall.test.tsx"
+  },
+  "releaseGates": [
+    "Quality",
+    "Deploy isolated preview",
+    "E2E / UI QA",
+    "Stage production (no domain)",
+    "Runtime source alignment",
+    "Promote production"
+  ],
+  "artifactPolicy": {
+    "commitScreenshots": false,
+    "directories": ["playwright-report/", "test-results/"]
+  }
+}

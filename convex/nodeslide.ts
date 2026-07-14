@@ -65,6 +65,7 @@ import {
   nodeSlideDataAttachmentShape,
   normalizeNodeSlideDataAttachment,
 } from './lib/nodeslideDataAttachment';
+import { deleteNodeSlideDeckRows } from './lib/nodeslideDeckDeletion';
 import {
   NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK,
   type NodeSlideExecutionTrace,
@@ -362,6 +363,15 @@ export const deleteDataSource = mutation({
     }
     await ctx.db.delete(source._id);
     return true;
+  },
+});
+
+/** Owner-only, fail-closed erasure of a deck, its private data, and its project shell. */
+export const deleteDeck = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, { deckId, ownerAccessKey }) => {
+    const deck = await requireOwnerAccess(ctx, deckId, ownerAccessKey);
+    return await deleteNodeSlideDeckRows(ctx, deck);
   },
 });
 

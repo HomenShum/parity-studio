@@ -1,21 +1,28 @@
-name: Quality
+name: Release gates
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
+    name: Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       # Build-time shape only. CI must never inherit a writable production endpoint.
       VITE_CONVEX_URL: https://ci-placeholder.convex.cloud
       VITE_CONVEX_SITE_URL: https://ci-placeholder.convex.site
+      PARITY_SOURCE_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -26,9 +33,165 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm qa:manifest
       - run: pnpm test
       - run: pnpm exec tsc -p convex/tsconfig.json --noEmit
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
+      - run: pnpm check:built-runtime-source -- dist/runtime-source.json "$GITHUB_SHA"
       - run: pnpm audit --prod
+
+  deploy_preview:
+    name: Deploy isolated preview
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: preview
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PARITY_CONVEX_PREVIEW_NAME: qa-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require release credentials
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+      - name: Pull preview project settings
+        run: >-
+          pnpm dlx vercel@56.1.0 pull --yes --environment=preview
+          --git-branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --token="$VERCEL_TOKEN"
+      - id: deploy
+        name: Deploy frontend plus isolated Convex preview
+        run: |
+          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force \
+            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+            --build-env PARITY_CONVEX_PREVIEW_NAME="$PARITY_CONVEX_PREVIEW_NAME" \
+            --token="$VERCEL_TOKEN")"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+  e2e_ui_qa:
+    name: E2E / UI QA
+    needs: deploy_preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ needs.deploy_preview.outputs.url }}
+      NODESLIDE_E2E_MUTATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm qa:manifest
+      - run: pnpm test:e2e
+      - name: Verify preview frontend and Convex source alignment
+        run: >-
+          pnpm check:runtime-source -- --frontend "$PLAYWRIGHT_BASE_URL"
+          --expected-sha "$GITHUB_SHA" --attempts 12 --delay-ms 5000
+      - name: Upload Playwright screenshots and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            playwright-report/
+            test-results/
+
+  stage_production:
+    name: Stage production (no domain)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: e2e_ui_qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pull production project settings
+        run: >-
+          pnpm dlx vercel@56.1.0 pull --yes --environment=production
+          --token="$VERCEL_TOKEN"
+      - id: deploy
+        name: Build staged production deployment
+        run: |
+          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force --prod --skip-domain \
+            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+            --token="$VERCEL_TOKEN")"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+  production_source_alignment:
+    name: Runtime source alignment
+    needs: stage_production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: >-
+          node scripts/check-runtime-source.mjs
+          --frontend "${{ needs.stage_production.outputs.url }}"
+          --expected-sha "$GITHUB_SHA" --attempts 12 --delay-ms 5000
+
+  promote_production:
+    name: Promote production
+    needs: [stage_production, production_source_alignment]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Promote only the verified staged deployment
+        run: >-
+          pnpm dlx vercel@56.1.0 promote "${{ needs.stage_production.outputs.url }}"
+          --yes --token="$VERCEL_TOKEN"

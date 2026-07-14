@@ -21,11 +21,15 @@
     "proof:nodeslide:agentic:local": "node scripts/nodeslide-agentic-local-switch-proof.mjs",
     "proof:nodeslide:ui": "node scripts/nodeslide-agent-operability-proof.mjs",
     "proof:nodeslide:hero": "node scripts/nodeslide-production-hero-proof.mjs",
+    "qa:manifest": "node scripts/validate-qa-manifest.mjs",
+    "check:built-runtime-source": "node scripts/check-built-runtime-source.mjs",
+    "check:runtime-source": "node scripts/check-runtime-source.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:nodeslide-agent-ui": "node scripts/nodeslide-agent-ui-linter.mjs",
     "lint:fix": "biome check --write .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {

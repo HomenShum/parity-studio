@@ -532,6 +532,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
+    .index('by_project_id', ['projectId'])
+    .index('by_project_row', ['projectRowId'])
     .index('by_session_updated', ['clientSessionId', 'updatedAt'])
     .index('by_share_slug', ['shareSlug']),
 
@@ -1075,6 +1077,7 @@ export default defineSchema({
     processedAt: v.optional(v.number()),
   })
     .index('by_stable_id', ['id'])
+    .index('by_deck_recorded', ['deckId', 'recordedAt'])
     .index('by_tenant_actor_recorded', ['tenantId', 'actorId', 'recordedAt'])
     .index('by_tenant_deck_recorded', ['tenantId', 'deckId', 'recordedAt']),
 
@@ -1109,6 +1112,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
+    .index('by_tenant', ['tenantId'])
     .index('by_tenant_actor', ['tenantId', 'actorId']),
 
   nodeslide_rate_limits: defineTable({
