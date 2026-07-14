@@ -42,6 +42,7 @@ import type * as lib_nodeslideExecutionTraceValidator from "../lib/nodeslideExec
 import type * as lib_nodeslideGoogleOAuth from "../lib/nodeslideGoogleOAuth.js";
 import type * as lib_nodeslideIds from "../lib/nodeslideIds.js";
 import type * as lib_nodeslideManagedKernel from "../lib/nodeslideManagedKernel.js";
+import type * as lib_nodeslideMemoryPolicy from "../lib/nodeslideMemoryPolicy.js";
 import type * as lib_nodeslideOtlp from "../lib/nodeslideOtlp.js";
 import type * as lib_nodeslidePatches from "../lib/nodeslidePatches.js";
 import type * as lib_nodeslidePreferenceEtl from "../lib/nodeslidePreferenceEtl.js";
@@ -56,6 +57,7 @@ import type * as lib_nodeslideSeed from "../lib/nodeslideSeed.js";
 import type * as lib_nodeslideShadowComparison from "../lib/nodeslideShadowComparison.js";
 import type * as lib_nodeslideShadowComparisonValidator from "../lib/nodeslideShadowComparisonValidator.js";
 import type * as lib_nodeslideSignatureProfiles from "../lib/nodeslideSignatureProfiles.js";
+import type * as lib_nodeslideSourceLineage from "../lib/nodeslideSourceLineage.js";
 import type * as lib_nodeslideStoryBench from "../lib/nodeslideStoryBench.js";
 import type * as lib_nodeslideTasteMismatch from "../lib/nodeslideTasteMismatch.js";
 import type * as lib_nodeslideValidation from "../lib/nodeslideValidation.js";
@@ -127,6 +129,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideGoogleOAuth": typeof lib_nodeslideGoogleOAuth;
   "lib/nodeslideIds": typeof lib_nodeslideIds;
   "lib/nodeslideManagedKernel": typeof lib_nodeslideManagedKernel;
+  "lib/nodeslideMemoryPolicy": typeof lib_nodeslideMemoryPolicy;
   "lib/nodeslideOtlp": typeof lib_nodeslideOtlp;
   "lib/nodeslidePatches": typeof lib_nodeslidePatches;
   "lib/nodeslidePreferenceEtl": typeof lib_nodeslidePreferenceEtl;
@@ -141,6 +144,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideShadowComparison": typeof lib_nodeslideShadowComparison;
   "lib/nodeslideShadowComparisonValidator": typeof lib_nodeslideShadowComparisonValidator;
   "lib/nodeslideSignatureProfiles": typeof lib_nodeslideSignatureProfiles;
+  "lib/nodeslideSourceLineage": typeof lib_nodeslideSourceLineage;
   "lib/nodeslideStoryBench": typeof lib_nodeslideStoryBench;
   "lib/nodeslideTasteMismatch": typeof lib_nodeslideTasteMismatch;
   "lib/nodeslideValidation": typeof lib_nodeslideValidation;
