@@ -8401,11 +8401,18 @@
   }
 
   .nodeslide-studio .ns-landing-composer [aria-label="Attach data"] {
-    width: 38px;
+    min-height: 40px;
+    width: 40px;
   }
 
   .nodeslide-studio .ns-landing-composer .ns-model-trigger {
+    min-height: 40px;
     min-width: 100px;
+  }
+
+  .nodeslide-studio .ns-landing-composer .ns-prompt-effort-wrap,
+  .nodeslide-studio .ns-landing-composer .ns-prompt-effort {
+    min-height: 40px;
   }
 
   .nodeslide-studio .ns-landing-consent {
@@ -8421,6 +8428,10 @@
     min-height: 42px;
     text-align: left;
     width: 100%;
+  }
+
+  .nodeslide-studio .ns-landing-sample {
+    min-height: 42px;
   }
 
   .nodeslide-studio .ns-landing-footer {

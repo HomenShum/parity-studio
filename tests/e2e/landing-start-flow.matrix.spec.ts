@@ -395,10 +395,6 @@ for (const visualCase of [
 }
 
 test('mobile landing controls meet the minimum touch-target floor', async ({ page }) => {
-  test.fail(
-    true,
-    'Known product defect: multiple mobile landing controls render below the 40px minimum target.',
-  );
   await page.setViewportSize({ width: 390, height: 844 });
   await openIsolatedLanding(page);
   const undersized = await page.locator('button:visible, select:visible').evaluateAll((controls) =>
@@ -418,10 +414,6 @@ test('mobile landing controls meet the minimum touch-target floor', async ({ pag
 test('dark preference produces a dark landing surface or an explicit theme control', async ({
   page,
 }) => {
-  test.fail(
-    true,
-    'Known product defect: the fresh landing neither honors dark preference nor exposes a theme toggle.',
-  );
   await page.emulateMedia({ colorScheme: 'dark' });
   await openIsolatedLanding(page);
   const darkState = await page.evaluate(() => {
