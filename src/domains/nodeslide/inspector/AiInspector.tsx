@@ -1,4 +1,14 @@
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 import { PromptInputButton } from '@/components/ai-elements/prompt-input';
+import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from '@/components/ai-elements/tool';
 import {
   AtSign,
   Brain,
@@ -220,12 +230,9 @@ export function AiInspector<CommandId extends string = string>({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  // Zero-friction consent: an external model is disclosed by the always-visible
-  // model pill, so choosing it and sending IS the consent. The consent token is
-  // still generated and validated server-side on every request — disclosure is
-  // preserved; only the per-request checkbox friction is removed.
-  const providerConsent = true;
+  const [providerConsent, setProviderConsent] = useState(false);
   const [webResearch, setWebResearch] = useState(false);
+  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -247,6 +254,7 @@ export function AiInspector<CommandId extends string = string>({
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const reviewScrollRef = useRef<HTMLDivElement | null>(null);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
@@ -273,6 +281,8 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
+    setProviderConsent(false);
+    setWebResearchConsent(false);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -399,7 +409,7 @@ export function AiInspector<CommandId extends string = string>({
     providerModel,
     providerEffort,
   );
-  const providerReady = providerMode === 'deterministic' || provider !== null;
+  const providerReady = provider !== null && (!webResearch || webResearchConsent);
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -434,6 +444,7 @@ export function AiInspector<CommandId extends string = string>({
   const latestPersistedUserAsk = [...recentMessages]
     .reverse()
     .find((message) => message.role === 'user')?.content;
+  const activityAutoScrollPaused = proposals.length > 0 || directions.length > 0;
 
   const updateInstruction = (value: string, cursor = value.length) => {
     composerSession.setText(value);
@@ -443,6 +454,7 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
+    setProviderConsent(false);
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -515,11 +527,13 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
+    if (providerMode !== 'deterministic') setProviderConsent(false);
+    setWebResearchConsent(false);
   };
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
     const text = submittedInstruction.trim();
-    if (!text || isSubmitting || attachmentBusy || !provider) return;
+    if (!text || isSubmitting || attachmentBusy || !provider || !providerReady) return;
     let submittedReadContext = requestedReadContext;
     if (files.length > 0) {
       if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
@@ -564,7 +578,7 @@ export function AiInspector<CommandId extends string = string>({
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      ...(webResearch
+      ...(webResearch && webResearchConsent
         ? {
             webResearch: true,
             webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
@@ -579,6 +593,8 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
+    if (providerMode !== 'deterministic') setProviderConsent(false);
+    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -677,7 +693,7 @@ export function AiInspector<CommandId extends string = string>({
         </p>
       </section>
 
-      <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll">
+      <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll" ref={reviewScrollRef}>
         {!visibleAsk &&
         !resolvedActivity &&
         !activeTrace &&
@@ -699,45 +715,30 @@ export function AiInspector<CommandId extends string = string>({
           </section>
         ) : null}
 
-        {recentMessages.map((message) => (
-          <section
-            key={message.id}
-            className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
-            data-testid={`agent-message-${message.role}`}
-          >
-            {message.role !== 'user' ? (
-              <span className="ns-ai-v3-agent-mark" aria-hidden="true">
-                {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
-              </span>
-            ) : null}
-            <div>
-              <span className="ns-eyebrow">
-                {message.role === 'user'
-                  ? 'You'
-                  : message.role === 'tool'
-                    ? humanizeToolName(message.toolName)
-                    : 'NodeSlide'}
-              </span>
-              <p>{message.content}</p>
-              {message.sourceIds?.length ? (
-                <small>
-                  {message.sourceIds.length} persisted source snapshot
-                  {message.sourceIds.length === 1 ? '' : 's'}
-                </small>
-              ) : null}
-            </div>
-          </section>
-        ))}
+        <Conversation
+          className="ns-ai-v3-conversation flex-none overflow-visible"
+          follow={!activityAutoScrollPaused}
+          scrollOwnerRef={reviewScrollRef}
+        >
+          <ConversationContent className="ns-ai-v3-conversation-content gap-0 p-0">
+            {recentMessages.map((message) => (
+              <AgentActivityMessage key={message.id} message={message} />
+            ))}
 
-        {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
-          <section
-            className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
-            data-testid="optimistic-user-ask"
-          >
-            <span>You asked</span>
-            <p>{visibleAsk}</p>
-          </section>
-        ) : null}
+            {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
+              <Message
+                className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
+                data-testid="optimistic-user-ask"
+                from="user"
+              >
+                <MessageContent>
+                  <span>You asked</span>
+                  <p>{visibleAsk}</p>
+                </MessageContent>
+              </Message>
+            ) : null}
+          </ConversationContent>
+        </Conversation>
 
         {resolvedActivity || activeTrace ? (
           <section
@@ -810,14 +811,12 @@ export function AiInspector<CommandId extends string = string>({
                 <p>No proposal has been created or applied yet.</p>
               </output>
             ) : showPlan && activeTrace?.plan.length ? (
+              // AI Elements Task is intentionally not mounted here: persisted traces expose
+              // labels, but no stable per-step lifecycle. Neutral bullets avoid inventing one.
               <ol className="ns-plan-list">
                 {activeTrace.plan.map((step, index) => (
-                  <li key={step} className={index === 0 ? 'is-current' : ''}>
-                    {index === 0 ? (
-                      <LoaderCircle className="ns-spin" size={13} />
-                    ) : (
-                      <Circle size={10} />
-                    )}
+                  <li key={`${activeTrace.id}:${index}:${step}`}>
+                    <Circle size={10} />
                     <span>{step}</span>
                   </li>
                 ))}
@@ -1053,6 +1052,9 @@ export function AiInspector<CommandId extends string = string>({
                 <>
                   <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
                   {selectedAgentModel.label} · {nodeSlideNativeEffortLabel(providerEffort)} effort
+                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
+                    {providerConsent ? 'Consent attached' : 'Consent required'}
+                  </span>
                 </>
               )}
             </div>
@@ -1073,6 +1075,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode === 'deterministic'}
                   onChange={() => {
                     setProviderMode('deterministic');
+                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-deterministic"
                 />
@@ -1090,6 +1093,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode !== 'deterministic'}
                   onChange={() => {
                     setProviderMode(nodeSlideProviderModeForModel(providerModel));
+                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-external"
                 />
@@ -1263,6 +1267,7 @@ export function AiInspector<CommandId extends string = string>({
           onEffortChange={(effort) => {
             setProviderEffort(effort);
             window.localStorage.setItem('nodeslide.agent-effort', effort);
+            setProviderConsent(false);
           }}
           onModelChange={chooseProviderModel}
           onSubmit={({ text, files }) => submit(text, files)}
@@ -1311,12 +1316,15 @@ export function AiInspector<CommandId extends string = string>({
               >
                 <PlugZap size={14} />
               </PromptInputButton>
-              <span data-testid="ai-web-research-consent" style={{ display: 'contents' }}>
+              <span style={{ display: 'contents' }}>
                 <PromptInputButton
                   aria-label="Toggle web research"
                   aria-pressed={webResearch}
                   data-testid="ai-web-research-toggle"
-                  onClick={() => setWebResearch((enabled) => !enabled)}
+                  onClick={() => {
+                    setWebResearch((enabled) => !enabled);
+                    setWebResearchConsent(false);
+                  }}
                   title="Search the web and persist source snapshots before planning"
                   variant={webResearch ? 'default' : 'ghost'}
                 >
@@ -1356,6 +1364,44 @@ export function AiInspector<CommandId extends string = string>({
             </>
           }
         />
+
+        {providerMode !== 'deterministic' || webResearch ? (
+          <div className="ns-ai-inline-consent" aria-label="External request consent">
+            {providerMode !== 'deterministic' ? (
+              <label className={providerConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={providerConsent}
+                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  data-testid="ai-provider-consent"
+                />
+                <span>
+                  Allow one {providerNameForMode(providerMode)} request / {selectedAgentModel.label}{' '}
+                  / {nodeSlideNativeEffortLabel(providerEffort)}
+                  <small>
+                    Sends this ask and scoped context
+                    {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
+                    Trace.
+                  </small>
+                </span>
+              </label>
+            ) : null}
+            {webResearch ? (
+              <label className={webResearchConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={webResearchConsent}
+                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  data-testid="ai-web-research-consent"
+                />
+                <span>
+                  Allow web research for this request
+                  <small>Source URLs and excerpts are saved in Data and Trace.</small>
+                </span>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
@@ -1416,7 +1462,9 @@ export function AiInspector<CommandId extends string = string>({
           <kbd>↵</kbd> for a new line ·{' '}
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
-            : `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort`}
+            : providerConsent
+              ? `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent attached`
+              : `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent required`}
         </small>
       </div>
       <NodeSlideConnectionsDialog
@@ -1439,6 +1487,96 @@ export function AiInspector<CommandId extends string = string>({
       ) : null}
     </div>
   );
+}
+
+function AgentActivityMessage({ message }: { message: NodeSlideAgentMessage }) {
+  const referencedSourceIds = new Set(message.sourceIds ?? []);
+  const resolvedSources = (message.resolvedSources ?? []).filter(
+    (source) =>
+      referencedSourceIds.has(source.id) && isSafeResolvedSource(source.title, source.url),
+  );
+  const resolvedSourceIds = new Set(resolvedSources.map((source) => source.id));
+  const unresolvedSourceCount = [...referencedSourceIds].filter(
+    (sourceId) => !resolvedSourceIds.has(sourceId),
+  ).length;
+  const toolActivity = message.role === 'tool' ? message.toolActivity : undefined;
+  const toolOpen =
+    toolActivity?.state === 'input-streaming' ||
+    toolActivity?.state === 'input-available' ||
+    toolActivity?.state === 'output-error';
+
+  return (
+    <Message
+      className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
+      data-testid={`agent-message-${message.role}`}
+      from={message.role === 'user' ? 'user' : 'assistant'}
+    >
+      {message.role !== 'user' ? (
+        <span className="ns-ai-v3-agent-mark" aria-hidden="true">
+          {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
+        </span>
+      ) : null}
+      <MessageContent>
+        <span className="ns-eyebrow">
+          {message.role === 'user'
+            ? 'You'
+            : message.role === 'tool'
+              ? humanizeToolName(message.toolName)
+              : 'NodeSlide'}
+        </span>
+        {toolActivity && message.toolName ? (
+          <Tool
+            className="ns-ai-v3-tool"
+            data-testid="agent-tool"
+            data-tool-state={toolActivity.state}
+            defaultOpen={toolOpen}
+          >
+            <ToolHeader
+              state={toolActivity.state}
+              title={humanizeToolName(message.toolName)}
+              toolName={message.toolName}
+              type="dynamic-tool"
+            />
+            <ToolContent>
+              <p>{message.content}</p>
+              {toolActivity.input !== undefined ? <ToolInput input={toolActivity.input} /> : null}
+              {toolActivity.output !== undefined || toolActivity.errorText ? (
+                <ToolOutput errorText={toolActivity.errorText} output={toolActivity.output} />
+              ) : null}
+            </ToolContent>
+          </Tool>
+        ) : (
+          <p>{message.content}</p>
+        )}
+        {resolvedSources.length ? (
+          <Sources data-testid="agent-message-sources">
+            <SourcesTrigger count={resolvedSources.length} />
+            <SourcesContent>
+              {resolvedSources.map((source) => (
+                <Source href={source.url} key={source.id} title={source.title} />
+              ))}
+            </SourcesContent>
+          </Sources>
+        ) : null}
+        {unresolvedSourceCount > 0 ? (
+          <small>
+            {unresolvedSourceCount} persisted source snapshot
+            {unresolvedSourceCount === 1 ? '' : 's'}
+          </small>
+        ) : null}
+      </MessageContent>
+    </Message>
+  );
+}
+
+function isSafeResolvedSource(title: string, url: string) {
+  if (!title.trim()) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 function humanizeToolName(toolName?: string) {

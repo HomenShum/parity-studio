@@ -121,11 +121,12 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(/\.ns-composer-field:focus-within[\s\S]*?border-color:[\s\S]*?box-shadow:/);
     expect(css).toMatch(/\.ns-composer-field textarea[\s\S]*?min-height: 92px;/);
 
-    // The composer is present and primary; zero-friction consent removed the
-    // inline per-request consent block entirely (disclosure lives in the model pill).
+    // The composer remains primary while external egress stays fail-closed behind
+    // an unchecked, per-request consent control.
     expect(aiInspectorSource).toContain('<NodeSlidePromptComposer');
     expect(aiInspectorSource).toContain('composerClassName="ns-ai-v3-prompt"');
-    expect(aiInspectorSource).not.toContain('className="ns-ai-inline-consent"');
+    expect(aiInspectorSource).toContain('className="ns-ai-inline-consent"');
+    expect(aiInspectorSource).toContain('data-testid="ai-provider-consent"');
   });
 
   it('contains narrow inspector rails without horizontal drift', () => {

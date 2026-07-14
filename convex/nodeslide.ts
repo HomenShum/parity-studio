@@ -11,6 +11,7 @@ import {
   NODESLIDE_LAYER_OPERATION_VERSION,
   NODESLIDE_PATCH_OPERATION_LIMIT,
   NODESLIDE_REFERENCE_USE_POLICIES,
+  type NodeSlideAgentToolActivity,
   type PatchOperation,
   type PatchScope,
   type PatchSource,
@@ -399,9 +400,102 @@ export const listAgentMessages = query({
       .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
       .order('desc')
       .take(limit);
-    return rows.reverse().map(({ _id, _creationTime, ...message }) => message);
+    const [sourceRows, runRows, spanRows] = await Promise.all([
+      ctx.db
+        .query('nodeslide_sources')
+        .withIndex('by_deck', (query) => query.eq('deckId', args.deckId))
+        .collect(),
+      ctx.db
+        .query('nodeslide_agent_runs')
+        .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+        .order('desc')
+        .take(limit),
+      ctx.db
+        .query('nodeslide_agent_spans')
+        .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+        .order('desc')
+        .take(Math.min(1_600, limit * 8)),
+    ]);
+    const sourcesById = new Map(
+      sourceRows.flatMap((source) => {
+        const resolved = resolvedAgentMessageSource(source);
+        return resolved ? [[source.id, resolved] as const] : [];
+      }),
+    );
+    const runsById = new Map(runRows.map((run) => [run.id, run] as const));
+    const toolSpansByStart = new Map(
+      spanRows.flatMap((span) =>
+        span.toolName
+          ? [[agentMessageToolSpanKey(span.runId, span.toolName, span.startTime), span] as const]
+          : [],
+      ),
+    );
+
+    return rows.reverse().map(({ _id, _creationTime, ...message }) => {
+      const resolvedSources = [...new Set(message.sourceIds ?? [])].flatMap((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return source ? [source] : [];
+      });
+      const toolActivity = projectAgentMessageToolActivity(
+        message,
+        runsById.get(message.runId),
+        message.toolName
+          ? toolSpansByStart.get(
+              agentMessageToolSpanKey(message.runId, message.toolName, message.createdAt),
+            )
+          : undefined,
+      );
+      return {
+        ...message,
+        ...(resolvedSources.length ? { resolvedSources } : {}),
+        ...(toolActivity ? { toolActivity } : {}),
+      };
+    });
   },
 });
+
+function resolvedAgentMessageSource(source: Doc<'nodeslide_sources'>) {
+  const title = source.title.trim();
+  if (!title || !source.url) return null;
+  try {
+    const parsed = new URL(source.url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  } catch {
+    return null;
+  }
+  return { id: source.id, title, url: source.url };
+}
+
+function agentMessageToolSpanKey(runId: string, toolName: string, startTime: number) {
+  return `${runId}\u001f${toolName}\u001f${startTime}`;
+}
+
+function projectAgentMessageToolActivity(
+  message: Pick<Doc<'nodeslide_agent_messages'>, 'createdAt' | 'role' | 'runId' | 'toolName'>,
+  run: Doc<'nodeslide_agent_runs'> | undefined,
+  span: Doc<'nodeslide_agent_spans'> | undefined,
+): NodeSlideAgentToolActivity | undefined {
+  if (message.role !== 'tool' || !message.toolName) return undefined;
+  if (span?.status === 'ok') return { state: 'output-available' };
+  if (span?.status === 'error') {
+    const errorText =
+      run?.status === 'failed' && run.updatedAt === span.endTime ? run.error : undefined;
+    return {
+      state: 'output-error',
+      ...(errorText ? { errorText } : {}),
+    };
+  }
+  const activeStatus =
+    message.toolName === 'web_search'
+      ? 'researching'
+      : message.toolName === 'candidate_validation'
+        ? 'validating'
+        : null;
+  if (run && activeStatus && run.status === activeStatus && run.updatedAt === message.createdAt) {
+    return { state: 'input-available' };
+  }
+  return undefined;
+}
 
 export const listAgentTelemetryPage = query({
   args: {

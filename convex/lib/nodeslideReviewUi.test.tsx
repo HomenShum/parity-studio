@@ -115,7 +115,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
     expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
-    expect(markup).not.toContain('Allow one Nebius request');
+    expect(markup).toContain('Consent required');
+    expect(markup).toContain('Allow one Nebius request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
@@ -125,7 +126,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
     expect(markup).not.toContain('<option value="max">Max</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).not.toMatch(/ai-provider-consent/);
+    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="ai-provider-consent"/);
 
     expect(createAiProviderRequest('nebius', false)).toBeNull();
     expect(createAiProviderRequest('nebius', true)).toEqual({

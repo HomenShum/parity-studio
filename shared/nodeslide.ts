@@ -675,6 +675,30 @@ export interface NodeSlideAgentTelemetryPage {
   totalRecorded: number;
 }
 
+export type NodeSlideAgentToolState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'approval-requested'
+  | 'approval-responded'
+  | 'output-available'
+  | 'output-error'
+  | 'output-denied';
+
+/** Query-projected lifecycle backed only by durable run/span records. */
+export interface NodeSlideAgentToolActivity {
+  state: NodeSlideAgentToolState;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+}
+
+/** A source link is exposed to activity UI only after both fields resolve. */
+export interface NodeSlideAgentResolvedSource {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export interface NodeSlideAgentMessage {
   id: string;
   deckId: string;
@@ -683,6 +707,8 @@ export interface NodeSlideAgentMessage {
   content: string;
   toolName?: string;
   sourceIds?: string[];
+  toolActivity?: NodeSlideAgentToolActivity;
+  resolvedSources?: NodeSlideAgentResolvedSource[];
   createdAt: number;
 }
 
