@@ -388,7 +388,8 @@ describe('JsonInspector editing', () => {
     expect(wiring).toContain('baseDeckVersion: currentWorkspace.deck.version');
     expect(wiring).toContain('baseElementVersions: applyExpectedElementVersions');
     expect(wiring).toContain('editorCandidateCanAccept');
-    expect(studioSource).toContain('onApplyJsonPatch={proposeJsonOperations}');
+    expect(studioSource).toContain('onProposeJsonPatch={proposeJsonOperations}');
+    expect(studioSource).not.toContain('onApplyJsonPatch={proposeJsonOperations}');
 
     const panelStart = inspectorPanelSource.indexOf('<JsonInspector');
     const panelEnd = inspectorPanelSource.indexOf('/>', panelStart);

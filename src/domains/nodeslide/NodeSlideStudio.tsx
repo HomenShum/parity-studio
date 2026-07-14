@@ -101,6 +101,7 @@ import type {
   AiVariationRequest,
 } from './inspector/AiInspector';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
 import { extractPptxSignature } from './signature/index';
@@ -1498,12 +1499,7 @@ export function NodeSlideStudio() {
   );
 
   const proposeJsonOperations = useCallback(
-    async (
-      operations: PatchOperation[],
-      summary: string,
-      elementId: string,
-      baseElementVersion: number,
-    ) => {
+    async ({ operations, summary, elementId, baseElementVersion }: JsonPatchProposalRequest) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
       const requestedDeckId = workspace.deck.id;
       return enqueueEditorWrite(
@@ -3606,7 +3602,7 @@ export function NodeSlideStudio() {
               summary,
             )
           }
-          onApplyJsonPatch={proposeJsonOperations}
+          onProposeJsonPatch={proposeJsonOperations}
           onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
             ownerAccessKey
