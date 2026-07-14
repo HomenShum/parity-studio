@@ -86,7 +86,9 @@ export function NodeSlideLanding({
   const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
+  // Zero-friction consent: the external model is disclosed by the composer's model
+  // pill, so choosing it and creating IS the consent. The consent token is still
+  // generated + validated server-side (createDeckFromBrief) — only the checkbox is gone.
   const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
@@ -98,7 +100,6 @@ export function NodeSlideLanding({
   const start = () => {
     const nextPrompt = prompt.trim();
     if (!nextPrompt) return;
-    if (providerMode !== 'deterministic' && !providerConsent) return;
     onCreate({
       clientSessionId,
       title: starterTitle ?? titleFromPrompt(nextPrompt),
@@ -155,8 +156,7 @@ export function NodeSlideLanding({
     start();
   };
 
-  const providerReady = providerMode === 'deterministic' || providerConsent;
-  const canCreate = Boolean(prompt.trim()) && providerReady && !creating;
+  const canCreate = Boolean(prompt.trim()) && !creating;
 
   return (
     <main
@@ -274,7 +274,6 @@ export function NodeSlideLanding({
                     ) {
                       setReasoningEffort('high');
                     }
-                    setProviderConsent(false);
                     onClearError?.();
                   }}
                 >
@@ -305,7 +304,6 @@ export function NodeSlideLanding({
                     value={reasoningEffort}
                     onChange={(event) => {
                       setReasoningEffort(event.target.value as NodeSlideReasoningEffort);
-                      setProviderConsent(false);
                       onClearError?.();
                     }}
                   >
@@ -327,39 +325,11 @@ export function NodeSlideLanding({
               type="submit"
               aria-label="Create presentation"
               disabled={!canCreate}
-              title={
-                !prompt.trim()
-                  ? 'Describe a presentation first'
-                  : !providerReady
-                    ? `Consent to ${selectedModel?.label ?? 'the selected model'} or choose private deterministic`
-                    : 'Create presentation'
-              }
+              title={!prompt.trim() ? 'Describe a presentation first' : 'Create presentation'}
             >
               {creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />}
             </button>
           </div>
-          {providerMode !== 'deterministic' ? (
-            <label className="ns-landing-consent">
-              <input
-                type="checkbox"
-                checked={providerConsent}
-                onChange={(event) => {
-                  setProviderConsent(event.target.checked);
-                  onClearError?.();
-                }}
-                data-testid="landing-provider-consent"
-              />
-              <span>
-                Use {selectedModel?.label ?? 'this model'} at{' '}
-                {NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === reasoningEffort)?.label}{' '}
-                effort through {providerDisplayName(providerMode)} for this deck
-                <small>
-                  Sends this brief{attachments.length ? ' and attached files' : ''}. Trace records
-                  the route, tokens, cost, and any fallback.
-                </small>
-              </span>
-            </label>
-          ) : null}
           {creating ? (
             <output className="ns-landing-create-status" aria-live="polite">
               <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating
@@ -389,7 +359,7 @@ export function NodeSlideLanding({
               {attachments.length > 0
                 ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
                 : ''}
-              . One explicit consent above; then create directly.
+              . Create directly; the route, tokens, and cost are recorded in Trace.
             </>
           )}
         </p>
