@@ -785,6 +785,18 @@ export interface DeckVersion {
   createdAt: number;
 }
 
+export type NodeSlideSourceBindingStatus = 'bound' | 'not_applicable' | 'legacy_unavailable';
+
+/** Immutable element-level evidence binding for one factual candidate operation. */
+export interface NodeSlideClaimSourceBinding {
+  operationIndex: number;
+  operation: 'replace_text' | 'update_chart';
+  slideId: string;
+  elementId: string;
+  sourceIds: string[];
+  claimDigest: string;
+}
+
 export interface AgentTrace {
   id: string;
   deckId: string;
@@ -807,6 +819,10 @@ export interface AgentTrace {
   costMicroUsd?: number;
   inputTokens?: number;
   outputTokens?: number;
+  /** Always hydrated for current API reads; absent only on older serialized clients. */
+  sourceBindingStatus?: NodeSlideSourceBindingStatus;
+  /** Empty for non-factual runs and honestly unavailable on legacy traces. */
+  claimSourceBindings?: NodeSlideClaimSourceBinding[];
   createdAt: number;
   completedAt?: number;
 }

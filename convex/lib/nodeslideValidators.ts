@@ -809,6 +809,21 @@ export const nodeslideDeckReplCommandValidator = v.union(
   }),
 );
 
+export const nodeslideSourceBindingStatusValidator = v.union(
+  v.literal('bound'),
+  v.literal('not_applicable'),
+  v.literal('legacy_unavailable'),
+);
+
+export const nodeslideClaimSourceBindingValidator = v.object({
+  operationIndex: v.number(),
+  operation: v.union(v.literal('replace_text'), v.literal('update_chart')),
+  slideId: v.string(),
+  elementId: v.string(),
+  sourceIds: v.array(v.string()),
+  claimDigest: v.string(),
+});
+
 export const nodeslidePatchStatusValidator = v.union(
   v.literal('draft'),
   v.literal('validating'),

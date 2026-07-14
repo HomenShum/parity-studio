@@ -3,6 +3,7 @@ import type { NodeSlideAgentMemory, NodeSlideAgentMemoryCategory } from '../shar
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { requireOwnerAccess } from './lib/nodeslideAccess';
 import { nodeslideContentDigest, nodeslideEventId } from './lib/nodeslideIds';
+import { isNodeSlideStandingInstruction } from './lib/nodeslideMemoryPolicy';
 
 export const NODESLIDE_MEMORY_MAX_ITEMS = 100;
 export const NODESLIDE_MEMORY_MAX_ACTIVE_ITEMS = 48;
@@ -200,7 +201,11 @@ export const retrieveRelevantInternal = internalQuery({
       )
       .order('desc')
       .take(NODESLIDE_MEMORY_MAX_ACTIVE_ITEMS);
-    return selectRelevantMemories(rows.map(memoryFromRow), args.instruction, args.limit);
+    return selectRelevantMemories(
+      rows.filter((row) => row.deckId === args.deckId).map(memoryFromRow),
+      args.instruction,
+      args.limit,
+    );
   },
 });
 
@@ -240,22 +245,32 @@ export function selectRelevantMemories(
   const now = Date.now();
   const ranked = memories
     .filter((memory) => memory.status === 'active')
-    .map((memory) => {
+    .flatMap((memory) => {
       const memoryTokens = tokens(memory.content);
       let overlap = 0;
       for (const token of queryTokens) if (memoryTokens.has(token)) overlap += 1;
+      const standingInstruction = isNodeSlideStandingInstruction(memory);
+      // Explicit standing instructions are intentionally global. Every other
+      // memory must earn retrieval through deterministic lexical relevance;
+      // recency and category can rank a match but can never manufacture one.
+      if (!standingInstruction && overlap === 0) return [];
       const categoryWeight =
-        memory.category === 'instruction' || memory.category === 'decision'
-          ? 3
-          : memory.category === 'preference'
-            ? 2
-            : 1;
+        memory.category === 'decision' ? 3 : memory.category === 'preference' ? 2 : 1;
       const ageDays = Math.max(0, (now - memory.updatedAt) / 86_400_000);
       const recency = Math.max(0, 2 - ageDays / 30);
-      return { memory, score: overlap * 10 + categoryWeight + recency };
+      return [
+        {
+          memory,
+          standingInstruction,
+          score: overlap * 10 + categoryWeight + recency,
+        },
+      ];
     })
     .sort(
-      (left, right) => right.score - left.score || right.memory.updatedAt - left.memory.updatedAt,
+      (left, right) =>
+        Number(right.standingInstruction) - Number(left.standingInstruction) ||
+        right.score - left.score ||
+        right.memory.updatedAt - left.memory.updatedAt,
     );
 
   const selected: NodeSlideAgentMemory[] = [];

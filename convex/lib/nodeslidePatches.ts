@@ -321,6 +321,14 @@ export function validateNodeSlidePatch(
       );
     }
     if (operation.op === 'replace_text' && (element.kind === 'text' || element.kind === 'math')) {
+      const sourceBindingValid =
+        operation.sourceIds === undefined ||
+        (operation.sourceIds.length <= NODESLIDE_ELEMENT_SOURCE_LIMIT &&
+          new Set(operation.sourceIds).size === operation.sourceIds.length &&
+          operation.sourceIds.every((sourceId) => sources.has(sourceId)));
+      if (!sourceBindingValid) {
+        errors.push(`replace_text on ${operation.elementId} has an invalid source binding.`);
+      }
       const currentText =
         element.kind === 'math'
           ? (element.math?.display ?? element.math?.expression ?? element.content ?? '')
@@ -329,6 +337,9 @@ export function validateNodeSlidePatch(
         errors.push(`replace_text must change element ${operation.elementId}.`);
       } else if (canMutate) {
         element.content = operation.text;
+        if (sourceBindingValid && operation.sourceIds !== undefined) {
+          element.sourceIds = [...operation.sourceIds];
+        }
         if (element.kind === 'math' && element.math) {
           element.math.display = operation.text;
           element.math.expression = operation.text;
@@ -396,6 +407,10 @@ export function validateNodeSlidePatch(
         );
       } else {
         const chart = operation.chart;
+        const sourceBindingValid = !chart.sourceId || sources.has(chart.sourceId);
+        if (!sourceBindingValid) {
+          errors.push(`update_chart on ${operation.elementId} has an invalid source binding.`);
+        }
         const validLabels = chart.labels.length > 0 && chart.labels.length <= 24;
         const validSeries =
           chart.series.length > 0 &&
@@ -410,6 +425,9 @@ export function validateNodeSlidePatch(
           errors.push(
             'update_chart requires 1-24 labels and 1-6 finite series aligned to those labels.',
           );
+        } else if (!sourceBindingValid) {
+          // Keep validating the rest of the candidate without materializing
+          // an unbound chart into the working snapshot.
         } else if (JSON.stringify(chart) === JSON.stringify(element.chart)) {
           errors.push(`update_chart must change element ${operation.elementId}.`);
         } else if (canMutate) {

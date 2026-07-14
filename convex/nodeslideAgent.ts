@@ -42,6 +42,7 @@ import {
 } from './lib/nodeslideEditShadowPlanner';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
+import { nodeSlideMemoryUse } from './lib/nodeslideMemoryPolicy';
 import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
   NodeSlideProviderConsentError,
@@ -55,6 +56,7 @@ import {
   createNodeSlideShadowComparison,
   nodeSlideEditTurnInputDigest,
 } from './lib/nodeslideShadowComparison';
+import { nodeSlideOperationSourceIds } from './lib/nodeslideSourceLineage';
 import {
   invokeNodeSlideBriefProvider,
   nodeslideAgentModelValidator,
@@ -294,13 +296,17 @@ export const proposeEdit = action({
             })) as NodeSlideAgentMemory[])
           : [];
       if (memories.length > 0) {
+        const standingInstructionCount = memories.filter(
+          (memory) => nodeSlideMemoryUse(memory) === 'standing_instruction',
+        ).length;
+        const retrievedMemoryCount = memories.length - standingInstructionCount;
         await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
           status: 'planning',
           activity: 'memory_retrieval',
-          message: `Retrieved ${memories.length} relevant deck memor${memories.length === 1 ? 'y' : 'ies'} for this run.`,
+          message: `Loaded ${standingInstructionCount} explicit standing instruction${standingInstructionCount === 1 ? '' : 's'} and ${retrievedMemoryCount} relevant retrieved memor${retrievedMemoryCount === 1 ? 'y' : 'ies'} for this run.`,
           role: 'tool',
           toolName: 'memory_retrieval',
           memoryIds: memories.map((memory) => memory.id),
@@ -323,12 +329,20 @@ export const proposeEdit = action({
         writeScope: args.scope,
         ...(requestedReadContext.length ? { requested: requestedReadContext } : {}),
       });
+      const explicitlySuppliedEvidence =
+        webSourceIds.length > 0 ||
+        (args.readContext ?? []).some((reference) => reference.kind === 'source');
+      const requireFactualSourceBindings =
+        providerChoice.providerMode !== 'deterministic' && explicitlySuppliedEvidence;
       const traceContext = [
         `Read context: ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'}, ${readContext.comments.length} comment${readContext.comments.length === 1 ? '' : 's'}`,
         ...readContext.sources.map(
           (source) =>
             `Source: ${source.title} [${source.id}] · ${source.sourceType} · ${nodeslideContentDigest(source.citation)}`,
         ),
+        requireFactualSourceBindings
+          ? 'Evidence policy: factual text and chart output requires exact claim-level source bindings'
+          : 'Evidence policy: no external evidence-grounded factual output requested',
       ];
 
       const request: NodeSlideEditPlanningRequest = {
@@ -343,6 +357,7 @@ export const proposeEdit = action({
         referenceUse: args.referenceUse ?? 'context_only',
         providerMode: providerChoice.providerMode,
         ...(memories.length ? { memories } : {}),
+        ...(requireFactualSourceBindings ? { requireFactualSourceBindings: true } : {}),
         ...(providerChoice.providerMode !== 'deterministic'
           ? {
               providerModel: providerChoice.providerModel,
@@ -361,6 +376,8 @@ export const proposeEdit = action({
 
       const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
       if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
+      const finalOperations = baseline.operations;
+      const boundSourceIds = nodeSlideOperationSourceIds(finalOperations);
       const runBeforeValidation = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
         deckId: args.deckId,
         ownerAccessKey: args.ownerAccessKey,
@@ -377,11 +394,8 @@ export const proposeEdit = action({
         message: `Validating ${baseline.operations.length} proposed operation${baseline.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
-        ...(readContext.sources.length
-          ? { sourceIds: readContext.sources.map((source) => source.id) }
-          : {}),
+        ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
-      const finalOperations = baseline.operations;
       const summary = baseline.summary;
       const providerRequested = providerChoice.providerMode !== 'deterministic';
       const requestedProviderModel =
@@ -493,6 +507,11 @@ export const proposeEdit = action({
             : 'Produced deterministic bounded edit operations',
           'Persisted proposal and human-readable trace atomically',
         ],
+        sourceBindingPolicy:
+          requireFactualSourceBindings && baseline.receipt.origin === 'free_route'
+            ? 'required_external_evidence'
+            : 'not_applicable',
+        authorizedSourceIds: readContext.sources.map((source) => source.id),
         ...traceAttribution,
       });
       await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
@@ -504,7 +523,7 @@ export const proposeEdit = action({
         traceId,
         message: `${summary} Review the validated proposal before it can change the deck.`,
         role: 'assistant',
-        ...(webSourceIds.length ? { sourceIds: webSourceIds } : {}),
+        ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
       return proposal;
     } catch (error) {
@@ -708,6 +727,8 @@ export const proposeExternalAgentEdit = action({
                 'Revalidated scope, clocks, locks, provenance, and layout server-side',
                 'Persisted an unapplied proposal and trace receipt atomically',
               ],
+        sourceBindingPolicy: 'not_applicable',
+        authorizedSourceIds: nodeSlideOperationSourceIds(args.operations),
         provider,
         model,
         ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),

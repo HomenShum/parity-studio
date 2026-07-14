@@ -5,6 +5,7 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_AGENT_READ_CONTEXT_LIMITS,
   NODESLIDE_DESIGN_BEHAVIORS,
   NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION,
   NODESLIDE_EDITOR_CAPABILITY_VERSION,
@@ -107,6 +108,7 @@ import {
   requireDeckSignatureProfile,
   requireSignatureProfile,
 } from './lib/nodeslideSignatureProfiles';
+import { buildNodeSlideSourceLineage } from './lib/nodeslideSourceLineage';
 import { isNormalizedBoundingBox, validateNodeSlideSnapshot } from './lib/nodeslideValidation';
 import {
   nodeslideBriefAttachmentValidator,
@@ -2184,6 +2186,27 @@ export const createFromBriefInternal = internalMutation({
   },
 });
 
+async function requireAgentSourceAuthorization(
+  ctx: Pick<MutationCtx, 'db'>,
+  deckId: string,
+  sourceIds: readonly string[],
+): Promise<void> {
+  if (sourceIds.length > NODESLIDE_AGENT_READ_CONTEXT_LIMITS.sourceIds) {
+    throw new Error('Agent source authorization exceeds the bounded read-context limit.');
+  }
+  const rows = await Promise.all(
+    sourceIds.map((sourceId) =>
+      ctx.db
+        .query('nodeslide_sources')
+        .withIndex('by_stable_id', (query) => query.eq('id', sourceId))
+        .unique(),
+    ),
+  );
+  if (rows.some((row) => !row || row.deckId !== deckId || row.status === 'failed')) {
+    throw new Error('Agent source authorization references a source outside this deck.');
+  }
+}
+
 export const proposeAgentPatchInternal = internalMutation({
   args: {
     ...internalAgentPatchArgs,
@@ -2196,6 +2219,10 @@ export const proposeAgentPatchInternal = internalMutation({
     traceSummary: v.string(),
     traceContext: v.array(v.string()),
     toolCalls: v.array(v.string()),
+    sourceBindingPolicy: v.optional(
+      v.union(v.literal('not_applicable'), v.literal('required_external_evidence')),
+    ),
+    authorizedSourceIds: v.optional(v.array(v.string())),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
@@ -2212,6 +2239,12 @@ export const proposeAgentPatchInternal = internalMutation({
     ) {
       throw new Error('Agent trace context is invalid or exceeds bounds.');
     }
+    const sourceLineage = buildNodeSlideSourceLineage({
+      operations: args.operations,
+      authorizedSourceIds: args.authorizedSourceIds ?? [],
+      policy: args.sourceBindingPolicy ?? 'not_applicable',
+    });
+    await requireAgentSourceAuthorization(ctx, args.deckId, args.authorizedSourceIds ?? []);
     const planningBindingsValid =
       /^turn_sha256:[0-9a-f]{64}$/.test(args.planningInputDigest ?? '') &&
       /^snap_sha256:[0-9a-f]{64}$/.test(args.planningSnapshotDigest ?? '');
@@ -2238,6 +2271,21 @@ export const proposeAgentPatchInternal = internalMutation({
         existingTrace.patchId !== args.id
       ) {
         throw new Error('Agent proposal trace idempotency binding is invalid.');
+      }
+      const hasPersistedSourceLineage =
+        existingTrace.sourceBindingStatus !== undefined ||
+        existingTrace.claimSourceBindings !== undefined;
+      if (
+        hasPersistedSourceLineage &&
+        stableJson({
+          sourceBindingStatus: existingTrace.sourceBindingStatus,
+          claimSourceBindings: existingTrace.claimSourceBindings ?? [],
+        }) !== stableJson(sourceLineage)
+      ) {
+        throw new Error('Agent proposal source-lineage idempotency binding is invalid.');
+      }
+      if (!hasPersistedSourceLineage) {
+        await ctx.db.patch(existingTrace._id, sourceLineage);
       }
       return proposal;
     }
@@ -2273,6 +2321,9 @@ export const proposeAgentPatchInternal = internalMutation({
         'Locked elements are immutable',
         'Fine-grained CAS before commit',
         'No provider secrets persisted',
+        sourceLineage.sourceBindingStatus === 'bound'
+          ? 'Claim-level source bindings verified server-side'
+          : 'No source-grounded factual operation was persisted',
       ],
       ...(args.planningInputDigest ? { planningInputDigest: args.planningInputDigest } : {}),
       ...(args.planningSnapshotDigest
@@ -2290,6 +2341,7 @@ export const proposeAgentPatchInternal = internalMutation({
       ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
       ...(args.inputTokens !== undefined ? { inputTokens: args.inputTokens } : {}),
       ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
+      ...sourceLineage,
       createdAt: now,
       ...(proposal.patch.status === 'stale' ? { completedAt: now } : {}),
     };
@@ -3087,6 +3139,8 @@ async function createWorkspaceRows(
     ...(args.trace.costMicroUsd !== undefined ? { costMicroUsd: args.trace.costMicroUsd } : {}),
     ...(args.trace.inputTokens !== undefined ? { inputTokens: args.trace.inputTokens } : {}),
     ...(args.trace.outputTokens !== undefined ? { outputTokens: args.trace.outputTokens } : {}),
+    sourceBindingStatus: 'not_applicable',
+    claimSourceBindings: [],
     createdAt: now,
     completedAt: now,
   });

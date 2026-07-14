@@ -170,6 +170,45 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[1]?.[0].userText).toContain('Missing operations');
   });
 
+  it('repairs a missing factual source binding exactly once against the planner schema', async () => {
+    const sourceBindingRequest = {
+      ...request,
+      jsonSchema: {
+        name: 'nodeslide_source_bound_patch',
+        schema: {
+          type: 'object',
+          required: ['operations'],
+          properties: {
+            operations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['op', 'sourceIds'],
+                properties: {
+                  op: { const: 'replace_text' },
+                  sourceIds: { type: 'array', minItems: 1, items: { type: 'string' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('{"operations":[{"op":"replace_text"}]}'))
+      .mockResolvedValueOnce(
+        completion('{"operations":[{"op":"replace_text","sourceIds":["source-fifa"]}]}'),
+      );
+
+    const result = await callNodeSlideFreeJson(sourceBindingRequest, { complete });
+
+    expect(result.ok).toBe(true);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0].userText).toContain('"op":"replace_text"');
+  });
+
   it('falls back honestly after the single repair also returns invalid JSON', async () => {
     const complete = vi
       .fn<NodeSlideCompletion>()
