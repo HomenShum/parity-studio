@@ -19,6 +19,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type UIEvent,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -45,11 +46,23 @@ import {
 import './TraceWaterfall.css';
 
 type WaterfallFilter = 'all' | 'errors' | 'sources' | 'models';
+export type WaterfallGrouping = 'trace' | 'service' | 'type' | 'status';
 
 export interface TraceWaterfallRow {
   span: NodeSlideAgentSpan;
   depth: number;
   childCount: number;
+  groupKey?: string;
+  groupLabel?: string;
+}
+
+export interface TraceWaterfallGroup {
+  key: string;
+  label: string;
+  spanCount: number;
+  errorCount: number;
+  durationMs: number;
+  costMicroUsd: number;
 }
 
 interface TraceWaterfallProps {
@@ -71,6 +84,8 @@ const MINIMAP_BUCKET_COUNT = 48;
 const MAX_EVENT_MARKERS = 8;
 const MAX_VISIBLE_EVENTS = 40;
 const MAX_VISIBLE_ATTRIBUTES = 24;
+const MAX_VISIBLE_EVIDENCE = 12;
+const MAX_VISIBLE_GROUPS = 12;
 
 function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: string): boolean {
   if (filter === 'errors' && span.status !== 'error') return false;
@@ -157,6 +172,84 @@ export function buildWaterfallRows(
   return rows;
 }
 
+function stringAttribute(span: NodeSlideAgentSpan, pattern: RegExp): string | undefined {
+  const value = span.attributes.find(
+    (attribute) => pattern.test(attribute.key) && typeof attribute.value === 'string',
+  )?.value;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function spanGroupIdentity(
+  span: NodeSlideAgentSpan,
+  grouping: Exclude<WaterfallGrouping, 'trace'>,
+): { key: string; label: string } {
+  if (grouping === 'service') {
+    const service =
+      stringAttribute(span, /^(?:service\.name|resource\.service\.name)$/i) ??
+      span.provider ??
+      (span.toolName ? 'nodeslide.tools' : 'nodeslide.agent');
+    return { key: service.toLocaleLowerCase(), label: service };
+  }
+  if (grouping === 'type') {
+    const type = spanType(span);
+    return { key: type, label: humanize(type) };
+  }
+  return { key: span.status, label: humanize(span.status) };
+}
+
+export function buildGroupedWaterfallRows(
+  spans: readonly NodeSlideAgentSpan[],
+  grouping: WaterfallGrouping,
+  collapsed: ReadonlySet<string> = new Set(),
+  filter: WaterfallFilter = 'all',
+  query = '',
+): TraceWaterfallRow[] {
+  if (grouping === 'trace') return buildWaterfallRows(spans, collapsed, filter, query);
+
+  return spans
+    .filter((span) => spanMatches(span, filter, query.trim()))
+    .map((span) => ({ span, group: spanGroupIdentity(span, grouping) }))
+    .sort(
+      (left, right) =>
+        left.group.label.localeCompare(right.group.label) ||
+        left.span.startTime - right.span.startTime ||
+        left.span.sequence - right.span.sequence,
+    )
+    .map(({ span, group }) => ({
+      span,
+      depth: 0,
+      childCount: 0,
+      groupKey: group.key,
+      groupLabel: group.label,
+    }));
+}
+
+export function buildWaterfallGroups(
+  spans: readonly NodeSlideAgentSpan[],
+  grouping: Exclude<WaterfallGrouping, 'trace'>,
+): TraceWaterfallGroup[] {
+  const groups = new Map<string, TraceWaterfallGroup>();
+  for (const span of spans) {
+    const identity = spanGroupIdentity(span, grouping);
+    const current = groups.get(identity.key) ?? {
+      key: identity.key,
+      label: identity.label,
+      spanCount: 0,
+      errorCount: 0,
+      durationMs: 0,
+      costMicroUsd: 0,
+    };
+    current.spanCount += 1;
+    current.errorCount += span.status === 'error' ? 1 : 0;
+    current.durationMs += spanDurationMs(span) ?? 0;
+    current.costMicroUsd += span.costMicroUsd ?? 0;
+    groups.set(identity.key, current);
+  }
+  return [...groups.values()].sort(
+    (left, right) => right.spanCount - left.spanCount || left.label.localeCompare(right.label),
+  );
+}
+
 export function collapsibleSpanIds(spans: readonly NodeSlideAgentSpan[]): Set<string> {
   const parents = new Set(spans.flatMap((span) => (span.parentSpanId ? [span.parentSpanId] : [])));
   return new Set(spans.filter((span) => parents.has(span.spanId)).map((span) => span.spanId));
@@ -169,7 +262,14 @@ export function defaultCollapsedSpanIds(
   if (spans.length < threshold) return new Set();
   const bySpanId = new Set(spans.map((span) => span.spanId));
   const roots = spans.filter((span) => !span.parentSpanId || !bySpanId.has(span.parentSpanId));
+  const rootIds = new Set(roots.map((span) => span.spanId));
   const collapsible = collapsibleSpanIds(spans);
+  const groupedChildren = spans.filter(
+    (span) => span.parentSpanId && rootIds.has(span.parentSpanId) && collapsible.has(span.spanId),
+  );
+  if (groupedChildren.length > 0) {
+    return new Set(groupedChildren.map((span) => span.spanId));
+  }
   return new Set(roots.filter((span) => collapsible.has(span.spanId)).map((span) => span.spanId));
 }
 
@@ -304,6 +404,29 @@ function MiniMap({
   );
 }
 
+function GroupSummary({ groups }: { groups: readonly TraceWaterfallGroup[] }) {
+  const visible = groups.slice(0, MAX_VISIBLE_GROUPS);
+  return (
+    <section className="ns-waterfall-groups" aria-label="Loaded span group aggregates">
+      {visible.map((group) => (
+        <article key={group.key} data-testid="trace-group-summary" data-group={group.key}>
+          <strong>{group.label}</strong>
+          <span>
+            {group.spanCount} span{group.spanCount === 1 ? '' : 's'} · {group.errorCount} error
+            {group.errorCount === 1 ? '' : 's'}
+          </span>
+          <small>
+            {formatDuration(group.durationMs)} span time · {formatCost(group.costMicroUsd)}
+          </small>
+        </article>
+      ))}
+      {groups.length > visible.length ? (
+        <p>{groups.length - visible.length} additional loaded groups omitted from this summary.</p>
+      ) : null}
+    </section>
+  );
+}
+
 export type TraceTreeKeyboardAction =
   | { type: 'select'; spanId: string; index: number }
   | { type: 'toggle'; spanId: string }
@@ -415,8 +538,9 @@ function O11ySpanRow({
       role="treeitem"
       aria-level={row.depth + 1}
       aria-selected={selectedSpanId === sourceSpan.spanId}
-      aria-label={`${sourceSpan.name}, ${humanize(sourceSpan.status)}, ${formatSpanDuration(sourceSpan)}`}
+      aria-label={`${sourceSpan.name}, ${row.groupLabel ? `${row.groupLabel} group, ` : ''}${humanize(sourceSpan.status)}, ${formatSpanDuration(sourceSpan)}`}
       {...(row.childCount > 0 ? { 'aria-expanded': !isCollapsed } : {})}
+      {...(row.groupKey ? { 'data-group': row.groupKey } : {})}
       data-tree-collapsed={isCollapsed ? 'true' : 'false'}
       data-testid="trace-waterfall-row"
       data-source-count={sourceSpan.sourceIds?.length ?? 0}
@@ -459,7 +583,10 @@ function O11ySpanRow({
           </SpanPrimitive.TypeBadge>
           <span>
             <SpanPrimitive.Name className="ns-o11y-name" />
-            <small>{sourceSpan.toolName ?? sourceSpan.operationName}</small>
+            <small>
+              {row.groupLabel ? `${row.groupLabel} · ` : ''}
+              {sourceSpan.toolName ?? sourceSpan.operationName}
+            </small>
           </span>
         </button>
       </SpanPrimitive.Indent>
@@ -557,6 +684,7 @@ function O11ySpanTimeline({
   onSelect,
   onToggle,
   onKeyDown,
+  flatten,
 }: {
   rows: readonly TraceWaterfallRow[];
   rangeStart: number;
@@ -569,8 +697,12 @@ function O11ySpanTimeline({
   onSelect: (spanId: string) => void;
   onToggle: (spanId: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  flatten: boolean;
 }) {
-  const o11ySpans = useMemo(() => toO11ySpans(rows.map((row) => row.span)), [rows]);
+  const o11ySpans = useMemo(() => {
+    const adapted = toO11ySpans(rows.map((row) => row.span));
+    return flatten ? adapted.map((span) => ({ ...span, parentSpanId: null })) : adapted;
+  }, [flatten, rows]);
   const aui = useAui({ span: SpanResource({ spans: o11ySpans }) }, { parent: null });
 
   return (
@@ -692,10 +824,12 @@ function TraceProofStrip({
           {proof.provider} · {proof.model}
         </dd>
       </div>
-      <div>
-        <dt>Effort</dt>
-        <dd>{proof.effort ?? 'not recorded'}</dd>
-      </div>
+      {!compact ? (
+        <div>
+          <dt>Effort</dt>
+          <dd>{proof.effort ?? 'not recorded'}</dd>
+        </div>
+      ) : null}
       <div>
         <dt>Tokens</dt>
         <dd>
@@ -742,6 +876,7 @@ function TraceWaterfallRun({
 }: TraceWaterfallProps) {
   const [filter, setFilter] = useState<WaterfallFilter>('all');
   const [query, setQuery] = useState('');
+  const [grouping, setGrouping] = useState<WaterfallGrouping>('trace');
   const [collapsed, setCollapsed] = useState<Set<string>>(() =>
     defaultCollapsedSpanIds(telemetry.spans),
   );
@@ -750,6 +885,7 @@ function TraceWaterfallRun({
   const [viewportHeight, setViewportHeight] = useState(430);
   const [expandedEventsFor, setExpandedEventsFor] = useState<string | null>(null);
   const [expandedAttributesFor, setExpandedAttributesFor] = useState<string | null>(null);
+  const [expandedEvidenceFor, setExpandedEvidenceFor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const spans = useMemo(
@@ -758,12 +894,20 @@ function TraceWaterfallRun({
   );
   const hasActiveFilter = filter !== 'all' || Boolean(query.trim());
   const effectiveCollapsed = useMemo(
-    () => (hasActiveFilter ? new Set<string>() : collapsed),
-    [collapsed, hasActiveFilter],
+    () => (hasActiveFilter || grouping !== 'trace' ? new Set<string>() : collapsed),
+    [collapsed, grouping, hasActiveFilter],
   );
   const rows = useMemo(
-    () => buildWaterfallRows(spans, effectiveCollapsed, filter, query),
-    [effectiveCollapsed, filter, query, spans],
+    () => buildGroupedWaterfallRows(spans, grouping, effectiveCollapsed, filter, query),
+    [effectiveCollapsed, filter, grouping, query, spans],
+  );
+  const matchingSpans = useMemo(
+    () => spans.filter((span) => spanMatches(span, filter, query.trim())),
+    [filter, query, spans],
+  );
+  const groups = useMemo(
+    () => (grouping === 'trace' ? [] : buildWaterfallGroups(matchingSpans, grouping)),
+    [grouping, matchingSpans],
   );
   const collapsibleIds = useMemo(() => collapsibleSpanIds(spans), [spans]);
   const metrics = useMemo(
@@ -776,6 +920,9 @@ function TraceWaterfallRun({
   const rangeEnd = metrics.rangeEnd;
   const rangeDuration = Math.max(1, rangeEnd - rangeStart);
   const selected = rows.find((row) => row.span.spanId === selectedSpanId)?.span ?? rows[0]?.span;
+  const persistedSelected = selectedSpanId
+    ? spans.find((span) => span.spanId === selectedSpanId)
+    : undefined;
   const selectedEnd = selected ? spanEndTime(selected) : undefined;
   const eventsBySpan = useMemo(() => {
     const map = new Map<string, NodeSlideAgentEvent[]>();
@@ -787,12 +934,23 @@ function TraceWaterfallRun({
     return map;
   }, [telemetry.events]);
 
+  useEffect(() => {
+    if (compact) return;
+    const element = scrollRef.current;
+    if (!element) return;
+    const maximum = Math.max(0, rows.length * ROW_HEIGHT - element.clientHeight);
+    const restored = Math.min(scrollTop, maximum);
+    if (Math.abs(element.scrollTop - restored) > 1) element.scrollTop = restored;
+    if (restored !== scrollTop) setScrollTop(restored);
+    setViewportHeight(element.clientHeight || 430);
+  }, [compact, rows.length, scrollTop]);
+
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     setScrollTop(event.currentTarget.scrollTop);
     setViewportHeight(event.currentTarget.clientHeight);
   };
   const toggleSpan = (spanId: string) => {
-    if (hasActiveFilter) return;
+    if (hasActiveFilter || grouping !== 'trace') return;
     setCollapsed((current) => {
       const next = new Set(current);
       if (next.has(spanId)) next.delete(spanId);
@@ -812,6 +970,7 @@ function TraceWaterfallRun({
     }
   };
   const onTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (grouping !== 'trace' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) return;
     const action = traceTreeKeyboardAction(
       rows,
       selected?.spanId ?? null,
@@ -834,11 +993,16 @@ function TraceWaterfallRun({
     : [...new Set(runMessages.flatMap((message) => message.sourceIds ?? []))];
   const evidenceMode = exactSourceIds.length ? 'span' : legacySourceIds.length ? 'run' : 'none';
   const evidenceIds = exactSourceIds.length ? exactSourceIds : legacySourceIds;
-  const evidence = evidenceIds
+  const showAllEvidence = expandedEvidenceFor === selected?.spanId;
+  const visibleEvidenceIds = showAllEvidence
+    ? evidenceIds
+    : evidenceIds.slice(0, MAX_VISIBLE_EVIDENCE);
+  const evidence = visibleEvidenceIds
     .map((id) => sources.find((source) => source.id === id))
     .filter((source): source is SourceRecord => Boolean(source));
   const resolvedEvidenceIds = new Set(evidence.map((source) => source.id));
-  const missingEvidenceIds = evidenceIds.filter((id) => !resolvedEvidenceIds.has(id));
+  const missingEvidenceIds = visibleEvidenceIds.filter((id) => !resolvedEvidenceIds.has(id));
+  const hiddenEvidenceCount = Math.max(0, evidenceIds.length - visibleEvidenceIds.length);
   const selectedEvents = selected ? (eventsBySpan.get(selected.spanId) ?? []) : [];
   const showAllEvents = expandedEventsFor === selected?.spanId;
   const showAllAttributes = expandedAttributesFor === selected?.spanId;
@@ -901,7 +1065,27 @@ function TraceWaterfallRun({
         </div>
 
         <TraceProofStrip proof={proof} compact />
-        <CompactO11yActivity spans={compactSpans} />
+        {compactSpans.length > 0 ? (
+          <CompactO11yActivity spans={compactSpans} />
+        ) : (
+          <p className="ns-trace-activity-empty">
+            No recorded spans. NodeSlide does not synthesize activity or timing.
+          </p>
+        )}
+
+        {persistedSelected ? (
+          <div className="ns-trace-compact-selection" data-testid="trace-compact-selection">
+            <span>Selected span</span>
+            <strong>{persistedSelected.name}</strong>
+            <code>{persistedSelected.spanId}</code>
+            <small>
+              {formatSpanDuration(persistedSelected)} · started{' '}
+              <time dateTime={new Date(persistedSelected.startTime).toISOString()}>
+                {formatDateTime(persistedSelected.startTime)}
+              </time>
+            </small>
+          </div>
+        ) : null}
 
         {hiddenCount ? (
           <p className="ns-trace-activity-more">
@@ -1026,10 +1210,23 @@ function TraceWaterfallRun({
             </button>
           ))}
         </fieldset>
+        <label className="ns-waterfall-grouping">
+          <span>Group</span>
+          <select
+            value={grouping}
+            aria-label="Group trace spans"
+            onChange={(event) => setGrouping(event.target.value as WaterfallGrouping)}
+          >
+            <option value="trace">Trace hierarchy</option>
+            <option value="service">Service</option>
+            <option value="type">Span type</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
         <div className="ns-waterfall-tree-actions" aria-label="Trace tree controls">
           <button
             type="button"
-            disabled={hasActiveFilter || collapsibleIds.size === 0}
+            disabled={grouping !== 'trace' || hasActiveFilter || collapsibleIds.size === 0}
             onClick={() => {
               setCollapsed(new Set(collapsibleIds));
               setSelectedSpanId(rows[0]?.span.spanId ?? null);
@@ -1041,7 +1238,7 @@ function TraceWaterfallRun({
           </button>
           <button
             type="button"
-            disabled={hasActiveFilter || collapsed.size === 0}
+            disabled={grouping !== 'trace' || hasActiveFilter || collapsed.size === 0}
             title="Rows remain virtualized while loaded subtrees expand"
             onClick={() => setCollapsed(new Set())}
           >
@@ -1050,10 +1247,12 @@ function TraceWaterfallRun({
         </div>
         <output aria-live="polite">
           {rows.length} of {spans.length} loaded spans visible
+          {grouping !== 'trace' ? ` · grouped by ${grouping}` : ''}
           {hasActiveFilter ? ' · matching branches temporarily expanded' : ''}
         </output>
       </div>
 
+      {grouping !== 'trace' ? <GroupSummary groups={groups} /> : null}
       <MiniMap
         spans={spans}
         rangeStart={rangeStart}
@@ -1077,7 +1276,7 @@ function TraceWaterfallRun({
         ref={scrollRef}
         className="ns-waterfall-scroll"
         onScroll={onScroll}
-        style={{ height: Math.min(430, Math.max(152, rows.length * ROW_HEIGHT)) }}
+        style={{ height: rows.length === 0 ? 0 : Math.min(430, rows.length * ROW_HEIGHT) }}
       >
         <O11ySpanTimeline
           rows={rows}
@@ -1091,11 +1290,16 @@ function TraceWaterfallRun({
           onSelect={setSelectedSpanId}
           onToggle={toggleSpan}
           onKeyDown={onTreeKeyDown}
+          flatten={grouping !== 'trace'}
         />
       </div>
 
       {rows.length === 0 ? (
-        <div className="ns-waterfall-empty">No spans match this filter.</div>
+        <div className="ns-waterfall-empty">
+          {spans.length === 0
+            ? 'No recorded spans. Timing is not synthesized.'
+            : 'No spans match this loaded-window filter.'}
+        </div>
       ) : null}
 
       {telemetry.hasMore ? (
@@ -1353,6 +1557,16 @@ function TraceWaterfallRun({
                 ))
               ) : evidenceIds.length === 0 ? (
                 <p>No source citation is bound to this span.</p>
+              ) : null}
+              {hiddenEvidenceCount > 0 ? (
+                <button
+                  type="button"
+                  className="ns-waterfall-evidence-more"
+                  onClick={() => setExpandedEvidenceFor(selected.spanId)}
+                >
+                  Show {hiddenEvidenceCount} more loaded source record
+                  {hiddenEvidenceCount === 1 ? '' : 's'}
+                </button>
               ) : null}
             </section>
           </div>

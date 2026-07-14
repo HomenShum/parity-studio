@@ -11,12 +11,15 @@ import type {
 } from '../../../../shared/nodeslide';
 import {
   TraceWaterfall,
+  buildGroupedWaterfallRows,
   buildMiniMapBuckets,
+  buildWaterfallGroups,
   buildWaterfallRows,
   collapsibleSpanIds,
   defaultCollapsedSpanIds,
   traceTreeKeyboardAction,
 } from './TraceWaterfall';
+import { TRACE_FIXTURE_ROOT_SPAN_ID, createTraceWaterfallFixture } from './TraceWaterfall.fixture';
 import { spanTimingState, toO11ySpans, traceWindowMetrics } from './traceTelemetry';
 
 const startedAt = 1_720_000_000_000;
@@ -123,17 +126,22 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
   it.each([4, 10, 100])(
     'keeps compact and expanded %i-span layouts bounded and OTel-readable',
     (count) => {
-      const fixture = telemetryFor(count);
+      const generated = createTraceWaterfallFixture(count);
+      const fixture = generated.telemetry;
+      const fixtureRoot = generated.allSpans[0];
+      if (!fixtureRoot?.endTime) throw new Error('generated root span is missing terminal timing');
+      expect(generated.allSpans).toHaveLength(count);
+      expect(fixture.spans).toHaveLength(count);
       expect(buildWaterfallRows(fixture.spans)).toHaveLength(count);
 
       const compactHtml = renderToStaticMarkup(
         <TraceWaterfall
           compact
-          run={run}
-          trace={trace}
+          run={generated.run}
+          trace={generated.trace}
           telemetry={fixture}
-          messages={[]}
-          sources={[source]}
+          messages={generated.messages}
+          sources={generated.sources}
           onExpand={() => {}}
         />,
       );
@@ -144,16 +152,17 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
       expect(compactHtml).toContain('openrouter · z-ai/glm-5.2');
       expect(compactHtml).toContain('2,400 in · 600 out');
       expect(compactHtml).toContain('$0.0042');
-      expect(compactHtml).toContain(trace.candidateDigest as string);
+      expect(compactHtml).toContain(generated.trace.candidateDigest as string);
+      expect(compactHtml).toContain(`dateTime="${new Date(fixtureRoot.startTime).toISOString()}"`);
       if (count > 6) expect(compactHtml).toContain(`${count - 6} earlier loaded step`);
 
       const expandedHtml = renderToStaticMarkup(
         <TraceWaterfall
-          run={run}
-          trace={trace}
+          run={generated.run}
+          trace={generated.trace}
           telemetry={fixture}
-          messages={[]}
-          sources={[source]}
+          messages={generated.messages}
+          sources={generated.sources}
         />,
       );
       const expandedRows = expandedHtml.match(/data-testid="trace-waterfall-row"/g)?.length ?? 0;
@@ -166,14 +175,79 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
       expect(expandedHtml).toContain('Collapse all');
       expect(expandedHtml).toContain('Expand loaded');
       expect(expandedHtml).toContain('Search trace spans');
-      expect(expandedHtml).toContain(`Complete loaded trace · ${count} records`);
-      expect(expandedHtml).toContain(`dateTime="${new Date(startedAt).toISOString()}"`);
-      expect(expandedHtml).toContain(`dateTime="${new Date(startedAt + 45).toISOString()}"`);
+      expect(expandedHtml).toContain(`Complete loaded trace · ${fixture.totalRecorded} records`);
+      expect(expandedHtml).toContain(`of ${count} loaded spans visible`);
+      expect(expandedHtml).toContain(`dateTime="${new Date(fixtureRoot.startTime).toISOString()}"`);
+      expect(expandedHtml).toContain(`dateTime="${new Date(fixtureRoot.endTime).toISOString()}"`);
       expect(expandedHtml).toContain('data-edge="end"');
       expect(expandedHtml.length).toBeLessThan(200_000);
       if (count === 100) expect(expandedRows).toBeLessThan(40);
     },
   );
+
+  it.each([250, 1_000])(
+    'keeps the exact %i-span fixture grouped, aggregated, and DOM-bounded',
+    (count) => {
+      const generated = createTraceWaterfallFixture(count);
+      expect(generated.telemetry.spans).toHaveLength(count);
+
+      const defaultCollapsed = defaultCollapsedSpanIds(generated.telemetry.spans);
+      expect(defaultCollapsed.size).toBeGreaterThan(0);
+      expect(defaultCollapsed.has(TRACE_FIXTURE_ROOT_SPAN_ID)).toBe(false);
+      const groupedHeaders = buildWaterfallRows(generated.telemetry.spans, defaultCollapsed);
+      expect(groupedHeaders.length).toBeGreaterThan(1);
+      expect(groupedHeaders.length).toBeLessThanOrEqual(9);
+
+      const compactHtml = renderToStaticMarkup(
+        <TraceWaterfall
+          compact
+          run={generated.run}
+          trace={generated.trace}
+          telemetry={generated.telemetry}
+          messages={generated.messages}
+          sources={generated.sources}
+          onExpand={() => {}}
+        />,
+      );
+      expect(compactHtml.match(/data-testid="trace-activity-row"/g)).toHaveLength(6);
+      expect(compactHtml).toContain(`${count - 6} earlier loaded steps hidden here`);
+
+      const expandedHtml = renderToStaticMarkup(
+        <TraceWaterfall
+          run={generated.run}
+          trace={generated.trace}
+          telemetry={generated.telemetry}
+          messages={generated.messages}
+          sources={generated.sources}
+        />,
+      );
+      const mountedRows = expandedHtml.match(/data-testid="trace-waterfall-row"/g)?.length ?? 0;
+      expect(mountedRows).toBeGreaterThan(1);
+      expect(mountedRows).toBeLessThan(40);
+      expect(expandedHtml.match(/data-testid="trace-minimap-bucket"/g)).toHaveLength(48);
+      expect(expandedHtml.length).toBeLessThan(200_000);
+    },
+  );
+
+  it('groups 1,000 loaded spans by real service/type fields with honest aggregates', () => {
+    const generated = createTraceWaterfallFixture(1_000);
+    const serviceRows = buildGroupedWaterfallRows(generated.telemetry.spans, 'service', new Set());
+    const serviceGroups = buildWaterfallGroups(generated.telemetry.spans, 'service');
+    const sourceRows = buildGroupedWaterfallRows(
+      generated.telemetry.spans,
+      'type',
+      new Set(),
+      'sources',
+    );
+
+    expect(serviceRows).toHaveLength(1_000);
+    expect(serviceRows.every((row) => row.depth === 0 && row.childCount === 0)).toBe(true);
+    expect(serviceGroups.reduce((sum, group) => sum + group.spanCount, 0)).toBe(1_000);
+    expect(serviceGroups.some((group) => group.label === 'openrouter')).toBe(true);
+    expect(serviceGroups.some((group) => group.errorCount > 0)).toBe(true);
+    expect(sourceRows.length).toBeGreaterThan(1);
+    expect(sourceRows.every((row) => Boolean(row.span.sourceIds?.length))).toBe(true);
+  });
 
   it('keeps the minimap faithful to all loaded spans while tree subtrees collapse', () => {
     const fixture = telemetryFor(100);
@@ -280,6 +354,30 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
     );
     expect(html).toContain('1 bound source record is unavailable');
     expect(html).toContain('source_missing');
+  });
+
+  it('caps high-cardinality source evidence until the reviewer explicitly expands it', () => {
+    const sourceIds = Array.from({ length: 20 }, (_, index) => `source_bounded_${index}`);
+    const sources = sourceIds.map(
+      (id, index): SourceRecord => ({
+        ...source,
+        id,
+        title: `Bounded source ${index}`,
+      }),
+    );
+    const root = { ...span(0), sourceIds };
+    const html = renderToStaticMarkup(
+      <TraceWaterfall
+        run={run}
+        telemetry={{ spans: [root], events: [], hasMore: false, totalRecorded: 1 }}
+        messages={[]}
+        sources={sources}
+      />,
+    );
+
+    expect(html.match(/data-testid="trace-source-citation"/g)).toHaveLength(12);
+    expect(html).toContain('Show 8 more loaded source records');
+    expect(html).not.toContain('Bounded source 12');
   });
 
   it('distinguishes open spans from terminal spans with unknown duration', () => {
