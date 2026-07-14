@@ -29,6 +29,8 @@ describe('NodeSlide v3 visual contract', () => {
     expect(desktop).toMatch(
       /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: var\(--ns-inspector-width\) !important/,
     );
+    expect(baseCss).toContain('--ns-inspector-width: 400px');
+    expect(studioSource).toContain('useState(400)');
   });
 
   it('keeps navigation and inspector reachable as tablet overlays', () => {
@@ -135,6 +137,28 @@ describe('NodeSlide v3 visual contract', () => {
     );
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: wrap;/,
+    );
+  });
+
+  it('switches the agent rail into a review-first state without a nested composer scroller', () => {
+    expect(aiInspectorSource).toContain("'is-awaiting-review'");
+    expect(aiInspectorSource).toContain(
+      "data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}",
+    );
+    expect(css).toMatch(
+      /Agent rail state contract[\s\S]*?\.ns-ai-v3-composer \{[\s\S]*?max-height: none;[\s\S]*?overflow: visible;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell\.is-awaiting-review \.ns-ai-v3-context-note[\s\S]*?display: none;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell \.ns-proposal-actions[\s\S]*?bottom: 0;[\s\S]*?position: sticky;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-composer\.is-review-compact \.ns-prompt-textarea[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    );
+    expect(studioSource).toContain(
+      "previewedPatch && (inspectorCollapsed || activeInspectorTab !== 'ai')",
     );
   });
 

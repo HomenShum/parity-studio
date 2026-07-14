@@ -43,7 +43,7 @@
     --ns-control-min-height: 32px;
     --ns-chrome-min-font: var(--ns-font-control);
     --ns-nav-width: 300px;
-    --ns-inspector-width: 340px;
+    --ns-inspector-width: 400px;
     color-scheme: light;
   }
 

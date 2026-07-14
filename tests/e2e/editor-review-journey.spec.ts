@@ -59,6 +59,13 @@ test.describe('deployed editor review boundary', () => {
 
     const proposal = page.getByTestId('proposal-card').first();
     await expect(proposal).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByTestId('ai-composer')).toHaveAttribute(
+      'data-composer-mode',
+      'follow-up',
+    );
+    await expect(proposal.getByTestId('proposal-accept')).toBeVisible();
+    await expect(proposal.getByTestId('proposal-reject')).toBeVisible();
+    await expect(page.locator('.ns-candidate-actions')).toHaveCount(0);
     await expect(proposal.getByTestId('candidate-validation')).toContainText(
       'Candidate validation passed',
     );

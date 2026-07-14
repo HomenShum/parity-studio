@@ -454,6 +454,20 @@ export function AiInspector<CommandId extends string = string>({
     .reverse()
     .find((message) => message.role === 'user')?.content;
   const activityAutoScrollPaused = proposals.length > 0 || directions.length > 0;
+  const hasReviewableProposal = proposals.length > 0;
+  const compactReviewComposer =
+    hasReviewableProposal &&
+    !composerExpanded &&
+    !providerControlsOpen &&
+    !instruction.trim() &&
+    !menuOpen;
+  const inspectorState = hasReviewableProposal
+    ? 'is-awaiting-review'
+    : activeDurableRun || isSubmitting || activeTrace?.status === 'working'
+      ? 'is-running'
+      : resolvedActivity && isFailureActivity(resolvedActivity)
+        ? 'has-failed'
+        : 'is-idle';
 
   const updateInstruction = (value: string, cursor = value.length) => {
     composerSession.setText(value);
@@ -616,6 +630,8 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
+    setProviderControlsOpen(false);
+    setComposerExpanded(false);
     if (providerMode !== 'deterministic') setProviderConsent(false);
     if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
@@ -673,7 +689,7 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   return (
-    <div className="ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell">
+    <div className={`ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell ${inspectorState}`}>
       <section
         className="ns-ai-v3-context"
         aria-labelledby={`${composerId}-context-heading`}
@@ -1002,8 +1018,14 @@ export function AiInspector<CommandId extends string = string>({
       </div>
 
       <div
-        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
+        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''} ${
+          compactReviewComposer ? 'is-review-compact' : ''
+        }`}
         data-testid="ai-composer"
+        data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}
+        onFocusCapture={() => {
+          if (compactReviewComposer) setComposerExpanded(true);
+        }}
       >
         {showSuggested ? (
           <section
@@ -1322,11 +1344,13 @@ export function AiInspector<CommandId extends string = string>({
           onTextareaSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
           onTextChange={updateInstruction}
           placeholder={
-            commentContext
-              ? 'Address this review comment without resolving it...'
-              : scopeChoice === 'elements'
-                ? 'Make this feel more decisive...'
-                : 'Turn this into a crisp executive story...'
+            compactReviewComposer
+              ? 'Ask a follow-up or request a revision...'
+              : commentContext
+                ? 'Address this review comment without resolving it...'
+                : scopeChoice === 'elements'
+                  ? 'Make this feel more decisive...'
+                  : 'Turn this into a crisp executive story...'
           }
           session={composerSession}
           status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
@@ -1354,7 +1378,7 @@ export function AiInspector<CommandId extends string = string>({
           textareaId={composerId}
           textareaLabel="AI instruction"
           textareaRef={textareaRef}
-          textareaRows={composerExpanded ? 9 : 3}
+          textareaRows={compactReviewComposer ? 1 : composerExpanded ? 9 : 3}
           tools={
             <>
               <PromptInputButton

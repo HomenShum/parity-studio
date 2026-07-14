@@ -589,7 +589,7 @@ export function NodeSlideStudio() {
     () => window.innerWidth >= 700 && window.innerWidth < 1100,
   );
   const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth < 1100);
-  const [inspectorWidth, setInspectorWidth] = useState(340);
+  const [inspectorWidth, setInspectorWidth] = useState(400);
   const [zoom, setZoom] = useState(() => {
     if (window.innerWidth < 700) return 40;
     if (window.innerWidth < 1100) return 55;
@@ -3355,7 +3355,7 @@ export function NodeSlideStudio() {
           onOverlayOpacityChange={setCompareOverlayOpacity}
           blinkPaused={compareBlinkPaused}
           onBlinkPausedChange={setCompareBlinkPaused}
-          {...(previewedPatch
+          {...(previewedPatch && (inspectorCollapsed || activeInspectorTab !== 'ai')
             ? {
                 onAcceptCandidate: () => handleAcceptPatch(previewedPatch),
                 onDeclineCandidate: () => handleRejectPatch(previewedPatch),

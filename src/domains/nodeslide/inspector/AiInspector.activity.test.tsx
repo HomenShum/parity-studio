@@ -119,6 +119,25 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(screen.getByText('2 slides')).toBeVisible();
   });
 
+  it('prioritizes review while keeping an obvious expandable follow-up composer', async () => {
+    const snapshot = fixture('review-first-composer');
+    const user = userEvent.setup();
+    renderInspector(snapshot, { patches: [proposal(snapshot)] });
+
+    const composer = screen.getByTestId('ai-composer');
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    expect(composer).toHaveAttribute('data-composer-mode', 'follow-up');
+    expect(instruction).toHaveAttribute('rows', '1');
+    expect(instruction).toHaveAttribute('placeholder', 'Ask a follow-up or request a revision...');
+    expect(composer.closest('.ns-ai-v3-shell')).toHaveClass('is-awaiting-review');
+
+    await user.click(instruction);
+
+    await waitFor(() => expect(composer).toHaveAttribute('data-composer-mode', 'full'));
+    expect(instruction).toHaveAttribute('rows', '9');
+    expect(screen.getByTestId('ai-connect-agent')).toBeVisible();
+  });
+
   it('fails closed before per-request provider consent and resets consent after submit', async () => {
     const snapshot = fixture('consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
