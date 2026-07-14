@@ -349,7 +349,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(markup).not.toContain('Resolved review request');
   });
 
-  it('exposes slide and selection context chips and all seven collapsed tabs', () => {
+  it('exposes context chips, prioritized primary tabs, and all seven collapsed shortcuts', () => {
     const snapshot = fixture();
     const slide = requiredSlide(snapshot);
     const element = snapshot.elements.find((candidate) => candidate.slideId === slide.id);
@@ -360,9 +360,13 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'json', 'trace']) {
+    for (const tab of ['design', 'comments', 'data', 'trace']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
+    expect(expanded).toContain('data-testid="inspector-more"');
+    expect(expanded).toContain('aria-label="More inspector views"');
+    expect(expanded).not.toContain('data-testid="inspector-tab-versions"');
+    expect(expanded).not.toContain('data-testid="inspector-tab-json"');
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
