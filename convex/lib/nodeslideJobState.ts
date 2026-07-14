@@ -28,7 +28,7 @@ export type NodeSlideJobPhase = (typeof NODESLIDE_JOB_PHASES)[number];
 
 export interface NodeSlideJobRecord {
   id: string;
-  kind: 'create_deck';
+  kind: 'create_deck' | 'edit_proposal';
   clientSessionId: string;
   admissionQuotaSubject: string;
   ownerDigest: string;
@@ -45,6 +45,7 @@ export interface NodeSlideJobRecord {
   workflowId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
+  resultCandidateDigest?: string;
   conversationRunId?: string;
   error?: string;
   createdAt: number;
@@ -66,6 +67,16 @@ export interface PublicNodeSlideJob {
   workflowId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
+  resultCandidateDigest?: string;
+  result?:
+    | { kind: 'create_deck'; deckId: string; conversationRunId?: string }
+    | {
+        kind: 'edit_proposal';
+        deckId: string;
+        patchId: string;
+        candidateDigest: string;
+        reviewRequired: true;
+      };
   conversationRunId?: string;
   error?: string;
   createdAt: number;
@@ -125,6 +136,7 @@ export function advanceNodeSlideJob(
     progress: number;
     resultDeckId?: string;
     resultPatchId?: string;
+    resultCandidateDigest?: string;
     conversationRunId?: string;
     memoryIds?: readonly string[];
     workflowId?: string;
@@ -146,6 +158,9 @@ export function advanceNodeSlideJob(
     progress,
     ...(update.resultDeckId ? { resultDeckId: boundedText(update.resultDeckId, 256) } : {}),
     ...(update.resultPatchId ? { resultPatchId: boundedText(update.resultPatchId, 256) } : {}),
+    ...(update.resultCandidateDigest
+      ? { resultCandidateDigest: boundedText(update.resultCandidateDigest, 256) }
+      : {}),
     ...(update.conversationRunId
       ? { conversationRunId: boundedText(update.conversationRunId, 256) }
       : {}),
@@ -220,12 +235,43 @@ export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob 
     ...(job.workflowId ? { workflowId: job.workflowId } : {}),
     ...(job.resultDeckId ? { resultDeckId: job.resultDeckId } : {}),
     ...(job.resultPatchId ? { resultPatchId: job.resultPatchId } : {}),
+    ...(job.resultCandidateDigest ? { resultCandidateDigest: job.resultCandidateDigest } : {}),
     ...(job.conversationRunId ? { conversationRunId: job.conversationRunId } : {}),
     ...(job.error ? { error: job.error } : {}),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     ...(job.completedAt ? { completedAt: job.completedAt } : {}),
+    ...publicResult(job),
   };
+}
+
+function publicResult(job: NodeSlideJobRecord): Pick<PublicNodeSlideJob, 'result'> {
+  if (job.kind === 'create_deck' && job.resultDeckId) {
+    return {
+      result: {
+        kind: 'create_deck',
+        deckId: job.resultDeckId,
+        ...(job.conversationRunId ? { conversationRunId: job.conversationRunId } : {}),
+      },
+    };
+  }
+  if (
+    job.kind === 'edit_proposal' &&
+    job.resultDeckId &&
+    job.resultPatchId &&
+    job.resultCandidateDigest
+  ) {
+    return {
+      result: {
+        kind: 'edit_proposal',
+        deckId: job.resultDeckId,
+        patchId: job.resultPatchId,
+        candidateDigest: job.resultCandidateDigest,
+        reviewRequired: true,
+      },
+    };
+  }
+  return {};
 }
 
 export function nodeSlideJobProgressLine(

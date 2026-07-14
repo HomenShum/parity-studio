@@ -44,7 +44,10 @@ import {
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
 import { nodeSlideJobRequestDigest } from './lib/nodeslideJobState';
-import { nodeSlideCreateJobRequestFromArgs } from './lib/nodeslideJobValidators';
+import {
+  nodeSlideCreateJobRequestFromArgs,
+  nodeSlideEditProposalJobRequestFromArgs,
+} from './lib/nodeslideJobValidators';
 import { nodeSlideMemoryUse } from './lib/nodeslideMemoryPolicy';
 import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
@@ -98,6 +101,7 @@ const NODESLIDE_PUBLIC_CREATION_ENV = 'NODESLIDE_PUBLIC_CREATION';
 
 export const proposeEdit = action({
   args: {
+    clientSessionId: v.optional(v.string()),
     deckId: v.string(),
     ownerAccessKey: v.string(),
     instruction: v.string(),
@@ -118,8 +122,54 @@ export const proposeEdit = action({
     webResearch: v.optional(v.boolean()),
     webResearchConsent: v.optional(v.string()),
     memoryMode: v.optional(v.union(v.literal('off'), v.literal('relevant'))),
+    durableJob: v.optional(
+      v.object({
+        jobId: v.string(),
+        ownerAccessKey: v.string(),
+        executionAccessKey: v.string(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
+    const durableJob = args.durableJob
+      ? {
+          jobId: requiredCreateText(args.durableJob.jobId, 'durableJob.jobId', 256, 768),
+          ownerAccessKey: args.durableJob.ownerAccessKey,
+          executionAccessKey: args.durableJob.executionAccessKey,
+        }
+      : null;
+    const durableRequestDigest = durableJob
+      ? nodeSlideJobRequestDigest(
+          nodeSlideEditProposalJobRequestFromArgs({
+            ...args,
+            clientSessionId: requiredCreateText(
+              args.clientSessionId ?? '',
+              'clientSessionId',
+              256,
+              768,
+            ),
+          }),
+        )
+      : null;
+    if (durableJob) {
+      if (
+        !isOwnerAccessKey(durableJob.ownerAccessKey) ||
+        !isOwnerAccessKey(durableJob.executionAccessKey) ||
+        durableJob.ownerAccessKey !== args.ownerAccessKey
+      ) {
+        throw publicAgentError(
+          'invalid_request',
+          'The durable NodeSlide edit job capability is invalid.',
+        );
+      }
+      await ctx.runQuery(nodeslideJobsInternal.authorizeExecutionInternal, {
+        jobId: durableJob.jobId,
+        kind: 'edit_proposal',
+        ownerAccessKey: durableJob.ownerAccessKey,
+        executionAccessKey: durableJob.executionAccessKey,
+        requestDigest: durableRequestDigest,
+      });
+    }
     const instruction = args.instruction.replace(/\s+/g, ' ').trim();
     if (!instruction) throw new Error('NodeSlide edit instruction is required.');
     if (instruction.length > 4000)
@@ -167,6 +217,7 @@ export const proposeEdit = action({
           ownerAccessKey: args.ownerAccessKey,
         })) as NodeSlideWorkspace | null,
       consume: async () => {
+        if (durableJob) return;
         await ctx.runMutation(nodeslideInternal.consumePreviewQuota, {
           buckets: [
             {
@@ -218,7 +269,14 @@ export const proposeEdit = action({
         const patch = current?.patches.find(
           (candidate: { id: string }) => candidate.id === runStart.run.patchId,
         );
-        if (current && patch) return { patch, workspace: current };
+        if (current && patch) {
+          return {
+            patch,
+            workspace: current,
+            conversationRunId: runId,
+            memoryIds: runStart.run.memoryIds ?? [],
+          };
+        }
       }
       throw publicAgentError(
         'invalid_request',
@@ -466,6 +524,17 @@ export const proposeEdit = action({
             createdAt: planningStartedAt,
           })
         : null;
+      // Re-check the durable capability immediately before proposal persistence so a
+      // cancelled job cannot advance a late worker result into the review lane.
+      if (durableJob && durableRequestDigest) {
+        await ctx.runQuery(nodeslideJobsInternal.authorizeExecutionInternal, {
+          jobId: durableJob.jobId,
+          kind: 'edit_proposal',
+          ownerAccessKey: durableJob.ownerAccessKey,
+          executionAccessKey: durableJob.executionAccessKey,
+          requestDigest: durableRequestDigest,
+        });
+      }
       const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
         id: patchId,
         traceId,
@@ -530,7 +599,11 @@ export const proposeEdit = action({
         role: 'assistant',
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
-      return proposal;
+      return {
+        ...proposal,
+        conversationRunId: runId,
+        memoryIds: memories.map((memory) => memory.id),
+      };
     } catch (error) {
       const publicError =
         error instanceof ConvexError
@@ -1049,6 +1122,7 @@ export const createDeckFromBrief = action({
     const durableAdmission = durableJob
       ? ((await ctx.runQuery(nodeslideJobsInternal.authorizeExecutionInternal, {
           jobId: durableJob.jobId,
+          kind: 'create_deck',
           ownerAccessKey: durableJob.ownerAccessKey,
           executionAccessKey: durableJob.executionAccessKey,
           requestDigest: nodeSlideJobRequestDigest(nodeSlideCreateJobRequestFromArgs(args)),

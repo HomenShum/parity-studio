@@ -1,11 +1,13 @@
 import { PersistentTextStreaming, type StreamId } from '@convex-dev/persistent-text-streaming';
 import type { WorkflowId } from '@convex-dev/workflow';
 import { v } from 'convex/values';
+import { NODESLIDE_WEB_RESEARCH_CONSENT } from '../shared/nodeslide';
 import { components, internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
 import { createOwnerAccessKey, isOwnerAccessKey } from './lib/nodeslideAccess';
+import { nodeSlideActorQuotaKey } from './lib/nodeslideAuthority';
 import { nodeslideContentDigest, nodeslideStableId } from './lib/nodeslideIds';
 import {
   NODESLIDE_JOB_MAX_ATTEMPTS,
@@ -26,9 +28,16 @@ import {
 } from './lib/nodeslideJobState';
 import {
   type NodeSlideCreateJobRequest,
+  type NodeSlideEditProposalJobRequest,
   nodeSlideCreateJobRequestFromArgs,
+  nodeSlideEditProposalJobRequestFromArgs,
   nodeslideCreateJobRequestFields,
+  nodeslideEditProposalJobRequestFields,
 } from './lib/nodeslideJobValidators';
+import {
+  NodeSlideProviderConsentError,
+  validateNodeSlideProviderChoice,
+} from './lib/nodeslideProviderConsent';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   nodeslideCreatePublicError,
@@ -52,6 +61,8 @@ const workflowResultValidator = v.union(
 // Keep generated-reference escape hatches local to that cycle.
 // biome-ignore lint/suspicious/noExplicitAny: generated Convex self-reference boundary
 const jobsInternal: any = (internal as any).nodeslideJobs;
+// biome-ignore lint/suspicious/noExplicitAny: generated NodeSlide authorization boundary
+const nodeslideInternal: any = (internal as any).nodeslide;
 // biome-ignore lint/suspicious/noExplicitAny: generated Convex workflow reference boundary
 const jobWorkflowInternal: any = (internal as any).nodeslideJobWorkflow;
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
@@ -175,6 +186,99 @@ export const startCreateDeck = mutation({
   },
 });
 
+export const startEditProposal = mutation({
+  args: {
+    ...nodeslideEditProposalJobRequestFields,
+    ownerAccessKey: v.string(),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const ownerAccessKey = requiredOwnerAccessKey(args.ownerAccessKey);
+    const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
+    const idempotencyKey = requiredText(args.idempotencyKey, 'idempotencyKey', 160);
+    const request = nodeSlideEditProposalJobRequestFromArgs(args);
+    validateEditProposalRequest(request);
+    const requestDigest = nodeSlideJobRequestDigest(request);
+    const ownerDigest = nodeSlideJobOwnerDigest(ownerAccessKey);
+    const existing = await ctx.db
+      .query('nodeslide_agent_jobs')
+      .withIndex('by_session_idempotency', (queryBuilder) =>
+        queryBuilder.eq('clientSessionId', clientSessionId).eq('idempotencyKey', idempotencyKey),
+      )
+      .unique();
+    if (existing) {
+      assertNodeSlideJobIdempotency(jobFromRow(existing), requestDigest, ownerDigest);
+      return publicNodeSlideJob(jobFromRow(existing));
+    }
+
+    const workspace = await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+      deckId: request.deckId,
+      ownerAccessKey,
+    });
+    if (!workspace) throw new Error(`Deck ${request.deckId} not found.`);
+
+    try {
+      await consumePreviewQuotaBuckets(ctx, [
+        {
+          key: nodeSlideActorQuotaKey('edit', ownerAccessKey),
+          limit: 60,
+          windowMs: 86_400_000,
+        },
+        { key: 'edit:global', limit: 500, windowMs: 3_600_000 },
+      ]);
+    } catch (error) {
+      if (error instanceof NodeSlidePreviewQuotaError) {
+        throw new Error('NodeSlide edit quota reached. Try again after the current window.');
+      }
+      throw error;
+    }
+
+    const now = Date.now();
+    const executionAccessKey = createOwnerAccessKey();
+    const jobId = nodeslideStableId(
+      'nodeslide_job',
+      'edit_proposal',
+      clientSessionId,
+      idempotencyKey,
+    );
+    const streamId = await streaming.createStream(ctx);
+    const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
+      id: jobId,
+      kind: 'edit_proposal',
+      clientSessionId,
+      admissionQuotaSubject: nodeSlideActorQuotaKey('edit', ownerAccessKey),
+      ownerDigest,
+      executionDigest: nodeSlideJobExecutionDigest(executionAccessKey),
+      idempotencyKey,
+      requestDigest,
+      status: 'queued',
+      phase: 'queued',
+      progress: 0,
+      attempt: 0,
+      maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
+      streamId,
+      memoryIds: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const workflowId = await workflow.start(
+      ctx,
+      jobWorkflowInternal.editProposalJobWorkflow,
+      { jobId, ownerAccessKey, executionAccessKey, request },
+      {
+        onComplete: jobsInternal.onWorkflowComplete,
+        context: { jobId },
+        startAsync: true,
+      },
+    );
+    await ctx.db.patch(rowId, { workflowId: workflowId.toString() });
+    const created = await ctx.db.get(rowId);
+    if (!created) throw new Error('NodeSlide job was not persisted.');
+    await appendProgress(ctx, jobFromRow(created), false);
+    return publicNodeSlideJob(jobFromRow(created));
+  },
+});
+
 export const get = query({
   args: { jobId: v.string(), ownerAccessKey: v.string() },
   handler: async (ctx, args) => {
@@ -195,6 +299,7 @@ export const getStream = query({
 export const authorizeExecutionInternal = internalQuery({
   args: {
     jobId: v.string(),
+    kind: v.union(v.literal('create_deck'), v.literal('edit_proposal')),
     ownerAccessKey: v.string(),
     executionAccessKey: v.string(),
     requestDigest: v.string(),
@@ -203,6 +308,7 @@ export const authorizeExecutionInternal = internalQuery({
     const row = await findAuthorizedJob(ctx, args.jobId, args.ownerAccessKey);
     if (
       !row ||
+      row.kind !== args.kind ||
       (row.status !== 'queued' && row.status !== 'running') ||
       row.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey) ||
       row.requestDigest !== args.requestDigest
@@ -220,7 +326,7 @@ export const cancel = mutation({
     if (!row) return null;
     // Once the deck transaction has committed, cancellation cannot honestly
     // claim that creation was prevented. Let workflow finalization win.
-    if (row.resultDeckId) return publicNodeSlideJob(jobFromRow(row));
+    if (row.kind === 'create_deck' && row.resultDeckId) return publicNodeSlideJob(jobFromRow(row));
     const current = jobFromRow(row);
     const next = cancelNodeSlideJob(current, Date.now());
     if (next === current) return publicNodeSlideJob(current);
@@ -244,7 +350,7 @@ export const retry = mutation({
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, false);
     await workflow.restart(ctx, row.workflowId as WorkflowId, {
-      from: 'execute-create-deck',
+      from: row.kind === 'create_deck' ? 'execute-create-deck' : 'execute-edit-proposal',
       startAsync: true,
     });
     return publicNodeSlideJob(next);
@@ -273,6 +379,7 @@ export const checkpointInternal = internalMutation({
     progress: v.number(),
     resultDeckId: v.optional(v.string()),
     resultPatchId: v.optional(v.string()),
+    resultCandidateDigest: v.optional(v.string()),
     conversationRunId: v.optional(v.string()),
     memoryIds: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
@@ -281,6 +388,9 @@ export const checkpointInternal = internalMutation({
     const row = await findJob(ctx, args.jobId);
     if (!row) throw new Error('NodeSlide job not found.');
     const current = jobFromRow(row);
+    if (current.kind !== 'create_deck') {
+      throw new Error('The durable job kind cannot complete a deck-creation result.');
+    }
     const next = advanceNodeSlideJob(
       current,
       {
@@ -289,6 +399,9 @@ export const checkpointInternal = internalMutation({
         progress: Math.max(row.progress, args.progress),
         ...(args.resultDeckId ? { resultDeckId: args.resultDeckId } : {}),
         ...(args.resultPatchId ? { resultPatchId: args.resultPatchId } : {}),
+        ...(args.resultCandidateDigest
+          ? { resultCandidateDigest: args.resultCandidateDigest }
+          : {}),
         ...(args.conversationRunId ? { conversationRunId: args.conversationRunId } : {}),
         ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
         ...(args.error ? { error: args.error } : {}),
@@ -313,6 +426,9 @@ export const completeCreateDeckInternal = internalMutation({
     const row = await findJob(ctx, args.jobId);
     if (!row) throw new Error('NodeSlide job not found.');
     const current = jobFromRow(row);
+    if (current.kind !== 'edit_proposal') {
+      throw new Error('The durable job kind cannot complete an edit-proposal result.');
+    }
     const next = advanceNodeSlideJob(
       current,
       {
@@ -320,6 +436,40 @@ export const completeCreateDeckInternal = internalMutation({
         phase: 'complete',
         progress: 100,
         resultDeckId: args.resultDeckId,
+        conversationRunId: args.conversationRunId,
+        ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
+      },
+      Date.now(),
+    );
+    if (next === current) return publicNodeSlideJob(current);
+    await patchJob(ctx, row, next);
+    await appendProgress(ctx, next, true);
+    return publicNodeSlideJob(next);
+  },
+});
+
+export const completeEditProposalInternal = internalMutation({
+  args: {
+    jobId: v.string(),
+    resultDeckId: v.string(),
+    resultPatchId: v.string(),
+    resultCandidateDigest: v.string(),
+    conversationRunId: v.string(),
+    memoryIds: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const row = await findJob(ctx, args.jobId);
+    if (!row) throw new Error('NodeSlide job not found.');
+    const current = jobFromRow(row);
+    const next = advanceNodeSlideJob(
+      current,
+      {
+        status: 'awaiting_review',
+        phase: 'awaiting_review',
+        progress: 100,
+        resultDeckId: args.resultDeckId,
+        resultPatchId: args.resultPatchId,
+        resultCandidateDigest: args.resultCandidateDigest,
         conversationRunId: args.conversationRunId,
         ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
       },
@@ -395,12 +545,46 @@ async function patchJob(
     ...(next.workflowId ? { workflowId: next.workflowId } : {}),
     ...(next.resultDeckId ? { resultDeckId: next.resultDeckId } : {}),
     ...(next.resultPatchId ? { resultPatchId: next.resultPatchId } : {}),
+    ...(next.resultCandidateDigest ? { resultCandidateDigest: next.resultCandidateDigest } : {}),
     ...(next.conversationRunId ? { conversationRunId: next.conversationRunId } : {}),
     memoryIds: [...next.memoryIds],
     ...(next.error ? { error: next.error } : { error: undefined }),
     updatedAt: next.updatedAt,
     ...(next.completedAt ? { completedAt: next.completedAt } : { completedAt: undefined }),
   });
+}
+
+function validateEditProposalRequest(request: NodeSlideEditProposalJobRequest): void {
+  const instruction = requiredText(request.instruction, 'instruction', 4_000);
+  if (request.scope.deckId !== request.deckId) throw new Error('Patch scope deckId mismatch.');
+  if ((request.commandId ?? 'edit') !== 'edit') {
+    throw new Error('The durable edit workflow only supports proposal-only edit commands.');
+  }
+  if (!Number.isFinite(request.baseDeckVersion) || request.baseDeckVersion < 0) {
+    throw new Error('baseDeckVersion must be a non-negative finite number.');
+  }
+  if (instruction.length === 0) throw new Error('NodeSlide edit instruction is required.');
+  try {
+    validateNodeSlideProviderChoice(
+      'propose_edit',
+      request.providerMode,
+      request.providerConsent,
+      request.providerModel,
+      request.providerEffort,
+    );
+  } catch (error) {
+    if (error instanceof NodeSlideProviderConsentError) throw new Error(error.message);
+    throw error;
+  }
+  if (request.webResearch) {
+    if (request.webResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT) {
+      throw new Error(
+        'Explicit web research consent is required before sending this query to search providers.',
+      );
+    }
+  } else if (request.webResearchConsent !== undefined) {
+    throw new Error('Web research consent must only accompany a web research request.');
+  }
 }
 
 async function appendProgress(

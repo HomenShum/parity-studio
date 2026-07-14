@@ -807,7 +807,7 @@ export default defineSchema({
 
   nodeslide_agent_jobs: defineTable({
     id: v.string(),
-    kind: v.literal('create_deck'),
+    kind: v.union(v.literal('create_deck'), v.literal('edit_proposal')),
     clientSessionId: v.string(),
     admissionQuotaSubject: v.string(),
     ownerDigest: v.string(),
@@ -823,6 +823,7 @@ export default defineSchema({
     streamId: v.string(),
     resultDeckId: v.optional(v.string()),
     resultPatchId: v.optional(v.string()),
+    resultCandidateDigest: v.optional(v.string()),
     conversationRunId: v.optional(v.string()),
     memoryIds: v.array(v.string()),
     error: v.optional(v.string()),

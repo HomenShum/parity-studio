@@ -4,7 +4,10 @@ import { v } from 'convex/values';
 import { api, internal } from './_generated/api';
 import { internalAction } from './_generated/server';
 import { nodeslideStableId } from './lib/nodeslideIds';
-import { nodeslideCreateJobRequestValidator } from './lib/nodeslideJobValidators';
+import {
+  nodeslideCreateJobRequestValidator,
+  nodeslideEditProposalJobRequestValidator,
+} from './lib/nodeslideJobValidators';
 
 // Generated Convex references form a deliberate action -> mutation/action
 // boundary. All values still cross explicit validators.
@@ -109,6 +112,100 @@ export const executeCreateDeckInternal = internalAction({
       deckId: resultDeckId,
       conversationRunId: runStart.run.id,
       memoryIds,
+    };
+  },
+});
+
+export const executeEditProposalInternal = internalAction({
+  args: {
+    jobId: v.string(),
+    ownerAccessKey: v.string(),
+    executionAccessKey: v.string(),
+    request: nodeslideEditProposalJobRequestValidator,
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    deckId: string;
+    patchId: string;
+    candidateDigest: string;
+    conversationRunId: string;
+    memoryIds: string[];
+  }> => {
+    const claimed = (await ctx.runMutation(jobsInternal.claimAttemptInternal, {
+      jobId: args.jobId,
+    })) as {
+      status: string;
+      progress: number;
+      resultDeckId?: string;
+      resultPatchId?: string;
+      resultCandidateDigest?: string;
+      conversationRunId?: string;
+      memoryIds?: string[];
+    };
+    if (claimed.status === 'cancelled') throw new Error('NodeSlide job was cancelled.');
+    if (
+      claimed.status === 'awaiting_review' &&
+      claimed.resultDeckId === args.request.deckId &&
+      claimed.resultPatchId &&
+      claimed.resultCandidateDigest &&
+      claimed.conversationRunId
+    ) {
+      return {
+        deckId: claimed.resultDeckId,
+        patchId: claimed.resultPatchId,
+        candidateDigest: claimed.resultCandidateDigest,
+        conversationRunId: claimed.conversationRunId,
+        memoryIds: claimed.memoryIds ?? [],
+      };
+    }
+    await ctx.runMutation(jobsInternal.checkpointInternal, {
+      jobId: args.jobId,
+      status: 'running',
+      phase: 'generating',
+      progress: Math.max(claimed.progress, 35),
+    });
+    const result = (await ctx.runAction(nodeslideAgentPublic.proposeEdit, {
+      ...args.request,
+      ownerAccessKey: args.ownerAccessKey,
+      idempotencyKey: `job:${args.jobId}`,
+      durableJob: {
+        jobId: args.jobId,
+        ownerAccessKey: args.ownerAccessKey,
+        executionAccessKey: args.executionAccessKey,
+      },
+    })) as {
+      patch: { id: string; deckId: string; status: string; candidateDigest?: string };
+      conversationRunId: string;
+      memoryIds?: string[];
+    };
+    if (
+      result.patch.deckId !== args.request.deckId ||
+      result.patch.status !== 'ready' ||
+      !result.patch.candidateDigest
+    ) {
+      throw new Error(
+        'NodeSlide job produced no reviewable candidate bound to the requested deck.',
+      );
+    }
+    await ctx.runMutation(jobsInternal.checkpointInternal, {
+      jobId: args.jobId,
+      status: 'running',
+      phase: 'validating',
+      progress: 95,
+      resultDeckId: result.patch.deckId,
+      resultPatchId: result.patch.id,
+      resultCandidateDigest: result.patch.candidateDigest,
+      conversationRunId: result.conversationRunId,
+      ...(result.memoryIds ? { memoryIds: result.memoryIds } : {}),
+    });
+    return {
+      deckId: result.patch.deckId,
+      patchId: result.patch.id,
+      candidateDigest: result.patch.candidateDigest,
+      conversationRunId: result.conversationRunId,
+      memoryIds: result.memoryIds ?? [],
     };
   },
 });
