@@ -1,0 +1,95 @@
+{
+  "schema": "nodeslide-roadshow-captions/v1",
+  "style": {
+    "position": "bottom-center",
+    "maxLines": 2,
+    "safeBottomPx": 52
+  },
+  "captions": [
+    {
+      "sceneId": "fresh_landing",
+      "text": "Start from a fresh NodeSlide landing — one idea, no recycled deck.",
+      "minimumDurationMs": 2600
+    },
+    {
+      "sceneId": "attach_evidence",
+      "text": "Attach the PRD, TDD, measured metrics, research notes, and design direction.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "consent_model_web",
+      "text": "Choose a named model and consent now. Web research will ask for its own separate consent.",
+      "minimumDurationMs": 3200
+    },
+    {
+      "sceneId": "create_six_slide_deck",
+      "text": "NodeSlide compiles that evidence into a new six-slide, editable founder roadshow.",
+      "minimumDurationMs": 3200
+    },
+    {
+      "sceneId": "inspect_editable_primitives",
+      "text": "Text, charts, math, images, and diagrams stay native — never flattened into slide screenshots.",
+      "minimumDurationMs": 3400
+    },
+    {
+      "sceneId": "one_element_edit",
+      "text": "Select one element and ask the agent for one bounded change.",
+      "minimumDurationMs": 2800
+    },
+    {
+      "sceneId": "compare_accept",
+      "text": "The candidate is validated and compared before a human accepts it.",
+      "minimumDurationMs": 2800
+    },
+    {
+      "sceneId": "one_slide_edit",
+      "text": "Refine one slide with separately consented web research and bound source evidence.",
+      "minimumDurationMs": 3200
+    },
+    {
+      "sceneId": "bounded_multi_slide_edit",
+      "text": "Select exactly two slides and grant exactly that write scope — not the whole deck.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "chart_change",
+      "text": "Edit chart labels and values in a native data grid, then review the resulting patch.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "math_change",
+      "text": "The north-star formula is a real editable math primitive.",
+      "minimumDurationMs": 2600
+    },
+    {
+      "sceneId": "layout_change",
+      "text": "Layout remains structured too: move and resize elements without flattening the slide.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "image_change",
+      "text": "Replace an image with a rights-cleared file, alt text, and visible credit.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "trace_source_lineage",
+      "text": "Trace ties model work, validation, cost, timestamps, and source lineage to the accepted result.",
+      "minimumDurationMs": 3400
+    },
+    {
+      "sceneId": "persistent_memory",
+      "text": "Deck memory preserves a scoped standing preference for future long-running work.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "present_share",
+      "text": "Present in the app, then publish a frozen validated version for review.",
+      "minimumDurationMs": 3000
+    },
+    {
+      "sceneId": "export_pptx_json",
+      "text": "Finish with editable PowerPoint and validated JSON — the story remains portable and inspectable.",
+      "minimumDurationMs": 3400
+    }
+  ]
+}
