@@ -1,3 +1,4 @@
+import { URL, fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/postcss';
 import react from '@vitejs/plugin-react';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -23,6 +24,11 @@ export default defineConfig(() => {
         },
       },
     ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
     test: {
       exclude: [...configDefaults.exclude, '**/.claude/**', '**/tests/e2e/**'],
     },

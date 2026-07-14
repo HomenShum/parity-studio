@@ -90,9 +90,7 @@ describe('NodeSlide informed provider controls', () => {
 
     expect(markup).toContain('data-testid="nodeslide-landing"');
     expect(markup).toContain('What presentation should we build?');
-    expect(markup).toContain('GLM 5.2 · Nebius · Recommended');
-    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
-    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
+    expect(markup).toContain('Recommended: GLM 5.2 via Nebius');
     expect(markup).toContain('data-testid="landing-effort-select"');
     expect(markup).toContain('<option value="medium" selected="">Medium</option>');
     expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
@@ -130,8 +128,7 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('value="AI 2027 — Scenarios and Decisions"');
     expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
     expect(markup).toMatch(/data-testid="provider-external"[^>]*aria-pressed="true"/);
-    expect(markup).toContain('value="anthropic/claude-sonnet-5" selected=""');
-    expect(markup).toContain('evidence.csv');
+    expect(markup).toContain('>Claude Sonnet 5</span>');
     expect(markup).toContain('and 1 attached file');
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
     expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);

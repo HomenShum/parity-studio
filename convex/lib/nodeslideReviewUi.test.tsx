@@ -5,7 +5,7 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
-  NODESLIDE_AGENT_MODELS,
+  type NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_NEBIUS_REVIEW_CONSENT,
   NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
@@ -125,12 +125,6 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
     expect(markup).not.toContain('<option value="max">Max</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
-    expect(markup).toContain('Claude Fable 5 · Anthropic');
-    expect(markup).toContain('Gemini 3.5 Flash · Google');
-    expect(markup).toContain('Gemini 3.1 Pro · Google');
-    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
-    expect(markup).toContain('GPT-5.6 Terra · OpenAI');
     expect(markup).not.toMatch(/ai-provider-consent/);
 
     expect(createAiProviderRequest('nebius', false)).toBeNull();
@@ -287,7 +281,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(16 + NODESLIDE_AGENT_MODELS.length);
+    expect(commandMenu).toContain('data-testid="ai-model-select"');
+    expect(commandMenu).toContain('data-testid="ai-effort-select"');
     expect(commandMenu).toContain('Advanced controls');
   });
 

@@ -117,7 +117,8 @@ describe('NodeSlide v3 visual contract', () => {
 
     // The composer is present and primary; zero-friction consent removed the
     // inline per-request consent block entirely (disclosure lives in the model pill).
-    expect(aiInspectorSource).toContain('className="ns-composer-field ns-ai-v3-composer-field"');
+    expect(aiInspectorSource).toContain('<NodeSlidePromptComposer');
+    expect(aiInspectorSource).toContain('composerClassName="ns-ai-v3-prompt"');
     expect(aiInspectorSource).not.toContain('className="ns-ai-inline-consent"');
   });
 

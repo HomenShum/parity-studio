@@ -8,6 +8,10 @@
     "allowJs": true,
     "strict": true,
     "moduleResolution": "Bundler",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,

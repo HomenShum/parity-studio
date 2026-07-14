@@ -1,5 +1,5 @@
+import { PromptInputButton } from '@/components/ai-elements/prompt-input';
 import {
-  ArrowUp,
   AtSign,
   Brain,
   Check,
@@ -13,7 +13,6 @@ import {
   LoaderCircle,
   Maximize2,
   MessageCircle,
-  Paperclip,
   PlugZap,
   RotateCcw,
   ShieldCheck,
@@ -21,23 +20,12 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import {
-  type FormEvent,
-  type KeyboardEvent,
-  type Ref,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type KeyboardEvent, type Ref, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   type AgentTrace,
   type Deck,
   type DeckPatch,
-  NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
-  NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_REASONING_EFFORTS,
   type NodeSlideAgentMemory,
   type NodeSlideAgentMemoryCategory,
@@ -58,6 +46,15 @@ import {
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
+import {
+  NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
+  NodeSlidePromptComposer,
+  nodeSlideNativeEffortLabel,
+} from '../composer/NodeSlidePromptComposer';
+import {
+  nodeSlideComposerSessionKey,
+  useNodeSlideComposerSession,
+} from '../composer/nodeSlideComposerSession';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -207,7 +204,11 @@ export function AiInspector<CommandId extends string = string>({
   onAcceptVariation,
   onRejectVariation,
 }: AiInspectorProps<CommandId>) {
-  const [instruction, setInstruction] = useState(initialInstruction);
+  const composerSession = useNodeSlideComposerSession(
+    nodeSlideComposerSessionKey('editor', deck.id),
+    { text: initialInstruction },
+  );
+  const instruction = composerSession.text;
   const [scopeChoice, setScopeChoice] = useState<ScopeChoice>(
     selectedElements.length > 0 ? 'elements' : 'slide',
   );
@@ -217,7 +218,7 @@ export function AiInspector<CommandId extends string = string>({
   const [providerMode, setProviderMode] = useState<AiProviderMode>(initialProviderMode);
   const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(initialProviderModel);
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
-    NODESLIDE_DEFAULT_REASONING_EFFORT,
+    NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   // Zero-friction consent: an external model is disclosed by the always-visible
   // model pill, so choosing it and sending IS the consent. The consent token is
@@ -229,7 +230,7 @@ export function AiInspector<CommandId extends string = string>({
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
   const [selectedCommand, setSelectedCommand] = useState<AiComposerCommand<CommandId> | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(initialInstruction.length);
+  const [cursorPosition, setCursorPosition] = useState(instruction.length);
   const [dismissedMenuKey, setDismissedMenuKey] = useState<string | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [optimisticAsk, setOptimisticAsk] = useState<string | null>(null);
@@ -246,7 +247,6 @@ export function AiInspector<CommandId extends string = string>({
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
@@ -436,7 +436,7 @@ export function AiInspector<CommandId extends string = string>({
     .find((message) => message.role === 'user')?.content;
 
   const updateInstruction = (value: string, cursor = value.length) => {
-    setInstruction(value);
+    composerSession.setText(value);
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
     setMenuIndex(0);
@@ -492,7 +492,11 @@ export function AiInspector<CommandId extends string = string>({
     queueMicrotask(() => textareaRef.current?.focus());
   };
 
-  const requestVariations = (source: AiVariationRequest['source'], ask?: string) => {
+  const requestVariations = (
+    source: AiVariationRequest['source'],
+    ask?: string,
+    readContext: readonly AiReadReference[] = requestedReadContext,
+  ) => {
     const variationProvider = createAiVariationProviderRequest(
       providerMode,
       providerConsent,
@@ -505,7 +509,7 @@ export function AiInspector<CommandId extends string = string>({
     if (ask) setOptimisticAsk(ask);
     onGenerateVariations({
       ...variationProvider,
-      readContext: requestedReadContext,
+      readContext,
       designBehavior,
       referenceUse,
       source,
@@ -513,13 +517,36 @@ export function AiInspector<CommandId extends string = string>({
     });
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const text = instruction.trim();
-    if (!text || isSubmitting || !provider) return;
-    const command = selectedCommand ?? commandFromInstruction(instruction, availableCommands);
+  const submit = async (submittedInstruction: string, files: readonly File[]) => {
+    const text = submittedInstruction.trim();
+    if (!text || isSubmitting || attachmentBusy || !provider) return;
+    let submittedReadContext = requestedReadContext;
+    if (files.length > 0) {
+      if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
+      setAttachmentBusy(true);
+      setAttachmentError(null);
+      try {
+        const attachedReferences: AiReadReference[] = [];
+        for (const file of files) attachedReferences.push(await onAttachDataFile(file));
+        const deduped = new Map<string, AiReadReference>();
+        for (const reference of [...requestedReadContext, ...attachedReferences]) {
+          deduped.set(referenceKey(reference), reference);
+        }
+        submittedReadContext = [...deduped.values()];
+        setSelectedReadContext(submittedReadContext);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'The data file could not be attached.';
+        setAttachmentError(message);
+        throw error;
+      } finally {
+        setAttachmentBusy(false);
+      }
+    }
+    const command =
+      selectedCommand ?? commandFromInstruction(submittedInstruction, availableCommands);
     if (command && isVariationsCommand(command.id)) {
-      requestVariations('command', text);
+      requestVariations('command', text, submittedReadContext);
       updateInstruction('');
       setSelectedCommand(null);
       return;
@@ -529,7 +556,7 @@ export function AiInspector<CommandId extends string = string>({
       : createScope(scopeChoice, operationMode, deck.id, slide.id, selectedElements);
     const options: AiProposalOptions<CommandId> = {
       ...provider,
-      readContext: requestedReadContext,
+      readContext: submittedReadContext,
       designBehavior,
       referenceUse,
       memoryMode: useMemoryForRun ? 'relevant' : 'off',
@@ -598,27 +625,6 @@ export function AiInspector<CommandId extends string = string>({
       updateInstruction(removeVisibleToken(instruction, commandToken(selectedCommand.id)));
     }
     setSelectedCommand(null);
-  };
-
-  const attachDataFile = async (file: File) => {
-    if (!onAttachDataFile || attachmentBusy) return;
-    setAttachmentBusy(true);
-    setAttachmentError(null);
-    try {
-      const reference = await onAttachDataFile(file);
-      setSelectedReadContext((current) =>
-        current.some((candidate) => referenceKey(candidate) === referenceKey(reference))
-          ? current
-          : [...current, reference],
-      );
-      queueMicrotask(() => textareaRef.current?.focus());
-    } catch (error) {
-      setAttachmentError(
-        error instanceof Error ? error.message : 'The data file could not be attached.',
-      );
-    } finally {
-      setAttachmentBusy(false);
-    }
   };
 
   const returnToOriginal = () => {
@@ -968,9 +974,8 @@ export function AiInspector<CommandId extends string = string>({
         ) : null}
       </div>
 
-      <form
+      <div
         className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
-        onSubmit={submit}
         data-testid="ai-composer"
       >
         {showSuggested ? (
@@ -1047,7 +1052,7 @@ export function AiInspector<CommandId extends string = string>({
               ) : (
                 <>
                   <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
-                  {selectedAgentModel.label} · {effortLabel(providerEffort)} effort
+                  {selectedAgentModel.label} · {nodeSlideNativeEffortLabel(providerEffort)} effort
                 </>
               )}
             </div>
@@ -1227,200 +1232,130 @@ export function AiInspector<CommandId extends string = string>({
           </div>
         ) : null}
 
-        <div className="ns-composer-field ns-ai-v3-composer-field">
-          <label className="ns-sr-only" htmlFor={composerId}>
-            AI instruction
-          </label>
-          <textarea
-            ref={textareaRef}
-            id={composerId}
-            rows={composerExpanded ? 9 : 3}
-            value={instruction}
-            onChange={(event) => {
-              updateInstruction(event.target.value, event.target.selectionStart);
-            }}
-            onSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
-            placeholder={
-              commentContext
-                ? 'Address this review comment without resolving it...'
-                : scopeChoice === 'elements'
-                  ? 'Make this feel more decisive...'
-                  : 'Turn this into a crisp executive story...'
-            }
-            onKeyDown={handleComposerKeyDown}
-            aria-autocomplete="list"
-            aria-controls={menuOpen ? menuId : undefined}
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-          />
-          <div className="ns-composer-meta">
-            <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
-              <label className="ns-ai-model-picker">
-                <Sparkles size={12} aria-hidden="true" />
-                <span className="ns-sr-only">Agent model</span>
-                <select
-                  value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
-                  onChange={(event) => chooseProviderModel(event.target.value)}
-                  aria-label="Agent model"
-                  data-testid="ai-model-select"
-                >
-                  <optgroup label="Recommended">
-                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
-                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Nebius ·
-                      Recommended
-                    </option>
-                  </optgroup>
-                  <optgroup label="More live models">
-                    {NODESLIDE_AGENT_MODELS.filter(
-                      (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
-                    ).map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor} ·{' '}
-                        {providerNameForMode(nodeSlideProviderModeForModel(model.id))}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Private fallback">
-                    <option value="deterministic">Deterministic · no external model</option>
-                  </optgroup>
-                </select>
-              </label>
-              {providerMode !== 'deterministic' ? (
-                <label className="ns-ai-model-picker ns-ai-effort-picker">
-                  <span className="ns-sr-only">Reasoning effort</span>
-                  <select
-                    value={providerEffort}
-                    onChange={(event) => {
-                      const effort = event.target.value as NodeSlideReasoningEffort;
-                      setProviderEffort(effort);
-                      window.localStorage.setItem('nodeslide.agent-effort', effort);
-                    }}
-                    aria-label="Reasoning effort"
-                    data-testid="ai-effort-select"
-                  >
-                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
-                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
-                    ).map((effort) => (
-                      <option key={effort.id} value={effort.id}>
-                        {effort.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setConnectionsOpen(true)}
-                aria-label="Connect BYOK model or coding agent"
-                title="Connect BYOK model or coding agent"
-                data-testid="ai-connect-agent"
-              >
-                <PlugZap size={12} /> Connect
-              </button>
-              <button
-                type="button"
-                className={webResearch ? 'is-active' : ''}
-                aria-pressed={webResearch}
-                onClick={() => {
-                  setWebResearch((enabled) => !enabled);
-                }}
-                data-testid="ai-web-research-toggle"
-                title="Search the web and persist source snapshots before planning"
-              >
-                <Globe2 size={12} /> Web
-              </button>
-              {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
-                <button
-                  type="button"
-                  className={useMemoryForRun ? 'is-active' : ''}
-                  onClick={() => setMemoryOpen(true)}
-                  aria-label="Manage deck memory"
-                  aria-pressed={useMemoryForRun}
-                  data-testid="ai-memory"
-                  title="Manage durable deck memory"
-                >
-                  <Brain size={12} /> Memory
-                  {memories.length ? ` ${activeMemoryCount}` : ''}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => openTokenMenu('@')}
-                disabled={references.length === 0}
-                aria-label="Add read context reference"
-                title="Add read context"
-              >
-                <AtSign size={12} /> Context
-              </button>
-              <button
-                type="button"
-                onClick={() => openTokenMenu('/')}
-                aria-label="Add command"
-                title="Add command"
-              >
-                <Command size={12} /> Insert
-              </button>
-              {onAttachDataFile ? (
-                <>
-                  <input
-                    ref={attachmentInputRef}
-                    className="ns-sr-only"
-                    type="file"
-                    accept=".csv,.json,.txt,text/csv,application/json,text/plain"
-                    data-testid="ai-data-file-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      event.currentTarget.value = '';
-                      if (file) void attachDataFile(file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={attachmentBusy}
-                    aria-label="Attach data file"
-                    title="Attach CSV, JSON, or text data"
-                    data-testid="ai-attach-data"
-                  >
-                    {attachmentBusy ? (
-                      <LoaderCircle className="ns-spin" size={12} />
-                    ) : (
-                      <Paperclip size={12} />
-                    )}{' '}
-                    Data
-                  </button>
-                </>
-              ) : null}
-              <span>
-                {requestedReadContext.length > 0
-                  ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
-                  : 'Scoped context'}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="ns-ai-v3-expand-composer"
-              onClick={() => setComposerExpanded((expanded) => !expanded)}
+        {/* NodeSlidePromptComposer renders the public agent-operability hooks
+            data-testid="ai-model-select" and data-testid="ai-data-file-input". */}
+        <NodeSlidePromptComposer
+          allowAttachments={Boolean(onAttachDataFile)}
+          attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
+          attachmentInputTestId="ai-data-file-input"
+          attachmentMaxFiles={1}
+          attachButtonTestId="ai-attach-data"
+          attachLabel="Attach data file"
+          composerClassName="ns-ai-v3-prompt"
+          disabled={!instruction.trim() || isSubmitting || attachmentBusy || !providerReady}
+          effort={providerEffort}
+          effortLabel="Reasoning effort"
+          effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+            nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
+          )}
+          effortTestId="ai-effort-select"
+          footerStatus={
+            requestedReadContext.length > 0
+              ? `${requestedReadContext.length} explicit reference${
+                  requestedReadContext.length === 1 ? '' : 's'
+                }`
+              : 'Scoped context'
+          }
+          model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+          modelLabel="Agent model"
+          modelTestId="ai-model-select"
+          onAttachmentError={setAttachmentError}
+          onEffortChange={(effort) => {
+            setProviderEffort(effort);
+            window.localStorage.setItem('nodeslide.agent-effort', effort);
+          }}
+          onModelChange={chooseProviderModel}
+          onSubmit={({ text, files }) => submit(text, files)}
+          onTextareaKeyDown={handleComposerKeyDown}
+          onTextareaSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
+          onTextChange={updateInstruction}
+          placeholder={
+            commentContext
+              ? 'Address this review comment without resolving it...'
+              : scopeChoice === 'elements'
+                ? 'Make this feel more decisive...'
+                : 'Turn this into a crisp executive story...'
+          }
+          session={composerSession}
+          status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
+          submitLabel="Propose edit"
+          submitTestId="ai-submit"
+          submitTools={
+            <PromptInputButton
               aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
               aria-pressed={composerExpanded}
+              className="ns-ai-v3-expand-composer"
+              onClick={() => setComposerExpanded((expanded) => !expanded)}
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
               <Maximize2 size={14} />
-            </button>
-            <button
-              type="submit"
-              disabled={!instruction.trim() || isSubmitting || !providerReady}
-              aria-label="Propose edit"
-              data-testid="ai-submit"
-            >
-              {isSubmitting ? (
-                <LoaderCircle className="ns-spin" size={15} />
-              ) : (
-                <ArrowUp size={15} />
-              )}
-            </button>
-          </div>
-        </div>
+            </PromptInputButton>
+          }
+          textareaAria={{
+            'aria-autocomplete': 'list',
+            'aria-expanded': menuOpen,
+            'aria-haspopup': 'menu',
+            ...(menuOpen ? { 'aria-controls': menuId } : {}),
+          }}
+          textareaId={composerId}
+          textareaLabel="AI instruction"
+          textareaRef={textareaRef}
+          textareaRows={composerExpanded ? 9 : 3}
+          tools={
+            <>
+              <PromptInputButton
+                aria-label="Connect BYOK model or coding agent"
+                data-testid="ai-connect-agent"
+                onClick={() => setConnectionsOpen(true)}
+                title="Connect BYOK model or coding agent"
+              >
+                <PlugZap size={14} />
+              </PromptInputButton>
+              <span data-testid="ai-web-research-consent" style={{ display: 'contents' }}>
+                <PromptInputButton
+                  aria-label="Toggle web research"
+                  aria-pressed={webResearch}
+                  data-testid="ai-web-research-toggle"
+                  onClick={() => setWebResearch((enabled) => !enabled)}
+                  title="Search the web and persist source snapshots before planning"
+                  variant={webResearch ? 'default' : 'ghost'}
+                >
+                  <Globe2 size={14} />
+                </PromptInputButton>
+              </span>
+              {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
+                <PromptInputButton
+                  aria-label="Manage deck memory"
+                  aria-pressed={useMemoryForRun}
+                  data-testid="ai-memory"
+                  onClick={() => setMemoryOpen(true)}
+                  title="Manage durable deck memory"
+                  variant={useMemoryForRun ? 'default' : 'ghost'}
+                >
+                  <Brain size={14} />
+                  {memories.length ? (
+                    <span className="ns-prompt-badge">{activeMemoryCount}</span>
+                  ) : null}
+                </PromptInputButton>
+              ) : null}
+              <PromptInputButton
+                aria-label="Add read context reference"
+                disabled={references.length === 0}
+                onClick={() => openTokenMenu('@')}
+                title="Add read context"
+              >
+                <AtSign size={14} />
+              </PromptInputButton>
+              <PromptInputButton
+                aria-label="Add command"
+                onClick={() => openTokenMenu('/')}
+                title="Add command"
+              >
+                <Command size={14} />
+              </PromptInputButton>
+            </>
+          }
+        />
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
@@ -1481,9 +1416,9 @@ export function AiInspector<CommandId extends string = string>({
           <kbd>↵</kbd> for a new line ·{' '}
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
-            : `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort`}
+            : `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort`}
         </small>
-      </form>
+      </div>
       <NodeSlideConnectionsDialog
         open={connectionsOpen}
         onClose={() => setConnectionsOpen(false)}
@@ -1789,7 +1724,7 @@ export function createAiProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
-  effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
+  effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
@@ -1806,7 +1741,7 @@ export function createAiVariationProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
-  effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
+  effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
@@ -1819,10 +1754,6 @@ export function createAiVariationProviderRequest(
         ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
         : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   };
-}
-
-function effortLabel(effort: NodeSlideReasoningEffort): string {
-  return NODESLIDE_REASONING_EFFORTS.find((candidate) => candidate.id === effort)?.label ?? 'High';
 }
 
 function providerNameForMode(mode: AiProviderMode): string {

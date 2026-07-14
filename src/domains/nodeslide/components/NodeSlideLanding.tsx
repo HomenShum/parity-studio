@@ -1,21 +1,16 @@
 import {
   ArrowRight,
-  FileText,
   FolderOpen,
   Globe2,
   Layers3,
   LoaderCircle,
-  Paperclip,
   PlugZap,
   ShieldCheck,
   Sparkles,
-  X,
 } from 'lucide-react';
-import { type ChangeEvent, type FormEvent, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
-  NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
-  NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_REASONING_EFFORTS,
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
@@ -23,7 +18,14 @@ import {
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
-import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import {
+  NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
+  NodeSlidePromptComposer,
+} from '../composer/NodeSlidePromptComposer';
+import {
+  nodeSlideComposerSessionKey,
+  useNodeSlideComposerSession,
+} from '../composer/nodeSlideComposerSession';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
@@ -78,82 +80,72 @@ export function NodeSlideLanding({
   onOpenProjects,
   onOpenDeck,
 }: NodeSlideLandingProps) {
-  const [prompt, setPrompt] = useState('');
+  const composerSession = useNodeSlideComposerSession(
+    nodeSlideComposerSessionKey('landing', clientSessionId),
+  );
+  const prompt = composerSession.text;
   const [starterTitle, setStarterTitle] = useState<string | null>(null);
   const [generation, setGeneration] = useState<'deterministic' | NodeSlideAgentModelId>(
     NODESLIDE_DEFAULT_AGENT_MODEL,
   );
   const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
-    NODESLIDE_DEFAULT_REASONING_EFFORT,
+    NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   // Zero-friction consent: the external model is disclosed by the composer's model
   // pill, so choosing it and creating IS the consent. The consent token is still
   // generated + validated server-side (createDeckFromBrief) — only the checkbox is gone.
-  const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
 
-  const start = () => {
-    const nextPrompt = prompt.trim();
+  const start = async (submittedPrompt: string, files: readonly File[]) => {
+    const nextPrompt = submittedPrompt.trim();
     if (!nextPrompt) return;
-    onCreate({
-      clientSessionId,
-      title: starterTitle ?? titleFromPrompt(nextPrompt),
-      brief: {
-        prompt: nextPrompt,
-        audience: 'Decision-makers described in the brief',
-        purpose: 'Create an editable, reviewable presentation from this idea',
-        successCriteria: [
-          'A coherent 6–8 slide narrative',
-          'Structured chart, formula, and image primitives where relevant',
-          'Validation passes before presentation or export',
-        ],
-      },
-      themeId: 'editorial-signal',
-      route: 'free',
-      providerMode,
-      attachments,
-      ...(generation === 'deterministic'
-        ? {}
-        : {
-            providerModel: generation,
-            providerEffort: reasoningEffort,
-            providerConsent:
-              providerMode === 'nebius'
-                ? NODESLIDE_NEBIUS_BRIEF_CONSENT
-                : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
-          }),
-    });
-  };
-
-  const applyStarter = (starter: (typeof starters)[number]) => {
-    setPrompt(starter.prompt);
-    setStarterTitle(starter.title);
-    onClearError?.();
-  };
-
-  const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files ? Array.from(event.target.files) : [];
-    event.target.value = '';
-    if (!files.length) return;
     try {
-      setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
+      const attachments = await readNodeSlideAttachmentFiles(files, []);
       setAttachmentError(null);
-      onClearError?.();
-    } catch (error) {
-      setAttachmentError(
-        error instanceof Error ? error.message : 'The file could not be attached.',
-      );
+      onCreate({
+        clientSessionId,
+        title: starterTitle ?? titleFromPrompt(nextPrompt),
+        brief: {
+          prompt: nextPrompt,
+          audience: 'Decision-makers described in the brief',
+          purpose: 'Create an editable, reviewable presentation from this idea',
+          successCriteria: [
+            'A coherent 6–8 slide narrative',
+            'Structured chart, formula, and image primitives where relevant',
+            'Validation passes before presentation or export',
+          ],
+        },
+        themeId: 'editorial-signal',
+        route: 'free',
+        providerMode,
+        attachments,
+        ...(generation === 'deterministic'
+          ? {}
+          : {
+              providerModel: generation,
+              providerEffort: reasoningEffort,
+              providerConsent:
+                providerMode === 'nebius'
+                  ? NODESLIDE_NEBIUS_BRIEF_CONSENT
+                  : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+            }),
+      });
+    } catch (fileError) {
+      const message =
+        fileError instanceof Error ? fileError.message : 'The file could not be attached.';
+      setAttachmentError(message);
+      throw fileError;
     }
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    start();
+  const applyStarter = (starter: (typeof starters)[number]) => {
+    composerSession.setText(starter.prompt);
+    setStarterTitle(starter.title);
+    onClearError?.();
   };
 
   const canCreate = Boolean(prompt.trim()) && !creating;
@@ -195,157 +187,76 @@ export function NodeSlideLanding({
           </p>
         </div>
 
-        <form className="ns-landing-composer" onSubmit={submit}>
-          <label className="ns-sr-only" htmlFor="nodeslide-landing-prompt">
-            Presentation brief
-          </label>
-          <textarea
-            id="nodeslide-landing-prompt"
-            value={prompt}
-            onChange={(event) => {
-              setPrompt(event.target.value);
-              setStarterTitle(null);
-              onClearError?.();
-            }}
-            placeholder="Describe the presentation you want to make…"
-            rows={4}
-            maxLength={4000}
-          />
-          {attachments.length > 0 ? (
-            <div className="ns-landing-attachments" aria-label="Attached data files">
-              {attachments.map((attachment) => (
-                <span key={attachment.title}>
-                  <FileText size={12} aria-hidden="true" />
-                  <span>{attachment.title}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${attachment.title}`}
-                    onClick={() =>
-                      setAttachments((current) =>
-                        current.filter((item) => item.title !== attachment.title),
-                      )
-                    }
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-          <input
-            ref={fileInputRef}
-            className="ns-sr-only"
-            data-testid="landing-file-input"
-            type="file"
-            accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown"
-            multiple
-            onChange={(event) => void attachFiles(event)}
-          />
-          <div className="ns-landing-composer-bar">
-            <div className="ns-landing-tools">
-              <button
-                className="ns-landing-attach"
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip size={14} aria-hidden="true" /> Attach data
-              </button>
-              <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
-                <Globe2 size={13} aria-hidden="true" />
-                {providerDisplayName(providerMode)}
-              </span>
-              <label className="ns-landing-model">
-                <span className="ns-sr-only">Generation model</span>
-                {providerMode === 'deterministic' ? (
-                  <ShieldCheck size={14} aria-hidden="true" />
-                ) : (
-                  <Sparkles size={14} aria-hidden="true" />
-                )}
-                <select
-                  aria-label="Generation model"
-                  data-testid="landing-model-select"
-                  value={generation}
-                  onChange={(event) => {
-                    const model = event.target.value as 'deterministic' | NodeSlideAgentModelId;
-                    setGeneration(model);
-                    if (
-                      model !== 'deterministic' &&
-                      !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
-                    ) {
-                      setReasoningEffort('high');
-                    }
-                    onClearError?.();
-                  }}
-                >
-                  <optgroup label="Recommended">
-                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
-                      GLM 5.2 · Nebius · Recommended
-                    </option>
-                  </optgroup>
-                  <optgroup label="More live models">
-                    {NODESLIDE_AGENT_MODELS.slice(1).map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor} ·{' '}
-                        {providerDisplayName(nodeSlideProviderModeForModel(model.id))}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Private fallback">
-                    <option value="deterministic">Deterministic · no external model</option>
-                  </optgroup>
-                </select>
-              </label>
-              {providerMode !== 'deterministic' ? (
-                <label className="ns-landing-model ns-landing-effort">
-                  <span className="ns-sr-only">Reasoning effort</span>
-                  <select
-                    aria-label="Reasoning effort"
-                    data-testid="landing-effort-select"
-                    value={reasoningEffort}
-                    onChange={(event) => {
-                      setReasoningEffort(event.target.value as NodeSlideReasoningEffort);
-                      onClearError?.();
-                    }}
-                  >
-                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
-                      generation !== 'deterministic'
-                        ? nodeSlideModelSupportsReasoningEffort(generation, effort.id)
-                        : false,
-                    ).map((effort) => (
-                      <option key={effort.id} value={effort.id}>
-                        {effort.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-            <button
-              className="ns-landing-send"
-              type="submit"
-              aria-label="Create presentation"
-              disabled={!canCreate}
-              title={!prompt.trim() ? 'Describe a presentation first' : 'Create presentation'}
-            >
-              {creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />}
-            </button>
-          </div>
-          {creating ? (
-            <output className="ns-landing-create-status" aria-live="polite">
-              <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating
-              your editable deck…
-            </output>
-          ) : error ? (
-            <output className="ns-landing-create-error" role="alert">
-              {error}
-            </output>
-          ) : null}
-          {attachmentError ? (
-            <output className="ns-landing-file-error" role="alert">
-              {attachmentError}
-            </output>
-          ) : null}
-        </form>
+        <NodeSlidePromptComposer
+          attachmentInputTestId="landing-file-input"
+          attachLabel="Attach data"
+          clearAttachmentsOnSubmit={false}
+          composerClassName="ns-landing-composer"
+          disabled={!canCreate}
+          effort={reasoningEffort}
+          effortLabel="Reasoning effort"
+          effortOptions={NODESLIDE_REASONING_EFFORTS.filter(
+            (effort) =>
+              generation !== 'deterministic' &&
+              nodeSlideModelSupportsReasoningEffort(generation, effort.id),
+          )}
+          effortTestId="landing-effort-select"
+          model={generation}
+          modelLabel="Generation model"
+          modelTestId="landing-model-select"
+          onAttachmentError={setAttachmentError}
+          onEffortChange={(effort) => {
+            setReasoningEffort(effort);
+            onClearError?.();
+          }}
+          onModelChange={(model) => {
+            setGeneration(model);
+            if (
+              model !== 'deterministic' &&
+              !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
+            ) {
+              setReasoningEffort('high');
+            }
+            onClearError?.();
+          }}
+          onSubmit={({ text, files }) => start(text, files)}
+          onTextChange={() => {
+            setStarterTitle(null);
+            onClearError?.();
+          }}
+          placeholder="Describe the presentation you want to make…"
+          session={composerSession}
+          status={creating ? 'submitted' : error || attachmentError ? 'error' : 'ready'}
+          submitContent={
+            creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />
+          }
+          submitLabel="Create presentation"
+          textareaId="nodeslide-landing-prompt"
+          textareaLabel="Presentation brief"
+          textareaMaxLength={4000}
+          textareaRows={4}
+          tools={
+            <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
+              <Globe2 size={13} aria-hidden="true" />
+              {providerDisplayName(providerMode)}
+            </span>
+          }
+        />
+        {creating ? (
+          <output className="ns-landing-create-status" aria-live="polite">
+            <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating your
+            editable deck…
+          </output>
+        ) : error ? (
+          <output className="ns-landing-create-error" role="alert">
+            {error}
+          </output>
+        ) : null}
+        {attachmentError ? (
+          <output className="ns-landing-file-error" role="alert">
+            {attachmentError}
+          </output>
+        ) : null}
 
         <p className="ns-landing-privacy" aria-live="polite">
           {providerMode === 'deterministic' ? (
@@ -356,8 +267,8 @@ export function NodeSlideLanding({
             <>
               <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via{' '}
               {providerDisplayName(providerMode)}
-              {attachments.length > 0
-                ? ` + ${attachments.length} file${attachments.length === 1 ? '' : 's'}`
+              {composerSession.attachments.length > 0
+                ? ` + ${composerSession.attachments.length} file${composerSession.attachments.length === 1 ? '' : 's'}`
                 : ''}
               . Create directly; the route, tokens, and cost are recorded in Trace.
             </>
