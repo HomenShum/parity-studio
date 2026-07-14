@@ -115,7 +115,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
     expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
-    expect(markup).not.toContain('Allow one Nebius request');
+    expect(markup).toContain('Allow one Nebius request / GLM 5.2 / High');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
@@ -131,7 +131,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Gemini 3.1 Pro · Google');
     expect(markup).toContain('GPT-5.6 Sol · OpenAI');
     expect(markup).toContain('GPT-5.6 Terra · OpenAI');
-    expect(markup).not.toMatch(/ai-provider-consent/);
+    expect(markup).toMatch(/<input type="checkbox"[^>]*ai-provider-consent/);
+    expect(markup).not.toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
     expect(createAiProviderRequest('nebius', false)).toBeNull();
     expect(createAiProviderRequest('nebius', true)).toEqual({
@@ -353,7 +354,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(markup).not.toContain('Resolved review request');
   });
 
-  it('exposes slide and selection context chips and all seven collapsed tabs', () => {
+  it('exposes slide and selection context chips and all six collapsed tabs', () => {
     const snapshot = fixture();
     const slide = requiredSlide(snapshot);
     const element = snapshot.elements.find((candidate) => candidate.slideId === slide.id);
@@ -364,14 +365,14 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'json', 'trace']) {
+    for (const tab of ['design', 'comments', 'versions', 'data', 'trace', 'json']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
     const collapsed = renderPanel(workspace, slide, true, []);
-    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'JSON', 'Trace']) {
+    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'Trace', 'Spec']) {
       expect(collapsed).toContain(`aria-label="Open ${tab}"`);
     }
   });
@@ -598,6 +599,7 @@ function renderPanel(
       onApplyTastePack={() => undefined}
       onClearTastePack={() => undefined}
       onApplyDesignPatch={() => undefined}
+      onApplyJsonPatch={() => undefined}
       onAddComment={() => undefined}
       onReply={() => undefined}
       onSetCommentStatus={() => undefined}

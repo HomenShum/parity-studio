@@ -1,3 +1,4 @@
+import { useAction, useQuery } from 'convex/react';
 import {
   Bot,
   Check,
@@ -6,12 +7,16 @@ import {
   ExternalLink,
   KeyRound,
   Laptop,
+  LoaderCircle,
+  Presentation,
   ServerCog,
   ShieldCheck,
   Trash2,
+  Unplug,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { api } from '../../../../convex/_generated/api';
 import {
   SESSION_BYOK_KEYS,
   clearSessionByok,
@@ -41,9 +46,21 @@ export function NodeSlideConnectionsDialog({
   onClose,
   deckId,
 }: NodeSlideConnectionsDialogProps) {
+  if (!open) return null;
+
+  return <NodeSlideConnectionsDialogContent onClose={onClose} deckId={deckId} />;
+}
+
+function NodeSlideConnectionsDialogContent({
+  onClose,
+  deckId,
+}: {
+  onClose: () => void;
+  deckId: string | undefined;
+}) {
   const firstInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
-    open,
+    open: true,
     onClose,
     initialFocusRef: firstInputRef,
   });
@@ -51,20 +68,25 @@ export function NodeSlideConnectionsDialog({
   const [routing, setRouting] = useState({ model: 'z-ai/glm-5.2', baseUrl: '' });
   const [client, setClient] = useState<ClientKind>('claude');
   const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setKeys(readSessionByok());
-    setRouting(readSessionByokRouting());
-    setNotice(null);
-  }, [open]);
+  const [googleBusy, setGoogleBusy] = useState<'connect' | 'disconnect' | null>(null);
 
   const ownerAccessKey = listStoredDeckAccess().find(
     (entry) => entry.deckId === deckId,
   )?.ownerAccessKey;
-  const configuredCount = SESSION_BYOK_KEYS.filter((key) => keys[key.envVar]?.trim()).length;
+  const googleStatus = useQuery(
+    api.nodeslideGoogleAuth.getStatus,
+    deckId && ownerAccessKey ? { deckId, ownerAccessKey } : 'skip',
+  );
+  const beginGoogleAuth = useAction(api.nodeslideGoogleAuth.begin);
+  const disconnectGoogleAuth = useAction(api.nodeslideGoogleAuth.disconnect);
 
-  if (!open) return null;
+  useEffect(() => {
+    setKeys(readSessionByok());
+    setRouting(readSessionByokRouting());
+    setNotice(null);
+  }, []);
+
+  const configuredCount = SESSION_BYOK_KEYS.filter((key) => keys[key.envVar]?.trim()).length;
 
   const save = () => {
     writeSessionByok(keys);
@@ -79,6 +101,48 @@ export function NodeSlideConnectionsDialog({
     setKeys({});
     setRouting({ model: 'z-ai/glm-5.2', baseUrl: '' });
     setNotice('Local connection values revoked from this tab.');
+  };
+
+  const connectGoogleSlides = async () => {
+    if (!deckId || !ownerAccessKey) {
+      setNotice('Open a deck owned by this browser before connecting Google Slides.');
+      return;
+    }
+    setGoogleBusy('connect');
+    setNotice(null);
+    try {
+      const returnTo = new URL(window.location.href);
+      returnTo.searchParams.delete('nodeslideGoogle');
+      const receipt = await beginGoogleAuth({
+        deckId,
+        ownerAccessKey,
+        returnTo: returnTo.toString(),
+      });
+      window.location.assign(receipt.authorizationUrl);
+    } catch {
+      setNotice(
+        'Google Slides connection could not start. Check the deployment configuration and try again.',
+      );
+      setGoogleBusy(null);
+    }
+  };
+
+  const disconnectGoogleSlides = async () => {
+    if (!deckId || !ownerAccessKey) return;
+    setGoogleBusy('disconnect');
+    setNotice(null);
+    try {
+      const receipt = await disconnectGoogleAuth({ deckId, ownerAccessKey });
+      setNotice(
+        receipt.providerRevoked
+          ? 'Google Slides access was revoked for this deck.'
+          : 'Google Slides was disconnected locally. Google did not confirm remote revocation.',
+      );
+    } catch {
+      setNotice('Google Slides could not be disconnected. Try again.');
+    } finally {
+      setGoogleBusy(null);
+    }
   };
 
   const copyConfig = async () => {
@@ -132,6 +196,72 @@ export function NodeSlideConnectionsDialog({
         </header>
 
         <div className="ns-connections-body">
+          <section
+            className="ns-connection-section ns-google-connection-section"
+            aria-labelledby="ns-google-slides-title"
+          >
+            <div className="ns-connection-heading">
+              <span>
+                <Presentation size={14} /> Google Slides
+              </span>
+              <small>
+                {!deckId || !ownerAccessKey
+                  ? 'Open an owned deck'
+                  : googleStatus?.connected
+                    ? 'Connected'
+                    : googleStatus === undefined
+                      ? 'Checking…'
+                      : 'Not connected'}
+              </small>
+            </div>
+            <h2 id="ns-google-slides-title">Authorize per-file Google Slides access</h2>
+            <p>
+              Google asks for per-file Drive access. NodeSlide stores refresh credentials encrypted
+              on the server, never in browser storage or Trace. Sync actions continue through the
+              existing revision, proposal, and validation gates.
+            </p>
+            <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
+              <div>
+                <strong>
+                  {googleStatus?.connected ? 'Google Slides is ready' : 'Explicit Google consent'}
+                </strong>
+                <small>
+                  {googleStatus?.connected
+                    ? 'This deck can now use the authenticated Google Slides adapter.'
+                    : 'NodeSlide requests the recommended drive.file scope—not access to all Drive files.'}
+                </small>
+              </div>
+              {googleStatus?.connected ? (
+                <button
+                  type="button"
+                  className="is-danger"
+                  disabled={googleBusy !== null}
+                  onClick={() => void disconnectGoogleSlides()}
+                >
+                  {googleBusy === 'disconnect' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <Unplug size={13} />
+                  )}
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!deckId || !ownerAccessKey || googleBusy !== null}
+                  onClick={() => void connectGoogleSlides()}
+                >
+                  {googleBusy === 'connect' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <ExternalLink size={13} />
+                  )}
+                  Continue to Google
+                </button>
+              )}
+            </div>
+          </section>
+
           <section className="ns-connection-section" aria-labelledby="ns-byok-title">
             <div className="ns-connection-heading">
               <span>

@@ -132,6 +132,13 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
+  onApplyJsonPatch: (
+    operations: PatchOperation[],
+    summary: string,
+    elementId: string,
+    baseElementVersion: number,
+  ) => boolean | undefined | Promise<boolean | undefined>;
+  onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
   onSetCommentStatus: (commentId: string, status: 'open' | 'resolved') => void;
@@ -145,8 +152,8 @@ const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'comments', label: 'Comments', icon: MessageCircle },
   { id: 'versions', label: 'Versions', icon: History },
   { id: 'data', label: 'Evidence', icon: Database },
-  { id: 'json', label: 'JSON', icon: Braces },
   { id: 'trace', label: 'Trace', icon: Activity },
+  { id: 'json', label: 'Spec', icon: Braces },
 ];
 
 export function InspectorPanel<CommandId extends string = string>({
@@ -212,6 +219,8 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
+  onApplyJsonPatch,
+  onImportSourceFile,
   onAddComment,
   onReply,
   onSetCommentStatus,
@@ -461,20 +470,6 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
           />
         ) : null}
-        {activeTab === 'json' ? (
-          <JsonInspector
-            snapshot={{
-              deck: workspace.deck,
-              slides: workspace.slides,
-              elements: workspace.elements,
-              sources: workspace.sources,
-            }}
-            slide={slide}
-            selectedElements={selectedElements}
-            patches={workspace.patches}
-            onApplyPatch={onApplyDesignPatch}
-          />
-        ) : null}
         {activeTab === 'trace' ? (
           <TraceInspector
             traces={workspace.traces}
@@ -489,6 +484,14 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
             {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
             {...(agentTelemetry ? { agentTelemetry } : {})}
+          />
+        ) : null}
+        {activeTab === 'json' ? (
+          <JsonInspector
+            workspace={workspace}
+            selectedElements={selectedElements}
+            onApplyPatch={onApplyJsonPatch}
+            {...(onImportSourceFile ? { onImportSourceFile } : {})}
           />
         ) : null}
       </div>

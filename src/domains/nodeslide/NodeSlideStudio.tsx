@@ -512,6 +512,20 @@ export function NodeSlideStudio() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const before = url.toString();
+    const googleResult = url.searchParams.get('nodeslideGoogle');
+    if (googleResult === 'connected') {
+      setToast({ kind: 'success', message: 'Google Slides is connected for this deck.' });
+    } else if (googleResult === 'denied') {
+      setToast({ kind: 'error', message: 'Google Slides consent was not granted.' });
+    } else if (googleResult === 'expired') {
+      setToast({
+        kind: 'error',
+        message: 'That Google Slides connection link expired. Try again.',
+      });
+    } else if (googleResult === 'failed') {
+      setToast({ kind: 'error', message: 'Google Slides could not be connected. Try again.' });
+    }
+    url.searchParams.delete('nodeslideGoogle');
     url.searchParams.delete('qa');
     if (url.searchParams.get('domain') === 'nodeslide') url.searchParams.delete('domain');
     if (url.toString() !== before) window.history.replaceState(null, '', url);
@@ -3912,15 +3926,34 @@ function RecoveryScreen({
   );
 }
 
-function errorMessage(error: unknown, fallback: string) {
+export function nodeSlideErrorMessage(error: unknown, fallback: string): string {
+  let rawMessage: string | undefined;
   if (error && typeof error === 'object' && 'data' in error) {
     const data = error.data;
     if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
-      return data.message;
+      rawMessage = data.message;
     }
   }
-  return error instanceof Error ? error.message : fallback;
+  rawMessage ??= error instanceof Error ? error.message : undefined;
+  if (!rawMessage?.trim()) return fallback;
+
+  const safeMessage = rawMessage
+    .replace(/^\[CONVEX[^\]]*\]\s*/iu, '')
+    .replace(/\[Request ID:[^\]]*\]\s*/giu, '')
+    .replace(/^(?:(?:Server Error|Uncaught Error)\s*:?\s*)+/iu, '')
+    .split(/\n\s*at\s+/u, 1)[0]
+    ?.trim();
+
+  if (
+    !safeMessage ||
+    /(?:convex server error|request id|uncaught error|\bat\s+\w+\s*\()/iu.test(safeMessage)
+  ) {
+    return fallback;
+  }
+  return safeMessage;
 }
+
+const errorMessage = nodeSlideErrorMessage;
 
 function Toast({
   toast,

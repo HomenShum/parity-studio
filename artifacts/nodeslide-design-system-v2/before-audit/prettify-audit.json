@@ -1,0 +1,316 @@
+{
+  "url": "http://127.0.0.1:5201/",
+  "scheme": "light",
+  "viewport": {
+    "width": 1512,
+    "height": 812
+  },
+  "when": "2026-07-14T02:01:10.797Z",
+  "signals": {
+    "counts": {
+      "visibleElements": 533,
+      "textElements": 108
+    },
+    "fontSizes": {
+      "unique": 14,
+      "scale": [6.6, 7, 8.3, 9, 10, 10.5, 11, 11.5, 12, 12.5, 13, 14, 16, 21],
+      "histogram": {
+        "7": 3,
+        "9": 2,
+        "10": 34,
+        "11": 25,
+        "12": 5,
+        "13": 14,
+        "14": 1,
+        "16": 1,
+        "21": 1,
+        "10.5": 10,
+        "12.5": 8,
+        "11.5": 2,
+        "6.6": 1,
+        "8.3": 1
+      }
+    },
+    "fontWeights": {
+      "unique": 9,
+      "values": [400, 430, 500, 560, 600, 620, 650, 700, 750]
+    },
+    "textColors": {
+      "unique": 12,
+      "offAllowlistCount": 0,
+      "offAllowlist": [],
+      "histogram": {
+        "#4b5563": 43,
+        "#667085": 22,
+        "#111827": 20,
+        "#047857": 9,
+        "#26221d": 4,
+        "#a8583f": 3,
+        "#ffffff": 2,
+        "#5e6ad2": 1,
+        "#b44a2d": 1,
+        "#756b61": 1,
+        "#fafafa": 1,
+        "#dc2626": 1
+      }
+    },
+    "spacing": {
+      "uniqueValues": 23,
+      "scale": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 30, 40, 54, 58, 125, 126],
+      "totalDecls": 588,
+      "offGrid4Count": 420,
+      "offGrid4Rate": 0.714,
+      "offGrid8Count": 420
+    },
+    "radii": {
+      "unique": 11,
+      "values": [0, 1, 3, 5, 6, 7, 8, 9, 10, 16, 50]
+    },
+    "shadows": {
+      "unique": 8
+    },
+    "icons": {
+      "uniqueSizes": 8,
+      "sizes": ["15x15", "14x14", "12x12", "13x13", "9x13", "16x16", "11x11", "11x12"]
+    },
+    "contrast": {
+      "flagged": 6,
+      "worst": [
+        {
+          "sel": "span.ns-wordmark-mark.ns-wordmark-mark--v3",
+          "ratio": 1.06,
+          "size": 13,
+          "weight": 750,
+          "fg": "#ffffff",
+          "bg": "#faf8f6",
+          "text": "N"
+        },
+        {
+          "sel": "span",
+          "ratio": 1.06,
+          "size": 13,
+          "weight": 600,
+          "fg": "#ffffff",
+          "bg": "#faf8f6",
+          "text": "Export"
+        },
+        {
+          "sel": "span.ns-narrative-label",
+          "ratio": 4.15,
+          "size": 9,
+          "weight": 400,
+          "fg": "#5e6ad2",
+          "bg": "#eff1f3",
+          "text": "Slide job"
+        },
+        {
+          "sel": "button.is-active",
+          "ratio": 4.2,
+          "size": 10.5,
+          "weight": 400,
+          "fg": "#a8583f",
+          "bg": "#f0e8e6",
+          "text": "This slide"
+        },
+        {
+          "sel": "span.ns-editor-slide-number",
+          "ratio": 4.39,
+          "size": 10,
+          "weight": 400,
+          "fg": "#667085",
+          "bg": "#eff1f3",
+          "text": "01"
+        },
+        {
+          "sel": "span.needs-consent",
+          "ratio": 4.39,
+          "size": 11,
+          "weight": 400,
+          "fg": "#dc2626",
+          "bg": "#f3f4f6",
+          "text": "Consent required"
+        }
+      ]
+    },
+    "alignment": {
+      "distinctLeftEdges": 59,
+      "strayRate": 0.457
+    },
+    "motion": {
+      "reducedMotionActive": false,
+      "animatedInfinite": 0,
+      "transitionsWithDuration": 16,
+      "over400ms": 0,
+      "over400msSamples": []
+    },
+    "focus": {
+      "focusVisibleRules": 10,
+      "focusRules": 12
+    }
+  },
+  "rubric": {
+    "V1": {
+      "name": "Type-scale discipline",
+      "score": 0,
+      "why": "14 distinct font-sizes (<=7 disciplined, >10 sprawl)"
+    },
+    "V2": {
+      "name": "Spacing / grid rhythm",
+      "score": 0,
+      "why": "off-4px rate 0.714 (<=0.10 good), 23 distinct spacing values (<=12 good)"
+    },
+    "V3": {
+      "name": "Color restraint & token adherence",
+      "score": 2,
+      "why": "12 distinct text colors (<=12 good)"
+    },
+    "V4": {
+      "name": "Hierarchy (weight + size + value)",
+      "score": 2,
+      "why": "9 distinct font-weights (>=2 needed for weight hierarchy)"
+    },
+    "V5": {
+      "name": "Contrast / legibility (WCAG)",
+      "score": 0,
+      "why": "6 text nodes below WCAG floor (0 = pass)"
+    },
+    "V6": {
+      "name": "Radius / shadow / elevation consistency",
+      "score": 0,
+      "why": "11 radii, 8 shadows, 8 icon sizes (each <=4 = defined levels)"
+    },
+    "V7": {
+      "name": "Alignment / edge discipline",
+      "score": 0,
+      "why": "0.457 of block elements off the 8 dominant left-edges (<=0.25 good)"
+    },
+    "V8": {
+      "name": "State polish (empty / loading / error)",
+      "score": null,
+      "why": "vision-judge only — capture empty+loading+error PNGs; not derivable from one static DOM read"
+    },
+    "V9": {
+      "name": "Motion restraint",
+      "score": 2,
+      "why": "0 transitions >400ms, 0 infinite animations"
+    }
+  },
+  "targets": [
+    {
+      "id": "V1",
+      "name": "Type-scale discipline",
+      "score": 0,
+      "why": "14 distinct font-sizes (<=7 disciplined, >10 sprawl)",
+      "evidence": {
+        "scale": [6.6, 7, 8.3, 9, 10, 10.5, 11, 11.5, 12, 12.5, 13, 14, 16, 21]
+      }
+    },
+    {
+      "id": "V2",
+      "name": "Spacing / grid rhythm",
+      "score": 0,
+      "why": "off-4px rate 0.714 (<=0.10 good), 23 distinct spacing values (<=12 good)",
+      "evidence": {
+        "offGrid4Rate": 0.714,
+        "offGrid4Count": 420,
+        "uniqueValues": 23,
+        "scale": [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 30, 40, 54, 58, 125, 126
+        ]
+      }
+    },
+    {
+      "id": "V5",
+      "name": "Contrast / legibility (WCAG)",
+      "score": 0,
+      "why": "6 text nodes below WCAG floor (0 = pass)",
+      "evidence": {
+        "flagged": 6,
+        "worst": [
+          {
+            "sel": "span.ns-wordmark-mark.ns-wordmark-mark--v3",
+            "ratio": 1.06,
+            "size": 13,
+            "weight": 750,
+            "fg": "#ffffff",
+            "bg": "#faf8f6",
+            "text": "N"
+          },
+          {
+            "sel": "span",
+            "ratio": 1.06,
+            "size": 13,
+            "weight": 600,
+            "fg": "#ffffff",
+            "bg": "#faf8f6",
+            "text": "Export"
+          },
+          {
+            "sel": "span.ns-narrative-label",
+            "ratio": 4.15,
+            "size": 9,
+            "weight": 400,
+            "fg": "#5e6ad2",
+            "bg": "#eff1f3",
+            "text": "Slide job"
+          },
+          {
+            "sel": "button.is-active",
+            "ratio": 4.2,
+            "size": 10.5,
+            "weight": 400,
+            "fg": "#a8583f",
+            "bg": "#f0e8e6",
+            "text": "This slide"
+          },
+          {
+            "sel": "span.ns-editor-slide-number",
+            "ratio": 4.39,
+            "size": 10,
+            "weight": 400,
+            "fg": "#667085",
+            "bg": "#eff1f3",
+            "text": "01"
+          },
+          {
+            "sel": "span.needs-consent",
+            "ratio": 4.39,
+            "size": 11,
+            "weight": 400,
+            "fg": "#dc2626",
+            "bg": "#f3f4f6",
+            "text": "Consent required"
+          }
+        ]
+      }
+    },
+    {
+      "id": "V6",
+      "name": "Radius / shadow / elevation consistency",
+      "score": 0,
+      "why": "11 radii, 8 shadows, 8 icon sizes (each <=4 = defined levels)",
+      "evidence": {
+        "radii": [0, 1, 3, 5, 6, 7, 8, 9, 10, 16, 50],
+        "shadows": 8,
+        "iconSizes": ["15x15", "14x14", "12x12", "13x13", "9x13", "16x16", "11x11", "11x12"]
+      }
+    },
+    {
+      "id": "V7",
+      "name": "Alignment / edge discipline",
+      "score": 0,
+      "why": "0.457 of block elements off the 8 dominant left-edges (<=0.25 good)",
+      "evidence": {
+        "strayRate": 0.457,
+        "distinctLeftEdges": 59
+      }
+    }
+  ],
+  "focusOk": true,
+  "aggregate": {
+    "measuredDims": 8,
+    "score": 6,
+    "max": 16,
+    "pct": 38
+  }
+}
