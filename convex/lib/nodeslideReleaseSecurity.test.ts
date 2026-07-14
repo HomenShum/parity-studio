@@ -725,6 +725,88 @@ describe('NodeSlide release security', () => {
     expect(database.writes).toEqual([]);
   });
 
+  it('keeps a JSON edit candidate out of the canonical deck until Accept', async () => {
+    const database = new MemoryDatabase();
+    const fixture = seedWorkspace(database, 'json-review', OWNER_ACCESS_KEY, '7');
+    const context = { db: database } as unknown as MutationCtx;
+    const before = await requiredSnapshot(context, fixture.snapshot.deck.id);
+    const edit = textEdit(before, 'JSON candidate copy');
+    const request: PatchRequest = {
+      id: 'json-review-candidate',
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: before.deck.version,
+      ...clocksForNodeSlideOperations(before, [edit.operation]),
+      scope: edit.scope,
+      operations: [edit.operation],
+      summary: 'Edit selected element via JSON',
+    };
+
+    const proposed = await proposePatchHandler(context, request);
+    expect(proposed.patch).toMatchObject({
+      status: 'ready',
+      candidateDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      candidateValidation: expect.objectContaining({ ok: true }),
+    });
+    expect(await requiredSnapshot(context, before.deck.id)).toEqual(before);
+
+    const accepted = await acceptPatchHandler(context, {
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      patchId: proposed.patch.id,
+    });
+    expect(accepted.patch.status).toBe('accepted');
+    const after = await requiredSnapshot(context, before.deck.id);
+    expect(after.deck.version).toBe(before.deck.version + 1);
+    expect(after.elements.find((element) => element.id === edit.elementId)?.content).toBe(
+      'JSON candidate copy',
+    );
+  });
+
+  it('rejects a stale JSON candidate without overwriting a newer canonical edit', async () => {
+    const database = new MemoryDatabase();
+    const fixture = seedWorkspace(database, 'json-stale', OWNER_ACCESS_KEY, '8');
+    const context = { db: database } as unknown as MutationCtx;
+    const before = await requiredSnapshot(context, fixture.snapshot.deck.id);
+    const jsonEdit = textEdit(before, 'Stale JSON candidate');
+    const proposed = await proposePatchHandler(context, {
+      id: 'json-stale-candidate',
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: before.deck.version,
+      ...clocksForNodeSlideOperations(before, [jsonEdit.operation]),
+      scope: jsonEdit.scope,
+      operations: [jsonEdit.operation],
+      summary: 'Edit selected element via JSON',
+    });
+    expect(await requiredSnapshot(context, before.deck.id)).toEqual(before);
+
+    const competingOperation = { ...jsonEdit.operation, text: 'Newer canonical copy' };
+    const competing = await applyPatchHandler(context, {
+      id: 'competing-canonical-edit',
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: before.deck.version,
+      ...clocksForNodeSlideOperations(before, [competingOperation]),
+      scope: jsonEdit.scope,
+      operations: [competingOperation],
+      summary: 'Competing canonical edit',
+    });
+    expect(competing.patch.status).toBe('accepted');
+    const afterCompetingEdit = await requiredSnapshot(context, before.deck.id);
+
+    const stale = await acceptPatchHandler(context, {
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      patchId: proposed.patch.id,
+    });
+    expect(stale.patch.status).toBe('stale');
+    expect(await requiredSnapshot(context, before.deck.id)).toEqual(afterCompetingEdit);
+    expect(
+      afterCompetingEdit.elements.find((element) => element.id === jsonEdit.elementId)?.content,
+    ).toBe('Newer canonical copy');
+  });
+
   it('rejects cross-deck comment idempotency collisions for comments and replies', async () => {
     const database = new MemoryDatabase();
     const first = seedWorkspace(database, 'comment-owner', OWNER_ACCESS_KEY, 'f');

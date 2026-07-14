@@ -96,9 +96,12 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
     expect(markup).not.toContain('<option value="max">Max</option>');
     expect(markup).toContain('data-testid="landing-file-input"');
-    expect(markup).not.toContain('data-testid="landing-provider-consent"');
+    expect(markup).toContain('data-testid="landing-provider-consent"');
+    expect(markup).not.toMatch(/data-testid="landing-provider-consent"[^>]*checked/);
     expect(markup).toContain('Attach data');
-    expect(markup).toContain('Create directly; the route, tokens, and cost are recorded in Trace.');
+    expect(markup).toContain('Check consent for this request before creation');
+    expect(markup).toContain('Consent resets immediately after submission.');
+    expect(markup).not.toContain('Create directly');
     expect(markup).toContain('aria-label="Create presentation"');
     expect(markup).toContain('Explore the editable sample workspace');
     expect(markup).not.toContain('nodeslide-preview-access-code');

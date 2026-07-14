@@ -53,6 +53,9 @@ describe('NodeSlide MCP governance', () => {
     expect(() => requireExplicitConsent(false, 'local BYOK model egress')).toThrow(
       'Explicit consent',
     );
+    expect(() => requireExplicitConsent('true', 'local BYOK model egress')).toThrow(
+      'Explicit consent',
+    );
     expect(() => requireExplicitConsent(true, 'local BYOK model egress')).not.toThrow();
   });
 
@@ -271,6 +274,50 @@ describe('NodeSlide MCP governance', () => {
         'nodeslide.propose_patch',
       ]),
     );
+
+    const createDeck = handlers.get('nodeslide.create_deck');
+    await expect(
+      createDeck?.({
+        title: 'Unconsented deck',
+        prompt: 'Do not send this brief.',
+        audience: 'Reviewers',
+        purpose: 'Consent regression',
+        successCriteria: ['No egress'],
+        themeId: 'editorial-signal',
+        clientSessionId: 'mcp-consent-session',
+        execution: 'hosted',
+        model: 'z-ai/glm-5.2',
+      }),
+    ).rejects.toThrow('Explicit consent');
+
+    const proposeEdit = handlers.get('nodeslide.propose_edit');
+    for (const execution of ['hosted', 'byok'] as const) {
+      await expect(
+        proposeEdit?.({
+          deckId: 'deck_1',
+          ownerAccessKey: 'owner-key',
+          instruction: 'Do not send this deck context.',
+          scope: 'slide',
+          slideId: 'slide_1',
+          operationMode: 'copy',
+          execution,
+          model: 'z-ai/glm-5.2',
+        }),
+      ).rejects.toThrow('Explicit consent');
+    }
+
+    const searchWeb = handlers.get('nodeslide.search_web');
+    await expect(
+      searchWeb?.({
+        deckId: 'deck_1',
+        ownerAccessKey: 'owner-key',
+        query: 'Do not search this query.',
+        scope: 'slide',
+        slideId: 'slide_1',
+        operationMode: 'copy',
+      }),
+    ).rejects.toThrow('Explicit consent');
+    expect(calls).toHaveLength(0);
 
     const propose = handlers.get('nodeslide.propose_patch');
     expect(propose).toBeDefined();

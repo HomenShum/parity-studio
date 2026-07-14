@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_REASONING_EFFORTS,
@@ -29,10 +29,9 @@ import {
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
-  NODESLIDE_NEBIUS_BRIEF_CONSENT,
-  NODESLIDE_OPENROUTER_BRIEF_CONSENT,
   type NodeSlideBriefProviderMode,
   type RecentDeck,
+  createDeckProviderAdmission,
 } from './ProjectDialog';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 
@@ -91,18 +90,29 @@ export function NodeSlideLanding({
   const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  // Zero-friction consent: the external model is disclosed by the composer's model
-  // pill, so choosing it and creating IS the consent. The consent token is still
-  // generated + validated server-side (createDeckFromBrief) — only the checkbox is gone.
+  const [providerConsent, setProviderConsent] = useState(false);
+  const providerConsentRef = useRef(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
+  const setPerRequestProviderConsent = (consented: boolean) => {
+    providerConsentRef.current = consented;
+    setProviderConsent(consented);
+  };
 
   const start = async (submittedPrompt: string, files: readonly File[]) => {
     const nextPrompt = submittedPrompt.trim();
     if (!nextPrompt) return;
+    const providerAdmission = createDeckProviderAdmission(
+      providerMode,
+      generation === 'deterministic' ? NODESLIDE_DEFAULT_AGENT_MODEL : generation,
+      reasoningEffort,
+      providerConsentRef.current,
+    );
+    if (!providerAdmission) return;
+    setPerRequestProviderConsent(false);
     try {
       const attachments = await readNodeSlideAttachmentFiles(files, []);
       setAttachmentError(null);
@@ -121,18 +131,8 @@ export function NodeSlideLanding({
         },
         themeId: 'editorial-signal',
         route: 'free',
-        providerMode,
         attachments,
-        ...(generation === 'deterministic'
-          ? {}
-          : {
-              providerModel: generation,
-              providerEffort: reasoningEffort,
-              providerConsent:
-                providerMode === 'nebius'
-                  ? NODESLIDE_NEBIUS_BRIEF_CONSENT
-                  : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
-            }),
+        ...providerAdmission,
       });
     } catch (fileError) {
       const message =
@@ -148,7 +148,8 @@ export function NodeSlideLanding({
     onClearError?.();
   };
 
-  const canCreate = Boolean(prompt.trim()) && !creating;
+  const canCreate =
+    Boolean(prompt.trim()) && !creating && (providerMode === 'deterministic' || providerConsent);
 
   return (
     <main
@@ -207,6 +208,7 @@ export function NodeSlideLanding({
           onAttachmentError={setAttachmentError}
           onEffortChange={(effort) => {
             setReasoningEffort(effort);
+            setPerRequestProviderConsent(false);
             onClearError?.();
           }}
           onModelChange={(model) => {
@@ -217,6 +219,7 @@ export function NodeSlideLanding({
             ) {
               setReasoningEffort('high');
             }
+            setPerRequestProviderConsent(false);
             onClearError?.();
           }}
           onSubmit={({ text, files }) => start(text, files)}
@@ -242,6 +245,43 @@ export function NodeSlideLanding({
             </span>
           }
         />
+        {providerMode !== 'deterministic' ? (
+          <label
+            className="ns-provider-consent"
+            style={{
+              alignItems: 'start',
+              background: 'var(--ns-surface, #f3f3ef)',
+              border: '1px solid var(--ns-line-soft)',
+              borderRadius: 9,
+              display: 'grid',
+              gap: 8,
+              gridTemplateColumns: 'auto 1fr',
+              marginTop: 8,
+              padding: 10,
+            }}
+          >
+            <input
+              type="checkbox"
+              data-testid="landing-provider-consent"
+              checked={providerConsent}
+              onChange={(event) => setPerRequestProviderConsent(event.target.checked)}
+              style={{
+                accentColor: 'var(--ns-accent)',
+                marginTop: 2,
+                padding: 0,
+                width: 'auto',
+              }}
+            />
+            <span>
+              I consent to sending this full brief
+              {composerSession.attachments.length > 0
+                ? ` and ${composerSession.attachments.length} attached file${composerSession.attachments.length === 1 ? '' : 's'}`
+                : ''}{' '}
+              to {providerDisplayName(providerMode)} for this creation request.
+              <small> Consent resets immediately after submission.</small>
+            </span>
+          </label>
+        ) : null}
         {creating ? (
           <output className="ns-landing-create-status" aria-live="polite">
             <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating your
@@ -270,21 +310,36 @@ export function NodeSlideLanding({
               {composerSession.attachments.length > 0
                 ? ` + ${composerSession.attachments.length} file${composerSession.attachments.length === 1 ? '' : 's'}`
                 : ''}
-              . Create directly; the route, tokens, and cost are recorded in Trace.
+              . Check consent for this request before creation; route, tokens, and cost are recorded
+              in Trace.
             </>
           )}
         </p>
 
-        <div className="ns-landing-starters" aria-label="Presentation starters">
+        <div
+          className="ns-landing-starters"
+          aria-label="Presentation starters"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+        >
           <span>Try an idea</span>
           {starters.map((starter) => (
-            <button key={starter.label} type="button" onClick={() => applyStarter(starter)}>
+            <button
+              key={starter.label}
+              type="button"
+              style={{ minHeight: 24 }}
+              onClick={() => applyStarter(starter)}
+            >
               {starter.label}
             </button>
           ))}
         </div>
 
-        <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
+        <button
+          className="ns-landing-sample"
+          type="button"
+          style={{ marginTop: 10, minHeight: 24 }}
+          onClick={onExploreSample}
+        >
           <Layers3 size={15} /> Explore the editable sample workspace
         </button>
 

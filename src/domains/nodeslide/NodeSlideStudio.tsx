@@ -1369,6 +1369,96 @@ export function NodeSlideStudio() {
     ],
   );
 
+  const proposeJsonOperations = useCallback(
+    async (
+      operations: PatchOperation[],
+      summary: string,
+      elementId: string,
+      baseElementVersion: number,
+    ) => {
+      if (!workspace || !ownerAccessKey || operations.length === 0) return false;
+      const requestedDeckId = workspace.deck.id;
+      return enqueueEditorWrite(
+        requestedDeckId,
+        false,
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          const requestGate = editorRequestGateRef.current;
+          const scope = scopeForOperations(currentWorkspace, operations, 'unrestricted');
+          const clocks = clocksForScope(currentWorkspace, scope, operations);
+          try {
+            const receipt = await proposePatchMutation({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: currentWorkspace.deck.version,
+              baseSlideVersions: clocks.baseSlideVersions,
+              baseElementVersions: applyExpectedElementVersions(clocks.baseElementVersions, {
+                [elementId]: baseElementVersion,
+              }),
+              scope,
+              operations,
+              summary,
+            });
+            if (!requestGate.isCurrent(requestToken)) return false;
+            if (receipt.patch.status === 'stale') {
+              if (receipt.workspace) installWorkspace(receipt.workspace, currentOwnerAccessKey);
+              setPreviewedPatchId(null);
+              setCanvasMode('edit');
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+              setToast({
+                kind: 'error',
+                message:
+                  'The JSON candidate is stale. The deck stayed unchanged; review the current version and retry.',
+              });
+              return false;
+            }
+            if (
+              receipt.patch.status !== 'ready' ||
+              !receipt.workspace ||
+              !editorCandidateCanAccept(
+                editorCandidateReceiptForPatch(receipt.patch, receipt.workspace.deck),
+              )
+            ) {
+              throw new Error(
+                'The JSON edit did not produce an exact, validated candidate for review.',
+              );
+            }
+            const candidateDeck = receipt.workspace.deck;
+            installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            setPreviewedVariation(null);
+            setPreviewedSignatureProfile(null);
+            setPreviewedPatchId(receipt.patch.id);
+            const firstAffectedSlideId =
+              'slideIds' in receipt.patch.scope ? receipt.patch.scope.slideIds[0] : undefined;
+            if (firstAffectedSlideId && candidateDeck.slideOrder.includes(firstAffectedSlideId)) {
+              selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+            }
+            setCanvasMode('compare');
+            setActiveInspectorTab('ai');
+            setInspectorCollapsed(false);
+            setToast({
+              kind: 'success',
+              message: 'JSON candidate validated. Compare it, then choose Accept or Reject.',
+            });
+            return true;
+          } catch (error) {
+            if (!requestGate.isCurrent(requestToken)) return false;
+            setToast({
+              kind: 'error',
+              message: errorMessage(error, 'The JSON edit could not be proposed.'),
+            });
+            return false;
+          }
+        },
+      );
+    },
+    [enqueueEditorWrite, installWorkspace, ownerAccessKey, proposePatchMutation, workspace],
+  );
+
   const proposeSourceImport = useCallback(
     async (file: File, kind: 'json' | 'pptx'): Promise<string> => {
       const initialWorkspace = workspaceRef.current;
@@ -3352,15 +3442,7 @@ export function NodeSlideStudio() {
               summary,
             )
           }
-          onApplyJsonPatch={(operations, summary, elementId, baseElementVersion) =>
-            applyOperations(
-              operations,
-              scopeForOperations(workspace, operations, 'unrestricted'),
-              summary,
-              undefined,
-              { [elementId]: baseElementVersion },
-            )
-          }
+          onApplyJsonPatch={proposeJsonOperations}
           onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
             ownerAccessKey

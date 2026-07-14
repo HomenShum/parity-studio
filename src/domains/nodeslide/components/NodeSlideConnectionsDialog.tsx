@@ -208,7 +208,7 @@ function NodeSlideConnectionsDialogContent({
                 {!deckId || !ownerAccessKey
                   ? 'Open an owned deck'
                   : googleStatus?.connected
-                    ? 'Connected'
+                    ? 'OAuth authorized'
                     : googleStatus === undefined
                       ? 'Checking…'
                       : 'Not connected'}
@@ -217,17 +217,19 @@ function NodeSlideConnectionsDialogContent({
             <h2 id="ns-google-slides-title">Authorize per-file Google Slides access</h2>
             <p>
               Google asks for per-file Drive access. NodeSlide stores refresh credentials encrypted
-              on the server, never in browser storage or Trace. Sync actions continue through the
-              existing revision, proposal, and validation gates.
+              on the server, never in browser storage or Trace. Authorization enables authenticated
+              planning; this release does not expose a Google Slides push or pull action.
             </p>
             <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
               <div>
                 <strong>
-                  {googleStatus?.connected ? 'Google Slides is ready' : 'Explicit Google consent'}
+                  {googleStatus?.connected
+                    ? 'OAuth authorized · planning available'
+                    : 'Explicit Google consent'}
                 </strong>
                 <small>
                   {googleStatus?.connected
-                    ? 'This deck can now use the authenticated Google Slides adapter.'
+                    ? 'NodeSlide can build guarded sync plans; it does not push or pull slides yet.'
                     : 'NodeSlide requests the recommended drive.file scope—not access to all Drive files.'}
                 </small>
               </div>
@@ -273,7 +275,8 @@ function NodeSlideConnectionsDialogContent({
             <p>
               Values live in this tab’s session storage, then run in the local MCP process you
               launch. They are never sent to Convex, written into Trace, or returned by a tool.
-              Every model request still needs explicit consent.
+              Every model request still needs explicit per-call consent; copied config never grants
+              it.
             </p>
             <div className="ns-byok-grid">
               {SESSION_BYOK_KEYS.filter((key) => key.provider !== 'google').map((key, index) => (
@@ -341,7 +344,9 @@ function NodeSlideConnectionsDialogContent({
             <p>
               The agent can read decks and traces, upload evidence, and propose edits. Proposals
               remain unapplied until a separate accept call; the server rechecks owner authority,
-              scope, clocks, quotas, and candidate validation.
+              scope, clocks, quotas, and candidate validation. The copied config contains no consent
+              grant: external-model and web tools require <code>consent: true</code> on that exact
+              call after user approval.
             </p>
             <div className="ns-agent-client-tabs" role="tablist" aria-label="Agent client">
               <button
@@ -398,8 +403,9 @@ function NodeSlideConnectionsDialogContent({
             <ShieldCheck size={15} />
             <span>
               <strong>Same locks, second front door.</strong>
-              Consent, proposals, server scope, validation receipts, version clocks, and honest
-              failures are identical whether the request starts in this UI or over MCP.
+              The UI checkbox and MCP’s per-call consent field each authorize one request. Server
+              scope, proposals, validation receipts, version clocks, and honest failures stay the
+              same.
             </span>
           </aside>
           {notice ? <output className="ns-connection-notice">{notice}</output> : null}

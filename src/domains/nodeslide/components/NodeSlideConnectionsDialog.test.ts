@@ -28,6 +28,7 @@ describe('NodeSlide coding-agent connection config', () => {
     expect(config.mcpServers.nodeslide.args).toEqual(['-y', NODESLIDE_MCP_PACKAGE]);
     expect(config.mcpServers.nodeslide.env).toEqual(env);
     expect(JSON.stringify(config)).not.toContain('parity-studio-mcp@latest');
+    expect(JSON.stringify(config).toLowerCase()).not.toContain('consent');
   });
 
   it('emits a Codex config with writes approval and explicit production routing', () => {
@@ -38,6 +39,7 @@ describe('NodeSlide coding-agent connection config', () => {
     expect(config).toContain(`PARITY_CONVEX_URL = "${NODESLIDE_CONVEX_URL}"`);
     expect(config).toContain('PARITY_DASHBOARD = "disabled"');
     expect(config).not.toContain('parity-studio-mcp@latest');
+    expect(config.toLowerCase()).not.toContain('consent');
   });
 
   it('keeps the pinned MCP tarball in Vercel deployments', () => {
@@ -57,6 +59,10 @@ describe('NodeSlide coding-agent connection config', () => {
     expect(dialogSource).toContain('api.nodeslideGoogleAuth.begin');
     expect(dialogSource).toContain('api.nodeslideGoogleAuth.disconnect');
     expect(dialogSource).toContain('drive.file scope');
+    expect(dialogSource).toContain('OAuth authorized · planning available');
+    expect(dialogSource).toContain('does not push or pull slides yet');
+    expect(dialogSource).not.toContain('Google Slides is ready');
+    expect(dialogSource).not.toContain('Sync actions continue');
     expect(dialogSource).not.toContain('accessToken');
     expect(dialogSource).not.toContain('refreshToken');
   });

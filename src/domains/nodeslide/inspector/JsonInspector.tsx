@@ -80,7 +80,7 @@ const UNSUPPORTED_FIELDS: readonly (keyof SlideElement)[] = [
  * Diff an edited element against the original and synthesize typed
  * PatchOperations. Pure + exported for tests. Identity (`id`/`kind`/`slideId`)
  * and unsupported fields are rejected rather than dropped; the returned ops still
- * pass through the server's validate → CAS → commit gate — no second write path.
+ * pass through the server's validate → CAS → proposal gate — no second write path.
  */
 export function synthesizeElementOps(
   original: SlideElement,
@@ -205,10 +205,10 @@ const codeStyle: CSSProperties = {
 
 function ElementJsonEditor({
   element,
-  onApply,
+  onPropose,
 }: {
   element: SlideElement;
-  onApply: (
+  onPropose: (
     operations: PatchOperation[],
     summary: string,
     elementId: string,
@@ -219,10 +219,10 @@ function ElementJsonEditor({
   const [text, setText] = useState(original);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [applying, setApplying] = useState(false);
+  const [proposing, setProposing] = useState(false);
   const dirty = text !== original;
 
-  const apply = async () => {
+  const propose = async () => {
     setError(null);
     setNote(null);
     let parsed: unknown;
@@ -238,30 +238,34 @@ function ElementJsonEditor({
       return;
     }
     if (result.ops.length === 0) {
-      setNote('No changes to apply.');
+      setNote('No changes to propose.');
       return;
     }
-    setApplying(true);
+    setProposing(true);
     try {
-      const accepted = await onApply(
+      const proposed = await onPropose(
         result.ops,
         `Edit ${element.name || element.kind} via JSON`,
         element.id,
         element.version,
       );
-      if (accepted === false) {
-        setError('The JSON edit was not applied. The element may have changed; review and retry.');
+      if (proposed === false) {
+        setError(
+          'The JSON candidate was not created. The element may have changed; review and retry.',
+        );
         return;
       }
       setNote(
-        `Sent ${result.ops.length} change${result.ops.length === 1 ? '' : 's'} through validation.`,
+        `Proposed ${result.ops.length} change${result.ops.length === 1 ? '' : 's'}. The deck is unchanged; review Compare and choose Accept or Reject.`,
       );
-    } catch (applyError) {
+    } catch (proposalError) {
       setError(
-        applyError instanceof Error ? applyError.message : 'The JSON edit could not be applied.',
+        proposalError instanceof Error
+          ? proposalError.message
+          : 'The JSON edit could not be proposed.',
       );
     } finally {
-      setApplying(false);
+      setProposing(false);
     }
   };
 
@@ -278,11 +282,11 @@ function ElementJsonEditor({
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <button
           type="button"
-          onClick={() => void apply()}
-          disabled={!dirty || applying}
+          onClick={() => void propose()}
+          disabled={!dirty || proposing}
           style={actionStyle}
         >
-          {applying ? 'Applying…' : 'Apply changes'}
+          {proposing ? 'Proposing…' : 'Propose changes'}
         </button>
         <button
           type="button"
@@ -383,7 +387,7 @@ export function JsonInspector({
           The canonical <code>nodeslide.slidelang/v1</code> DeckSpec — {snapshot.slides.length}{' '}
           slides · {snapshot.elements.length} elements.{' '}
           {onApplyPatch
-            ? 'Select a single element and switch to Selection to edit its JSON; changes still flow through the validated propose → accept path.'
+            ? 'Select a single element and switch to Selection to edit its JSON; changes create a validated candidate, open Compare, and require Accept or Reject.'
             : 'Read-only view.'}
         </p>
       </section>
@@ -484,7 +488,7 @@ export function JsonInspector({
       </div>
 
       {editing && selectedOne && onApplyPatch ? (
-        <ElementJsonEditor key={selectedOne.id} element={selectedOne} onApply={onApplyPatch} />
+        <ElementJsonEditor key={selectedOne.id} element={selectedOne} onPropose={onApplyPatch} />
       ) : json ? (
         <pre className="ns-json-view" style={{ ...codeStyle, margin: '0 12px 12px' }}>
           {shown}

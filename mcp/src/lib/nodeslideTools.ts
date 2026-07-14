@@ -119,6 +119,14 @@ const scopeArgs = {
   operationMode: z.enum(['copy', 'style', 'layout', 'unrestricted']).default('unrestricted'),
 };
 
+const optionalPerRequestConsent = z
+  .literal(true)
+  .optional()
+  .describe('Set to true only after the user explicitly approves this exact external task.');
+const requiredPerRequestConsent = z
+  .literal(true)
+  .describe('Required after the user explicitly approves this exact external task.');
+
 const finiteNumber = z.number().finite();
 const nonNegativeInteger = z.number().int().min(0);
 const boundingBoxSchema = z
@@ -697,12 +705,17 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
         ...scopeArgs,
         execution: z.enum(['byok', 'hosted', 'deterministic']).default('byok'),
         model: z.string().optional(),
-        consent: z.boolean().default(false),
+        consent: optionalPerRequestConsent,
         idempotencyKey: z.string().max(160).optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
+      if (args.execution === 'byok') {
+        requireExplicitConsent(args.consent, 'local BYOK model egress');
+      } else if (args.execution === 'hosted') {
+        requireExplicitConsent(args.consent, 'hosted model egress');
+      }
       const workspace = await getWorkspace(convexCall, args.deckId, args.ownerAccessKey);
       const key = resolveOwnerKey(args.deckId, args.ownerAccessKey);
       const scope = resolveScope(workspace, args);
@@ -710,7 +723,6 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
       const beforeVersion = workspace.deck.version;
       let result: unknown;
       if (args.execution === 'byok') {
-        requireExplicitConsent(args.consent, 'local BYOK model egress');
         const model = args.model ?? DEFAULT_BYOK_MODEL;
         requireLocalKeys([model]);
         const planned = await planLocalByokEdit({
@@ -738,9 +750,6 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
           ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
         });
       } else {
-        if (args.execution === 'hosted' && !args.consent) {
-          requireExplicitConsent(args.consent, 'hosted model egress');
-        }
         result = await convexCall('action', 'nodeslideAgent:proposeEdit', {
           deckId: args.deckId,
           ownerAccessKey: key,
@@ -780,7 +789,7 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
         baseSlideVersions: versionClockSchema,
         baseElementVersions: versionClockSchema,
         idempotencyKey: z.string().trim().min(1).max(160),
-        consent: z.boolean().default(false),
+        consent: requiredPerRequestConsent,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -884,7 +893,7 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
         ...ownerArgs,
         query: z.string().min(1).max(2000),
         ...scopeArgs,
-        consent: z.boolean().default(false),
+        consent: requiredPerRequestConsent,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -933,12 +942,12 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
         accessCode: z.string().optional(),
         execution: z.enum(['hosted', 'deterministic']).default('hosted'),
         model: z.string().default('z-ai/glm-5.2'),
-        consent: z.boolean().default(false),
+        consent: optionalPerRequestConsent,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
-      if (args.execution === 'hosted' && !args.consent) {
+      if (args.execution === 'hosted') {
         requireExplicitConsent(args.consent, 'hosted model egress');
       }
       const result = (await convexCall('action', 'nodeslideAgent:createDeckFromBrief', {
@@ -1276,8 +1285,8 @@ export function unappliedProposalReceipt(result: unknown, beforeVersion: number)
   };
 }
 
-export function requireExplicitConsent(consent: boolean, purpose: string): void {
-  if (!consent) throw new Error(`Explicit consent is required before ${purpose}.`);
+export function requireExplicitConsent(consent: unknown, purpose: string): void {
+  if (consent !== true) throw new Error(`Explicit consent is required before ${purpose}.`);
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> | null {

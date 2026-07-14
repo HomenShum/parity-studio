@@ -5,6 +5,9 @@ NodeSlide’s MCP server is a second front door to the same governed actions as 
 ## What stays invariant
 
 - External model and web egress require explicit consent on every task.
+- Client config, environment variables, saved keys, model selection, and tool defaults never grant
+  consent. External calls accept only a literal `consent: true` supplied for that exact call after
+  user approval; deterministic calls omit it.
 - `nodeslide.propose_edit` returns an unapplied proposal and candidate receipt. It verifies the deck version did not change.
 - `nodeslide.accept_proposal` is a separate review action and revalidates candidate digest, scope, locks, and version clocks.
 - Owner authority and quota are enforced in Convex, not trusted to the MCP client.
@@ -83,7 +86,9 @@ not part of this source port.
 - OpenAI direct: model such as `openai/gpt-5.4` plus `OPENAI_API_KEY`.
 - OpenAI-compatible/local endpoint: set `NODESLIDE_BYOK_BASE_URL`, an OpenAI model id, and the endpoint’s key if required.
 
-Key presence never grants consent. The MCP call must still set `consent: true` for that single external task.
+Key presence never grants consent. Neither copied config nor a prior call stores consent. After the
+user approves the exact external task, that MCP call must set literal `consent: true`; the next task
+starts unconsented. Deterministic calls do not need or carry consent.
 
 ## v0.5.0 source tools
 
@@ -110,10 +115,11 @@ Key presence never grants consent. The MCP call must still set `consent: true` f
 ```text
 1. Call nodeslide.get_deck with deckId.
 2. Call nodeslide.list_slides and choose slide_1.
-3. Call nodeslide.propose_edit with execution="byok", scope="slide",
+3. Show the user the provider/model and the exact task context, then obtain approval for this call.
+4. Call nodeslide.propose_edit with execution="byok", scope="slide",
    slideId="slide_1", consent=true, and an explicit instruction.
-4. Inspect candidateReceipt and nodeslide.get_trace.
-5. Stop for human review. Do not call accept_proposal unless the user explicitly approves.
+5. Inspect candidateReceipt and nodeslide.get_trace.
+6. Stop for human review. Do not call accept_proposal unless the user explicitly approves.
 ```
 
 The proposal response includes `applied: false` and identical before/after deck versions. A mismatch fails closed as a governance violation.

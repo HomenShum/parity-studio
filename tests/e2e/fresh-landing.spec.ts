@@ -19,18 +19,25 @@ test.describe('canonical fresh landing', () => {
     await expect(prompt).toHaveValue('Build a concise quarterly review');
 
     const model = page.getByTestId('landing-model-select');
-    await model.selectOption('deterministic');
+    const recommendedLabel = (await model.innerText()).trim();
+    await model.click();
+    const modelDialog = page.getByRole('dialog', { name: 'Generation model' });
+    await modelDialog.getByText('Deterministic', { exact: true }).click();
     await expect(page.locator('.ns-landing-privacy')).toContainText('No external model egress');
 
-    const externalValue = await model
-      .locator('option:not([value="deterministic"])')
-      .first()
-      .getAttribute('value');
-    expect(externalValue).toBeTruthy();
-    await model.selectOption(externalValue ?? '');
+    await model.click();
+    await modelDialog
+      .getByLabel('Recommended')
+      .getByText(recommendedLabel, { exact: true })
+      .click();
     await expect(page.locator('.ns-landing-privacy')).toContainText(
-      'route, tokens, and cost are recorded in Trace',
+      'Check consent for this request before creation',
     );
+    const consent = page.getByTestId('landing-provider-consent');
+    await expect(consent).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeDisabled();
+    await consent.check();
+    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
   });
 
   test('attaches and removes a local data file before creation', async ({ page }) => {
@@ -73,6 +80,38 @@ test.describe('canonical fresh landing', () => {
       );
     expect(unnamedButtons).toEqual([]);
     await expectNoDocumentOverflow(page);
+  });
+
+  test('keeps starter and sample actions at accessible touch sizes and spacing', async ({
+    page,
+  }) => {
+    await openFreshLanding(page);
+
+    const starters = page.getByLabel('Presentation starters');
+    const starterButtons = starters.getByRole('button');
+    const starterHeights = await starterButtons.evaluateAll((buttons) =>
+      buttons.map((button) => button.getBoundingClientRect().height),
+    );
+    expect(starterHeights.length).toBeGreaterThan(0);
+    expect(Math.min(...starterHeights)).toBeGreaterThanOrEqual(24);
+
+    const sample = page.getByRole('button', { name: 'Explore the editable sample workspace' });
+    const sampleHeight = await sample.evaluate((button) => button.getBoundingClientRect().height);
+    expect(sampleHeight).toBeGreaterThanOrEqual(24);
+
+    const starterGap = await starters.evaluate((container) => {
+      const style = getComputedStyle(container);
+      return Math.min(Number.parseFloat(style.columnGap), Number.parseFloat(style.rowGap));
+    });
+    expect(starterGap).toBeGreaterThanOrEqual(8);
+
+    const sampleGap = await page.evaluate(() => {
+      const starter = document.querySelector('.ns-landing-starters');
+      const sampleButton = document.querySelector('.ns-landing-sample');
+      if (!(starter instanceof HTMLElement) || !(sampleButton instanceof HTMLElement)) return -1;
+      return sampleButton.getBoundingClientRect().top - starter.getBoundingClientRect().bottom;
+    });
+    expect(sampleGap).toBeGreaterThanOrEqual(8);
   });
 });
 
