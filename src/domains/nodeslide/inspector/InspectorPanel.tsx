@@ -132,6 +132,13 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
+  onApplyJsonPatch?: (
+    operations: PatchOperation[],
+    summary: string,
+    elementId: string,
+    baseElementVersion: number,
+  ) => boolean | undefined | Promise<boolean | undefined>;
+  onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
   onSetCommentStatus: (commentId: string, status: 'open' | 'resolved') => void;
@@ -212,6 +219,8 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
+  onApplyJsonPatch,
+  onImportSourceFile,
   onAddComment,
   onReply,
   onSetCommentStatus,
@@ -472,7 +481,14 @@ export function InspectorPanel<CommandId extends string = string>({
             slide={slide}
             selectedElements={selectedElements}
             patches={workspace.patches}
-            onApplyPatch={onApplyDesignPatch}
+            onApplyPatch={
+              onApplyJsonPatch ??
+              ((operations, summary) => {
+                onApplyDesignPatch(operations, summary);
+                return undefined;
+              })
+            }
+            {...(onImportSourceFile ? { onImportSourceFile } : {})}
           />
         ) : null}
         {activeTab === 'trace' ? (

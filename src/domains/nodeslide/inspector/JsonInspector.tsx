@@ -1,3 +1,4 @@
+import { FileJson2, FileUp } from 'lucide-react';
 import { type CSSProperties, useMemo, useState } from 'react';
 import type {
   DeckPatch,
@@ -7,6 +8,11 @@ import type {
   SlideElement,
 } from '../../../../shared/nodeslide';
 import { downloadDeckJson } from '../slidelang/download';
+import {
+  JSON_EDITOR_CHARACTER_LIMIT,
+  boundedJsonPreview,
+  latestDeckPatch,
+} from '../slidelang/jsonEdit';
 
 export type DeckJsonMode = 'deck' | 'slide' | 'selection' | 'patch';
 
@@ -19,7 +25,8 @@ export interface DeckJsonContext {
 
 /**
  * The value serialized for each view mode. Pure so it can be unit-tested and so
- * the rendered JSON, the Copy payload, and the Download payload never diverge.
+ * the rendered JSON and Copy payload never diverge. Deck downloads use the
+ * validated, versioned NodeSlide envelope from `downloadDeckJson`.
  * Returns `null` for the empty states (nothing selected / no proposals yet).
  */
 export function deckJsonView(mode: DeckJsonMode, ctx: DeckJsonContext): unknown {
@@ -34,7 +41,7 @@ export function deckJsonView(mode: DeckJsonMode, ctx: DeckJsonContext): unknown 
     case 'selection':
       return ctx.selectedElements.length > 0 ? [...ctx.selectedElements] : null;
     case 'patch':
-      return ctx.patches.at(-1) ?? null;
+      return latestDeckPatch(ctx.patches);
   }
 }
 
@@ -201,15 +208,21 @@ function ElementJsonEditor({
   onApply,
 }: {
   element: SlideElement;
-  onApply: (operations: PatchOperation[], summary: string) => void;
+  onApply: (
+    operations: PatchOperation[],
+    summary: string,
+    elementId: string,
+    baseElementVersion: number,
+  ) => boolean | undefined | Promise<boolean | undefined>;
 }) {
   const original = useMemo(() => serializeDeckJson(element), [element]);
   const [text, setText] = useState(original);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
   const dirty = text !== original;
 
-  const apply = () => {
+  const apply = async () => {
     setError(null);
     setNote(null);
     let parsed: unknown;
@@ -228,10 +241,28 @@ function ElementJsonEditor({
       setNote('No changes to apply.');
       return;
     }
-    onApply(result.ops, `Edit ${element.name || element.kind} via JSON`);
-    setNote(
-      `Sent ${result.ops.length} change${result.ops.length === 1 ? '' : 's'} through validation.`,
-    );
+    setApplying(true);
+    try {
+      const accepted = await onApply(
+        result.ops,
+        `Edit ${element.name || element.kind} via JSON`,
+        element.id,
+        element.version,
+      );
+      if (accepted === false) {
+        setError('The JSON edit was not applied. The element may have changed; review and retry.');
+        return;
+      }
+      setNote(
+        `Sent ${result.ops.length} change${result.ops.length === 1 ? '' : 's'} through validation.`,
+      );
+    } catch (applyError) {
+      setError(
+        applyError instanceof Error ? applyError.message : 'The JSON edit could not be applied.',
+      );
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -239,13 +270,19 @@ function ElementJsonEditor({
       <textarea
         value={text}
         onChange={(event) => setText(event.target.value)}
+        maxLength={JSON_EDITOR_CHARACTER_LIMIT}
         spellCheck={false}
         aria-label={`JSON for ${element.name || element.id}`}
         style={{ ...codeStyle, width: '100%', minHeight: 220, resize: 'vertical' }}
       />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <button type="button" onClick={apply} disabled={!dirty} style={actionStyle}>
-          Apply changes
+        <button
+          type="button"
+          onClick={() => void apply()}
+          disabled={!dirty || applying}
+          style={actionStyle}
+        >
+          {applying ? 'Applying…' : 'Apply changes'}
         </button>
         <button
           type="button"
@@ -277,7 +314,13 @@ export interface JsonInspectorProps {
   slide: Slide;
   selectedElements: readonly SlideElement[];
   patches: readonly DeckPatch[];
-  onApplyPatch?: (operations: PatchOperation[], summary: string) => void;
+  onApplyPatch?: (
+    operations: PatchOperation[],
+    summary: string,
+    elementId: string,
+    baseElementVersion: number,
+  ) => boolean | undefined | Promise<boolean | undefined>;
+  onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
 }
 
 export function JsonInspector({
@@ -286,18 +329,22 @@ export function JsonInspector({
   selectedElements,
   patches,
   onApplyPatch,
+  onImportSourceFile,
 }: JsonInspectorProps) {
   const [mode, setMode] = useState<DeckJsonMode>('deck');
+  const [importing, setImporting] = useState<'json' | 'pptx' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const view = useMemo(
     () => deckJsonView(mode, { snapshot, slide, selectedElements, patches }),
     [mode, snapshot, slide, selectedElements, patches],
   );
   const json = useMemo(() => (view === null ? '' : serializeDeckJson(view)), [view]);
-  const shown =
-    json.length > RENDER_CAP
-      ? `${json.slice(0, RENDER_CAP)}\n… (${json.length - RENDER_CAP} more characters — use Download for the full file)`
-      : json;
+  const shown = useMemo(
+    () => (view === null ? '' : boundedJsonPreview(view, RENDER_CAP).text.trimEnd()),
+    [view],
+  );
 
   const selectedOne = selectedElements.length === 1 ? (selectedElements[0] ?? null) : null;
   const editing = mode === 'selection' && onApplyPatch !== undefined && selectedOne !== null;
@@ -305,6 +352,20 @@ export function JsonInspector({
   const copy = () => {
     if (json && typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(json);
+    }
+  };
+
+  const importSourceFile = async (file: File, kind: 'json' | 'pptx') => {
+    if (!onImportSourceFile || importing) return;
+    setActionError(null);
+    setActionNotice(null);
+    setImporting(kind);
+    try {
+      setActionNotice(await onImportSourceFile(file, kind));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The source file could not be read.');
+    } finally {
+      setImporting(null);
     }
   };
 
@@ -327,6 +388,65 @@ export function JsonInspector({
         </p>
       </section>
 
+      {onImportSourceFile ? (
+        <section className="ns-inspector-section" aria-labelledby="ns-source-import-title">
+          <div className="ns-section-title-row">
+            <div>
+              <span className="ns-eyebrow">Review before applying</span>
+              <h3 id="ns-source-import-title">Import an external deck</h3>
+            </div>
+          </div>
+          <p>
+            Re-open validated NodeSlide JSON or convert bounded PPTX primitives into an unapplied
+            proposal. PPTX review reports native, approximated, and dropped objects.
+          </p>
+          <div style={rowStyle}>
+            <label
+              style={{ ...actionStyle, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              aria-disabled={Boolean(importing)}
+            >
+              <FileJson2 size={14} aria-hidden="true" />
+              {importing === 'json' ? 'Reading JSON…' : 'Import Deck JSON'}
+              <input
+                type="file"
+                accept="application/json,.json"
+                disabled={Boolean(importing)}
+                style={{ display: 'none' }}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void importSourceFile(file, 'json');
+                }}
+              />
+            </label>
+            <label
+              style={{ ...actionStyle, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              aria-disabled={Boolean(importing)}
+            >
+              <FileUp size={14} aria-hidden="true" />
+              {importing === 'pptx' ? 'Reading PPTX…' : 'Import PPTX'}
+              <input
+                type="file"
+                accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
+                disabled={Boolean(importing)}
+                style={{ display: 'none' }}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void importSourceFile(file, 'pptx');
+                }}
+              />
+            </label>
+          </div>
+          {actionError ? (
+            <p role="alert" style={{ color: 'var(--ns-danger, #b42318)' }}>
+              {actionError}
+            </p>
+          ) : null}
+          {actionNotice ? <output aria-live="polite">{actionNotice}</output> : null}
+        </section>
+      ) : null}
+
       <div style={rowStyle} role="tablist" aria-label="JSON view">
         {MODES.map((option) => (
           <button
@@ -346,7 +466,19 @@ export function JsonInspector({
         <button type="button" onClick={copy} disabled={!json} style={actionStyle}>
           Copy
         </button>
-        <button type="button" onClick={() => downloadDeckJson(snapshot)} style={actionStyle}>
+        <button
+          type="button"
+          onClick={() => {
+            setActionError(null);
+            try {
+              downloadDeckJson(snapshot);
+              setActionNotice('Validated NodeSlide JSON download prepared.');
+            } catch (error) {
+              setActionError(error instanceof Error ? error.message : 'Deck JSON export failed.');
+            }
+          }}
+          style={actionStyle}
+        >
           Download deck.json
         </button>
       </div>

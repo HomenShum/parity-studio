@@ -8,6 +8,48 @@ import { buildFigmaBridgeFiles } from './lib/figmaBridge';
 
 const http = httpRouter();
 
+http.route({
+  path: '/api/nodeslide/google/oauth/callback',
+  method: 'GET',
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const state = url.searchParams.get('state')?.trim();
+    if (!state || state.length > 256) {
+      return new Response('This Google Slides connection link is invalid or expired.', {
+        status: 400,
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+    const code = url.searchParams.get('code')?.trim();
+    const error = url.searchParams.get('error')?.trim();
+    if ((code?.length ?? 0) > 4096 || (error?.length ?? 0) > 256) {
+      return new Response('This Google Slides connection response is invalid.', {
+        status: 400,
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+    const { redirectTo } = await ctx.runAction(internal.nodeslideGoogleAuth.complete, {
+      state,
+      ...(code ? { code } : {}),
+      ...(error ? { error } : {}),
+    });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'cache-control': 'no-store',
+        location: redirectTo,
+        'referrer-policy': 'no-referrer',
+      },
+    });
+  }),
+});
+
 /**
  * GET /api/runs/:id/{zip|html|markdown|figma}
  *

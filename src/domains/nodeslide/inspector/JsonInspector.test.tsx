@@ -161,6 +161,26 @@ describe('JsonInspector render', () => {
     expect(html).toContain('deck-1');
     expect(html).toContain('&quot;schemaVersion&quot;');
   });
+
+  it('offers validated JSON and bounded PPTX imports as unapplied proposals', () => {
+    const snap = snapshot();
+    const [slide] = snap.slides;
+    if (!slide) throw new Error('fixture must have a slide');
+    const html = renderToStaticMarkup(
+      <JsonInspector
+        snapshot={snap}
+        slide={slide}
+        selectedElements={[]}
+        patches={[]}
+        onImportSourceFile={async () => 'Import proposed.'}
+      />,
+    );
+
+    expect(html).toContain('Import Deck JSON');
+    expect(html).toContain('Import PPTX');
+    expect(html).toContain('unapplied proposal');
+    expect(html).toContain('native, approximated, and dropped');
+  });
 });
 
 describe('synthesizeElementOps', () => {

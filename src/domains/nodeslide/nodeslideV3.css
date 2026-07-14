@@ -5070,6 +5070,63 @@
   padding: 15px;
 }
 
+.nodeslide-studio .ns-google-connection-section {
+  grid-column: 1 / -1;
+}
+
+.nodeslide-studio .ns-google-connection-card {
+  align-items: center;
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line);
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.nodeslide-studio .ns-google-connection-card > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-google-connection-card small {
+  color: var(--ns-faint);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.nodeslide-studio .ns-google-connection-card button {
+  align-items: center;
+  background: var(--ns-paper);
+  border: 1px solid var(--ns-line-d);
+  border-radius: 8px;
+  color: var(--ns-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 650;
+  gap: 5px;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.nodeslide-studio .ns-google-connection-card button.is-danger {
+  color: var(--ns-danger);
+}
+
+.nodeslide-studio .ns-google-connection-card .ns-spin {
+  animation: ns-google-connection-spin 0.8s linear infinite;
+}
+
+@keyframes ns-google-connection-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .nodeslide-studio .ns-connection-heading {
   align-items: center;
   display: flex;

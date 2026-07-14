@@ -3,6 +3,7 @@
 import { ConvexError, v } from 'convex/values';
 import {
   type DeckSnapshot,
+  NODESLIDE_EXTERNAL_AGENT_PATCH_CONSENT,
   NODESLIDE_LOCAL_BYOK_EDIT_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
   type NodeSlideAgentMemory,
@@ -572,6 +573,7 @@ export const proposeExternalAgentEdit = action({
     summary: v.string(),
     provider: v.string(),
     model: v.string(),
+    submissionKind: v.optional(v.union(v.literal('local_byok'), v.literal('external_agent'))),
     providerConsent: v.string(),
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
@@ -579,10 +581,17 @@ export const proposeExternalAgentEdit = action({
     idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    if (args.providerConsent !== NODESLIDE_LOCAL_BYOK_EDIT_CONSENT) {
+    const submissionKind = args.submissionKind ?? 'local_byok';
+    const expectedConsent =
+      submissionKind === 'external_agent'
+        ? NODESLIDE_EXTERNAL_AGENT_PATCH_CONSENT
+        : NODESLIDE_LOCAL_BYOK_EDIT_CONSENT;
+    if (args.providerConsent !== expectedConsent) {
       throw publicAgentError(
         'invalid_request',
-        'Explicit per-request consent is required before a local BYOK model may receive NodeSlide context.',
+        submissionKind === 'external_agent'
+          ? 'Explicit per-request consent is required before an external agent-authored patch may be submitted to NodeSlide.'
+          : 'Explicit per-request consent is required before a local BYOK model may receive NodeSlide context.',
       );
     }
     const instruction = requiredCreateText(args.instruction, 'instruction', 4000, 12_000);
@@ -592,14 +601,14 @@ export const proposeExternalAgentEdit = action({
     if (args.operations.length === 0 || args.operations.length > 8) {
       throw publicAgentError(
         'invalid_request',
-        'A local BYOK proposal must contain 1 to 8 operations.',
+        `${submissionKind === 'external_agent' ? 'An external agent' : 'A local BYOK'} proposal must contain 1 to 8 operations.`,
       );
     }
     for (const value of [args.costMicroUsd, args.inputTokens, args.outputTokens]) {
       if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
         throw publicAgentError(
           'invalid_request',
-          'Local BYOK metering must be finite and non-negative.',
+          `${submissionKind === 'external_agent' ? 'External-agent' : 'Local BYOK'} metering must be finite and non-negative.`,
         );
       }
     }
@@ -658,7 +667,7 @@ export const proposeExternalAgentEdit = action({
         ownerAccessKey: args.ownerAccessKey,
         runId,
         status: 'validating',
-        message: `Validating ${args.operations.length} local-agent operation${args.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
+        message: `Validating ${args.operations.length} ${submissionKind === 'external_agent' ? 'external-agent' : 'local-agent'} operation${args.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
       });
@@ -679,17 +688,35 @@ export const proposeExternalAgentEdit = action({
         summary,
         instruction,
         shadowComparisonRequested: false,
-        traceSummary: `${provider} ${model} proposed ${args.operations.length} scoped operation${args.operations.length === 1 ? '' : 's'} through local BYOK for review.`,
-        traceContext: [
-          'Provider credential stayed in the local MCP process',
-          'Exact local BYOK consent attached for this request',
-          `Base deck version: ${args.baseDeckVersion}`,
-        ],
-        toolCalls: [
-          `Received a bounded candidate from ${provider} ${model}`,
-          'Revalidated scope, clocks, locks, provenance, and layout server-side',
-          'Persisted an unapplied proposal and trace receipt atomically',
-        ],
+        traceSummary:
+          submissionKind === 'external_agent'
+            ? `${provider} ${model} submitted ${args.operations.length} scoped operation${args.operations.length === 1 ? '' : 's'} for review. NodeSlide made no model request.`
+            : `${provider} ${model} proposed ${args.operations.length} scoped operation${args.operations.length === 1 ? '' : 's'} through local BYOK for review.`,
+        traceContext:
+          submissionKind === 'external_agent'
+            ? [
+                'Operations were authored outside NodeSlide and submitted by an authorized external agent client',
+                'NodeSlide made no model request and records no provider token or cost claim',
+                'Exact external-agent patch consent attached for this request',
+                `Base deck version: ${args.baseDeckVersion}`,
+              ]
+            : [
+                'Provider credential stayed in the local MCP process',
+                'Exact local BYOK consent attached for this request',
+                `Base deck version: ${args.baseDeckVersion}`,
+              ],
+        toolCalls:
+          submissionKind === 'external_agent'
+            ? [
+                `Received exact typed operations from external client ${provider} ${model}`,
+                'Revalidated scope, clocks, locks, provenance, and layout server-side',
+                'Persisted an unapplied proposal and trace receipt atomically',
+              ]
+            : [
+                `Received a bounded candidate from ${provider} ${model}`,
+                'Revalidated scope, clocks, locks, provenance, and layout server-side',
+                'Persisted an unapplied proposal and trace receipt atomically',
+              ],
         provider,
         model,
         ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),

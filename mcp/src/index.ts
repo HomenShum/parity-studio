@@ -110,7 +110,7 @@ async function dashboardForTool(): Promise<string | null> {
   return bootDashboardUrl;
 }
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const PARITY_AGENT_RULES = `# Parity Studio agent rules
 

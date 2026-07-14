@@ -8,6 +8,11 @@ import {
   buildNodeSlideMcpJson,
 } from './NodeSlideConnectionsDialog';
 
+const dialogSource = readFileSync(
+  new URL('./NodeSlideConnectionsDialog.tsx', import.meta.url),
+  'utf8',
+);
+
 const env = {
   PARITY_CONVEX_URL: NODESLIDE_CONVEX_URL,
   PARITY_DASHBOARD: 'disabled',
@@ -45,5 +50,14 @@ describe('NodeSlide coding-agent connection config', () => {
 
     expect(archiveIgnore).toBeGreaterThanOrEqual(0);
     expect(packageInclude).toBeGreaterThan(archiveIgnore);
+  });
+
+  it('wires per-deck Google OAuth without storing credentials in the browser', () => {
+    expect(dialogSource).toContain('api.nodeslideGoogleAuth.getStatus');
+    expect(dialogSource).toContain('api.nodeslideGoogleAuth.begin');
+    expect(dialogSource).toContain('api.nodeslideGoogleAuth.disconnect');
+    expect(dialogSource).toContain('drive.file scope');
+    expect(dialogSource).not.toContain('accessToken');
+    expect(dialogSource).not.toContain('refreshToken');
   });
 });

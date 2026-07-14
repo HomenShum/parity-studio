@@ -1,6 +1,6 @@
 {
   "name": "parity-studio-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": false,
   "type": "module",
   "description": "MCP server for Parity Studio and NodeSlide. Gives coding agents governed deck reads, reviewable edits, traces, and design-to-code workflows.",
