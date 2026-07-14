@@ -45,3 +45,10 @@ export function downloadDeckHtml(snapshot: DeckSnapshot, fileName?: string): voi
     fileName ?? `${safeFileStem(snapshot.deck.title)}.html`,
   );
 }
+
+export function downloadDeckJson(snapshot: DeckSnapshot, fileName?: string): void {
+  downloadBlob(
+    new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json;charset=utf-8' }),
+    fileName ?? `${safeFileStem(snapshot.deck.title)}.json`,
+  );
+}

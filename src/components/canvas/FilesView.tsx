@@ -293,7 +293,7 @@ export function FilesView({
             : null}
         </FileGroup>
 
-        <FileGroup label="Source">
+        <FileGroup label="Original">
           <button
             type="button"
             onClick={hasSourceImage ? onPreviewSourceImage : undefined}

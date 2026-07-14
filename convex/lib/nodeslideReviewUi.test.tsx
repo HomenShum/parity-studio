@@ -354,7 +354,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(markup).not.toContain('Resolved review request');
   });
 
-  it('exposes slide and selection context chips and all six collapsed tabs', () => {
+  it('exposes slide and selection context chips and all seven collapsed tabs', () => {
     const snapshot = fixture();
     const slide = requiredSlide(snapshot);
     const element = snapshot.elements.find((candidate) => candidate.slideId === slide.id);
@@ -365,14 +365,14 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'trace']) {
+    for (const tab of ['design', 'comments', 'versions', 'data', 'json', 'trace']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
     const collapsed = renderPanel(workspace, slide, true, []);
-    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Data', 'Trace']) {
+    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'JSON', 'Trace']) {
       expect(collapsed).toContain(`aria-label="Open ${tab}"`);
     }
   });
