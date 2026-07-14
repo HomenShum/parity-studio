@@ -1,49 +1,18 @@
+@layer nodeslide.tokens, nodeslide.base, nodeslide.editor, nodeslide.inspector, nodeslide.contract;
+
 /* NodeSlide Editor v3 visual contract.
  *
  * This file intentionally loads after the legacy/v2 shell styles. It keeps the
  * production editor's semantics and authoritative callbacks while aligning the
  * rendered workspace with the standalone v3 interface supplied for launch.
  */
+/* biome-ignore format: Preserve the visual contract while assigning explicit cascade ownership. */
+@layer nodeslide.contract {
 
 .nodeslide-studio {
-  --ns-bg: #fafafa;
-  --ns-surface: #fff;
-  --ns-raised: #f3f4f6;
-  --ns-canvas: #eff1f3;
-  --ns-ink: #111827;
-  --ns-ink2: #4b5563;
-  --ns-muted: var(--ns-ink2);
-  --ns-faint: #667085;
-  --ns-hover: rgb(15 23 42 / 5%);
-  --ns-line-a: rgb(15 23 42 / 6%);
-  --ns-line-b: rgb(15 23 42 / 8%);
-  --ns-line-c: rgb(15 23 42 / 10%);
-  --ns-line-d: rgb(15 23 42 / 12%);
-  --ns-line-e: rgb(15 23 42 / 18%);
-  --ns-line-f: rgb(15 23 42 / 25%);
-  --ns-line: var(--ns-line-c);
-  --ns-line-soft: var(--ns-line-b);
-  --ns-paper: var(--ns-surface);
-  --ns-panel: var(--ns-raised);
-  --ns-glass: rgb(255 255 255 / 60%);
-  --ns-topbar: rgb(250 248 245 / 88%);
-  --ns-chip: rgb(255 255 255 / 74%);
-  --ns-accent: #d97757;
-  --ns-accent-dark: #a8583f;
-  --ns-accent-soft: rgb(217 119 87 / 10%);
-  --ns-positive: #047857;
-  --ns-warning: #b45309;
-  --ns-danger: #dc2626;
-  --ns-collaboration: #5e6ad2;
-  --ns-shadow-sm: 0 1px 3px rgb(15 23 42 / 8%);
-  --ns-shadow-lg: 0 12px 32px rgb(15 23 42 / 12%);
-  --ns-nav-width: 300px;
-  --ns-inspector-width: 340px;
-  --ns-chrome-min-font: 11px;
   background: radial-gradient(circle at 8% 0%, rgb(217 119 87 / 5%), transparent 30%),
     radial-gradient(circle at 92% 0%, rgb(94 106 210 / 5%), transparent 32%), var(--ns-bg);
   color: var(--ns-ink);
-  color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, Inter, Manrope, system-ui, sans-serif;
   grid-template-rows: 52px minmax(0, 1fr);
 }
@@ -520,33 +489,6 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-.nodeslide-studio[data-ns-theme="dark"] {
-  --ns-bg: #0c0e11;
-  --ns-surface: #14181d;
-  --ns-raised: #1e242b;
-  --ns-canvas: #0f1216;
-  --ns-ink: #f3f4f6;
-  --ns-ink2: #a7b0bc;
-  --ns-muted: var(--ns-ink2);
-  --ns-faint: #9aa5b1;
-  --ns-accent-dark: #df8e70;
-  --ns-hover: rgb(255 255 255 / 6%);
-  --ns-line-a: rgb(255 255 255 / 6%);
-  --ns-line-b: rgb(255 255 255 / 8%);
-  --ns-line-c: rgb(255 255 255 / 11%);
-  --ns-line-d: rgb(255 255 255 / 14%);
-  --ns-line-e: rgb(255 255 255 / 16%);
-  --ns-line-f: rgb(255 255 255 / 22%);
-  --ns-line: var(--ns-line-c);
-  --ns-line-soft: var(--ns-line-b);
-  --ns-glass: rgb(17 20 24 / 60%);
-  --ns-topbar: rgb(13 16 20 / 82%);
-  --ns-chip: rgb(255 255 255 / 6%);
-  --ns-shadow-sm: 0 1px 3px rgb(0 0 0 / 28%);
-  --ns-shadow-lg: 0 12px 32px rgb(0 0 0 / 34%);
-  color-scheme: dark;
 }
 
 .nodeslide-studio :is(button, input, textarea, select) {
@@ -1666,10 +1608,33 @@
   border-left: 1px solid var(--ns-line-b);
   container-name: nodeslide-inspector;
   container-type: inline-size;
-  grid-template-rows: 38px 31px minmax(0, 1fr) 30px;
+  grid-template-rows: minmax(0, 1fr);
+  max-width: 100%;
   min-width: 0;
-  overflow-x: clip;
+  overflow: clip;
   width: var(--ns-inspector-width) !important;
+}
+
+.nodeslide-studio .ns-inspector-expanded-shell {
+  display: grid;
+  grid-template-rows: 40px 34px minmax(0, 1fr) 32px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-inspector-collapsed-shell {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-inspector-collapsed-tabs button.is-active {
+  background: var(--ns-accent-soft);
+  color: var(--ns-accent-dark);
 }
 
 .nodeslide-studio .ns-inspector-resizer {
@@ -1688,8 +1653,8 @@
   border-top: 1px solid var(--ns-line-b);
   color: var(--ns-faint);
   display: flex;
-  font-size: 9.5px;
-  min-height: 30px;
+  font-size: var(--ns-font-caption);
+  min-height: 32px;
   padding: 0 11px;
 }
 
@@ -1724,7 +1689,7 @@
   border: 0;
   color: var(--ns-faint);
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-size: var(--ns-font-caption);
   max-width: 126px;
   overflow: hidden;
   padding: 0;
@@ -1741,9 +1706,9 @@
 }
 
 .nodeslide-studio .ns-inspector-topbar > .ns-icon-button {
-  height: 24px;
+  height: var(--ns-control-min-height);
   margin-left: auto;
-  width: 24px;
+  width: var(--ns-control-min-height);
 }
 
 .nodeslide-studio .ns-inspector-tabs {
@@ -1759,9 +1724,10 @@
   border-bottom-width: 2px;
   color: var(--ns-ink2);
   flex: none;
-  font-size: 11.5px;
+  font-size: var(--ns-font-control);
   font-weight: 500;
   gap: 0;
+  min-height: 34px;
   padding: 8px 0 7px;
 }
 
@@ -1777,6 +1743,15 @@
 
 .nodeslide-studio .ns-inspector-content {
   color: var(--ns-ink);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-inspector-tabpanel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1810,6 +1785,11 @@
 .nodeslide-studio :is(.ns-ai-v3-review-scroll, .ns-ai-v3-composer, .ns-ai-v3-controls-body) {
   overflow-x: hidden;
   overscroll-behavior-x: none;
+}
+
+.nodeslide-studio
+  :is(.ns-inspector-scroll, .ns-ai-v3-review-scroll, .ns-ai-v3-controls-body) {
+  overscroll-behavior-y: contain;
 }
 
 .nodeslide-studio
@@ -4241,7 +4221,41 @@
   background: var(--ns-raised);
 }
 
+.nodeslide-studio [hidden] {
+  display: none !important;
+}
+
+.nodeslide-studio .ns-inspector :is(button, input, select, textarea) {
+  font-size: max(var(--ns-font-control), 1em);
+}
+
+.nodeslide-studio .ns-inspector :is(button, input, select) {
+  min-block-size: var(--ns-control-min-height);
+}
+
+.nodeslide-studio .ns-overlay-backdrop {
+  background: var(--ns-overlay-scrim);
+  backdrop-filter: blur(var(--ns-overlay-blur));
+  inset: 52px 0 0;
+  position: fixed;
+  z-index: 70;
+}
+
+.nodeslide-studio .ns-inspector-reopen {
+  display: none;
+}
+
 /* Responsive contract from the v3 standalone. */
+
+@media (max-width: 1099px) {
+  .nodeslide-studio .ns-inspector-reopen {
+    display: inline-flex;
+  }
+
+  .nodeslide-studio .ns-inspector-resizer {
+    display: none;
+  }
+}
 
 @media (min-width: 1100px) {
   .nodeslide-studio {
@@ -4277,6 +4291,14 @@
   .nodeslide-studio .ns-inspector.is-collapsed {
     display: flex;
     width: 48px !important;
+  }
+
+  .nodeslide-studio .ns-overlay-backdrop {
+    display: none;
+  }
+
+  .nodeslide-studio .ns-rail-toggle {
+    display: none;
   }
 }
 
@@ -4347,14 +4369,16 @@
     grid-row: 1;
   }
 
-  .nodeslide-studio .ns-inspector:not(.is-collapsed) {
+  .nodeslide-studio .ns-inspector.is-drawer-open {
     bottom: 0;
-    box-shadow: var(--ns-shadow-lg);
-    position: absolute;
+    box-shadow: var(--ns-overlay-shadow);
+    contain: layout paint;
+    max-width: calc(100vw - 48px);
+    position: fixed;
     right: 0;
-    top: 0;
-    width: 420px !important;
-    z-index: 50;
+    top: 52px;
+    width: clamp(360px, 46vw, 480px) !important;
+    z-index: 80;
   }
 
   .nodeslide-studio .ns-inspector.is-collapsed {
@@ -4367,12 +4391,6 @@
 
   .nodeslide-studio .ns-toolbar .ns-navigator-toggle {
     display: inline-flex;
-  }
-}
-
-@media (min-width: 1100px) {
-  .nodeslide-studio .ns-rail-toggle {
-    display: none;
   }
 }
 
@@ -4544,9 +4562,10 @@
     grid-row: 2;
   }
 
-  .nodeslide-studio .ns-inspector:not(.is-collapsed) {
+  .nodeslide-studio .ns-inspector.is-drawer-open {
     bottom: 0;
     left: 0;
+    max-width: none;
     position: fixed;
     right: 0;
     top: 52px;
@@ -5916,4 +5935,5 @@
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
   }
+}
 }

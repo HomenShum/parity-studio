@@ -26,6 +26,7 @@ import {
   useState,
 } from 'react';
 import type { Presence } from '../../../../shared/nodeslide';
+import { PopoverSurface } from './overlayPrimitives';
 
 export type StudioThemeMode = 'light' | 'dark';
 export type StudioLanguage = 'en' | 'zh-CN';
@@ -99,8 +100,6 @@ export function StudioToolbar({
   const [localPlainLanguage, setLocalPlainLanguage] = useState(false);
   const [localCopyIncludesContextAndSources, setLocalCopyIncludesContextAndSources] =
     useState(true);
-  const exportRef = useRef<HTMLDivElement>(null);
-  const languageRef = useRef<HTMLDivElement>(null);
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
   const exportPopoverId = useId();
@@ -113,27 +112,6 @@ export function StudioToolbar({
   const copyContextEnabled = copyIncludesContextAndSources ?? localCopyIncludesContextAndSources;
 
   useEffect(() => setDraftTitle(title), [title]);
-  useEffect(() => {
-    if (!exportOpen && !languageOpen) return;
-    const closeOutside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (exportOpen && !exportRef.current?.contains(target)) setExportOpen(false);
-      if (languageOpen && !languageRef.current?.contains(target)) setLanguageOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      const restoreFocus = languageOpen ? languageTriggerRef.current : exportTriggerRef.current;
-      setExportOpen(false);
-      setLanguageOpen(false);
-      requestAnimationFrame(() => restoreFocus?.focus());
-    };
-    window.addEventListener('pointerdown', closeOutside);
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      window.removeEventListener('pointerdown', closeOutside);
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [exportOpen, languageOpen]);
 
   const commitTitle = () => {
     const next = draftTitle.trim();
@@ -258,7 +236,7 @@ export function StudioToolbar({
           {activeThemeMode === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
         </button>
 
-        <div className="ns-export-menu ns-language-menu" ref={languageRef}>
+        <div className="ns-export-menu ns-language-menu">
           <button
             ref={languageTriggerRef}
             className="ns-button ns-button--quiet ns-language-trigger"
@@ -278,84 +256,83 @@ export function StudioToolbar({
             <ChevronDown size={12} />
           </button>
 
-          {languageOpen ? (
-            <dialog
-              open
-              className="ns-popover ns-export-popover ns-language-popover"
-              id={languagePopoverId}
-              aria-label="Language and clarity"
+          <PopoverSurface
+            open={languageOpen}
+            id={languagePopoverId}
+            surfaceRole="dialog"
+            ariaLabel="Language and clarity"
+            className="ns-popover ns-export-popover ns-language-popover"
+            triggerRef={languageTriggerRef}
+            onClose={() => setLanguageOpen(false)}
+          >
+            <header className="ns-language-popover-heading">
+              <strong>Language &amp; clarity</strong>
+              <small>
+                English is active. Additional localization and copy policies are preview-only.
+              </small>
+            </header>
+
+            <div
+              className="ns-language-options"
+              role="radiogroup"
+              aria-label="Presentation language"
             >
-              <header className="ns-language-popover-heading">
-                <strong>Language &amp; clarity</strong>
-                <small>
-                  English is active. Additional localization and copy policies are preview-only.
-                </small>
-              </header>
-
-              <div
-                className="ns-language-options"
-                role="radiogroup"
-                aria-label="Presentation language"
+              <label className={`ns-language-option ${activeLanguage === 'en' ? 'is-active' : ''}`}>
+                <input
+                  className="ns-sr-only"
+                  type="radio"
+                  name={languageRadioName}
+                  value="en"
+                  checked={activeLanguage === 'en'}
+                  onChange={() => changeLanguage('en')}
+                />
+                <span>English</span>
+                <small>EN</small>
+              </label>
+              <label
+                className={`ns-language-option ${activeLanguage === 'zh-CN' ? 'is-active' : ''}`}
               >
-                <label
-                  className={`ns-language-option ${activeLanguage === 'en' ? 'is-active' : ''}`}
-                >
-                  <input
-                    className="ns-sr-only"
-                    type="radio"
-                    name={languageRadioName}
-                    value="en"
-                    checked={activeLanguage === 'en'}
-                    onChange={() => changeLanguage('en')}
-                  />
-                  <span>English</span>
-                  <small>EN</small>
-                </label>
-                <label
-                  className={`ns-language-option ${activeLanguage === 'zh-CN' ? 'is-active' : ''}`}
-                >
-                  <input
-                    className="ns-sr-only"
-                    type="radio"
-                    name={languageRadioName}
-                    value="zh-CN"
-                    checked={activeLanguage === 'zh-CN'}
-                    disabled
-                    onChange={() => changeLanguage('zh-CN')}
-                  />
-                  <span>简体中文</span>
-                  <small>简</small>
-                </label>
-              </div>
+                <input
+                  className="ns-sr-only"
+                  type="radio"
+                  name={languageRadioName}
+                  value="zh-CN"
+                  checked={activeLanguage === 'zh-CN'}
+                  disabled
+                  onChange={() => changeLanguage('zh-CN')}
+                />
+                <span>简体中文</span>
+                <small>简</small>
+              </label>
+            </div>
 
-              <div className="ns-clarity-options">
-                <label className="ns-clarity-toggle">
-                  <input
-                    type="checkbox"
-                    checked={plainLanguageEnabled}
-                    disabled
-                    onChange={(event) => changePlainLanguage(event.currentTarget.checked)}
-                  />
-                  <span>
-                    <strong>Plain language</strong>
-                    <small>Prefer direct, broadly readable wording.</small>
-                  </span>
-                </label>
-                <label className="ns-clarity-toggle">
-                  <input
-                    type="checkbox"
-                    checked={copyContextEnabled}
-                    disabled
-                    onChange={(event) => changeCopyContext(event.currentTarget.checked)}
-                  />
-                  <span>
-                    <strong>Copy includes context + sources</strong>
-                    <small>Keep evidence and source context attached when copying.</small>
-                  </span>
-                </label>
-              </div>
-            </dialog>
-          ) : null}
+            <div className="ns-clarity-options">
+              <label className="ns-clarity-toggle">
+                <input
+                  type="checkbox"
+                  checked={plainLanguageEnabled}
+                  disabled
+                  onChange={(event) => changePlainLanguage(event.currentTarget.checked)}
+                />
+                <span>
+                  <strong>Plain language</strong>
+                  <small>Prefer direct, broadly readable wording.</small>
+                </span>
+              </label>
+              <label className="ns-clarity-toggle">
+                <input
+                  type="checkbox"
+                  checked={copyContextEnabled}
+                  disabled
+                  onChange={(event) => changeCopyContext(event.currentTarget.checked)}
+                />
+                <span>
+                  <strong>Copy includes context + sources</strong>
+                  <small>Keep evidence and source context attached when copying.</small>
+                </span>
+              </label>
+            </div>
+          </PopoverSurface>
         </div>
 
         {onResetView ? (
@@ -416,7 +393,7 @@ export function StudioToolbar({
           <Play size={14} /> <span>Present</span>
         </button>
 
-        <div className="ns-export-menu" ref={exportRef}>
+        <div className="ns-export-menu">
           <button
             ref={exportTriggerRef}
             className="ns-button ns-button--accent ns-toolbar-labeled ns-toolbar-export"
@@ -433,61 +410,67 @@ export function StudioToolbar({
           >
             <Download size={15} /> <span>Export</span> <ChevronDown size={13} />
           </button>
-          {exportOpen ? (
-            <div className="ns-popover ns-export-popover" id={exportPopoverId} role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                data-testid="export-html"
-                onClick={() => {
-                  setExportOpen(false);
-                  onExportHtml();
-                }}
-              >
-                <span className="ns-menu-icon">
-                  <FileCode2 size={17} />
-                </span>
-                <span>
-                  <strong>Interactive HTML</strong>
-                  <small>Web-native deck and notes</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                data-testid="export-json"
-                onClick={() => {
-                  setExportOpen(false);
-                  onExportJson();
-                }}
-              >
-                <span className="ns-menu-icon">
-                  <FileJson2 size={17} />
-                </span>
-                <span>
-                  <strong>Deck JSON</strong>
-                  <small>Validated, re-openable NodeSlide snapshot</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                data-testid="export-pptx"
-                onClick={() => {
-                  setExportOpen(false);
-                  onExportPptx();
-                }}
-              >
-                <span className="ns-menu-icon">
-                  <FileType2 size={17} />
-                </span>
-                <span>
-                  <strong>PowerPoint</strong>
-                  <small>Editable PPTX with fallbacks</small>
-                </span>
-              </button>
-            </div>
-          ) : null}
+          <PopoverSurface
+            open={exportOpen}
+            id={exportPopoverId}
+            surfaceRole="menu"
+            ariaLabel="Export deck"
+            className="ns-popover ns-export-popover"
+            triggerRef={exportTriggerRef}
+            onClose={() => setExportOpen(false)}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="export-html"
+              onClick={() => {
+                setExportOpen(false);
+                onExportHtml();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <FileCode2 size={17} />
+              </span>
+              <span>
+                <strong>Interactive HTML</strong>
+                <small>Web-native deck and notes</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="export-json"
+              onClick={() => {
+                setExportOpen(false);
+                onExportJson();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <FileJson2 size={17} />
+              </span>
+              <span>
+                <strong>Deck JSON</strong>
+                <small>Validated, re-openable NodeSlide snapshot</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="export-pptx"
+              onClick={() => {
+                setExportOpen(false);
+                onExportPptx();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <FileType2 size={17} />
+              </span>
+              <span>
+                <strong>PowerPoint</strong>
+                <small>Editable PPTX with fallbacks</small>
+              </span>
+            </button>
+          </PopoverSurface>
         </div>
 
         <button
@@ -504,17 +487,16 @@ export function StudioToolbar({
           </kbd>
         </button>
 
-        {inspectorCollapsed ? (
-          <button
-            className="ns-icon-button ns-inspector-reopen"
-            type="button"
-            onClick={onToggleInspector}
-            aria-label="Open inspector"
-            title="Open inspector"
-          >
-            <PanelRightOpen size={16} />
-          </button>
-        ) : null}
+        <button
+          className="ns-icon-button ns-inspector-reopen"
+          type="button"
+          onClick={onToggleInspector}
+          aria-label={inspectorCollapsed ? 'Open inspector' : 'Collapse inspector'}
+          aria-pressed={!inspectorCollapsed}
+          title={inspectorCollapsed ? 'Open inspector' : 'Collapse inspector'}
+        >
+          <PanelRightOpen size={16} />
+        </button>
       </div>
     </header>
   );

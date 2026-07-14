@@ -1,4 +1,8 @@
+@layer nodeslide.tokens, nodeslide.base, nodeslide.editor, nodeslide.inspector, nodeslide.contract;
+
 /* NodeSlide v2 interaction shell. All stateful color cues are derived from studio tokens. */
+/* biome-ignore format: Preserve the editor rules while assigning explicit cascade ownership. */
+@layer nodeslide.editor {
 
 .nodeslide-studio .ns-navigator-tabs {
   background: color-mix(in srgb, var(--ns-panel) 78%, var(--ns-paper));
@@ -997,39 +1001,7 @@
   }
 }
 
-@media (max-width: 720px) {
-  .nodeslide-studio .ns-studio-grid {
-    grid-template-rows: 150px minmax(0, 1fr) 0;
-  }
-
-  .nodeslide-studio .ns-navigator,
-  .nodeslide-studio .ns-navigator.is-collapsed,
-  .nodeslide-studio .ns-navigator:not(.is-collapsed) {
-    height: 150px;
-  }
-
-  .nodeslide-studio .ns-navigator-tabs {
-    min-height: 31px;
-    padding: 3px 6px;
-  }
-
-  .nodeslide-studio .ns-navigator-tabs button {
-    padding: 4px 6px;
-  }
-
-  .nodeslide-studio .ns-navigator-panel {
-    height: calc(100% - 31px);
-  }
-
-  .nodeslide-studio .ns-slide-list {
-    padding: 5px 8px;
-  }
-
-  .nodeslide-studio .ns-slide-row {
-    flex-basis: 122px;
-    height: 105px;
-  }
-
+@media (max-width: 699px) {
   .nodeslide-studio .ns-outline-list {
     display: flex;
     gap: 7px;
@@ -1115,4 +1087,5 @@
   .nodeslide-studio .ns-candidate-actions {
     margin-left: 0;
   }
+}
 }

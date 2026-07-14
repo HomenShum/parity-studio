@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(new URL('./nodeslideV3.css', import.meta.url), 'utf8');
+const baseCss = readFileSync(new URL('./nodeslide.css', import.meta.url), 'utf8');
 const studioSource = readFileSync(new URL('./NodeSlideStudio.tsx', import.meta.url), 'utf8');
 const aiInspectorSource = readFileSync(
   new URL('./inspector/AiInspector.tsx', import.meta.url),
@@ -13,6 +14,10 @@ describe('NodeSlide v3 visual contract', () => {
     expect(studioSource.indexOf("import './nodeslide.css'")).toBeLessThan(
       studioSource.indexOf("import './nodeslideV3.css'"),
     );
+    expect(baseCss).toContain(
+      '@layer nodeslide.tokens, nodeslide.base, nodeslide.editor, nodeslide.inspector, nodeslide.contract;',
+    );
+    expect(css).toContain('@layer nodeslide.contract');
   });
 
   it('locks the supplied desktop geometry', () => {
@@ -27,12 +32,12 @@ describe('NodeSlide v3 visual contract', () => {
   it('keeps navigation and inspector reachable as tablet overlays', () => {
     const tablet = mediaBlock(
       '@media (min-width: 700px) and (max-width: 1099px)',
-      '@media (min-width: 1100px)',
+      '@media (max-width: 699px)',
     );
 
     expect(tablet).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 300px/);
     expect(tablet).toMatch(
-      /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*position: absolute[\s\S]*width: 420px !important/,
+      /\.ns-inspector\.is-drawer-open[\s\S]*position: fixed[\s\S]*width: clamp\(360px, 46vw, 480px\) !important/,
     );
     expect(tablet).toMatch(/\.ns-toolbar \.ns-navigator-toggle[\s\S]*display: inline-flex/);
     expect(tablet).toMatch(
@@ -53,7 +58,7 @@ describe('NodeSlide v3 visual contract', () => {
     expect(phone).toMatch(/\.ns-toolbar-actions--v3 \.ns-language-menu[\s\S]*display: none/);
     expect(phone).toMatch(/\.ns-command-button[\s\S]*display: none/);
     expect(phone).toMatch(/\.ns-navigator,[\s\S]*max-width: none/);
-    expect(phone).toMatch(/\.ns-inspector:not\(\.is-collapsed\)[\s\S]*position: fixed/);
+    expect(phone).toMatch(/\.ns-inspector\.is-drawer-open[\s\S]*position: fixed/);
     expect(phone).toMatch(/\.ns-inspector\.is-collapsed[\s\S]*display: none/);
     expect(phone).toMatch(/\.ns-slide-stepper[\s\S]*display: flex/);
     expect(phone).toMatch(/\.ns-slide-more[\s\S]*display: flex !important/);
@@ -89,7 +94,8 @@ describe('NodeSlide v3 visual contract', () => {
   });
 
   it('keeps consequential AI review text above the readable inspector floor', () => {
-    expect(css).toContain('--ns-chrome-min-font: 11px');
+    expect(baseCss).toContain('--ns-font-control: 11px');
+    expect(baseCss).toContain('--ns-chrome-min-font: var(--ns-font-control)');
     expect(css).toMatch(
       /\.ns-ai-v3-shell \.ns-agent-honesty-state strong[\s\S]*?font-size: 11\.5px/,
     );
@@ -124,7 +130,7 @@ describe('NodeSlide v3 visual contract', () => {
 
   it('contains narrow inspector rails without horizontal drift', () => {
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-inspector[\s\S]*?container-name: nodeslide-inspector;[\s\S]*?container-type: inline-size;[\s\S]*?overflow-x: clip;/,
+      /\.nodeslide-studio \.ns-inspector[\s\S]*?container-name: nodeslide-inspector;[\s\S]*?container-type: inline-size;[\s\S]*?overflow: clip;/,
     );
     expect(css).toMatch(
       /:is\(\.ns-ai-v3-review-scroll, \.ns-ai-v3-composer, \.ns-ai-v3-controls-body\)[\s\S]*?overflow-x: hidden;[\s\S]*?overscroll-behavior-x: none;/,

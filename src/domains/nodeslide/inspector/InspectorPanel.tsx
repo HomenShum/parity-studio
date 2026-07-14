@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
@@ -35,6 +36,13 @@ import type {
 import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
+import { NODESLIDE_RESPONSIVE_DRAWER_QUERY } from '../components/editorShellResponsive';
+import {
+  OverlayBackdrop,
+  getRovingFocusIndex,
+  useDrawerSurface,
+  useViewportMatch,
+} from '../components/overlayPrimitives';
 import type { NodeSlideTastePackId } from '../signature/packs/index';
 import {
   type AiAgentActivity,
@@ -146,7 +154,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onRestoreVersion: (version: DeckVersion) => void;
 }
 
-const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
+export const INSPECTOR_TABS: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'ai', label: 'AI', icon: Bot },
   { id: 'design', label: 'Design', icon: SlidersHorizontal },
   { id: 'comments', label: 'Comments', icon: MessageCircle },
@@ -228,6 +236,20 @@ export function InspectorPanel<CommandId extends string = string>({
   onRestoreVersion,
 }: InspectorPanelProps<CommandId>) {
   const resizeRef = useRef<ResizeState | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const mountedTabsRef = useRef<Set<InspectorTab>>(new Set());
+  const shouldRestoreDrawerFocusRef = useRef(true);
+  const drawerViewport = useViewportMatch(NODESLIDE_RESPONSIVE_DRAWER_QUERY);
+  const drawerOpen = drawerViewport && !collapsed;
+  rememberInspectorTab(mountedTabsRef.current, activeTab);
+  shouldRestoreDrawerFocusRef.current = collapsed;
+  const { surfaceRef: drawerRef, handleKeyDown: handleDrawerKeyDown } =
+    useDrawerSurface<HTMLElement>({
+      open: drawerOpen,
+      onClose: onToggleCollapsed,
+      initialFocusRef: closeButtonRef,
+      shouldRestoreFocusRef: shouldRestoreDrawerFocusRef,
+    });
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -262,265 +284,285 @@ export function InspectorPanel<CommandId extends string = string>({
   ).length;
   const validation = workspace.validations[0];
 
-  if (collapsed) {
-    return (
-      <aside
-        className="ns-inspector is-collapsed"
-        aria-label="Inspector collapsed"
-        data-testid="inspector"
-      >
-        <button
-          className="ns-inspector-collapsed-button"
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label="Open inspector"
-        >
-          <ChevronLeft size={16} />
-          <span>Inspector</span>
-        </button>
-        <div className="ns-inspector-collapsed-tabs">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              className={activeTab === id ? 'is-active' : ''}
-              aria-pressed={activeTab === id}
-              onClick={() => {
-                onTabChange(id);
-                onToggleCollapsed();
-              }}
-              aria-label={`Open ${label}`}
-              title={label}
-            >
-              <Icon size={15} />
-              {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-            </button>
-          ))}
-        </div>
-      </aside>
-    );
-  }
-
   return (
-    <aside
-      className="ns-inspector"
-      aria-label="NodeSlide inspector"
-      style={{ width }}
-      data-testid="inspector"
-    >
-      <button
-        className="ns-inspector-resizer"
-        type="button"
-        onPointerDown={startResize}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            onWidthChange(clampWidth(width + 16));
-          }
-          if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            onWidthChange(clampWidth(width - 16));
-          }
-        }}
-        aria-label="Resize inspector"
-        title="Drag or use Left and Right arrow keys to resize inspector"
+    <>
+      <OverlayBackdrop
+        open={drawerOpen}
+        className="ns-inspector-backdrop"
+        onDismiss={onToggleCollapsed}
       />
-      <div className="ns-inspector-topbar">
-        <div className="ns-inspector-context-summary">
-          <span className="ns-eyebrow">Inspector</span>
-          <div className="ns-inspector-context-chips" aria-label="Current inspector context">
-            <span className="is-slide" title={slide.title}>
-              Slide · {slide.title}
-            </span>
-            <span className={selectedElements.length > 0 ? 'is-selection' : 'is-empty'}>
-              Selection · {selectedElements.length > 0 ? selectedElements.length : 'none'}
-            </span>
+      <aside
+        ref={drawerRef}
+        className={`ns-inspector${collapsed ? ' is-collapsed' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
+        aria-label={collapsed ? 'Inspector collapsed' : 'NodeSlide inspector'}
+        aria-hidden={drawerViewport && collapsed ? true : undefined}
+        role={drawerOpen ? 'dialog' : undefined}
+        aria-modal={drawerOpen ? true : undefined}
+        data-overlay-mode={drawerViewport ? 'drawer' : 'pane'}
+        style={{ width }}
+        data-testid="inspector"
+        onKeyDown={drawerOpen ? handleDrawerKeyDown : undefined}
+      >
+        <div className="ns-inspector-collapsed-shell" hidden={!collapsed}>
+          <button
+            className="ns-inspector-collapsed-button"
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label="Open inspector"
+          >
+            <ChevronLeft size={16} />
+            <span>Inspector</span>
+          </button>
+          <div className="ns-inspector-collapsed-tabs">
+            {INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className={activeTab === id ? 'is-active' : ''}
+                aria-pressed={activeTab === id}
+                onClick={() => {
+                  onTabChange(id);
+                  onToggleCollapsed();
+                }}
+                aria-label={`Open ${label}`}
+                title={label}
+              >
+                <Icon size={15} />
+                {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
+              </button>
+            ))}
           </div>
         </div>
-        <button
-          className="ns-icon-button"
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label="Collapse inspector"
-        >
-          <PanelRightClose size={16} />
-        </button>
-      </div>
-      <div className="ns-inspector-tabs" role="tablist" aria-label="Inspector views">
-        {tabs.map(({ id, label, icon: Icon }) => (
+        <div className="ns-inspector-expanded-shell" hidden={collapsed} inert={collapsed}>
           <button
+            className="ns-inspector-resizer"
             type="button"
-            role="tab"
-            id={`ns-tab-${id}`}
-            aria-controls={`ns-tabpanel-${id}`}
-            aria-selected={activeTab === id}
-            className={activeTab === id ? 'is-active' : ''}
-            data-testid={`inspector-tab-${id}`}
-            key={id}
-            tabIndex={activeTab === id ? 0 : -1}
-            onClick={() => onTabChange(id)}
-            onKeyDown={(event) => handleInspectorTabKeyDown(event, id, onTabChange)}
+            onPointerDown={startResize}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                onWidthChange(clampWidth(width + 16));
+              }
+              if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                onWidthChange(clampWidth(width - 16));
+              }
+            }}
+            aria-label="Resize inspector"
+            title="Drag or use Left and Right arrow keys to resize inspector"
+          />
+          <div className="ns-inspector-topbar">
+            <div className="ns-inspector-context-summary">
+              <span className="ns-eyebrow">Inspector</span>
+              <div className="ns-inspector-context-chips" aria-label="Current inspector context">
+                <span className="is-slide" title={slide.title}>
+                  Slide · {slide.title}
+                </span>
+                <span className={selectedElements.length > 0 ? 'is-selection' : 'is-empty'}>
+                  Selection · {selectedElements.length > 0 ? selectedElements.length : 'none'}
+                </span>
+              </div>
+            </div>
+            <button
+              ref={closeButtonRef}
+              className="ns-icon-button"
+              type="button"
+              onClick={onToggleCollapsed}
+              aria-label="Collapse inspector"
+            >
+              <PanelRightClose size={16} />
+            </button>
+          </div>
+          <div className="ns-inspector-tabs" role="tablist" aria-label="Inspector views">
+            {INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                type="button"
+                role="tab"
+                id={`ns-tab-${id}`}
+                aria-controls={`ns-tabpanel-${id}`}
+                aria-selected={activeTab === id}
+                className={activeTab === id ? 'is-active' : ''}
+                data-testid={`inspector-tab-${id}`}
+                key={id}
+                tabIndex={activeTab === id ? 0 : -1}
+                onClick={() => onTabChange(id)}
+                onKeyDown={(event) => handleInspectorTabKeyDown(event, id, onTabChange)}
+              >
+                <Icon size={14} />
+                <span>{label}</span>
+                {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
+                {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
+              </button>
+            ))}
+          </div>
+
+          <div className="ns-inspector-content">
+            {mountedTabsRef.current.has('ai') ? (
+              <InspectorTabPanel id="ai" activeTab={activeTab}>
+                <AiInspector
+                  key={workspace.deck.id}
+                  deck={workspace.deck}
+                  slide={slide}
+                  selectedElements={selectedElements}
+                  workspaceElements={workspace.elements}
+                  patches={workspace.patches}
+                  traces={workspace.traces}
+                  agentRuns={agentRuns}
+                  agentMessages={agentMessages}
+                  memories={memories}
+                  memoriesLoading={memoriesLoading}
+                  variations={variations}
+                  variationsLoading={variationsLoading}
+                  isSubmitting={agentBusy}
+                  variationBusy={variationBusy}
+                  variationGenerating={variationGenerating}
+                  variationError={variationError}
+                  previewedVariationId={previewedVariationId}
+                  references={aiReferences}
+                  commands={aiCommands}
+                  commentContext={aiCommentContext}
+                  previewedPatchId={previewedPatchId}
+                  {...(aiSuggestedActions ? { suggestedActions: aiSuggestedActions } : {})}
+                  {...(aiAgentActivity !== undefined ? { agentActivity: aiAgentActivity } : {})}
+                  {...(onPreviewPatch ? { onPreviewPatch } : {})}
+                  {...(onClearAiCommentContext
+                    ? { onClearCommentContext: onClearAiCommentContext }
+                    : {})}
+                  onPropose={onProposeEdit}
+                  {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
+                  {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
+                  {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
+                  {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
+                  {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
+                  onAccept={onAcceptPatch}
+                  onReject={onRejectPatch}
+                  onGenerateVariations={onGenerateVariations}
+                  onPreviewVariation={onPreviewVariation}
+                  onAcceptVariation={onAcceptVariation}
+                  onRejectVariation={onRejectVariation}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('design') ? (
+              <InspectorTabPanel id="design" activeTab={activeTab}>
+                <DesignInspector
+                  slide={slide}
+                  slideElements={workspace.elements.filter(
+                    (element) => element.slideId === slide.id,
+                  )}
+                  selectedElements={selectedElements}
+                  theme={workspace.deck.theme}
+                  activeTastePackId={activeTastePackId}
+                  activeProfileId={activeProfileId}
+                  previewProfileId={previewProfileId}
+                  profiles={signatureProfiles}
+                  busy={tastePackBusy}
+                  onApplyTastePack={onApplyTastePack}
+                  onApplyProfile={onApplySignatureProfile}
+                  onPreviewProfile={onPreviewSignatureProfile}
+                  onUploadSource={onUploadSignatureSource}
+                  tasteProfile={tasteProfile}
+                  tasteProfileLoading={tasteProfileLoading}
+                  onEvictTasteSignal={onEvictTasteSignal}
+                  onOpenPreferenceEvidence={onOpenPreferenceEvidence}
+                  onClearTastePack={onClearTastePack}
+                  onApplyPatch={onApplyDesignPatch}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('comments') ? (
+              <InspectorTabPanel id="comments" activeTab={activeTab}>
+                <CommentsInspector
+                  deckId={workspace.deck.id}
+                  slide={slide}
+                  selectedElements={selectedElements}
+                  comments={workspace.comments}
+                  onAddComment={onAddComment}
+                  onReply={onReply}
+                  onSetStatus={onSetCommentStatus}
+                  onSendToAi={(comment) => {
+                    onSendCommentToAi?.(comment);
+                    onTabChange('ai');
+                  }}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('versions') ? (
+              <InspectorTabPanel id="versions" activeTab={activeTab}>
+                <VersionsInspector
+                  deck={workspace.deck}
+                  versions={workspace.versions}
+                  patches={workspace.patches}
+                  onRestore={onRestoreVersion}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('data') ? (
+              <InspectorTabPanel id="data" activeTab={activeTab}>
+                <DataInspector
+                  sources={workspace.sources}
+                  selectedElements={selectedElements}
+                  {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('json') ? (
+              <InspectorTabPanel id="json" activeTab={activeTab}>
+                <JsonInspector
+                  snapshot={{
+                    deck: workspace.deck,
+                    slides: workspace.slides,
+                    elements: workspace.elements,
+                    sources: workspace.sources,
+                  }}
+                  slide={slide}
+                  selectedElements={selectedElements}
+                  patches={workspace.patches}
+                  onApplyPatch={
+                    onApplyJsonPatch ??
+                    ((operations, summary) => {
+                      onApplyDesignPatch(operations, summary);
+                      return undefined;
+                    })
+                  }
+                  {...(onImportSourceFile ? { onImportSourceFile } : {})}
+                />
+              </InspectorTabPanel>
+            ) : null}
+            {mountedTabsRef.current.has('trace') ? (
+              <InspectorTabPanel id="trace" activeTab={activeTab}>
+                <TraceInspector
+                  traces={workspace.traces}
+                  validations={workspace.validations}
+                  patches={workspace.patches}
+                  agentRuns={agentRuns}
+                  agentMessages={agentMessages}
+                  sources={workspace.sources}
+                  {...(agentTelemetryRunId ? { agentTelemetryRunId } : {})}
+                  agentTelemetryLoadingMore={agentTelemetryLoadingMore}
+                  {...(agentTelemetryLoadError ? { agentTelemetryLoadError } : {})}
+                  {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
+                  {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
+                  {...(agentTelemetry ? { agentTelemetry } : {})}
+                />
+              </InspectorTabPanel>
+            ) : null}
+          </div>
+
+          <button
+            className="ns-inspector-footer"
+            type="button"
+            data-testid="validation-status"
+            onClick={() => onTabChange('trace')}
+            aria-label={`${validationLabel(validation)}. Open validation details.`}
           >
-            <Icon size={14} />
-            <span>{label}</span>
-            {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-            {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
+            <span className={validation?.cleanOk ? 'is-ok' : validation ? 'has-issues' : ''} />
+            <output aria-live="polite">{validationLabel(validation)}</output>
+            <ChevronRight size={12} />
           </button>
-        ))}
-      </div>
-
-      <div
-        className="ns-inspector-content"
-        role="tabpanel"
-        id={`ns-tabpanel-${activeTab}`}
-        aria-labelledby={`ns-tab-${activeTab}`}
-      >
-        {activeTab === 'ai' ? (
-          <AiInspector
-            key={workspace.deck.id}
-            deck={workspace.deck}
-            slide={slide}
-            selectedElements={selectedElements}
-            workspaceElements={workspace.elements}
-            patches={workspace.patches}
-            traces={workspace.traces}
-            agentRuns={agentRuns}
-            agentMessages={agentMessages}
-            memories={memories}
-            memoriesLoading={memoriesLoading}
-            variations={variations}
-            variationsLoading={variationsLoading}
-            isSubmitting={agentBusy}
-            variationBusy={variationBusy}
-            variationGenerating={variationGenerating}
-            variationError={variationError}
-            previewedVariationId={previewedVariationId}
-            references={aiReferences}
-            commands={aiCommands}
-            commentContext={aiCommentContext}
-            previewedPatchId={previewedPatchId}
-            {...(aiSuggestedActions ? { suggestedActions: aiSuggestedActions } : {})}
-            {...(aiAgentActivity !== undefined ? { agentActivity: aiAgentActivity } : {})}
-            {...(onPreviewPatch ? { onPreviewPatch } : {})}
-            {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
-            onPropose={onProposeEdit}
-            {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
-            {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
-            {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
-            {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
-            {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
-            onAccept={onAcceptPatch}
-            onReject={onRejectPatch}
-            onGenerateVariations={onGenerateVariations}
-            onPreviewVariation={onPreviewVariation}
-            onAcceptVariation={onAcceptVariation}
-            onRejectVariation={onRejectVariation}
-          />
-        ) : null}
-        {activeTab === 'design' ? (
-          <DesignInspector
-            slide={slide}
-            slideElements={workspace.elements.filter((element) => element.slideId === slide.id)}
-            selectedElements={selectedElements}
-            theme={workspace.deck.theme}
-            activeTastePackId={activeTastePackId}
-            activeProfileId={activeProfileId}
-            previewProfileId={previewProfileId}
-            profiles={signatureProfiles}
-            busy={tastePackBusy}
-            onApplyTastePack={onApplyTastePack}
-            onApplyProfile={onApplySignatureProfile}
-            onPreviewProfile={onPreviewSignatureProfile}
-            onUploadSource={onUploadSignatureSource}
-            tasteProfile={tasteProfile}
-            tasteProfileLoading={tasteProfileLoading}
-            onEvictTasteSignal={onEvictTasteSignal}
-            onOpenPreferenceEvidence={onOpenPreferenceEvidence}
-            onClearTastePack={onClearTastePack}
-            onApplyPatch={onApplyDesignPatch}
-          />
-        ) : null}
-        {activeTab === 'comments' ? (
-          <CommentsInspector
-            deckId={workspace.deck.id}
-            slide={slide}
-            selectedElements={selectedElements}
-            comments={workspace.comments}
-            onAddComment={onAddComment}
-            onReply={onReply}
-            onSetStatus={onSetCommentStatus}
-            onSendToAi={(comment) => {
-              onSendCommentToAi?.(comment);
-              onTabChange('ai');
-            }}
-          />
-        ) : null}
-        {activeTab === 'versions' ? (
-          <VersionsInspector
-            deck={workspace.deck}
-            versions={workspace.versions}
-            patches={workspace.patches}
-            onRestore={onRestoreVersion}
-          />
-        ) : null}
-        {activeTab === 'data' ? (
-          <DataInspector
-            sources={workspace.sources}
-            selectedElements={selectedElements}
-            {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
-          />
-        ) : null}
-        {activeTab === 'json' ? (
-          <JsonInspector
-            snapshot={{
-              deck: workspace.deck,
-              slides: workspace.slides,
-              elements: workspace.elements,
-              sources: workspace.sources,
-            }}
-            slide={slide}
-            selectedElements={selectedElements}
-            patches={workspace.patches}
-            onApplyPatch={
-              onApplyJsonPatch ??
-              ((operations, summary) => {
-                onApplyDesignPatch(operations, summary);
-                return undefined;
-              })
-            }
-            {...(onImportSourceFile ? { onImportSourceFile } : {})}
-          />
-        ) : null}
-        {activeTab === 'trace' ? (
-          <TraceInspector
-            traces={workspace.traces}
-            validations={workspace.validations}
-            patches={workspace.patches}
-            agentRuns={agentRuns}
-            agentMessages={agentMessages}
-            sources={workspace.sources}
-            {...(agentTelemetryRunId ? { agentTelemetryRunId } : {})}
-            agentTelemetryLoadingMore={agentTelemetryLoadingMore}
-            {...(agentTelemetryLoadError ? { agentTelemetryLoadError } : {})}
-            {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
-            {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
-            {...(agentTelemetry ? { agentTelemetry } : {})}
-          />
-        ) : null}
-      </div>
-
-      <button
-        className="ns-inspector-footer"
-        type="button"
-        data-testid="validation-status"
-        onClick={() => onTabChange('trace')}
-        aria-label={`${validationLabel(validation)}. Open validation details.`}
-      >
-        <span className={validation?.cleanOk ? 'is-ok' : validation ? 'has-issues' : ''} />
-        <output aria-live="polite">{validationLabel(validation)}</output>
-        <ChevronRight size={12} />
-      </button>
-    </aside>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -528,21 +570,45 @@ function clampWidth(width: number) {
   return Math.min(560, Math.max(304, width));
 }
 
+interface InspectorTabPanelProps {
+  id: InspectorTab;
+  activeTab: InspectorTab;
+  children: ReactNode;
+}
+
+function InspectorTabPanel({ id, activeTab, children }: InspectorTabPanelProps) {
+  return (
+    <section
+      className="ns-inspector-tabpanel"
+      role="tabpanel"
+      id={`ns-tabpanel-${id}`}
+      aria-labelledby={`ns-tab-${id}`}
+      hidden={activeTab !== id}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function rememberInspectorTab(mountedTabs: Set<InspectorTab>, activeTab: InspectorTab) {
+  mountedTabs.add(activeTab);
+  return mountedTabs;
+}
+
+export function inspectorTabAfterKey(currentTab: InspectorTab, key: string): InspectorTab | null {
+  const currentIndex = INSPECTOR_TABS.findIndex(({ id }) => id === currentTab);
+  const nextIndex = getRovingFocusIndex(INSPECTOR_TABS.length, currentIndex, key);
+  return nextIndex === null ? null : (INSPECTOR_TABS[nextIndex]?.id ?? null);
+}
+
 function handleInspectorTabKeyDown(
   event: ReactKeyboardEvent<HTMLButtonElement>,
   currentTab: InspectorTab,
   onTabChange: (tab: InspectorTab) => void,
 ) {
-  const currentIndex = tabs.findIndex(({ id }) => id === currentTab);
-  let nextIndex = currentIndex;
-  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
-  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-  else if (event.key === 'Home') nextIndex = 0;
-  else if (event.key === 'End') nextIndex = tabs.length - 1;
-  else return;
-  event.preventDefault();
-  const nextTab = tabs[nextIndex]?.id;
+  const nextTab = inspectorTabAfterKey(currentTab, event.key);
   if (!nextTab) return;
+  event.preventDefault();
   onTabChange(nextTab);
   requestAnimationFrame(() => document.getElementById(`ns-tab-${nextTab}`)?.focus());
 }
