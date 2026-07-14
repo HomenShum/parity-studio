@@ -1,6 +1,7 @@
 import { ConvexError } from 'convex/values';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeckFromBrief } from '../nodeslideAgent';
+import { nodeslideStableId } from './nodeslideIds';
 import { callNodeSlideFreeJson } from './nodeslideProvider';
 import {
   NODESLIDE_CREATE_DECK_LIMITS,
@@ -164,6 +165,39 @@ describe('NodeSlide create action admission boundary', () => {
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).not.toHaveProperty('accessCode');
     expect(persistenceArgs).not.toHaveProperty('providerConsent');
+  });
+
+  it('does not consume creation quota again inside an authorized durable retry', async () => {
+    const jobId = 'job-durable-create';
+    const ownerAccessKey = 'a'.repeat(43);
+    const executionAccessKey = 'b'.repeat(43);
+    const workspace = { deck: { id: nodeslideStableId('deck_job', jobId) } };
+    const runQuery = vi.fn().mockResolvedValue({ admissionQuotaSubject: 'admitted-job' });
+    const runMutation = vi.fn().mockResolvedValue(workspace);
+
+    await expect(
+      createDeckHandler(
+        { runMutation, runQuery },
+        {
+          ...createActionArgs(undefined),
+          durableJob: {
+            jobId,
+            deckId: nodeslideStableId('deck_job', jobId),
+            projectId: nodeslideStableId('project_nodeslide_job', jobId),
+            ownerAccessKey,
+            executionAccessKey,
+          },
+        },
+      ),
+    ).resolves.toBe(workspace);
+
+    expect(runQuery).toHaveBeenCalledOnce();
+    expect(runMutation).toHaveBeenCalledOnce();
+    expect(runMutation.mock.calls[0]?.[1]).toMatchObject({
+      jobId,
+      ownerAccessKey,
+      executionAccessKey,
+    });
   });
 
   it('routes the selected named model and uploaded evidence through the consented path', async () => {
@@ -477,10 +511,20 @@ interface CreateActionArgs {
     format: 'csv' | 'json' | 'txt';
     content: string;
   }>;
+  durableJob?: {
+    jobId: string;
+    deckId: string;
+    projectId: string;
+    ownerAccessKey: string;
+    executionAccessKey: string;
+  };
 }
 
 type CreateDeckHandler = (
-  context: { runMutation: ReturnType<typeof vi.fn> },
+  context: {
+    runMutation: ReturnType<typeof vi.fn>;
+    runQuery?: ReturnType<typeof vi.fn>;
+  },
   args: CreateActionArgs,
 ) => Promise<unknown>;
 

@@ -608,6 +608,8 @@ export interface NodeSlideAgentRun {
   provider: string;
   model: string;
   webResearch: boolean;
+  /** Existing deck-scoped memory records retrieved for this durable run. */
+  memoryIds?: string[];
   attempt: number;
   /** W3C-compatible 32-hex trace identifier for this durable run. */
   otelTraceId?: string;

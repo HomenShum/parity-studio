@@ -104,6 +104,12 @@ import { InspectorPanel } from './inspector/InspectorPanel';
 import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
+import {
+  type AgentSessionJobReceipt,
+  AgentSessionProvider,
+  agentSessionRequestFingerprint,
+  useAgentSession,
+} from './session';
 import { extractPptxSignature } from './signature/index';
 import {
   NODESLIDE_TASTE_PACKS,
@@ -176,6 +182,18 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideJobs: {
+    startCreateDeck: PublicMutation<
+      CreateDeckAdmissionRequest & { ownerAccessKey: string; idempotencyKey: string },
+      AgentSessionJobReceipt
+    >;
+    get: PublicQuery<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
+    cancel: PublicMutation<
+      { jobId: string; ownerAccessKey: string },
+      AgentSessionJobReceipt | null
+    >;
+    retry: PublicMutation<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
+  };
   nodeslide: {
     getWorkspace: PublicQuery<
       { deckId: string; ownerAccessKey: string },
@@ -546,8 +564,27 @@ export function EditorProjectDialogs({
 }
 
 export function NodeSlideStudio() {
-  const convex = useConvex();
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
+  return (
+    <AgentSessionProvider clientSessionId={clientSessionId}>
+      <NodeSlideStudioSession clientSessionId={clientSessionId} />
+    </AgentSessionProvider>
+  );
+}
+
+function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }) {
+  const convex = useConvex();
+  const {
+    state: agentSessionState,
+    setSurface: setAgentSessionSurface,
+    updateControls: updateAgentSessionControls,
+    prepareJob: prepareAgentSessionJob,
+    attachJob: attachAgentSessionJob,
+    reconcileJob: reconcileAgentSessionJob,
+    failPreparedJob: failPreparedAgentSessionJob,
+    archiveJob: archiveAgentSessionJob,
+    resetTransientConsent: resetAgentSessionConsent,
+  } = useAgentSession();
   const requestedDeck = useMemo(() => new URLSearchParams(window.location.search).get('deck'), []);
   const requestedShare = useMemo(
     () => new URLSearchParams(window.location.search).get('share'),
@@ -614,7 +651,10 @@ export function NodeSlideStudio() {
   const [previewedVariation, setPreviewedVariation] = useState<SlideVariation | null>(null);
   const [previewedSignatureProfile, setPreviewedSignatureProfile] =
     useState<SignatureProfile | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => {
+    const job = agentSessionState.activeJob;
+    return job?.kind === 'create_deck' && (job.status === 'queued' || job.status === 'running');
+  });
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -637,11 +677,14 @@ export function NodeSlideStudio() {
   const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
   const localCommitVersionsRef = useRef(new Set<number>());
   const acceptingPatchIdsRef = useRef(new Set<string>());
+  const handledCreateJobIdsRef = useRef(new Set<string>());
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
   activeDeckIdRef.current = activeDeckId;
   ownerAccessKeyRef.current = ownerAccessKey;
+
+  const activeSessionJob = agentSessionState.activeJob;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -686,7 +729,9 @@ export function NodeSlideStudio() {
   const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
   const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
   const removeAgentMemory = useMutation(nodeslideApi.nodeslideMemory.remove);
-  const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
+  const startCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.startCreateDeck);
+  const cancelCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
+  const retryCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.retry);
   const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
   const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
@@ -727,6 +772,18 @@ export function NodeSlideStudio() {
     nodeslideApi.nodeslide.listDecks,
     knownAccess.length > 0 ? { access: knownAccess } : 'skip',
   );
+  const durableCreateJob = useQuery(
+    nodeslideApi.nodeslideJobs.get,
+    activeSessionJob?.kind === 'create_deck' && activeSessionJob.jobId
+      ? {
+          jobId: activeSessionJob.jobId,
+          ownerAccessKey: activeSessionJob.ownerAccessKey,
+        }
+      : 'skip',
+  );
+  useEffect(() => {
+    if (durableCreateJob) reconcileAgentSessionJob(durableCreateJob);
+  }, [durableCreateJob, reconcileAgentSessionJob]);
   const variationRows = useQuery(
     nodeslideApi.nodeslideVariations.list,
     activeDeckId && ownerAccessKey && activeSlideId
@@ -754,6 +811,13 @@ export function NodeSlideStudio() {
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const latestAgentRunId = agentRuns?.[0]?.id;
+  const latestAgentMemoryIds = agentRuns?.[0]?.memoryIds;
+  useEffect(() => {
+    if (!latestAgentRunId) return;
+    updateAgentSessionControls({
+      memory: { references: latestAgentMemoryIds ?? [] },
+    });
+  }, [latestAgentMemoryIds, latestAgentRunId, updateAgentSessionControls]);
   const selectedTelemetryRunId =
     traceTelemetryRunId && agentRuns?.some((run) => run.id === traceTelemetryRunId)
       ? traceTelemetryRunId
@@ -902,6 +966,72 @@ export function NodeSlideStudio() {
     },
     [],
   );
+
+  useEffect(() => {
+    setAgentSessionSurface(workspace ? 'editor' : projectsOpen ? 'create' : 'landing');
+  }, [projectsOpen, setAgentSessionSurface, workspace]);
+
+  useEffect(() => {
+    if (!durableCreateJob || durableCreateJob.kind !== 'create_deck') return;
+    if (durableCreateJob.status === 'queued' || durableCreateJob.status === 'running') {
+      handledCreateJobIdsRef.current.delete(durableCreateJob.jobId);
+      setCreating(true);
+      setProjectError(null);
+      return;
+    }
+    if (handledCreateJobIdsRef.current.has(durableCreateJob.jobId)) return;
+    if (durableCreateJob.status === 'failed') {
+      handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
+      const message = durableCreateJob.error ?? 'The durable deck job failed.';
+      setCreating(false);
+      setProjectError(message);
+      setToast({ kind: 'error', message });
+      return;
+    }
+    if (durableCreateJob.status === 'cancelled') {
+      handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
+      setCreating(false);
+      setProjectError(null);
+      setToast({ kind: 'success', message: 'Deck creation cancelled before persistence.' });
+      archiveAgentSessionJob();
+      return;
+    }
+    if (durableCreateJob.status !== 'succeeded' || !durableCreateJob.resultDeckId) return;
+    const ownerCapability = activeSessionJob?.ownerAccessKey;
+    if (!ownerCapability) return;
+    handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
+    void convex
+      .query(nodeslideApi.nodeslide.getWorkspace, {
+        deckId: durableCreateJob.resultDeckId,
+        ownerAccessKey: ownerCapability,
+      })
+      .then((createdWorkspace) => {
+        if (!createdWorkspace) throw new Error('The completed deck could not be resumed.');
+        setCreating(false);
+        setProjectError(null);
+        const accessDurable = installWorkspace(createdWorkspace, ownerCapability, false, true);
+        setProjectsOpen(false);
+        if (accessDurable) {
+          setToast({
+            kind: 'success',
+            message: 'Deck created and resumed from its durable job.',
+          });
+          archiveAgentSessionJob();
+        }
+      })
+      .catch((error: unknown) => {
+        const message = errorMessage(error, 'The completed deck could not be resumed.');
+        setCreating(false);
+        setProjectError(message);
+        setToast({ kind: 'error', message });
+      });
+  }, [
+    activeSessionJob?.ownerAccessKey,
+    archiveAgentSessionJob,
+    convex,
+    durableCreateJob,
+    installWorkspace,
+  ]);
 
   useEffect(() => {
     if (!recoveryAccessRequest || recoveredWorkspace === undefined) return;
@@ -1941,29 +2071,53 @@ export function NodeSlideStudio() {
     const requestGate = editorRequestGateRef.current;
     const requestToken = requestGate.begin('create-deck', activeDeckId);
     setProjectError(null);
-    setCreating(true);
     try {
-      const result = await createDeckFromBrief({ ...request });
+      const { accessCode: _accessCode, ...durableIntent } = request;
+      const prepared = prepareAgentSessionJob({
+        kind: 'create_deck',
+        requestFingerprint: agentSessionRequestFingerprint(durableIntent),
+      });
+      setCreating(true);
+      let receipt = await startCreateDeckJob({
+        ...request,
+        ownerAccessKey: prepared.ownerAccessKey,
+        idempotencyKey: prepared.idempotencyKey,
+      });
+      if (receipt.status === 'failed' && receipt.attempt < receipt.maxAttempts) {
+        const retried = await retryCreateDeckJob({
+          jobId: receipt.jobId,
+          ownerAccessKey: prepared.ownerAccessKey,
+        });
+        if (!retried) throw new Error('The durable deck job could not be retried.');
+        receipt = retried;
+      }
+      attachAgentSessionJob(receipt);
+      if (!requestGate.isCurrent(requestToken)) return;
+      setCreating(receipt.status === 'queued' || receipt.status === 'running');
+    } catch (error) {
+      const message = errorMessage(error, 'The deck could not be created.');
+      failPreparedAgentSessionJob(message);
       if (!requestGate.isCurrent(requestToken)) return;
       setCreating(false);
-      const accessDurable = installWorkspace(result, undefined, false, true);
-      setProjectsOpen(false);
-      if (accessDurable) {
-        setToast({
-          kind: 'success',
-          message:
-            request.providerMode === 'deterministic'
-              ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
-              : `Deck created after your consented ${request.providerMode === 'nebius' ? 'Nebius' : 'OpenRouter'} attempt. Trace shows the provider result and any deterministic fallback.`,
-        });
-      }
-    } catch (error) {
-      if (!requestGate.isCurrent(requestToken)) return;
-      const message = errorMessage(error, 'The deck could not be created.');
       setProjectError(message);
       setToast({ kind: 'error', message });
     } finally {
-      if (requestGate.isCurrent(requestToken)) setCreating(false);
+      resetAgentSessionConsent();
+    }
+  };
+
+  const cancelCreateDeck = async () => {
+    const job = agentSessionState.activeJob;
+    if (job?.kind !== 'create_deck' || !job.jobId) return;
+    try {
+      const receipt = await cancelCreateDeckJob({
+        jobId: job.jobId,
+        ownerAccessKey: job.ownerAccessKey,
+      });
+      if (receipt) reconcileAgentSessionJob(receipt);
+    } catch (error) {
+      const message = errorMessage(error, 'The durable deck job could not be cancelled.');
+      setToast({ kind: 'error', message });
     }
   };
 
@@ -2078,6 +2232,7 @@ export function NodeSlideStudio() {
           creating={creating}
           error={projectError}
           onClearError={() => setProjectError(null)}
+          onCancelCreate={() => void cancelCreateDeck()}
           onCreate={(request) => void createDeck(request)}
           onExploreSample={() => setSampleRequested(true)}
           onOpenProjects={() => {
@@ -2615,6 +2770,34 @@ export function NodeSlideStudio() {
     options: AiProposalOptions<NodeSlideEditorCommandId>,
   ) => {
     if (!ownerAccessKey) return;
+    const scopedSlideIds = 'slideIds' in scope ? scope.slideIds : [];
+    const scopedElementIds = 'elementIds' in scope ? scope.elementIds : [];
+    updateAgentSessionControls({
+      model: options.providerMode === 'deterministic' ? 'deterministic' : options.providerModel,
+      effort:
+        options.providerMode === 'deterministic'
+          ? agentSessionState.controls.effort
+          : options.providerEffort,
+      scope: {
+        kind:
+          scope.kind === 'deck'
+            ? 'deck'
+            : scope.kind === 'slide' && scopedSlideIds.length > 1
+              ? 'selected_slides'
+              : scope.kind === 'slide'
+                ? 'slide'
+                : 'elements',
+        deckId: scope.deckId,
+        operationMode: scope.operationMode,
+        slideIds: scopedSlideIds,
+        elementIds: scopedElementIds,
+      },
+      web: {
+        enabled: options.webResearch === true,
+        consentGranted: Boolean(options.webResearchConsent),
+      },
+      memory: { mode: options.memoryMode ?? 'off' },
+    });
     const requestedDeckId = workspace.deck.id;
     const requestedOwnerAccessKey = ownerAccessKey;
     const requestGate = editorRequestGateRef.current;
@@ -2624,6 +2807,7 @@ export function NodeSlideStudio() {
     if (options.commandId === 'propagate') {
       const parent = latestPropagatablePatch(workspace.patches);
       if (!parent) {
+        resetAgentSessionConsent();
         setAgentBusy(false);
         setAiAgentActivity(null);
         setToast({
@@ -2655,6 +2839,7 @@ export function NodeSlideStudio() {
           setAiAgentActivity({ status: 'failed', elapsedMs: 0, ask: instruction, message });
           setToast({ kind: 'error', message });
         } finally {
+          resetAgentSessionConsent();
           if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
         }
       })();
@@ -2704,6 +2889,7 @@ export function NodeSlideStudio() {
           message: cancelled ? 'Run cancelled. No deck changes were applied.' : message,
         });
       } finally {
+        resetAgentSessionConsent();
         if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
       }
     })();

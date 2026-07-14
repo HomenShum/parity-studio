@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { nodeslideExecutionTraceFields } from './lib/nodeslideExecutionTraceValidator';
+import { NODESLIDE_JOB_PHASES, NODESLIDE_JOB_STATUSES } from './lib/nodeslideJobState';
 import { nodeslideShadowComparisonFields } from './lib/nodeslideShadowComparisonValidator';
 import {
   nodeslideBoundingBoxValidator,
@@ -804,6 +805,36 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck', ['deckId']),
 
+  nodeslide_agent_jobs: defineTable({
+    id: v.string(),
+    kind: v.literal('create_deck'),
+    clientSessionId: v.string(),
+    admissionQuotaSubject: v.string(),
+    ownerDigest: v.string(),
+    executionDigest: v.string(),
+    idempotencyKey: v.string(),
+    requestDigest: v.string(),
+    status: v.union(...NODESLIDE_JOB_STATUSES.map((status) => v.literal(status))),
+    phase: v.union(...NODESLIDE_JOB_PHASES.map((phase) => v.literal(phase))),
+    progress: v.number(),
+    attempt: v.number(),
+    maxAttempts: v.number(),
+    workflowId: v.optional(v.string()),
+    streamId: v.string(),
+    resultDeckId: v.optional(v.string()),
+    resultPatchId: v.optional(v.string()),
+    conversationRunId: v.optional(v.string()),
+    memoryIds: v.array(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_session_idempotency', ['clientSessionId', 'idempotencyKey'])
+    .index('by_status_updated', ['status', 'updatedAt'])
+    .index('by_result_deck', ['resultDeckId']),
+
   nodeslide_agent_runs: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -823,6 +854,7 @@ export default defineSchema({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    memoryIds: v.optional(v.array(v.string())),
     attempt: v.number(),
     otelTraceId: v.optional(v.string()),
     rootSpanId: v.optional(v.string()),

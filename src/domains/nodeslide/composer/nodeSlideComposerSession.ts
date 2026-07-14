@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useOptionalAgentSession } from '../session/AgentSessionProvider';
+import type { AgentSessionAttachment } from '../session/types';
 
 const STORAGE_PREFIX = 'nodeslide.composer-session:v1:';
 
-export interface NodeSlideComposerAttachmentDraft {
-  id: string;
-  name: string;
-  mediaType: string;
-  content: string;
-  lastModified: number;
-}
+export type NodeSlideComposerAttachmentDraft = AgentSessionAttachment;
 
 export interface NodeSlideComposerSessionState {
   text: string;
@@ -59,11 +55,14 @@ export function useNodeSlideComposerSession(
   key: string,
   initial: Partial<NodeSlideComposerSessionState> = EMPTY_SESSION,
 ): NodeSlideComposerSessionController {
+  const agentSession = useOptionalAgentSession();
+  const seededSharedAttachments = useRef(false);
   const subscribe = useCallback((listener: () => void) => subscribeToSession(key, listener), [key]);
   const getSnapshot = useCallback(() => ensureSession(key, initial), [initial, key]);
   const serverSnapshot = useMemo(() => normalizeSession(initial), [initial]);
   const getServerSnapshot = useCallback(() => serverSnapshot, [serverSnapshot]);
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const sharedAttachments = agentSession?.state.controls.attachments;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -78,25 +77,55 @@ export function useNodeSlideComposerSession(
     return () => window.removeEventListener('storage', onStorage);
   }, [key]);
 
+  useEffect(() => {
+    if (!agentSession || seededSharedAttachments.current) return;
+    seededSharedAttachments.current = true;
+    if (agentSession.state.controls.attachments.length > 0 || state.attachments.length === 0)
+      return;
+    agentSession.updateControls({ attachments: state.attachments });
+  }, [agentSession, state.attachments]);
+
   const setText = useCallback(
     (text: string) => updateSession(key, { ...ensureSession(key), text }),
     [key],
   );
   const setAttachments = useCallback(
-    (attachments: readonly NodeSlideComposerAttachmentDraft[]) =>
-      updateSession(key, { ...ensureSession(key), attachments: normalizeAttachments(attachments) }),
-    [key],
+    (attachments: readonly NodeSlideComposerAttachmentDraft[]) => {
+      const normalized = normalizeAttachments(attachments);
+      if (agentSession) {
+        agentSession.updateControls({ attachments: normalized });
+        return;
+      }
+      updateSession(key, { ...ensureSession(key), attachments: normalized });
+    },
+    [agentSession, key],
   );
   const reset = useCallback(
-    (next: Partial<NodeSlideComposerSessionState> = EMPTY_SESSION) =>
-      updateSession(key, normalizeSession(next)),
-    [key],
+    (next: Partial<NodeSlideComposerSessionState> = EMPTY_SESSION) => {
+      const normalized = normalizeSession(next);
+      updateSession(key, {
+        ...normalized,
+        attachments: agentSession ? ensureSession(key).attachments : normalized.attachments,
+      });
+      agentSession?.updateControls({ attachments: normalized.attachments });
+    },
+    [agentSession, key],
   );
-  const clear = useCallback(() => clearNodeSlideComposerSession(key), [key]);
+  const clear = useCallback(() => {
+    clearNodeSlideComposerSession(key);
+    agentSession?.updateControls({ attachments: [] });
+  }, [agentSession, key]);
+  const controllerState = useMemo<NodeSlideComposerSessionState>(
+    () =>
+      sharedAttachments
+        ? Object.freeze({ text: state.text, attachments: sharedAttachments })
+        : state,
+    [sharedAttachments, state],
+  );
 
   return useMemo(
-    () => ({ ...state, key, setText, setAttachments, reset, clear }),
-    [clear, key, reset, setAttachments, setText, state],
+    () => ({ ...controllerState, key, setText, setAttachments, reset, clear }),
+    [clear, controllerState, key, reset, setAttachments, setText],
   );
 }
 

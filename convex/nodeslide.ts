@@ -82,6 +82,7 @@ import {
   nodeslideIdDigest,
   nodeslideStableId,
 } from './lib/nodeslideIds';
+import { nodeSlideJobExecutionDigest, nodeSlideJobOwnerDigest } from './lib/nodeslideJobState';
 import {
   type NodeSlidePatchInput,
   clocksForNodeSlideOperations,
@@ -1906,6 +1907,7 @@ export const advanceAgentRunInternal = internalMutation({
       ...(terminal ? { completedAt: now } : {}),
       ...(args.patchId ? { patchId: args.patchId } : {}),
       ...(args.traceId ? { traceId: args.traceId } : {}),
+      ...(args.memoryIds ? { memoryIds: args.memoryIds.slice(0, 6) } : {}),
       ...(args.error ? { error: requiredText(args.error, 'run error', 600) } : {}),
     });
     if (terminal) {
@@ -2133,13 +2135,54 @@ export const createFromBriefInternal = internalMutation({
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
+    jobId: v.optional(v.string()),
+    executionAccessKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (!isOwnerAccessKey(args.ownerAccessKey))
       throw new Error('Invalid NodeSlide owner access key.');
+    const jobId = args.jobId;
+    const job = jobId
+      ? await ctx.db
+          .query('nodeslide_agent_jobs')
+          .withIndex('by_stable_id', (query) => query.eq('id', jobId))
+          .unique()
+      : null;
+    if (jobId) {
+      if (
+        !job ||
+        job.kind !== 'create_deck' ||
+        job.ownerDigest !== nodeSlideJobOwnerDigest(args.ownerAccessKey) ||
+        !args.executionAccessKey ||
+        job.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey)
+      ) {
+        throw new Error('Durable NodeSlide job authorization is invalid.');
+      }
+      if (job.status === 'cancelled' || job.status === 'failed') {
+        throw new Error(`Durable NodeSlide job cannot persist while ${job.status}.`);
+      }
+      if (job.resultDeckId && job.resultDeckId !== args.deckId) {
+        throw new Error('Durable NodeSlide job output binding is invalid.');
+      }
+      if (
+        args.deckId !== nodeslideStableId('deck_job', jobId) ||
+        args.projectId !== nodeslideStableId('project_nodeslide_job', jobId)
+      ) {
+        throw new Error('Durable NodeSlide job output identity is invalid.');
+      }
+    }
     const existing = await findDeckRow(ctx, args.deckId);
     if (existing) {
       await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+      if (job) {
+        await ctx.db.patch(job._id, {
+          resultDeckId: args.deckId,
+          status: 'running',
+          phase: 'persisting',
+          progress: Math.max(job.progress, 85),
+          updatedAt: Date.now(),
+        });
+      }
       return await ownerWorkspaceResponse(ctx, args.deckId, args.ownerAccessKey, Date.now());
     }
     if (args.plan.length > 12) throw new Error('NodeSlide plans support at most 12 steps.');
@@ -2182,6 +2225,15 @@ export const createFromBriefInternal = internalMutation({
         ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
       },
     });
+    if (job) {
+      await ctx.db.patch(job._id, {
+        resultDeckId: args.deckId,
+        status: 'running',
+        phase: 'persisting',
+        progress: Math.max(job.progress, 85),
+        updatedAt: Date.now(),
+      });
+    }
     return await ownerWorkspaceResponse(ctx, args.deckId, args.ownerAccessKey, Date.now());
   },
 });

@@ -43,6 +43,8 @@ import {
 } from './lib/nodeslideEditShadowPlanner';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
+import { nodeSlideJobRequestDigest } from './lib/nodeslideJobState';
+import { nodeSlideCreateJobRequestFromArgs } from './lib/nodeslideJobValidators';
 import { nodeSlideMemoryUse } from './lib/nodeslideMemoryPolicy';
 import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
@@ -87,6 +89,8 @@ import {
 const nodeslideInternal: any = (internal as any).nodeslide;
 // biome-ignore lint/suspicious/noExplicitAny: breaks generated Convex action self-reference recursion
 const nodeslideMemoryInternal: any = (internal as any).nodeslideMemory;
+// biome-ignore lint/suspicious/noExplicitAny: generated durable-job action/query cycle
+const nodeslideJobsInternal: any = (internal as any).nodeslideJobs;
 
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
 const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
@@ -996,18 +1000,71 @@ export const createDeckFromBrief = action({
     providerEffort: v.optional(nodeslideReasoningEffortValidator),
     providerConsent: v.optional(v.string()),
     attachments: v.optional(v.array(nodeslideBriefAttachmentValidator)),
+    durableJob: v.optional(
+      v.object({
+        jobId: v.string(),
+        deckId: v.string(),
+        projectId: v.string(),
+        ownerAccessKey: v.string(),
+        executionAccessKey: v.string(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     const clientSessionId = requiredCreateText(args.clientSessionId, 'clientSessionId', 256, 768);
+    const durableJob = args.durableJob
+      ? {
+          jobId: requiredCreateText(args.durableJob.jobId, 'durableJob.jobId', 256, 768),
+          deckId: requiredCreateText(args.durableJob.deckId, 'durableJob.deckId', 256, 768),
+          projectId: requiredCreateText(
+            args.durableJob.projectId,
+            'durableJob.projectId',
+            256,
+            768,
+          ),
+          ownerAccessKey: args.durableJob.ownerAccessKey,
+          executionAccessKey: args.durableJob.executionAccessKey,
+        }
+      : null;
+    if (durableJob) {
+      if (
+        !isOwnerAccessKey(durableJob.ownerAccessKey) ||
+        !isOwnerAccessKey(durableJob.executionAccessKey)
+      ) {
+        throw nodeslideCreatePublicError(
+          'invalid_request',
+          'The durable NodeSlide job owner capability is invalid.',
+        );
+      }
+      if (
+        durableJob.deckId !== nodeslideStableId('deck_job', durableJob.jobId) ||
+        durableJob.projectId !== nodeslideStableId('project_nodeslide_job', durableJob.jobId)
+      ) {
+        throw nodeslideCreatePublicError(
+          'invalid_request',
+          'The durable NodeSlide job output identity is invalid.',
+        );
+      }
+    }
+    const durableAdmission = durableJob
+      ? ((await ctx.runQuery(nodeslideJobsInternal.authorizeExecutionInternal, {
+          jobId: durableJob.jobId,
+          ownerAccessKey: durableJob.ownerAccessKey,
+          executionAccessKey: durableJob.executionAccessKey,
+          requestDigest: nodeSlideJobRequestDigest(nodeSlideCreateJobRequestFromArgs(args)),
+        })) as { admissionQuotaSubject: string })
+      : null;
     const publicCreationEnabled =
       process.env[NODESLIDE_PUBLIC_CREATION_ENV]?.trim().toLowerCase() === 'true';
-    const admissionQuotaSubject = publicCreationEnabled
-      ? 'public-launch-v1'
-      : await validateNodeSlidePreviewAdmission({
-          providedAccessCode: args.accessCode,
-          expectedAccessCode: process.env[NODESLIDE_PREVIEW_ACCESS_CODE_ENV],
-          admissionSubject: process.env[NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV],
-        });
+    const admissionQuotaSubject =
+      durableAdmission?.admissionQuotaSubject ??
+      (publicCreationEnabled
+        ? 'public-launch-v1'
+        : await validateNodeSlidePreviewAdmission({
+            providedAccessCode: args.accessCode,
+            expectedAccessCode: process.env[NODESLIDE_PREVIEW_ACCESS_CODE_ENV],
+            admissionSubject: process.env[NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV],
+          }));
     if (args.route !== 'free') {
       throw nodeslideCreatePublicError(
         'invalid_request',
@@ -1026,24 +1083,26 @@ export const createDeckFromBrief = action({
     });
     const themeId = requiredCreateText(args.themeId, 'themeId', 128, 256);
     const attachments = validateNodeSlideBriefAttachments(args.attachments);
-    const previewSessionQuotaSubject = nodeslideContentDigest(
-      `${admissionQuotaSubject}:${clientSessionId}`,
-    ).slice('sha256:'.length);
-    const quotaResult = (await ctx.runMutation(nodeslideInternal.consumePreviewQuotaResult, {
-      buckets: [
-        {
-          key: `create:${previewSessionQuotaSubject}`,
-          limit: 10,
-          windowMs: 86_400_000,
-        },
-        { key: 'create:global', limit: 120, windowMs: 3_600_000 },
-      ],
-    })) as { ok: boolean; reason?: 'quota_exceeded' };
-    if (!quotaResult.ok) {
-      throw nodeslideCreatePublicError(
-        'quota_exceeded',
-        'NodeSlide creation quota reached. Try again after the current window.',
-      );
+    if (!durableAdmission) {
+      const previewSessionQuotaSubject = nodeslideContentDigest(
+        `${admissionQuotaSubject}:${clientSessionId}`,
+      ).slice('sha256:'.length);
+      const quotaResult = (await ctx.runMutation(nodeslideInternal.consumePreviewQuotaResult, {
+        buckets: [
+          {
+            key: `create:${previewSessionQuotaSubject}`,
+            limit: 10,
+            windowMs: 86_400_000,
+          },
+          { key: 'create:global', limit: 120, windowMs: 3_600_000 },
+        ],
+      })) as { ok: boolean; reason?: 'quota_exceeded' };
+      if (!quotaResult.ok) {
+        throw nodeslideCreatePublicError(
+          'quota_exceeded',
+          'NodeSlide creation quota reached. Try again after the current window.',
+        );
+      }
     }
 
     const generationBrief =
@@ -1168,8 +1227,9 @@ export const createDeckFromBrief = action({
     const plan = extractPlan(provider?.ok === true ? provider.value : null, fallbackSpec);
     const now = Date.now();
     const uniqueness = `${clientSessionId}:${title}:${now}`;
-    const deckId = nodeslideEventId('deck', now, uniqueness);
-    const projectId = nodeslideEventId('project_nodeslide', now, uniqueness);
+    const deckId = durableJob?.deckId ?? nodeslideEventId('deck', now, uniqueness);
+    const projectId =
+      durableJob?.projectId ?? nodeslideEventId('project_nodeslide', now, uniqueness);
     const telemetry = provider?.telemetry;
     const providerSucceeded = provider?.ok === true;
     const selectedModel =
@@ -1188,7 +1248,10 @@ export const createDeckFromBrief = action({
       deckId,
       projectId,
       clientSessionId,
-      ownerAccessKey: createOwnerAccessKey(),
+      ownerAccessKey: durableJob?.ownerAccessKey ?? createOwnerAccessKey(),
+      ...(durableJob
+        ? { jobId: durableJob.jobId, executionAccessKey: durableJob.executionAccessKey }
+        : {}),
       title,
       brief,
       attachments,

@@ -52,6 +52,7 @@ import {
   NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
   NODESLIDE_DATA_ATTACHMENT_MAX_BYTES,
 } from '../../../../shared/nodeslideAttachments';
+import { useOptionalAgentSession } from '../session/AgentSessionProvider';
 import {
   type NodeSlideComposerAttachmentDraft,
   type NodeSlideComposerSessionController,
@@ -186,6 +187,9 @@ export function NodeSlidePromptComposer({
   className,
   composerClassName,
 }: NodeSlidePromptComposerProps) {
+  const agentSession = useOptionalAgentSession();
+  const authoritativeModel = agentSession?.state.controls.model ?? model;
+  const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
   const attachmentControlDisabled = attachmentDisabled ?? status === 'submitted';
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
@@ -196,6 +200,39 @@ export function NodeSlidePromptComposer({
   const handleAttachmentInputError = useCallback(
     (error: { message: string }) => onAttachmentError?.(error.message),
     [onAttachmentError],
+  );
+
+  useEffect(() => {
+    if (!agentSession || model === authoritativeModel) return;
+    onModelChange(authoritativeModel);
+  }, [agentSession, authoritativeModel, model, onModelChange]);
+
+  useEffect(() => {
+    if (
+      !agentSession ||
+      !effort ||
+      !authoritativeEffort ||
+      effort === authoritativeEffort ||
+      !onEffortChange
+    ) {
+      return;
+    }
+    onEffortChange(authoritativeEffort);
+  }, [agentSession, authoritativeEffort, effort, onEffortChange]);
+
+  const chooseModel = useCallback(
+    (next: NodeSlideComposerModelValue) => {
+      agentSession?.updateControls({ model: next });
+      onModelChange(next);
+    },
+    [agentSession, onModelChange],
+  );
+  const chooseEffort = useCallback(
+    (next: NodeSlideReasoningEffort) => {
+      agentSession?.updateControls({ effort: next });
+      onEffortChange?.(next);
+    },
+    [agentSession, onEffortChange],
   );
 
   const handleSubmit = async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
@@ -268,12 +305,15 @@ export function NodeSlidePromptComposer({
             ) : null}
             <NodeSlideModelSelector
               label={modelLabel}
-              model={model}
-              onChange={onModelChange}
+              model={authoritativeModel}
+              onChange={chooseModel}
               portalContainer={portalContainer}
               testId={modelTestId}
             />
-            {model !== 'deterministic' && effort && effortOptions.length > 0 && onEffortChange ? (
+            {authoritativeModel !== 'deterministic' &&
+            authoritativeEffort &&
+            effortOptions.length > 0 &&
+            onEffortChange ? (
               <label className="ns-prompt-effort-wrap">
                 <span className="sr-only">{effortLabel}</span>
                 <select
@@ -281,9 +321,9 @@ export function NodeSlidePromptComposer({
                   className="ns-prompt-effort"
                   data-testid={effortTestId}
                   onChange={(event) =>
-                    onEffortChange(event.currentTarget.value as NodeSlideReasoningEffort)
+                    chooseEffort(event.currentTarget.value as NodeSlideReasoningEffort)
                   }
-                  value={effort}
+                  value={authoritativeEffort}
                 >
                   {effortOptions.map((option) => (
                     <option key={option.id} value={option.id}>

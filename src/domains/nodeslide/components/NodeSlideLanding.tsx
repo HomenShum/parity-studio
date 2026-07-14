@@ -8,26 +8,22 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_REASONING_EFFORTS,
-  type NodeSlideAgentModelId,
-  type NodeSlideReasoningEffort,
   nodeSlideAgentModel,
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import { inferNodeSlideRequestedSlideCount } from '../../../../shared/nodeslideSlideCount';
-import {
-  NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
-  NodeSlidePromptComposer,
-} from '../composer/NodeSlidePromptComposer';
+import { NodeSlidePromptComposer } from '../composer/NodeSlidePromptComposer';
 import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
 import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import { useAgentSession } from '../session/AgentSessionProvider';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
@@ -45,6 +41,7 @@ interface NodeSlideLandingProps {
   creating: boolean;
   error?: string | null;
   onClearError?: () => void;
+  onCancelCreate?: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onExploreSample: () => void;
   onOpenProjects: () => void;
@@ -78,22 +75,20 @@ export function NodeSlideLanding({
   creating,
   error = null,
   onClearError,
+  onCancelCreate,
   onCreate,
   onExploreSample,
   onOpenProjects,
   onOpenDeck,
 }: NodeSlideLandingProps) {
+  const agentSession = useAgentSession();
   const composerSession = useNodeSlideComposerSession(
     nodeSlideComposerSessionKey('landing', clientSessionId),
   );
   const prompt = composerSession.text;
   const [starterTitle, setStarterTitle] = useState<string | null>(null);
-  const [generation, setGeneration] = useState<'deterministic' | NodeSlideAgentModelId>(
-    NODESLIDE_DEFAULT_AGENT_MODEL,
-  );
-  const [reasoningEffort, setReasoningEffort] = useState<NodeSlideReasoningEffort>(
-    NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
-  );
+  const generation = agentSession.state.controls.model;
+  const reasoningEffort = agentSession.state.controls.effort;
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const providerMode: NodeSlideBriefProviderMode =
@@ -114,6 +109,13 @@ export function NodeSlideLanding({
     consumeConsent: consumeProviderConsent,
     clearConsent: clearProviderConsent,
   } = usePerRequestConsent<NodeSlideBriefProviderConsent>(providerConsentRequestKey);
+  const activeCreateJob =
+    agentSession.state.activeJob?.kind === 'create_deck' ? agentSession.state.activeJob : null;
+  const { setSurface } = agentSession;
+
+  useEffect(() => {
+    setSurface('landing');
+  }, [setSurface]);
 
   const start = async (submittedPrompt: string, files: readonly File[]) => {
     const nextPrompt = submittedPrompt.trim();
@@ -131,7 +133,10 @@ export function NodeSlideLanding({
       setAttachmentError(null);
       onCreate({
         clientSessionId,
-        title: starterTitle ?? titleFromPrompt(nextPrompt),
+        title:
+          starterTitle ??
+          starters.find((starter) => starter.prompt === nextPrompt)?.title ??
+          titleFromPrompt(nextPrompt),
         brief: {
           prompt: nextPrompt,
           audience: 'Decision-makers described in the brief',
@@ -226,17 +231,17 @@ export function NodeSlideLanding({
           onAttachmentError={setAttachmentError}
           onAttachmentsChange={clearProviderConsent}
           onEffortChange={(effort) => {
-            setReasoningEffort(effort);
+            agentSession.updateControls({ effort });
             clearProviderConsent();
             onClearError?.();
           }}
           onModelChange={(model) => {
-            setGeneration(model);
+            agentSession.updateControls({ model });
             if (
               model !== 'deterministic' &&
               !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
             ) {
-              setReasoningEffort('high');
+              agentSession.updateControls({ effort: 'high' });
             }
             clearProviderConsent();
             onClearError?.();
@@ -288,9 +293,28 @@ export function NodeSlideLanding({
           </label>
         ) : null}
         {creating ? (
-          <output className="ns-landing-create-status" aria-live="polite">
+          <output
+            className="ns-landing-create-status"
+            aria-live="polite"
+            style={{ alignItems: 'center', display: 'flex', gap: 8 }}
+          >
             <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating your
             editable deck…
+            {activeCreateJob?.jobId ? (
+              <small>
+                {activeCreateJob.phase} · {activeCreateJob.progress}%
+              </small>
+            ) : null}
+            {activeCreateJob?.jobId && onCancelCreate ? (
+              <button
+                className="ns-button"
+                type="button"
+                onClick={onCancelCreate}
+                style={{ marginLeft: 'auto', minHeight: 28 }}
+              >
+                Cancel
+              </button>
+            ) : null}
           </output>
         ) : error ? (
           <output className="ns-landing-create-error" role="alert">

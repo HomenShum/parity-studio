@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NODESLIDE_DEFAULT_AGENT_MODEL } from '../../../../shared/nodeslide';
+import { AgentSessionProvider } from '../session/AgentSessionProvider';
 import { NodeSlideLanding } from './NodeSlideLanding';
 import {
   NODESLIDE_NEBIUS_BRIEF_CONSENT,
@@ -131,15 +132,17 @@ describe('NodeSlide creation consent', () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();
     render(
-      <NodeSlideLanding
-        clientSessionId="landing-external-consent"
-        recentDecks={[]}
-        creating={false}
-        onCreate={onCreate}
-        onExploreSample={() => undefined}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="landing-external-consent">
+        <NodeSlideLanding
+          clientSessionId="landing-external-consent"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     await user.type(
@@ -286,15 +289,17 @@ describe('NodeSlide creation consent', () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();
     render(
-      <NodeSlideLanding
-        clientSessionId="landing-deterministic-consent"
-        recentDecks={[]}
-        creating={false}
-        onCreate={onCreate}
-        onExploreSample={() => undefined}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="landing-deterministic-consent">
+        <NodeSlideLanding
+          clientSessionId="landing-deterministic-consent"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     await user.click(screen.getByTestId('landing-model-select'));
