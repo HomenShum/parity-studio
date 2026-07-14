@@ -45,12 +45,10 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       expect(compactMetrics.documentOverflow).toBeLessThanOrEqual(2);
       expect(compactMetrics.domNodes).toBeLessThan(TRACE_SCALE_DOM_NODE_BUDGET);
 
-      if (count === 100) {
-        await page.screenshot({
-          path: resolve(artifactDir, 'exact-100-compact.png'),
-          animations: 'disabled',
-        });
-      }
+      await page.screenshot({
+        path: resolve(artifactDir, `exact-${count}-compact.png`),
+        animations: 'disabled',
+      });
 
       await page.getByRole('button', { name: 'Open full trace timeline' }).click();
       await expect(page.getByLabel('Expanded trace observability view')).toBeVisible();
@@ -71,12 +69,10 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       expect(expandedMetrics.waterfallOverflowX).toBe('hidden');
       expect(runtimeErrors).toEqual([]);
 
-      if (count === 100) {
-        await page.screenshot({
-          path: resolve(artifactDir, 'exact-100-expanded.png'),
-          animations: 'disabled',
-        });
-      }
+      await page.screenshot({
+        path: resolve(artifactDir, `exact-${count}-expanded.png`),
+        animations: 'disabled',
+      });
       capturedMetrics.push({
         scenario: `exact-${count}`,
         compactDomNodes: compactMetrics.domNodes,
