@@ -190,6 +190,7 @@ export function TraceInspector({
       onKeyDown={(event) => {
         if (expanded && event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           closeExpanded();
         }
       }}

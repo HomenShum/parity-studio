@@ -183,15 +183,17 @@ describe('NodeSlide creation consent', () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();
     render(
-      <NodeSlideLanding
-        clientSessionId="landing-keyboard-preset-consent"
-        recentDecks={[]}
-        creating={false}
-        onCreate={onCreate}
-        onExploreSample={() => undefined}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="landing-keyboard-preset-consent">
+        <NodeSlideLanding
+          clientSessionId="landing-keyboard-preset-consent"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     const prompt = screen.getByLabelText('Presentation brief');
@@ -229,15 +231,17 @@ describe('NodeSlide creation consent', () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();
     render(
-      <NodeSlideLanding
-        clientSessionId="landing-attachment-consent"
-        recentDecks={[]}
-        creating={false}
-        onCreate={onCreate}
-        onExploreSample={() => undefined}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="landing-attachment-consent">
+        <NodeSlideLanding
+          clientSessionId="landing-attachment-consent"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     await user.type(screen.getByLabelText('Presentation brief'), 'Build an evidence review.');
@@ -260,15 +264,17 @@ describe('NodeSlide creation consent', () => {
     const onExploreSample = vi.fn();
     const user = userEvent.setup();
     render(
-      <NodeSlideLanding
-        clientSessionId="landing-sample-consent"
-        recentDecks={[]}
-        creating={false}
-        onCreate={onCreate}
-        onExploreSample={onExploreSample}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="landing-sample-consent">
+        <NodeSlideLanding
+          clientSessionId="landing-sample-consent"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={onExploreSample}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     await user.type(screen.getByLabelText('Presentation brief'), 'Build an external draft.');
