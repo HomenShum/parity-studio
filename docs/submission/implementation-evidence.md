@@ -1,0 +1,28 @@
+# NodeSlide implementation evidence map
+
+This appendix maps submission claims to current repository paths. It is a source-code index, not a claim that every path has already been deployed to the final production URL. Final build, test, deployment, and browser-smoke results belong in the release-verification field of the submission reply.
+
+| Claim | Current implementation evidence |
+| --- | --- |
+| Canonical SlideLang-compatible DeckSpec, primitive types, versions, public/private types | [`shared/nodeslide.ts`](../../shared/nodeslide.ts), [`shared/nodeslidePatch.ts`](../../shared/nodeslidePatch.ts) |
+| Convex authority, candidates, CAS/version checks, digest binding, validation, immutable publishing | [`convex/nodeslide.ts`](../../convex/nodeslide.ts), [`convex/lib/nodeslideValidation.ts`](../../convex/lib/nodeslideValidation.ts), [`convex/lib/nodeslideData.ts`](../../convex/lib/nodeslideData.ts) |
+| Named provider/model routing through pi-ai, timeout/size/repair controls | [`convex/lib/nodeslideProvider.ts`](../../convex/lib/nodeslideProvider.ts), [`convex/lib/nodeslideEditPlanner.ts`](../../convex/lib/nodeslideEditPlanner.ts), [`shared/nodeslide.ts`](../../shared/nodeslide.ts) |
+| Durable/idempotent agent runs, consent, web/file context, proposal lifecycle | [`convex/nodeslideAgent.ts`](../../convex/nodeslideAgent.ts), [`convex/nodeslide.ts`](../../convex/nodeslide.ts) |
+| Source authorization and immutable per-claim lineage | [`convex/lib/nodeslideSourceLineage.ts`](../../convex/lib/nodeslideSourceLineage.ts), [`convex/lib/nodeslideEditPlanner.ts`](../../convex/lib/nodeslideEditPlanner.ts) |
+| Owner-only, opt-in, relevance-filtered deck memory | [`convex/nodeslideMemory.ts`](../../convex/nodeslideMemory.ts), [`convex/lib/nodeslideMemoryPolicy.ts`](../../convex/lib/nodeslideMemoryPolicy.ts), [`src/domains/nodeslide/components/NodeSlideMemoryDialog.tsx`](../../src/domains/nodeslide/components/NodeSlideMemoryDialog.tsx) |
+| Browser editor, landing/composer, native slide rendering, validation UX | [`src/domains/nodeslide/NodeSlideStudio.tsx`](../../src/domains/nodeslide/NodeSlideStudio.tsx), [`src/domains/nodeslide/components/NodeSlideLanding.tsx`](../../src/domains/nodeslide/components/NodeSlideLanding.tsx), [`src/domains/nodeslide/composer/NodeSlidePromptComposer.tsx`](../../src/domains/nodeslide/composer/NodeSlidePromptComposer.tsx), [`src/domains/nodeslide/slidelang/validation.ts`](../../src/domains/nodeslide/slidelang/validation.ts) |
+| JSON inspection, guarded edits, and canonical download | [`src/domains/nodeslide/inspector/JsonInspector.tsx`](../../src/domains/nodeslide/inspector/JsonInspector.tsx), [`src/domains/nodeslide/slidelang/jsonEdit.ts`](../../src/domains/nodeslide/slidelang/jsonEdit.ts), [`src/domains/nodeslide/slidelang/download.ts`](../../src/domains/nodeslide/slidelang/download.ts) |
+| PowerPoint import candidate/fidelity report and editable export | [`src/domains/nodeslide/slidelang/pptxImport.ts`](../../src/domains/nodeslide/slidelang/pptxImport.ts), [`src/domains/nodeslide/slidelang/pptxImportTypes.ts`](../../src/domains/nodeslide/slidelang/pptxImportTypes.ts), [`src/domains/nodeslide/slidelang/pptx.ts`](../../src/domains/nodeslide/slidelang/pptx.ts) |
+| Google per-file OAuth and guarded sync foundation; no current UI push/pull | [`convex/nodeslideGoogleAuth.ts`](../../convex/nodeslideGoogleAuth.ts), [`convex/lib/nodeslideGoogleOAuth.ts`](../../convex/lib/nodeslideGoogleOAuth.ts), [`src/domains/nodeslide/integrations/googleSlides`](../../src/domains/nodeslide/integrations/googleSlides), [`src/domains/nodeslide/components/NodeSlideConnectionsDialog.tsx`](../../src/domains/nodeslide/components/NodeSlideConnectionsDialog.tsx) |
+| Local BYOK and governed MCP for Codex/Claude Code/Cursor | [`mcp/src/lib/nodeslideTools.ts`](../../mcp/src/lib/nodeslideTools.ts), [`mcp/src/lib/llmClient.ts`](../../mcp/src/lib/llmClient.ts), [`src/lib/sessionByok.ts`](../../src/lib/sessionByok.ts), [`src/domains/nodeslide/components/NodeSlideConnectionsDialog.tsx`](../../src/domains/nodeslide/components/NodeSlideConnectionsDialog.tsx) |
+| Timestamped traces, waterfall, sources, OTLP-compatible payload | [`src/domains/nodeslide/inspector/TraceWaterfall.tsx`](../../src/domains/nodeslide/inspector/TraceWaterfall.tsx), [`src/domains/nodeslide/inspector/traceTelemetry.ts`](../../src/domains/nodeslide/inspector/traceTelemetry.ts), [`convex/lib/nodeslideOtlp.ts`](../../convex/lib/nodeslideOtlp.ts) |
+| Release alignment, preview admission, deletion/OAuth safety | [`.github/workflows/quality.yml`](../../.github/workflows/quality.yml), [`docs/QA_RELEASE_GATES.md`](../QA_RELEASE_GATES.md), [`convex/lib/nodeslideDeckDeletion.ts`](../../convex/lib/nodeslideDeckDeletion.ts) |
+| Dependencies and verification entry points | [`package.json`](../../package.json), [`tests/e2e`](../../tests/e2e), [`scripts/validate-qa-manifest.mjs`](../../scripts/validate-qa-manifest.mjs) |
+
+## Explicit boundaries
+
+- The canonical format is NodeSlide's `nodeslide.slidelang/v1`, not AI Fund's proprietary Slidelang implementation.
+- Browser BYOK fields prepare local MCP configuration; provider keys are not used by or uploaded to the hosted browser app.
+- Google OAuth, normalization, conflict planning, and guarded REST primitives are present, but the current UI does not expose a live Google Slides push/pull command.
+- OTLP-compatible export is optional and configuration-dependent; the in-product waterfall remains available from persisted run/span/event records.
+- Repository implementation evidence is not a substitute for final deployed smoke proof; unresolved links and results remain explicit placeholders in the submission reply.
