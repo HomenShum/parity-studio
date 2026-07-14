@@ -8,7 +8,9 @@ test('builds a bounded noncontiguous multi-slide scope without moving canvas foc
 
   const thumbnails = page.locator('[data-testid^="slide-thumbnail-"]');
   expect(await thumbnails.count()).toBeGreaterThanOrEqual(4);
-  const activeBefore = await page.locator('.ns-slide-row.is-active').getAttribute('data-multi-selected');
+  const activeBefore = await page
+    .locator('.ns-slide-row.is-active')
+    .getAttribute('data-multi-selected');
 
   await page.keyboard.down('Control');
   await thumbnails.nth(1).click();
@@ -21,6 +23,9 @@ test('builds a bounded noncontiguous multi-slide scope without moving canvas foc
   expect(await page.locator('.ns-slide-row.is-active').getAttribute('data-multi-selected')).toBe(
     activeBefore,
   );
+
+  const advancedControls = page.getByTestId('ai-provider-summary');
+  await advancedControls.click();
 
   const scope = page.getByRole('button', { name: 'Selected slides (2)' });
   await expect(scope).toBeVisible();
