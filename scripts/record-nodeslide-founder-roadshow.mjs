@@ -17,12 +17,16 @@ import {
   buildFfmpegCommands,
   buildRoadshowAttachmentPlan,
   buildSrt,
+  humanTypingTimeoutMs,
   readRoadshowJson,
   recorderEvidenceSkeleton,
   resolveRoadshowInputPaths,
+  roadshowPlaybackRate,
   sanitizeEvidenceUrl,
+  selectedElementScopePattern,
   selectedSlidesScopePattern,
   shouldClearBeforeHumanTyping,
+  shouldTogglePressedControl,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -31,14 +35,13 @@ const storyboardPath = resolve(repoRoot, 'docs/demo/founder-roadshow/storyboard.
 const captionsPath = resolve(repoRoot, 'docs/demo/founder-roadshow/captions.json');
 const defaultTargetUrl = 'https://parity-studio.vercel.app/';
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-
 const CREATION_PROMPT = [
-  'Create a six-slide founder roadshow for NodeSlide aimed at early-stage AI investors.',
-  'Explain the evidence-to-story problem, the structured authoring insight, the editable workflow,',
+  'Help the NodeSlide founder prepare one six-slide AI Fund roadshow for an investor meeting today.',
+  'Turn the attached product definition, measured prototype metrics, review notes, and design direction into one argument:',
+  'the evidence-to-story problem, the structured-authoring insight, how evidence becomes editable visuals,',
   'measured prototype proof, the founder and researcher wedge, and the next design-partner milestone.',
-  'Use the attached PRD, TDD, measured metrics, dogfooding notes, and design reference.',
-  'Use web research only for cited external claims. Include native editable text, chart, math, image,',
-  'and diagram primitives. Distinguish measured evidence from future targets. Add concise speaker notes.',
+  'Use web research only for cited external claims. Distinguish measured evidence from future targets.',
+  'Include native editable text, diagram, chart, math, and image primitives with concise speaker notes.',
 ].join(' ');
 
 const args = parseArgs(process.argv.slice(2));
@@ -131,6 +134,7 @@ async function main() {
       'Live recording requires NODESLIDE_DEMO_IMAGE_PATH (or --image-path) pointing to a rights-cleared local image.',
     );
   }
+  evidence.runtimeSource = await verifyTargetRuntimeSource(targetUrl);
 
   const rawDir = resolve(outputDir, 'raw');
   const downloadsDir = resolve(outputDir, 'downloads');
@@ -203,11 +207,17 @@ async function main() {
     });
     evidence.outputs.productRaw = product.videoPath;
     evidence.productDurationMs = Math.round((await probeDuration(product.videoPath)) * 1_000);
+    evidence.playbackRate = roadshowPlaybackRate(
+      evidence.preRollDurationMs,
+      evidence.productDurationMs,
+    );
+    evidence.uniformTimeCompression = evidence.playbackRate > 1;
 
     const captionTimeline = buildCaptionTimeline(
       evidence.scenes,
       captionPlan,
       evidence.preRollDurationMs,
+      evidence.playbackRate,
     );
     const srtPath = resolve(outputDir, 'nodeslide-founder-roadshow.srt');
     await writeFile(srtPath, buildSrt(captionTimeline), 'utf8');
@@ -220,6 +230,7 @@ async function main() {
       browserChromePng: preRoll.browserChromePng,
       captionsSrt: srtPath,
       outputDir,
+      playbackRate: evidence.playbackRate,
     });
     evidence.ffmpeg = ffmpeg.commands.map((command) => ({
       label: command.label,
@@ -632,14 +643,29 @@ function createSceneHooks(state) {
 
     one_element_edit: async () => {
       await openPrimitive(state, 'text');
-      const textElement = state.page
-        .locator('.ns-editor-edit-canvas .ns-slide-element--text')
-        .first();
+      const textElement = await requiredLocator(
+        state.page,
+        'one_element_edit',
+        'editable headline element',
+        [
+          [
+            'role:button[name^=Headline]',
+            () =>
+              state.page
+                .locator('.ns-editor-edit-canvas')
+                .getByRole('button', { name: /^Headline, text slide element/u }),
+          ],
+          [
+            'second text element',
+            () => state.page.locator('.ns-editor-edit-canvas .ns-slide-element--text').nth(1),
+          ],
+        ],
+      );
       await humanClick(state.page, textElement);
       await configureAiRun(state, { scope: 'Selection', web: false });
       await submitAiInstruction(
         state,
-        'Rewrite only this selected headline so it states one decisive investor takeaway. Preserve every other element and the current layout.',
+        'Rewrite only this selected headline so it states one decisive investor takeaway in plain language. Preserve every other element and the current layout.',
       );
       state.pendingProposal = await waitForProposal(state.page);
       return { scope: 'one selected element', canonicalMutation: false };
@@ -655,7 +681,7 @@ function createSceneHooks(state) {
       await configureAiRun(state, { scope: 'This slide', web: true });
       await submitAiInstruction(
         state,
-        'Strengthen only this slide with one concise externally verifiable claim about editable programmatic presentations. Use web research, bind the source to the exact claim, and leave the design structure intact.',
+        "On this slide only, add one concise, externally verifiable claim explaining why editable programmatic presentations matter to this founder workflow. Use web research, bind the source to the exact claim, and preserve the slide's argument and design.",
       );
       const proposal = await waitForProposal(state.page, 180_000);
       return await compareAndAccept(state, proposal);
@@ -682,30 +708,90 @@ function createSceneHooks(state) {
       await configureAiRun(state, { scope: 'Selected slides', web: false, selectedSlideCount: 2 });
       await submitAiInstruction(
         state,
-        'Make the selected slides use parallel, action-led headlines. Change nothing outside this two-slide write scope.',
+        'Make the selected opening problem and insight slides use parallel, action-led headlines so they read as one chapter. Change nothing outside this two-slide write scope.',
       );
       const proposal = await waitForProposal(state.page);
       return await compareAndAccept(state, proposal);
     },
 
     chart_change: async () => {
+      const selectionSummary = state.page.locator('.ns-slide-selection-summary.has-selection');
+      if (await selectionSummary.isVisible().catch(() => false)) {
+        await humanClick(
+          state.page,
+          selectionSummary.getByRole('button', { name: 'Clear', exact: true }),
+        );
+      }
       await openPrimitive(state, 'chart');
-      await humanClick(
+      const chartElement = state.page
+        .locator('.ns-editor-edit-canvas .ns-slide-element--chart')
+        .first();
+      await humanClick(state.page, chartElement);
+      await openInspectorTab(state.page, 'data');
+      const dependency = await requiredLocator(
         state.page,
-        state.page.locator('.ns-editor-edit-canvas .ns-slide-element--chart').first(),
+        'chart_change',
+        'chart source dependency',
+        [['selection dependency card', () => state.page.locator('.ns-dependency-card').first()]],
       );
+      const dependencyBefore = cleanText(await dependency.textContent());
+      if (
+        /No source records are attached/i.test(dependencyBefore) ||
+        !/prototype[- ]metrics\.csv/i.test(dependencyBefore)
+      ) {
+        throw new MissingRoadshowCapabilityError(
+          'chart_change',
+          'a chart bound to prototype-metrics.csv',
+          ['Data → Selection dependencies → prototype-metrics.csv'],
+        );
+      }
       await openInspectorTab(state.page, 'design');
-      const value = await requiredLocator(state.page, 'chart_change', 'first chart value', [
-        ['testid:chart-value-0', () => state.page.getByTestId('chart-value-0')],
-        ['label:Value for point 1', () => state.page.getByLabel('Value for point 1')],
+      const values = state.page.locator('[data-testid^="chart-value-"]');
+      const beforeValues = await values.evaluateAll((inputs) =>
+        inputs.map((input) => Number(input.value)),
+      );
+      if (beforeValues.length < 1 || beforeValues.some((value) => !Number.isFinite(value))) {
+        throw new Error('The chart does not expose a complete numeric data series.');
+      }
+      const label = await requiredLocator(state.page, 'chart_change', 'first chart label', [
+        ['testid:chart-label-0', () => state.page.getByTestId('chart-label-0')],
+        ['label:Label for point 1', () => state.page.getByLabel('Label for point 1')],
       ]);
-      const before = Number.parseFloat(await value.inputValue());
-      if (!Number.isFinite(before)) throw new Error('The first chart value is not numeric.');
-      const after = Number((before * 1.05 + 1).toFixed(2));
-      await humanType(state.page, value, String(after));
+      const beforeLabel = await label.inputValue();
+      const baseLabel =
+        beforeLabel.replace(/^Prototype (?:metric|evidence)\s*·\s*/iu, '').trim() ||
+        'Measured prototype result';
+      const afterLabel = beforeLabel.startsWith('Prototype metric ·')
+        ? `Prototype evidence · ${baseLabel}`
+        : `Prototype metric · ${baseLabel}`;
+      await humanType(state.page, label, afterLabel);
       await humanClick(state.page, state.page.getByRole('button', { name: 'Apply chart data' }));
       await waitForValidationReady(state.page);
-      return { changedPoint: 1, before, after };
+      const afterValues = await state.page
+        .locator('[data-testid^="chart-value-"]')
+        .evaluateAll((inputs) => inputs.map((input) => Number(input.value)));
+      if (
+        beforeValues.length !== afterValues.length ||
+        beforeValues.some((value, index) => !Object.is(value, afterValues[index]))
+      ) {
+        throw new Error(
+          'Chart label changed, but one or more measured numeric values also changed.',
+        );
+      }
+      await openInspectorTab(state.page, 'data');
+      const dependencyAfter = cleanText(
+        await state.page.locator('.ns-dependency-card').first().textContent(),
+      );
+      if (!/prototype[- ]metrics\.csv/i.test(dependencyAfter)) {
+        throw new Error('Chart source binding was lost after the label edit.');
+      }
+      return {
+        changedField: 'label',
+        beforeLabel,
+        afterLabel,
+        numericValuesUnchanged: true,
+        sourceBindingPreserved: true,
+      };
     },
 
     math_change: async () => {
@@ -754,11 +840,14 @@ function createSceneHooks(state) {
         state.page.locator('.ns-editor-edit-canvas .ns-slide-element--image').first(),
       );
       await openInspectorTab(state.page, 'design');
+      const upload = state.page.getByTestId('image-upload');
+      await upload.waitFor({ state: 'attached', timeout: 10_000 });
+      const imageForm = upload.locator('xpath=ancestor::form[1]');
       const alt = await requiredLocator(state.page, 'image_change', 'Alt text', [
-        ['label:Alt text', () => state.page.getByLabel('Alt text')],
+        ['image editor label:Alt text', () => imageForm.getByLabel('Alt text', { exact: true })],
       ]);
       const credit = await requiredLocator(state.page, 'image_change', 'Image credit', [
-        ['label:Credit', () => state.page.getByLabel('Credit')],
+        ['image editor label:Credit', () => imageForm.getByLabel('Credit', { exact: true })],
       ]);
       await humanType(state.page, alt, 'Founder reviewing a sourced, editable NodeSlide roadshow');
       await humanType(
@@ -767,11 +856,9 @@ function createSceneHooks(state) {
         process.env.NODESLIDE_DEMO_IMAGE_CREDIT ??
           'Rights-cleared demo image; source recorded by operator',
       );
-      const upload = state.page.getByTestId('image-upload');
-      await moveVirtualCursor(
-        state.page,
-        state.page.getByText('Upload downloaded image', { exact: false }),
-      );
+      const uploadControl = imageForm.locator('.ns-image-upload-control');
+      await uploadControl.scrollIntoViewIfNeeded();
+      await moveVirtualCursor(state.page, uploadControl);
       await upload.setInputFiles(state.imagePath);
       await state.page
         .locator('.ns-editor-edit-canvas .ns-slide-element--image img')
@@ -789,7 +876,32 @@ function createSceneHooks(state) {
         state: 'visible',
         timeout: 30_000,
       });
-      const attribution = state.page.locator('.ns-trace-attribution').first();
+      const runPicker = state.page.locator('label.ns-trace-picker select');
+      const optionCount = await runPicker.locator('option').count();
+      let citedHealth = '';
+      for (let index = 0; index < optionCount; index += 1) {
+        const optionLabel = cleanText(await runPicker.locator('option').nth(index).textContent());
+        await runPicker.selectOption({ index });
+        await state.page
+          .locator('.ns-trace-run-title')
+          .filter({ hasText: optionLabel })
+          .waitFor({ state: 'visible', timeout: 15_000 });
+        const compactActivity = state.page.getByLabel('Compact trace activity');
+        await compactActivity.waitFor({ state: 'visible', timeout: 15_000 });
+        const health = compactActivity.locator('[aria-label="Trace health summary"]');
+        await health.waitFor({ state: 'visible', timeout: 15_000 });
+        citedHealth = cleanText(await health.textContent());
+        if (/[1-9]\d*\s+cited/i.test(citedHealth)) break;
+      }
+      if (!/[1-9]\d*\s+cited/i.test(citedHealth)) {
+        throw new MissingRoadshowCapabilityError(
+          'trace_source_lineage',
+          'a persisted run with source-bound telemetry',
+          ['[aria-label="Trace health summary"]'],
+        );
+      }
+      const attribution = state.page.locator('[title*="reasoning effort attribution"]').first();
+      await attribution.waitFor({ state: 'visible', timeout: 30_000 });
       const attributionText = cleanText(await attribution.textContent());
       if (
         !attributionText ||
@@ -799,7 +911,23 @@ function createSceneHooks(state) {
           `Trace does not expose a named provider/model: ${attributionText || '<empty>'}`,
         );
       }
+      const fullTimeline = state.page.getByRole('button', {
+        name: 'Open full trace timeline',
+        exact: true,
+      });
+      await fullTimeline.waitFor({ state: 'visible', timeout: 10_000 });
+      await humanClick(state.page, fullTimeline);
+      await state.page
+        .getByLabel('Expanded trace observability view')
+        .waitFor({ state: 'visible', timeout: 10_000 });
+      const waterfall = state.page.getByTestId('trace-waterfall');
+      await waterfall.waitFor({ state: 'visible', timeout: 10_000 });
+      await humanClick(state.page, waterfall.getByRole('button', { name: 'Sources', exact: true }));
       const citations = state.page.getByTestId('trace-source-citation');
+      await citations
+        .first()
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .catch(() => undefined);
       const citationCount = await citations.count();
       if (citationCount < 1) {
         throw new MissingRoadshowCapabilityError(
@@ -809,6 +937,15 @@ function createSceneHooks(state) {
         );
       }
       await humanClick(state.page, citations.first());
+      const exitExpanded = state.page.getByRole('button', {
+        name: 'Exit expanded trace view',
+        exact: true,
+      });
+      await exitExpanded.waitFor({ state: 'visible', timeout: 10_000 });
+      await humanClick(state.page, exitExpanded);
+      await state.page
+        .getByLabel('Expanded trace observability view')
+        .waitFor({ state: 'hidden', timeout: 10_000 });
       return { attribution: attributionText, sourceCitationCount: citationCount };
     },
 
@@ -832,6 +969,9 @@ function createSceneHooks(state) {
     },
 
     present_share: async () => {
+      const firstSlide = state.page.locator('[data-testid^="slide-thumbnail-"]').first();
+      await humanClick(state.page, firstSlide);
+      await state.page.waitForTimeout(450);
       await humanClick(state.page, state.page.getByTestId('present'));
       await state.page.locator('.ns-presenter').waitFor({ state: 'visible', timeout: 30_000 });
       await humanClick(state.page, state.page.getByRole('button', { name: 'Next slide' }));
@@ -891,6 +1031,14 @@ async function openPrimitive(state, kind) {
   if (!Number.isInteger(index)) {
     throw new MissingRoadshowCapabilityError(`${kind}_change`, `${kind} primitive slide mapping`);
   }
+  const editMode = state.page.getByRole('tab', { name: 'Edit', exact: true });
+  if ((await editMode.getAttribute('aria-selected')) !== 'true') {
+    await humanClick(state.page, editMode);
+  }
+  await state.page.getByTestId('editor-edit-canvas').waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
   const thumbnail = state.page.locator('[data-testid^="slide-thumbnail-"]').nth(index);
   await humanClick(state.page, thumbnail);
   await state.page.waitForTimeout(450);
@@ -917,18 +1065,18 @@ async function configureAiRun(state, { scope, web, selectedSlideCount = null }) 
       ? scopeGroup.getByRole('button', {
           name: selectedSlidesScopePattern(selectedSlideCount),
         })
-      : scopeGroup.getByRole('button', { name: scope, exact: true });
+      : scope === 'Selection'
+        ? scopeGroup.getByRole('button', { name: selectedElementScopePattern(1) })
+        : scopeGroup.getByRole('button', { name: scope, exact: true });
   if (!(await scopeButton.count())) {
     throw new MissingRoadshowCapabilityError('ai_scope', `AI write scope control "${scope}"`, [
       `aria-label="AI write scope" button "${scope}"`,
     ]);
   }
   await humanClick(state.page, scopeButton);
-  if (web) {
-    const webToggle = state.page.getByTestId('ai-web-research-toggle');
-    if ((await webToggle.getAttribute('aria-pressed')) !== 'true') {
-      await humanClick(state.page, webToggle);
-    }
+  const webToggle = state.page.getByTestId('ai-web-research-toggle');
+  if (shouldTogglePressedControl(await webToggle.getAttribute('aria-pressed'), Boolean(web))) {
+    await humanClick(state.page, webToggle);
   }
   const providerConsent = state.page.getByTestId('ai-provider-consent');
   await humanCheck(state.page, providerConsent);
@@ -947,7 +1095,29 @@ async function submitAiInstruction(state, instruction) {
 
 async function waitForProposal(page, timeout = 150_000) {
   const proposal = page.getByTestId('proposal-card').first();
-  await proposal.waitFor({ state: 'visible', timeout });
+  await page.waitForFunction(
+    () => {
+      const proposalCard = document.querySelector('[data-testid="proposal-card"]');
+      const proposalVisible = Boolean(proposalCard && proposalCard.getClientRects().length > 0);
+      const terminalFailure = [...document.querySelectorAll('[role="alert"]')].some(
+        (element) =>
+          element.getClientRects().length > 0 &&
+          /No proposal was created or applied/u.test(element.textContent ?? ''),
+      );
+      return proposalVisible || terminalFailure;
+    },
+    undefined,
+    { timeout },
+  );
+  const terminalFailure = page
+    .getByRole('alert')
+    .filter({ hasText: 'No proposal was created or applied' })
+    .last();
+  if (await terminalFailure.isVisible().catch(() => false)) {
+    throw new Error(
+      `Agent failed before proposal: ${cleanText(await terminalFailure.textContent())}`,
+    );
+  }
   const validation = proposal.getByTestId('candidate-validation');
   await validation.waitFor({ state: 'visible', timeout: 30_000 });
   const text = cleanText(await validation.textContent());
@@ -958,12 +1128,36 @@ async function waitForProposal(page, timeout = 150_000) {
 async function compareAndAccept(state, suppliedProposal) {
   const proposal = suppliedProposal ?? (await waitForProposal(state.page));
   const preview = proposal.getByTestId('proposal-preview');
-  if ((await preview.getAttribute('aria-pressed')) !== 'true')
-    await humanClick(state.page, preview);
-  await state.page.getByLabel('Baseline and candidate comparison').waitFor({
-    state: 'visible',
-    timeout: 30_000,
-  });
+  const comparison = state.page.getByLabel('Baseline and candidate comparison');
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if ((await preview.getAttribute('aria-pressed')) !== 'true') {
+      if (attempt === 0) {
+        await humanClick(state.page, preview);
+      } else {
+        await preview.focus();
+        await preview.press('Enter');
+        await state.page.waitForTimeout(500);
+      }
+    }
+    if (
+      await comparison
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      break;
+    }
+  }
+  if (!(await comparison.isVisible().catch(() => false))) {
+    const previewState = {
+      pressed: await preview.getAttribute('aria-pressed'),
+      text: cleanText(await preview.textContent()),
+      disabled: await preview.isDisabled(),
+    };
+    throw new Error(
+      `Compare did not open after pointer and keyboard activation: ${JSON.stringify(previewState)}`,
+    );
+  }
   const receipt = state.page.getByTestId('candidate-receipt');
   const receiptStatus = await receipt.getAttribute('data-candidate-status');
   if (receiptStatus !== 'ready')
@@ -1036,7 +1230,8 @@ async function humanType(page, locator, text) {
     await locator.press('Control+A').catch(() => {});
     await locator.press('Backspace').catch(() => {});
   }
-  await locator.pressSequentially(text, { delay: typingDelayMs });
+  const typingTimeoutMs = humanTypingTimeoutMs(text, typingDelayMs);
+  await locator.pressSequentially(text, { delay: typingDelayMs, timeout: typingTimeoutMs });
   await page.waitForTimeout(360);
 }
 
@@ -1228,6 +1423,48 @@ async function prepareAttachmentFiles(plan) {
       };
     }),
   );
+}
+
+async function verifyTargetRuntimeSource(url) {
+  const frontendUrl = new URL('/runtime-source.json', url).toString();
+  const frontend = await fetchRuntimeSource(frontendUrl);
+  if (
+    frontend?.schema !== 'parity.runtime-source/v1' ||
+    frontend?.layer !== 'frontend' ||
+    typeof frontend?.sourceSha !== 'string' ||
+    typeof frontend?.backendRuntimeSourceUrl !== 'string'
+  ) {
+    throw new Error('The target frontend did not expose a valid runtime-source receipt.');
+  }
+  const backend = await fetchRuntimeSource(frontend.backendRuntimeSourceUrl);
+  if (
+    backend?.schema !== 'parity.runtime-source/v1' ||
+    backend?.layer !== 'convex' ||
+    backend?.sourceSha !== frontend.sourceSha
+  ) {
+    throw new Error('The target frontend and Convex backend are not source-aligned.');
+  }
+  return {
+    sourceSha: frontend.sourceSha,
+    frontend: sanitizeEvidenceUrl(frontendUrl),
+    backend: sanitizeEvidenceUrl(frontend.backendRuntimeSourceUrl),
+    aligned: true,
+  };
+}
+
+async function fetchRuntimeSource(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Runtime-source request failed with HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function inspectInputs(paths) {

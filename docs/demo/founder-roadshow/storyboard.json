@@ -1,13 +1,14 @@
 {
   "schema": "nodeslide-roadshow-storyboard/v1",
-  "title": "NodeSlide founder roadshow — fresh evidence to editable deck",
-  "target": "A continuous, full-browser demo recorded from a fresh canonical landing.",
+  "title": "NodeSlide founder roadshow — one founder turns evidence into an investor-ready story",
+  "target": "A continuous, full-browser story of one founder turning evidence into a six-slide roadshow, directing bounded revisions, verifying provenance, and taking the approved deck to the room.",
   "invariants": [
     "No pre-existing deck or seeded product state is used.",
     "Only browser chrome, cursor, and caption overlays may be synthetic.",
     "Every product claim is proven by the visible live UI or the evidence JSON.",
     "Every canonical mutation passes through Compare and explicit Accept.",
-    "A required capability that cannot be located stops the recording."
+    "A required capability that cannot be located stops the recording.",
+    "Every proof scene advances the same founder, same deck, and same meeting outcome."
   ],
   "inputs": [
     "docs/submission/nodeslide-prd.md",
@@ -20,91 +21,91 @@
     {
       "id": "fresh_landing",
       "sequence": 1,
-      "title": "Start with an idea",
+      "title": "Begin with one founder, one deadline",
       "proof": "Canonical root URL, no query parameters, one dominant composer, and no editor mounted.",
       "hook": { "status": "implemented", "name": "freshLanding" }
     },
     {
       "id": "attach_evidence",
       "sequence": 2,
-      "title": "Attach the evidence pack",
+      "title": "Bring the evidence together",
       "proof": "Three visible attachments preserve the PRD, TDD, measured metrics, customer notes, and design direction within NodeSlide's bounded upload limit.",
       "hook": { "status": "implemented", "name": "attachEvidence" }
     },
     {
       "id": "consent_model_web",
       "sequence": 3,
-      "title": "Choose the real model and consent deliberately",
+      "title": "Choose what may leave the browser",
       "proof": "The recommended named model is visible; creation egress is explicitly consented. Web research is separately enabled and consented on the first editor run.",
       "hook": { "status": "implemented", "name": "consentModelAndWeb" }
     },
     {
       "id": "create_six_slide_deck",
       "sequence": 4,
-      "title": "Create a new six-slide founder roadshow",
+      "title": "Build the six-slide argument",
       "proof": "A newly generated editor workspace contains exactly six slides.",
       "hook": { "status": "implemented", "name": "createSixSlideDeck" }
     },
     {
       "id": "inspect_editable_primitives",
       "sequence": 5,
-      "title": "Inspect the editable system",
+      "title": "Keep the story editable",
       "proof": "Text, chart, math, image, and diagram/connector primitives are found in the generated deck.",
       "hook": { "status": "implemented", "name": "inspectEditablePrimitives" }
     },
     {
       "id": "one_element_edit",
       "sequence": 6,
-      "title": "Change one element",
+      "title": "Direct one precise element change",
       "proof": "The agent proposes a text-only edit scoped to one selected element; the deck remains unchanged.",
       "hook": { "status": "implemented", "name": "oneElementEdit" }
     },
     {
       "id": "compare_accept",
       "sequence": 7,
-      "title": "Compare before accepting",
+      "title": "Review before accepting",
       "proof": "Baseline and candidate are visible together; candidate validation passes before explicit Accept.",
       "hook": { "status": "implemented", "name": "compareAndAccept" }
     },
     {
       "id": "one_slide_edit",
       "sequence": 8,
-      "title": "Refine one slide with web evidence",
+      "title": "Ground one slide with current evidence",
       "proof": "This-slide scope, explicit model consent, separate web-research consent, source capture, Compare, and Accept are visible.",
       "hook": { "status": "implemented", "name": "oneSlideEdit" }
     },
     {
       "id": "bounded_multi_slide_edit",
       "sequence": 9,
-      "title": "Change a bounded set of slides",
+      "title": "Align the opening chapter",
       "proof": "Two visibly selected slides become the exact write scope; no whole-deck permission is granted.",
       "hook": { "status": "implemented", "name": "boundedMultiSlideEdit" }
     },
     {
       "id": "chart_change",
       "sequence": 10,
-      "title": "Edit native chart data",
-      "proof": "A numeric chart datum changes through the labeled grid and the resulting canonical version validates.",
+      "title": "Clarify the chart without changing evidence",
+      "proof": "A source-bound chart label is clarified through the native grid; every numeric value is asserted unchanged, source binding survives, and the canonical version validates.",
       "hook": { "status": "implemented", "name": "changeChart" }
     },
     {
       "id": "math_change",
       "sequence": 11,
-      "title": "Edit the north-star formula",
+      "title": "Refine the north-star formula",
       "proof": "The math expression remains a native editable primitive and the resulting canonical version validates.",
       "hook": { "status": "implemented", "name": "changeMath" }
     },
     {
       "id": "layout_change",
       "sequence": 12,
-      "title": "Rebalance layout without flattening the slide",
+      "title": "Rebalance the approved slide",
       "proof": "A selected element position changes through labeled controls and the resulting canonical version validates.",
       "hook": { "status": "implemented", "name": "changeLayout" }
     },
     {
       "id": "image_change",
       "sequence": 13,
-      "title": "Replace a sourced image",
+      "title": "Replace the image responsibly",
       "proof": "A user-supplied, rights-cleared image, alt text, and credit replace the image primitive and the resulting canonical version validates.",
       "precondition": "Set NODESLIDE_DEMO_IMAGE_PATH to a local PNG/JPEG/WebP/GIF whose source and reuse rights are documented.",
       "hook": { "status": "implemented", "name": "changeImage" }
@@ -112,28 +113,28 @@
     {
       "id": "trace_source_lineage",
       "sequence": 14,
-      "title": "Audit the run",
+      "title": "Audit the accepted work",
       "proof": "Trace shows timestamps, provider/model, tokens/cost, validation, human approval, and claim/element-bound source evidence.",
       "hook": { "status": "implemented", "name": "traceAndLineage" }
     },
     {
       "id": "persistent_memory",
       "sequence": 15,
-      "title": "Save durable deck memory",
+      "title": "Carry one rule into the next roadshow",
       "proof": "A scoped standing preference is created and enabled for later runs.",
       "hook": { "status": "implemented", "name": "persistentMemory" }
     },
     {
       "id": "present_share",
       "sequence": 16,
-      "title": "Present and publish a frozen version",
+      "title": "Rehearse and share the approved story",
       "proof": "Presenter mode works, then a validated immutable share link is created or shown.",
       "hook": { "status": "implemented", "name": "presentAndShare" }
     },
     {
       "id": "export_pptx_json",
       "sequence": 17,
-      "title": "Export the editable handoff",
+      "title": "Hand off the editable story",
       "proof": "PowerPoint and validated NodeSlide JSON both download and are hashed in evidence.",
       "hook": { "status": "implemented", "name": "exportPptxAndJson" }
     }

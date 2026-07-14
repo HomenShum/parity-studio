@@ -2,7 +2,7 @@
 
 This folder is the controlled input pack for the final NodeSlide dogfood recording.
 
-- `brief.md` is the exact creation prompt.
+- `brief.md` is the canonical editorial contract; the recorder types its concise, semantically complete founder brief while the supporting evidence stays attached.
 - `customer-notes.md` contains anonymized internal feedback, not market traction.
 - `design-reference.md` contains reusable visual direction.
 - `storyboard.json` is the machine-checked 17-scene recording contract.
@@ -18,6 +18,13 @@ cursor without taking over the foreground desktop, then uses ffmpeg to create on
 continuous 1920×1080 MP4 with burned captions and a companion SRT/evidence JSON. Run
 `--dry-run` first: required product hooks and evidence inputs fail closed rather than
 being skipped or replaced with seeded state.
+
+The completed production take, public links, scene-by-scene verification, runtime identity,
+and export hashes are recorded in [`final-recording-receipt.md`](./final-recording-receipt.md).
+
+If live provider latency would push the submission beyond five minutes, finalization applies
+one uniform, evidence-recorded playback rate to the uninterrupted product capture and scales
+all caption timestamps by the same factor. It never cuts, splices, or fabricates product state.
 
 For local selector QA only, `--metrics-path` may replace the not-yet-final metrics file and
 `--probe-through-scene <scene-id>` runs the real browser journey without assembling a final
