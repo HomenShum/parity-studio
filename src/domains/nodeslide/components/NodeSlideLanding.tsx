@@ -266,20 +266,7 @@ export function NodeSlideLanding({
           }
         />
         {providerMode !== 'deterministic' ? (
-          <label
-            className="ns-provider-consent"
-            style={{
-              alignItems: 'start',
-              background: 'var(--ns-surface, #f3f3ef)',
-              border: '1px solid var(--ns-line-soft)',
-              borderRadius: 9,
-              display: 'grid',
-              gap: 8,
-              gridTemplateColumns: 'auto 1fr',
-              marginTop: 8,
-              padding: 10,
-            }}
-          >
+          <label className="ns-provider-consent ns-landing-consent">
             <input
               type="checkbox"
               data-testid="landing-provider-consent"
@@ -289,12 +276,6 @@ export function NodeSlideLanding({
                   event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,
                 )
               }
-              style={{
-                accentColor: 'var(--ns-accent)',
-                marginTop: 2,
-                padding: 0,
-                width: 'auto',
-              }}
             />
             <span>
               I consent to sending this full brief
@@ -340,19 +321,10 @@ export function NodeSlideLanding({
           )}
         </p>
 
-        <div
-          className="ns-landing-starters"
-          aria-label="Presentation starters"
-          style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-        >
+        <div className="ns-landing-starters" aria-label="Presentation starters">
           <span>Try an idea</span>
           {starters.map((starter) => (
-            <button
-              key={starter.label}
-              type="button"
-              style={{ minHeight: 24 }}
-              onClick={() => applyStarter(starter)}
-            >
+            <button key={starter.label} type="button" onClick={() => applyStarter(starter)}>
               {starter.label}
             </button>
           ))}
@@ -361,7 +333,6 @@ export function NodeSlideLanding({
         <button
           className="ns-landing-sample"
           type="button"
-          style={{ marginTop: 10, minHeight: 24 }}
           onClick={() => {
             clearProviderConsent();
             onExploreSample();
