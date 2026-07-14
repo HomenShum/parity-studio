@@ -63,7 +63,7 @@ import {
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
 import { DesignInspector } from './DesignInspector';
-import { JsonInspector } from './JsonInspector';
+import { JsonInspector, type JsonPatchProposalCallback } from './JsonInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
 import type { InspectorTab } from './types';
@@ -146,12 +146,17 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
+  onProposeJsonPatch?: JsonPatchProposalCallback;
+  /**
+   * @deprecated Compatibility for the existing studio integration. Despite the
+   * legacy name, this callback must create an unapplied proposal.
+   */
   onApplyJsonPatch?: (
     operations: PatchOperation[],
     summary: string,
     elementId: string,
     baseElementVersion: number,
-  ) => boolean | undefined | Promise<boolean | undefined>;
+  ) => boolean | Promise<boolean>;
   onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
@@ -250,6 +255,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
+  onProposeJsonPatch,
   onApplyJsonPatch,
   onImportSourceFile,
   onAddComment,
@@ -267,6 +273,12 @@ export function InspectorPanel<CommandId extends string = string>({
   const moreMenuId = useId();
   const drawerViewport = useViewportMatch(NODESLIDE_RESPONSIVE_DRAWER_QUERY);
   const drawerOpen = drawerViewport && !collapsed;
+  const proposeJsonPatch: JsonPatchProposalCallback | undefined =
+    onProposeJsonPatch ??
+    (onApplyJsonPatch
+      ? ({ operations, summary, elementId, baseElementVersion }) =>
+          onApplyJsonPatch(operations, summary, elementId, baseElementVersion)
+      : undefined);
   rememberInspectorTab(mountedTabsRef.current, activeTab);
   shouldRestoreDrawerFocusRef.current = collapsed;
   const { surfaceRef: drawerRef, handleKeyDown: handleDrawerKeyDown } =
@@ -608,13 +620,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   slide={slide}
                   selectedElements={selectedElements}
                   patches={workspace.patches}
-                  onApplyPatch={
-                    onApplyJsonPatch ??
-                    ((operations, summary) => {
-                      onApplyDesignPatch(operations, summary);
-                      return undefined;
-                    })
-                  }
+                  {...(proposeJsonPatch ? { onProposePatch: proposeJsonPatch } : {})}
                   {...(onImportSourceFile ? { onImportSourceFile } : {})}
                 />
               </InspectorTabPanel>
