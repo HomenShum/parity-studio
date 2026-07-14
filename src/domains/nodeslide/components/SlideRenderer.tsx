@@ -221,14 +221,16 @@ function mediaFragmentUrl(url: string, start?: number, end?: number): string {
 
 function elementVisualStyle(element: SlideElement): CSSProperties {
   const style = element.style;
+  const connector = element.kind === 'connector';
   return {
-    background: style.fill,
-    borderColor: style.stroke,
-    borderStyle: style.stroke ? 'solid' : undefined,
-    borderWidth: style.strokeWidth === undefined ? undefined : `${style.strokeWidth}px`,
+    background: connector ? undefined : style.fill,
+    borderColor: connector ? undefined : style.stroke,
+    borderStyle: !connector && style.stroke ? 'solid' : undefined,
+    borderWidth:
+      connector || style.strokeWidth === undefined ? undefined : `${style.strokeWidth}px`,
     borderRadius: style.radius === undefined ? undefined : `${style.radius / 12.8}cqw`,
     boxShadow: style.shadow,
-    color: style.color,
+    color: connector ? (style.stroke ?? style.color) : style.color,
     fontFamily: style.fontFamily,
     fontSize: style.fontSize === undefined ? undefined : `${style.fontSize / 12.8}cqw`,
     fontWeight: style.fontWeight,

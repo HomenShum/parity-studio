@@ -204,8 +204,21 @@ describe('NodeSlide create action admission boundary', () => {
     const providerRequest = vi.mocked(callNodeSlideFreeJson).mock.calls[0]?.[0];
     expect(providerRequest?.systemPrompt).toContain('Produce exactly 6 concise slides');
     expect(providerRequest?.jsonSchema?.schema).toMatchObject({
-      properties: { slides: { minItems: 6, maxItems: 6 } },
+      properties: {
+        slides: {
+          minItems: 6,
+          maxItems: 6,
+          items: {
+            properties: {
+              diagram: {
+                properties: { nodes: { minItems: 2, maxItems: 4 } },
+              },
+            },
+          },
+        },
+      },
     });
+    expect(providerRequest?.systemPrompt).toContain('emit one diagram object');
     expect(providerRequest?.userText).toContain('world-cup.csv');
     expect(providerRequest?.userText).toContain('goals,172');
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;

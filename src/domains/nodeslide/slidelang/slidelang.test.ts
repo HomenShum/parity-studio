@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/nodeslide';
 import { createHostedSlideLangAdapter } from './hosted';
 import { createLocalSlideLangAdapter } from './localAdapter';
+import { importPptxSnapshot } from './pptxImport';
 
 const HIDDEN_ELEMENT_ID = 'element:hidden-export-sentinel';
 const HIDDEN_ELEMENT_NAME = 'Hidden export sentinel label';
@@ -482,6 +483,57 @@ describe('local SlideLangAdapter', () => {
     expect(slideXml).toContain('<a:t>172 ÷ 64 = 2.69 goals per match</a:t>');
     expect(slideXml).toContain('<a:t>Replace image</a:t>');
     expect(slideXml).toContain('<a:t>Licensed FIFA image and photographer credit required</a:t>');
+  });
+
+  it('renders and round-trips a native horizontal connector consistently', async () => {
+    const snapshot = cleanSnapshot();
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Missing slide fixture.');
+    const connector: SlideElement = {
+      id: 'element:connector',
+      slideId: slide.id,
+      name: 'Workflow connector',
+      kind: 'connector',
+      role: 'diagram_connector',
+      bbox: { x: 0.4, y: 0.5, width: 0.2, height: 0.05 },
+      rotation: 0,
+      style: { stroke: '#7dd3fc', strokeWidth: 2 },
+      sourceIds: ['source:adoption'],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+      version: 1,
+    };
+    snapshot.elements.push(connector);
+    slide.elementOrder.push(connector.id);
+
+    const html = adapter.renderSlideHtml(snapshot, slide.id);
+    expect(html).toContain('data-element-id="element:connector" data-element-kind="connector"');
+    const line = html.match(
+      /data-element-kind="connector"[\s\S]*?<line x1="[^"]+" y1="([^"]+)" x2="[^"]+" y2="([^"]+)"/u,
+    );
+    expect(line?.[1]).toBe(line?.[2]);
+
+    const binary = await adapter.buildPptx(snapshot);
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = await zip.file('ppt/slides/slide1.xml')?.async('string');
+    expect(slideXml).toContain('name="element:connector"');
+    expect(slideXml).toContain('prst="line"');
+    expect(slideXml).toContain('<a:tailEnd type="triangle"/>');
+
+    const imported = await importPptxSnapshot(binary, {
+      deckId: 'deck:connector-roundtrip',
+      projectId: 'project:connector-roundtrip',
+      fileName: 'connector-roundtrip.pptx',
+      timestamp: 1_000,
+    });
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) return;
+    expect(imported.snapshot.elements).toContainEqual(
+      expect.objectContaining({
+        kind: 'connector',
+        bbox: expect.objectContaining({ height: 0.001 }),
+      }),
+    );
   });
 
   it('omits hidden text from HTML visual, semantic, accessibility, and provenance output', () => {

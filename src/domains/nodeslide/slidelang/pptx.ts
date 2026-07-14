@@ -157,6 +157,7 @@ function addNativeConnector(
 ): void {
   pptxSlide.addShape(pptx.ShapeType.line, {
     ...box,
+    h: 0,
     objectName: element.id,
     line: {
       color: colorToPptxHex(element.style.stroke, snapshot.deck.theme.colors.trace),

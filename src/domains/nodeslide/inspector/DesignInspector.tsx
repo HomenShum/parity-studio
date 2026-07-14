@@ -175,6 +175,24 @@ export function DesignInspector({
     }));
     if (operations.length > 0) onApplyPatch(operations, label);
   };
+  const appearanceColorTarget =
+    primary.kind === 'text' || primary.kind === 'math'
+      ? 'color'
+      : primary.kind === 'connector'
+        ? 'stroke'
+        : 'fill';
+  const appearanceColorLabel =
+    appearanceColorTarget === 'color'
+      ? 'Text'
+      : appearanceColorTarget === 'stroke'
+        ? 'Line'
+        : 'Fill';
+  const appearanceColorValue =
+    appearanceColorTarget === 'color'
+      ? (primary.style.color ?? theme.colors.ink)
+      : appearanceColorTarget === 'stroke'
+        ? (primary.style.stroke ?? theme.colors.trace)
+        : (primary.style.fill ?? theme.colors.accentSoft);
 
   return (
     <div className="ns-inspector-scroll ns-design-inspector">
@@ -458,24 +476,18 @@ export function DesignInspector({
 
         <InspectorGroup icon={<Palette size={14} />} title="Appearance">
           <ColorField
-            label={primary.kind === 'text' || primary.kind === 'math' ? 'Text' : 'Fill'}
-            value={
-              primary.kind === 'text' || primary.kind === 'math'
-                ? (primary.style.color ?? theme.colors.ink)
-                : (primary.style.fill ?? theme.colors.accentSoft)
-            }
+            label={appearanceColorLabel}
+            value={appearanceColorValue}
             onCommit={(value) =>
               patchStyle(
-                primary.kind === 'text' || primary.kind === 'math'
-                  ? { color: value }
-                  : { fill: value },
-                `Updated ${primary.kind === 'text' || primary.kind === 'math' ? 'text color' : 'fill'}`,
+                { [appearanceColorTarget]: value },
+                `Updated ${appearanceColorLabel.toLocaleLowerCase()} color`,
               )
             }
             disabled={editable.length === 0}
           />
           <div className="ns-control-line">
-            {primary.kind !== 'text' ? (
+            {primary.kind !== 'text' && primary.kind !== 'connector' ? (
               <NumberStepper
                 icon={<CornerUpLeft size={14} />}
                 label="Corner radius"

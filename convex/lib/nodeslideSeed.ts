@@ -55,6 +55,11 @@ export interface NodeSlidePlannedVideo {
   endAtSeconds?: number;
 }
 
+export interface NodeSlidePlannedDiagram {
+  /** Ordered, presentation-ready labels compiled into editable nodes and connectors. */
+  nodes: string[];
+}
+
 export interface NodeSlidePlannedSlide {
   title: string;
   section: string;
@@ -67,6 +72,7 @@ export interface NodeSlidePlannedSlide {
   formula?: NodeSlidePlannedFormula;
   image?: NodeSlidePlannedImage;
   video?: NodeSlidePlannedVideo;
+  diagram?: NodeSlidePlannedDiagram;
 }
 
 export interface NodeSlideDeckSpec {
@@ -676,6 +682,53 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
       credit: 'Licensed image and visible credit required before external use',
     };
   }
+
+  applyRequestedDiagramPrimitive(slides, prompt);
+}
+
+function requestsDiagramPrimitive(prompt: string): boolean {
+  if (
+    /\b(?:(?:do not|don't)\s+(?:include|create|add|show|use|build|make|render|draw)\s+|without\s+|no\s+)(?:an?\s+)?(?:editable\s+|native\s+|structured\s+)?(?:diagram|flowchart|connector)\b/iu.test(
+      prompt,
+    )
+  ) {
+    return false;
+  }
+  return (
+    /\b(?:include|create|add|show|use|build|make|render|draw)\b[^.!?]{0,120}\b(?:diagram|flowchart|connector)(?:s|\s+primitives?)?\b/iu.test(
+      prompt,
+    ) ||
+    /\b(?:editable|native|structured)\s+(?:(?:workflow|process)\s+)?(?:diagram|flowchart|connector)(?:s|\s+primitives?)?\b/iu.test(
+      prompt,
+    )
+  );
+}
+
+function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt: string): boolean {
+  if (!requestsDiagramPrimitive(prompt)) return true;
+  if (slides.some((slide) => slide.diagram)) return true;
+
+  const candidate =
+    slides.find(
+      (slide) =>
+        /\b(?:workflow|approach|process|how|system)\b/iu.test(`${slide.title} ${slide.headline}`) &&
+        !slide.chart &&
+        !slide.formula &&
+        !slide.image &&
+        !slide.video,
+    ) ??
+    slides.find(
+      (slide, index) => index > 0 && !slide.chart && !slide.formula && !slide.image && !slide.video,
+    );
+  if (!candidate) return false;
+
+  const nodes = candidate.bullets
+    .map((label) => nodeslideCleanText(label, 52))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (nodes.length < 2) return false;
+  candidate.diagram = { nodes };
+  return true;
 }
 
 function briefMetricCsvRecords(
@@ -727,6 +780,7 @@ export function coerceBriefSpec(
     .filter((slide): slide is NodeSlidePlannedSlide => slide !== null)
     .slice(0, requestedSlideCount ?? 8);
   if (slides.length < (requestedSlideCount ?? 6)) return fallback;
+  if (!applyRequestedDiagramPrimitive(slides, brief.prompt)) return fallback;
 
   const narrative = Array.isArray(rawSpec.narrative)
     ? rawSpec.narrative
@@ -970,7 +1024,10 @@ function buildSlide(input: {
   const isOpening = input.index === 0;
   const isClosing = input.index === input.total - 1;
   const hasPrimaryMedia =
-    planned.formula !== undefined || planned.image !== undefined || planned.video !== undefined;
+    planned.formula !== undefined ||
+    planned.image !== undefined ||
+    planned.video !== undefined ||
+    planned.diagram !== undefined;
   const hasStructuredPrimitive = Boolean(planned.chart || hasPrimaryMedia);
   const hasVisual = hasStructuredPrimitive || planned.metric !== undefined;
   const claimSourceIds = [input.sourceBriefId, ...input.linkedSourceIds];
@@ -1076,6 +1133,70 @@ function buildSlide(input: {
         exportCapabilities: [...EDITABLE_CAPABILITIES],
       }),
     );
+  }
+
+  if (planned.diagram) {
+    const nodes = planned.diagram.nodes.slice(0, 4);
+    const groupId = nodeslideStableId('group', input.slideId, 'diagram');
+    const gap = 0.025;
+    const diagramWidth = 0.39;
+    const connectorWidth = 0.032;
+    const nodeWidth =
+      (diagramWidth - connectorWidth * (nodes.length - 1) - gap * (nodes.length - 1)) /
+      nodes.length;
+    let x = 0.53;
+    nodes.forEach((label, index) => {
+      add(
+        element(`diagram-node-${index + 1}`, {
+          name: `Diagram node ${index + 1}`,
+          kind: 'shape',
+          role: 'diagram_node',
+          bbox: box(x, 0.47, nodeWidth, 0.18),
+          rotation: 0,
+          content: label,
+          style: {
+            fill: theme.colors.insight,
+            stroke: theme.colors.border,
+            strokeWidth: 1.5,
+            color: theme.colors.insightInk,
+            fontFamily: theme.typography.body,
+            fontSize: 16,
+            fontWeight: 650,
+            lineHeight: 1.15,
+            padding: 10,
+            radius: theme.defaultRadius,
+            textAlign: 'center',
+            verticalAlign: 'middle',
+          },
+          sourceIds: claimSourceIds,
+          locked: false,
+          groupId,
+          exportCapabilities: [...EDITABLE_CAPABILITIES],
+        }),
+      );
+      x += nodeWidth;
+      if (index < nodes.length - 1) {
+        add(
+          element(`diagram-connector-${index + 1}`, {
+            name: `Diagram connector ${index + 1}`,
+            kind: 'connector',
+            role: 'diagram_connector',
+            bbox: box(x + gap / 2, 0.535, connectorWidth, 0.05),
+            rotation: 0,
+            style: {
+              color: theme.colors.trace,
+              stroke: theme.colors.trace,
+              strokeWidth: 2,
+            },
+            sourceIds: claimSourceIds,
+            locked: false,
+            groupId,
+            exportCapabilities: [...EDITABLE_CAPABILITIES],
+          }),
+        );
+        x += connectorWidth + gap;
+      }
+    });
   }
 
   if (planned.formula) {
@@ -1328,13 +1449,43 @@ function coercePlannedSlide(
   const explicitFormula = coerceFormula(value.formula ?? value.math);
   const explicitImage = coerceImage(value.image);
   const explicitVideo = coerceVideo(value.video);
-  const hasExplicitPrimary = Boolean(
-    explicitChart || explicitFormula || explicitImage || explicitVideo,
-  );
-  const chart = explicitChart ?? (hasExplicitPrimary ? undefined : fallback?.chart);
-  const formula = explicitFormula ?? (hasExplicitPrimary ? undefined : fallback?.formula);
-  const image = explicitImage ?? (hasExplicitPrimary ? undefined : fallback?.image);
-  const video = explicitVideo ?? (hasExplicitPrimary ? undefined : fallback?.video);
+  const explicitDiagram = coerceDiagram(value.diagram);
+  const explicitPrimaryKind = explicitDiagram
+    ? 'diagram'
+    : explicitChart
+      ? 'chart'
+      : explicitFormula
+        ? 'formula'
+        : explicitImage
+          ? 'image'
+          : explicitVideo
+            ? 'video'
+            : undefined;
+  const chart = explicitPrimaryKind
+    ? explicitPrimaryKind === 'chart'
+      ? explicitChart
+      : undefined
+    : fallback?.chart;
+  const formula = explicitPrimaryKind
+    ? explicitPrimaryKind === 'formula'
+      ? explicitFormula
+      : undefined
+    : fallback?.formula;
+  const image = explicitPrimaryKind
+    ? explicitPrimaryKind === 'image'
+      ? explicitImage
+      : undefined
+    : fallback?.image;
+  const video = explicitPrimaryKind
+    ? explicitPrimaryKind === 'video'
+      ? explicitVideo
+      : undefined
+    : fallback?.video;
+  const diagram = explicitPrimaryKind
+    ? explicitPrimaryKind === 'diagram'
+      ? explicitDiagram
+      : undefined
+    : fallback?.diagram;
   return {
     title,
     section,
@@ -1347,7 +1498,18 @@ function coercePlannedSlide(
     ...(formula ? { formula } : {}),
     ...(image ? { image } : {}),
     ...(video ? { video } : {}),
+    ...(diagram ? { diagram } : {}),
   };
+}
+
+function coerceDiagram(value: unknown): NodeSlidePlannedDiagram | undefined {
+  if (!isRecord(value) || !Array.isArray(value.nodes)) return undefined;
+  const nodes = value.nodes
+    .filter((node): node is string => typeof node === 'string')
+    .map((node) => nodeslideCleanText(node, 52))
+    .filter(Boolean)
+    .slice(0, 4);
+  return nodes.length >= 2 ? { nodes } : undefined;
 }
 
 function coerceChart(value: unknown): NodeSlidePlannedChart | undefined {
@@ -1512,6 +1674,8 @@ interface NodeSlideInputRecord extends Record<string, unknown> {
   math?: unknown;
   image?: unknown;
   video?: unknown;
+  diagram?: unknown;
+  nodes?: unknown;
   expression?: unknown;
   syntax?: unknown;
   display?: unknown;
