@@ -25,10 +25,11 @@ export const NODESLIDE_JOB_PHASES = [
 
 export type NodeSlideJobStatus = (typeof NODESLIDE_JOB_STATUSES)[number];
 export type NodeSlideJobPhase = (typeof NODESLIDE_JOB_PHASES)[number];
+export type NodeSlideJobKind = 'create_deck' | 'edit_proposal';
 
 export interface NodeSlideJobRecord {
   id: string;
-  kind: 'create_deck' | 'edit_proposal';
+  kind: NodeSlideJobKind;
   clientSessionId: string;
   admissionQuotaSubject: string;
   ownerDigest: string;
@@ -126,6 +127,46 @@ export function claimNodeSlideJobAttempt(job: NodeSlideJobRecord, now: number): 
     attempt: job.attempt + 1,
     updatedAt: now,
   };
+}
+
+/** Keeps internal completion handlers from crossing durable job result lanes. */
+export function assertNodeSlideJobCompletionKind(
+  job: Pick<NodeSlideJobRecord, 'kind'>,
+  expected: NodeSlideJobKind,
+): void {
+  if (job.kind !== expected) {
+    throw new Error(`The durable ${job.kind} job cannot complete a ${expected} result.`);
+  }
+}
+
+/** Rejects result-bearing checkpoints that contradict the job's durable contract. */
+export function assertNodeSlideJobCheckpointKind(
+  job: Pick<NodeSlideJobRecord, 'kind'>,
+  update: Pick<
+    Parameters<typeof advanceNodeSlideJob>[1],
+    'status' | 'phase' | 'resultDeckId' | 'resultPatchId' | 'resultCandidateDigest'
+  >,
+): void {
+  if (job.kind === 'create_deck') {
+    if (
+      update.status === 'awaiting_review' ||
+      update.phase === 'awaiting_review' ||
+      update.resultPatchId !== undefined ||
+      update.resultCandidateDigest !== undefined
+    ) {
+      throw new Error('A create-deck job cannot checkpoint an edit-proposal result.');
+    }
+    return;
+  }
+  if (update.status === 'succeeded' || update.phase === 'complete') {
+    throw new Error('An edit-proposal job must stop at the review gate, not completion.');
+  }
+  if (
+    update.resultCandidateDigest !== undefined &&
+    (update.resultDeckId === undefined || update.resultPatchId === undefined)
+  ) {
+    throw new Error('An edit-proposal candidate digest requires its deck and patch bindings.');
+  }
 }
 
 export function advanceNodeSlideJob(

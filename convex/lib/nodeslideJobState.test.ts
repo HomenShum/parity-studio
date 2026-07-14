@@ -3,6 +3,8 @@ import {
   NODESLIDE_JOB_MAX_ATTEMPTS,
   type NodeSlideJobRecord,
   advanceNodeSlideJob,
+  assertNodeSlideJobCheckpointKind,
+  assertNodeSlideJobCompletionKind,
   assertNodeSlideJobIdempotency,
   cancelNodeSlideJob,
   claimNodeSlideJobAttempt,
@@ -136,6 +138,28 @@ describe('NodeSlide durable job state', () => {
         reviewRequired: true,
       },
     });
+  });
+
+  it('rejects cross-kind completions and checkpoint result substitution before persistence', () => {
+    expect(() => assertNodeSlideJobCompletionKind(job(), 'edit_proposal')).toThrow(
+      /cannot complete a edit_proposal result/i,
+    );
+    expect(() =>
+      assertNodeSlideJobCompletionKind(job({ kind: 'edit_proposal' }), 'create_deck'),
+    ).toThrow(/cannot complete a create_deck result/i);
+    expect(() =>
+      assertNodeSlideJobCheckpointKind(job(), {
+        phase: 'awaiting_review',
+        status: 'awaiting_review',
+        resultPatchId: 'patch_wrong_lane',
+      }),
+    ).toThrow(/cannot checkpoint an edit-proposal result/i);
+    expect(() =>
+      assertNodeSlideJobCheckpointKind(job({ kind: 'edit_proposal' }), {
+        phase: 'complete',
+        status: 'succeeded',
+      }),
+    ).toThrow(/must stop at the review gate/i);
   });
 });
 

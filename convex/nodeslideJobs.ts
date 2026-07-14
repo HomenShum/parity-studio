@@ -15,6 +15,8 @@ import {
   NODESLIDE_JOB_STATUSES,
   type NodeSlideJobRecord,
   advanceNodeSlideJob,
+  assertNodeSlideJobCheckpointKind,
+  assertNodeSlideJobCompletionKind,
   assertNodeSlideJobIdempotency,
   cancelNodeSlideJob,
   claimNodeSlideJobAttempt,
@@ -388,9 +390,7 @@ export const checkpointInternal = internalMutation({
     const row = await findJob(ctx, args.jobId);
     if (!row) throw new Error('NodeSlide job not found.');
     const current = jobFromRow(row);
-    if (current.kind !== 'create_deck') {
-      throw new Error('The durable job kind cannot complete a deck-creation result.');
-    }
+    assertNodeSlideJobCheckpointKind(current, args);
     const next = advanceNodeSlideJob(
       current,
       {
@@ -426,9 +426,7 @@ export const completeCreateDeckInternal = internalMutation({
     const row = await findJob(ctx, args.jobId);
     if (!row) throw new Error('NodeSlide job not found.');
     const current = jobFromRow(row);
-    if (current.kind !== 'edit_proposal') {
-      throw new Error('The durable job kind cannot complete an edit-proposal result.');
-    }
+    assertNodeSlideJobCompletionKind(current, 'create_deck');
     const next = advanceNodeSlideJob(
       current,
       {
@@ -461,6 +459,7 @@ export const completeEditProposalInternal = internalMutation({
     const row = await findJob(ctx, args.jobId);
     if (!row) throw new Error('NodeSlide job not found.');
     const current = jobFromRow(row);
+    assertNodeSlideJobCompletionKind(current, 'edit_proposal');
     const next = advanceNodeSlideJob(
       current,
       {

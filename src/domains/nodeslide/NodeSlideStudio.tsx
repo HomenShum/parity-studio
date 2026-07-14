@@ -1,15 +1,7 @@
 import { useAction, useConvex, useMutation, useQuery } from 'convex/react';
 import type { DefaultFunctionArgs, FunctionReference } from 'convex/server';
-import {
-  AlertCircle,
-  CheckCircle2,
-  FolderOpen,
-  LoaderCircle,
-  RefreshCw,
-  ShieldAlert,
-  X,
-} from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LoaderCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type {
   AgentEditRequest,
@@ -34,7 +26,7 @@ import type {
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
-import { NODESLIDE_SCOPE_SLIDE_LIMIT, operationElementIds } from '../../../shared/nodeslide';
+import { operationElementIds } from '../../../shared/nodeslide';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -45,23 +37,17 @@ import {
   getOrCreateSessionId,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
-  removeDeckOwnerAccessKey,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
-import { DeleteDeckDialog } from './components/DeleteDeckDialog';
 import {
   type EditorCandidateReceipt,
   type EditorCanvasMode,
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
-import { NodeSlideConnectionsDialog } from './components/NodeSlideConnectionsDialog';
 import { NodeSlideLanding } from './components/NodeSlideLanding';
-import {
-  type OwnerCapabilityRecovery,
-  OwnerCapabilityRecoveryDialog,
-} from './components/OwnerCapabilityRecoveryDialog';
+import { type OwnerCapabilityRecovery } from './components/OwnerCapabilityRecoveryDialog';
 import { PresenterView } from './components/PresenterView';
 import {
   type CreateDeckAdmissionRequest,
@@ -72,13 +58,16 @@ import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import {
   type LayerZOrderAction,
-  SlideNavigator,
   type SlideNavigatorTab,
   normalizeSelectedSlideIds,
 } from './components/SlideNavigator';
 import { StoryArcOverview } from './components/StoryArcOverview';
 import { type StudioThemeMode, StudioToolbar } from './components/StudioToolbar';
 import { shouldRevealCandidateCanvas } from './components/editorShellResponsive';
+import { LoadingScreen, RecoveryScreen, Toast } from './components/shell/EditorFeedback';
+import { EditorNavigator } from './components/shell/EditorNavigator';
+import { EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
+import { elementScope } from './components/shell/editorActions';
 import {
   type EditorRequestToken,
   type WorkspaceReceiptMarker,
@@ -129,6 +118,8 @@ import {
 } from './slidelang/index';
 import './nodeslide.css';
 import './nodeslideV3.css';
+
+export { DeckDeletionAction, EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
 
 type ConvexArgs<Args> = Args & DefaultFunctionArgs;
 type PublicQuery<Args, Result> = FunctionReference<'query', 'public', ConvexArgs<Args>, Result>;
@@ -449,118 +440,6 @@ function mergeAgentTelemetryPages(
       : {}),
     totalRecorded: Math.max(...available.map((page) => page.totalRecorded)),
   };
-}
-
-type DeleteDeckMutation = (args: {
-  deckId: string;
-  ownerAccessKey: string;
-}) => Promise<unknown>;
-
-interface DeckDeletionActionProps {
-  open: boolean;
-  deckId: string;
-  deckTitle: string;
-  ownerAccessKey: string;
-  deleteDeck: DeleteDeckMutation;
-  onClose: () => void;
-  removeOwnerCapability?: (deckId: string) => unknown;
-  navigate?: (path: string) => void;
-}
-
-/** Owns the fail-open delete flow while the existing confirmation dialog owns exact-title input. */
-export function DeckDeletionAction({ open, ...props }: DeckDeletionActionProps) {
-  if (!open) return null;
-  return <OpenDeckDeletionAction key={props.deckId} {...props} />;
-}
-
-function OpenDeckDeletionAction({
-  deckId,
-  deckTitle,
-  ownerAccessKey,
-  deleteDeck,
-  onClose,
-  removeOwnerCapability = removeDeckOwnerAccessKey,
-  navigate = (path) => window.location.assign(path),
-}: Omit<DeckDeletionActionProps, 'open'>) {
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const confirmDeletion = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteDeck({ deckId, ownerAccessKey });
-      removeOwnerCapability(deckId);
-      navigate('/');
-    } catch (error) {
-      setDeleteError(errorMessage(error, 'Deck could not be deleted. Try again.'));
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <DeleteDeckDialog
-      open
-      deckTitle={deckTitle}
-      deleting={deleting}
-      error={deleteError}
-      onCancel={onClose}
-      onConfirm={() => void confirmDeletion()}
-    />
-  );
-}
-
-interface EditorProjectDialogsProps {
-  deckId: string;
-  deckTitle: string;
-  ownerAccessKey: string;
-  connectionsOpen: boolean;
-  deleteDeckOpen: boolean;
-  projectsOpen: boolean;
-  ownerRecovery: OwnerCapabilityRecovery | null;
-  deleteDeck: DeleteDeckMutation;
-  onCloseConnections: () => void;
-  onCloseDeleteDeck: () => void;
-  onCloseRecovery: () => void;
-}
-
-/** Keeps editor project actions bound to the active deck instead of a stale URL parameter. */
-export function EditorProjectDialogs({
-  deckId,
-  deckTitle,
-  ownerAccessKey,
-  connectionsOpen,
-  deleteDeckOpen,
-  projectsOpen,
-  ownerRecovery,
-  deleteDeck,
-  onCloseConnections,
-  onCloseDeleteDeck,
-  onCloseRecovery,
-}: EditorProjectDialogsProps) {
-  return (
-    <>
-      <NodeSlideConnectionsDialog
-        open={connectionsOpen}
-        onClose={onCloseConnections}
-        deckId={deckId}
-      />
-      <OwnerCapabilityRecoveryDialog
-        open={Boolean(ownerRecovery) && !projectsOpen}
-        recovery={ownerRecovery}
-        onClose={onCloseRecovery}
-      />
-      <DeckDeletionAction
-        open={deleteDeckOpen}
-        deckId={deckId}
-        deckTitle={deckTitle}
-        ownerAccessKey={ownerAccessKey}
-        deleteDeck={deleteDeck}
-        onClose={onCloseDeleteDeck}
-      />
-    </>
-  );
 }
 
 export function NodeSlideStudio() {
@@ -3315,175 +3194,27 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       />
 
       <div className="ns-studio-grid">
-        <SlideNavigator
-          slides={orderedSlides}
-          elements={workspace.elements}
-          theme={workspace.deck.theme}
-          activeSlideId={activeSlide.id}
+        <EditorNavigator
+          workspace={workspace}
+          orderedSlides={orderedSlides}
+          activeSlide={activeSlide}
+          activeSlideIndex={activeSlideIndex}
           collapsed={navigatorCollapsed}
           activeTab={navigatorTab}
-          comments={workspace.comments}
-          patches={workspace.patches}
-          sources={workspace.sources}
-          validations={workspace.validations}
           collapsedSections={collapsedNavigatorSections}
           propagationSlideIds={affectedSlideIds}
           selectedSlideIds={selectedSlideIds}
           selectedElementIds={selectedElementIds}
-          canAddSlide
-          canDeleteSlide={orderedSlides.length > 1}
           onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
-          onSelectedSlideIdsChange={(slideIds) =>
-            setSelectedSlideIds(
-              normalizeSelectedSlideIds(
-                orderedSlides.map((slide) => slide.id),
-                slideIds.slice(0, NODESLIDE_SCOPE_SLIDE_LIMIT),
-              ),
-            )
+          onSelectedSlideIdsChange={setSelectedSlideIds}
+          onRemoveSelectedSlide={(slideId) =>
+            setSelectedSlideIds((current) => current.filter((id) => id !== slideId))
           }
           onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
           onTabChange={setNavigatorTab}
-          onToggleSection={(section) =>
-            setCollapsedNavigatorSections((current) =>
-              current.includes(section)
-                ? current.filter((candidate) => candidate !== section)
-                : [...current, section],
-            )
-          }
+          onCollapsedSectionsChange={setCollapsedNavigatorSections}
           onSelectedElementIdsChange={selectElements}
-          onRenameSlide={(slideId, currentTitle) => {
-            const title = window.prompt('Rename slide', currentTitle)?.trim();
-            if (!title || title === currentTitle) return;
-            void applyOperations(
-              [{ op: 'update_slide', slideId, properties: { title } }],
-              {
-                kind: 'slide',
-                deckId: workspace.deck.id,
-                slideIds: [slideId],
-                operationMode: 'unrestricted',
-              },
-              `Renamed slide to ${title}`,
-            );
-          }}
-          onAddSlide={() => {
-            const added = createBlankSlide(workspace, activeSlideIndex + 1);
-            void applyOperations(
-              [
-                {
-                  op: 'add_slide',
-                  slide: added.slide,
-                  elements: added.elements,
-                  index: added.index,
-                },
-              ],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Added slide ${added.index + 1}`,
-            ).then((accepted) => {
-              if (accepted) selectSlide(added.slide.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onDuplicateSlide={(slideId) => {
-            const added = duplicateSlide(workspace, slideId);
-            if (!added) return;
-            void applyOperations(
-              [
-                {
-                  op: 'add_slide',
-                  slide: added.slide,
-                  elements: added.elements,
-                  index: added.index,
-                },
-              ],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Duplicated ${added.slide.title}`,
-            ).then((accepted) => {
-              if (accepted) selectSlide(added.slide.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onDeleteSlide={(slideId) => {
-            const index = orderedSlides.findIndex((slide) => slide.id === slideId);
-            const fallback = orderedSlides[index + 1] ?? orderedSlides[index - 1];
-            void applyOperations(
-              [{ op: 'remove_slide', slideId }],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Deleted slide ${index + 1}`,
-            ).then((accepted) => {
-              if (!accepted) return;
-              setSelectedSlideIds((current) => current.filter((id) => id !== slideId));
-              if (fallback) selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onReorderSlide={(slideId, index) =>
-            void applyOperations(
-              [{ op: 'reorder_slide', slideId, index }],
-              {
-                kind: 'slide',
-                deckId: workspace.deck.id,
-                slideIds: [slideId],
-                operationMode: 'layout',
-              },
-              `Moved slide to position ${index + 1}`,
-            )
-          }
-          onToggleElementVisibility={(elementId, visible) => {
-            const element = workspace.elements.find((candidate) => candidate.id === elementId);
-            if (!element) return;
-            void applyOperations(
-              [{ op: 'set_visibility_v1', slideId: element.slideId, elementId, visible }],
-              elementScope(workspace.deck.id, [element]),
-              `${visible ? 'Showed' : 'Hid'} ${element.name}`,
-            );
-          }}
-          onGroupElements={(elementIds) => {
-            const targets = elementIds
-              .map((id) => workspace.elements.find((element) => element.id === id))
-              .filter((element): element is SlideElement => element !== undefined);
-            if (
-              targets.length < 2 ||
-              targets.some((element) => element.slideId !== activeSlide.id)
-            ) {
-              return;
-            }
-            void applyOperations(
-              [
-                {
-                  op: 'group_elements_v1',
-                  slideId: activeSlide.id,
-                  elementIds: targets.map((element) => element.id),
-                  groupId: uniqueClientId('group'),
-                },
-              ],
-              elementScope(workspace.deck.id, targets),
-              `Grouped ${targets.length} layers`,
-            );
-          }}
-          onUngroupElements={(elementIds) => {
-            const groupIds = new Set(
-              elementIds.flatMap((id) => {
-                const groupId = workspace.elements.find((element) => element.id === id)?.groupId;
-                return groupId ? [groupId] : [];
-              }),
-            );
-            const operations: PatchOperation[] = [];
-            const members: SlideElement[] = [];
-            for (const groupId of groupIds) {
-              const groupMembers = workspace.elements.filter(
-                (element) => element.slideId === activeSlide.id && element.groupId === groupId,
-              );
-              members.push(...groupMembers);
-              operations.push({
-                op: 'ungroup_elements_v1',
-                slideId: activeSlide.id,
-                elementIds: groupMembers.map((element) => element.id),
-                groupId,
-              });
-            }
-            void applyOperations(
-              operations,
-              elementScope(workspace.deck.id, members),
-              `Ungrouped ${groupIds.size} layer group${groupIds.size === 1 ? '' : 's'}`,
-            );
-          }}
+          applyOperations={applyOperations}
           onChangeElementZOrder={changeElementZOrder}
         />
 
@@ -4221,16 +3952,6 @@ function scopeForOperations(
     : { kind: 'slide', deckId: workspace.deck.id, slideIds, operationMode };
 }
 
-function elementScope(deckId: string, elements: readonly SlideElement[]): PatchScope {
-  return {
-    kind: 'elements',
-    deckId,
-    slideIds: [...new Set(elements.map((element) => element.slideId))],
-    elementIds: elements.map((element) => element.id),
-    operationMode: 'unrestricted',
-  };
-}
-
 function duplicateElement(element: SlideElement, index: number): SlideElement {
   const suffix = `${Date.now().toString(36)}-${index}`;
   return {
@@ -4249,120 +3970,6 @@ function duplicateElement(element: SlideElement, index: number): SlideElement {
 function pasteElement(element: SlideElement, slideId: string, index: number): SlideElement {
   const copy = duplicateElement(element, index);
   return { ...copy, slideId };
-}
-
-function createBlankSlide(
-  workspace: NodeSlideWorkspace,
-  requestedIndex: number,
-): { slide: Slide; elements: SlideElement[]; index: number } {
-  const index = Math.max(0, Math.min(requestedIndex, workspace.deck.slideOrder.length));
-  const slideId = uniqueClientId('slide');
-  const titleId = uniqueClientId('element-title');
-  const bodyId = uniqueClientId('element-body');
-  const capabilities: SlideElement['exportCapabilities'] = [
-    'web_native',
-    'pptx_editable',
-    'google_importable',
-  ];
-  const elements: SlideElement[] = [
-    {
-      id: titleId,
-      slideId,
-      name: 'Slide title',
-      kind: 'text',
-      role: 'headline',
-      bbox: { x: 0.08, y: 0.1, width: 0.84, height: 0.16 },
-      rotation: 0,
-      content: 'Untitled slide',
-      style: {
-        color: workspace.deck.theme.colors.ink,
-        fontFamily: workspace.deck.theme.typography.display,
-        fontSize: 40,
-        fontWeight: 700,
-        lineHeight: 1.08,
-      },
-      sourceIds: [],
-      locked: false,
-      exportCapabilities: [...capabilities],
-      version: 1,
-    },
-    {
-      id: bodyId,
-      slideId,
-      name: 'Body copy',
-      kind: 'text',
-      role: 'body',
-      bbox: { x: 0.08, y: 0.33, width: 0.72, height: 0.3 },
-      rotation: 0,
-      content: 'Add the point this slide needs to make.',
-      style: {
-        color: workspace.deck.theme.colors.muted,
-        fontFamily: workspace.deck.theme.typography.body,
-        fontSize: 24,
-        fontWeight: 450,
-        lineHeight: 1.35,
-      },
-      sourceIds: [],
-      locked: false,
-      exportCapabilities: [...capabilities],
-      version: 1,
-    },
-  ];
-  return {
-    index,
-    slide: {
-      id: slideId,
-      deckId: workspace.deck.id,
-      title: 'Untitled slide',
-      section: 'Deck',
-      notes: '',
-      background: workspace.deck.theme.colors.canvas,
-      elementOrder: elements.map((element) => element.id),
-      version: 1,
-    },
-    elements,
-  };
-}
-
-function duplicateSlide(
-  workspace: NodeSlideWorkspace,
-  sourceSlideId: string,
-): { slide: Slide; elements: SlideElement[]; index: number } | null {
-  const source = workspace.slides.find((slide) => slide.id === sourceSlideId);
-  const sourceIndex = workspace.deck.slideOrder.indexOf(sourceSlideId);
-  if (!source || sourceIndex < 0) return null;
-  const slideId = uniqueClientId('slide');
-  const sourceElements = source.elementOrder
-    .map((elementId) => workspace.elements.find((element) => element.id === elementId))
-    .filter((element): element is SlideElement => element !== undefined);
-  const elementIds = new Map(
-    sourceElements.map((element) => [element.id, uniqueClientId('element')]),
-  );
-  const elements = sourceElements.map((element) => ({
-    ...structuredClone(element),
-    id: elementIds.get(element.id) as string,
-    slideId,
-    version: 1,
-  }));
-  return {
-    index: sourceIndex + 1,
-    slide: {
-      ...structuredClone(source),
-      id: slideId,
-      title: `${source.title} copy`,
-      elementOrder: source.elementOrder.map((id) => elementIds.get(id) as string),
-      version: 1,
-    },
-    elements,
-  };
-}
-
-function uniqueClientId(prefix: string) {
-  const random =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  return `${prefix}_${random}`;
 }
 
 function currentVersion(workspace: NodeSlideWorkspace): DeckVersion | undefined {
@@ -4477,55 +4084,6 @@ function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlide
   return id === 'finance-ibcs' || id === 'startup-narrative' ? id : null;
 }
 
-function LoadingScreen({ title }: { title: string }) {
-  return (
-    <main
-      className="nodeslide-studio ns-loading-screen"
-      data-testid="nodeslide-studio"
-      aria-busy="true"
-    >
-      <output className="ns-sr-only" aria-live="polite">
-        {title}
-      </output>
-      <span className="ns-loading-mark" aria-hidden="true">
-        <LoaderCircle className="ns-spin" size={20} />
-      </span>
-      <strong>{title}</strong>
-      <p>Loading canonical slides, sources, comments, and revision clocks.</p>
-    </main>
-  );
-}
-
-function RecoveryScreen({
-  title,
-  detail,
-  primaryLabel,
-  onPrimary,
-  children,
-}: {
-  title: string;
-  detail: string;
-  primaryLabel: string;
-  onPrimary: () => void;
-  children?: ReactNode;
-}) {
-  return (
-    <main className="nodeslide-studio ns-recovery-screen" data-testid="nodeslide-studio">
-      <span className="ns-recovery-mark" aria-hidden="true">
-        <ShieldAlert size={22} />
-      </span>
-      <span className="ns-eyebrow">Safe recovery</span>
-      <h1>{title}</h1>
-      <p>{detail}</p>
-      {children}
-      <button className="ns-button ns-button--accent" type="button" onClick={onPrimary}>
-        {primaryLabel === 'Retry' ? <RefreshCw size={15} /> : <FolderOpen size={15} />}
-        {primaryLabel}
-      </button>
-    </main>
-  );
-}
-
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'data' in error) {
     const data = error.data;
@@ -4534,24 +4092,4 @@ function errorMessage(error: unknown, fallback: string) {
     }
   }
   return error instanceof Error ? error.message : fallback;
-}
-
-function Toast({
-  toast,
-  onClose,
-}: { toast: { kind: 'success' | 'error'; message: string }; onClose: () => void }) {
-  useEffect(() => {
-    if (toast.kind === 'error') return;
-    const timeout = window.setTimeout(onClose, 4200);
-    return () => window.clearTimeout(timeout);
-  }, [onClose, toast.kind]);
-  return (
-    <output className={`ns-toast is-${toast.kind}`} aria-live="polite">
-      {toast.kind === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-      <span>{toast.message}</span>
-      <button type="button" onClick={onClose} aria-label="Dismiss notification">
-        <X size={14} />
-      </button>
-    </output>
-  );
 }

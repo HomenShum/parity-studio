@@ -19,6 +19,10 @@ import {
 } from './components/OwnerCapabilityRecoveryDialog';
 
 const studioSource = readFileSync('src/domains/nodeslide/NodeSlideStudio.tsx', 'utf8');
+const projectDialogSource = readFileSync(
+  'src/domains/nodeslide/components/shell/EditorProjectDialogs.tsx',
+  'utf8',
+);
 
 beforeAll(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
@@ -148,6 +152,7 @@ describe('NodeSlide editor project actions', () => {
     expect(studioSource).toContain('createEnabled={false}');
     expect(studioSource).not.toContain('initialMode="create"');
     expect(studioSource).toContain("onNewDeck={() => window.location.assign('/')}");
+    expect(projectDialogSource).toContain('DeckDeletionAction');
   });
 });
 
