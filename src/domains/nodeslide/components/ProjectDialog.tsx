@@ -362,7 +362,7 @@ export function ProjectDialog({
 
   return (
     <div
-      className="ns-modal-backdrop"
+      className="nodeslide-studio ns-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) clearAdmissionAndClose();
