@@ -186,6 +186,10 @@ describe('NodeSlide create action admission boundary', () => {
       .mockResolvedValueOnce(workspace);
     const args: CreateActionArgs = {
       ...createActionArgs(PREVIEW_ACCESS_CODE),
+      brief: {
+        ...createActionArgs(PREVIEW_ACCESS_CODE).brief,
+        prompt: 'Create a six-slide data story.',
+      },
       providerMode: 'openrouter_free',
       providerModel: 'anthropic/claude-sonnet-5',
       providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
@@ -198,6 +202,10 @@ describe('NodeSlide create action admission boundary', () => {
       expect.objectContaining({ model: 'anthropic/claude-sonnet-5' }),
     );
     const providerRequest = vi.mocked(callNodeSlideFreeJson).mock.calls[0]?.[0];
+    expect(providerRequest?.systemPrompt).toContain('Produce exactly 6 concise slides');
+    expect(providerRequest?.jsonSchema?.schema).toMatchObject({
+      properties: { slides: { minItems: 6, maxItems: 6 } },
+    });
     expect(providerRequest?.userText).toContain('world-cup.csv');
     expect(providerRequest?.userText).toContain('goals,172');
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;

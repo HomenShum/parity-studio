@@ -20,6 +20,7 @@ import {
   resolveRoadshowInputPaths,
   sanitizeEvidenceUrl,
   selectedSlidesScopePattern,
+  shouldClearBeforeHumanTyping,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -104,6 +105,12 @@ describe('founder-roadshow contract', () => {
     expect(selectedSlidesScopePattern(2).test('Selected slides')).toBe(false);
     expect(selectedSlidesScopePattern(2).test('Selected slides (3)')).toBe(false);
     expect(selectedSlidesScopePattern().test('Selected slides (12)')).toBe(true);
+  });
+
+  it('does not backspace an empty composer and accidentally remove its last attachment', () => {
+    expect(shouldClearBeforeHumanTyping('')).toBe(false);
+    expect(shouldClearBeforeHumanTyping(null)).toBe(false);
+    expect(shouldClearBeforeHumanTyping('existing text')).toBe(true);
   });
 });
 

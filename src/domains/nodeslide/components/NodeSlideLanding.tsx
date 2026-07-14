@@ -18,6 +18,7 @@ import {
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
+import { inferNodeSlideRequestedSlideCount } from '../../../../shared/nodeslideSlideCount';
 import {
   NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   NodeSlidePromptComposer,
@@ -105,6 +106,7 @@ export function NodeSlideLanding({
   const start = async (submittedPrompt: string, files: readonly File[]) => {
     const nextPrompt = submittedPrompt.trim();
     if (!nextPrompt) return;
+    const requestedSlideCount = inferNodeSlideRequestedSlideCount(nextPrompt);
     const providerAdmission = createDeckProviderAdmission(
       providerMode,
       generation === 'deterministic' ? NODESLIDE_DEFAULT_AGENT_MODEL : generation,
@@ -124,7 +126,9 @@ export function NodeSlideLanding({
           audience: 'Decision-makers described in the brief',
           purpose: 'Create an editable, reviewable presentation from this idea',
           successCriteria: [
-            'A coherent 6–8 slide narrative',
+            requestedSlideCount
+              ? `Exactly ${requestedSlideCount} slides in the requested narrative`
+              : 'A coherent 6–8 slide narrative',
             'Structured chart, formula, and image primitives where relevant',
             'Validation passes before presentation or export',
           ],
