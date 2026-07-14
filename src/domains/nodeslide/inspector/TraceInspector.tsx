@@ -23,7 +23,16 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type AgentTrace,
   type CandidateValidationReceipt,
@@ -37,6 +46,7 @@ import {
   nodeSlideReasoningEffort,
 } from '../../../../shared/nodeslide';
 import { TraceWaterfall } from './TraceWaterfall';
+import { spanDurationMs, spanTimingState } from './traceTelemetry';
 
 /*
  * NodeSlide Trace tab — compact run activity with expandable evidence and receipts.
@@ -69,6 +79,7 @@ interface TraceInspectorProps {
 }
 
 const DENSITY_KEY = 'ns-trace-density';
+const DENSITY_ORDER: readonly TraceDensity[] = ['human', 'pro', 'tech'];
 
 const NODE_ORDER: TraceNodeId[] = ['consent', 'read', 'plan', 'edits', 'validate', 'receipt'];
 const NODE_META: Record<TraceNodeId, { label: string; ink: NodeInk; Icon: LucideIcon }> = {
@@ -79,6 +90,15 @@ const NODE_META: Record<TraceNodeId, { label: string; ink: NodeInk; Icon: Lucide
   validate: { label: 'Validation', ink: 'human', Icon: ShieldCheck },
   receipt: { label: 'Approval', ink: 'human', Icon: Receipt },
 };
+
+export function traceDensityForKey(current: TraceDensity, key: string): TraceDensity | null {
+  const index = DENSITY_ORDER.indexOf(current);
+  if (key === 'Home') return DENSITY_ORDER[0] ?? current;
+  if (key === 'End') return DENSITY_ORDER.at(-1) ?? current;
+  if (key !== 'ArrowLeft' && key !== 'ArrowRight') return null;
+  const offset = key === 'ArrowRight' ? 1 : -1;
+  return DENSITY_ORDER[(index + offset + DENSITY_ORDER.length) % DENSITY_ORDER.length] ?? current;
+}
 
 // ---------------------------------------------------------------------------
 // Top-level inspector
@@ -110,11 +130,33 @@ export function TraceInspector({
   const [density, setDensityState] = useState<TraceDensity>(() => readDensity());
   const [openByTrace, setOpenByTrace] = useState<Record<string, TraceNodeId | null>>({});
   const [expanded, setExpanded] = useState(false);
+  const tabsetId = useId();
+  const inspectorRef = useRef<HTMLElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const panelId = `${tabsetId}-panel`;
+  const runPickerId = `${tabsetId}-run-picker`;
+  const tabId = (value: TraceDensity) => `${tabsetId}-${value}-tab`;
 
   const setDensity = (next: TraceDensity) => {
     setDensityState(next);
     persistDensity(next);
   };
+  const onDensityKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const next = traceDensityForKey(density, event.key);
+    if (!next) return;
+    event.preventDefault();
+    setDensity(next);
+    requestAnimationFrame(() => document.getElementById(tabId(next))?.focus());
+  };
+  const openExpanded = () => setExpanded(true);
+  const closeExpanded = () => {
+    setExpanded(false);
+    requestAnimationFrame(() => expandButtonRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (expanded) inspectorRef.current?.focus();
+  }, [expanded]);
 
   const selected = sorted.find((trace) => trace.id === selectedTraceId) ?? sorted[0];
   const selectedRun = selected
@@ -139,37 +181,60 @@ export function TraceInspector({
   };
 
   return (
-    <div className={`ns-inspector-scroll ns-trace-inspector ${expanded ? 'is-expanded' : ''}`}>
+    <section
+      ref={inspectorRef}
+      className={`ns-inspector-scroll ns-trace-inspector ${expanded ? 'is-expanded' : ''}`}
+      aria-label={expanded ? 'Expanded trace observability view' : 'Trace inspector'}
+      tabIndex={expanded ? -1 : undefined}
+      onKeyDown={(event) => {
+        if (expanded && event.key === 'Escape') {
+          event.preventDefault();
+          closeExpanded();
+        }
+      }}
+    >
       <section className="ns-inspector-section ns-trace-intro ns-trace-header">
         <div className="ns-section-title-row">
           <div>
             <span className="ns-eyebrow">Agent activity</span>
             <h2>Run details</h2>
           </div>
-          <div className="ns-trace-density" role="tablist" aria-label="Trace detail level">
+          <div
+            className="ns-trace-density"
+            role="tablist"
+            aria-label="Trace detail level"
+            onKeyDown={onDensityKeyDown}
+          >
             <DensityButton
               active={density === 'human'}
+              id={tabId('human')}
+              controls={panelId}
               icon={<Eye size={11} />}
               label="Summary"
               onClick={() => setDensity('human')}
             />
             <DensityButton
               active={density === 'pro'}
+              id={tabId('pro')}
+              controls={panelId}
               icon={<Gauge size={11} />}
               label="Timeline"
               onClick={() => setDensity('pro')}
             />
             <DensityButton
               active={density === 'tech'}
+              id={tabId('tech')}
+              controls={panelId}
               icon={<Braces size={11} />}
               label="Raw"
               onClick={() => setDensity('tech')}
             />
           </div>
           <button
+            ref={expandButtonRef}
             type="button"
             className="ns-trace-expand"
-            onClick={() => setExpanded((value) => !value)}
+            onClick={expanded ? closeExpanded : openExpanded}
             aria-label={expanded ? 'Exit expanded trace view' : 'Expand trace view'}
             aria-pressed={expanded}
           >
@@ -193,9 +258,11 @@ export function TraceInspector({
         </div>
       ) : (
         <>
-          <label className="ns-trace-picker">
+          <label className="ns-trace-picker" htmlFor={runPickerId}>
             <span>Run</span>
             <select
+              id={runPickerId}
+              name="traceRun"
               value={selected?.id ?? ''}
               onChange={(event) => {
                 const traceId = event.target.value;
@@ -214,7 +281,7 @@ export function TraceInspector({
                 </option>
               ))}
             </select>
-            <ChevronRight size={13} />
+            <ChevronRight size={13} aria-hidden="true" />
           </label>
 
           {selected ? (
@@ -232,32 +299,57 @@ export function TraceInspector({
                   {selectedTelemetry?.totalRecorded ?? NODE_ORDER.length} auditable records
                 </small>
               </div>
-              {density === 'human' ? (
-                <TraceOverview
-                  trace={selected}
-                  {...(selectedRun ? { run: selectedRun } : {})}
-                  {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
-                />
-              ) : density === 'tech' ? (
-                <RawTelemetry
-                  {...(selectedRun ? { run: selectedRun } : {})}
-                  {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
-                />
-              ) : selectedRun && selectedTelemetry ? (
-                <div className="ns-trace-timeline-stack">
-                  <TraceWaterfall
-                    run={selectedRun}
-                    telemetry={selectedTelemetry}
-                    messages={agentMessages}
-                    sources={sources}
-                    loadingMore={agentTelemetryLoadingMore}
-                    compact={!expanded}
-                    onExpand={() => setExpanded(true)}
-                    {...(agentTelemetryLoadError ? { loadError: agentTelemetryLoadError } : {})}
-                    {...(onLoadMoreAgentTelemetry ? { onLoadMore: onLoadMoreAgentTelemetry } : {})}
+              <div
+                id={panelId}
+                className="ns-trace-tabpanel"
+                role="tabpanel"
+                aria-labelledby={tabId(density)}
+              >
+                {density === 'human' ? (
+                  <TraceOverview
+                    trace={selected}
+                    {...(selectedRun ? { run: selectedRun } : {})}
+                    {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
                   />
-                  <details className="ns-trace-custody-disclosure">
-                    <summary>Chain of custody and countersigned receipt</summary>
+                ) : density === 'tech' ? (
+                  <RawTelemetry
+                    {...(selectedRun ? { run: selectedRun } : {})}
+                    {...(selectedTelemetry ? { telemetry: selectedTelemetry } : {})}
+                  />
+                ) : selectedRun && selectedTelemetry ? (
+                  <div className="ns-trace-timeline-stack">
+                    <TraceWaterfall
+                      key={selectedRun.id}
+                      run={selectedRun}
+                      trace={selected}
+                      telemetry={selectedTelemetry}
+                      messages={agentMessages}
+                      sources={sources}
+                      loadingMore={agentTelemetryLoadingMore}
+                      compact={!expanded}
+                      onExpand={openExpanded}
+                      {...(agentTelemetryLoadError ? { loadError: agentTelemetryLoadError } : {})}
+                      {...(onLoadMoreAgentTelemetry
+                        ? { onLoadMore: onLoadMoreAgentTelemetry }
+                        : {})}
+                    />
+                    <details className="ns-trace-custody-disclosure">
+                      <summary>Chain of custody and countersigned receipt</summary>
+                      <CustodyRail
+                        trace={selected}
+                        patch={patch}
+                        validation={traceValidation}
+                        density={density}
+                        openNode={openNode}
+                        onToggle={toggleNode}
+                      />
+                    </details>
+                  </div>
+                ) : (
+                  <div className="ns-trace-timeline-empty">
+                    <Clock3 size={16} />
+                    <strong>Structured timeline unavailable</strong>
+                    <p>Legacy runs keep their custody receipt but do not invent span timing.</p>
                     <CustodyRail
                       trace={selected}
                       patch={patch}
@@ -266,23 +358,9 @@ export function TraceInspector({
                       openNode={openNode}
                       onToggle={toggleNode}
                     />
-                  </details>
-                </div>
-              ) : (
-                <div className="ns-trace-timeline-empty">
-                  <Clock3 size={16} />
-                  <strong>Structured timeline unavailable</strong>
-                  <p>Legacy runs keep their custody receipt but do not invent span timing.</p>
-                  <CustodyRail
-                    trace={selected}
-                    patch={patch}
-                    validation={traceValidation}
-                    density={density}
-                    openNode={openNode}
-                    onToggle={toggleNode}
-                  />
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
               {traceValidation && traceValidation.id !== latestValidation?.id ? (
                 <ValidationSummary validation={traceValidation} label="Selected trace validation" />
               ) : null}
@@ -292,7 +370,7 @@ export function TraceInspector({
       )}
 
       <RunJournal runs={agentRuns} messages={agentMessages} />
-    </div>
+    </section>
   );
 }
 
@@ -356,21 +434,28 @@ function RunJournal({
 
 function DensityButton({
   active,
+  id,
+  controls,
   icon,
   label,
   onClick,
 }: {
   active: boolean;
+  id: string;
+  controls: string;
   icon: ReactNode;
   label: string;
   onClick: () => void;
 }) {
   return (
     <button
+      id={id}
       className={active ? 'is-active' : ''}
       type="button"
       role="tab"
       aria-selected={active}
+      aria-controls={controls}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
     >
       {icon}
@@ -471,7 +556,12 @@ function TraceOverview({
       sequence: span.sequence,
       label: span.name,
       timestamp: span.endTime ?? span.startTime,
-      meta: span.durationMs === undefined ? span.status : formatDurationMs(span.durationMs),
+      meta:
+        spanTimingState(span) === 'recorded'
+          ? formatDurationMs(spanDurationMs(span) ?? 0)
+          : spanTimingState(span) === 'open'
+            ? 'open at last checkpoint'
+            : 'duration unknown',
       status: span.status,
     })) ?? []),
     ...(telemetry?.events.map((event) => ({
@@ -581,7 +671,11 @@ function RawTelemetry({
               <span>{span.name}</span>
               <small>
                 {span.status} ·{' '}
-                {span.durationMs === undefined ? 'open' : formatDurationMs(span.durationMs)}
+                {spanTimingState(span) === 'recorded'
+                  ? formatDurationMs(spanDurationMs(span) ?? 0)
+                  : spanTimingState(span) === 'open'
+                    ? 'open at last checkpoint'
+                    : 'duration unknown'}
               </small>
             </li>
           ))}

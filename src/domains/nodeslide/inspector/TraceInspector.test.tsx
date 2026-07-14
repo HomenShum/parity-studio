@@ -21,6 +21,7 @@ import {
   nodeSummary,
   persistDensity,
   readDensity,
+  traceDensityForKey,
 } from './TraceInspector';
 
 /*
@@ -432,6 +433,15 @@ describe('progressive disclosure — depth gates real information', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('supports wrapping arrow navigation and direct Home/End tab navigation', () => {
+    expect(traceDensityForKey('human', 'ArrowRight')).toBe('pro');
+    expect(traceDensityForKey('tech', 'ArrowRight')).toBe('human');
+    expect(traceDensityForKey('human', 'ArrowLeft')).toBe('tech');
+    expect(traceDensityForKey('pro', 'Home')).toBe('human');
+    expect(traceDensityForKey('pro', 'End')).toBe('tech');
+    expect(traceDensityForKey('pro', 'Enter')).toBeNull();
+  });
 });
 
 describe('copy interaction (spec §4b)', () => {
@@ -641,7 +651,12 @@ describe('compact durable telemetry projection', () => {
     expect(html).toContain('Full timeline');
     expect(html).toContain('Plan bounded slide edit');
     expect(html).toContain('204');
-    expect(html).toContain('Older telemetry is available on the server');
+    expect(html).toContain('202 older records not loaded');
+    expect(html).toContain('Counts and search cover the loaded window only');
+    expect(html).toContain('data-observability-primitives="assistant-ui-react-o11y"');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tabpanel"');
+    expect(html).toContain('aria-controls=');
     expect(html).toContain('Chain of custody and countersigned receipt');
   });
 });

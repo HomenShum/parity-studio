@@ -1,0 +1,332 @@
+/* Trace-only refinements for the react-o11y waterfall. The base NodeSlide trace
+   tokens remain in nodeslideV3.css; this file owns no generic studio chrome. */
+
+.nodeslide-studio .ns-trace-o11y-compact-row {
+  display: contents;
+}
+
+.nodeslide-studio .ns-trace-activity-compact li .ns-o11y-name,
+.nodeslide-studio .ns-trace-activity-compact li small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-trace-activity-compact li .ns-o11y-name {
+  color: var(--ns-ink);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.nodeslide-studio .ns-trace-activity-compact li .ns-trace-o11y-compact-row > time {
+  color: var(--ns-ink-2);
+  font: 600 9px / 1 var(--ns-mono);
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-trace-activity-icon {
+  position: relative;
+}
+
+.nodeslide-studio .ns-trace-activity-icon .ns-o11y-status {
+  position: absolute;
+  inset: 2px 2px auto auto;
+  width: 5px;
+  height: 5px;
+}
+
+.nodeslide-studio .ns-waterfall-proof {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) repeat(4, minmax(90px, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--ns-line);
+  background: color-mix(in srgb, var(--ns-surface) 72%, var(--ns-panel));
+}
+
+.nodeslide-studio .ns-waterfall-proof > div {
+  min-width: 0;
+  padding: 7px 9px;
+  border-right: 1px solid var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-waterfall-proof > div:last-child {
+  border-right: 0;
+}
+
+.nodeslide-studio .ns-waterfall-proof dt,
+.nodeslide-studio .ns-waterfall-proof dd {
+  margin: 0;
+}
+
+.nodeslide-studio .ns-waterfall-proof dt {
+  color: var(--ns-faint);
+  font: 600 8px / 1.2 var(--ns-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nodeslide-studio .ns-waterfall-proof dd {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ns-ink-2);
+  font: 600 9px / 1.3 var(--ns-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-waterfall-proof dd small {
+  display: block;
+  color: var(--ns-faint);
+  font-size: 8px;
+}
+
+.nodeslide-studio .ns-waterfall-proof.is-compact {
+  grid-template-columns: minmax(0, 1.45fr) minmax(70px, 0.55fr);
+  margin: 0 10px 7px;
+  border: 1px solid var(--ns-line-b);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-waterfall-proof.is-compact > div {
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-waterfall-proof.is-compact > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.nodeslide-studio .ns-waterfall-runbar {
+  flex-wrap: wrap;
+}
+
+.nodeslide-studio .ns-waterfall-run-ids {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  padding-top: 7px;
+  border-top: 1px solid var(--ns-line-b);
+  color: var(--ns-faint);
+  font: 500 8.5px / 1.3 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-run-ids code {
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-waterfall-partial,
+.nodeslide-studio .ns-waterfall-complete {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ns-line-b);
+  color: var(--ns-faint);
+  background: color-mix(in srgb, var(--ns-warning) 7%, var(--ns-panel));
+  font: 500 9px / 1.4 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-complete {
+  background: color-mix(in srgb, var(--ns-positive) 5%, var(--ns-panel));
+}
+
+.nodeslide-studio .ns-waterfall-tree-actions {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.nodeslide-studio .ns-waterfall-toolbar output {
+  flex: 1 0 100%;
+  color: var(--ns-faint);
+  font: 500 8.5px / 1.3 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.nodeslide-studio .ns-o11y-timeline {
+  position: relative;
+  min-width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.nodeslide-studio .ns-o11y-timeline:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ns-collaboration) 58%, transparent);
+}
+
+.nodeslide-studio .ns-o11y-status {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, currentColor 62%, transparent);
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.nodeslide-studio .ns-o11y-status[data-span-status="running"] {
+  background: transparent;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.nodeslide-studio .ns-o11y-status[data-span-status="failed"] {
+  color: var(--ns-danger);
+}
+
+.nodeslide-studio .ns-o11y-type {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nodeslide-studio .ns-waterfall-label-main .ns-o11y-name,
+.nodeslide-studio .ns-waterfall-label-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-waterfall-label-main .ns-o11y-name {
+  color: var(--ns-ink);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.nodeslide-studio .ns-waterfall-label-main small {
+  margin-top: 1px;
+  color: var(--ns-ink-3);
+  font: 500 8px / 1.2 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="model"] {
+  background: var(--ns-waterfall-model);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="tool"] {
+  background: var(--ns-waterfall-tool);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="retrieval"] {
+  background: var(--ns-waterfall-retrieval);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="validation"] {
+  background: var(--ns-waterfall-validation);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="human"] {
+  background: var(--ns-waterfall-human);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-type="error"],
+.nodeslide-studio .ns-waterfall-bar[data-span-status="failed"] {
+  background: var(--ns-danger);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-span-running] {
+  border: 1px dashed currentColor;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ns-warning) 42%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  color: var(--ns-warning);
+}
+
+.nodeslide-studio .ns-waterfall-bar[data-timing="unknown"] {
+  width: 10px;
+  min-width: 10px;
+  border: 1px dashed currentColor;
+  background: transparent;
+  transform: translateX(-50%);
+}
+
+.nodeslide-studio .ns-waterfall-event.is-overflow {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translateX(-100%);
+  background: var(--ns-ink-3);
+}
+
+.nodeslide-studio .ns-waterfall-detail-grid li button,
+.nodeslide-studio .ns-waterfall-detail-grid details > button {
+  border: 0;
+  background: transparent;
+  color: var(--ns-collaboration);
+  cursor: pointer;
+  font: 600 9px / 1.3 var(--ns-mono);
+  padding: 0;
+  text-align: left;
+}
+
+.nodeslide-studio .ns-waterfall-evidence-note code,
+.nodeslide-studio .ns-waterfall-evidence-missing code,
+.nodeslide-studio .ns-waterfall-evidence article > div code {
+  overflow-wrap: anywhere;
+  color: var(--ns-ink-2);
+  font: 500 8.5px / 1.3 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-evidence-missing {
+  margin: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--ns-line-b);
+  color: var(--ns-danger);
+  background: color-mix(in srgb, var(--ns-danger) 7%, transparent);
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-waterfall-source-url {
+  overflow: hidden;
+  color: var(--ns-data) !important;
+  font: 500 8px / 1.3 var(--ns-mono) !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-waterfall-citation-more {
+  margin-top: 6px;
+  border: 0 !important;
+  padding: 0 !important;
+}
+
+.nodeslide-studio .ns-waterfall-citation-more summary {
+  color: var(--ns-data);
+  cursor: pointer;
+  font: 600 8.5px / 1.3 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-citation-more > p {
+  margin-top: 6px !important;
+}
+
+@media (max-width: 900px) {
+  .nodeslide-studio .ns-waterfall-proof {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nodeslide-studio .ns-waterfall-proof > div {
+    border-bottom: 1px solid var(--ns-line-b);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nodeslide-studio button.ns-waterfall-disclosure svg {
+    transition: none;
+  }
+}

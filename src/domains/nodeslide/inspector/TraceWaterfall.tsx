@@ -1,3 +1,5 @@
+import { SpanByIndexProvider, SpanPrimitive, SpanResource } from '@assistant-ui/react-o11y';
+import { AuiProvider, useAui, useAuiState } from '@assistant-ui/store';
 import {
   AlertTriangle,
   Bot,
@@ -13,8 +15,16 @@ import {
   Search,
   Wrench,
 } from 'lucide-react';
-import { type CSSProperties, type UIEvent, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type UIEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type {
+  AgentTrace,
   NodeSlideAgentEvent,
   NodeSlideAgentMessage,
   NodeSlideAgentRun,
@@ -22,6 +32,17 @@ import type {
   NodeSlideAgentTelemetryPage,
   SourceRecord,
 } from '../../../../shared/nodeslide';
+import {
+  numericAttribute,
+  spanDurationMs,
+  spanEndTime,
+  spanTimingState,
+  spanType,
+  toO11ySpans,
+  traceProofSummary,
+  traceWindowMetrics,
+} from './traceTelemetry';
+import './TraceWaterfall.css';
 
 type WaterfallFilter = 'all' | 'errors' | 'sources' | 'models';
 
@@ -33,6 +54,7 @@ export interface TraceWaterfallRow {
 
 interface TraceWaterfallProps {
   run: NodeSlideAgentRun;
+  trace?: AgentTrace;
   telemetry: NodeSlideAgentTelemetryPage;
   messages: readonly NodeSlideAgentMessage[];
   sources: readonly SourceRecord[];
@@ -45,6 +67,10 @@ interface TraceWaterfallProps {
 
 const ROW_HEIGHT = 38;
 const OVERSCAN = 8;
+const MINIMAP_BUCKET_COUNT = 48;
+const MAX_EVENT_MARKERS = 8;
+const MAX_VISIBLE_EVENTS = 40;
+const MAX_VISIBLE_ATTRIBUTES = 24;
 
 function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: string): boolean {
   if (filter === 'errors' && span.status !== 'error') return false;
@@ -67,10 +93,7 @@ function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: s
 }
 
 function spanMemoryCount(span: NodeSlideAgentSpan): number {
-  const value = span.attributes.find(
-    (attribute) => attribute.key === 'nodeslide.memory.count',
-  )?.value;
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  return Math.max(0, Math.floor(numericAttribute(span, 'nodeslide.memory.count')));
 }
 
 export function buildWaterfallRows(
@@ -108,43 +131,79 @@ export function buildWaterfallRows(
 
   const rows: TraceWaterfallRow[] = [];
   const visited = new Set<string>();
+  const structurallyAnchored = new Set<string>();
+  const markAnchored = (span: NodeSlideAgentSpan) => {
+    if (structurallyAnchored.has(span.spanId)) return;
+    structurallyAnchored.add(span.spanId);
+    for (const child of children.get(span.spanId) ?? []) markAnchored(child);
+  };
+  for (const root of children.get('') ?? []) markAnchored(root);
   const visit = (span: NodeSlideAgentSpan, depth: number) => {
     if (visited.has(span.spanId) || (included && !included.has(span.spanId))) return;
     visited.add(span.spanId);
     const descendants = children.get(span.spanId) ?? [];
     rows.push({ span, depth, childCount: descendants.length });
-    if (collapsed.has(span.spanId)) return;
+    // Search/filter is an explicit reveal action: matching descendants must not remain
+    // silently hidden behind an earlier collapse choice.
+    if (!included && collapsed.has(span.spanId)) return;
     for (const child of descendants) visit(child, depth + 1);
   };
   for (const root of children.get('') ?? []) visit(root, 0);
-  for (const span of spans) visit(span, 0);
+  // Only malformed cyclic islands need a fallback root. Descendants hidden by collapse
+  // remain structurally anchored and must not reappear as fake top-level rows.
+  for (const span of spans) {
+    if (!structurallyAnchored.has(span.spanId)) visit(span, 0);
+  }
   return rows;
 }
 
-function formatDuration(ms: number | undefined): string {
-  if (ms === undefined) return 'open';
+export function collapsibleSpanIds(spans: readonly NodeSlideAgentSpan[]): Set<string> {
+  const parents = new Set(spans.flatMap((span) => (span.parentSpanId ? [span.parentSpanId] : [])));
+  return new Set(spans.filter((span) => parents.has(span.spanId)).map((span) => span.spanId));
+}
+
+export function defaultCollapsedSpanIds(
+  spans: readonly NodeSlideAgentSpan[],
+  threshold = 101,
+): Set<string> {
+  if (spans.length < threshold) return new Set();
+  const bySpanId = new Set(spans.map((span) => span.spanId));
+  const roots = spans.filter((span) => !span.parentSpanId || !bySpanId.has(span.parentSpanId));
+  const collapsible = collapsibleSpanIds(spans);
+  return new Set(roots.filter((span) => collapsible.has(span.spanId)).map((span) => span.spanId));
+}
+
+function formatDuration(ms: number): string {
+  if (ms === 0) return '0 ms';
   if (ms < 1) return '<1 ms';
   if (ms < 1000) return `${Math.round(ms)} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`;
   return `${(ms / 60_000).toFixed(1)} min`;
 }
 
-function formatClock(value: number): string {
+function humanize(value: string): string {
+  return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatDateTime(value: number): string {
   return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
   }).format(value);
 }
 
+function formatSpanDuration(span: NodeSlideAgentSpan): string {
+  const timing = spanTimingState(span);
+  if (timing === 'open') return 'open at last checkpoint';
+  if (timing === 'unknown') return 'duration unknown';
+  return formatDuration(spanDurationMs(span) ?? 0);
+}
+
 function spanTone(span: NodeSlideAgentSpan): string {
-  if (span.status === 'error') return 'error';
-  if (span.sourceIds?.length || spanMemoryCount(span) > 0) return 'retrieval';
-  if (span.operationName === 'chat' || span.model) return 'model';
-  if (span.operationName === 'execute_tool' || span.toolName) return 'tool';
-  if (/validat/i.test(`${span.operationName} ${span.name}`)) return 'validation';
-  if (/approval|human/i.test(`${span.operationName} ${span.name}`)) return 'human';
-  return 'system';
+  return spanType(span);
 }
 
 function spanIcon(span: NodeSlideAgentSpan) {
@@ -156,72 +215,84 @@ function spanIcon(span: NodeSlideAgentSpan) {
   return CircleDot;
 }
 
-function intervalUnionDuration(spans: readonly NodeSlideAgentSpan[]): number {
-  const intervals = spans
-    .filter((span) => span.endTime !== undefined && span.parentSpanId)
-    .map((span) => [span.startTime, span.endTime as number] as const)
-    .filter(([start, end]) => end >= start)
-    .sort((left, right) => left[0] - right[0]);
-  let total = 0;
-  let cursorStart = -1;
-  let cursorEnd = -1;
-  for (const [start, end] of intervals) {
-    if (cursorStart < 0) {
-      cursorStart = start;
-      cursorEnd = end;
-    } else if (start <= cursorEnd) {
-      cursorEnd = Math.max(cursorEnd, end);
-    } else {
-      total += cursorEnd - cursorStart;
-      cursorStart = start;
-      cursorEnd = end;
+export interface TraceMiniMapBucket {
+  id: string;
+  count: number;
+  error: boolean;
+}
+
+export function buildMiniMapBuckets(
+  spans: readonly NodeSlideAgentSpan[],
+  rangeStart: number,
+  rangeEnd: number,
+  bucketCount = MINIMAP_BUCKET_COUNT,
+): TraceMiniMapBucket[] {
+  const safeBucketCount = Math.max(1, Math.floor(bucketCount));
+  const result = Array.from({ length: safeBucketCount }, (_, index) => ({
+    id: `trace-bucket-${index}`,
+    count: 0,
+    error: false,
+  }));
+  const duration = Math.max(1, rangeEnd - rangeStart);
+  for (const span of spans) {
+    const start = Math.max(
+      0,
+      Math.min(
+        safeBucketCount - 1,
+        Math.floor(((span.startTime - rangeStart) / duration) * safeBucketCount),
+      ),
+    );
+    const observedEnd =
+      spanEndTime(span) ?? (spanTimingState(span) === 'open' ? rangeEnd : span.startTime);
+    const end = Math.max(
+      start,
+      Math.min(
+        safeBucketCount - 1,
+        Math.floor(((observedEnd - rangeStart) / duration) * safeBucketCount),
+      ),
+    );
+    for (let index = start; index <= end; index += 1) {
+      const bucket = result[index];
+      if (!bucket) continue;
+      bucket.count += 1;
+      if (span.status === 'error') bucket.error = true;
     }
   }
-  return cursorStart < 0 ? 0 : total + cursorEnd - cursorStart;
+  return result;
 }
 
 function MiniMap({
   spans,
   rangeStart,
   rangeEnd,
+  partial,
 }: {
   spans: readonly NodeSlideAgentSpan[];
   rangeStart: number;
   rangeEnd: number;
+  partial: boolean;
 }) {
-  const buckets = useMemo(() => {
-    const result = Array.from({ length: 48 }, (_, index) => ({
-      id: `trace-bucket-${index}`,
-      count: 0,
-      error: false,
-    }));
-    const duration = Math.max(1, rangeEnd - rangeStart);
-    for (const span of spans) {
-      const start = Math.max(
-        0,
-        Math.min(47, Math.floor(((span.startTime - rangeStart) / duration) * 48)),
-      );
-      const observedEnd = span.endTime ?? Math.max(span.startTime, rangeEnd);
-      const end = Math.max(
-        start,
-        Math.min(47, Math.floor(((observedEnd - rangeStart) / duration) * 48)),
-      );
-      for (let index = start; index <= end; index += 1) {
-        const bucket = result[index];
-        if (!bucket) continue;
-        bucket.count += 1;
-        if (span.status === 'error') bucket.error = true;
-      }
-    }
-    return result;
-  }, [rangeEnd, rangeStart, spans]);
+  const buckets = useMemo(
+    () => buildMiniMapBuckets(spans, rangeStart, rangeEnd),
+    [rangeEnd, rangeStart, spans],
+  );
   const maximum = Math.max(1, ...buckets.map((bucket) => bucket.count));
   return (
-    <div className="ns-waterfall-minimap" aria-label="Trace activity overview">
+    <div
+      className="ns-waterfall-minimap"
+      role="img"
+      aria-label={`Trace activity overview for ${spans.length} loaded spans${partial ? '; older records are not loaded' : ''}`}
+      data-testid="trace-minimap"
+      data-partial={partial ? 'true' : 'false'}
+    >
       {buckets.map((bucket) => (
         <span
           key={bucket.id}
           className={bucket.error ? 'has-error' : ''}
+          data-testid="trace-minimap-bucket"
+          data-count={bucket.count}
+          data-error={bucket.error ? 'true' : 'false'}
+          aria-hidden="true"
           style={
             {
               '--ns-mini-height': `${Math.max(8, (bucket.count / maximum) * 100)}%`,
@@ -233,8 +304,433 @@ function MiniMap({
   );
 }
 
-export function TraceWaterfall({
+export type TraceTreeKeyboardAction =
+  | { type: 'select'; spanId: string; index: number }
+  | { type: 'toggle'; spanId: string }
+  | { type: 'none' };
+
+export function traceTreeKeyboardAction(
+  rows: readonly TraceWaterfallRow[],
+  selectedSpanId: string | null,
+  key: string,
+  collapsed: ReadonlySet<string>,
+): TraceTreeKeyboardAction {
+  if (rows.length === 0) return { type: 'none' };
+  const currentIndex = Math.max(
+    0,
+    rows.findIndex((row) => row.span.spanId === selectedSpanId),
+  );
+  const current = rows[currentIndex] ?? rows[0];
+  if (!current) return { type: 'none' };
+  const first = rows.at(0) ?? current;
+
+  if (key === 'ArrowDown') {
+    const index = Math.min(rows.length - 1, currentIndex + 1);
+    return { type: 'select', spanId: rows[index]?.span.spanId ?? current.span.spanId, index };
+  }
+  if (key === 'ArrowUp') {
+    const index = Math.max(0, currentIndex - 1);
+    return { type: 'select', spanId: rows[index]?.span.spanId ?? current.span.spanId, index };
+  }
+  if (key === 'Home') return { type: 'select', spanId: first.span.spanId, index: 0 };
+  if (key === 'End') {
+    const index = rows.length - 1;
+    const last = rows.at(-1) ?? current;
+    return { type: 'select', spanId: last.span.spanId, index };
+  }
+  if (key === 'ArrowRight') {
+    if (current.childCount > 0 && collapsed.has(current.span.spanId)) {
+      return { type: 'toggle', spanId: current.span.spanId };
+    }
+    const child = rows[currentIndex + 1];
+    if (child && child.depth > current.depth) {
+      return { type: 'select', spanId: child.span.spanId, index: currentIndex + 1 };
+    }
+  }
+  if (key === 'ArrowLeft') {
+    if (current.childCount > 0 && !collapsed.has(current.span.spanId)) {
+      return { type: 'toggle', spanId: current.span.spanId };
+    }
+    if (current.span.parentSpanId) {
+      const index = rows.findIndex((row) => row.span.spanId === current.span.parentSpanId);
+      const parent = rows[index];
+      if (index >= 0 && parent) {
+        return { type: 'select', spanId: parent.span.spanId, index };
+      }
+    }
+  }
+  return { type: 'none' };
+}
+
+function traceRowDomId(spanId: string): string {
+  return `trace-span-${spanId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
+interface O11yRowProps {
+  index: number;
+  rowBySpanId: ReadonlyMap<string, TraceWaterfallRow>;
+  eventsBySpan: ReadonlyMap<string, readonly NodeSlideAgentEvent[]>;
+  selectedSpanId: string | null;
+  collapsed: ReadonlySet<string>;
+  rangeStart: number;
+  rangeEnd: number;
+  onSelect: (spanId: string) => void;
+  onToggle: (spanId: string) => void;
+}
+
+function O11ySpanRow({
+  index,
+  rowBySpanId,
+  eventsBySpan,
+  selectedSpanId,
+  collapsed,
+  rangeStart,
+  rangeEnd,
+  onSelect,
+  onToggle,
+}: O11yRowProps) {
+  const o11ySpan = useAuiState((state) => state.span);
+  const row = rowBySpanId.get(o11ySpan.id);
+  if (!row) return null;
+  const sourceSpan = row.span;
+  const Icon = spanIcon(sourceSpan);
+  const allEvents = [...(eventsBySpan.get(sourceSpan.spanId) ?? [])].sort(
+    (left, right) => left.timestamp - right.timestamp,
+  );
+  const visibleEvents = allEvents.slice(-MAX_EVENT_MARKERS);
+  const hiddenEventCount = allEvents.length - visibleEvents.length;
+  const rangeDuration = Math.max(1, rangeEnd - rangeStart);
+  const isCollapsed = collapsed.has(sourceSpan.spanId);
+  const timing = spanTimingState(sourceSpan);
+  const tickLeft = Math.max(
+    0,
+    Math.min(100, ((sourceSpan.startTime - rangeStart) / rangeDuration) * 100),
+  );
+
+  return (
+    <SpanPrimitive.Root
+      id={traceRowDomId(sourceSpan.spanId)}
+      className={`ns-waterfall-row is-${spanTone(sourceSpan)} ${selectedSpanId === sourceSpan.spanId ? 'is-selected' : ''}`}
+      style={{ top: index * ROW_HEIGHT }}
+      role="treeitem"
+      aria-level={row.depth + 1}
+      aria-selected={selectedSpanId === sourceSpan.spanId}
+      aria-label={`${sourceSpan.name}, ${humanize(sourceSpan.status)}, ${formatSpanDuration(sourceSpan)}`}
+      {...(row.childCount > 0 ? { 'aria-expanded': !isCollapsed } : {})}
+      data-tree-collapsed={isCollapsed ? 'true' : 'false'}
+      data-testid="trace-waterfall-row"
+      data-source-count={sourceSpan.sourceIds?.length ?? 0}
+      onClick={() => onSelect(sourceSpan.spanId)}
+    >
+      <SpanPrimitive.Indent className="ns-waterfall-label" baseIndent={8} indentPerLevel={13}>
+        {row.childCount > 0 ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            className="ns-waterfall-disclosure"
+            aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${sourceSpan.name}`}
+            aria-expanded={!isCollapsed}
+            data-collapsed={isCollapsed ? 'true' : 'false'}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggle(sourceSpan.spanId);
+            }}
+          >
+            {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          </button>
+        ) : (
+          <span className="ns-waterfall-disclosure" />
+        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          className="ns-waterfall-label-main"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect(sourceSpan.spanId);
+          }}
+        >
+          <SpanPrimitive.StatusIndicator className="ns-o11y-status" />
+          <SpanPrimitive.TypeBadge
+            className="ns-o11y-type"
+            aria-label={`${spanTone(sourceSpan)} span`}
+          >
+            <Icon size={12} />
+          </SpanPrimitive.TypeBadge>
+          <span>
+            <SpanPrimitive.Name className="ns-o11y-name" />
+            <small>{sourceSpan.toolName ?? sourceSpan.operationName}</small>
+          </span>
+        </button>
+      </SpanPrimitive.Indent>
+      <button
+        type="button"
+        tabIndex={-1}
+        className="ns-waterfall-track"
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(sourceSpan.spanId);
+        }}
+        aria-label={`${sourceSpan.name}, ${formatSpanDuration(sourceSpan)}`}
+      >
+        {timing === 'unknown' ? (
+          <span
+            className="ns-waterfall-bar"
+            data-timing="unknown"
+            data-span-type={spanTone(sourceSpan)}
+            style={{ left: `${tickLeft}%` }}
+            title="Completed span; duration was not recorded"
+          />
+        ) : (
+          <SpanPrimitive.TimelineBar
+            className="ns-waterfall-bar"
+            now={rangeEnd}
+            data-timing={timing}
+          />
+        )}
+        {visibleEvents.map((event) => (
+          <i
+            key={event.id}
+            className={`ns-waterfall-event is-${event.severity}`}
+            title={`${event.name}: ${event.body}`}
+            style={{
+              left: `${Math.max(0, Math.min(100, ((event.timestamp - rangeStart) / rangeDuration) * 100))}%`,
+            }}
+          />
+        ))}
+        {hiddenEventCount > 0 ? (
+          <i
+            className="ns-waterfall-event is-overflow"
+            title={`${hiddenEventCount} additional events are available in span details`}
+            style={{ left: '100%' }}
+          />
+        ) : null}
+      </button>
+      <time dateTime={new Date(sourceSpan.startTime).toISOString()}>
+        {formatSpanDuration(sourceSpan)}
+      </time>
+    </SpanPrimitive.Root>
+  );
+}
+
+function VirtualizedO11yRows({
+  rows,
+  scrollTop,
+  viewportHeight,
+  ...rowProps
+}: Omit<O11yRowProps, 'index' | 'rowBySpanId'> & {
+  rows: readonly TraceWaterfallRow[];
+  scrollTop: number;
+  viewportHeight: number;
+}) {
+  const visibleCount = useAuiState((state) => state.span.children.length);
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIndex = Math.min(
+    visibleCount,
+    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
+  );
+  const rowBySpanId = useMemo(() => new Map(rows.map((row) => [row.span.spanId, row])), [rows]);
+  return (
+    <div className="ns-waterfall-rows" style={{ height: visibleCount * ROW_HEIGHT }}>
+      {Array.from({ length: Math.max(0, endIndex - startIndex) }, (_, offset) => {
+        const index = startIndex + offset;
+        const row = rows[index];
+        return (
+          <SpanByIndexProvider key={row?.span.spanId ?? index} index={index}>
+            <O11ySpanRow index={index} rowBySpanId={rowBySpanId} {...rowProps} />
+          </SpanByIndexProvider>
+        );
+      })}
+    </div>
+  );
+}
+
+function O11ySpanTimeline({
+  rows,
+  rangeStart,
+  rangeEnd,
+  scrollTop,
+  viewportHeight,
+  eventsBySpan,
+  selectedSpanId,
+  collapsed,
+  onSelect,
+  onToggle,
+  onKeyDown,
+}: {
+  rows: readonly TraceWaterfallRow[];
+  rangeStart: number;
+  rangeEnd: number;
+  scrollTop: number;
+  viewportHeight: number;
+  eventsBySpan: ReadonlyMap<string, readonly NodeSlideAgentEvent[]>;
+  selectedSpanId: string | null;
+  collapsed: ReadonlySet<string>;
+  onSelect: (spanId: string) => void;
+  onToggle: (spanId: string) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+}) {
+  const o11ySpans = useMemo(() => toO11ySpans(rows.map((row) => row.span)), [rows]);
+  const aui = useAui({ span: SpanResource({ spans: o11ySpans }) }, { parent: null });
+
+  return (
+    <AuiProvider value={aui}>
+      <SpanPrimitive.Timeline
+        className="ns-o11y-timeline"
+        timeRange={{ min: rangeStart, max: rangeEnd }}
+        role="tree"
+        tabIndex={0}
+        aria-label="Trace span waterfall. Use Up and Down to move; Left and Right to collapse or expand."
+        {...(selectedSpanId ? { 'aria-activedescendant': traceRowDomId(selectedSpanId) } : {})}
+        data-observability-primitives="assistant-ui-react-o11y"
+        onKeyDown={onKeyDown}
+      >
+        <VirtualizedO11yRows
+          rows={rows}
+          scrollTop={scrollTop}
+          viewportHeight={viewportHeight}
+          eventsBySpan={eventsBySpan}
+          selectedSpanId={selectedSpanId}
+          collapsed={collapsed}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          onSelect={onSelect}
+          onToggle={onToggle}
+        />
+      </SpanPrimitive.Timeline>
+    </AuiProvider>
+  );
+}
+
+function CompactO11yActivity({ spans }: { spans: readonly NodeSlideAgentSpan[] }) {
+  const o11ySpans = useMemo(
+    () => toO11ySpans(spans).map((span) => ({ ...span, parentSpanId: null })),
+    [spans],
+  );
+  const aui = useAui({ span: SpanResource({ spans: o11ySpans }) }, { parent: null });
+
+  return (
+    <AuiProvider value={aui}>
+      <ol
+        aria-label="Latest trace activity"
+        data-observability-primitives="assistant-ui-react-o11y"
+      >
+        {spans.map((span, index) => {
+          const Icon = spanIcon(span);
+          const memoryCount = spanMemoryCount(span);
+          return (
+            <li
+              key={span.id}
+              className={`is-${spanTone(span)}`}
+              data-testid="trace-activity-row"
+              aria-label={`${span.name}, ${humanize(span.status)}, ${formatSpanDuration(span)}`}
+            >
+              <SpanByIndexProvider index={index}>
+                <SpanPrimitive.Root className="ns-trace-o11y-compact-row">
+                  <SpanPrimitive.TypeBadge className="ns-trace-activity-icon">
+                    <SpanPrimitive.StatusIndicator className="ns-o11y-status" />
+                    <Icon size={12} />
+                  </SpanPrimitive.TypeBadge>
+                  <div>
+                    <SpanPrimitive.Name className="ns-o11y-name" />
+                    <small>{span.toolName ?? span.operationName}</small>
+                  </div>
+                  <time dateTime={new Date(span.startTime).toISOString()}>
+                    {formatSpanDuration(span)}
+                  </time>
+                  {span.sourceIds?.length ? (
+                    <span className="ns-trace-activity-source" title="Span-bound sources">
+                      {span.sourceIds.length} source{span.sourceIds.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                  {memoryCount ? (
+                    <span className="ns-trace-activity-source" title="Bounded deck memories used">
+                      {memoryCount} memor{memoryCount === 1 ? 'y' : 'ies'}
+                    </span>
+                  ) : null}
+                </SpanPrimitive.Root>
+              </SpanByIndexProvider>
+            </li>
+          );
+        })}
+      </ol>
+    </AuiProvider>
+  );
+}
+
+function formatInteger(value: number | undefined): string {
+  return value === undefined ? 'not recorded' : new Intl.NumberFormat().format(value);
+}
+
+function formatCost(value: number | undefined): string {
+  if (value === undefined) return 'not recorded';
+  if (value === 0) return '$0.0000';
+  const exactDollars = (value / 1_000_000).toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  return `$${exactDollars}`;
+}
+
+function shortDigest(value: string): string {
+  return value.length <= 24 ? value : `${value.slice(0, 14)}…${value.slice(-7)}`;
+}
+
+function TraceProofStrip({
+  proof,
+  compact = false,
+}: {
+  proof: ReturnType<typeof traceProofSummary>;
+  compact?: boolean;
+}) {
+  return (
+    <dl
+      className={`ns-waterfall-proof ${compact ? 'is-compact' : ''}`}
+      aria-label="Model and receipt accounting"
+      data-testid="trace-proof-summary"
+    >
+      <div>
+        <dt>Route</dt>
+        <dd title={`${proof.provider} · ${proof.model}`}>
+          {proof.provider} · {proof.model}
+        </dd>
+      </div>
+      <div>
+        <dt>Effort</dt>
+        <dd>{proof.effort ?? 'not recorded'}</dd>
+      </div>
+      <div>
+        <dt>Tokens</dt>
+        <dd>
+          {formatInteger(proof.inputTokens)} in · {formatInteger(proof.outputTokens)} out
+          {proof.accountingScope === 'loaded spans' ? <small>loaded spans</small> : null}
+        </dd>
+      </div>
+      <div>
+        <dt>Cost</dt>
+        <dd>
+          {formatCost(proof.costMicroUsd)}
+          {proof.accountingScope === 'loaded spans' ? <small>loaded spans</small> : null}
+        </dd>
+      </div>
+      <div>
+        <dt>{proof.digestLabel ? `${proof.digestLabel} digest` : 'Digest'}</dt>
+        <dd>
+          {proof.digest ? (
+            <code title={proof.digest}>{shortDigest(proof.digest)}</code>
+          ) : (
+            'not recorded'
+          )}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+export function TraceWaterfall(props: TraceWaterfallProps) {
+  return <TraceWaterfallRun key={props.run.id} {...props} />;
+}
+
+function TraceWaterfallRun({
   run,
+  trace,
   telemetry,
   messages,
   sources,
@@ -246,28 +742,41 @@ export function TraceWaterfall({
 }: TraceWaterfallProps) {
   const [filter, setFilter] = useState<WaterfallFilter>('all');
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() =>
+    defaultCollapsedSpanIds(telemetry.spans),
+  );
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(430);
+  const [expandedEventsFor, setExpandedEventsFor] = useState<string | null>(null);
+  const [expandedAttributesFor, setExpandedAttributesFor] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const spans = useMemo(
     () => [...telemetry.spans].sort((left, right) => left.startTime - right.startTime),
     [telemetry.spans],
   );
+  const hasActiveFilter = filter !== 'all' || Boolean(query.trim());
+  const effectiveCollapsed = useMemo(
+    () => (hasActiveFilter ? new Set<string>() : collapsed),
+    [collapsed, hasActiveFilter],
+  );
   const rows = useMemo(
-    () => buildWaterfallRows(spans, collapsed, filter, query),
-    [collapsed, filter, query, spans],
+    () => buildWaterfallRows(spans, effectiveCollapsed, filter, query),
+    [effectiveCollapsed, filter, query, spans],
   );
-  const rangeStart = Math.min(run.createdAt, ...spans.map((span) => span.startTime));
-  const rangeEnd = Math.max(
-    run.updatedAt,
-    ...spans.map((span) => span.endTime ?? span.startTime),
-    ...telemetry.events.map((event) => event.timestamp),
+  const collapsibleIds = useMemo(() => collapsibleSpanIds(spans), [spans]);
+  const metrics = useMemo(
+    () =>
+      traceWindowMetrics(run, spans, telemetry.events, telemetry.totalRecorded, telemetry.hasMore),
+    [run, spans, telemetry.events, telemetry.hasMore, telemetry.totalRecorded],
   );
+  const proof = useMemo(() => traceProofSummary(run, spans, trace), [run, spans, trace]);
+  const rangeStart = metrics.rangeStart;
+  const rangeEnd = metrics.rangeEnd;
   const rangeDuration = Math.max(1, rangeEnd - rangeStart);
-  const activeDuration = intervalUnionDuration(spans);
-  const selected = spans.find((span) => span.spanId === selectedSpanId) ?? rows[0]?.span;
+  const selected = rows.find((row) => row.span.spanId === selectedSpanId)?.span ?? rows[0]?.span;
+  const selectedEnd = selected ? spanEndTime(selected) : undefined;
   const eventsBySpan = useMemo(() => {
     const map = new Map<string, NodeSlideAgentEvent[]>();
     for (const event of telemetry.events) {
@@ -278,15 +787,44 @@ export function TraceWaterfall({
     return map;
   }, [telemetry.events]);
 
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endIndex = Math.min(
-    rows.length,
-    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
-  );
-  const visibleRows = rows.slice(startIndex, endIndex);
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     setScrollTop(event.currentTarget.scrollTop);
     setViewportHeight(event.currentTarget.clientHeight);
+  };
+  const toggleSpan = (spanId: string) => {
+    if (hasActiveFilter) return;
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(spanId)) next.delete(spanId);
+      else next.add(spanId);
+      return next;
+    });
+    setSelectedSpanId(spanId);
+  };
+  const ensureRowVisible = (index: number) => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const top = index * ROW_HEIGHT;
+    const bottom = top + ROW_HEIGHT;
+    if (top < element.scrollTop) element.scrollTop = top;
+    else if (bottom > element.scrollTop + element.clientHeight) {
+      element.scrollTop = Math.max(0, bottom - element.clientHeight);
+    }
+  };
+  const onTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const action = traceTreeKeyboardAction(
+      rows,
+      selected?.spanId ?? null,
+      event.key,
+      effectiveCollapsed,
+    );
+    if (action.type === 'none' || (action.type === 'toggle' && hasActiveFilter)) return;
+    event.preventDefault();
+    if (action.type === 'toggle') toggleSpan(action.spanId);
+    else {
+      setSelectedSpanId(action.spanId);
+      ensureRowVisible(action.index);
+    }
   };
 
   const runMessages = messages.filter((message) => message.runId === run.id);
@@ -299,16 +837,32 @@ export function TraceWaterfall({
   const evidence = evidenceIds
     .map((id) => sources.find((source) => source.id === id))
     .filter((source): source is SourceRecord => Boolean(source));
+  const resolvedEvidenceIds = new Set(evidence.map((source) => source.id));
+  const missingEvidenceIds = evidenceIds.filter((id) => !resolvedEvidenceIds.has(id));
   const selectedEvents = selected ? (eventsBySpan.get(selected.spanId) ?? []) : [];
+  const showAllEvents = expandedEventsFor === selected?.spanId;
+  const showAllAttributes = expandedAttributesFor === selected?.spanId;
+  const visibleSelectedEvents = showAllEvents
+    ? selectedEvents
+    : selectedEvents.slice(0, MAX_VISIBLE_EVENTS);
+  const visibleSelectedAttributes = showAllAttributes
+    ? (selected?.attributes ?? [])
+    : (selected?.attributes.slice(0, MAX_VISIBLE_ATTRIBUTES) ?? []);
+  const selectedEffort = selected?.attributes.find((attribute) =>
+    /reasoning[._-]?effort/i.test(attribute.key),
+  )?.value;
+  const selectedDigestAttributes =
+    selected?.attributes.filter((attribute) => /digest|receipt/i.test(attribute.key)) ?? [];
 
   if (compact) {
     const orderedSpans = [...spans].sort((left, right) => left.sequence - right.sequence);
-    const compactSpans =
+    const compactSpans = (
       orderedSpans.length <= 6
         ? orderedSpans
         : [orderedSpans[0], ...orderedSpans.slice(-5)].filter((span): span is NodeSlideAgentSpan =>
             Boolean(span),
-          );
+          )
+    ).sort((left, right) => left.startTime - right.startTime || left.sequence - right.sequence);
     const hiddenCount = Math.max(0, orderedSpans.length - compactSpans.length);
     const errorCount = spans.filter((span) => span.status === 'error').length;
     const citedCount = spans.filter((span) => span.sourceIds?.length).length;
@@ -336,7 +890,7 @@ export function TraceWaterfall({
 
         <div className="ns-trace-activity-health" aria-label="Trace health summary">
           <span>
-            <b>{telemetry.totalRecorded}</b> records
+            <b>{metrics.loadedRecordCount}</b> loaded
           </span>
           <span className={errorCount ? 'has-error' : ''}>
             <b>{errorCount}</b> errors
@@ -346,44 +900,21 @@ export function TraceWaterfall({
           </span>
         </div>
 
-        <ol aria-label="Latest trace activity">
-          {compactSpans.map((span) => {
-            const Icon = spanIcon(span);
-            const memoryCount = spanMemoryCount(span);
-            return (
-              <li key={span.id} className={`is-${spanTone(span)}`} data-testid="trace-activity-row">
-                <span className="ns-trace-activity-icon">
-                  <Icon size={12} />
-                </span>
-                <div>
-                  <strong>{span.name}</strong>
-                  <small>{span.toolName ?? span.operationName}</small>
-                </div>
-                <time dateTime={new Date(span.startTime).toISOString()}>
-                  {formatDuration(span.durationMs)}
-                </time>
-                {span.sourceIds?.length ? (
-                  <span className="ns-trace-activity-source" title="Span-bound sources">
-                    {span.sourceIds.length} source{span.sourceIds.length === 1 ? '' : 's'}
-                  </span>
-                ) : null}
-                {memoryCount ? (
-                  <span className="ns-trace-activity-source" title="Bounded deck memories used">
-                    {memoryCount} memor{memoryCount === 1 ? 'y' : 'ies'}
-                  </span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+        <TraceProofStrip proof={proof} compact />
+        <CompactO11yActivity spans={compactSpans} />
 
         {hiddenCount ? (
           <p className="ns-trace-activity-more">
-            {hiddenCount} earlier step{hiddenCount === 1 ? '' : 's'} available in the full timeline.
+            {hiddenCount} earlier loaded step{hiddenCount === 1 ? '' : 's'} hidden here; open the
+            full timeline to inspect them.
           </p>
         ) : null}
         {telemetry.hasMore ? (
-          <p className="ns-trace-activity-more">Older telemetry is available on the server.</p>
+          <p className="ns-trace-activity-more" data-testid="trace-partial-notice">
+            {metrics.omittedRecordCount} older record
+            {metrics.omittedRecordCount === 1 ? '' : 's'} not loaded. Counts and search cover the
+            loaded window only.
+          </p>
         ) : null}
         {loadError ? (
           <p className="ns-waterfall-error">Telemetry unavailable: {loadError}</p>
@@ -396,38 +927,79 @@ export function TraceWaterfall({
     <section className="ns-waterfall" data-testid="trace-waterfall">
       <header className="ns-waterfall-runbar">
         <div>
-          <span className={`ns-waterfall-status is-${run.status}`} />
+          <span className={`ns-waterfall-status is-${run.status}`} aria-hidden="true" />
           <div>
             <strong>{run.instruction}</strong>
             <small>
-              {run.provider} · {run.model}
+              {humanize(run.status)} · {proof.provider} · {proof.model}
             </small>
           </div>
         </div>
         <dl>
           <div>
             <dt>Started</dt>
-            <dd>{formatClock(run.createdAt)}</dd>
+            <dd>
+              <time dateTime={new Date(run.createdAt).toISOString()}>
+                {formatDateTime(run.createdAt)}
+              </time>
+            </dd>
           </div>
           <div>
             <dt>Wall</dt>
-            <dd>{formatDuration(Math.max(0, run.updatedAt - run.createdAt))}</dd>
+            <dd>{formatDuration(metrics.wallDurationMs)}</dd>
           </div>
           <div>
-            <dt>Active</dt>
-            <dd>{formatDuration(activeDuration)}</dd>
+            <dt>Active observed</dt>
+            <dd>{formatDuration(metrics.activeDurationMs)}</dd>
+          </div>
+          <div>
+            <dt>Human wait</dt>
+            <dd>
+              {metrics.humanWaitDurationMs > 0
+                ? formatDuration(metrics.humanWaitDurationMs)
+                : 'none recorded'}
+            </dd>
           </div>
           <div>
             <dt>Records</dt>
-            <dd>{telemetry.totalRecorded}</dd>
+            <dd>
+              {metrics.loadedRecordCount} of {telemetry.totalRecorded}
+            </dd>
           </div>
         </dl>
+        <div className="ns-waterfall-run-ids">
+          <span>
+            Observed through{' '}
+            <time dateTime={new Date(metrics.rangeEnd).toISOString()}>
+              {formatDateTime(metrics.rangeEnd)}
+            </time>
+          </span>
+          <code title={run.otelTraceId ?? spans[0]?.traceId ?? 'Trace ID not recorded'}>
+            {run.otelTraceId ?? spans[0]?.traceId ?? 'trace id not recorded'}
+          </code>
+        </div>
       </header>
+
+      <TraceProofStrip proof={proof} />
+
+      {!metrics.isComplete ? (
+        <p className="ns-waterfall-partial" data-testid="trace-partial-notice">
+          Partial loaded window: {metrics.loadedRecordCount} of {telemetry.totalRecorded} records.
+          Search, filters, metrics, and the minimap cover loaded records only;{' '}
+          {metrics.omittedRecordCount} older record
+          {metrics.omittedRecordCount === 1 ? '' : 's'} remain available by cursor.
+        </p>
+      ) : (
+        <p className="ns-waterfall-complete" data-testid="trace-complete-notice">
+          Complete loaded trace · {metrics.loadedRecordCount} records
+        </p>
+      )}
 
       <div className="ns-waterfall-toolbar">
         <label>
           <Search size={13} />
           <input
+            type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find span, tool, model, or source"
@@ -454,9 +1026,40 @@ export function TraceWaterfall({
             </button>
           ))}
         </fieldset>
+        <div className="ns-waterfall-tree-actions" aria-label="Trace tree controls">
+          <button
+            type="button"
+            disabled={hasActiveFilter || collapsibleIds.size === 0}
+            onClick={() => {
+              setCollapsed(new Set(collapsibleIds));
+              setSelectedSpanId(rows[0]?.span.spanId ?? null);
+              setScrollTop(0);
+              if (scrollRef.current) scrollRef.current.scrollTop = 0;
+            }}
+          >
+            Collapse all
+          </button>
+          <button
+            type="button"
+            disabled={hasActiveFilter || collapsed.size === 0}
+            title="Rows remain virtualized while loaded subtrees expand"
+            onClick={() => setCollapsed(new Set())}
+          >
+            Expand loaded
+          </button>
+        </div>
+        <output aria-live="polite">
+          {rows.length} of {spans.length} loaded spans visible
+          {hasActiveFilter ? ' · matching branches temporarily expanded' : ''}
+        </output>
       </div>
 
-      <MiniMap spans={spans} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+      <MiniMap
+        spans={spans}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+        partial={!metrics.isComplete}
+      />
       <div className="ns-waterfall-axis" aria-hidden="true">
         <span>Operation</span>
         {[0, 25, 50, 75, 100].map((tick) => (
@@ -471,117 +1074,49 @@ export function TraceWaterfall({
       </div>
 
       <div
+        ref={scrollRef}
         className="ns-waterfall-scroll"
         onScroll={onScroll}
-        role="tree"
-        aria-label="Trace span waterfall"
         style={{ height: Math.min(430, Math.max(152, rows.length * ROW_HEIGHT)) }}
       >
-        <div className="ns-waterfall-rows" style={{ height: rows.length * ROW_HEIGHT }}>
-          {visibleRows.map(({ span, depth, childCount }, index) => {
-            const rowIndex = startIndex + index;
-            const observedEnd = span.endTime ?? Math.max(span.startTime, rangeEnd);
-            const left = ((span.startTime - rangeStart) / rangeDuration) * 100;
-            const measuredWidth = ((observedEnd - span.startTime) / rangeDuration) * 100;
-            const width =
-              span.endTime === undefined
-                ? Math.max(0.8, measuredWidth)
-                : Math.max(0.5, measuredWidth);
-            const Icon = spanIcon(span);
-            const rowEvents = eventsBySpan.get(span.spanId) ?? [];
-            const isCollapsed = collapsed.has(span.spanId);
-            return (
-              <div
-                key={span.id}
-                className={`ns-waterfall-row is-${spanTone(span)} ${selected?.spanId === span.spanId ? 'is-selected' : ''}`}
-                style={{ top: rowIndex * ROW_HEIGHT } as CSSProperties}
-                role="treeitem"
-                aria-level={depth + 1}
-                aria-selected={selected?.spanId === span.spanId}
-                data-testid="trace-waterfall-row"
-              >
-                <div
-                  className="ns-waterfall-label"
-                  style={{ '--ns-trace-depth': depth } as CSSProperties}
-                >
-                  {childCount ? (
-                    <button
-                      type="button"
-                      className="ns-waterfall-disclosure"
-                      aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${span.name}`}
-                      onClick={() => {
-                        setCollapsed((current) => {
-                          const next = new Set(current);
-                          if (next.has(span.spanId)) next.delete(span.spanId);
-                          else next.add(span.spanId);
-                          return next;
-                        });
-                      }}
-                    >
-                      {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                    </button>
-                  ) : (
-                    <span className="ns-waterfall-disclosure" />
-                  )}
-                  <button
-                    type="button"
-                    className="ns-waterfall-label-main"
-                    onClick={() => setSelectedSpanId(span.spanId)}
-                  >
-                    <Icon size={13} />
-                    <span>
-                      <strong>{span.name}</strong>
-                      <small>{span.toolName ?? span.operationName}</small>
-                    </span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="ns-waterfall-track"
-                  onClick={() => setSelectedSpanId(span.spanId)}
-                  aria-label={`${span.name}, ${formatDuration(span.durationMs)}`}
-                >
-                  <span
-                    className="ns-waterfall-bar"
-                    data-tone={spanTone(span)}
-                    data-open={span.endTime === undefined ? 'true' : 'false'}
-                    style={{
-                      left: `${Math.max(0, left)}%`,
-                      width: `${Math.min(100 - Math.max(0, left), width)}%`,
-                    }}
-                  />
-                  {rowEvents.map((event) => (
-                    <i
-                      key={event.id}
-                      className={`ns-waterfall-event is-${event.severity}`}
-                      title={`${event.name}: ${event.body}`}
-                      style={{
-                        left: `${Math.max(0, Math.min(100, ((event.timestamp - rangeStart) / rangeDuration) * 100))}%`,
-                      }}
-                    />
-                  ))}
-                </button>
-                <time>{formatDuration(span.durationMs)}</time>
-              </div>
-            );
-          })}
-        </div>
+        <O11ySpanTimeline
+          rows={rows}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          scrollTop={scrollTop}
+          viewportHeight={viewportHeight}
+          eventsBySpan={eventsBySpan}
+          selectedSpanId={selected?.spanId ?? null}
+          collapsed={effectiveCollapsed}
+          onSelect={setSelectedSpanId}
+          onToggle={toggleSpan}
+          onKeyDown={onTreeKeyDown}
+        />
       </div>
 
       {rows.length === 0 ? (
         <div className="ns-waterfall-empty">No spans match this filter.</div>
       ) : null}
 
-      {telemetry.hasMore && telemetry.nextBeforeSequence && onLoadMore ? (
+      {telemetry.hasMore ? (
         <button
           type="button"
           className="ns-waterfall-load"
-          disabled={loadingMore}
-          onClick={() => void onLoadMore(run.id, telemetry.nextBeforeSequence as number)}
+          data-testid="trace-load-more"
+          disabled={loadingMore || !telemetry.nextBeforeSequence || !onLoadMore}
+          onClick={() => {
+            if (telemetry.nextBeforeSequence && onLoadMore) {
+              void onLoadMore(run.id, telemetry.nextBeforeSequence);
+            }
+          }}
         >
           {loadingMore
             ? 'Loading older spans…'
-            : `Load older records · ${telemetry.spans.length + telemetry.events.length} of ${telemetry.totalRecorded}`}
+            : !telemetry.nextBeforeSequence
+              ? 'Older records exist, but the server cursor was not recorded'
+              : !onLoadMore
+                ? 'Older records exist, but loading is unavailable'
+                : `Load older records · ${metrics.loadedRecordCount} of ${telemetry.totalRecorded}`}
         </button>
       ) : null}
       {loadError ? (
@@ -589,7 +1124,11 @@ export function TraceWaterfall({
       ) : null}
 
       {selected ? (
-        <aside className="ns-waterfall-detail" aria-label={`Selected span: ${selected.name}`}>
+        <aside
+          className="ns-waterfall-detail"
+          aria-label={`Selected span: ${selected.name}`}
+          data-testid="trace-selected-span"
+        >
           <header>
             <div>
               <span className={`ns-waterfall-detail-icon is-${spanTone(selected)}`}>
@@ -602,7 +1141,7 @@ export function TraceWaterfall({
                 </small>
               </div>
             </div>
-            <code>{selected.spanId}</code>
+            <code title={`trace ${selected.traceId}`}>{selected.spanId}</code>
           </header>
           <div className="ns-waterfall-detail-grid">
             <section>
@@ -610,56 +1149,98 @@ export function TraceWaterfall({
               <dl>
                 <div>
                   <dt>Started</dt>
-                  <dd>{formatClock(selected.startTime)}</dd>
+                  <dd>
+                    <time dateTime={new Date(selected.startTime).toISOString()}>
+                      {formatDateTime(selected.startTime)}
+                    </time>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Ended</dt>
+                  <dd>
+                    {selectedEnd !== undefined ? (
+                      <time dateTime={new Date(selectedEnd).toISOString()}>
+                        {formatDateTime(selectedEnd)}
+                      </time>
+                    ) : spanTimingState(selected) === 'open' ? (
+                      'open at last server checkpoint'
+                    ) : (
+                      'not recorded'
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt>Duration</dt>
-                  <dd>{formatDuration(selected.durationMs)}</dd>
+                  <dd>{formatSpanDuration(selected)}</dd>
                 </div>
-                {selected.provider ? (
-                  <div>
-                    <dt>Provider</dt>
-                    <dd>{selected.provider}</dd>
-                  </div>
-                ) : null}
-                {selected.model ? (
-                  <div>
-                    <dt>Model</dt>
-                    <dd>{selected.model}</dd>
-                  </div>
-                ) : null}
+                <div>
+                  <dt>Provider</dt>
+                  <dd>{selected.provider ?? 'not recorded'}</dd>
+                </div>
+                <div>
+                  <dt>Model</dt>
+                  <dd>{selected.model ?? 'not recorded'}</dd>
+                </div>
+                <div>
+                  <dt>Effort</dt>
+                  <dd>{selectedEffort === undefined ? 'not recorded' : String(selectedEffort)}</dd>
+                </div>
                 {selected.toolName ? (
                   <div>
                     <dt>Tool</dt>
                     <dd>{selected.toolName}</dd>
                   </div>
                 ) : null}
-                {selected.costMicroUsd !== undefined ? (
-                  <div>
-                    <dt>Cost</dt>
-                    <dd>${(selected.costMicroUsd / 1_000_000).toFixed(4)}</dd>
-                  </div>
-                ) : null}
-                {selected.inputTokens !== undefined || selected.outputTokens !== undefined ? (
-                  <div>
-                    <dt>Tokens</dt>
-                    <dd>
-                      {selected.inputTokens ?? 0} in · {selected.outputTokens ?? 0} out
-                    </dd>
-                  </div>
-                ) : null}
+                <div>
+                  <dt>Cost</dt>
+                  <dd>{formatCost(selected.costMicroUsd)}</dd>
+                </div>
+                <div>
+                  <dt>Tokens</dt>
+                  <dd>
+                    {formatInteger(selected.inputTokens)} in ·{' '}
+                    {formatInteger(selected.outputTokens)} out
+                  </dd>
+                </div>
+                <div>
+                  <dt>Digest / receipt</dt>
+                  <dd>
+                    {selectedDigestAttributes.length > 0
+                      ? selectedDigestAttributes
+                          .map((attribute) => `${attribute.key}=${String(attribute.value)}`)
+                          .join(' · ')
+                      : 'not recorded on span'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Trace / parent</dt>
+                  <dd>
+                    <code>{selected.traceId}</code>
+                    {' · '}
+                    <code>{selected.parentSpanId ?? 'root'}</code>
+                  </dd>
+                </div>
               </dl>
             </section>
             <section>
               <h3>Events & attributes</h3>
               {selectedEvents.length ? (
                 <ul>
-                  {selectedEvents.map((event) => (
+                  {visibleSelectedEvents.map((event) => (
                     <li key={event.id}>
                       <b>{event.name}</b>
                       <span>{event.body}</span>
                     </li>
                   ))}
+                  {selectedEvents.length > visibleSelectedEvents.length ? (
+                    <li>
+                      <b>Bounded view</b>
+                      <button type="button" onClick={() => setExpandedEventsFor(selected.spanId)}>
+                        Show {selectedEvents.length - visibleSelectedEvents.length} more loaded
+                        events
+                      </button>
+                    </li>
+                  ) : null}
                 </ul>
               ) : (
                 <p>No events on this span.</p>
@@ -668,41 +1249,71 @@ export function TraceWaterfall({
                 <details>
                   <summary>{selected.attributes.length} attributes</summary>
                   <dl>
-                    {selected.attributes.map((attribute) => (
+                    {visibleSelectedAttributes.map((attribute) => (
                       <div key={attribute.key}>
                         <dt>{attribute.key}</dt>
                         <dd>{String(attribute.value)}</dd>
                       </div>
                     ))}
                   </dl>
+                  {selected.attributes.length > visibleSelectedAttributes.length ? (
+                    <button type="button" onClick={() => setExpandedAttributesFor(selected.spanId)}>
+                      Show {selected.attributes.length - visibleSelectedAttributes.length} more
+                      loaded attributes
+                    </button>
+                  ) : null}
                 </details>
               ) : null}
             </section>
-            <section className="ns-waterfall-evidence">
+            <section
+              className="ns-waterfall-evidence"
+              data-testid="trace-span-evidence"
+              data-span-id={selected.spanId}
+            >
               <h3>
                 {evidenceMode === 'span'
                   ? 'Span evidence'
                   : evidenceMode === 'run'
                     ? 'Run evidence'
                     : 'Evidence'}
-                {evidenceMode === 'span' ? <span>{evidence.length} cited</span> : null}
+                {evidenceMode === 'span' ? <span>{evidenceIds.length} bound</span> : null}
               </h3>
+              {evidenceMode === 'span' ? (
+                <p className="ns-waterfall-evidence-note">
+                  Bound directly to OTel span <code>{selected.spanId}</code>.
+                </p>
+              ) : null}
               {evidenceMode === 'run' ? (
                 <p className="ns-waterfall-evidence-note">
-                  Legacy run-level sources; this span has no stored source binding.
+                  Run-level evidence; not span-bound. This span has no stored source binding.
+                </p>
+              ) : null}
+              {missingEvidenceIds.length > 0 ? (
+                <p className="ns-waterfall-evidence-missing">
+                  {missingEvidenceIds.length} bound source record
+                  {missingEvidenceIds.length === 1 ? ' is' : 's are'} unavailable:{' '}
+                  <code>{missingEvidenceIds.join(', ')}</code>
                 </p>
               ) : null}
               {evidence.length ? (
                 evidence.map((source) => (
-                  <article key={source.id}>
+                  <article
+                    key={source.id}
+                    data-testid="trace-source-citation"
+                    data-source-id={source.id}
+                  >
                     <div>
                       <span>{source.url ? <Globe2 size={13} /> : <FileText size={13} />}</span>
                       <div>
                         <strong>{source.title}</strong>
                         <small>
-                          {source.sourceType} · retrieved{' '}
-                          {new Date(source.retrievedAt).toLocaleDateString()}
+                          {source.sourceType}
+                          {source.format ? ` · ${source.format}` : ''} · retrieved{' '}
+                          <time dateTime={new Date(source.retrievedAt).toISOString()}>
+                            {formatDateTime(source.retrievedAt)}
+                          </time>
                         </small>
+                        <code>{source.id}</code>
                       </div>
                       {source.url ? (
                         <a
@@ -715,25 +1326,34 @@ export function TraceWaterfall({
                         </a>
                       ) : null}
                     </div>
+                    {source.url ? <p className="ns-waterfall-source-url">{source.url}</p> : null}
                     <p>
-                      {source.citation.length > 320
-                        ? `${source.citation.slice(0, 320)}…`
-                        : source.citation}
+                      {source.citation.slice(0, 320)}
+                      {source.citation.length > 320 ? '…' : ''}
                     </p>
+                    {source.citation.length > 320 ? (
+                      <details className="ns-waterfall-citation-more">
+                        <summary>Show full citation · {source.citation.length} characters</summary>
+                        <p>{source.citation}</p>
+                      </details>
+                    ) : null}
                     <footer>
                       {source.contentDigest ? (
-                        <code>{source.contentDigest.slice(0, 18)}…</code>
+                        <code title={source.contentDigest}>
+                          {shortDigest(source.contentDigest)}
+                        </code>
                       ) : (
                         <span>digest not recorded</span>
                       )}
                       {source.rowCount !== undefined ? <span>{source.rowCount} rows</span> : null}
                       {source.columns?.length ? <span>{source.columns.length} columns</span> : null}
+                      <span>claim/output binding not recorded</span>
                     </footer>
                   </article>
                 ))
-              ) : (
+              ) : evidenceIds.length === 0 ? (
                 <p>No source citation is bound to this span.</p>
-              )}
+              ) : null}
             </section>
           </div>
         </aside>
