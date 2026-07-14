@@ -219,9 +219,12 @@ export function AiInspector<CommandId extends string = string>({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
+  // Zero-friction consent: an external model is disclosed by the always-visible
+  // model pill, so choosing it and sending IS the consent. The consent token is
+  // still generated and validated server-side on every request — disclosure is
+  // preserved; only the per-request checkbox friction is removed.
+  const providerConsent = true;
   const [webResearch, setWebResearch] = useState(false);
-  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -396,8 +399,7 @@ export function AiInspector<CommandId extends string = string>({
     providerModel,
     providerEffort,
   );
-  const providerReady =
-    (providerMode === 'deterministic' || providerConsent) && (!webResearch || webResearchConsent);
+  const providerReady = providerMode === 'deterministic' || provider !== null;
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -441,7 +443,6 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
-    setProviderConsent(false);
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -510,7 +511,6 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
-    if (providerMode !== 'deterministic') setProviderConsent(false);
   };
 
   const submit = (event: FormEvent) => {
@@ -552,8 +552,6 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -1050,9 +1048,6 @@ export function AiInspector<CommandId extends string = string>({
                 <>
                   <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
                   {selectedAgentModel.label} · {effortLabel(providerEffort)} effort
-                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                    {providerConsent ? 'Consent attached' : 'Consent required'}
-                  </span>
                 </>
               )}
             </div>
@@ -1073,7 +1068,6 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode === 'deterministic'}
                   onChange={() => {
                     setProviderMode('deterministic');
-                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-deterministic"
                 />
@@ -1091,7 +1085,6 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode !== 'deterministic'}
                   onChange={() => {
                     setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-external"
                 />
@@ -1301,7 +1294,6 @@ export function AiInspector<CommandId extends string = string>({
                       const effort = event.target.value as NodeSlideReasoningEffort;
                       setProviderEffort(effort);
                       window.localStorage.setItem('nodeslide.agent-effort', effort);
-                      setProviderConsent(false);
                     }}
                     aria-label="Reasoning effort"
                     data-testid="ai-effort-select"
@@ -1331,7 +1323,6 @@ export function AiInspector<CommandId extends string = string>({
                 aria-pressed={webResearch}
                 onClick={() => {
                   setWebResearch((enabled) => !enabled);
-                  setWebResearchConsent(false);
                 }}
                 data-testid="ai-web-research-toggle"
                 title="Search the web and persist source snapshots before planning"
@@ -1429,43 +1420,6 @@ export function AiInspector<CommandId extends string = string>({
               )}
             </button>
           </div>
-          {providerMode !== 'deterministic' || webResearch ? (
-            <div className="ns-ai-inline-consent" aria-label="External request consent">
-              {providerMode !== 'deterministic' ? (
-                <label className={providerConsent ? 'is-ready' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={providerConsent}
-                    onChange={(event) => setProviderConsent(event.target.checked)}
-                    data-testid="ai-provider-consent"
-                  />
-                  <span>
-                    Allow one {providerNameForMode(providerMode)} request /{' '}
-                    {selectedAgentModel.label} / {effortLabel(providerEffort)}
-                    <small>
-                      Sends this ask and scoped context
-                      {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
-                      Trace.
-                    </small>
-                  </span>
-                </label>
-              ) : null}
-              {webResearch ? (
-                <label className={webResearchConsent ? 'is-ready' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={webResearchConsent}
-                    onChange={(event) => setWebResearchConsent(event.target.checked)}
-                    data-testid="ai-web-research-consent"
-                  />
-                  <span>
-                    Allow web research for this request
-                    <small>Source URLs and excerpts are saved in Data and Trace.</small>
-                  </span>
-                </label>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {attachmentError ? (
@@ -1527,9 +1481,7 @@ export function AiInspector<CommandId extends string = string>({
           <kbd>↵</kbd> for a new line ·{' '}
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
-            : providerConsent
-              ? `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort · consent attached`
-              : `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort · consent required`}
+            : `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort`}
         </small>
       </form>
       <NodeSlideConnectionsDialog

@@ -115,17 +115,10 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(/\.ns-composer-field:focus-within[\s\S]*?border-color:[\s\S]*?box-shadow:/);
     expect(css).toMatch(/\.ns-composer-field textarea[\s\S]*?min-height: 92px;/);
 
-    const composerStart = aiInspectorSource.indexOf(
-      'className="ns-composer-field ns-ai-v3-composer-field"',
-    );
-    const consentStart = aiInspectorSource.indexOf(
-      'className="ns-ai-inline-consent"',
-      composerStart,
-    );
-    const composerEnd = aiInspectorSource.indexOf('\n        </div>', consentStart);
-    expect(composerStart).toBeGreaterThanOrEqual(0);
-    expect(consentStart).toBeGreaterThan(composerStart);
-    expect(composerEnd).toBeGreaterThan(consentStart);
+    // The composer is present and primary; zero-friction consent removed the
+    // inline per-request consent block entirely (disclosure lives in the model pill).
+    expect(aiInspectorSource).toContain('className="ns-composer-field ns-ai-v3-composer-field"');
+    expect(aiInspectorSource).not.toContain('className="ns-ai-inline-consent"');
   });
 
   it('contains narrow inspector rails without horizontal drift', () => {
