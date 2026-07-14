@@ -2,11 +2,13 @@ import {
   Activity,
   Bot,
   Braces,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Database,
   History,
   MessageCircle,
+  MoreHorizontal,
   PanelRightClose,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -15,7 +17,9 @@ import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useId,
   useRef,
+  useState,
 } from 'react';
 import type {
   CommentAnchor,
@@ -39,6 +43,7 @@ import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NODESLIDE_RESPONSIVE_DRAWER_QUERY } from '../components/editorShellResponsive';
 import {
   OverlayBackdrop,
+  PopoverSurface,
   getRovingFocusIndex,
   useDrawerSurface,
   useViewportMatch,
@@ -165,6 +170,22 @@ export const INSPECTOR_TABS: Array<{ id: InspectorTab; label: string; icon: type
   { id: 'trace', label: 'Trace', icon: Activity },
 ];
 
+const PRIMARY_INSPECTOR_TAB_IDS = new Set<InspectorTab>([
+  'ai',
+  'design',
+  'comments',
+  'data',
+  'trace',
+]);
+
+export const PRIMARY_INSPECTOR_TABS = INSPECTOR_TABS.filter(({ id }) =>
+  PRIMARY_INSPECTOR_TAB_IDS.has(id),
+);
+
+export const MORE_INSPECTOR_TABS = INSPECTOR_TABS.filter(
+  ({ id }) => !PRIMARY_INSPECTOR_TAB_IDS.has(id),
+);
+
 export function InspectorPanel<CommandId extends string = string>({
   workspace,
   slide,
@@ -239,8 +260,11 @@ export function InspectorPanel<CommandId extends string = string>({
 }: InspectorPanelProps<CommandId>) {
   const resizeRef = useRef<ResizeState | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const mountedTabsRef = useRef<Set<InspectorTab>>(new Set());
   const shouldRestoreDrawerFocusRef = useRef(true);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuId = useId();
   const drawerViewport = useViewportMatch(NODESLIDE_RESPONSIVE_DRAWER_QUERY);
   const drawerOpen = drawerViewport && !collapsed;
   rememberInspectorTab(mountedTabsRef.current, activeTab);
@@ -252,6 +276,10 @@ export function InspectorPanel<CommandId extends string = string>({
       initialFocusRef: closeButtonRef,
       shouldRestoreFocusRef: shouldRestoreDrawerFocusRef,
     });
+
+  useEffect(() => {
+    if (collapsed) setMoreOpen(false);
+  }, [collapsed]);
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -378,28 +406,84 @@ export function InspectorPanel<CommandId extends string = string>({
               <PanelRightClose size={16} />
             </button>
           </div>
-          <div className="ns-inspector-tabs" role="tablist" aria-label="Inspector views">
-            {INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+          <nav className="ns-inspector-nav" aria-label="Inspector views">
+            <div className="ns-inspector-tabs" role="tablist" aria-label="Primary inspector views">
+              {PRIMARY_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`ns-tab-${id}`}
+                  aria-controls={`ns-tabpanel-${id}`}
+                  aria-selected={activeTab === id}
+                  className={activeTab === id ? 'is-active' : ''}
+                  data-testid={`inspector-tab-${id}`}
+                  key={id}
+                  tabIndex={activeTab === id ? 0 : -1}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onTabChange(id);
+                  }}
+                  onKeyDown={(event) => handlePrimaryInspectorTabKeyDown(event, id, onTabChange)}
+                >
+                  <Icon size={14} />
+                  <span>{label}</span>
+                  {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
+                  {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
+                </button>
+              ))}
+            </div>
+            <div className="ns-inspector-more">
               <button
+                ref={moreTriggerRef}
+                id="ns-inspector-more-trigger"
+                className={`ns-inspector-more-trigger ${
+                  MORE_INSPECTOR_TABS.some(({ id }) => id === activeTab) ? 'is-active' : ''
+                }`}
                 type="button"
-                role="tab"
-                id={`ns-tab-${id}`}
-                aria-controls={`ns-tabpanel-${id}`}
-                aria-selected={activeTab === id}
-                className={activeTab === id ? 'is-active' : ''}
-                data-testid={`inspector-tab-${id}`}
-                key={id}
-                tabIndex={activeTab === id ? 0 : -1}
-                onClick={() => onTabChange(id)}
-                onKeyDown={(event) => handleInspectorTabKeyDown(event, id, onTabChange)}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                aria-controls={moreMenuId}
+                aria-label={`More inspector views${
+                  MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label
+                    ? `, current: ${MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label}`
+                    : ''
+                }`}
+                data-testid="inspector-more"
+                onClick={() => setMoreOpen((open) => !open)}
               >
-                <Icon size={14} />
-                <span>{label}</span>
-                {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-                {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
+                <MoreHorizontal size={14} aria-hidden="true" />
+                <span>More</span>
+                <ChevronDown size={11} aria-hidden="true" />
               </button>
-            ))}
-          </div>
+              <PopoverSurface
+                open={moreOpen}
+                id={moreMenuId}
+                surfaceRole="menu"
+                ariaLabel="More inspector views"
+                className="ns-popover ns-inspector-more-menu"
+                triggerRef={moreTriggerRef}
+                onClose={() => setMoreOpen(false)}
+              >
+                {MORE_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={activeTab === id ? 'is-active' : ''}
+                    data-testid={`inspector-tab-${id}`}
+                    key={id}
+                    onClick={() => {
+                      onTabChange(id);
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Icon size={14} aria-hidden="true" />
+                    <span>{label}</span>
+                    {activeTab === id ? <span className="ns-sr-only">Current view</span> : null}
+                  </button>
+                ))}
+              </PopoverSurface>
+            </div>
+          </nav>
 
           <div className="ns-inspector-content">
             {mountedTabsRef.current.has('ai') ? (
@@ -588,12 +672,37 @@ function InspectorTabPanel({ id, activeTab, children }: InspectorTabPanelProps) 
       className="ns-inspector-tabpanel"
       role="tabpanel"
       id={`ns-tabpanel-${id}`}
-      aria-labelledby={`ns-tab-${id}`}
+      aria-labelledby={
+        MORE_INSPECTOR_TABS.some(({ id: secondaryId }) => secondaryId === id)
+          ? 'ns-inspector-more-trigger'
+          : `ns-tab-${id}`
+      }
       hidden={activeTab !== id}
     >
       {children}
     </section>
   );
+}
+
+function handlePrimaryInspectorTabKeyDown(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  currentTab: InspectorTab,
+  onTabChange: (tab: InspectorTab) => void,
+) {
+  const nextTab = primaryInspectorTabAfterKey(currentTab, event.key);
+  if (!nextTab) return;
+  event.preventDefault();
+  onTabChange(nextTab);
+  requestAnimationFrame(() => document.getElementById(`ns-tab-${nextTab}`)?.focus());
+}
+
+export function primaryInspectorTabAfterKey(
+  currentTab: InspectorTab,
+  key: string,
+): InspectorTab | null {
+  const currentIndex = PRIMARY_INSPECTOR_TABS.findIndex(({ id }) => id === currentTab);
+  const nextIndex = getRovingFocusIndex(PRIMARY_INSPECTOR_TABS.length, currentIndex, key);
+  return nextIndex === null ? null : (PRIMARY_INSPECTOR_TABS[nextIndex]?.id ?? null);
 }
 
 export function rememberInspectorTab(mountedTabs: Set<InspectorTab>, activeTab: InspectorTab) {
@@ -605,18 +714,6 @@ export function inspectorTabAfterKey(currentTab: InspectorTab, key: string): Ins
   const currentIndex = INSPECTOR_TABS.findIndex(({ id }) => id === currentTab);
   const nextIndex = getRovingFocusIndex(INSPECTOR_TABS.length, currentIndex, key);
   return nextIndex === null ? null : (INSPECTOR_TABS[nextIndex]?.id ?? null);
-}
-
-function handleInspectorTabKeyDown(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  currentTab: InspectorTab,
-  onTabChange: (tab: InspectorTab) => void,
-) {
-  const nextTab = inspectorTabAfterKey(currentTab, event.key);
-  if (!nextTab) return;
-  event.preventDefault();
-  onTabChange(nextTab);
-  requestAnimationFrame(() => document.getElementById(`ns-tab-${nextTab}`)?.focus());
 }
 
 function validationLabel(validation: NodeSlideWorkspace['validations'][number] | undefined) {

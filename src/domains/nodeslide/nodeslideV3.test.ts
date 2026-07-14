@@ -20,13 +20,15 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toContain('@layer nodeslide.contract');
   });
 
-  it('locks the supplied desktop geometry', () => {
+  it('locks the desktop navigator while preserving the user-resizable inspector width', () => {
     const desktop = mediaBlock('@media (min-width: 1100px)', '@media (min-width: 700px)');
 
     expect(desktop).toContain('--ns-nav-width: 300px !important');
-    expect(desktop).toContain('--ns-inspector-width: 340px !important');
+    expect(desktop).not.toContain('--ns-inspector-width: 340px !important');
     expect(desktop).toMatch(/\.ns-navigator:not\(\.is-collapsed\)[\s\S]*width: 300px/);
-    expect(desktop).toMatch(/\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: 340px !important/);
+    expect(desktop).toMatch(
+      /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: var\(--ns-inspector-width\) !important/,
+    );
   });
 
   it('keeps navigation and inspector reachable as tablet overlays', () => {
@@ -127,6 +129,24 @@ describe('NodeSlide v3 visual contract', () => {
     expect(aiInspectorSource).toContain('composerClassName="ns-ai-v3-prompt"');
     expect(aiInspectorSource).toContain('className="ns-ai-inline-consent"');
     expect(aiInspectorSource).toContain('data-testid="ai-provider-consent"');
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 104px;[\s\S]*?padding: 15px 14px 10px;/,
+    );
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: wrap;/,
+    );
+  });
+
+  it('keeps readable canvas and inspector navigation after the global reset', () => {
+    expect(css).toMatch(
+      /Runtime visual-system boundary[\s\S]*?\.ns-editor-mode-controls button[\s\S]*?min-height: 28px;[\s\S]*?padding: 5px 10px;/,
+    );
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-inspector-nav[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto;/,
+    );
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-inspector-tabs button,[\s\S]*?\.ns-inspector-more-trigger[\s\S]*?min-height: 39px;/,
+    );
   });
 
   it('contains narrow inspector rails without horizontal drift', () => {

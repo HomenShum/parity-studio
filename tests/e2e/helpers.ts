@@ -29,6 +29,7 @@ export async function openSampleWorkspace(page: Page): Promise<void> {
 export async function readVersionState(
   page: Page,
 ): Promise<{ version: number; revisionCount: number }> {
+  await page.getByTestId('inspector-more').click();
   await page.getByTestId('inspector-tab-versions').click();
   const versionText = await page.locator('.ns-count-pill').textContent();
   const match = /^v(\d+)$/.exec(versionText?.trim() ?? '');
