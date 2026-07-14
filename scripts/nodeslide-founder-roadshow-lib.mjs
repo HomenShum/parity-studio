@@ -4,6 +4,27 @@ import { resolve } from 'node:path';
 export const ROADSHOW_STORYBOARD_SCHEMA = 'nodeslide-roadshow-storyboard/v1';
 export const ROADSHOW_CAPTIONS_SCHEMA = 'nodeslide-roadshow-captions/v1';
 export const ROADSHOW_EVIDENCE_SCHEMA = 'nodeslide-roadshow-recorder-evidence/v1';
+export const ROADSHOW_METRICS_INPUT = 'docs/demo/founder-roadshow/prototype-metrics.csv';
+export const ROADSHOW_ATTACHMENT_GROUPS = Object.freeze([
+  Object.freeze({
+    filename: 'nodeslide-product-definition.md',
+    sources: Object.freeze([
+      'docs/submission/nodeslide-prd.md',
+      'docs/submission/nodeslide-tdd.md',
+    ]),
+  }),
+  Object.freeze({
+    filename: 'prototype-metrics.csv',
+    sources: Object.freeze([ROADSHOW_METRICS_INPUT]),
+  }),
+  Object.freeze({
+    filename: 'nodeslide-customer-and-design-notes.md',
+    sources: Object.freeze([
+      'docs/demo/founder-roadshow/customer-notes.md',
+      'docs/demo/founder-roadshow/design-reference.md',
+    ]),
+  }),
+]);
 
 export const ROADSHOW_VIDEO = Object.freeze({
   width: 1920,
@@ -154,6 +175,57 @@ export function assertRoadshowLiveReady(storyboard) {
     );
   }
   return true;
+}
+
+export function resolveRoadshowInputPaths(inputs, { repoRoot, metricsPath = null }) {
+  if (!Array.isArray(inputs) || !repoRoot) {
+    throw new RoadshowContractError('Roadshow input resolution requires inputs and repoRoot');
+  }
+  const resolvedMetricsPath = metricsPath ? resolve(metricsPath) : null;
+  return inputs.map((input) =>
+    input === ROADSHOW_METRICS_INPUT && resolvedMetricsPath
+      ? resolvedMetricsPath
+      : resolve(repoRoot, input),
+  );
+}
+
+export function buildRoadshowAttachmentPlan(inputs, resolvedPaths) {
+  if (
+    !Array.isArray(inputs) ||
+    !Array.isArray(resolvedPaths) ||
+    inputs.length !== resolvedPaths.length
+  ) {
+    throw new RoadshowContractError(
+      'Roadshow attachment planning requires aligned canonical and resolved input paths',
+    );
+  }
+  const resolvedByCanonicalInput = new Map(
+    inputs.map((input, index) => [input, resolvedPaths[index]]),
+  );
+  const plan = ROADSHOW_ATTACHMENT_GROUPS.map((group) => ({
+    filename: group.filename,
+    sources: group.sources.map((source) => {
+      const path = resolvedByCanonicalInput.get(source);
+      if (!path) throw new RoadshowContractError(`Missing attachment source: ${source}`);
+      return { canonicalInput: source, path };
+    }),
+  }));
+  const plannedSources = new Set(
+    plan.flatMap((group) => group.sources.map((item) => item.canonicalInput)),
+  );
+  const unplanned = inputs.filter((input) => !plannedSources.has(input));
+  if (unplanned.length > 0) {
+    throw new RoadshowContractError(`Unplanned attachment source(s): ${unplanned.join(', ')}`);
+  }
+  return plan;
+}
+
+export function selectedSlidesScopePattern(expectedCount = null) {
+  if (expectedCount !== null && (!Number.isInteger(expectedCount) || expectedCount < 2)) {
+    throw new RoadshowContractError('Selected-slide scope requires at least two slides');
+  }
+  const count = expectedCount ?? '\\d+';
+  return new RegExp(`^Selected slides \\(${count}\\)$`);
 }
 
 export function buildCaptionTimeline(sceneResults, captionPlan, preRollDurationMs) {

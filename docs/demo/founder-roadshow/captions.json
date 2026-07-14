@@ -13,7 +13,7 @@
     },
     {
       "sceneId": "attach_evidence",
-      "text": "Attach the PRD, TDD, measured metrics, research notes, and design direction.",
+      "text": "Attach three bounded evidence files containing the PRD, TDD, measured metrics, research notes, and design direction.",
       "minimumDurationMs": 3000
     },
     {

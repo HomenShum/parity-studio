@@ -9,15 +9,19 @@ import { chromium } from 'playwright';
 import {
   MissingRoadshowCapabilityError,
   REQUIRED_ROADSHOW_SCENES,
+  ROADSHOW_METRICS_INPUT,
   ROADSHOW_VIDEO,
   assertRoadshowLiveReady,
   browserChromeMarkup,
   buildCaptionTimeline,
   buildFfmpegCommands,
+  buildRoadshowAttachmentPlan,
   buildSrt,
   readRoadshowJson,
   recorderEvidenceSkeleton,
+  resolveRoadshowInputPaths,
   sanitizeEvidenceUrl,
+  selectedSlidesScopePattern,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -40,7 +44,7 @@ const args = parseArgs(process.argv.slice(2));
 const targetUrl = canonicalTarget(
   args.targetUrl ?? process.env.NODESLIDE_DEMO_URL ?? defaultTargetUrl,
 );
-const mode = args.dryRun ? 'dry-run' : 'live';
+const mode = args.dryRun ? 'dry-run' : args.probeThroughScene ? 'selector-probe' : 'live';
 const outputDir = resolve(
   args.outputDir ??
     process.env.NODESLIDE_DEMO_OUTPUT ??
@@ -67,8 +71,44 @@ async function main() {
   evidence.storyboardPath = relativeRepoPath(storyboardPath);
   evidence.captionsPath = relativeRepoPath(captionsPath);
 
-  const inputPaths = storyboard.inputs.map((path) => resolve(repoRoot, path));
+  const metricsPath = resolveOptionalPath(
+    args.metricsPath ?? process.env.NODESLIDE_DEMO_METRICS_PATH ?? null,
+  );
+  if (metricsPath && mode === 'live') {
+    throw new Error(
+      'A temporary metrics override is allowed only for --dry-run or --probe-through-scene. Final recordings must use the measured canonical input.',
+    );
+  }
+  const inputPaths = resolveRoadshowInputPaths(storyboard.inputs, {
+    repoRoot,
+    metricsPath,
+  });
+  evidence.inputOverrides = metricsPath
+    ? [
+        {
+          canonicalInput: ROADSHOW_METRICS_INPUT,
+          temporaryInput: relativeRepoPath(metricsPath),
+          allowedModes: ['dry-run', 'selector-probe'],
+        },
+      ]
+    : [];
   evidence.inputs = await inspectInputs(inputPaths);
+  const attachmentPlan = buildRoadshowAttachmentPlan(storyboard.inputs, inputPaths);
+  evidence.attachmentPlan = attachmentPlan.map((group) => ({
+    filename: group.filename,
+    sources: group.sources.map((source) => source.canonicalInput),
+  }));
+  const attachmentBundles = evidence.inputs.every((input) => input.exists)
+    ? await prepareAttachmentFiles(attachmentPlan)
+    : [];
+  const attachmentPaths = attachmentBundles.map((bundle) => bundle.path);
+  evidence.attachmentBundles = attachmentBundles.map((bundle) => ({
+    filename: bundle.filename,
+    path: relativeRepoPath(bundle.path),
+    bytes: bundle.bytes,
+    sha256: bundle.sha256,
+    sources: bundle.sources,
+  }));
   const imagePath = resolveOptionalPath(
     args.imagePath ?? process.env.NODESLIDE_DEMO_IMAGE_PATH ?? null,
   );
@@ -80,7 +120,10 @@ async function main() {
   }
 
   assertRoadshowLiveReady(storyboard);
-  assertFfmpegAvailable();
+  if (args.probeThroughScene && !REQUIRED_ROADSHOW_SCENES.includes(args.probeThroughScene)) {
+    throw new Error(`Unknown selector probe scene: ${args.probeThroughScene}`);
+  }
+  if (!args.probeThroughScene) assertFfmpegAvailable();
   assertRequiredInputs(evidence.inputs);
   if (!imagePath || !evidence.imageInput?.exists) {
     throw new Error(
@@ -108,6 +151,37 @@ async function main() {
       headless: !headed,
       args: headed ? ['--start-maximized'] : [],
     });
+    if (args.probeThroughScene) {
+      evidence.probeThroughScene = args.probeThroughScene;
+      const product = await recordProduct({
+        browser,
+        targetUrl,
+        outputDir,
+        rawDir,
+        downloadsDir,
+        failuresDir,
+        storyboard,
+        captionPlan,
+        evidence,
+        attachmentPaths,
+        imagePath,
+        stopAfterScene: args.probeThroughScene,
+      });
+      if (product.completedSceneId !== args.probeThroughScene) {
+        throw new Error(
+          `Selector probe stopped at ${product.completedSceneId ?? '<none>'} instead of ${args.probeThroughScene}.`,
+        );
+      }
+      evidence.outputs.productRaw = product.videoPath;
+      evidence.productDurationMs = Math.round((await probeDuration(product.videoPath)) * 1_000);
+      evidence.verdict = 'selector-probe-passed';
+      evidence.completedAt = new Date().toISOString();
+      await writeEvidence(evidence);
+      console.log(`[roadshow:probe] passed through ${args.probeThroughScene}`);
+      console.log(`[roadshow:probe] raw capture: ${product.videoPath}`);
+      console.log(`[roadshow:probe] evidence: ${resolve(outputDir, 'evidence.json')}`);
+      return;
+    }
     const preRoll = await recordBrowserPreRoll(browser, rawDir, targetUrl);
     evidence.outputs.browserChromePng = preRoll.browserChromePng;
     evidence.outputs.preRollRaw = preRoll.videoPath;
@@ -123,7 +197,7 @@ async function main() {
       storyboard,
       captionPlan,
       evidence,
-      inputPaths,
+      attachmentPaths,
       imagePath,
     });
     evidence.outputs.productRaw = product.videoPath;
@@ -295,8 +369,9 @@ async function recordProduct({
   storyboard,
   captionPlan,
   evidence,
-  inputPaths,
+  attachmentPaths,
   imagePath,
+  stopAfterScene = null,
 }) {
   const videoDir = resolve(rawDir, 'product-video');
   await mkdir(videoDir, { recursive: true });
@@ -331,7 +406,7 @@ async function recordProduct({
     targetUrl,
     outputDir,
     downloadsDir,
-    inputPaths,
+    attachmentPaths,
     imagePath,
     evidence,
     primitiveSlides: new Map(),
@@ -340,6 +415,7 @@ async function recordProduct({
   };
 
   const hooks = createSceneHooks(state);
+  let lastCompletedSceneId = null;
   try {
     for (const scene of [...storyboard.scenes].sort((a, b) => a.sequence - b.sequence)) {
       const hook = hooks[scene.id];
@@ -360,6 +436,8 @@ async function recordProduct({
           endedAtMs: Date.now() - productStartedAt,
           details: redactDetails(details),
         });
+        lastCompletedSceneId = scene.id;
+        if (stopAfterScene === scene.id) break;
       } catch (error) {
         const failurePath = resolve(failuresDir, `${scene.sequence}-${scene.id}.png`);
         await page.screenshot({ path: failurePath, fullPage: false }).catch(() => {});
@@ -387,7 +465,7 @@ async function recordProduct({
   }
   const videoPath = resolve(rawDir, 'product.webm');
   await video.saveAs(videoPath);
-  return { videoPath };
+  return { videoPath, completedSceneId: lastCompletedSceneId };
 }
 
 function createSceneHooks(state) {
@@ -425,19 +503,33 @@ function createSceneHooks(state) {
       if ((await button.getAttribute('type').catch(() => null)) !== 'file') {
         await moveVirtualCursor(state.page, button);
       }
-      await fileInput.setInputFiles(state.inputPaths);
+      await fileInput.setInputFiles(state.attachmentPaths);
       const shelf = state.page.getByLabel('Attached data files');
       await shelf.waitFor({ state: 'visible', timeout: 20_000 });
-      const names = state.inputPaths.map((path) => path.split(/[\\/]/).at(-1));
+      const names = state.attachmentPaths.map((path) => path.split(/[\\/]/).at(-1));
       for (const name of names) {
-        if (!(await shelf.getByText(name, { exact: false }).count())) {
-          throw new Error(`Attached file is not visible in the composer: ${name}`);
-        }
+        await shelf.getByRole('button', { name: `Remove ${name}` }).waitFor({
+          state: 'visible',
+          timeout: 20_000,
+        });
       }
-      return { attachedFiles: names };
+      const session = await waitForLandingComposerSession(state.page, {
+        attachmentNames: names,
+      });
+      return {
+        attachedFiles: names,
+        sessionAttachmentCount: session.attachmentNames.length,
+      };
     },
 
     consent_model_web: async () => {
+      const prompt = state.page.getByLabel('Presentation brief');
+      await humanType(state.page, prompt, CREATION_PROMPT);
+      const attachmentNames = state.attachmentPaths.map((path) => path.split(/[\\/]/).at(-1));
+      const session = await waitForLandingComposerSession(state.page, {
+        attachmentNames,
+        expectedText: CREATION_PROMPT,
+      });
       const model = state.page.getByTestId('landing-model-select');
       await model.waitFor({ state: 'visible', timeout: 10_000 });
       const selectedModel = (await model.innerText()).trim();
@@ -454,21 +546,49 @@ function createSceneHooks(state) {
         selectedModel,
         creationConsent: true,
         webResearchConsent: 'deferred to the first editor research run',
+        briefCharacters: session.textLength,
+        sessionAttachmentCount: session.attachmentNames.length,
       };
     },
 
     create_six_slide_deck: async () => {
       const prompt = state.page.getByLabel('Presentation brief');
-      await humanType(state.page, prompt, CREATION_PROMPT);
+      if ((await prompt.inputValue()) !== CREATION_PROMPT) {
+        throw new Error('The consented creation brief changed before submission.');
+      }
+      const consent = state.page.getByTestId('landing-provider-consent');
+      if (!(await consent.isChecked())) {
+        throw new Error('Creation consent was reset before submission.');
+      }
+      await waitForLandingComposerSession(state.page, {
+        attachmentNames: state.attachmentPaths.map((path) => path.split(/[\\/]/).at(-1)),
+        expectedText: CREATION_PROMPT,
+      });
       const submit = state.page.getByRole('button', { name: 'Create presentation' });
       if (await submit.isDisabled()) {
         throw new Error('Create presentation remains disabled after prompt, files, and consent.');
       }
       await humanClick(state.page, submit);
-      await state.page.getByTestId('nodeslide-studio').waitFor({
-        state: 'visible',
-        timeout: 240_000,
-      });
+      const creationTimeout = state.evidence.mode === 'selector-probe' ? 60_000 : 240_000;
+      await state.page.waitForFunction(
+        () => {
+          const studio = document.querySelector('[data-testid="nodeslide-studio"]');
+          const error = document.querySelector('.ns-landing-create-error');
+          return Boolean(
+            (studio && studio.getClientRects().length > 0) ||
+              (error && error.getClientRects().length > 0),
+          );
+        },
+        undefined,
+        { timeout: creationTimeout },
+      );
+      const creationError = state.page.locator('.ns-landing-create-error');
+      if (await creationError.isVisible().catch(() => false)) {
+        throw new Error(
+          `Creation failed before the editor opened: ${cleanText(await creationError.textContent())}`,
+        );
+      }
+      await state.page.getByTestId('nodeslide-studio').waitFor({ state: 'visible' });
       await state.page
         .getByTestId('slide-navigator')
         .waitFor({ state: 'visible', timeout: 60_000 });
@@ -542,6 +662,7 @@ function createSceneHooks(state) {
 
     bounded_multi_slide_edit: async () => {
       const slideActions = state.page.getByRole('button', { name: /^Slide \d+ actions$/ });
+      await slideActions.first().waitFor({ state: 'visible', timeout: 20_000 });
       if ((await slideActions.count()) < 2) {
         throw new MissingRoadshowCapabilityError(
           'bounded_multi_slide_edit',
@@ -557,7 +678,7 @@ function createSceneHooks(state) {
         );
       }
       await state.page.getByText('2 selected', { exact: true }).waitFor({ state: 'visible' });
-      await configureAiRun(state, { scope: 'Selected slides', web: false });
+      await configureAiRun(state, { scope: 'Selected slides', web: false, selectedSlideCount: 2 });
       await submitAiInstruction(
         state,
         'Make the selected slides use parallel, action-led headlines. Change nothing outside this two-slide write scope.',
@@ -776,16 +897,26 @@ async function openPrimitive(state, kind) {
   await element.waitFor({ state: 'visible', timeout: 10_000 });
 }
 
-async function configureAiRun(state, { scope, web }) {
+async function configureAiRun(state, { scope, web, selectedSlideCount = null }) {
   await openInspectorTab(state.page, 'ai');
+  const controls = state.page.getByTestId('ai-provider-controls');
   const advanced = state.page.getByTestId('ai-provider-summary');
-  if ((await advanced.getAttribute('aria-expanded')) !== 'true')
+  const controlsOpen = await controls.evaluate((element) => element.open);
+  if (!controlsOpen) {
     await humanClick(state.page, advanced);
+    await state.page.waitForFunction(
+      () => document.querySelector('[data-testid="ai-provider-controls"]')?.open === true,
+    );
+  }
   const external = state.page.getByTestId('ai-provider-external');
   if (!(await external.isChecked())) await humanCheck(state.page, external);
-  const scopeButton = state.page
-    .getByLabel('AI write scope')
-    .getByRole('button', { name: scope, exact: true });
+  const scopeGroup = state.page.getByLabel('AI write scope');
+  const scopeButton =
+    scope === 'Selected slides'
+      ? scopeGroup.getByRole('button', {
+          name: selectedSlidesScopePattern(selectedSlideCount),
+        })
+      : scopeGroup.getByRole('button', { name: scope, exact: true });
   if (!(await scopeButton.count())) {
     throw new MissingRoadshowCapabilityError('ai_scope', `AI write scope control "${scope}"`, [
       `aria-label="AI write scope" button "${scope}"`,
@@ -1029,6 +1160,72 @@ async function waitForCount(locator, expected, timeout) {
   throw new Error(`Timed out waiting for exactly ${expected} matching elements.`);
 }
 
+async function waitForLandingComposerSession(page, { attachmentNames, expectedText = null }) {
+  const handle = await page.waitForFunction(
+    ({ names, text }) => {
+      const prefix = 'nodeslide.composer-session:v1:landing%3A';
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        try {
+          const session = JSON.parse(window.localStorage.getItem(key) ?? '{}');
+          const attachments = Array.isArray(session.attachments) ? session.attachments : [];
+          const storedNames = attachments.map((attachment) => attachment?.name).filter(Boolean);
+          const attachmentsMatch =
+            storedNames.length === names.length &&
+            names.every((name) => storedNames.includes(name));
+          const textMatches = text === null || session.text === text;
+          if (attachmentsMatch && textMatches) {
+            return {
+              attachmentNames: storedNames,
+              textLength: typeof session.text === 'string' ? session.text.length : 0,
+            };
+          }
+        } catch {
+          // Keep polling until the session bridge persists a complete, parseable snapshot.
+        }
+      }
+      return false;
+    },
+    { names: attachmentNames, text: expectedText },
+    { timeout: 20_000 },
+  );
+  return await handle.jsonValue();
+}
+
+async function prepareAttachmentFiles(plan) {
+  const bundleDir = resolve(outputDir, 'attachment-inputs');
+  await mkdir(bundleDir, { recursive: true });
+  return await Promise.all(
+    plan.map(async (group) => {
+      const chunks = await Promise.all(
+        group.sources.map(async (source) => ({
+          canonicalInput: source.canonicalInput,
+          content: await readFile(source.path, 'utf8'),
+        })),
+      );
+      const content =
+        chunks.length === 1 && group.filename.endsWith('.csv')
+          ? chunks[0].content
+          : chunks
+              .map(
+                (chunk) => `# Evidence source: ${chunk.canonicalInput}\n\n${chunk.content.trim()}`,
+              )
+              .join('\n\n---\n\n');
+      const path = resolve(bundleDir, group.filename);
+      await writeFile(path, `${content.trim()}\n`, 'utf8');
+      const inspected = await inspectInput(path);
+      return {
+        filename: group.filename,
+        path,
+        bytes: inspected.bytes,
+        sha256: inspected.sha256,
+        sources: chunks.map((chunk) => chunk.canonicalInput),
+      };
+    }),
+  );
+}
+
 async function inspectInputs(paths) {
   return await Promise.all(paths.map((path) => inspectInput(path)));
 }
@@ -1113,11 +1310,14 @@ function parseArgs(values) {
     else if (value === '--target-url') parsed.targetUrl = requireValue(values, ++index, value);
     else if (value === '--output-dir') parsed.outputDir = requireValue(values, ++index, value);
     else if (value === '--image-path') parsed.imagePath = requireValue(values, ++index, value);
+    else if (value === '--metrics-path') parsed.metricsPath = requireValue(values, ++index, value);
+    else if (value === '--probe-through-scene')
+      parsed.probeThroughScene = requireValue(values, ++index, value);
     else if (value === '--typing-delay-ms')
       parsed.typingDelayMs = requireValue(values, ++index, value);
     else if (value === '--help' || value === '-h') {
       console.log(
-        'Usage: node scripts/record-nodeslide-founder-roadshow.mjs [options]\n\n  --dry-run             Validate scenes, captions, inputs, and ffmpeg commands only\n  --target-url URL       Canonical deployed NodeSlide root\n  --output-dir PATH      Recorder output directory\n  --image-path PATH      Rights-cleared local image for the image-change scene\n  --typing-delay-ms N    Per-character delay (default 14)\n  --headed               Foreground debug only; headless is the safe default',
+        'Usage: node scripts/record-nodeslide-founder-roadshow.mjs [options]\n\n  --dry-run             Validate scenes, captions, inputs, and ffmpeg commands only\n  --probe-through-scene ID\n                        Run the real browser journey through one scene without assembling a final video\n  --target-url URL       Canonical deployed NodeSlide root\n  --output-dir PATH      Recorder output directory\n  --image-path PATH      Rights-cleared local image for the image-change scene\n  --metrics-path PATH    Temporary measured fixture for dry-run/selector-probe only\n  --typing-delay-ms N    Per-character delay (default 14)\n  --headed               Foreground debug only; headless is the safe default',
       );
       process.exit(0);
     } else throw new Error(`Unknown argument: ${value}`);

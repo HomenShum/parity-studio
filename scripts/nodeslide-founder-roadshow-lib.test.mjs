@@ -3,18 +3,23 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   REQUIRED_ROADSHOW_SCENES,
+  ROADSHOW_ATTACHMENT_GROUPS,
+  ROADSHOW_METRICS_INPUT,
   ROADSHOW_VIDEO,
   RoadshowContractError,
   assertRoadshowLiveReady,
   browserChromeMarkup,
   buildCaptionTimeline,
   buildFfmpegCommands,
+  buildRoadshowAttachmentPlan,
   buildSrt,
   ffmpegFilterPath,
   formatSrtTimestamp,
   readRoadshowJson,
   recorderEvidenceSkeleton,
+  resolveRoadshowInputPaths,
   sanitizeEvidenceUrl,
+  selectedSlidesScopePattern,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -56,6 +61,49 @@ describe('founder-roadshow contract', () => {
     expect(() => validateRoadshowContract(incomplete, captions)).toThrow(
       /missing required scene: trace_source_lineage/,
     );
+  });
+
+  it('uses a temporary metrics fixture only when the recorder explicitly supplies one', () => {
+    const inputs = [
+      'docs/submission/nodeslide-prd.md',
+      ROADSHOW_METRICS_INPUT,
+      'docs/demo/founder-roadshow/customer-notes.md',
+    ];
+    const defaults = resolveRoadshowInputPaths(inputs, { repoRoot });
+    const temporaryMetrics = resolve(repoRoot, '.tmp/roadshow/prototype-metrics.csv');
+    const overridden = resolveRoadshowInputPaths(inputs, {
+      repoRoot,
+      metricsPath: temporaryMetrics,
+    });
+
+    expect(defaults[1]).toBe(resolve(repoRoot, ROADSHOW_METRICS_INPUT));
+    expect(overridden).toEqual([
+      resolve(repoRoot, inputs[0]),
+      temporaryMetrics,
+      resolve(repoRoot, inputs[2]),
+    ]);
+  });
+
+  it('packs all five evidence sources into the product three-file attachment limit', async () => {
+    const storyboard = await readRoadshowJson(storyboardPath);
+    const resolvedPaths = resolveRoadshowInputPaths(storyboard.inputs, { repoRoot });
+    const plan = buildRoadshowAttachmentPlan(storyboard.inputs, resolvedPaths);
+
+    expect(plan).toHaveLength(3);
+    expect(plan.map((group) => group.filename)).toEqual(
+      ROADSHOW_ATTACHMENT_GROUPS.map((group) => group.filename),
+    );
+    expect(plan.flatMap((group) => group.sources)).toHaveLength(5);
+    expect(
+      new Set(plan.flatMap((group) => group.sources.map((source) => source.canonicalInput))),
+    ).toEqual(new Set(storyboard.inputs));
+  });
+
+  it('tracks the visible bounded-scope count instead of the obsolete static label', () => {
+    expect(selectedSlidesScopePattern(2).test('Selected slides (2)')).toBe(true);
+    expect(selectedSlidesScopePattern(2).test('Selected slides')).toBe(false);
+    expect(selectedSlidesScopePattern(2).test('Selected slides (3)')).toBe(false);
+    expect(selectedSlidesScopePattern().test('Selected slides (12)')).toBe(true);
   });
 });
 

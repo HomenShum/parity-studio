@@ -28,7 +28,7 @@
       "id": "attach_evidence",
       "sequence": 2,
       "title": "Attach the evidence pack",
-      "proof": "PRD, TDD, measured metrics, customer notes, and design direction are visibly attached.",
+      "proof": "Three visible attachments preserve the PRD, TDD, measured metrics, customer notes, and design direction within NodeSlide's bounded upload limit.",
       "hook": { "status": "implemented", "name": "attachEvidence" }
     },
     {
