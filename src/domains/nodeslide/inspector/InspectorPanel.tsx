@@ -1,6 +1,7 @@
 import {
   Activity,
   Bot,
+  Braces,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -49,6 +50,7 @@ import {
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
 import { DesignInspector } from './DesignInspector';
+import { JsonInspector } from './JsonInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
 import type { InspectorTab } from './types';
@@ -142,7 +144,8 @@ const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'design', label: 'Design', icon: SlidersHorizontal },
   { id: 'comments', label: 'Comments', icon: MessageCircle },
   { id: 'versions', label: 'Versions', icon: History },
-  { id: 'data', label: 'Data', icon: Database },
+  { id: 'data', label: 'Evidence', icon: Database },
+  { id: 'json', label: 'JSON', icon: Braces },
   { id: 'trace', label: 'Trace', icon: Activity },
 ];
 
@@ -456,6 +459,20 @@ export function InspectorPanel<CommandId extends string = string>({
             sources={workspace.sources}
             selectedElements={selectedElements}
             {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
+          />
+        ) : null}
+        {activeTab === 'json' ? (
+          <JsonInspector
+            snapshot={{
+              deck: workspace.deck,
+              slides: workspace.slides,
+              elements: workspace.elements,
+              sources: workspace.sources,
+            }}
+            slide={slide}
+            selectedElements={selectedElements}
+            patches={workspace.patches}
+            onApplyPatch={onApplyDesignPatch}
           />
         ) : null}
         {activeTab === 'trace' ? (
