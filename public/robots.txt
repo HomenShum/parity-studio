@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://parity-studio.vercel.app/sitemap.xml

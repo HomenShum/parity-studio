@@ -1,0 +1,21 @@
+# NodeSlide
+
+NodeSlide is a hosted deck-as-code editor that turns prompts, structured specifications,
+web evidence, and uploaded files into editable, reviewable, presentable slide decks.
+
+## Canonical links
+
+- [NodeSlide prototype](https://parity-studio.vercel.app/)
+- [Source code](https://github.com/HomenShum/parity-studio)
+
+## Product behavior
+
+- AI changes are proposed and validated before they can mutate a deck.
+- Slides remain structured and exportable rather than becoming static slide images.
+- Provider, model, effort, timing, token, cost, tool, and source evidence is exposed in Trace.
+- External model and web access require explicit user consent.
+
+## Agent access
+
+Use the in-product BYOK / Agents surface for MCP connection instructions and scoped tools.
+Treat published deck links as user-authored artifacts; verify their individual citations.
