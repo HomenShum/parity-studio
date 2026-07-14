@@ -1,6 +1,7 @@
 import {
   Activity,
   Bot,
+  Braces,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -49,6 +50,7 @@ import {
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
 import { DesignInspector } from './DesignInspector';
+import { JsonInspector } from './JsonInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
 import type { InspectorTab } from './types';
@@ -130,6 +132,13 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
+  onApplyJsonPatch: (
+    operations: PatchOperation[],
+    summary: string,
+    elementId: string,
+    baseElementVersion: number,
+  ) => boolean | undefined | Promise<boolean | undefined>;
+  onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
   onSetCommentStatus: (commentId: string, status: 'open' | 'resolved') => void;
@@ -144,6 +153,7 @@ const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'versions', label: 'Versions', icon: History },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'trace', label: 'Trace', icon: Activity },
+  { id: 'json', label: 'Source', icon: Braces },
 ];
 
 export function InspectorPanel<CommandId extends string = string>({
@@ -209,6 +219,8 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
+  onApplyJsonPatch,
+  onImportSourceFile,
   onAddComment,
   onReply,
   onSetCommentStatus,
@@ -472,6 +484,14 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
             {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
             {...(agentTelemetry ? { agentTelemetry } : {})}
+          />
+        ) : null}
+        {activeTab === 'json' ? (
+          <JsonInspector
+            workspace={workspace}
+            selectedElements={selectedElements}
+            onApplyPatch={onApplyJsonPatch}
+            {...(onImportSourceFile ? { onImportSourceFile } : {})}
           />
         ) : null}
       </div>

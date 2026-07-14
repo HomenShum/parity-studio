@@ -32,7 +32,7 @@ pnpm proof:nodeslide
 
 To prove an existing deck, pass both `--deck <live-deck-id>` and `--owner-key <capability>` (or set `NODESLIDE_OWNER_ACCESS_KEY`). A raw deck ID never grants editor access.
 
-NodeSlide reports export behavior per element (`web_native`, `pptx_editable`, `pptx_static_fallback`, `google_importable`, or `web_only`). It does not claim universal animation support, arbitrary PPTX round-trip fidelity, or a native Google Slides editor.
+NodeSlide reports export behavior per element (`web_native`, `pptx_editable`, `pptx_static_fallback`, `google_importable`, or `web_only`). Its Source inspector exposes a versioned, re-openable Deck JSON envelope and converts bounded PPTX files into reviewable typed-operation proposals with an explicit fidelity ledger. The Google Slides adapter and durable sync metadata are implemented, but live push/pull still requires deployment-owned OAuth configuration and user consent; NodeSlide does not claim universal animation support, arbitrary PPTX fidelity, or a native Google Slides editor. See [`docs/nodeslide-interoperability.md`](./docs/nodeslide-interoperability.md).
 
 ## The 6-step user flow
 
@@ -152,7 +152,7 @@ Launch + model routing, BYOK/session privacy, run history/chat, file editing, Pa
 
 ## Use it from your coding agent (MCP)
 
-The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 19 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes `parity_design_workflow_catalog` for Open Design-style workflow/discovery selection, a high-level `parity_design_mission` wrapper for design-first slug boards and QA dogfood relay packets, a `parity_studio` wrapper for natural requests, safe runtime metadata, approved-design apply, plus `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import` for direct pipeline work.
+The fastest way to try the pipeline today is via the [`parity-studio-mcp`](./mcp/) package - a stdio MCP server with 34 tools, `use-parity-studio` / `use-parity-design-mission` prompts, and `parity://agent-rules`. It includes governed NodeSlide snapshot, element, export, and reviewable patch tools alongside `parity_design_workflow_catalog`, the high-level `parity_design_mission` wrapper, safe runtime metadata, approved-design apply, `parity_platform_to_ui_kit`, `parity_pipeline`, `parity_decompose`, `parity_verify`, `parity_export_zip`, `parity_figma_export`, and `parity_figma_import`.
 
 ```jsonc
 // MCP client config for Claude Code, Codex, Cursor, Windsurf, etc.

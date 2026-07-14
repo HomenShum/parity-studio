@@ -599,6 +599,7 @@ function renderPanel(
       onApplyTastePack={() => undefined}
       onClearTastePack={() => undefined}
       onApplyDesignPatch={() => undefined}
+      onApplyJsonPatch={() => undefined}
       onAddComment={() => undefined}
       onReply={() => undefined}
       onSetCommentStatus={() => undefined}

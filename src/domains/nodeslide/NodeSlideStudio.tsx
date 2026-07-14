@@ -104,7 +104,15 @@ import {
   type NodeSlideTastePackId,
   getNodeSlideTastePack,
 } from './signature/packs/index';
-import { downloadDeckHtml, downloadPptx, validateSnapshot } from './slidelang/index';
+import {
+  createPptxImportCandidate,
+  diffNodeSlideSnapshots,
+  downloadDeckHtml,
+  downloadDeckJson,
+  downloadPptx,
+  parseNodeSlideJson,
+  validateSnapshot,
+} from './slidelang/index';
 import './nodeslide.css';
 import './nodeslideV3.css';
 
@@ -215,6 +223,7 @@ interface NodeSlideGeneratedApi {
       OwnerWorkspace
     >;
     applyPatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
+    proposePatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
     acceptPatch: PublicMutation<
       { deckId: string; ownerAccessKey: string; patchId: string },
       PatchReceipt
@@ -520,6 +529,7 @@ export function NodeSlideStudio() {
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
+  const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
@@ -1343,6 +1353,123 @@ export function NodeSlideStudio() {
     ],
   );
 
+  const proposeSourceImport = useCallback(
+    async (file: File, kind: 'json' | 'pptx'): Promise<string> => {
+      const initialWorkspace = workspaceRef.current;
+      if (!initialWorkspace || !ownerAccessKeyRef.current) {
+        throw new Error('Open an owned deck before importing a source file.');
+      }
+      const requestedDeckId = initialWorkspace.deck.id;
+      const payload = kind === 'json' ? await file.text() : await file.arrayBuffer();
+      return enqueueEditorWrite(
+        requestedDeckId,
+        'The active deck changed before the import could be reviewed.',
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          let args: ConvexArgs<ApplyPatchArgs>;
+          let receiptMessage: string;
+          if (kind === 'json') {
+            const parsed = parseNodeSlideJson(payload as string);
+            if (!parsed.ok) {
+              throw new Error(
+                `Deck JSON is invalid: ${parsed.issues
+                  .slice(0, 3)
+                  .map((issue) => `${issue.path} ${issue.message}`)
+                  .join(' ')}`,
+              );
+            }
+            const diff = diffNodeSlideSnapshots(currentWorkspace, parsed.snapshot);
+            if (!diff.ok) {
+              throw new Error(
+                `Deck JSON could not be compared: ${diff.issues
+                  .slice(0, 3)
+                  .map((issue) => `${issue.path} ${issue.message}`)
+                  .join(' ')}`,
+              );
+            }
+            if (!diff.fidelity.canApply) {
+              throw new Error(
+                `This JSON cannot be safely re-opened here: ${diff.fidelity.findings
+                  .filter((finding) => finding.fidelity === 'unsupported')
+                  .slice(0, 3)
+                  .map((finding) => finding.message)
+                  .join(' ')}`,
+              );
+            }
+            if (diff.operations.length === 0) {
+              return 'This JSON already matches the current deck. Nothing was proposed.';
+            }
+            const scope = scopeForOperations(currentWorkspace, diff.operations, 'unrestricted');
+            const clocks = clocksForScope(currentWorkspace, scope, diff.operations);
+            args = {
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: currentWorkspace.deck.version,
+              baseSlideVersions: clocks.baseSlideVersions,
+              baseElementVersions: clocks.baseElementVersions,
+              scope,
+              operations: diff.operations,
+              summary: `Re-open ${file.name} as a validated NodeSlide JSON change.`,
+            };
+            receiptMessage = `JSON import proposed with ${diff.operations.length} typed operation${diff.operations.length === 1 ? '' : 's'}.`;
+          } else {
+            const imported = await createPptxImportCandidate(
+              {
+                deck: currentWorkspace.deck,
+                slides: currentWorkspace.slides,
+                elements: currentWorkspace.elements,
+                sources: currentWorkspace.sources,
+              },
+              payload as ArrayBuffer,
+              { fileName: file.name },
+            );
+            if (!imported.ok) {
+              throw new Error(`PPTX import stopped: ${imported.error.message}`);
+            }
+            const { candidate } = imported;
+            args = {
+              deckId: candidate.deckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: candidate.baseDeckVersion,
+              baseSlideVersions: candidate.baseSlideVersions,
+              baseElementVersions: candidate.baseElementVersions,
+              scope: candidate.scope,
+              operations: candidate.operations,
+              summary: candidate.summary,
+            };
+            receiptMessage = `PPTX import proposed: ${candidate.source.slideCount} slide${candidate.source.slideCount === 1 ? '' : 's'}, ${candidate.source.importedElementCount} editable object${candidate.source.importedElementCount === 1 ? '' : 's'}; ${candidate.fidelity.summary.approximated} approximated and ${candidate.fidelity.summary.dropped} dropped.`;
+          }
+
+          const receipt = await proposePatchMutation(args);
+          if (!editorRequestGateRef.current.isCurrent(requestToken)) {
+            throw new Error('The active deck changed before the proposal returned.');
+          }
+          if (receipt.workspace) installWorkspace(receipt.workspace, currentOwnerAccessKey);
+          if (receipt.patch.status === 'stale') {
+            throw new Error(
+              'The deck changed during import. Reload the source file and try again.',
+            );
+          }
+          if (receipt.patch.status !== 'ready') {
+            throw new Error('The import did not produce a reviewable proposal.');
+          }
+          setActiveInspectorTab('ai');
+          setInspectorCollapsed(false);
+          setCanvasMode('compare');
+          setToast({
+            kind: 'success',
+            message: 'Import validated. Review the candidate before accepting it.',
+          });
+          return `${receiptMessage} Nothing changed yet; review it in Compare and choose Accept or Reject.`;
+        },
+      );
+    },
+    [enqueueEditorWrite, installWorkspace, proposePatchMutation],
+  );
+
   const restoreHistory = useCallback(
     async (direction: 'undo' | 'redo') => {
       if (!workspace || !ownerAccessKey) return;
@@ -1827,7 +1954,16 @@ export function NodeSlideStudio() {
     setQueryParam('present', '1');
     setPresentMode(true);
   };
-  const exportDeck = (kind: 'html' | 'pptx') => {
+  const exportDeck = (kind: 'html' | 'json' | 'pptx') => {
+    if (kind === 'json') {
+      try {
+        downloadDeckJson(snapshot);
+        setToast({ kind: 'success', message: 'Re-openable Deck JSON export prepared.' });
+      } catch (error) {
+        setToast({ kind: 'error', message: errorMessage(error, 'Deck JSON export failed.') });
+      }
+      return;
+    }
     if (activeSignatureLoading) {
       setToast({
         kind: 'error',
@@ -2709,6 +2845,7 @@ export function NodeSlideStudio() {
         onShare={() => setShareOpen(true)}
         onPresent={beginPresentation}
         onExportHtml={() => exportDeck('html')}
+        onExportJson={() => exportDeck('json')}
         onExportPptx={() => exportDeck('pptx')}
         onOpenCommandPalette={() => setCommandOpen(true)}
         onToggleInspector={() => setInspectorCollapsed((value) => !value)}
@@ -3190,6 +3327,16 @@ export function NodeSlideStudio() {
               summary,
             )
           }
+          onApplyJsonPatch={(operations, summary, elementId, baseElementVersion) =>
+            applyOperations(
+              operations,
+              scopeForOperations(workspace, operations, 'unrestricted'),
+              summary,
+              undefined,
+              { [elementId]: baseElementVersion },
+            )
+          }
+          onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
             ownerAccessKey
               ? void addComment({

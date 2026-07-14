@@ -22,7 +22,7 @@ Use the in-app **BYOK / Agents** control to configure a provider in the current 
       "command": "npx",
       "args": [
         "-y",
-        "https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.4.0.tgz"
+        "https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.5.0.tgz"
       ],
       "env": {
         "PARITY_CONVEX_URL": "https://blissful-pig-998.convex.cloud",
@@ -45,7 +45,7 @@ Codex uses `~/.codex/config.toml` or a trusted project’s `.codex/config.toml`:
 ```toml
 [mcp_servers.nodeslide]
 command = "npx"
-args = ["-y", "https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.4.0.tgz"]
+args = ["-y", "https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.5.0.tgz"]
 env_vars = ["NODESLIDE_OWNER_ACCESS_KEY", "OPENROUTER_API_KEY"]
 default_tools_approval_mode = "writes"
 
@@ -59,7 +59,7 @@ Use `npx.cmd` as the command on Windows. In Codex, `/mcp` shows connected server
 
 The production tarball is pinned instead of using npm `latest`, so a copied config cannot silently
 resolve to an older MCP server. Verify it with
-[`parity-studio-mcp-0.4.0.sha256`](../public/downloads/parity-studio-mcp-0.4.0.sha256).
+[`parity-studio-mcp-0.5.0.sha256`](../public/downloads/parity-studio-mcp-0.5.0.sha256).
 
 ## Provider routing
 
@@ -76,10 +76,14 @@ Key presence never grants consent. The MCP call must still set `consent: true` f
 | --- | --- |
 | `nodeslide.byok_status` | Read-only key-presence check; values never returned |
 | `nodeslide.get_deck` | Read-only structured deck summary + receipt |
+| `nodeslide.get_snapshot` | Read-only canonical snapshot with version clocks |
+| `nodeslide.list_elements` | Bounded, paginated structured element listing |
+| `nodeslide.export_spec` | Versioned `nodeslide.deck-snapshot` JSON envelope |
 | `nodeslide.list_slides` | Read-only slides and version clocks |
 | `nodeslide.get_trace` | Read-only model/cost/token/digest/validation trace |
 | `nodeslide.list_versions` | Read-only immutable version history |
 | `nodeslide.propose_edit` | Local BYOK, hosted, or deterministic planning; always unapplied |
+| `nodeslide.propose_patch` | Exact external-agent typed patch; validated and always unapplied |
 | `nodeslide.accept_proposal` | Explicit reviewed commit to a new version |
 | `nodeslide.reject_proposal` | Rejects proposal; deck unchanged |
 | `nodeslide.upload_source` | Bounded private source ingestion with server digest |

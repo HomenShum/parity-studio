@@ -230,6 +230,15 @@ const nodeslidePublishedSnapshotValidator = v.object({
   sources: v.array(nodeslidePublishedSourceValidator),
 });
 
+const nodeslideSyncObjectLinkValidator = v.object({
+  kind: v.union(v.literal('deck'), v.literal('slide'), v.literal('element')),
+  localId: v.string(),
+  remoteId: v.string(),
+  semanticFingerprint: v.string(),
+  localSlideId: v.optional(v.string()),
+  remoteSlideId: v.optional(v.string()),
+});
+
 export default defineSchema({
   projects: defineTable({
     clientSessionId: v.optional(v.string()),
@@ -525,6 +534,33 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_session_updated', ['clientSessionId', 'updatedAt'])
     .index('by_share_slug', ['shareSlug']),
+
+  nodeslide_sync_connections: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    remotePresentationId: v.string(),
+    remoteRevision: v.string(),
+    lastSyncedDeckVersion: v.number(),
+    objectMapping: v.array(nodeslideSyncObjectLinkValidator),
+    status: v.union(
+      v.literal('active'),
+      v.literal('syncing'),
+      v.literal('conflict'),
+      v.literal('error'),
+      v.literal('disconnected'),
+    ),
+    connectionVersion: v.number(),
+    lastMutationKey: v.string(),
+    lastMutationFingerprint: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastSyncedAt: v.number(),
+    disconnectedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_provider', ['deckId', 'provider'])
+    .index('by_provider_remote', ['provider', 'remotePresentationId']),
 
   nodeslide_slides: defineTable({
     id: v.string(),

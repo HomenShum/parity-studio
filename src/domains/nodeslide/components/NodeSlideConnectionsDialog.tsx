@@ -33,7 +33,7 @@ interface NodeSlideConnectionsDialogProps {
 type ClientKind = 'claude' | 'codex';
 
 export const NODESLIDE_MCP_PACKAGE =
-  'https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.4.0.tgz';
+  'https://parity-studio.vercel.app/downloads/parity-studio-mcp-0.5.0.tgz';
 export const NODESLIDE_CONVEX_URL = 'https://blissful-pig-998.convex.cloud';
 
 export function NodeSlideConnectionsDialog({
@@ -256,11 +256,11 @@ export function NodeSlideConnectionsDialog({
             </a>
             <a
               className="ns-connection-doc-link"
-              href="/downloads/parity-studio-mcp-0.4.0.sha256"
+              href="/downloads/parity-studio-mcp-0.5.0.sha256"
               target="_blank"
               rel="noreferrer"
             >
-              Verify v0.4.0 checksum <ExternalLink size={12} />
+              Verify v0.5.0 checksum <ExternalLink size={12} />
             </a>
           </section>
 

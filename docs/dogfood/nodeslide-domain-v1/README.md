@@ -45,4 +45,4 @@ For the official SlideLang source project, use the upstream CLI with `DECKS_DATA
 
 - The free model route is opportunistic; deterministic fallback keeps testing and authoring usable without credits while preserving scope and validation.
 - Unsupported image/media behavior is labelled as a static fallback rather than claimed editable parity.
-- Google Slides is import-oriented only. Native Google Slides editing, universal PowerPoint import fidelity, and full animation parity are outside P0.
+- Google Slides has a tested, revision-aware adapter and durable sync metadata, but live push/pull remains disabled until an approved OAuth client is configured. PPTX import is bounded and fidelity-labelled; universal PowerPoint fidelity, native Google Slides editing, and full animation parity are not claimed.

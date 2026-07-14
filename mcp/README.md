@@ -2,7 +2,7 @@
 
 > MCP server for Parity Studio. Lets coding agents (Claude Code, Codex, Cursor, Windsurf, any MCP client) capture an existing app route, decompose it into a canonical `ui_kit/`, import it into Parity Studio, and keep iterating without leaving the editor.
 
-**Status**: v0.4.0 - stdio transport - Parity Studio + governed NodeSlide tools
+**Status**: v0.5.0 - stdio transport - Parity Studio + governed NodeSlide tools
 
 ## Install
 

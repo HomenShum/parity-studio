@@ -9,6 +9,7 @@
   --ns-bg: #fafafa;
   --ns-surface: #fff;
   --ns-raised: #f3f4f6;
+  --ns-surface-subtle: var(--ns-raised);
   --ns-canvas: #eff1f3;
   --ns-ink: #111827;
   --ns-ink2: #4b5563;
@@ -37,6 +38,9 @@
   --ns-collaboration: #5e6ad2;
   --ns-shadow-sm: 0 1px 3px rgb(15 23 42 / 8%);
   --ns-shadow-lg: 0 12px 32px rgb(15 23 42 / 12%);
+  --ns-radius-sm: 8px;
+  --ns-space-2: 8px;
+  --ns-font-mono: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   --ns-nav-width: 300px;
   --ns-inspector-width: 340px;
   --ns-chrome-min-font: 11px;
@@ -1778,6 +1782,131 @@
 .nodeslide-studio .ns-inspector-content {
   color: var(--ns-ink);
   overflow: hidden;
+}
+
+/* JSON / Source is a compact code workbench inside the inspector, not a raw
+ * textarea bolted onto the rail. The selected view remains the only strong
+ * accent so the source itself stays visually primary. */
+.nodeslide-studio .ns-json-view-tabs {
+  background: var(--ns-surface-subtle);
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-sm);
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 3px;
+}
+
+.nodeslide-studio .ns-json-view-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--ns-radius-sm) - 2px);
+  color: var(--ns-ink2);
+  font-size: 10.5px;
+  font-weight: 600;
+  min-width: 0;
+  padding: 7px 6px;
+}
+
+.nodeslide-studio .ns-json-view-tabs button.is-active {
+  background: var(--ns-surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 10%);
+  color: var(--ns-ink);
+}
+
+.nodeslide-studio .ns-json-heading,
+.nodeslide-studio .ns-json-heading-actions,
+.nodeslide-studio .ns-json-editor-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.nodeslide-studio .ns-json-heading {
+  justify-content: space-between;
+}
+
+.nodeslide-studio .ns-json-editor-shell {
+  display: grid;
+  gap: 8px;
+}
+
+.nodeslide-studio .ns-json-code,
+.nodeslide-studio .ns-json-editor {
+  background: var(--ns-surface-subtle);
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-sm);
+  box-sizing: border-box;
+  color: var(--ns-ink);
+  font-family: var(--ns-font-mono);
+  font-size: 10.5px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 100%;
+  tab-size: 2;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-json-code {
+  max-height: 520px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.nodeslide-studio .ns-json-editor {
+  min-height: 320px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.nodeslide-studio .ns-json-editor:focus-visible,
+.nodeslide-studio .ns-json-view-tabs button:focus-visible {
+  border-color: var(--ns-accent);
+  outline: 2px solid color-mix(in srgb, var(--ns-accent) 28%, transparent);
+  outline-offset: 1px;
+}
+
+.nodeslide-studio .ns-json-editor-actions {
+  justify-content: flex-end;
+}
+
+.nodeslide-studio .ns-source-import {
+  display: grid;
+  gap: var(--ns-space-2);
+}
+
+.nodeslide-studio .ns-source-import p,
+.nodeslide-studio .ns-source-import small {
+  margin: 0;
+}
+
+.nodeslide-studio .ns-source-import-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ns-space-2);
+}
+
+.nodeslide-studio .ns-source-import-actions .ns-button {
+  min-width: 0;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.nodeslide-studio .ns-source-import-actions input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-source-import-actions [aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 /* The inspector is a containment boundary. Every scrollable lane owns only its

@@ -18,7 +18,7 @@ Binary metric: the same golden-deck content applied under two intentionally diff
 
 ## Existing contracts that remain fixed
 
-- `PatchOperation` keeps exactly 11 operation names.
+- Signature application continues to use the shared typed `PatchOperation` union; it does not add a signature-specific write path.
 - Signature application uses only `update_slide` and `update_style` in revision 1.
 - Application never writes a snapshot directly; callers submit the plan through the existing patch/CAS path.
 - `ValidationResult` remains `{id, deckId, deckVersion, ok, publishOk, cleanOk, issues, checkedAt, toolchainVersion}`.

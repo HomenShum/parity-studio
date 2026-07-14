@@ -186,7 +186,11 @@ describe('NodeSlide seed', () => {
       ),
     );
     expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
-    expect(validateSnapshot(built.snapshot).issues).toEqual([]);
+    const exportValidation = validateSnapshot(built.snapshot);
+    expect(exportValidation.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
+    expect(exportValidation.issues).toContainEqual(
+      expect.objectContaining({ code: 'export', severity: 'warning', elementId: formula?.id }),
+    );
   });
 
   it('keeps deterministic fallback headlines sentence-cased and sequence labels singular', () => {
@@ -240,7 +244,11 @@ describe('NodeSlide seed', () => {
     expect(snapshot.elements.some((element) => element.kind === 'math')).toBe(true);
     expect(snapshot.elements.some((element) => element.kind === 'chart')).toBe(true);
     expect(snapshot.elements.some((element) => element.kind === 'image')).toBe(true);
-    expect(validateSnapshot(snapshot).issues).toEqual([]);
+    const exportValidation = validateSnapshot(snapshot);
+    expect(exportValidation.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
+    expect(exportValidation.issues).toContainEqual(
+      expect.objectContaining({ code: 'export', severity: 'warning' }),
+    );
   });
 
   it('maps every advertised design profile to genuinely distinct tokens', () => {

@@ -53,6 +53,12 @@ describe('NodeSlide Design inspector sections', () => {
     expect(inspectorSource).toContain('label="Opacity %"');
     expect(inspectorSource).toContain('className="ns-stepper-label"');
   });
+
+  it('labels PPTX signature extraction without implying slide-content import', () => {
+    expect(inspectorSource).toContain('Import design style from PPTX');
+    expect(inspectorSource).toContain('Slides and content are not');
+    expect(inspectorSource).not.toContain('Upload a past deck');
+  });
 });
 
 describe('NodeSlide chart label/value grid', () => {

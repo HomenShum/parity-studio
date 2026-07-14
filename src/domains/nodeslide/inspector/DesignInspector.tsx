@@ -1166,8 +1166,11 @@ function TastePackPanel({
       </p>
       {onUploadSource ? (
         <label className="ns-signature-upload">
-          <strong>Upload a past deck</strong>
-          <span>NodeSlide extracts observed colors, type, and layout evidence from PPTX.</span>
+          <strong>Import design style from PPTX</strong>
+          <span>
+            Extracts observed colors, type, and layout evidence. Slides and content are not imported
+            here.
+          </span>
           <input
             type="file"
             accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"

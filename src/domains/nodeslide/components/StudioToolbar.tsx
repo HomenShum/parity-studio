@@ -3,6 +3,7 @@ import {
   Command,
   Download,
   FileCode2,
+  FileJson2,
   FileType2,
   Globe2,
   Moon,
@@ -48,6 +49,7 @@ export interface StudioToolbarProps {
   onShare: () => void;
   onPresent: () => void;
   onExportHtml: () => void;
+  onExportJson: () => void;
   onExportPptx: () => void;
   onOpenCommandPalette: () => void;
   onToggleInspector: () => void;
@@ -78,6 +80,7 @@ export function StudioToolbar({
   onShare,
   onPresent,
   onExportHtml,
+  onExportJson,
   onExportPptx,
   onOpenCommandPalette,
   onToggleInspector,
@@ -447,6 +450,23 @@ export function StudioToolbar({
                 <span>
                   <strong>Interactive HTML</strong>
                   <small>Web-native deck and notes</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="export-json"
+                onClick={() => {
+                  setExportOpen(false);
+                  onExportJson();
+                }}
+              >
+                <span className="ns-menu-icon">
+                  <FileJson2 size={17} />
+                </span>
+                <span>
+                  <strong>Deck JSON</strong>
+                  <small>Full-fidelity NodeSlide source snapshot</small>
                 </span>
               </button>
               <button

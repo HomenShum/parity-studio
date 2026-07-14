@@ -186,6 +186,8 @@ export const NODESLIDE_NEBIUS_VARIATIONS_CONSENT =
 export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
 /** Exact consent for a local MCP process to send scoped context to a user-selected BYOK model. */
 export const NODESLIDE_LOCAL_BYOK_EDIT_CONSENT = 'nodeslide_local_byok_edit_v1' as const;
+/** Exact consent for an external coding agent to submit already-authored operations for review. */
+export const NODESLIDE_EXTERNAL_AGENT_PATCH_CONSENT = 'nodeslide_external_agent_patch_v1' as const;
 export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
 export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
   'nodeslide.design-behavior-policy/v1' as const;

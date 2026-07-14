@@ -1,0 +1,11 @@
+{
+  "repo": ".",
+  "url": "http://127.0.0.1:5200/?domain=nodeslide",
+  "outDir": "artifacts/nodeslide-integration",
+  "viewport": { "width": 1280, "height": 720 },
+  "scheme": "light",
+  "clicks": ["text=Explore the editable sample workspace", "text=Source"],
+  "waitMs": 1500,
+  "clickWaitMs": 2500,
+  "settleMs": 2500
+}
