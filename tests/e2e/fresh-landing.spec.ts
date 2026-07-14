@@ -115,7 +115,9 @@ test.describe('canonical fresh landing', () => {
 
     const viewAll = page.getByRole('button', { name: 'View all' });
     if (await viewAll.count()) {
-      const viewAllHeight = await viewAll.evaluate((button) => button.getBoundingClientRect().height);
+      const viewAllHeight = await viewAll.evaluate(
+        (button) => button.getBoundingClientRect().height,
+      );
       expect(viewAllHeight).toBeGreaterThanOrEqual(24);
     }
   });
