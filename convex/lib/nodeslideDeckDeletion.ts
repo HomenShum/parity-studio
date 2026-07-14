@@ -11,6 +11,9 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_comments',
   'nodeslide_versions',
   'nodeslide_sources',
+  'nodeslide_sync_connections',
+  'nodeslide_oauth_sessions',
+  'nodeslide_oauth_credentials',
   'nodeslide_agent_runs',
   'nodeslide_agent_messages',
   'nodeslide_agent_memories',
@@ -108,6 +111,18 @@ export async function deleteNodeSlideDeckRows(
     ctx.db
       .query('nodeslide_sources')
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .collect(),
+    ctx.db
+      .query('nodeslide_sync_connections')
+      .withIndex('by_deck_provider', (query) => query.eq('deckId', deck.id))
+      .collect(),
+    ctx.db
+      .query('nodeslide_oauth_sessions')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .collect(),
+    ctx.db
+      .query('nodeslide_oauth_credentials')
+      .withIndex('by_deck_provider', (query) => query.eq('deckId', deck.id))
       .collect(),
     ctx.db
       .query('nodeslide_agent_runs')
