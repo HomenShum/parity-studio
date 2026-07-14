@@ -663,6 +663,13 @@ export function deterministicAgentOperations(
 ): PatchOperation[] {
   const eligible = eligibleElements(snapshot, scope);
   const lower = instruction.toLowerCase();
+  const parallelHeadlineOperations = deterministicParallelHeadlineOperations(
+    snapshot,
+    eligible,
+    scope,
+    instruction,
+  );
+  if (parallelHeadlineOperations) return parallelHeadlineOperations;
   const wholeSlideTopic =
     scope.operationMode === 'copy' || scope.operationMode === 'unrestricted'
       ? extractWholeSlideTopic(instruction)
@@ -777,6 +784,60 @@ export function deterministicAgentOperations(
       },
     },
   ];
+}
+
+function deterministicParallelHeadlineOperations(
+  snapshot: DeckSnapshot,
+  eligible: readonly SlideElement[],
+  scope: PatchScope,
+  instruction: string,
+): PatchOperation[] | null {
+  const lower = instruction.toLowerCase();
+  const requested =
+    /\b(?:selected|these|both|multiple)\s+slides?\b/.test(lower) &&
+    /\b(?:parallel|consistent|action[- ]led)\b/.test(lower) &&
+    /\b(?:headlines?|titles?|headings?)\b/.test(lower);
+  if (!requested) return null;
+  if (scope.kind === 'deck' || scope.slideIds.length < 2) {
+    throw new Error(
+      'The deterministic multi-slide fallback requires at least two explicit slide IDs.',
+    );
+  }
+  if (scope.slideIds.length > 8) {
+    throw new Error('The deterministic multi-slide fallback supports at most eight slides.');
+  }
+
+  const scopedSlideIds = new Set(scope.slideIds);
+  const orderedSlideIds = snapshot.deck.slideOrder.filter((slideId) => scopedSlideIds.has(slideId));
+  const operations = orderedSlideIds.map((slideId) => {
+    const candidates = eligible.filter(
+      (element) =>
+        element.slideId === slideId &&
+        element.kind === 'text' &&
+        element.visible !== false &&
+        /\b(?:headline|title|heading)\b/i.test(`${element.role ?? ''} ${element.name}`),
+    );
+    const target =
+      candidates.find((element) => /\bheadline\b/i.test(element.role ?? '')) ?? candidates[0];
+    if (!target?.content?.trim()) {
+      throw new Error(
+        'The deterministic multi-slide fallback found a scoped slide without an editable headline.',
+      );
+    }
+    const current = nodeslideCleanText(target.content, 160).replace(/[.!?]+$/u, '');
+    const base = current.replace(/^(?:Act on this|Decide now):\s*/iu, '');
+    const preferred = nodeslideCleanText(`Act on this: ${base}`, 180);
+    const text =
+      preferred === target.content ? nodeslideCleanText(`Decide now: ${base}`, 180) : preferred;
+    return {
+      op: 'replace_text' as const,
+      slideId,
+      elementId: target.id,
+      text,
+    };
+  });
+
+  return operations.length === orderedSlideIds.length ? operations : null;
 }
 
 export function summarizePatchOperations(
