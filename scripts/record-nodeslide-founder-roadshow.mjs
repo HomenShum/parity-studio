@@ -541,18 +541,22 @@ function createSceneHooks(state) {
     },
 
     bounded_multi_slide_edit: async () => {
-      const slideSelectors = state.page.locator(
-        '[data-testid^="slide-scope-select-"], [aria-label^="Select slide for AI scope"]',
-      );
-      if ((await slideSelectors.count()) < 2) {
+      const slideActions = state.page.getByRole('button', { name: /^Slide \d+ actions$/ });
+      if ((await slideActions.count()) < 2) {
         throw new MissingRoadshowCapabilityError(
           'bounded_multi_slide_edit',
           'a stable UI contract for selecting two explicit slide IDs as the write scope',
-          ['[data-testid^="slide-scope-select-"]', '[aria-label^="Select slide for AI scope"]'],
+          ['button[aria-label^="Slide "][aria-label$=" actions"]'],
         );
       }
-      await humanCheck(state.page, slideSelectors.nth(0));
-      await humanCheck(state.page, slideSelectors.nth(1));
+      for (let index = 0; index < 2; index += 1) {
+        await humanClick(state.page, slideActions.nth(index));
+        await humanClick(
+          state.page,
+          state.page.getByRole('menuitemcheckbox', { name: 'Select for multi-slide edit' }),
+        );
+      }
+      await state.page.getByText('2 selected', { exact: true }).waitFor({ state: 'visible' });
       await configureAiRun(state, { scope: 'Selected slides', web: false });
       await submitAiInstruction(
         state,

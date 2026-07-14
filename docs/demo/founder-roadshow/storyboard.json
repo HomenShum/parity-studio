@@ -78,11 +78,7 @@
       "sequence": 9,
       "title": "Change a bounded set of slides",
       "proof": "Two visibly selected slides become the exact write scope; no whole-deck permission is granted.",
-      "hook": {
-        "status": "pending-product-selector",
-        "name": "boundedMultiSlideEdit",
-        "reason": "Current consolidation HEAD exposes element multi-select and deck/this-slide scope, but no stable UI contract for selecting a bounded set of slide IDs. Live recording must remain blocked until that product selector lands."
-      }
+      "hook": { "status": "implemented", "name": "boundedMultiSlideEdit" }
     },
     {
       "id": "chart_change",

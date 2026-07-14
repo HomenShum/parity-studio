@@ -23,7 +23,7 @@ const storyboardPath = resolve(repoRoot, 'docs/demo/founder-roadshow/storyboard.
 const captionsPath = resolve(repoRoot, 'docs/demo/founder-roadshow/captions.json');
 
 describe('founder-roadshow contract', () => {
-  it('covers every required scene and labels the current live blocker', async () => {
+  it('covers every required scene with an implemented live hook', async () => {
     const [storyboard, captions] = await Promise.all([
       readRoadshowJson(storyboardPath),
       readRoadshowJson(captionsPath),
@@ -32,20 +32,15 @@ describe('founder-roadshow contract', () => {
 
     expect(result.sceneCount).toBe(REQUIRED_ROADSHOW_SCENES.length);
     expect(result.captionCount).toBe(REQUIRED_ROADSHOW_SCENES.length);
-    expect(result.pendingHooks).toEqual([
-      expect.objectContaining({
-        sceneId: 'bounded_multi_slide_edit',
-        status: 'pending-product-selector',
-      }),
-    ]);
-    expect(() => assertRoadshowLiveReady(storyboard)).toThrow(/bounded_multi_slide_edit/);
+    expect(result.pendingHooks).toEqual([]);
+    expect(assertRoadshowLiveReady(storyboard)).toBe(true);
   });
 
-  it('allows live execution only after every required hook is implemented', async () => {
+  it('blocks live execution if any required hook regresses to pending', async () => {
     const storyboard = structuredClone(await readRoadshowJson(storyboardPath));
-    const pending = storyboard.scenes.find((scene) => scene.id === 'bounded_multi_slide_edit');
-    pending.hook = { status: 'implemented', name: 'boundedMultiSlideEdit' };
-    expect(assertRoadshowLiveReady(storyboard)).toBe(true);
+    const multiSlide = storyboard.scenes.find((scene) => scene.id === 'bounded_multi_slide_edit');
+    multiSlide.hook = { status: 'pending-product-selector', name: 'boundedMultiSlideEdit' };
+    expect(() => assertRoadshowLiveReady(storyboard)).toThrow(/bounded_multi_slide_edit/);
   });
 
   it('rejects a missing scene instead of shrinking the demo', async () => {
