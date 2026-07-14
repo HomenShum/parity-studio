@@ -502,18 +502,20 @@ function AttachmentSessionBridge({
   useEffect(() => {
     if (hydration.current !== 'ready') return;
     onAttachmentsChange?.();
+    // A real attachment transition supersedes prior validation feedback. Clear
+    // it at the start of this committed transition so an older async draft
+    // conversion can never erase a newer max-files/accept error.
+    onError?.(null);
     const version = ++syncVersion.current;
     const currentFiles = [...files];
     if (currentFiles.length === 0) {
       setSessionAttachments([]);
-      onError?.(null);
       return;
     }
     void Promise.all(currentFiles.map(attachmentDraftFromPart))
       .then((drafts) => {
         if (version !== syncVersion.current) return;
         setSessionAttachments(drafts);
-        onError?.(null);
       })
       .catch((error: unknown) => {
         if (version !== syncVersion.current) return;

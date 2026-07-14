@@ -452,6 +452,11 @@ export interface PromptInputMessage {
   files: FileUIPart[];
 }
 
+type PromptInputError = {
+  code: 'max_files' | 'max_file_size' | 'accept';
+  message: string;
+};
+
 export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' | 'onError'> & {
   // e.g., "image/*" or leave undefined for any
   accept?: string;
@@ -471,10 +476,7 @@ export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' 
     ComponentProps<'input'>,
     'accept' | 'multiple' | 'onChange' | 'ref' | 'type'
   > & { 'data-testid'?: string };
-  onError?: (err: {
-    code: 'max_files' | 'max_file_size' | 'accept';
-    message: string;
-  }) => void;
+  onError?: (err: PromptInputError) => void;
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>,
@@ -506,7 +508,19 @@ export const PromptInput = ({
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const itemsRef = useRef(items);
   const files = usingProvider ? controller.attachments.files : items;
+
+  // Error callbacks can update a parent (for example, an inline validation message).
+  // Keep the latest callback in a ref and queue notification after the event/state
+  // transition, never from inside a React state updater.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+  const reportErrorAfterTransition = useCallback((error: PromptInputError) => {
+    queueMicrotask(() => onErrorRef.current?.(error));
+  }, []);
 
   // ----- Local referenced sources (always local to PromptInput)
   const [referencedSources, setReferencedSources] = useState<
@@ -555,7 +569,7 @@ export const PromptInput = ({
       const incoming = [...fileList];
       const accepted = incoming.filter((f) => matchesAccept(f));
       if (incoming.length && accepted.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'accept',
           message: 'No files match the accepted types.',
         });
@@ -564,50 +578,48 @@ export const PromptInput = ({
       const withinSize = (f: File) => (maxFileSize ? f.size <= maxFileSize : true);
       const sized = accepted.filter(withinSize);
       if (accepted.length > 0 && sized.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_file_size',
           message: 'All files exceed the maximum size.',
         });
         return;
       }
 
-      setItems((prev) => {
-        const capacity =
-          typeof maxFiles === 'number' ? Math.max(0, maxFiles - prev.length) : undefined;
-        const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === 'number' && sized.length > capacity) {
-          onError?.({
-            code: 'max_files',
-            message: 'Too many files. Some were not added.',
-          });
-        }
-        const next: (FileUIPart & { id: string })[] = [];
-        for (const file of capped) {
-          next.push({
-            filename: file.name,
-            id: nanoid(),
-            mediaType: file.type,
-            type: 'file',
-            url: URL.createObjectURL(file),
-          });
-        }
-        return [...prev, ...next];
-      });
+      const current = itemsRef.current;
+      const capacity =
+        typeof maxFiles === 'number' ? Math.max(0, maxFiles - current.length) : undefined;
+      const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
+      const additions: (FileUIPart & { id: string })[] = capped.map((file) => ({
+        filename: file.name,
+        id: nanoid(),
+        mediaType: file.type,
+        type: 'file',
+        url: URL.createObjectURL(file),
+      }));
+      const next = [...current, ...additions];
+      itemsRef.current = next;
+      setItems(next);
+
+      if (typeof capacity === 'number' && sized.length > capacity) {
+        reportErrorAfterTransition({
+          code: 'max_files',
+          message: 'Too many files. Some were not added.',
+        });
+      }
     },
-    [matchesAccept, maxFiles, maxFileSize, onError],
+    [matchesAccept, maxFiles, maxFileSize, reportErrorAfterTransition],
   );
 
-  const removeLocal = useCallback(
-    (id: string) =>
-      setItems((prev) => {
-        const found = prev.find((file) => file.id === id);
-        if (found?.url) {
-          URL.revokeObjectURL(found.url);
-        }
-        return prev.filter((file) => file.id !== id);
-      }),
-    [],
-  );
+  const removeLocal = useCallback((id: string) => {
+    const current = itemsRef.current;
+    const found = current.find((file) => file.id === id);
+    if (found?.url) {
+      URL.revokeObjectURL(found.url);
+    }
+    const next = current.filter((file) => file.id !== id);
+    itemsRef.current = next;
+    setItems(next);
+  }, []);
 
   // Wrapper that validates files before calling provider's add
   const addWithProviderValidation = useCallback(
@@ -615,7 +627,7 @@ export const PromptInput = ({
       const incoming = [...fileList];
       const accepted = incoming.filter((f) => matchesAccept(f));
       if (incoming.length && accepted.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'accept',
           message: 'No files match the accepted types.',
         });
@@ -624,7 +636,7 @@ export const PromptInput = ({
       const withinSize = (f: File) => (maxFileSize ? f.size <= maxFileSize : true);
       const sized = accepted.filter(withinSize);
       if (accepted.length > 0 && sized.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_file_size',
           message: 'All files exceed the maximum size.',
         });
@@ -636,7 +648,7 @@ export const PromptInput = ({
         typeof maxFiles === 'number' ? Math.max(0, maxFiles - currentCount) : undefined;
       const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
       if (typeof capacity === 'number' && sized.length > capacity) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_files',
           message: 'Too many files. Some were not added.',
         });
@@ -646,21 +658,23 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller],
+    [matchesAccept, maxFileSize, maxFiles, files.length, controller, reportErrorAfterTransition],
   );
 
   const clearAttachments = useCallback(
     () =>
       usingProvider
         ? controller?.attachments.clear()
-        : setItems((prev) => {
-            for (const file of prev) {
+        : (() => {
+            const current = itemsRef.current;
+            for (const file of current) {
               if (file.url) {
                 URL.revokeObjectURL(file.url);
               }
             }
-            return [];
-          }),
+            itemsRef.current = [];
+            setItems([]);
+          })(),
     [usingProvider, controller],
   );
 

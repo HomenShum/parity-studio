@@ -251,10 +251,6 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
   test('reports a visible reason when the attachment cap rejects another file', async ({
     page,
   }) => {
-    test.fail(
-      true,
-      'Known product defect: the fourth file is rejected, but the landing composer emits no inline max-files alert.',
-    );
     await openIsolatedLanding(page);
     const input = page.getByTestId('landing-file-input');
     await input.setInputFiles([
