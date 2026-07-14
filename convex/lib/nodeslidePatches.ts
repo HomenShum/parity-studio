@@ -482,6 +482,11 @@ export function validateNodeSlidePatch(
               ...(operation.credit ? { credit: operation.credit.trim() } : {}),
               ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
             };
+            element.exportCapabilities = [
+              'web_native',
+              'pptx_static_fallback',
+              'google_importable',
+            ];
             if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];
           }
         }

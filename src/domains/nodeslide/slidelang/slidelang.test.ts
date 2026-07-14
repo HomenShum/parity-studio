@@ -469,6 +469,8 @@ describe('local SlideLangAdapter', () => {
           'Math exports to PowerPoint and manual Google Slides import as editable text, not a native equation object.',
       }),
     ]);
+    expect(validation.publishOk).toBe(true);
+    expect(validation.cleanOk).toBe(false);
 
     const html = adapter.renderSlideHtml(snapshot, slide.id);
     expect(html).toContain('data-element-kind="math"');
