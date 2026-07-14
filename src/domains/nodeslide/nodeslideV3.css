@@ -5795,10 +5795,14 @@
 }
 
 .nodeslide-studio .ns-landing-recents > div button {
+  align-items: center;
   background: transparent;
   border: 0;
   color: var(--ns-faint);
-  font-size: 10px;
+  display: inline-flex;
+  font-size: 11px;
+  min-height: 24px;
+  padding: 4px 6px;
 }
 
 .nodeslide-studio .ns-landing-recents ul {

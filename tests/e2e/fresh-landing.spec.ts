@@ -112,6 +112,12 @@ test.describe('canonical fresh landing', () => {
       return sampleButton.getBoundingClientRect().top - starter.getBoundingClientRect().bottom;
     });
     expect(sampleGap).toBeGreaterThanOrEqual(8);
+
+    const viewAll = page.getByRole('button', { name: 'View all' });
+    if (await viewAll.count()) {
+      const viewAllHeight = await viewAll.evaluate((button) => button.getBoundingClientRect().height);
+      expect(viewAllHeight).toBeGreaterThanOrEqual(24);
+    }
   });
 });
 
