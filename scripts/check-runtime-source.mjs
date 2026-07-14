@@ -2,10 +2,15 @@
 import { pathToFileURL } from 'node:url';
 import { normalizeRuntimeSourceSha, parseRuntimeSourcePayload } from './runtime-source.mjs';
 
-export async function checkRuntimeSourceOnce({ frontendUrl, expectedSha, fetchImpl = fetch }) {
+export async function checkRuntimeSourceOnce({
+  frontendUrl,
+  expectedSha,
+  fetchImpl = fetch,
+  vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+}) {
   const frontendEndpoint = new URL('/runtime-source.json', requiredUrl(frontendUrl)).toString();
   const frontendPayload = parseRuntimeSourcePayload(
-    await fetchJson(fetchImpl, frontendEndpoint),
+    await fetchJson(fetchImpl, frontendEndpoint, vercelBypassHeaders(vercelBypassSecret)),
     'frontend',
   );
   const convexPayload = parseRuntimeSourcePayload(
@@ -64,10 +69,13 @@ function parseArgs(args) {
   return { frontendUrl, expectedSha, attempts, delayMs };
 }
 
-async function fetchJson(fetchImpl, url) {
+async function fetchJson(fetchImpl, url, extraHeaders = {}) {
+  const protectedFrontendRequest = Object.keys(extraHeaders).length > 0;
   const response = await fetchImpl(url, {
-    headers: { accept: 'application/json' },
-    redirect: 'follow',
+    headers: { accept: 'application/json', ...extraHeaders },
+    // Never carry a Vercel bypass header across a redirect. The configured
+    // deployment URL must answer directly when the bypass is valid.
+    redirect: protectedFrontendRequest ? 'manual' : 'follow',
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error(`Runtime source endpoint returned HTTP ${response.status}.`);
@@ -76,6 +84,16 @@ async function fetchJson(fetchImpl, url) {
     throw new Error('Runtime source endpoint did not return JSON.');
   }
   return await response.json();
+}
+
+function vercelBypassHeaders(value) {
+  const secret = typeof value === 'string' ? value.trim() : '';
+  return secret
+    ? {
+        'x-vercel-protection-bypass': secret,
+        'x-vercel-set-bypass-cookie': 'true',
+      }
+    : {};
 }
 
 function requiredUrl(value) {

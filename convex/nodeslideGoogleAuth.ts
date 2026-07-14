@@ -7,7 +7,7 @@ import {
   internalQuery,
   query,
 } from './_generated/server';
-import { requireOwnerAccess } from './lib/nodeslideAccess';
+import { isOwnerAccessKey, requireOwnerAccess } from './lib/nodeslideAccess';
 import {
   NODESLIDE_GOOGLE_OAUTH_SESSION_MS,
   NODESLIDE_GOOGLE_SCOPE,
@@ -33,6 +33,12 @@ interface GoogleTokenResponse {
   refresh_token?: string;
   scope?: string;
   token_type?: string;
+}
+
+interface GoogleOAuthSessionGrant {
+  version: 1;
+  codeVerifier: string;
+  ownerAccessKey: string;
 }
 
 export const getStatus = query({
@@ -75,12 +81,20 @@ export const begin = action({
     const [stateDigest, codeChallenge, codeVerifierCiphertext] = await Promise.all([
       sha256Base64Url(state),
       sha256Base64Url(codeVerifier),
-      encryptOAuthSecret(codeVerifier, config.encryptionKey),
+      encryptOAuthSecret(
+        serializeGoogleOAuthSessionGrant({
+          version: 1,
+          codeVerifier,
+          ownerAccessKey: args.ownerAccessKey,
+        }),
+        config.encryptionKey,
+      ),
     ]);
     const expiresAt = Date.now() + NODESLIDE_GOOGLE_OAUTH_SESSION_MS;
     await ctx.runMutation(internal.nodeslideGoogleAuth.storeSession, {
       stateDigest,
       deckId: args.deckId,
+      ownerAccessKey: args.ownerAccessKey,
       codeVerifierCiphertext,
       returnTo,
       expiresAt,
@@ -129,6 +143,7 @@ export const disconnect = action({
     }
     await ctx.runMutation(internal.nodeslideGoogleAuth.revokeCredential, {
       deckId: args.deckId,
+      ownerAccessKey: args.ownerAccessKey,
     });
     return { disconnected: true, providerRevoked };
   },
@@ -153,12 +168,16 @@ export const complete = internalAction({
       return { redirectTo: withGoogleOAuthResult(session.returnTo, 'denied') };
     }
 
+    let exchangedTokenForRevocation: string | undefined;
     try {
       const config = requireGoogleOAuthConfig();
-      const codeVerifier = await decryptOAuthSecret(
-        session.codeVerifierCiphertext,
-        config.encryptionKey,
+      const grant = parseGoogleOAuthSessionGrant(
+        await decryptOAuthSecret(session.codeVerifierCiphertext, config.encryptionKey),
       );
+      await ctx.runQuery(internal.nodeslideGoogleAuth.validateOwner, {
+        deckId: session.deckId,
+        ownerAccessKey: grant.ownerAccessKey,
+      });
       const response = await fetchWithTimeout(
         GOOGLE_TOKEN_URL,
         {
@@ -168,7 +187,7 @@ export const complete = internalAction({
             code: args.code,
             client_id: config.clientId,
             client_secret: config.clientSecret,
-            code_verifier: codeVerifier,
+            code_verifier: grant.codeVerifier,
             grant_type: 'authorization_code',
             redirect_uri: config.redirectUri,
           }),
@@ -184,6 +203,7 @@ export const complete = internalAction({
       ) {
         throw new Error('Google OAuth token exchange failed.');
       }
+      exchangedTokenForRevocation = token.refresh_token ?? token.access_token;
       const scopes = normalizeScopes(token.scope);
       if (!scopes.includes(NODESLIDE_GOOGLE_SCOPE)) {
         throw new Error('Google OAuth did not grant the required per-file scope.');
@@ -197,14 +217,19 @@ export const complete = internalAction({
       await ctx.runMutation(internal.nodeslideGoogleAuth.storeCredential, {
         stateDigest,
         deckId: session.deckId,
+        ownerAccessKey: grant.ownerAccessKey,
         accessTokenCiphertext,
         ...(refreshTokenCiphertext ? { refreshTokenCiphertext } : {}),
         accessTokenExpiresAt: Date.now() + (token.expires_in ?? 0) * 1000,
         scopes,
         tokenType: token.token_type ?? 'Bearer',
       });
+      exchangedTokenForRevocation = undefined;
       return { redirectTo: withGoogleOAuthResult(session.returnTo, 'connected') };
     } catch {
+      if (exchangedTokenForRevocation) {
+        await revokeGoogleToken(exchangedTokenForRevocation).catch(() => undefined);
+      }
       await ctx.runMutation(internal.nodeslideGoogleAuth.consumeSession, { stateDigest });
       return { redirectTo: withGoogleOAuthResult(session.returnTo, 'failed') };
     }
@@ -223,11 +248,13 @@ export const storeSession = internalMutation({
   args: {
     stateDigest: v.string(),
     deckId: v.string(),
+    ownerAccessKey: v.string(),
     codeVerifierCiphertext: v.string(),
     returnTo: v.string(),
     expiresAt: v.number(),
   },
   handler: async (ctx, args): Promise<void> => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     const now = Date.now();
     const oldSessions = await ctx.db
       .query('nodeslide_oauth_sessions')
@@ -239,7 +266,11 @@ export const storeSession = internalMutation({
         .map((session) => ctx.db.delete(session._id)),
     );
     await ctx.db.insert('nodeslide_oauth_sessions', {
-      ...args,
+      stateDigest: args.stateDigest,
+      deckId: args.deckId,
+      codeVerifierCiphertext: args.codeVerifierCiphertext,
+      returnTo: args.returnTo,
+      expiresAt: args.expiresAt,
       provider: PROVIDER,
       createdAt: now,
     });
@@ -272,6 +303,7 @@ export const storeCredential = internalMutation({
   args: {
     stateDigest: v.string(),
     deckId: v.string(),
+    ownerAccessKey: v.string(),
     accessTokenCiphertext: v.string(),
     refreshTokenCiphertext: v.optional(v.string()),
     accessTokenExpiresAt: v.number(),
@@ -279,6 +311,7 @@ export const storeCredential = internalMutation({
     tokenType: v.string(),
   },
   handler: async (ctx, args): Promise<void> => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     const session = await ctx.db
       .query('nodeslide_oauth_sessions')
       .withIndex('by_state_digest', (index) => index.eq('stateDigest', args.stateDigest))
@@ -338,8 +371,9 @@ export const readCredentialForOwner = internalQuery({
 });
 
 export const revokeCredential = internalMutation({
-  args: { deckId: v.string() },
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
   handler: async (ctx, args): Promise<void> => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     const credential = await ctx.db
       .query('nodeslide_oauth_credentials')
       .withIndex('by_deck_provider', (index) =>
@@ -377,6 +411,40 @@ function googleOAuthFallbackOrigin(): string {
 function normalizeScopes(value: string | undefined): string[] {
   const scopes = (value ?? NODESLIDE_GOOGLE_SCOPE).split(/\s+/u).filter(Boolean);
   return [...new Set(scopes)].sort();
+}
+
+function serializeGoogleOAuthSessionGrant(grant: GoogleOAuthSessionGrant): string {
+  return JSON.stringify(grant);
+}
+
+function parseGoogleOAuthSessionGrant(value: string): GoogleOAuthSessionGrant {
+  try {
+    const grant = JSON.parse(value) as Partial<GoogleOAuthSessionGrant>;
+    if (
+      grant.version !== 1 ||
+      typeof grant.codeVerifier !== 'string' ||
+      !/^[A-Za-z0-9_-]{43,128}$/.test(grant.codeVerifier) ||
+      typeof grant.ownerAccessKey !== 'string' ||
+      !isOwnerAccessKey(grant.ownerAccessKey)
+    ) {
+      throw new Error();
+    }
+    return grant as GoogleOAuthSessionGrant;
+  } catch {
+    throw new Error('OAuth session is unavailable.');
+  }
+}
+
+async function revokeGoogleToken(token: string): Promise<void> {
+  await fetchWithTimeout(
+    GOOGLE_REVOKE_URL,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }),
+    },
+    TOKEN_TIMEOUT_MS,
+  );
 }
 
 async function fetchWithTimeout(

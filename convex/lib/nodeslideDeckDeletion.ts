@@ -1,3 +1,4 @@
+import { getConvexSize } from 'convex/values';
 import type { Doc } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 
@@ -31,12 +32,21 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_presence',
 ] as const;
 
+// Convex currently permits larger transactions, but deletion deliberately
+// reserves substantial headroom for reads, index ranges, and platform changes.
+// Decks beyond either bound are not partially erased.
+export const NODESLIDE_DECK_ERASURE_MAX_RECORDS = 4_000;
+export const NODESLIDE_DECK_ERASURE_MAX_BYTES = 4 * 1024 * 1024;
+
 type DeleteDeckCtx = Pick<MutationCtx, 'db'>;
+type ErasureTable = (typeof NODESLIDE_DECK_ERASURE_TABLES)[number];
+type ErasureRow = Doc<ErasureTable>;
 
 /**
- * Deletes a NodeSlide deck and every row whose schema binds it to that deck.
- * All relationship checks and reads happen before the first write so an
- * ambiguous project link fails closed. Convex then commits the writes atomically.
+ * Atomically erases a deck only when its complete deletion set fits the
+ * conservative record and byte envelope above. Every read is bounded and all
+ * checks finish before the first write. Arbitrarily large decks require a
+ * future durable tombstone/batch workflow and are intentionally rejected.
  */
 export async function deleteNodeSlideDeckRows(
   ctx: DeleteDeckCtx,
@@ -54,7 +64,7 @@ export async function deleteNodeSlideDeckRows(
   const linkedDecks = await ctx.db
     .query('nodeslide_decks')
     .withIndex('by_project_row', (query) => query.eq('projectRowId', deck.projectRowId))
-    .collect();
+    .take(2);
   if (linkedDecks.length !== 1 || linkedDecks[0]?._id !== deck._id) {
     throw new Error('NodeSlide deck deletion failed closed: project binding is ambiguous.');
   }
@@ -62,7 +72,7 @@ export async function deleteNodeSlideDeckRows(
   const tenantDecks = await ctx.db
     .query('nodeslide_decks')
     .withIndex('by_project_id', (query) => query.eq('projectId', deck.projectId))
-    .collect();
+    .take(2);
   if (tenantDecks.length !== 1 || tenantDecks[0]?._id !== deck._id) {
     throw new Error('NodeSlide deck deletion failed closed: data tenant binding is ambiguous.');
   }
@@ -70,131 +80,205 @@ export async function deleteNodeSlideDeckRows(
   const linkedRuns = await ctx.db
     .query('runs')
     .withIndex('by_project', (query) => query.eq('projectId', deck.projectRowId))
-    .collect();
+    .take(1);
   if (linkedRuns.length > 0) {
     throw new Error('NodeSlide deck deletion failed closed: the project has linked runs.');
   }
 
-  const childGroups = await Promise.all([
-    ctx.db
+  const childGroups: ErasureRow[][] = [];
+  let deletionRecords = 2;
+  let deletionBytes = getConvexSize(deck) + getConvexSize(project);
+
+  const nextLimit = () => Math.max(1, NODESLIDE_DECK_ERASURE_MAX_RECORDS - deletionRecords + 1);
+  const addGroup = (rows: ErasureRow[]) => {
+    const remaining = NODESLIDE_DECK_ERASURE_MAX_RECORDS - deletionRecords;
+    if (rows.length > remaining) throwAtomicRecordLimit();
+    deletionRecords += rows.length;
+    for (const row of rows) deletionBytes += getConvexSize(row);
+    if (deletionBytes > NODESLIDE_DECK_ERASURE_MAX_BYTES) throwAtomicByteLimit();
+    childGroups.push(rows);
+  };
+
+  addGroup(
+    await ctx.db
       .query('nodeslide_slides')
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_elements')
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_patches')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_variation_batches')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_variations')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_variation_decisions')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_comments')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_versions')
       .withIndex('by_deck_version', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_sources')
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_sync_connections')
       .withIndex('by_deck_provider', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_oauth_sessions')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_oauth_credentials')
       .withIndex('by_deck_provider', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_runs')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_messages')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_memories')
       .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_spans')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_events')
       .withIndex('by_deck_timestamp', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_validations')
       .withIndex('by_deck_checked', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_traces')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_execution_traces')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_shadow_comparisons')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_exports')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_publications')
       .withIndex('by_deck_revision', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_preference_events')
       .withIndex('by_deck_recorded', (query) => query.eq('deckId', deck.id))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_signature_profiles')
       .withIndex('by_tenant_updated', (query) => query.eq('tenantId', deck.projectId))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_taste_profiles')
       .withIndex('by_tenant', (query) => query.eq('tenantId', deck.projectId))
-      .collect(),
-    ctx.db
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_presence')
       .withIndex('by_deck_session', (query) => query.eq('deckId', deck.id))
-      .collect(),
-  ]);
+      .take(nextLimit()),
+  );
 
-  let deletedRecords = 0;
   for (const rows of childGroups) {
-    for (const row of rows) {
-      await ctx.db.delete(row._id);
-      deletedRecords += 1;
-    }
+    for (const row of rows) await ctx.db.delete(row._id);
   }
   await ctx.db.delete(deck._id);
   await ctx.db.delete(project._id);
 
-  return { deleted: true, deckId: deck.id, deletedRecords: deletedRecords + 2 };
+  return { deleted: true, deckId: deck.id, deletedRecords: deletionRecords };
+}
+
+function throwAtomicRecordLimit(): never {
+  throw new Error(
+    `NodeSlide deck deletion failed closed: the complete erasure set exceeds the atomic limit of ${NODESLIDE_DECK_ERASURE_MAX_RECORDS} records; no records were deleted.`,
+  );
+}
+
+function throwAtomicByteLimit(): never {
+  throw new Error(
+    `NodeSlide deck deletion failed closed: the complete erasure set exceeds the atomic limit of ${NODESLIDE_DECK_ERASURE_MAX_BYTES} bytes; no records were deleted.`,
+  );
 }

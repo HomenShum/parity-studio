@@ -1,7 +1,14 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig } from 'playwright/test';
 
 const remoteBaseUrl = process.env['PLAYWRIGHT_BASE_URL'];
 const baseURL = remoteBaseUrl ?? 'http://127.0.0.1:4173';
+const vercelBypassSecret = process.env['VERCEL_AUTOMATION_BYPASS_SECRET']?.trim();
+const bypassStorageState = join(
+  tmpdir(),
+  `parity-studio-vercel-bypass-${process.env['GITHUB_RUN_ID'] ?? 'local'}.json`,
+);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -12,17 +19,23 @@ export default defineConfig({
   workers: process.env['CI'] ? 1 : undefined,
   timeout: 90_000,
   expect: { timeout: 15_000 },
+  ...(remoteBaseUrl && vercelBypassSecret
+    ? { globalSetup: './tests/e2e/vercel-bypass.globalSetup.ts' }
+    : {}),
   reporter: process.env['CI']
     ? [['github'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
     : [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
     baseURL,
     browserName: 'chromium',
+    ...(remoteBaseUrl && vercelBypassSecret ? { storageState: bypassStorageState } : {}),
     viewport: { width: 1440, height: 1000 },
     colorScheme: 'light',
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
-    trace: 'retain-on-failure',
+    // Protected-preview traces can serialize the bypass cookie. Keep that
+    // credential out of uploaded artifacts while retaining screenshots/video.
+    trace: remoteBaseUrl && vercelBypassSecret ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },

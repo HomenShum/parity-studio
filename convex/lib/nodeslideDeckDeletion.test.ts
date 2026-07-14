@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MutationCtx } from '../_generated/server';
 import { deleteDeck } from '../nodeslide';
-import { NODESLIDE_DECK_ERASURE_TABLES } from './nodeslideDeckDeletion';
+import {
+  NODESLIDE_DECK_ERASURE_MAX_BYTES,
+  NODESLIDE_DECK_ERASURE_MAX_RECORDS,
+  NODESLIDE_DECK_ERASURE_TABLES,
+} from './nodeslideDeckDeletion';
 
 const OWNER_ACCESS_KEY = 'a'.repeat(43);
 const OTHER_ACCESS_KEY = 'b'.repeat(43);
@@ -43,6 +47,11 @@ class MemoryQuery {
     return this.evaluate();
   }
 
+  async take(count: number): Promise<StoredRow[]> {
+    this.database.takeCalls.push({ tableName: this.tableName, count });
+    return this.evaluate().slice(0, count);
+  }
+
   private evaluate(): StoredRow[] {
     return this.database
       .rows(this.tableName)
@@ -54,6 +63,7 @@ class MemoryDatabase {
   private readonly tables = new Map<string, StoredRow[]>();
   private sequence = 0;
   readonly collectCalls: string[] = [];
+  readonly takeCalls: Array<{ tableName: string; count: number }> = [];
   readonly writes: Array<{ kind: 'delete'; tableName: string; rowId: string }> = [];
 
   query(tableName: string): MemoryQuery {
@@ -176,6 +186,7 @@ describe('deleteDeck', () => {
 
     expect(database.writes).toEqual([]);
     expect(database.collectCalls).toEqual([]);
+    expect(database.takeCalls).toEqual([]);
   });
 
   it('fails closed without writes when the linked project cannot be verified', async () => {
@@ -284,7 +295,7 @@ describe('deleteDeck', () => {
       deckId: 'deck:target',
       deletedRecords: NODESLIDE_DECK_ERASURE_TABLES.length + 2,
     });
-    expect(new Set(database.collectCalls)).toEqual(
+    expect(new Set(database.takeCalls.map((call) => call.tableName))).toEqual(
       new Set(['nodeslide_decks', 'runs', ...NODESLIDE_DECK_ERASURE_TABLES]),
     );
     for (const tableName of NODESLIDE_DECK_ERASURE_TABLES) {
@@ -300,5 +311,59 @@ describe('deleteDeck', () => {
     expect(database.rows('projects')).toEqual([other.project]);
     expect(database.rows('nodeslide_decks')).not.toContain(target.deck);
     expect(database.rows('projects')).not.toContain(target.project);
+  });
+
+  it('rejects an oversized record set before the first write', async () => {
+    const database = new MemoryDatabase();
+    seedDeck(database, {
+      deckId: 'deck:large',
+      clientSessionId: 'session:large',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    for (let index = 0; index < NODESLIDE_DECK_ERASURE_MAX_RECORDS - 1; index += 1) {
+      database.seed('nodeslide_slides', {
+        id: `slide:${index}`,
+        deckId: 'deck:large',
+      });
+    }
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:large',
+        ownerAccessKey: OWNER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow(`atomic limit of ${NODESLIDE_DECK_ERASURE_MAX_RECORDS} records`);
+
+    expect(database.writes).toEqual([]);
+    expect(database.rows('nodeslide_decks')).toHaveLength(1);
+    expect(database.rows('nodeslide_slides')).toHaveLength(NODESLIDE_DECK_ERASURE_MAX_RECORDS - 1);
+  });
+
+  it('rejects an oversized byte set before the first write', async () => {
+    const database = new MemoryDatabase();
+    seedDeck(database, {
+      deckId: 'deck:heavy',
+      clientSessionId: 'session:heavy',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    const payload = 'x'.repeat(Math.ceil(NODESLIDE_DECK_ERASURE_MAX_BYTES / 5));
+    for (let index = 0; index < 5; index += 1) {
+      database.seed('nodeslide_sources', {
+        id: `source:${index}`,
+        deckId: 'deck:heavy',
+        payload,
+      });
+    }
+
+    await expect(
+      deleteDeckHandler(mutationContext(database), {
+        deckId: 'deck:heavy',
+        ownerAccessKey: OWNER_ACCESS_KEY,
+      }),
+    ).rejects.toThrow(`atomic limit of ${NODESLIDE_DECK_ERASURE_MAX_BYTES} bytes`);
+
+    expect(database.writes).toEqual([]);
+    expect(database.rows('nodeslide_decks')).toHaveLength(1);
+    expect(database.rows('nodeslide_sources')).toHaveLength(5);
   });
 });

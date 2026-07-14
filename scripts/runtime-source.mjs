@@ -43,7 +43,7 @@ export function resolveConvexRuntimeSourceUrl(env = process.env) {
   }
 
   const configuredSiteUrl =
-    cleanUrl(env.VITE_CONVEX_SITE_URL) ?? cleanUrl(env.VITE_CONVEX_HTTP_URL);
+    cleanUrl(env.VITE_CONVEX_HTTP_URL) ?? cleanUrl(env.VITE_CONVEX_SITE_URL);
   return configuredSiteUrl ? new URL('/api/runtime-source', configuredSiteUrl).toString() : null;
 }
 
