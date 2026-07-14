@@ -464,7 +464,8 @@ function renderConnector(
 ): string {
   const stroke = colorToHex(element.style.stroke, snapshot.deck.theme.colors.trace);
   const width = clamp(finite(element.style.strokeWidth, 2), 1, 20);
-  return `<line x1="${box.x}" y1="${box.y + box.height}" x2="${box.x + box.width}" y2="${box.y}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" marker-end="url(#${markerId})"/>`;
+  const y = box.y + box.height / 2;
+  return `<line x1="${box.x}" y1="${y}" x2="${box.x + box.width}" y2="${y}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" marker-end="url(#${markerId})"/>`;
 }
 
 function renderElement(snapshot: DeckSnapshot, element: SlideElement, markerId: string): string {

@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { SlideElement } from '../../../../shared/nodeslide';
+import type { Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
 import {
   CollapsibleInspectorSection,
   DEFAULT_DESIGN_INSPECTOR_SECTIONS,
+  DesignInspector,
   appendChartDataRow,
   buildChartUpdateOperation,
   chartRowsFromElement,
@@ -52,6 +53,57 @@ describe('NodeSlide Design inspector sections', () => {
     expect(inspectorSource).toContain('label="Corner radius"');
     expect(inspectorSource).toContain('label="Opacity %"');
     expect(inspectorSource).toContain('className="ns-stepper-label"');
+  });
+
+  it('labels connector color as Line and does not show an irrelevant radius control', () => {
+    const connector: SlideElement = {
+      id: 'connector-1',
+      slideId: 'slide-1',
+      name: 'Diagram connector 1',
+      kind: 'connector',
+      bbox: { x: 0.4, y: 0.5, width: 0.2, height: 0.05 },
+      rotation: 0,
+      style: { stroke: '#7566a8', strokeWidth: 2 },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+      version: 1,
+    };
+    const slide: Slide = {
+      id: 'slide-1',
+      deckId: 'deck-1',
+      title: 'Workflow',
+      background: '#ffffff',
+      elementOrder: [connector.id],
+      version: 1,
+    };
+    const html = renderToStaticMarkup(
+      <DesignInspector
+        slide={slide}
+        slideElements={[connector]}
+        selectedElements={[connector]}
+        theme={inspectorTheme()}
+        activeTastePackId={null}
+        activeProfileId={null}
+        previewProfileId={null}
+        profiles={[]}
+        busy={false}
+        onApplyTastePack={() => {}}
+        onApplyProfile={undefined}
+        onPreviewProfile={undefined}
+        onUploadSource={undefined}
+        tasteProfile={null}
+        tasteProfileLoading={false}
+        onEvictTasteSignal={undefined}
+        onOpenPreferenceEvidence={undefined}
+        onClearTastePack={() => {}}
+        onApplyPatch={() => {}}
+      />,
+    );
+
+    expect(html).toContain('>Line<');
+    expect(html).not.toContain('Corner radius');
+    expect(html).toContain('Opacity %');
   });
 });
 
@@ -137,5 +189,27 @@ function chartElement(): SlideElement {
     locked: false,
     exportCapabilities: ['web_native', 'pptx_editable'],
     version: 4,
+  };
+}
+
+function inspectorTheme(): ThemeSpec {
+  return {
+    id: 'test-theme',
+    name: 'Test theme',
+    mode: 'light',
+    colors: {
+      canvas: '#ffffff',
+      ink: '#111111',
+      muted: '#666666',
+      accent: '#b44a2d',
+      accentSoft: '#f2ded3',
+      insight: '#e5e9d6',
+      insightInk: '#34452c',
+      trace: '#7566a8',
+      border: '#ded7cc',
+    },
+    typography: { display: 'serif', body: 'sans-serif', data: 'monospace' },
+    defaultRadius: 12,
+    spacingUnit: 8,
   };
 }

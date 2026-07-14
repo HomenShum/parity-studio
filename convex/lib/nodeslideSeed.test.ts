@@ -216,6 +216,128 @@ describe('NodeSlide seed', () => {
     );
   });
 
+  it('compiles a requested diagram into editable grouped nodes and connectors', () => {
+    const brief = {
+      prompt: 'Create a six-slide founder roadshow with an editable workflow diagram.',
+      audience: 'Investors',
+      purpose: 'Show how the product works',
+      successCriteria: ['Exactly 6 slides in the requested narrative'],
+    };
+    const rawSpec = {
+      title: 'Founder roadshow',
+      narrative: ['Show the workflow.'],
+      slides: Array.from({ length: 6 }, (_, index) => ({
+        title: index === 2 ? 'How the workflow works' : `Slide ${index + 1}`,
+        section: `Story / ${index + 1}`,
+        headline: index === 2 ? 'Evidence becomes an editable decision.' : `Point ${index + 1}`,
+        body: 'Evidence-led context.',
+        bullets:
+          index === 2
+            ? ['Attach evidence', 'Generate structured slides', 'Review and accept']
+            : ['Editable', 'Reviewable', 'Sourced'],
+      })),
+    };
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-diagram-primitives',
+      projectId: 'project-diagram-primitives',
+      title: 'Founder roadshow',
+      brief,
+      themeId: 'editorial-signal',
+      rawSpec,
+      now: 1_000,
+    });
+    const diagramNodes = built.snapshot.elements.filter(
+      (element) => element.role === 'diagram_node',
+    );
+    const connectors = built.snapshot.elements.filter((element) => element.kind === 'connector');
+
+    expect(diagramNodes.map((element) => element.content)).toEqual([
+      'Attach evidence',
+      'Generate structured slides',
+      'Review and accept',
+    ]);
+    expect(connectors).toHaveLength(2);
+    expect(
+      new Set([...diagramNodes, ...connectors].map((element) => element.groupId)),
+    ).toHaveLength(1);
+    expect(
+      connectors.every((element) => element.exportCapabilities.includes('pptx_editable')),
+    ).toBe(true);
+    expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
+  });
+
+  it('does not infer a diagram from generic workflow language or a negated request', () => {
+    for (const prompt of ['Explain our workflow clearly.', 'Do not include a diagram.']) {
+      const spec = deterministicBriefSpec('Workflow brief', {
+        prompt,
+        audience: 'Reviewers',
+        purpose: 'Explain the product',
+        successCriteria: ['Keep the story editable'],
+      });
+      expect(spec.slides.some((slide) => slide.diagram)).toBe(false);
+    }
+  });
+
+  it('falls back rather than silently dropping an explicit diagram request', () => {
+    const brief = {
+      prompt: 'Include an editable workflow diagram in this six-slide deck.',
+      audience: 'Reviewers',
+      purpose: 'Explain the product',
+      successCriteria: ['Exactly 6 slides in the requested narrative'],
+    };
+    const rawSpec = {
+      title: 'Provider title that should be rejected',
+      narrative: ['Provider narrative'],
+      slides: Array.from({ length: 6 }, (_, index) => ({
+        title: `Slide ${index + 1}`,
+        section: `Story / ${index + 1}`,
+        headline: `Point ${index + 1}`,
+        body: 'Every provider slide already consumed its visual slot.',
+        bullets: ['Attach', 'Generate', 'Review'],
+        image: { altText: `Image ${index + 1}`, credit: 'Illustrative' },
+      })),
+    };
+
+    const normalized = coerceBriefSpec(rawSpec, 'Deterministic title', brief);
+    expect(normalized.title).toBe('Deterministic title');
+    expect(normalized.slides.some((slide) => slide.diagram)).toBe(true);
+  });
+
+  it('preserves an explicit provider diagram and normalizes it to one primary visual', () => {
+    const brief = {
+      prompt: 'Explain the product operating model.',
+      audience: 'Reviewers',
+      purpose: 'Explain the product',
+      successCriteria: ['Keep the story editable'],
+    };
+    const rawSpec = {
+      title: 'Provider diagram',
+      narrative: ['Provider narrative'],
+      slides: Array.from({ length: 6 }, (_, index) => ({
+        title: `Slide ${index + 1}`,
+        section: `Story / ${index + 1}`,
+        headline: `Point ${index + 1}`,
+        body: 'Evidence-led context.',
+        bullets: ['Attach', 'Generate', 'Review'],
+        ...(index === 2
+          ? {
+              diagram: { nodes: ['Attach', 'Generate', 'Review'] },
+              chart: { labels: ['A', 'B'], values: [1, 2] },
+              formula: { expression: '1 + 1', display: '2', variables: [] },
+            }
+          : {}),
+      })),
+    };
+
+    const normalized = coerceBriefSpec(rawSpec, 'Provider diagram', brief);
+    expect(normalized.slides[2]).toMatchObject({
+      diagram: { nodes: ['Attach', 'Generate', 'Review'] },
+    });
+    expect(normalized.slides[2]?.chart).toBeUndefined();
+    expect(normalized.slides[2]?.formula).toBeUndefined();
+  });
+
   it('keeps deterministic fallback headlines sentence-cased and sequence labels singular', () => {
     const spec = deterministicBriefSpec('Pilot story', {
       prompt: 'Explain a bounded pilot.',
