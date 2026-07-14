@@ -486,7 +486,9 @@ function ToolGroup({
       </button>
       {expanded ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-          {calls.map((tc) => <ToolCallCard key={tc.id} call={tc} />)}
+          {calls.map((tc) => (
+            <ToolCallCard key={tc.id} call={tc} />
+          ))}
         </div>
       ) : null}
     </div>

@@ -1,0 +1,176 @@
+/*
+ * NodeSlide — scoped Tailwind v4 + shadcn token layer for AI Elements.
+ *
+ * Preflight is intentionally OMITTED (we import only theme + utilities layers),
+ * so Tailwind can never reset or restyle the existing bespoke NodeSlide UI.
+ * The base reset shadcn utilities rely on (box-sizing + border-style) is scoped
+ * to the `.ns-ai-elements` subtree only — see the @layer base block below.
+ *
+ * shadcn color tokens are exposed to Tailwind via `@theme inline`, so utilities
+ * like `bg-background` compile to `var(--background)` directly and NO global
+ * `--color-*` custom properties are emitted — zero collision with tokens.css.
+ * The `--background` / `--foreground` / … tokens are then mapped onto NodeSlide's
+ * warm `--color-*` system so AI Elements inherit the deck palette + dark mode.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * Map shadcn tokens onto NodeSlide's warm token system. Because these reference
+ * `--color-*` (defined in tokens.css and flipped by NodeSlide's dark theme), the
+ * composer follows the deck's light/dark palette automatically — no separate
+ * dark block needed here.
+ */
+:root {
+  --radius: 0.75rem;
+  --background: var(--color-surface);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-surface-elevated);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-surface-elevated);
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-on-accent);
+  --secondary: var(--color-surface-hover);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: var(--color-surface-muted);
+  --muted-foreground: var(--color-text-secondary);
+  --accent: var(--color-surface-hover);
+  --accent-foreground: var(--color-text-primary);
+  --destructive: var(--color-error);
+  --destructive-foreground: var(--color-on-accent);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent);
+  --chart-1: var(--color-accent);
+  --chart-2: var(--color-accent-hover);
+  --chart-3: var(--color-text-secondary);
+  --chart-4: var(--color-border-strong);
+  --chart-5: var(--color-text-muted);
+  --sidebar: var(--color-surface);
+  --sidebar-foreground: var(--color-text-primary);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-on-accent);
+  --sidebar-accent: var(--color-surface-hover);
+  --sidebar-accent-foreground: var(--color-text-primary);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-accent);
+}
+
+/*
+ * Scoped preflight substitute — ONLY the `.ns-ai-elements` subtree.
+ * Tailwind's `border` utility sets border-width but assumes preflight already
+ * set `border-style: solid`; without this scoped reset shadcn borders vanish.
+ */
+@layer base {
+  .ns-ai-elements *,
+  .ns-ai-elements *::before,
+  .ns-ai-elements *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--border);
+  }
+
+  .ns-ai-elements button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: none;
+  }
+
+  .ns-ai-elements input,
+  .ns-ai-elements textarea {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/*
+ * Composer fit — unlayered so it wins over Tailwind utilities. Keeps the
+ * PromptInput toolbar inside the ~340px inspector rail and the model pill
+ * from crowding out the tool buttons.
+ */
+.ns-ai-v3-prompt {
+  order: 1;
+  width: 100%;
+}
+
+.ns-ai-v3-prompt .ns-prompt-footer {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 6px;
+}
+
+.ns-ai-v3-prompt .ns-prompt-tools {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.ns-ai-v3-prompt .ns-prompt-model {
+  max-width: 150px;
+}
+
+.ns-ai-v3-prompt .ns-prompt-effort {
+  max-width: 96px;
+}
+
+.ns-ai-v3-prompt .ns-prompt-context-count {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.ns-ai-v3-prompt .ns-prompt-submit-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ns-ai-v3-prompt .ns-prompt-badge {
+  font-size: 10px;
+  font-weight: 600;
+}
