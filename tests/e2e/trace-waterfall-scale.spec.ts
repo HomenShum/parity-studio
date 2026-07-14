@@ -8,7 +8,7 @@ import {
   createTraceWaterfallFixture,
 } from '../../src/domains/nodeslide/inspector/TraceWaterfall.fixture';
 
-const artifactDir = resolve('.tmp/nodeslide-trace-scale');
+const artifactDir = resolve('artifacts/agentic-ui-qa-2026-07-14/trace-scale');
 const capturedMetrics: TraceScaleMetrics[] = [];
 const fixtureUrl = (count: number, loaded = count) =>
   `/tests/fixtures/trace-waterfall.html?count=${count}&loaded=${loaded}`;

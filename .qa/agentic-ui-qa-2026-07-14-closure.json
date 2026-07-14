@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "passId": "agentic-ui-qa-2026-07-14-luna",
+  "app": "nodeslide",
+  "branch": "codex/nodeslide-launch-consolidation",
+  "startingCommit": "c455a8f",
+  "inheritedFindingSet": {
+    "count": 13,
+    "derivation": "12 fingerprints from qa-memory open plus the latest fixed consent fingerprint 8ef0554fb31a",
+    "source": ".qa/memory/findings.jsonl"
+  },
+  "proof": {
+    "scaleSpec": "tests/e2e/trace-waterfall-scale.spec.ts",
+    "artifactDir": "artifacts/agentic-ui-qa-2026-07-14/trace-scale",
+    "requiredScenarios": [4, 10, 100],
+    "stressScenario": "250 loaded / 1000 total"
+  },
+  "findings": [
+    {
+      "fp": "8ef0554fb31a",
+      "severity": "P0",
+      "area": "external-provider-consent",
+      "status": "closed",
+      "proof": "Exact per-request consent, provider binding, invalidation, and no-egress tests in NodeSlideCreationConsent.test.tsx, AiInspector.activity.test.tsx, and nodeslideReviewUi.test.tsx."
+    },
+    {
+      "fp": "49f5a47d7d92",
+      "severity": "P0",
+      "area": "json-proposal-gate",
+      "status": "closed",
+      "proof": "JsonInspector routes edits through proposePatch, opens Compare, and leaves canonical state unchanged until Accept/Reject; covered by JsonInspector.test.tsx and editor shell candidate tests."
+    },
+    {
+      "fp": "a36cdd9af48d",
+      "severity": "P1",
+      "area": "live-edit-reliability",
+      "status": "open",
+      "disposition": "in-tree fallback containment is proven; production post-deploy hero re-verification is still required",
+      "proof": "nodeslideProvider.test.ts and nodeslideEditPlanner.test.ts prove thrown-provider convergence and telemetry preservation; no new deployed-live artifact was available in this lane."
+    },
+    {
+      "fp": "57d77d43bf12",
+      "severity": "P1",
+      "area": "capability-honest-labeling",
+      "status": "closed",
+      "proof": "Web is now a separately consented web-research request with server-side search adapters and source persistence; inspirationSearch.test.ts plus AiInspector request wiring provide concrete proof."
+    },
+    {
+      "fp": "0bd8f84d923b",
+      "severity": "P1",
+      "area": "google-slides-capability-honesty",
+      "status": "closed",
+      "proof": "Google Slides capabilities explicitly mark outbound writes conditional, revision guarded, and proposal-only; googleSlides.test.ts covers the contract and required revision guard."
+    },
+    {
+      "fp": "982a14dc350c",
+      "severity": "P1",
+      "area": "memory-relevance",
+      "status": "closed",
+      "proof": "nodeslideMemory.test.ts proves zero-lexical-relevance active memories are excluded and standing instructions remain explicit."
+    },
+    {
+      "fp": "7a710ac5a3bf",
+      "severity": "P1",
+      "area": "claim-source-lineage",
+      "status": "closed",
+      "proof": "Planner rejects missing/out-of-scope factual source bindings; TraceWaterfall tests prove exact span-bound citations and visible missing-source diagnostics."
+    },
+    {
+      "fp": "7e76440c659b",
+      "severity": "P2",
+      "area": "error-copy",
+      "status": "open",
+      "disposition": "current-tree raw-error containment is proven, but the inherited production symptom remains open until post-deploy verification",
+      "proof": "nodeslideProvider.test.ts proves thrown provider messages are contained; the prior production screenshot is not a current-session proof of the deployed build."
+    },
+    {
+      "fp": "289f05a2f53b",
+      "severity": "P2",
+      "area": "visual-craft-trace-tab",
+      "status": "open",
+      "disposition": "machine checks pass, but final-session exact-10 and 1000-span expanded screenshots contain large black rendering regions; visual closure is not proven",
+      "proof": "artifacts/agentic-ui-qa-2026-07-14/trace-scale/exact-10-expanded.png and high-volume-1000-expanded.png; exact-4 and exact-100 remain visually legible."
+    },
+    {
+      "fp": "c52eb8abbbcb",
+      "severity": "P2",
+      "area": "test-coverage",
+      "status": "closed",
+      "proof": "nodeslideEditPlanner.test.ts contains an explicit provider-throw-to-deterministic-fallback test; nodeslideProvider.test.ts contains raw-message containment coverage."
+    },
+    {
+      "fp": "de3f2ddaf973",
+      "severity": "P2",
+      "area": "agentic-depth-baseline",
+      "status": "open",
+      "disposition": "partially advanced, not closed: durable jobs/web retrieval/multi-step shadow scaffolding exist, but live iterative repair, semantic eval, governed routing, roles, and repeat-user retention remain unproven or absent",
+      "proof": "Current source exposes runDeckReplShadow, durable job state, and live search, while DEPTH D1/D7/D9/D10/D11 requirements are not all satisfied end to end."
+    },
+    {
+      "fp": "c29c6c5c8d42",
+      "severity": "P2",
+      "area": "data-rights-export",
+      "status": "open",
+      "proof": "Current tree has owner-gated deletion and source deletion, but no owner-scoped export-my-data bundle with a documented schema and retention workflow."
+    },
+    {
+      "fp": "917fd51ccde2",
+      "severity": "P2",
+      "area": "multi-slide-scope",
+      "status": "closed",
+      "proof": "SlideNavigator multi-select, AiInspector selected_slides scope, MCP slideIds[], and per-scope version clocks are covered by current source and multi-select/scope tests."
+    }
+  ],
+  "openFindings": ["a36cdd9af48d", "7e76440c659b", "289f05a2f53b", "de3f2ddaf973", "c29c6c5c8d42"],
+  "finalVerification": {
+    "status": "complete_with_shared_full_suite_blocked",
+    "commands": {
+      "typecheck": "PASS",
+      "traceScale": "PASS 4/4",
+      "focusedFindings": "PASS 12 files / 145 tests",
+      "fullVitest": "BLOCKED_SHARED_TREE 109 files / 768 passed / 4 failed in other workers' changing tests"
+    },
+    "traceCommand": "pnpm exec playwright test tests/e2e/trace-waterfall-scale.spec.ts"
+  }
+}
