@@ -635,6 +635,7 @@ export function NodeSlideStudio() {
   const redoStackRef = useRef<string[]>([]);
   const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
   const localCommitVersionsRef = useRef(new Set<number>());
+  const acceptingPatchIdsRef = useRef(new Set<string>());
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
@@ -2464,6 +2465,8 @@ export function NodeSlideStudio() {
 
   const handleAcceptPatch = (patch: DeckPatch) => {
     if (!ownerAccessKey || !workspace) return;
+    if (acceptingPatchIdsRef.current.has(patch.id)) return;
+    acceptingPatchIdsRef.current.add(patch.id);
     const requestedDeckId = workspace.deck.id;
     void enqueueEditorWrite(
       requestedDeckId,
@@ -2543,7 +2546,7 @@ export function NodeSlideStudio() {
           return false;
         }
       },
-    );
+    ).finally(() => acceptingPatchIdsRef.current.delete(patch.id));
   };
 
   const handleRejectPatch = (patch: DeckPatch) => {

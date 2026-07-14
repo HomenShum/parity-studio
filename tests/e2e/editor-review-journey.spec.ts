@@ -32,7 +32,11 @@ test.describe('deployed editor review boundary', () => {
     await page.getByRole('button', { name: 'Switch to light theme' }).click();
     await expect(studio).toHaveAttribute('data-ns-theme', 'light');
 
-    await page.getByTestId('ai-model-select').selectOption('deterministic');
+    await page.getByTestId('ai-model-select').click();
+    await page
+      .getByRole('dialog', { name: 'Agent model' })
+      .getByText('Deterministic', { exact: true })
+      .click();
     await page.getByTestId('ai-provider-summary').click();
     await expect(page.getByTestId('ai-provider-route-status')).toContainText('External model: off');
     await expect(page.getByTestId('ai-provider-route-status')).toContainText(
@@ -89,7 +93,7 @@ test.describe('deployed editor review boundary', () => {
 
     await page.getByTestId('inspector-tab-trace').click();
     await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
-    await expect(page.locator('.ns-trace-attribution')).toContainText(/deterministic/i);
+    await expect(page.getByTestId('trace-proof-summary')).toContainText(/deterministic/i);
     await expect(
       page.getByText('Provider, work performed, validation, and human approval'),
     ).toBeVisible();

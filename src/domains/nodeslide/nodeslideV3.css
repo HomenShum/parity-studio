@@ -2018,6 +2018,13 @@
   overflow-y: auto;
 }
 
+/* A scrollable flex column must not compress its direct children. Shrinking
+ * made the final disclosure render outside the measured scroll range, where
+ * the inspector footer could intercept an otherwise visible click. */
+.nodeslide-studio .ns-ai-v3-composer > * {
+  flex-shrink: 0;
+}
+
 .nodeslide-studio .ns-ai-v3-composer.is-expanded {
   max-height: 70vh;
 }

@@ -112,6 +112,7 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(
       /\.ns-ai-v3-controls-disclosure[\s\S]*?border-radius: 9px;[\s\S]*?overflow: hidden;/,
     );
+    expect(css).toMatch(/\.ns-ai-v3-composer > \*[\s\S]*?flex-shrink: 0;/);
     expect(css).toMatch(
       /\.ns-composer-token-toolbar button[\s\S]*?background: transparent;[\s\S]*?width: auto;/,
     );
