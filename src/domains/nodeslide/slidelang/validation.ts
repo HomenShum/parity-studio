@@ -688,7 +688,7 @@ export function validateSnapshot(
     (issue) =>
       issue.severity === 'error' ||
       (issue.severity === 'warning' &&
-        (['source', 'missing_asset', 'export', 'contrast', 'font_size'].includes(issue.code) ||
+        (['source', 'missing_asset', 'contrast', 'font_size'].includes(issue.code) ||
           issue.code.startsWith('on_brand_'))),
   );
   const hasRepairableIssue = sortedIssues.some((issue) => issue.severity === 'warning');

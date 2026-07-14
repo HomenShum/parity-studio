@@ -2214,7 +2214,7 @@ export function NodeSlideStudio() {
       });
       return;
     }
-    if (!exportValidation.publishOk || !exportValidation.cleanOk) {
+    if (!exportValidation.publishOk) {
       setActiveInspectorTab('trace');
       setInspectorCollapsed(false);
       setToast({ kind: 'error', message: validationBlockMessage(exportValidation, 'export') });
@@ -2236,7 +2236,15 @@ export function NodeSlideStudio() {
     }
     void downloadPptx(snapshot)
       .then(() => {
-        setToast({ kind: 'success', message: 'Validated PowerPoint export prepared.' });
+        const fidelityNotes = exportValidation.issues.filter(
+          (issue) => issue.code === 'export',
+        ).length;
+        setToast({
+          kind: 'success',
+          message: fidelityNotes
+            ? `PowerPoint export prepared with ${fidelityNotes} fidelity note${fidelityNotes === 1 ? '' : 's'} recorded in validation.`
+            : 'Validated PowerPoint export prepared.',
+        });
         if (ownerAccessKey) {
           void recordPreferenceExport({
             deckId: workspace.deck.id,

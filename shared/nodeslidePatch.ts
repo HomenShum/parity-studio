@@ -364,6 +364,7 @@ export function applyDeckPatch(
         ...(operation.credit ? { credit: operation.credit } : {}),
         ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
       };
+      element.exportCapabilities = ['web_native', 'pptx_static_fallback', 'google_importable'];
       if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];
     } else if (operation.op === 'set_visibility_v1') {
       if ((element.visible ?? true) === operation.visible) {

@@ -41,6 +41,14 @@ afterEach(() => {
 });
 
 describe('NodeSlide editor project actions', () => {
+  it('allows publish-safe file export while preserving nonblocking fidelity notes', () => {
+    expect(studioSource).toContain('if (!exportValidation.publishOk) {');
+    expect(studioSource).not.toContain(
+      'if (!exportValidation.publishOk || !exportValidation.cleanOk) {',
+    );
+    expect(studioSource).toContain('fidelity note');
+  });
+
   it('binds Connections and normal-session recovery to the current editor deck', () => {
     const recovery: OwnerCapabilityRecovery = {
       deckId: 'deck:current',

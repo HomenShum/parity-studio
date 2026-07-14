@@ -314,6 +314,7 @@ describe('NodeSlide patch protocol', () => {
       imageUrl,
       altText: 'Mike Rubino, Head of Talent at AI Fund',
       image: { placeholder: false, credit: 'AI Fund team page' },
+      exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
       version: 2,
     });
   });
