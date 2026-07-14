@@ -1,0 +1,9 @@
+metric,value,unit,measurement_source,measured_at_utc,classification
+Automated unit and integration tests,718,passing tests,GitHub Release gates run 29333954052 / Quality,2026-07-14T12:51:00Z,measured prototype evidence
+Production browser journeys,15,passing Playwright tests,GitHub Release gates run 29333954052 / E2E UI QA,2026-07-14T12:53:34Z,measured production evidence
+Desktop Lighthouse performance,99,score out of 100,.tmp/lighthouse-desktop.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
+Desktop Lighthouse accessibility,100,score out of 100,.tmp/lighthouse-desktop.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
+Mobile Lighthouse performance,75,score out of 100,.tmp/lighthouse-mobile.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
+Mobile Lighthouse accessibility,100,score out of 100,.tmp/lighthouse-mobile.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
+Trace waterfall scale fixture,100,spans,Production trace UI scenario test fixture,2026-07-14T12:49:54Z,verified implementation capability
+Canonical source alignment,1,aligned production release,GitHub Release gates run 29333954052 / canonical runtime identity,2026-07-14T12:55:27Z,measured production evidence
