@@ -33,6 +33,7 @@ export const ROADSHOW_VIDEO = Object.freeze({
   appHeight: 1008,
   fps: 30,
   preRollMinimumMs: 5_000,
+  targetDurationMs: 285_000,
 });
 
 export const REQUIRED_ROADSHOW_SCENES = Object.freeze([
@@ -228,13 +229,59 @@ export function selectedSlidesScopePattern(expectedCount = null) {
   return new RegExp(`^Selected slides \\(${count}\\)$`);
 }
 
+export function selectedElementScopePattern(expectedCount = null) {
+  if (expectedCount !== null && (!Number.isInteger(expectedCount) || expectedCount < 1)) {
+    throw new RoadshowContractError('Element selection scope requires at least one element');
+  }
+  const count = expectedCount ?? '\\d+';
+  return new RegExp(`^Selection · ${count}$`);
+}
+
 export function shouldClearBeforeHumanTyping(currentValue) {
   return typeof currentValue === 'string' && currentValue.length > 0;
 }
 
-export function buildCaptionTimeline(sceneResults, captionPlan, preRollDurationMs) {
+export function shouldTogglePressedControl(ariaPressed, desiredPressed) {
+  return (ariaPressed === 'true') !== desiredPressed;
+}
+
+export function humanTypingTimeoutMs(text, delayMs) {
+  if (typeof text !== 'string' || !Number.isFinite(delayMs) || delayMs < 0) {
+    throw new RoadshowContractError('Human typing timeout requires text and a non-negative delay');
+  }
+  return Math.max(30_000, text.length * delayMs + 15_000);
+}
+
+export function roadshowPlaybackRate(
+  preRollDurationMs,
+  productDurationMs,
+  targetDurationMs = ROADSHOW_VIDEO.targetDurationMs,
+) {
+  if (
+    !Number.isFinite(preRollDurationMs) ||
+    preRollDurationMs < 0 ||
+    !Number.isFinite(productDurationMs) ||
+    productDurationMs <= 0 ||
+    !Number.isFinite(targetDurationMs) ||
+    targetDurationMs <= preRollDurationMs
+  ) {
+    throw new RoadshowContractError('Playback-rate calculation requires valid positive durations');
+  }
+  const availableProductMs = targetDurationMs - preRollDurationMs;
+  return Math.max(1, Math.ceil((productDurationMs / availableProductMs) * 1_000) / 1_000);
+}
+
+export function buildCaptionTimeline(
+  sceneResults,
+  captionPlan,
+  preRollDurationMs,
+  playbackRate = 1,
+) {
   if (!Number.isFinite(preRollDurationMs) || preRollDurationMs < 0) {
     throw new RoadshowContractError('preRollDurationMs must be a non-negative number');
+  }
+  if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
+    throw new RoadshowContractError('playbackRate must be a positive number');
   }
   const captionsByScene = new Map(
     captionPlan.captions.map((caption) => [caption.sceneId, caption]),
@@ -248,13 +295,15 @@ export function buildCaptionTimeline(sceneResults, captionPlan, preRollDurationM
     if (scene.status !== 'passed') {
       throw new RoadshowContractError(`Cannot caption incomplete scene ${scene.id}`, { scene });
     }
-    const startMs = Math.round(preRollDurationMs + scene.startedAtMs + 180);
+    const startMs = Math.round(preRollDurationMs + scene.startedAtMs / playbackRate + 180);
     const desiredEndMs = Math.max(
-      preRollDurationMs + scene.endedAtMs - 180,
-      startMs + caption.minimumDurationMs,
+      preRollDurationMs + scene.endedAtMs / playbackRate - 180,
+      startMs + caption.minimumDurationMs / playbackRate,
     );
     const next = ordered[index + 1];
-    const nextStartMs = next ? preRollDurationMs + next.startedAtMs : Number.POSITIVE_INFINITY;
+    const nextStartMs = next
+      ? preRollDurationMs + next.startedAtMs / playbackRate
+      : Number.POSITIVE_INFINITY;
     const endMs = Math.min(desiredEndMs, nextStartMs - 120);
     if (endMs - startMs < 900) {
       throw new RoadshowContractError(
@@ -327,7 +376,11 @@ export function buildFfmpegCommands({
   browserChromePng,
   captionsSrt,
   outputDir,
+  playbackRate = 1,
 }) {
+  if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
+    throw new RoadshowContractError('playbackRate must be a positive number');
+  }
   const preRollMp4 = resolveRoadshowOutput(outputDir, '01-browser-preroll.mp4');
   const productFramedMp4 = resolveRoadshowOutput(outputDir, '02-product-framed.mp4');
   const continuousMp4 = resolveRoadshowOutput(outputDir, '03-continuous-unsubtitled.mp4');
@@ -374,7 +427,7 @@ export function buildFfmpegCommands({
       '-i',
       browserChromePng,
       '-filter_complex',
-      `[0:v]scale=${appSize}:force_original_aspect_ratio=decrease,pad=${appSize}:(ow-iw)/2:(oh-ih)/2:color=#f7f7f5,fps=${ROADSHOW_VIDEO.fps}[app];[app]pad=${size}:0:${ROADSHOW_VIDEO.browserChromeHeight}:color=#e7e9ed[base];[1:v]scale=${chromeSize}[chrome];[base][chrome]overlay=0:0:shortest=1[outv]`,
+      `[0:v]scale=${appSize}:force_original_aspect_ratio=decrease,pad=${appSize}:(ow-iw)/2:(oh-ih)/2:color=#f7f7f5,fps=${ROADSHOW_VIDEO.fps},setpts=PTS/${playbackRate.toFixed(6)}[app];[app]pad=${size}:0:${ROADSHOW_VIDEO.browserChromeHeight}:color=#e7e9ed[base];[1:v]scale=${chromeSize}[chrome];[base][chrome]overlay=0:0:shortest=1[outv]`,
       '-map',
       '[outv]',
       ...common,

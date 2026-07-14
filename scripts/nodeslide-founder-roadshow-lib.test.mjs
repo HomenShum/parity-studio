@@ -15,12 +15,16 @@ import {
   buildSrt,
   ffmpegFilterPath,
   formatSrtTimestamp,
+  humanTypingTimeoutMs,
   readRoadshowJson,
   recorderEvidenceSkeleton,
   resolveRoadshowInputPaths,
+  roadshowPlaybackRate,
   sanitizeEvidenceUrl,
+  selectedElementScopePattern,
   selectedSlidesScopePattern,
   shouldClearBeforeHumanTyping,
+  shouldTogglePressedControl,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -107,10 +111,29 @@ describe('founder-roadshow contract', () => {
     expect(selectedSlidesScopePattern().test('Selected slides (12)')).toBe(true);
   });
 
+  it('tracks the visible element-selection count in the compact composer', () => {
+    expect(selectedElementScopePattern(1).test('Selection · 1')).toBe(true);
+    expect(selectedElementScopePattern(1).test('Selection')).toBe(false);
+    expect(selectedElementScopePattern(1).test('Selection · 2')).toBe(false);
+    expect(selectedElementScopePattern().test('Selection · 12')).toBe(true);
+  });
+
   it('does not backspace an empty composer and accidentally remove its last attachment', () => {
     expect(shouldClearBeforeHumanTyping('')).toBe(false);
     expect(shouldClearBeforeHumanTyping(null)).toBe(false);
     expect(shouldClearBeforeHumanTyping('existing text')).toBe(true);
+  });
+
+  it('resets a sticky web toggle between consecutive recorded runs', () => {
+    expect(shouldTogglePressedControl('true', false)).toBe(true);
+    expect(shouldTogglePressedControl('false', true)).toBe(true);
+    expect(shouldTogglePressedControl('true', true)).toBe(false);
+    expect(shouldTogglePressedControl('false', false)).toBe(false);
+  });
+
+  it('gives a full human-speed brief enough time to finish typing visibly', () => {
+    expect(humanTypingTimeoutMs('short', 14)).toBe(30_000);
+    expect(humanTypingTimeoutMs('x'.repeat(1_801), 14)).toBe(40_214);
   });
 });
 
@@ -143,6 +166,28 @@ describe('caption timing and SRT generation', () => {
     expect(formatSrtTimestamp(3_726_004)).toBe('01:02:06,004');
   });
 
+  it('uniformly time-compresses long captures without cuts and scales caption timing', async () => {
+    const captions = await readRoadshowJson(captionsPath);
+    const rate = roadshowPlaybackRate(5_000, 350_000);
+    const timeline = buildCaptionTimeline(
+      [
+        {
+          id: 'fresh_landing',
+          status: 'passed',
+          startedAtMs: 0,
+          endedAtMs: 4_000,
+        },
+      ],
+      captions,
+      5_000,
+      rate,
+    );
+
+    expect(rate).toBe(1.25);
+    expect(timeline[0].startMs).toBe(5_180);
+    expect(timeline[0].endMs).toBeLessThan(9_000);
+  });
+
   it('fails when an incomplete scene is presented as caption evidence', async () => {
     const captions = await readRoadshowJson(captionsPath);
     expect(() =>
@@ -172,6 +217,7 @@ describe('browser overlay and ffmpeg construction', () => {
       browserChromePng: 'C:\\tmp\\chrome.png',
       captionsSrt: 'C:\\tmp\\captions.srt',
       outputDir: 'C:\\tmp\\out',
+      playbackRate: 1.25,
     });
 
     expect(result.commands.map((command) => command.label)).toEqual([
@@ -181,6 +227,7 @@ describe('browser overlay and ffmpeg construction', () => {
       'burn scene captions',
     ]);
     expect(result.commands[1].args.join(' ')).toContain('overlay=0:0:shortest=1');
+    expect(result.commands[1].args.join(' ')).toContain('setpts=PTS/1.250000');
     expect(result.commands[2].args.join(' ')).toContain('concat=n=2:v=1:a=0');
     expect(result.commands[3].args.join(' ')).toContain("subtitles='C\\:/tmp/captions.srt'");
     expect(result.outputs.finalMp4).toBe('C:\\tmp\\out\\nodeslide-founder-roadshow.mp4');

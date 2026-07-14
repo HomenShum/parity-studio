@@ -18,6 +18,7 @@ This appendix maps submission claims to current repository paths. It is a source
 | Timestamped traces, waterfall, sources, OTLP-compatible payload | [`src/domains/nodeslide/inspector/TraceWaterfall.tsx`](../../src/domains/nodeslide/inspector/TraceWaterfall.tsx), [`src/domains/nodeslide/inspector/traceTelemetry.ts`](../../src/domains/nodeslide/inspector/traceTelemetry.ts), [`convex/lib/nodeslideOtlp.ts`](../../convex/lib/nodeslideOtlp.ts) |
 | Release alignment, preview admission, deletion/OAuth safety | [`.github/workflows/quality.yml`](../../.github/workflows/quality.yml), [`docs/QA_RELEASE_GATES.md`](../QA_RELEASE_GATES.md), [`convex/lib/nodeslideDeckDeletion.ts`](../../convex/lib/nodeslideDeckDeletion.ts) |
 | Dependencies and verification entry points | [`package.json`](../../package.json), [`tests/e2e`](../../tests/e2e), [`scripts/validate-qa-manifest.mjs`](../../scripts/validate-qa-manifest.mjs) |
+| Final story-led dogfood recording, machine-checked scene contract, and export receipts | [`docs/demo/founder-roadshow/final-recording-receipt.md`](../demo/founder-roadshow/final-recording-receipt.md), [`scripts/record-nodeslide-founder-roadshow.mjs`](../../scripts/record-nodeslide-founder-roadshow.mjs), [`scripts/verify-nodeslide-founder-roadshow.mjs`](../../scripts/verify-nodeslide-founder-roadshow.mjs) |
 
 ## Explicit boundaries
 
@@ -25,4 +26,4 @@ This appendix maps submission claims to current repository paths. It is a source
 - Browser BYOK fields prepare local MCP configuration; provider keys are not used by or uploaded to the hosted browser app.
 - Google OAuth, normalization, conflict planning, and guarded REST primitives are present, but the current UI does not expose a live Google Slides push/pull command.
 - OTLP-compatible export is optional and configuration-dependent; the in-product waterfall remains available from persisted run/span/event records.
-- Repository implementation evidence is not a substitute for final deployed smoke proof; unresolved links and results remain explicit placeholders in the submission reply.
+- Repository implementation evidence is paired with the final deployed smoke proof, public deck, video, and cryptographic recording/export receipts linked from the submission reply.

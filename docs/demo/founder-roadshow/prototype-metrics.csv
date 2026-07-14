@@ -1,9 +1,14 @@
 metric,value,unit,measurement_source,measured_at_utc,classification
-Automated unit and integration tests,719,passing tests,GitHub Release gates run 29335302380 / Quality,2026-07-14T13:10:49Z,measured prototype evidence
-Production browser journeys,15,passing Playwright tests,GitHub Release gates run 29335302380 / E2E UI QA,2026-07-14T13:13:40Z,measured production evidence
-Desktop Lighthouse performance,99,score out of 100,.tmp/lighthouse-desktop.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
-Desktop Lighthouse accessibility,100,score out of 100,.tmp/lighthouse-desktop.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
-Mobile Lighthouse performance,75,score out of 100,.tmp/lighthouse-mobile.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
-Mobile Lighthouse accessibility,100,score out of 100,.tmp/lighthouse-mobile.json against https://parity-studio.vercel.app/,2026-07-14T12:57:46Z,measured production evidence
+Automated unit and integration tests,733,passing tests,GitHub Release gates run 29343133529 / Quality / 107 test files / SHA 434330acffbcc3153810b9345770f7fdaa27f8ed,2026-07-14T14:58:51Z,measured prototype evidence
+Protected release-candidate browser journeys,15,passing Playwright tests,GitHub Release gates run 29343133529 / isolated preview E2E UI QA / SHA 434330acffbcc3153810b9345770f7fdaa27f8ed,2026-07-14T15:01:57Z,measured aligned preview evidence
+Canonical production read-only browser journeys,14,passing Playwright tests,docs/demo/founder-roadshow/production-e2e-2026-07-14.json / SHA256 72C28F4C0BD037011A4DC6DA77C2C339616519EE617C62DB3FD390641FD98A98 / mutation journey intentionally skipped,2026-07-14T15:15:13Z,measured production evidence
+Desktop Lighthouse performance,99,score out of 100,docs/demo/founder-roadshow/lighthouse-desktop-2026-07-14.json / SHA256 3155F1305B50AA5DEBF18FFA39A9772785E1B2B5B803284C3BC91A719F0A63D9,2026-07-14T15:30:23Z,measured production evidence
+Desktop Lighthouse accessibility,100,score out of 100,docs/demo/founder-roadshow/lighthouse-desktop-2026-07-14.json / SHA256 3155F1305B50AA5DEBF18FFA39A9772785E1B2B5B803284C3BC91A719F0A63D9,2026-07-14T15:30:23Z,measured production evidence
+Desktop Lighthouse best practices,96,score out of 100,docs/demo/founder-roadshow/lighthouse-desktop-2026-07-14.json / SHA256 3155F1305B50AA5DEBF18FFA39A9772785E1B2B5B803284C3BC91A719F0A63D9,2026-07-14T15:30:23Z,measured production evidence
+Desktop Lighthouse SEO,100,score out of 100,docs/demo/founder-roadshow/lighthouse-desktop-2026-07-14.json / SHA256 3155F1305B50AA5DEBF18FFA39A9772785E1B2B5B803284C3BC91A719F0A63D9,2026-07-14T15:30:23Z,measured production evidence
+Mobile Lighthouse performance,75,score out of 100,docs/demo/founder-roadshow/lighthouse-mobile-2026-07-14.json / SHA256 E1655D1D1F634872A013E6B09C86076E4D6F33FAE84D9EEEA6056E09497EB25A,2026-07-14T15:31:05Z,measured production evidence
+Mobile Lighthouse accessibility,100,score out of 100,docs/demo/founder-roadshow/lighthouse-mobile-2026-07-14.json / SHA256 E1655D1D1F634872A013E6B09C86076E4D6F33FAE84D9EEEA6056E09497EB25A,2026-07-14T15:31:05Z,measured production evidence
+Mobile Lighthouse best practices,96,score out of 100,docs/demo/founder-roadshow/lighthouse-mobile-2026-07-14.json / SHA256 E1655D1D1F634872A013E6B09C86076E4D6F33FAE84D9EEEA6056E09497EB25A,2026-07-14T15:31:05Z,measured production evidence
+Mobile Lighthouse SEO,100,score out of 100,docs/demo/founder-roadshow/lighthouse-mobile-2026-07-14.json / SHA256 E1655D1D1F634872A013E6B09C86076E4D6F33FAE84D9EEEA6056E09497EB25A,2026-07-14T15:31:05Z,measured production evidence
 Trace waterfall scale fixture,100,spans,Production trace UI scenario test fixture,2026-07-14T13:09:51Z,verified implementation capability
-Canonical source alignment,1,aligned production release,GitHub Release gates run 29335302380 / canonical runtime identity,2026-07-14T13:16:20Z,measured production evidence
+Canonical source alignment,1,aligned production release,GitHub Release gates run 29343133529 / final cutover / SHA 434330acffbcc3153810b9345770f7fdaa27f8ed,2026-07-14T15:03:51Z,measured production evidence
