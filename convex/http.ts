@@ -5,8 +5,77 @@ import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
 import { buildDesignSystemShowcaseFiles } from './lib/designSystemShowcase';
 import { buildFigmaBridgeFiles } from './lib/figmaBridge';
+import { RUNTIME_SOURCE_SCHEMA, convexRuntimeSourcePayload } from './lib/runtimeSource';
 
 const http = httpRouter();
+
+http.route({
+  path: '/api/nodeslide/google/oauth/callback',
+  method: 'GET',
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const state = url.searchParams.get('state')?.trim();
+    if (!state || state.length > 256) {
+      return new Response('This Google Slides connection link is invalid or expired.', {
+        status: 400,
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+    const code = url.searchParams.get('code')?.trim();
+    const error = url.searchParams.get('error')?.trim();
+    if ((code?.length ?? 0) > 4096 || (error?.length ?? 0) > 256) {
+      return new Response('This Google Slides connection response is invalid.', {
+        status: 400,
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+    const { redirectTo } = await ctx.runAction(internal.nodeslideGoogleAuth.complete, {
+      state,
+      ...(code ? { code } : {}),
+      ...(error ? { error } : {}),
+    });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'cache-control': 'no-store',
+        location: redirectTo,
+        'referrer-policy': 'no-referrer',
+      },
+    });
+  }),
+});
+
+http.route({
+  path: '/api/runtime-source',
+  method: 'GET',
+  handler: httpAction(async () => {
+    const payload = convexRuntimeSourcePayload(process.env['RUNTIME_SOURCE_SHA']);
+    return new Response(
+      JSON.stringify(
+        payload ?? {
+          schema: RUNTIME_SOURCE_SCHEMA,
+          layer: 'convex',
+          error: 'runtime_source_unavailable',
+        },
+      ),
+      {
+        status: payload ? 200 : 503,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store, max-age=0',
+          'access-control-allow-origin': '*',
+          'x-content-type-options': 'nosniff',
+        },
+      },
+    );
+  }),
+});
 
 /**
  * GET /api/runs/:id/{zip|html|markdown|figma}

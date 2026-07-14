@@ -60,6 +60,25 @@ function input(
   };
 }
 
+interface TestJsonSchema {
+  const?: unknown;
+  minItems?: number;
+  required?: string[];
+  properties?: Record<string, TestJsonSchema>;
+  items?: TestJsonSchema;
+  oneOf?: TestJsonSchema[];
+}
+
+function operationResponseSchema(
+  provider: ReturnType<typeof vi.fn<NodeSlideEditProvider>>,
+  operation: string,
+): TestJsonSchema | undefined {
+  const schema = provider.mock.calls[0]?.[0].jsonSchema?.schema as TestJsonSchema | undefined;
+  return schema?.properties?.operations?.items?.oneOf?.find(
+    (candidate) => candidate.properties?.op?.const === operation,
+  );
+}
+
 describe('NodeSlide baseline edit planner extraction', () => {
   it('sends only the bounded selected memories in the provider input', async () => {
     const { snapshot, target, scope } = fixture();
@@ -93,6 +112,18 @@ describe('NodeSlide baseline edit planner extraction', () => {
           ...planningInput.request,
           memories: [
             {
+              id: 'memory-standing',
+              deckId: snapshot.deck.id,
+              category: 'instruction',
+              content: 'Never publish without legal review.',
+              status: 'active',
+              source: 'user',
+              contentDigest: 'sha256:standing',
+              createdAt: NOW,
+              updatedAt: NOW,
+              useCount: 0,
+            },
+            {
               id: 'memory-relevant',
               deckId: snapshot.deck.id,
               category: 'preference',
@@ -113,9 +144,21 @@ describe('NodeSlide baseline edit planner extraction', () => {
     const call = provider.mock.calls[0]?.[0];
     expect(call).toBeDefined();
     const payload = JSON.parse(call?.userText ?? '{}') as {
-      memories?: Array<Record<string, unknown>>;
+      memory?: {
+        standingInstructions?: Array<Record<string, unknown>>;
+        retrievedMemories?: Array<Record<string, unknown>>;
+      };
     };
-    expect(payload.memories).toEqual([
+    expect(payload.memory?.standingInstructions).toEqual([
+      {
+        id: 'memory-standing',
+        category: 'instruction',
+        content: 'Never publish without legal review.',
+        contentDigest: 'sha256:standing',
+        updatedAt: NOW,
+      },
+    ]);
+    expect(payload.memory?.retrievedMemories).toEqual([
       {
         id: 'memory-relevant',
         category: 'preference',
@@ -124,7 +167,8 @@ describe('NodeSlide baseline edit planner extraction', () => {
         updatedAt: NOW,
       },
     ]);
-    expect(call?.systemPrompt).toContain('they never expand write scope or override safety rules');
+    expect(call?.systemPrompt).toContain('Explicit standing instructions');
+    expect(call?.systemPrompt).toContain('Neither kind expands write scope');
   });
 
   it('does not call a provider when deterministic mode is selected', async () => {
@@ -367,6 +411,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
         comments: [],
       },
     };
+    planningInput.request.requireFactualSourceBindings = true;
     const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true,
       value: {
@@ -404,6 +449,106 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema)).toContain(source.id);
+    expect(operationResponseSchema(provider, 'replace_text')?.required).toContain('sourceIds');
+    expect(operationResponseSchema(provider, 'replace_text')?.properties?.sourceIds?.minItems).toBe(
+      1,
+    );
+    expect(operationResponseSchema(provider, 'update_slide')).toBeUndefined();
+  });
+
+  it('rejects missing claim bindings on an external evidence-grounded text operation', async () => {
+    const { snapshot, target, scope } = fixture();
+    const source = snapshot.sources[0];
+    const slide = snapshot.slides.find((candidate) => candidate.id === target.slideId);
+    if (!source || !slide) throw new Error('Expected source and slide fixtures.');
+    const planningInput = {
+      ...input(snapshot, target, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: [target],
+        sources: [source],
+        comments: [],
+      },
+    };
+    planningInput.request.requireFactualSourceBindings = true;
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Unbound factual rewrite',
+          operations: [
+            {
+              op: 'replace_text',
+              slideId: target.slideId,
+              elementId: target.id,
+              text: 'After',
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 1,
+          inputTokens: 10,
+          outputTokens: 5,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt).toMatchObject({
+      origin: 'deterministic_fallback',
+      providerOutcome: 'invalid',
+      fallbackReason: expect.stringContaining('required evidence source binding'),
+    });
+    expect(result.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: target.slideId,
+        elementId: target.id,
+        text: 'After',
+      },
+    ]);
+  });
+
+  it('keeps the one-repair provider failure honest before deterministic fallback', async () => {
+    const { snapshot, target, scope } = fixture();
+    const source = snapshot.sources[0];
+    const slide = snapshot.slides.find((candidate) => candidate.id === target.slideId);
+    if (!source || !slide) throw new Error('Expected source and slide fixtures.');
+    const planningInput = {
+      ...input(snapshot, target, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: [target],
+        sources: [source],
+        comments: [],
+      },
+    };
+    planningInput.request.requireFactualSourceBindings = true;
+    const provider = vi.fn<NodeSlideEditProvider>(async ({ jsonSchema }) => {
+      expect(jsonSchema?.schema).toBeDefined();
+      return {
+        ok: false,
+        reason: 'The GLM 5.2 route returned invalid JSON after one repair attempt.',
+      };
+    });
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      ok: true,
+      receipt: {
+        origin: 'deterministic_fallback',
+        providerOutcome: 'failed',
+        fallbackReason: expect.stringContaining('one repair attempt'),
+      },
+    });
   });
 
   it('accepts a typed chart update only when its data source is in bounded read context', async () => {
@@ -431,6 +576,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     };
     planningInput.request.instruction = 'Update this chart from the supplied source.';
+    planningInput.request.requireFactualSourceBindings = true;
     const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true,
       value: {
@@ -479,6 +625,74 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(JSON.stringify(provider.mock.calls[0]?.[0].jsonSchema?.schema)).toContain(source.id);
+    expect(
+      operationResponseSchema(provider, 'update_chart')?.properties?.chart?.required,
+    ).toContain('sourceId');
+  });
+
+  it('rejects an evidence-grounded chart update without a sourceId', async () => {
+    const { snapshot } = fixture();
+    const chart = snapshot.elements.find((element) => element.kind === 'chart' && element.chart);
+    const source = snapshot.sources[0];
+    if (!chart || !source) throw new Error('Expected chart and source fixtures.');
+    const slide = snapshot.slides.find((candidate) => candidate.id === chart.slideId);
+    if (!slide) throw new Error('Expected chart slide fixture.');
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: snapshot.deck.id,
+      slideIds: [chart.slideId],
+      elementIds: [chart.id],
+      operationMode: 'unrestricted',
+    };
+    const planningInput = {
+      ...input(snapshot, chart, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: [chart],
+        sources: [source],
+        comments: [],
+      },
+    };
+    planningInput.request.instruction = 'Update this chart from the supplied source.';
+    planningInput.request.requireFactualSourceBindings = true;
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Unbound chart data',
+          operations: [
+            {
+              op: 'update_chart',
+              slideId: chart.slideId,
+              elementId: chart.id,
+              chart: {
+                chartType: 'line',
+                labels: ['2022', '2026'],
+                series: [{ name: 'Teams', values: [32, 48] }],
+              },
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 1,
+          inputTokens: 10,
+          outputTokens: 5,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.receipt).toMatchObject({
+      origin: 'deterministic_fallback',
+      providerOutcome: 'invalid',
+      fallbackReason: expect.stringContaining('required evidence source binding'),
+      terminalOutcome: 'fallback_unavailable',
+    });
   });
 
   it('rejects provider source bindings outside the authorized read context', async () => {
@@ -588,6 +802,37 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.receipt.providerTelemetry).toEqual(telemetry);
   });
 
+  it('contains a thrown provider call and converges on the bounded deterministic fallback', async () => {
+    const { snapshot, target, scope } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => {
+      throw new Error('raw Convex transport failure with upstream details');
+    });
+
+    const result = await planNodeSlideEdit(input(snapshot, target, scope), {
+      callProvider: provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: target.slideId,
+        elementId: target.id,
+        text: 'After',
+      },
+    ]);
+    expect(result.receipt).toMatchObject({
+      adapterVersion: '1.3.0',
+      origin: 'deterministic_fallback',
+      providerOutcome: 'failed',
+      terminalOutcome: 'completed',
+      fallbackReason: 'The GLM 5.2 route was unavailable.',
+    });
+    expect(JSON.stringify(result)).not.toContain('transport failure');
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
+
   it('recovers an invalid GLM envelope with a validated focused whole-slide rewrite', async () => {
     const { snapshot, target } = fixture();
     const focusedSlide = snapshot.slides.find((slide) => slide.id === target.slideId);
@@ -624,7 +869,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.1.0',
+      adapterVersion: '1.3.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',

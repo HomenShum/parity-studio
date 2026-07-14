@@ -21,6 +21,7 @@ import {
   nodeSummary,
   persistDensity,
   readDensity,
+  traceDensityForKey,
 } from './TraceInspector';
 
 /*
@@ -187,6 +188,12 @@ const traceFullGen: AgentTrace = {
 
 const patchLive = {
   id: 'patch_7f2e19',
+  scope: {
+    kind: 'slide',
+    deckId: 'deck_wc',
+    slideIds: ['slide_02'],
+    operationMode: 'unrestricted',
+  },
   status: 'proposed',
   operations: [1, 2, 3, 4, 5],
   candidateDigest: LIVE_DIGEST,
@@ -432,6 +439,15 @@ describe('progressive disclosure — depth gates real information', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('supports wrapping arrow navigation and direct Home/End tab navigation', () => {
+    expect(traceDensityForKey('human', 'ArrowRight')).toBe('pro');
+    expect(traceDensityForKey('tech', 'ArrowRight')).toBe('human');
+    expect(traceDensityForKey('human', 'ArrowLeft')).toBe('tech');
+    expect(traceDensityForKey('pro', 'Home')).toBe('human');
+    expect(traceDensityForKey('pro', 'End')).toBe('tech');
+    expect(traceDensityForKey('pro', 'Enter')).toBeNull();
+  });
 });
 
 describe('copy interaction (spec §4b)', () => {
@@ -508,7 +524,7 @@ describe('custody rail — fixed order and honest break', () => {
 
 describe('node summaries + consent derivation + no mojibake', () => {
   it('shows the persisted reasoning effort beside provider and model', () => {
-    expect(modelAttribution(traceLive)).toBe('openrouter · z-ai/glm-5.2 · Extra High effort');
+    expect(modelAttribution(traceLive)).toBe('openrouter · z-ai/glm-5.2 · XHigh effort');
   });
 
   it('binds every node summary to a real field', () => {
@@ -641,7 +657,34 @@ describe('compact durable telemetry projection', () => {
     expect(html).toContain('Full timeline');
     expect(html).toContain('Plan bounded slide edit');
     expect(html).toContain('204');
-    expect(html).toContain('Older telemetry is available on the server');
+    expect(html).toContain('202 older records not loaded');
+    expect(html).toContain('Counts and search cover the loaded window only');
+    expect(html).toContain('data-observability-primitives="assistant-ui-react-o11y"');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tabpanel"');
+    expect(html).toContain('aria-controls=');
     expect(html).toContain('Chain of custody and countersigned receipt');
+  });
+
+  it('shows the exact multi-slide write scope on the selected run', () => {
+    const multiSlidePatch = {
+      ...patchLive,
+      scope: {
+        kind: 'slide',
+        deckId: 'deck_wc',
+        slideIds: ['slide_02', 'slide_04'],
+        operationMode: 'unrestricted',
+      },
+    } as unknown as DeckPatch;
+    const html = renderToStaticMarkup(
+      <TraceInspector
+        traces={[traceLive]}
+        validations={[validationLive]}
+        patches={[multiSlidePatch]}
+      />,
+    );
+
+    expect(html).toContain('Write scope');
+    expect(html).toContain('2 slides');
   });
 });

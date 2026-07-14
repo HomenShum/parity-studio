@@ -3,6 +3,7 @@ import {
   getDeckOwnerAccessKey,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
+  removeDeckOwnerAccessKey,
   storeDeckOwnerAccessKey,
 } from './sessionIdentity';
 
@@ -38,6 +39,33 @@ describe('NodeSlide owner capability persistence', () => {
     expect(listStoredDeckAccess()).toEqual([
       { deckId: 'deck:one', ownerAccessKey: 'owner:one' },
       { deckId: 'deck:two', ownerAccessKey: 'owner:two' },
+    ]);
+  });
+
+  it('removes only the selected deck capability and clears its matching primary key', () => {
+    const localStorage = new MemoryStorage();
+    installWindow(localStorage);
+    storeDeckOwnerAccessKey('deck:one', 'owner:one', true);
+    storeDeckOwnerAccessKey('deck:two', 'owner:two');
+
+    expect(removeDeckOwnerAccessKey('deck:one')).toBe(true);
+
+    expect(getDeckOwnerAccessKey('deck:one')).toBeUndefined();
+    expect(getStoredOwnerAccessKey()).toBeUndefined();
+    expect(listStoredDeckAccess()).toEqual([{ deckId: 'deck:two', ownerAccessKey: 'owner:two' }]);
+  });
+
+  it('preserves a primary capability that is still used by another stored deck', () => {
+    const localStorage = new MemoryStorage();
+    installWindow(localStorage);
+    storeDeckOwnerAccessKey('deck:one', 'owner:shared', true);
+    storeDeckOwnerAccessKey('deck:two', 'owner:shared');
+
+    expect(removeDeckOwnerAccessKey('deck:one')).toBe(true);
+
+    expect(getStoredOwnerAccessKey()).toBe('owner:shared');
+    expect(listStoredDeckAccess()).toEqual([
+      { deckId: 'deck:two', ownerAccessKey: 'owner:shared' },
     ]);
   });
 

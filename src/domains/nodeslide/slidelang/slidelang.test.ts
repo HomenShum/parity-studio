@@ -459,7 +459,15 @@ describe('local SlideLangAdapter', () => {
     slide.elementOrder = snapshot.elements.map((element) => element.id);
 
     const validation = adapter.validate(snapshot);
-    expect(validation.issues).toEqual([]);
+    expect(validation.issues).toEqual([
+      expect.objectContaining({
+        code: 'export',
+        severity: 'warning',
+        elementId: 'element:formula',
+        message:
+          'Math exports to PowerPoint and manual Google Slides import as editable text, not a native equation object.',
+      }),
+    ]);
 
     const html = adapter.renderSlideHtml(snapshot, slide.id);
     expect(html).toContain('data-element-kind="math"');

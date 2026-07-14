@@ -55,6 +55,14 @@ export function getElementCapability(element: SlideElement): ElementCapabilityRe
     pptx = 'static_fallback';
     googleSlides = 'static_fallback';
     warnings.push('Math expression is missing, so exports use a labeled editable placeholder.');
+  } else if (element.kind === 'math') {
+    effective = ['web_native', 'pptx_editable', 'google_importable'];
+    web = 'native';
+    pptx = 'native';
+    googleSlides = 'native';
+    warnings.push(
+      'Math exports to PowerPoint and manual Google Slides import as editable text, not a native equation object.',
+    );
   } else if (element.kind === 'video') {
     effective = ['web_native', 'pptx_static_fallback', 'google_importable'];
     web = element.video?.url.trim() ? 'native' : 'static_fallback';

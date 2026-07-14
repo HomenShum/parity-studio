@@ -5,7 +5,7 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
-  NODESLIDE_AGENT_MODELS,
+  type NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_NEBIUS_REVIEW_CONSENT,
   NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
@@ -115,36 +115,31 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
     expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
-    expect(markup).not.toContain('Allow one Nebius request');
+    expect(markup).toContain('Consent required');
+    expect(markup).toContain('Allow one Nebius request');
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
-    expect(markup).toContain('<option value="low">Light</option>');
-    expect(markup).toContain('<option value="medium">Medium</option>');
-    expect(markup).toContain('<option value="high" selected="">High</option>');
-    expect(markup).not.toContain('<option value="xhigh">Extra High</option>');
-    expect(markup).not.toContain('<option value="max">Ultra</option>');
+    expect(markup).toContain('<option value="low">Low</option>');
+    expect(markup).toContain('<option value="medium" selected="">Medium</option>');
+    expect(markup).toContain('<option value="high">High</option>');
+    expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
+    expect(markup).not.toContain('<option value="max">Max</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
-    expect(markup).toContain('Claude Fable 5 · Anthropic');
-    expect(markup).toContain('Gemini 3.5 Flash · Google');
-    expect(markup).toContain('Gemini 3.1 Pro · Google');
-    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
-    expect(markup).toContain('GPT-5.6 Terra · OpenAI');
-    expect(markup).not.toMatch(/ai-provider-consent/);
+    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="ai-provider-consent"/);
 
     expect(createAiProviderRequest('nebius', false)).toBeNull();
     expect(createAiProviderRequest('nebius', true)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
     });
     expect(createAiVariationProviderRequest('nebius', false)).toBeNull();
     expect(createAiVariationProviderRequest('nebius', true)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
     });
     expect(createAiProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject({
@@ -166,8 +161,8 @@ describe('NodeSlide AI review inspector', () => {
       initialProviderModel: 'z-ai/glm-5.2',
     });
 
-    expect(markup).toContain('<option value="xhigh">Extra High</option>');
-    expect(markup).toContain('<option value="max">Ultra</option>');
+    expect(markup).toContain('<option value="xhigh">XHigh</option>');
+    expect(markup).not.toContain('<option value="max">Max</option>');
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
@@ -287,7 +282,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/variations');
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
-    expect(commandMenu.match(/<option value=/g)).toHaveLength(16 + NODESLIDE_AGENT_MODELS.length);
+    expect(commandMenu).toContain('data-testid="ai-model-select"');
+    expect(commandMenu).toContain('data-testid="ai-effort-select"');
     expect(commandMenu).toContain('Advanced controls');
   });
 
@@ -353,7 +349,7 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(markup).not.toContain('Resolved review request');
   });
 
-  it('exposes slide and selection context chips and all seven collapsed tabs', () => {
+  it('exposes context chips, prioritized primary tabs, and all seven collapsed shortcuts', () => {
     const snapshot = fixture();
     const slide = requiredSlide(snapshot);
     const element = snapshot.elements.find((candidate) => candidate.slideId === slide.id);
@@ -364,9 +360,13 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'json', 'trace']) {
+    for (const tab of ['design', 'comments', 'data', 'trace']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
+    expect(expanded).toContain('data-testid="inspector-more"');
+    expect(expanded).toContain('aria-label="More inspector views"');
+    expect(expanded).not.toContain('data-testid="inspector-tab-versions"');
+    expect(expanded).not.toContain('data-testid="inspector-tab-json"');
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 

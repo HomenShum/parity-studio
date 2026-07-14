@@ -1,3 +1,4 @@
+import { useAction, useQuery } from 'convex/react';
 import {
   Bot,
   Check,
@@ -6,12 +7,16 @@ import {
   ExternalLink,
   KeyRound,
   Laptop,
+  LoaderCircle,
+  Presentation,
   ServerCog,
   ShieldCheck,
   Trash2,
+  Unplug,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { api } from '../../../../convex/_generated/api';
 import {
   SESSION_BYOK_KEYS,
   clearSessionByok,
@@ -41,9 +46,21 @@ export function NodeSlideConnectionsDialog({
   onClose,
   deckId,
 }: NodeSlideConnectionsDialogProps) {
+  if (!open) return null;
+
+  return <NodeSlideConnectionsDialogContent onClose={onClose} deckId={deckId} />;
+}
+
+function NodeSlideConnectionsDialogContent({
+  onClose,
+  deckId,
+}: {
+  onClose: () => void;
+  deckId: string | undefined;
+}) {
   const firstInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
-    open,
+    open: true,
     onClose,
     initialFocusRef: firstInputRef,
   });
@@ -51,20 +68,25 @@ export function NodeSlideConnectionsDialog({
   const [routing, setRouting] = useState({ model: 'z-ai/glm-5.2', baseUrl: '' });
   const [client, setClient] = useState<ClientKind>('claude');
   const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setKeys(readSessionByok());
-    setRouting(readSessionByokRouting());
-    setNotice(null);
-  }, [open]);
+  const [googleBusy, setGoogleBusy] = useState<'connect' | 'disconnect' | null>(null);
 
   const ownerAccessKey = listStoredDeckAccess().find(
     (entry) => entry.deckId === deckId,
   )?.ownerAccessKey;
-  const configuredCount = SESSION_BYOK_KEYS.filter((key) => keys[key.envVar]?.trim()).length;
+  const googleStatus = useQuery(
+    api.nodeslideGoogleAuth.getStatus,
+    deckId && ownerAccessKey ? { deckId, ownerAccessKey } : 'skip',
+  );
+  const beginGoogleAuth = useAction(api.nodeslideGoogleAuth.begin);
+  const disconnectGoogleAuth = useAction(api.nodeslideGoogleAuth.disconnect);
 
-  if (!open) return null;
+  useEffect(() => {
+    setKeys(readSessionByok());
+    setRouting(readSessionByokRouting());
+    setNotice(null);
+  }, []);
+
+  const configuredCount = SESSION_BYOK_KEYS.filter((key) => keys[key.envVar]?.trim()).length;
 
   const save = () => {
     writeSessionByok(keys);
@@ -79,6 +101,48 @@ export function NodeSlideConnectionsDialog({
     setKeys({});
     setRouting({ model: 'z-ai/glm-5.2', baseUrl: '' });
     setNotice('Local connection values revoked from this tab.');
+  };
+
+  const connectGoogleSlides = async () => {
+    if (!deckId || !ownerAccessKey) {
+      setNotice('Open a deck owned by this browser before connecting Google Slides.');
+      return;
+    }
+    setGoogleBusy('connect');
+    setNotice(null);
+    try {
+      const returnTo = new URL(window.location.href);
+      returnTo.searchParams.delete('nodeslideGoogle');
+      const receipt = await beginGoogleAuth({
+        deckId,
+        ownerAccessKey,
+        returnTo: returnTo.toString(),
+      });
+      window.location.assign(receipt.authorizationUrl);
+    } catch {
+      setNotice(
+        'Google Slides connection could not start. Check the deployment configuration and try again.',
+      );
+      setGoogleBusy(null);
+    }
+  };
+
+  const disconnectGoogleSlides = async () => {
+    if (!deckId || !ownerAccessKey) return;
+    setGoogleBusy('disconnect');
+    setNotice(null);
+    try {
+      const receipt = await disconnectGoogleAuth({ deckId, ownerAccessKey });
+      setNotice(
+        receipt.providerRevoked
+          ? 'Google Slides access was revoked for this deck.'
+          : 'Google Slides was disconnected locally. Google did not confirm remote revocation.',
+      );
+    } catch {
+      setNotice('Google Slides could not be disconnected. Try again.');
+    } finally {
+      setGoogleBusy(null);
+    }
   };
 
   const copyConfig = async () => {
@@ -132,6 +196,74 @@ export function NodeSlideConnectionsDialog({
         </header>
 
         <div className="ns-connections-body">
+          <section
+            className="ns-connection-section ns-google-connection-section"
+            aria-labelledby="ns-google-slides-title"
+          >
+            <div className="ns-connection-heading">
+              <span>
+                <Presentation size={14} /> Google Slides
+              </span>
+              <small>
+                {!deckId || !ownerAccessKey
+                  ? 'Open an owned deck'
+                  : googleStatus?.connected
+                    ? 'OAuth authorized'
+                    : googleStatus === undefined
+                      ? 'Checking…'
+                      : 'Not connected'}
+              </small>
+            </div>
+            <h2 id="ns-google-slides-title">Authorize per-file Google Slides access</h2>
+            <p>
+              Google asks for per-file Drive access. NodeSlide stores refresh credentials encrypted
+              on the server, never in browser storage or Trace. Authorization enables authenticated
+              planning; this release does not expose a Google Slides push or pull action.
+            </p>
+            <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
+              <div>
+                <strong>
+                  {googleStatus?.connected
+                    ? 'OAuth authorized · planning available'
+                    : 'Explicit Google consent'}
+                </strong>
+                <small>
+                  {googleStatus?.connected
+                    ? 'NodeSlide can build guarded sync plans; it does not push or pull slides yet.'
+                    : 'NodeSlide requests the recommended drive.file scope—not access to all Drive files.'}
+                </small>
+              </div>
+              {googleStatus?.connected ? (
+                <button
+                  type="button"
+                  className="is-danger"
+                  disabled={googleBusy !== null}
+                  onClick={() => void disconnectGoogleSlides()}
+                >
+                  {googleBusy === 'disconnect' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <Unplug size={13} />
+                  )}
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!deckId || !ownerAccessKey || googleBusy !== null}
+                  onClick={() => void connectGoogleSlides()}
+                >
+                  {googleBusy === 'connect' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <ExternalLink size={13} />
+                  )}
+                  Continue to Google
+                </button>
+              )}
+            </div>
+          </section>
+
           <section className="ns-connection-section" aria-labelledby="ns-byok-title">
             <div className="ns-connection-heading">
               <span>
@@ -143,7 +275,8 @@ export function NodeSlideConnectionsDialog({
             <p>
               Values live in this tab’s session storage, then run in the local MCP process you
               launch. They are never sent to Convex, written into Trace, or returned by a tool.
-              Every model request still needs explicit consent.
+              Every model request still needs explicit per-call consent; copied config never grants
+              it.
             </p>
             <div className="ns-byok-grid">
               {SESSION_BYOK_KEYS.filter((key) => key.provider !== 'google').map((key, index) => (
@@ -211,7 +344,9 @@ export function NodeSlideConnectionsDialog({
             <p>
               The agent can read decks and traces, upload evidence, and propose edits. Proposals
               remain unapplied until a separate accept call; the server rechecks owner authority,
-              scope, clocks, quotas, and candidate validation.
+              scope, clocks, quotas, and candidate validation. The copied config contains no consent
+              grant: external-model and web tools require <code>consent: true</code> on that exact
+              call after user approval.
             </p>
             <div className="ns-agent-client-tabs" role="tablist" aria-label="Agent client">
               <button
@@ -268,8 +403,9 @@ export function NodeSlideConnectionsDialog({
             <ShieldCheck size={15} />
             <span>
               <strong>Same locks, second front door.</strong>
-              Consent, proposals, server scope, validation receipts, version clocks, and honest
-              failures are identical whether the request starts in this UI or over MCP.
+              The UI checkbox and MCP’s per-call consent field each authorize one request. Server
+              scope, proposals, validation receipts, version clocks, and honest failures stay the
+              same.
             </span>
           </aside>
           {notice ? <output className="ns-connection-notice">{notice}</output> : null}

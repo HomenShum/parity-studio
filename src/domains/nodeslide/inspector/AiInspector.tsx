@@ -1,5 +1,15 @@
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
+import { Message, MessageContent } from '@/components/ai-elements/message';
+import { PromptInputButton } from '@/components/ai-elements/prompt-input';
+import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import {
-  ArrowUp,
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from '@/components/ai-elements/tool';
+import {
   AtSign,
   Brain,
   Check,
@@ -13,7 +23,6 @@ import {
   LoaderCircle,
   Maximize2,
   MessageCircle,
-  Paperclip,
   PlugZap,
   RotateCcw,
   ShieldCheck,
@@ -21,24 +30,14 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import {
-  type FormEvent,
-  type KeyboardEvent,
-  type Ref,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type KeyboardEvent, type Ref, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   type AgentTrace,
   type Deck,
   type DeckPatch,
-  NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
-  NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_REASONING_EFFORTS,
+  NODESLIDE_SCOPE_SLIDE_LIMIT,
   type NodeSlideAgentMemory,
   type NodeSlideAgentMemoryCategory,
   type NodeSlideAgentMessage,
@@ -58,6 +57,15 @@ import {
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
+import {
+  NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
+  NodeSlidePromptComposer,
+  nodeSlideNativeEffortLabel,
+} from '../composer/NodeSlidePromptComposer';
+import {
+  nodeSlideComposerSessionKey,
+  useNodeSlideComposerSession,
+} from '../composer/nodeSlideComposerSession';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -79,6 +87,7 @@ import {
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
 } from './reviewTypes';
+import { nodeSlideScopeLabel } from './scopePresentation';
 
 export {
   AI_DRAFTING_PHASE_MS,
@@ -104,7 +113,7 @@ export type {
   AiVariationRequest,
 } from './reviewTypes';
 
-type ScopeChoice = 'deck' | 'slide' | 'elements';
+type ScopeChoice = 'deck' | 'slide' | 'selected_slides' | 'elements';
 
 interface ComposerTrigger {
   kind: 'reference' | 'command';
@@ -117,6 +126,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   deck: Deck;
   slide: Slide;
   selectedElements: readonly SlideElement[];
+  selectedSlideIds?: readonly string[];
   workspaceElements?: readonly SlideElement[];
   patches: readonly AiReviewablePatch[];
   traces: readonly AgentTrace[];
@@ -168,6 +178,7 @@ export function AiInspector<CommandId extends string = string>({
   deck,
   slide,
   selectedElements,
+  selectedSlideIds = [],
   workspaceElements = [],
   patches,
   traces,
@@ -207,7 +218,11 @@ export function AiInspector<CommandId extends string = string>({
   onAcceptVariation,
   onRejectVariation,
 }: AiInspectorProps<CommandId>) {
-  const [instruction, setInstruction] = useState(initialInstruction);
+  const composerSession = useNodeSlideComposerSession(
+    nodeSlideComposerSessionKey('editor', deck.id),
+    { text: initialInstruction },
+  );
+  const instruction = composerSession.text;
   const [scopeChoice, setScopeChoice] = useState<ScopeChoice>(
     selectedElements.length > 0 ? 'elements' : 'slide',
   );
@@ -217,19 +232,16 @@ export function AiInspector<CommandId extends string = string>({
   const [providerMode, setProviderMode] = useState<AiProviderMode>(initialProviderMode);
   const [providerModel, setProviderModel] = useState<NodeSlideAgentModelId>(initialProviderModel);
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
-    NODESLIDE_DEFAULT_REASONING_EFFORT,
+    NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  // Zero-friction consent: an external model is disclosed by the always-visible
-  // model pill, so choosing it and sending IS the consent. The consent token is
-  // still generated and validated server-side on every request — disclosure is
-  // preserved; only the per-request checkbox friction is removed.
-  const providerConsent = true;
+  const [providerConsent, setProviderConsent] = useState(false);
   const [webResearch, setWebResearch] = useState(false);
+  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
   const [selectedCommand, setSelectedCommand] = useState<AiComposerCommand<CommandId> | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(initialInstruction.length);
+  const [cursorPosition, setCursorPosition] = useState(instruction.length);
   const [dismissedMenuKey, setDismissedMenuKey] = useState<string | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [optimisticAsk, setOptimisticAsk] = useState<string | null>(null);
@@ -237,6 +249,7 @@ export function AiInspector<CommandId extends string = string>({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
@@ -246,7 +259,7 @@ export function AiInspector<CommandId extends string = string>({
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const reviewScrollRef = useRef<HTMLDivElement | null>(null);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
@@ -273,6 +286,8 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
+    setProviderConsent(false);
+    setWebResearchConsent(false);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -282,7 +297,9 @@ export function AiInspector<CommandId extends string = string>({
 
   useEffect(() => {
     if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
-  }, [scopeChoice, selectedElements.length]);
+    if (scopeChoice === 'selected_slides' && selectedSlideIds.length < 2) setScopeChoice('slide');
+    setScopeError(null);
+  }, [scopeChoice, selectedElements.length, selectedSlideIds.length]);
 
   const activeTrace = useMemo(
     () =>
@@ -399,7 +416,7 @@ export function AiInspector<CommandId extends string = string>({
     providerModel,
     providerEffort,
   );
-  const providerReady = providerMode === 'deterministic' || provider !== null;
+  const providerReady = provider !== null && (!webResearch || webResearchConsent);
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -427,22 +444,26 @@ export function AiInspector<CommandId extends string = string>({
     ? commentContext.label
     : scopeChoice === 'deck'
       ? 'Whole deck'
-      : scopeChoice === 'elements'
-        ? `${selectedElements.length} selected`
-        : 'Whole slide';
+      : scopeChoice === 'selected_slides'
+        ? `${selectedSlideIds.length} selected slides`
+        : scopeChoice === 'elements'
+          ? `${selectedElements.length} selected`
+          : 'Whole slide';
   const recentMessages = agentMessages.slice(-24);
   const latestPersistedUserAsk = [...recentMessages]
     .reverse()
     .find((message) => message.role === 'user')?.content;
+  const activityAutoScrollPaused = proposals.length > 0 || directions.length > 0;
 
   const updateInstruction = (value: string, cursor = value.length) => {
-    setInstruction(value);
+    composerSession.setText(value);
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
     setMenuIndex(0);
   };
 
   const chooseProviderModel = (value: string) => {
+    setProviderConsent(false);
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -492,7 +513,11 @@ export function AiInspector<CommandId extends string = string>({
     queueMicrotask(() => textareaRef.current?.focus());
   };
 
-  const requestVariations = (source: AiVariationRequest['source'], ask?: string) => {
+  const requestVariations = (
+    source: AiVariationRequest['source'],
+    ask?: string,
+    readContext: readonly AiReadReference[] = requestedReadContext,
+  ) => {
     const variationProvider = createAiVariationProviderRequest(
       providerMode,
       providerConsent,
@@ -505,31 +530,70 @@ export function AiInspector<CommandId extends string = string>({
     if (ask) setOptimisticAsk(ask);
     onGenerateVariations({
       ...variationProvider,
-      readContext: requestedReadContext,
+      readContext,
       designBehavior,
       referenceUse,
       source,
       ...(commentContext ? { commentContext } : {}),
     });
+    if (providerMode !== 'deterministic') setProviderConsent(false);
+    setWebResearchConsent(false);
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const text = instruction.trim();
-    if (!text || isSubmitting || !provider) return;
-    const command = selectedCommand ?? commandFromInstruction(instruction, availableCommands);
+  const submit = async (submittedInstruction: string, files: readonly File[]) => {
+    const text = submittedInstruction.trim();
+    if (!text || isSubmitting || attachmentBusy || !provider || !providerReady) return;
+    let submittedReadContext = requestedReadContext;
+    if (files.length > 0) {
+      if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
+      setAttachmentBusy(true);
+      setAttachmentError(null);
+      try {
+        const attachedReferences: AiReadReference[] = [];
+        for (const file of files) attachedReferences.push(await onAttachDataFile(file));
+        const deduped = new Map<string, AiReadReference>();
+        for (const reference of [...requestedReadContext, ...attachedReferences]) {
+          deduped.set(referenceKey(reference), reference);
+        }
+        submittedReadContext = [...deduped.values()];
+        setSelectedReadContext(submittedReadContext);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'The data file could not be attached.';
+        setAttachmentError(message);
+        throw error;
+      } finally {
+        setAttachmentBusy(false);
+      }
+    }
+    const command =
+      selectedCommand ?? commandFromInstruction(submittedInstruction, availableCommands);
     if (command && isVariationsCommand(command.id)) {
-      requestVariations('command', text);
+      requestVariations('command', text, submittedReadContext);
       updateInstruction('');
       setSelectedCommand(null);
       return;
     }
     const writeScope = commentContext
       ? createCommentScope(commentContext, operationMode, deck, workspaceElements)
-      : createScope(scopeChoice, operationMode, deck.id, slide.id, selectedElements);
+      : createScope(
+          scopeChoice,
+          operationMode,
+          deck.id,
+          slide.id,
+          selectedSlideIds,
+          selectedElements,
+        );
+    if (!writeScope) {
+      setScopeError(
+        `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
+      );
+      return;
+    }
+    setScopeError(null);
     const options: AiProposalOptions<CommandId> = {
       ...provider,
-      readContext: requestedReadContext,
+      readContext: submittedReadContext,
       designBehavior,
       referenceUse,
       memoryMode: useMemoryForRun ? 'relevant' : 'off',
@@ -537,7 +601,7 @@ export function AiInspector<CommandId extends string = string>({
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      ...(webResearch
+      ...(webResearch && webResearchConsent
         ? {
             webResearch: true,
             webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
@@ -552,6 +616,8 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
+    if (providerMode !== 'deterministic') setProviderConsent(false);
+    if (webResearch) setWebResearchConsent(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -600,27 +666,6 @@ export function AiInspector<CommandId extends string = string>({
     setSelectedCommand(null);
   };
 
-  const attachDataFile = async (file: File) => {
-    if (!onAttachDataFile || attachmentBusy) return;
-    setAttachmentBusy(true);
-    setAttachmentError(null);
-    try {
-      const reference = await onAttachDataFile(file);
-      setSelectedReadContext((current) =>
-        current.some((candidate) => referenceKey(candidate) === referenceKey(reference))
-          ? current
-          : [...current, reference],
-      );
-      queueMicrotask(() => textareaRef.current?.focus());
-    } catch (error) {
-      setAttachmentError(
-        error instanceof Error ? error.message : 'The data file could not be attached.',
-      );
-    } finally {
-      setAttachmentBusy(false);
-    }
-  };
-
   const returnToOriginal = () => {
     const previewButton = lastPreviewButtonRef.current;
     onPreviewVariation(null);
@@ -645,6 +690,11 @@ export function AiInspector<CommandId extends string = string>({
             Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')} ·{' '}
             {slide.title}
           </span>
+          {selectedSlideIds.length >= 2 ? (
+            <span className="ns-ai-v3-context-chip is-selection">
+              Selected slides · {selectedSlideIds.length}
+            </span>
+          ) : null}
           {selectedElements.length > 0 ? (
             <span className="ns-ai-v3-context-chip is-selection">
               Selection · {selectedElements.length}
@@ -671,7 +721,7 @@ export function AiInspector<CommandId extends string = string>({
         </p>
       </section>
 
-      <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll">
+      <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll" ref={reviewScrollRef}>
         {!visibleAsk &&
         !resolvedActivity &&
         !activeTrace &&
@@ -693,45 +743,30 @@ export function AiInspector<CommandId extends string = string>({
           </section>
         ) : null}
 
-        {recentMessages.map((message) => (
-          <section
-            key={message.id}
-            className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
-            data-testid={`agent-message-${message.role}`}
-          >
-            {message.role !== 'user' ? (
-              <span className="ns-ai-v3-agent-mark" aria-hidden="true">
-                {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
-              </span>
-            ) : null}
-            <div>
-              <span className="ns-eyebrow">
-                {message.role === 'user'
-                  ? 'You'
-                  : message.role === 'tool'
-                    ? humanizeToolName(message.toolName)
-                    : 'NodeSlide'}
-              </span>
-              <p>{message.content}</p>
-              {message.sourceIds?.length ? (
-                <small>
-                  {message.sourceIds.length} persisted source snapshot
-                  {message.sourceIds.length === 1 ? '' : 's'}
-                </small>
-              ) : null}
-            </div>
-          </section>
-        ))}
+        <Conversation
+          className="ns-ai-v3-conversation flex-none overflow-visible"
+          follow={!activityAutoScrollPaused}
+          scrollOwnerRef={reviewScrollRef}
+        >
+          <ConversationContent className="ns-ai-v3-conversation-content gap-0 p-0">
+            {recentMessages.map((message) => (
+              <AgentActivityMessage key={message.id} message={message} />
+            ))}
 
-        {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
-          <section
-            className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
-            data-testid="optimistic-user-ask"
-          >
-            <span>You asked</span>
-            <p>{visibleAsk}</p>
-          </section>
-        ) : null}
+            {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
+              <Message
+                className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
+                data-testid="optimistic-user-ask"
+                from="user"
+              >
+                <MessageContent>
+                  <span>You asked</span>
+                  <p>{visibleAsk}</p>
+                </MessageContent>
+              </Message>
+            ) : null}
+          </ConversationContent>
+        </Conversation>
 
         {resolvedActivity || activeTrace ? (
           <section
@@ -804,14 +839,12 @@ export function AiInspector<CommandId extends string = string>({
                 <p>No proposal has been created or applied yet.</p>
               </output>
             ) : showPlan && activeTrace?.plan.length ? (
+              // AI Elements Task is intentionally not mounted here: persisted traces expose
+              // labels, but no stable per-step lifecycle. Neutral bullets avoid inventing one.
               <ol className="ns-plan-list">
                 {activeTrace.plan.map((step, index) => (
-                  <li key={step} className={index === 0 ? 'is-current' : ''}>
-                    {index === 0 ? (
-                      <LoaderCircle className="ns-spin" size={13} />
-                    ) : (
-                      <Circle size={10} />
-                    )}
+                  <li key={`${activeTrace.id}:${index}:${step}`}>
+                    <Circle size={10} />
                     <span>{step}</span>
                   </li>
                 ))}
@@ -968,9 +1001,8 @@ export function AiInspector<CommandId extends string = string>({
         ) : null}
       </div>
 
-      <form
+      <div
         className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
-        onSubmit={submit}
         data-testid="ai-composer"
       >
         {showSuggested ? (
@@ -1047,7 +1079,10 @@ export function AiInspector<CommandId extends string = string>({
               ) : (
                 <>
                   <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
-                  {selectedAgentModel.label} · {effortLabel(providerEffort)} effort
+                  {selectedAgentModel.label} · {nodeSlideNativeEffortLabel(providerEffort)} effort
+                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
+                    {providerConsent ? 'Consent attached' : 'Consent required'}
+                  </span>
                 </>
               )}
             </div>
@@ -1068,6 +1103,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode === 'deterministic'}
                   onChange={() => {
                     setProviderMode('deterministic');
+                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-deterministic"
                 />
@@ -1085,6 +1121,7 @@ export function AiInspector<CommandId extends string = string>({
                   checked={providerMode !== 'deterministic'}
                   onChange={() => {
                     setProviderMode(nodeSlideProviderModeForModel(providerModel));
+                    setProviderConsent(false);
                   }}
                   data-testid="ai-provider-external"
                 />
@@ -1128,6 +1165,7 @@ export function AiInspector<CommandId extends string = string>({
                   <button
                     type="button"
                     className={scopeChoice === 'deck' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'deck'}
                     onClick={() => setScopeChoice('deck')}
                   >
                     Deck
@@ -1135,13 +1173,25 @@ export function AiInspector<CommandId extends string = string>({
                   <button
                     type="button"
                     className={scopeChoice === 'slide' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'slide'}
                     onClick={() => setScopeChoice('slide')}
                   >
                     This slide
                   </button>
+                  {selectedSlideIds.length >= 2 ? (
+                    <button
+                      type="button"
+                      className={scopeChoice === 'selected_slides' ? 'is-active' : ''}
+                      aria-pressed={scopeChoice === 'selected_slides'}
+                      onClick={() => setScopeChoice('selected_slides')}
+                    >
+                      Selected slides ({selectedSlideIds.length})
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={scopeChoice === 'elements' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'elements'}
                     disabled={selectedElements.length === 0}
                     onClick={() => setScopeChoice('elements')}
                   >
@@ -1150,6 +1200,12 @@ export function AiInspector<CommandId extends string = string>({
                 </div>
               </div>
             )}
+
+            {scopeError ? (
+              <p className="ns-ai-v3-inline-error" role="alert">
+                {scopeError}
+              </p>
+            ) : null}
 
             <div className="ns-ai-policy-grid">
               <label>
@@ -1227,200 +1283,184 @@ export function AiInspector<CommandId extends string = string>({
           </div>
         ) : null}
 
-        <div className="ns-composer-field ns-ai-v3-composer-field">
-          <label className="ns-sr-only" htmlFor={composerId}>
-            AI instruction
-          </label>
-          <textarea
-            ref={textareaRef}
-            id={composerId}
-            rows={composerExpanded ? 9 : 3}
-            value={instruction}
-            onChange={(event) => {
-              updateInstruction(event.target.value, event.target.selectionStart);
-            }}
-            onSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
-            placeholder={
-              commentContext
-                ? 'Address this review comment without resolving it...'
-                : scopeChoice === 'elements'
-                  ? 'Make this feel more decisive...'
-                  : 'Turn this into a crisp executive story...'
-            }
-            onKeyDown={handleComposerKeyDown}
-            aria-autocomplete="list"
-            aria-controls={menuOpen ? menuId : undefined}
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-          />
-          <div className="ns-composer-meta">
-            <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
-              <label className="ns-ai-model-picker">
-                <Sparkles size={12} aria-hidden="true" />
-                <span className="ns-sr-only">Agent model</span>
-                <select
-                  value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
-                  onChange={(event) => chooseProviderModel(event.target.value)}
-                  aria-label="Agent model"
-                  data-testid="ai-model-select"
-                >
-                  <optgroup label="Recommended">
-                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
-                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Nebius ·
-                      Recommended
-                    </option>
-                  </optgroup>
-                  <optgroup label="More live models">
-                    {NODESLIDE_AGENT_MODELS.filter(
-                      (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
-                    ).map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor} ·{' '}
-                        {providerNameForMode(nodeSlideProviderModeForModel(model.id))}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Private fallback">
-                    <option value="deterministic">Deterministic · no external model</option>
-                  </optgroup>
-                </select>
-              </label>
-              {providerMode !== 'deterministic' ? (
-                <label className="ns-ai-model-picker ns-ai-effort-picker">
-                  <span className="ns-sr-only">Reasoning effort</span>
-                  <select
-                    value={providerEffort}
-                    onChange={(event) => {
-                      const effort = event.target.value as NodeSlideReasoningEffort;
-                      setProviderEffort(effort);
-                      window.localStorage.setItem('nodeslide.agent-effort', effort);
-                    }}
-                    aria-label="Reasoning effort"
-                    data-testid="ai-effort-select"
-                  >
-                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
-                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
-                    ).map((effort) => (
-                      <option key={effort.id} value={effort.id}>
-                        {effort.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setConnectionsOpen(true)}
-                aria-label="Connect BYOK model or coding agent"
-                title="Connect BYOK model or coding agent"
-                data-testid="ai-connect-agent"
-              >
-                <PlugZap size={12} /> Connect
-              </button>
-              <button
-                type="button"
-                className={webResearch ? 'is-active' : ''}
-                aria-pressed={webResearch}
-                onClick={() => {
-                  setWebResearch((enabled) => !enabled);
-                }}
-                data-testid="ai-web-research-toggle"
-                title="Search the web and persist source snapshots before planning"
-              >
-                <Globe2 size={12} /> Web
-              </button>
-              {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
-                <button
-                  type="button"
-                  className={useMemoryForRun ? 'is-active' : ''}
-                  onClick={() => setMemoryOpen(true)}
-                  aria-label="Manage deck memory"
-                  aria-pressed={useMemoryForRun}
-                  data-testid="ai-memory"
-                  title="Manage durable deck memory"
-                >
-                  <Brain size={12} /> Memory
-                  {memories.length ? ` ${activeMemoryCount}` : ''}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => openTokenMenu('@')}
-                disabled={references.length === 0}
-                aria-label="Add read context reference"
-                title="Add read context"
-              >
-                <AtSign size={12} /> Context
-              </button>
-              <button
-                type="button"
-                onClick={() => openTokenMenu('/')}
-                aria-label="Add command"
-                title="Add command"
-              >
-                <Command size={12} /> Insert
-              </button>
-              {onAttachDataFile ? (
-                <>
-                  <input
-                    ref={attachmentInputRef}
-                    className="ns-sr-only"
-                    type="file"
-                    accept=".csv,.json,.txt,text/csv,application/json,text/plain"
-                    data-testid="ai-data-file-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      event.currentTarget.value = '';
-                      if (file) void attachDataFile(file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={attachmentBusy}
-                    aria-label="Attach data file"
-                    title="Attach CSV, JSON, or text data"
-                    data-testid="ai-attach-data"
-                  >
-                    {attachmentBusy ? (
-                      <LoaderCircle className="ns-spin" size={12} />
-                    ) : (
-                      <Paperclip size={12} />
-                    )}{' '}
-                    Data
-                  </button>
-                </>
-              ) : null}
-              <span>
-                {requestedReadContext.length > 0
-                  ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
-                  : 'Scoped context'}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="ns-ai-v3-expand-composer"
-              onClick={() => setComposerExpanded((expanded) => !expanded)}
+        {/* NodeSlidePromptComposer renders the public agent-operability hooks
+            data-testid="ai-model-select" and data-testid="ai-data-file-input". */}
+        <NodeSlidePromptComposer
+          allowAttachments={Boolean(onAttachDataFile)}
+          attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
+          attachmentInputTestId="ai-data-file-input"
+          attachmentMaxFiles={1}
+          attachButtonTestId="ai-attach-data"
+          attachLabel="Attach data file"
+          composerClassName="ns-ai-v3-prompt"
+          disabled={!instruction.trim() || isSubmitting || attachmentBusy || !providerReady}
+          effort={providerEffort}
+          effortLabel="Reasoning effort"
+          effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+            nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
+          )}
+          effortTestId="ai-effort-select"
+          footerStatus={
+            requestedReadContext.length > 0
+              ? `${requestedReadContext.length} explicit reference${
+                  requestedReadContext.length === 1 ? '' : 's'
+                }`
+              : 'Scoped context'
+          }
+          model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+          modelLabel="Agent model"
+          modelTestId="ai-model-select"
+          onAttachmentError={setAttachmentError}
+          onEffortChange={(effort) => {
+            setProviderEffort(effort);
+            window.localStorage.setItem('nodeslide.agent-effort', effort);
+            setProviderConsent(false);
+          }}
+          onModelChange={chooseProviderModel}
+          onSubmit={({ text, files }) => submit(text, files)}
+          onTextareaKeyDown={handleComposerKeyDown}
+          onTextareaSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
+          onTextChange={updateInstruction}
+          placeholder={
+            commentContext
+              ? 'Address this review comment without resolving it...'
+              : scopeChoice === 'elements'
+                ? 'Make this feel more decisive...'
+                : 'Turn this into a crisp executive story...'
+          }
+          session={composerSession}
+          status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
+          submitLabel="Propose edit"
+          submitContent={<span className="ns-ai-submit-label">Propose</span>}
+          submitTestId="ai-submit"
+          submitTools={
+            <PromptInputButton
               aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
               aria-pressed={composerExpanded}
+              className="ns-ai-v3-expand-composer"
+              onClick={() => setComposerExpanded((expanded) => !expanded)}
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
               <Maximize2 size={14} />
-            </button>
-            <button
-              type="submit"
-              disabled={!instruction.trim() || isSubmitting || !providerReady}
-              aria-label="Propose edit"
-              data-testid="ai-submit"
-            >
-              {isSubmitting ? (
-                <LoaderCircle className="ns-spin" size={15} />
-              ) : (
-                <ArrowUp size={15} />
-              )}
-            </button>
+              <span className="ns-ai-tool-label">{composerExpanded ? 'Collapse' : 'Expand'}</span>
+            </PromptInputButton>
+          }
+          textareaAria={{
+            'aria-autocomplete': 'list',
+            'aria-expanded': menuOpen,
+            'aria-haspopup': 'menu',
+            ...(menuOpen ? { 'aria-controls': menuId } : {}),
+          }}
+          textareaId={composerId}
+          textareaLabel="AI instruction"
+          textareaRef={textareaRef}
+          textareaRows={composerExpanded ? 9 : 3}
+          tools={
+            <>
+              <PromptInputButton
+                aria-label="Connect BYOK model or coding agent"
+                className="ns-ai-tool-button"
+                data-testid="ai-connect-agent"
+                onClick={() => setConnectionsOpen(true)}
+                title="Connect BYOK model or coding agent"
+              >
+                <PlugZap size={14} />
+                <span className="ns-ai-tool-label">Connect</span>
+              </PromptInputButton>
+              <span style={{ display: 'contents' }}>
+                <PromptInputButton
+                  aria-label="Toggle web research"
+                  className="ns-ai-tool-button"
+                  aria-pressed={webResearch}
+                  data-testid="ai-web-research-toggle"
+                  onClick={() => {
+                    setWebResearch((enabled) => !enabled);
+                    setWebResearchConsent(false);
+                  }}
+                  title="Search the web and persist source snapshots before planning"
+                  variant={webResearch ? 'default' : 'ghost'}
+                >
+                  <Globe2 size={14} />
+                  <span className="ns-ai-tool-label">Web</span>
+                </PromptInputButton>
+              </span>
+              {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
+                <PromptInputButton
+                  aria-label="Manage deck memory"
+                  className="ns-ai-tool-button"
+                  aria-pressed={useMemoryForRun}
+                  data-testid="ai-memory"
+                  onClick={() => setMemoryOpen(true)}
+                  title="Manage durable deck memory"
+                  variant={useMemoryForRun ? 'default' : 'ghost'}
+                >
+                  <Brain size={14} />
+                  <span className="ns-ai-tool-label">Memory</span>
+                  {memories.length ? (
+                    <span className="ns-prompt-badge">{activeMemoryCount}</span>
+                  ) : null}
+                </PromptInputButton>
+              ) : null}
+              <PromptInputButton
+                aria-label="Add read context reference"
+                className="ns-ai-tool-button ns-ai-tool-context"
+                disabled={references.length === 0}
+                onClick={() => openTokenMenu('@')}
+                title="Add read context"
+              >
+                <AtSign size={14} />
+                <span className="ns-ai-tool-label">Context</span>
+              </PromptInputButton>
+              <PromptInputButton
+                aria-label="Add command"
+                className="ns-ai-tool-button ns-ai-tool-command"
+                onClick={() => openTokenMenu('/')}
+                title="Add command"
+              >
+                <Command size={14} />
+                <span className="ns-ai-tool-label">Command</span>
+              </PromptInputButton>
+            </>
+          }
+        />
+
+        {providerMode !== 'deterministic' || webResearch ? (
+          <div className="ns-ai-inline-consent" aria-label="External request consent">
+            {providerMode !== 'deterministic' ? (
+              <label className={providerConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={providerConsent}
+                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  data-testid="ai-provider-consent"
+                />
+                <span>
+                  Allow one {providerNameForMode(providerMode)} request / {selectedAgentModel.label}{' '}
+                  / {nodeSlideNativeEffortLabel(providerEffort)}
+                  <small>
+                    Sends this ask and scoped context
+                    {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
+                    Trace.
+                  </small>
+                </span>
+              </label>
+            ) : null}
+            {webResearch ? (
+              <label className={webResearchConsent ? 'is-ready' : ''}>
+                <input
+                  type="checkbox"
+                  checked={webResearchConsent}
+                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  data-testid="ai-web-research-consent"
+                />
+                <span>
+                  Allow web research for this request
+                  <small>Source URLs and excerpts are saved in Data and Trace.</small>
+                </span>
+              </label>
+            ) : null}
           </div>
-        </div>
+        ) : null}
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
@@ -1481,9 +1521,11 @@ export function AiInspector<CommandId extends string = string>({
           <kbd>↵</kbd> for a new line ·{' '}
           {providerMode === 'deterministic'
             ? 'private deterministic processing'
-            : `${selectedAgentModel.label} · ${effortLabel(providerEffort)} effort`}
+            : providerConsent
+              ? `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent attached`
+              : `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent required`}
         </small>
-      </form>
+      </div>
       <NodeSlideConnectionsDialog
         open={connectionsOpen}
         onClose={() => setConnectionsOpen(false)}
@@ -1504,6 +1546,96 @@ export function AiInspector<CommandId extends string = string>({
       ) : null}
     </div>
   );
+}
+
+function AgentActivityMessage({ message }: { message: NodeSlideAgentMessage }) {
+  const referencedSourceIds = new Set(message.sourceIds ?? []);
+  const resolvedSources = (message.resolvedSources ?? []).filter(
+    (source) =>
+      referencedSourceIds.has(source.id) && isSafeResolvedSource(source.title, source.url),
+  );
+  const resolvedSourceIds = new Set(resolvedSources.map((source) => source.id));
+  const unresolvedSourceCount = [...referencedSourceIds].filter(
+    (sourceId) => !resolvedSourceIds.has(sourceId),
+  ).length;
+  const toolActivity = message.role === 'tool' ? message.toolActivity : undefined;
+  const toolOpen =
+    toolActivity?.state === 'input-streaming' ||
+    toolActivity?.state === 'input-available' ||
+    toolActivity?.state === 'output-error';
+
+  return (
+    <Message
+      className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
+      data-testid={`agent-message-${message.role}`}
+      from={message.role === 'user' ? 'user' : 'assistant'}
+    >
+      {message.role !== 'user' ? (
+        <span className="ns-ai-v3-agent-mark" aria-hidden="true">
+          {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
+        </span>
+      ) : null}
+      <MessageContent>
+        <span className="ns-eyebrow">
+          {message.role === 'user'
+            ? 'You'
+            : message.role === 'tool'
+              ? humanizeToolName(message.toolName)
+              : 'NodeSlide'}
+        </span>
+        {toolActivity && message.toolName ? (
+          <Tool
+            className="ns-ai-v3-tool"
+            data-testid="agent-tool"
+            data-tool-state={toolActivity.state}
+            defaultOpen={toolOpen}
+          >
+            <ToolHeader
+              state={toolActivity.state}
+              title={humanizeToolName(message.toolName)}
+              toolName={message.toolName}
+              type="dynamic-tool"
+            />
+            <ToolContent>
+              <p>{message.content}</p>
+              {toolActivity.input !== undefined ? <ToolInput input={toolActivity.input} /> : null}
+              {toolActivity.output !== undefined || toolActivity.errorText ? (
+                <ToolOutput errorText={toolActivity.errorText} output={toolActivity.output} />
+              ) : null}
+            </ToolContent>
+          </Tool>
+        ) : (
+          <p>{message.content}</p>
+        )}
+        {resolvedSources.length ? (
+          <Sources data-testid="agent-message-sources">
+            <SourcesTrigger count={resolvedSources.length} />
+            <SourcesContent>
+              {resolvedSources.map((source) => (
+                <Source href={source.url} key={source.id} title={source.title} />
+              ))}
+            </SourcesContent>
+          </Sources>
+        ) : null}
+        {unresolvedSourceCount > 0 ? (
+          <small>
+            {unresolvedSourceCount} persisted source snapshot
+            {unresolvedSourceCount === 1 ? '' : 's'}
+          </small>
+        ) : null}
+      </MessageContent>
+    </Message>
+  );
+}
+
+function isSafeResolvedSource(title: string, url: string) {
+  if (!title.trim()) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 function humanizeToolName(toolName?: string) {
@@ -1687,7 +1819,7 @@ function ProposalCard({
       <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
         <div>
           <dt>Write scope</dt>
-          <dd>{scopeEvidence(patch.scope)}</dd>
+          <dd>{nodeSlideScopeLabel(patch.scope)}</dd>
         </div>
         <div>
           <dt>Base</dt>
@@ -1789,7 +1921,7 @@ export function createAiProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
-  effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
+  effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
@@ -1806,7 +1938,7 @@ export function createAiVariationProviderRequest(
   mode: AiProviderMode,
   consentGranted: boolean,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
-  effort: NodeSlideReasoningEffort = NODESLIDE_DEFAULT_REASONING_EFFORT,
+  effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
   if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
@@ -1819,10 +1951,6 @@ export function createAiVariationProviderRequest(
         ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
         : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   };
-}
-
-function effortLabel(effort: NodeSlideReasoningEffort): string {
-  return NODESLIDE_REASONING_EFFORTS.find((candidate) => candidate.id === effort)?.label ?? 'High';
 }
 
 function providerNameForMode(mode: AiProviderMode): string {
@@ -1893,9 +2021,15 @@ function createScope(
   operationMode: OperationMode,
   deckId: string,
   slideId: string,
+  selectedSlideIds: readonly string[],
   selectedElements: readonly SlideElement[],
-): PatchScope {
+): PatchScope | null {
   if (choice === 'deck') return { kind: 'deck', deckId, operationMode };
+  if (choice === 'selected_slides') {
+    const exactSlideIds = [...new Set(selectedSlideIds)];
+    if (exactSlideIds.length < 2 || exactSlideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT) return null;
+    return { kind: 'slide', deckId, slideIds: exactSlideIds, operationMode };
+  }
   if (choice === 'elements') {
     return {
       kind: 'elements',
@@ -2047,19 +2181,6 @@ function defaultSuggestedActions(
       instruction: 'Reduce visual and copy density while preserving the evidence.',
     },
   ];
-}
-
-function scopeEvidence(scope: PatchScope) {
-  if (scope.kind === 'deck') return 'Entire deck';
-  if (scope.kind === 'slide')
-    return `${scope.slideIds.length} slide${scope.slideIds.length === 1 ? '' : 's'}`;
-  if (scope.kind === 'elements') {
-    return `${scope.elementIds.length} element${scope.elementIds.length === 1 ? '' : 's'} on ${
-      scope.slideIds.length
-    } slide${scope.slideIds.length === 1 ? '' : 's'}`;
-  }
-  if (scope.kind === 'bounding_box') return `Bounding box on ${scope.slideIds.length} slide`;
-  return `Comment ${scope.commentId}`;
 }
 
 function baseEvidence(patch: DeckPatch) {

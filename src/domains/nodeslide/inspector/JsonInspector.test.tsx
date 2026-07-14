@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,6 +12,9 @@ import {
   serializeDeckJson,
   synthesizeElementOps,
 } from './JsonInspector';
+
+const inspectorSource = readFileSync(new URL('./JsonInspector.tsx', import.meta.url), 'utf8');
+const studioSource = readFileSync(new URL('../NodeSlideStudio.tsx', import.meta.url), 'utf8');
 
 const now = 1_700_000_000_000;
 
@@ -161,6 +165,26 @@ describe('JsonInspector render', () => {
     expect(html).toContain('deck-1');
     expect(html).toContain('&quot;schemaVersion&quot;');
   });
+
+  it('offers validated JSON and bounded PPTX imports as unapplied proposals', () => {
+    const snap = snapshot();
+    const [slide] = snap.slides;
+    if (!slide) throw new Error('fixture must have a slide');
+    const html = renderToStaticMarkup(
+      <JsonInspector
+        snapshot={snap}
+        slide={slide}
+        selectedElements={[]}
+        patches={[]}
+        onImportSourceFile={async () => 'Import proposed.'}
+      />,
+    );
+
+    expect(html).toContain('Import Deck JSON');
+    expect(html).toContain('Import PPTX');
+    expect(html).toContain('unapplied proposal');
+    expect(html).toContain('native, approximated, and dropped');
+  });
 });
 
 describe('synthesizeElementOps', () => {
@@ -241,7 +265,7 @@ describe('synthesizeElementOps', () => {
 });
 
 describe('JsonInspector editing', () => {
-  it('advertises the validated edit path when onApplyPatch is provided', () => {
+  it('advertises an unapplied candidate and explicit review when editing is enabled', () => {
     const snap = snapshot();
     const [slide] = snap.slides;
     const [element] = snap.elements;
@@ -255,6 +279,25 @@ describe('JsonInspector editing', () => {
         onApplyPatch={() => undefined}
       />,
     );
-    expect(html).toContain('flow through the validated');
+    expect(html).toContain('create a validated candidate');
+    expect(html).toContain('require Accept or Reject');
+    expect(inspectorSource).toContain("'Propose changes'");
+    expect(inspectorSource).toContain('The deck is unchanged; review Compare');
+    expect(inspectorSource).not.toContain("'Apply changes'");
+  });
+
+  it('wires JSON edits only to proposePatch and opens the exact candidate in Compare', () => {
+    const start = studioSource.indexOf('const proposeJsonOperations');
+    const end = studioSource.indexOf('const proposeSourceImport', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const wiring = studioSource.slice(start, end);
+
+    expect(wiring).toContain('proposePatchMutation');
+    expect(wiring).not.toContain('applyPatchMutation');
+    expect(wiring).toContain("receipt.patch.status === 'stale'");
+    expect(wiring).toContain("setCanvasMode('compare')");
+    expect(wiring).toContain('setPreviewedPatchId(receipt.patch.id)');
+    expect(studioSource).toContain('onApplyJsonPatch={proposeJsonOperations}');
   });
 });

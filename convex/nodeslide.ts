@@ -5,12 +5,14 @@ import {
   type DeckComment,
   type DeckPatch,
   type DeckSnapshot,
+  NODESLIDE_AGENT_READ_CONTEXT_LIMITS,
   NODESLIDE_DESIGN_BEHAVIORS,
   NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION,
   NODESLIDE_EDITOR_CAPABILITY_VERSION,
   NODESLIDE_LAYER_OPERATION_VERSION,
   NODESLIDE_PATCH_OPERATION_LIMIT,
   NODESLIDE_REFERENCE_USE_POLICIES,
+  type NodeSlideAgentToolActivity,
   type PatchOperation,
   type PatchScope,
   type PatchSource,
@@ -65,6 +67,7 @@ import {
   nodeSlideDataAttachmentShape,
   normalizeNodeSlideDataAttachment,
 } from './lib/nodeslideDataAttachment';
+import { deleteNodeSlideDeckRows } from './lib/nodeslideDeckDeletion';
 import {
   NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK,
   type NodeSlideExecutionTrace,
@@ -105,6 +108,7 @@ import {
   requireDeckSignatureProfile,
   requireSignatureProfile,
 } from './lib/nodeslideSignatureProfiles';
+import { buildNodeSlideSourceLineage } from './lib/nodeslideSourceLineage';
 import { isNormalizedBoundingBox, validateNodeSlideSnapshot } from './lib/nodeslideValidation';
 import {
   nodeslideBriefAttachmentValidator,
@@ -365,6 +369,15 @@ export const deleteDataSource = mutation({
   },
 });
 
+/** Owner-only, fail-closed erasure of a deck, its private data, and its project shell. */
+export const deleteDeck = mutation({
+  args: { deckId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, { deckId, ownerAccessKey }) => {
+    const deck = await requireOwnerAccess(ctx, deckId, ownerAccessKey);
+    return await deleteNodeSlideDeckRows(ctx, deck);
+  },
+});
+
 export const listAgentRuns = query({
   args: { deckId: v.string(), ownerAccessKey: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -389,9 +402,102 @@ export const listAgentMessages = query({
       .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
       .order('desc')
       .take(limit);
-    return rows.reverse().map(({ _id, _creationTime, ...message }) => message);
+    const [sourceRows, runRows, spanRows] = await Promise.all([
+      ctx.db
+        .query('nodeslide_sources')
+        .withIndex('by_deck', (query) => query.eq('deckId', args.deckId))
+        .collect(),
+      ctx.db
+        .query('nodeslide_agent_runs')
+        .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+        .order('desc')
+        .take(limit),
+      ctx.db
+        .query('nodeslide_agent_spans')
+        .withIndex('by_deck_created', (query) => query.eq('deckId', args.deckId))
+        .order('desc')
+        .take(Math.min(1_600, limit * 8)),
+    ]);
+    const sourcesById = new Map(
+      sourceRows.flatMap((source) => {
+        const resolved = resolvedAgentMessageSource(source);
+        return resolved ? [[source.id, resolved] as const] : [];
+      }),
+    );
+    const runsById = new Map(runRows.map((run) => [run.id, run] as const));
+    const toolSpansByStart = new Map(
+      spanRows.flatMap((span) =>
+        span.toolName
+          ? [[agentMessageToolSpanKey(span.runId, span.toolName, span.startTime), span] as const]
+          : [],
+      ),
+    );
+
+    return rows.reverse().map(({ _id, _creationTime, ...message }) => {
+      const resolvedSources = [...new Set(message.sourceIds ?? [])].flatMap((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return source ? [source] : [];
+      });
+      const toolActivity = projectAgentMessageToolActivity(
+        message,
+        runsById.get(message.runId),
+        message.toolName
+          ? toolSpansByStart.get(
+              agentMessageToolSpanKey(message.runId, message.toolName, message.createdAt),
+            )
+          : undefined,
+      );
+      return {
+        ...message,
+        ...(resolvedSources.length ? { resolvedSources } : {}),
+        ...(toolActivity ? { toolActivity } : {}),
+      };
+    });
   },
 });
+
+function resolvedAgentMessageSource(source: Doc<'nodeslide_sources'>) {
+  const title = source.title.trim();
+  if (!title || !source.url) return null;
+  try {
+    const parsed = new URL(source.url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  } catch {
+    return null;
+  }
+  return { id: source.id, title, url: source.url };
+}
+
+function agentMessageToolSpanKey(runId: string, toolName: string, startTime: number) {
+  return `${runId}\u001f${toolName}\u001f${startTime}`;
+}
+
+function projectAgentMessageToolActivity(
+  message: Pick<Doc<'nodeslide_agent_messages'>, 'createdAt' | 'role' | 'runId' | 'toolName'>,
+  run: Doc<'nodeslide_agent_runs'> | undefined,
+  span: Doc<'nodeslide_agent_spans'> | undefined,
+): NodeSlideAgentToolActivity | undefined {
+  if (message.role !== 'tool' || !message.toolName) return undefined;
+  if (span?.status === 'ok') return { state: 'output-available' };
+  if (span?.status === 'error') {
+    const errorText =
+      run?.status === 'failed' && run.updatedAt === span.endTime ? run.error : undefined;
+    return {
+      state: 'output-error',
+      ...(errorText ? { errorText } : {}),
+    };
+  }
+  const activeStatus =
+    message.toolName === 'web_search'
+      ? 'researching'
+      : message.toolName === 'candidate_validation'
+        ? 'validating'
+        : null;
+  if (run && activeStatus && run.status === activeStatus && run.updatedAt === message.createdAt) {
+    return { state: 'input-available' };
+  }
+  return undefined;
+}
 
 export const listAgentTelemetryPage = query({
   args: {
@@ -2080,6 +2186,27 @@ export const createFromBriefInternal = internalMutation({
   },
 });
 
+async function requireAgentSourceAuthorization(
+  ctx: Pick<MutationCtx, 'db'>,
+  deckId: string,
+  sourceIds: readonly string[],
+): Promise<void> {
+  if (sourceIds.length > NODESLIDE_AGENT_READ_CONTEXT_LIMITS.sourceIds) {
+    throw new Error('Agent source authorization exceeds the bounded read-context limit.');
+  }
+  const rows = await Promise.all(
+    sourceIds.map((sourceId) =>
+      ctx.db
+        .query('nodeslide_sources')
+        .withIndex('by_stable_id', (query) => query.eq('id', sourceId))
+        .unique(),
+    ),
+  );
+  if (rows.some((row) => !row || row.deckId !== deckId || row.status === 'failed')) {
+    throw new Error('Agent source authorization references a source outside this deck.');
+  }
+}
+
 export const proposeAgentPatchInternal = internalMutation({
   args: {
     ...internalAgentPatchArgs,
@@ -2092,6 +2219,10 @@ export const proposeAgentPatchInternal = internalMutation({
     traceSummary: v.string(),
     traceContext: v.array(v.string()),
     toolCalls: v.array(v.string()),
+    sourceBindingPolicy: v.optional(
+      v.union(v.literal('not_applicable'), v.literal('required_external_evidence')),
+    ),
+    authorizedSourceIds: v.optional(v.array(v.string())),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
@@ -2108,6 +2239,12 @@ export const proposeAgentPatchInternal = internalMutation({
     ) {
       throw new Error('Agent trace context is invalid or exceeds bounds.');
     }
+    const sourceLineage = buildNodeSlideSourceLineage({
+      operations: args.operations,
+      authorizedSourceIds: args.authorizedSourceIds ?? [],
+      policy: args.sourceBindingPolicy ?? 'not_applicable',
+    });
+    await requireAgentSourceAuthorization(ctx, args.deckId, args.authorizedSourceIds ?? []);
     const planningBindingsValid =
       /^turn_sha256:[0-9a-f]{64}$/.test(args.planningInputDigest ?? '') &&
       /^snap_sha256:[0-9a-f]{64}$/.test(args.planningSnapshotDigest ?? '');
@@ -2123,6 +2260,35 @@ export const proposeAgentPatchInternal = internalMutation({
       throw new Error('Agent shadow comparison authorization binding is invalid.');
     }
     const proposal = await persistProposal(ctx, { ...args, source: 'agent' });
+    const existingTrace = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_patch', (query) => query.eq('patchId', args.id))
+      .first();
+    if (existingTrace) {
+      if (
+        existingTrace.deckId !== args.deckId ||
+        existingTrace.id !== args.traceId ||
+        existingTrace.patchId !== args.id
+      ) {
+        throw new Error('Agent proposal trace idempotency binding is invalid.');
+      }
+      const hasPersistedSourceLineage =
+        existingTrace.sourceBindingStatus !== undefined ||
+        existingTrace.claimSourceBindings !== undefined;
+      if (
+        hasPersistedSourceLineage &&
+        stableJson({
+          sourceBindingStatus: existingTrace.sourceBindingStatus,
+          claimSourceBindings: existingTrace.claimSourceBindings ?? [],
+        }) !== stableJson(sourceLineage)
+      ) {
+        throw new Error('Agent proposal source-lineage idempotency binding is invalid.');
+      }
+      if (!hasPersistedSourceLineage) {
+        await ctx.db.patch(existingTrace._id, sourceLineage);
+      }
+      return proposal;
+    }
     const now = Date.now();
     const validation = proposal.patch.candidateValidation
       ? validationFromCandidateReceipt(proposal.patch.candidateValidation)
@@ -2155,6 +2321,9 @@ export const proposeAgentPatchInternal = internalMutation({
         'Locked elements are immutable',
         'Fine-grained CAS before commit',
         'No provider secrets persisted',
+        sourceLineage.sourceBindingStatus === 'bound'
+          ? 'Claim-level source bindings verified server-side'
+          : 'No source-grounded factual operation was persisted',
       ],
       ...(args.planningInputDigest ? { planningInputDigest: args.planningInputDigest } : {}),
       ...(args.planningSnapshotDigest
@@ -2172,6 +2341,7 @@ export const proposeAgentPatchInternal = internalMutation({
       ...(args.costMicroUsd !== undefined ? { costMicroUsd: args.costMicroUsd } : {}),
       ...(args.inputTokens !== undefined ? { inputTokens: args.inputTokens } : {}),
       ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
+      ...sourceLineage,
       createdAt: now,
       ...(proposal.patch.status === 'stale' ? { completedAt: now } : {}),
     };
@@ -2502,6 +2672,50 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function proposalReplayMatches(
+  existing: Doc<'nodeslide_patches'>,
+  args: PatchMutationArgs,
+): boolean {
+  return (
+    stableJson({
+      deckId: existing.deckId,
+      baseDeckVersion: existing.baseDeckVersion,
+      baseSlideVersions: existing.baseSlideVersions,
+      baseElementVersions: existing.baseElementVersions,
+      scope: existing.scope,
+      operations: existing.operations,
+      source: existing.source,
+      summary: existing.summary,
+      linkedCommentId: existing.linkedCommentId,
+      traceId: existing.traceId,
+      proposalKind: existing.proposalKind ?? 'edit',
+      parentPatchId: existing.parentPatchId,
+      affectedSlideIds: existing.affectedSlideIds,
+      affectedSlideDigest: existing.affectedSlideDigest,
+      profileId: existing.profileId,
+      profileDigest: existing.profileDigest,
+    }) ===
+    stableJson({
+      deckId: args.deckId,
+      baseDeckVersion: args.baseDeckVersion,
+      baseSlideVersions: args.baseSlideVersions,
+      baseElementVersions: args.baseElementVersions,
+      scope: args.scope,
+      operations: args.operations,
+      source: args.source ?? 'human',
+      summary: args.summary?.trim() || 'Scoped NodeSlide change.',
+      linkedCommentId: args.linkedCommentId,
+      traceId: args.traceId,
+      proposalKind: args.proposalKind ?? 'edit',
+      parentPatchId: args.parentPatchId,
+      affectedSlideIds: args.affectedSlideIds,
+      affectedSlideDigest: args.affectedSlideDigest,
+      profileId: args.profileId,
+      profileDigest: args.profileDigest,
+    })
+  );
+}
+
 async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
@@ -2512,6 +2726,9 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   if (existing) {
     if (existing.deckId !== args.deckId) {
       throw new Error('Patch is unavailable.');
+    }
+    if (!proposalReplayMatches(existing, args)) {
+      throw new Error('Patch idempotency key belongs to a different proposal.');
     }
     return {
       patch: patchFromRow(existing),
@@ -2922,6 +3139,8 @@ async function createWorkspaceRows(
     ...(args.trace.costMicroUsd !== undefined ? { costMicroUsd: args.trace.costMicroUsd } : {}),
     ...(args.trace.inputTokens !== undefined ? { inputTokens: args.trace.inputTokens } : {}),
     ...(args.trace.outputTokens !== undefined ? { outputTokens: args.trace.outputTokens } : {}),
+    sourceBindingStatus: 'not_applicable',
+    claimSourceBindings: [],
     createdAt: now,
     completedAt: now,
   });

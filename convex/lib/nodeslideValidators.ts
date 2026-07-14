@@ -563,6 +563,7 @@ export const nodeslideAgentModelValidator = v.union(
   v.literal('anthropic/claude-fable-5'),
   v.literal('google/gemini-3.5-flash'),
   v.literal('google/gemini-3.1-pro-preview'),
+  v.literal('openai/gpt-5.6-luna'),
   v.literal('openai/gpt-5.6-sol'),
   v.literal('openai/gpt-5.6-terra'),
 );
@@ -808,6 +809,21 @@ export const nodeslideDeckReplCommandValidator = v.union(
     operations: v.array(nodeslidePatchOperationValidator),
   }),
 );
+
+export const nodeslideSourceBindingStatusValidator = v.union(
+  v.literal('bound'),
+  v.literal('not_applicable'),
+  v.literal('legacy_unavailable'),
+);
+
+export const nodeslideClaimSourceBindingValidator = v.object({
+  operationIndex: v.number(),
+  operation: v.union(v.literal('replace_text'), v.literal('update_chart')),
+  slideId: v.string(),
+  elementId: v.string(),
+  sourceIds: v.array(v.string()),
+  claimDigest: v.string(),
+});
 
 export const nodeslidePatchStatusValidator = v.union(
   v.literal('draft'),

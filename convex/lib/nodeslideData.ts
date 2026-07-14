@@ -211,6 +211,8 @@ export function traceFromRow(row: Doc<'nodeslide_traces'>): AgentTrace {
     ...(row.costMicroUsd !== undefined ? { costMicroUsd: row.costMicroUsd } : {}),
     ...(row.inputTokens !== undefined ? { inputTokens: row.inputTokens } : {}),
     ...(row.outputTokens !== undefined ? { outputTokens: row.outputTokens } : {}),
+    sourceBindingStatus: row.sourceBindingStatus ?? 'legacy_unavailable',
+    claimSourceBindings: row.claimSourceBindings ?? [],
     createdAt: row.createdAt,
     ...(row.completedAt !== undefined ? { completedAt: row.completedAt } : {}),
   };

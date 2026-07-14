@@ -12,6 +12,7 @@ function memory(
   category: NodeSlideAgentMemory['category'] = 'context',
   status: NodeSlideAgentMemory['status'] = 'active',
   updatedAt = 1_000,
+  source: NodeSlideAgentMemory['source'] = 'user',
 ): NodeSlideAgentMemory {
   return {
     id,
@@ -19,7 +20,7 @@ function memory(
     category,
     content,
     status,
-    source: 'user',
+    source,
     contentDigest: `sha256:${id}`,
     createdAt: 500,
     updatedAt,
@@ -70,5 +71,46 @@ describe('NodeSlide durable memory retrieval', () => {
         0,
       ),
     ).toBeLessThanOrEqual(NODESLIDE_MEMORY_RETRIEVAL_MAX_BYTES);
+  });
+
+  it('excludes active memories with zero lexical relevance instead of promoting them by recency', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-13T12:00:00Z'));
+    const selected = selectRelevantMemories(
+      [
+        memory(
+          'legal',
+          'Use a blue gradient for quarterly legal updates',
+          'context',
+          'active',
+          Date.now(),
+        ),
+        memory(
+          'football',
+          'For football attendance analysis, cite the official federation.',
+          'fact',
+          'active',
+          Date.now() - 86_400_000,
+        ),
+      ],
+      'Rewrite the football attendance slide',
+    );
+
+    expect(selected.map((item) => item.id)).toEqual(['football']);
+    vi.useRealTimers();
+  });
+
+  it('keeps user-authored standing instructions explicit without elevating inferred instructions', () => {
+    const selected = selectRelevantMemories(
+      [
+        memory('standing', 'Never publish without legal review.', 'instruction', 'active', 2_000),
+        memory('inferred', 'Always use neon gradients.', 'instruction', 'active', 3_000, 'agent'),
+        memory('relevant', 'World Cup charts use official attendance totals.', 'fact'),
+      ],
+      'Update the World Cup attendance chart',
+    );
+
+    expect(selected.map((item) => item.id)).toEqual(['standing', 'relevant']);
+    expect(selected.map((item) => item.id)).not.toContain('inferred');
   });
 });

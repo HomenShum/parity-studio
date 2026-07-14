@@ -1,5 +1,6 @@
 import type { DeckSnapshot } from '../../../../shared/nodeslide';
 import { renderDeckHtml } from './html';
+import { exportNodeSlideJson } from './jsonSpec';
 import { buildPptx } from './pptx';
 import type { PptxBinary } from './types';
 
@@ -47,8 +48,16 @@ export function downloadDeckHtml(snapshot: DeckSnapshot, fileName?: string): voi
 }
 
 export function downloadDeckJson(snapshot: DeckSnapshot, fileName?: string): void {
+  const exported = exportNodeSlideJson(snapshot);
+  if (!exported.ok) {
+    throw new Error(
+      `Deck JSON export failed validation: ${exported.issues.map((issue) => `${issue.path}: ${issue.message}`).join(' ')}`,
+    );
+  }
   downloadBlob(
-    new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json;charset=utf-8' }),
+    new Blob([`${exported.json}\n`], {
+      type: 'application/json;charset=utf-8',
+    }),
     fileName ?? `${safeFileStem(snapshot.deck.title)}.json`,
   );
 }

@@ -1,34 +1,258 @@
-name: Quality
+name: Release gates
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer main push must never cancel an in-flight backend/frontend cutover.
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   quality:
+    name: Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       # Build-time shape only. CI must never inherit a writable production endpoint.
       VITE_CONVEX_URL: https://ci-placeholder.convex.cloud
-      VITE_CONVEX_SITE_URL: https://ci-placeholder.convex.site
+      VITE_CONVEX_SITE_URL: https://stale-ci-placeholder.convex.site
+      PARITY_SOURCE_SHA: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 10.33.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm qa:manifest
       - run: pnpm test
       - run: pnpm exec tsc -p convex/tsconfig.json --noEmit
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
+      - run: pnpm check:built-runtime-source -- dist/runtime-source.json "$GITHUB_SHA"
       - run: pnpm audit --prod
+
+  deploy_preview:
+    name: Deploy isolated preview
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: preview
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+      PARITY_CONVEX_PREVIEW_NAME: qa-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Require isolated-preview credentials
+        shell: bash
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          if [[ ! "$CONVEX_DEPLOY_KEY" =~ ^preview:[^:\|[:space:]]+:[^:\|[:space:]]+\|[^[:space:]]+$ ]]; then
+            echo "CONVEX_PREVIEW_DEPLOY_KEY is missing or is not a preview deploy key." >&2
+            exit 1
+          fi
+      - name: Pull preview project settings
+        run: >-
+          pnpm dlx vercel@56.1.0 pull --yes --environment=preview
+          --git-branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --token="$VERCEL_TOKEN"
+      - id: deploy
+        name: Deploy frontend plus isolated Convex preview
+        shell: bash
+        run: |
+          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force \
+            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+            --build-env PARITY_CONVEX_DEPLOY_MODE=preview \
+            --build-env PARITY_CONVEX_PREVIEW_NAME="$PARITY_CONVEX_PREVIEW_NAME" \
+            --build-env CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY" \
+            --token="$VERCEL_TOKEN")"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+  preview_source_alignment:
+    name: Preview runtime identity
+    needs: deploy_preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Require the protected-preview bypass
+        run: test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+      - name: Verify preview frontend and Convex source alignment
+        run: >-
+          node scripts/check-runtime-source.mjs
+          --frontend "${{ needs.deploy_preview.outputs.url }}"
+          --expected-sha "$GITHUB_SHA" --attempts 12 --delay-ms 5000
+
+  e2e_ui_qa:
+    name: E2E / UI QA
+    needs: [deploy_preview, preview_source_alignment]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ needs.deploy_preview.outputs.url }}
+      NODESLIDE_E2E_MUTATIONS: "1"
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Require the protected-preview bypass
+        run: test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm qa:manifest
+      # Mutation coverage cannot start until preview_source_alignment is green.
+      - run: pnpm test:e2e
+      - name: Upload Playwright screenshots and reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            playwright-report/
+            test-results/
+
+  stage_production:
+    name: Stage production frontend (no backend side effects)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: e2e_ui_qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Require Vercel staging credentials
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+      - name: Pull production project settings
+        run: >-
+          pnpm dlx vercel@56.1.0 pull --yes --environment=production
+          --token="$VERCEL_TOKEN"
+      - id: deploy
+        name: Build staged frontend without deploying Convex
+        shell: bash
+        run: |
+          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force --prod --skip-domain \
+            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+            --build-env PARITY_CONVEX_DEPLOY_MODE=frontend-only \
+            --token="$VERCEL_TOKEN")"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+  final_cutover:
+    name: Approve and cut over production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [stage_production, e2e_ui_qa]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PRODUCTION_DEPLOY_KEY }}
+      NODESLIDE_EXPECTED_CREATION_MODE: ${{ vars.NODESLIDE_EXPECTED_CREATION_MODE }}
+      PRODUCTION_FRONTEND_URL: ${{ vars.PRODUCTION_FRONTEND_URL }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Require final-cutover configuration
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          test -n "$CONVEX_DEPLOY_KEY"
+          test -n "$NODESLIDE_EXPECTED_CREATION_MODE"
+          test -n "$PRODUCTION_FRONTEND_URL"
+      - run: pnpm install --frozen-lockfile
+      - name: Preflight OAuth and intended creation mode without exposing values
+        run: >-
+          pnpm exec node scripts/check-runtime-source-env.mjs
+          --expected-creation-mode "$NODESLIDE_EXPECTED_CREATION_MODE"
+      - name: Deploy the approved source to live Convex
+        run: >-
+          pnpm exec convex deploy --typecheck disable
+          --message "source ${GITHUB_SHA:0:12}"
+      - name: Bind live Convex runtime identity
+        run: pnpm exec convex env set RUNTIME_SOURCE_SHA "$GITHUB_SHA"
+      - name: Verify staged frontend against the cut-over backend
+        run: >-
+          node scripts/check-runtime-source.mjs
+          --frontend "${{ needs.stage_production.outputs.url }}"
+          --expected-sha "$GITHUB_SHA" --attempts 12 --delay-ms 2000
+      - name: Promote only the aligned staged frontend
+        run: >-
+          pnpm dlx vercel@56.1.0 promote "${{ needs.stage_production.outputs.url }}"
+          --yes --token="$VERCEL_TOKEN"
+      - name: Verify canonical production alignment after promotion
+        run: >-
+          node scripts/check-runtime-source.mjs
+          --frontend "$PRODUCTION_FRONTEND_URL"
+          --expected-sha "$GITHUB_SHA" --attempts 12 --delay-ms 5000
+      - name: Release smoke asserts OAuth and intended creation mode
+        run: >-
+          pnpm exec node scripts/check-runtime-source-env.mjs
+          --expected-creation-mode "$NODESLIDE_EXPECTED_CREATION_MODE"

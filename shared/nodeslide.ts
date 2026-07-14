@@ -25,7 +25,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'balanced',
     bestFor: 'Long, structured deck work',
     supportsTemperature: true,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
   },
   {
     id: 'anthropic/claude-sonnet-5',
@@ -49,7 +49,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Complex planning and review',
     supportsTemperature: false,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high'],
   },
   {
     id: 'google/gemini-3.5-flash',
@@ -61,7 +61,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'fast',
     bestFor: 'Fast iteration and large context',
     supportsTemperature: true,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high'],
   },
   {
     id: 'google/gemini-3.1-pro-preview',
@@ -73,6 +73,18 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Data-heavy analysis',
     supportsTemperature: true,
+    supportedEfforts: ['low', 'medium', 'high'],
+  },
+  {
+    id: 'openai/gpt-5.6-luna',
+    upstreamId: 'openai/gpt-5.6-luna',
+    provider: 'openrouter',
+    vendor: 'OpenAI',
+    label: 'GPT-5.6 Luna',
+    description: 'Fast, economical OpenAI reasoning for responsive slide iteration.',
+    costTier: 'fast',
+    bestFor: 'Fast edits and interactive iteration',
+    supportsTemperature: false,
     supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
@@ -106,14 +118,14 @@ export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'nebius/zai-
 export const NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
 
 export const NODESLIDE_REASONING_EFFORTS = [
-  { id: 'low', label: 'Light', description: 'Faster responses for straightforward work.' },
+  { id: 'low', label: 'Low', description: 'Faster responses for straightforward work.' },
   { id: 'medium', label: 'Medium', description: 'Balanced reasoning for routine deck work.' },
   { id: 'high', label: 'High', description: 'Deeper reasoning for complex edits and synthesis.' },
-  { id: 'xhigh', label: 'Extra High', description: 'More deliberation for difficult decisions.' },
-  { id: 'max', label: 'Ultra', description: 'Maximum reasoning; consumes usage limits faster.' },
+  { id: 'xhigh', label: 'XHigh', description: 'More deliberation for difficult decisions.' },
+  { id: 'max', label: 'Max', description: 'Maximum reasoning; consumes usage limits faster.' },
 ] as const;
 export type NodeSlideReasoningEffort = (typeof NODESLIDE_REASONING_EFFORTS)[number]['id'];
-export const NODESLIDE_DEFAULT_REASONING_EFFORT: NodeSlideReasoningEffort = 'high';
+export const NODESLIDE_DEFAULT_REASONING_EFFORT: NodeSlideReasoningEffort = 'medium';
 
 export function isNodeSlideReasoningEffort(value: unknown): value is NodeSlideReasoningEffort {
   return NODESLIDE_REASONING_EFFORTS.some((effort) => effort.id === value);
@@ -122,7 +134,7 @@ export function isNodeSlideReasoningEffort(value: unknown): value is NodeSlideRe
 export function nodeSlideReasoningEffort(effortId: NodeSlideReasoningEffort) {
   return (
     NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === effortId) ??
-    NODESLIDE_REASONING_EFFORTS[2]
+    NODESLIDE_REASONING_EFFORTS[1]
   );
 }
 
@@ -186,6 +198,8 @@ export const NODESLIDE_NEBIUS_VARIATIONS_CONSENT =
 export const NODESLIDE_WEB_RESEARCH_CONSENT = 'nodeslide_web_research_v1' as const;
 /** Exact consent for a local MCP process to send scoped context to a user-selected BYOK model. */
 export const NODESLIDE_LOCAL_BYOK_EDIT_CONSENT = 'nodeslide_local_byok_edit_v1' as const;
+/** Exact consent for an external coding agent to submit already-authored operations for review. */
+export const NODESLIDE_EXTERNAL_AGENT_PATCH_CONSENT = 'nodeslide_external_agent_patch_v1' as const;
 export const NODESLIDE_EDITOR_CAPABILITY_VERSION = 'nodeslide.editor-capabilities/v1' as const;
 export const NODESLIDE_DESIGN_BEHAVIOR_POLICY_VERSION =
   'nodeslide.design-behavior-policy/v1' as const;
@@ -673,6 +687,30 @@ export interface NodeSlideAgentTelemetryPage {
   totalRecorded: number;
 }
 
+export type NodeSlideAgentToolState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'approval-requested'
+  | 'approval-responded'
+  | 'output-available'
+  | 'output-error'
+  | 'output-denied';
+
+/** Query-projected lifecycle backed only by durable run/span records. */
+export interface NodeSlideAgentToolActivity {
+  state: NodeSlideAgentToolState;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+}
+
+/** A source link is exposed to activity UI only after both fields resolve. */
+export interface NodeSlideAgentResolvedSource {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export interface NodeSlideAgentMessage {
   id: string;
   deckId: string;
@@ -681,6 +719,8 @@ export interface NodeSlideAgentMessage {
   content: string;
   toolName?: string;
   sourceIds?: string[];
+  toolActivity?: NodeSlideAgentToolActivity;
+  resolvedSources?: NodeSlideAgentResolvedSource[];
   createdAt: number;
 }
 
@@ -757,6 +797,18 @@ export interface DeckVersion {
   createdAt: number;
 }
 
+export type NodeSlideSourceBindingStatus = 'bound' | 'not_applicable' | 'legacy_unavailable';
+
+/** Immutable element-level evidence binding for one factual candidate operation. */
+export interface NodeSlideClaimSourceBinding {
+  operationIndex: number;
+  operation: 'replace_text' | 'update_chart';
+  slideId: string;
+  elementId: string;
+  sourceIds: string[];
+  claimDigest: string;
+}
+
 export interface AgentTrace {
   id: string;
   deckId: string;
@@ -779,6 +831,10 @@ export interface AgentTrace {
   costMicroUsd?: number;
   inputTokens?: number;
   outputTokens?: number;
+  /** Always hydrated for current API reads; absent only on older serialized clients. */
+  sourceBindingStatus?: NodeSlideSourceBindingStatus;
+  /** Empty for non-factual runs and honestly unavailable on legacy traces. */
+  claimSourceBindings?: NodeSlideClaimSourceBinding[];
   createdAt: number;
   completedAt?: number;
 }

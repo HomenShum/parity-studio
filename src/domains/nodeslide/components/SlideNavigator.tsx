@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -19,19 +20,21 @@ import {
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  useEffect,
   useId,
   useMemo,
   useState,
 } from 'react';
-import type {
-  DeckComment,
-  DeckPatch,
-  Slide,
-  SlideElement,
-  SourceRecord,
-  ThemeSpec,
-  ValidationIssue,
-  ValidationResult,
+import {
+  type DeckComment,
+  type DeckPatch,
+  NODESLIDE_SCOPE_SLIDE_LIMIT,
+  type Slide,
+  type SlideElement,
+  type SourceRecord,
+  type ThemeSpec,
+  type ValidationIssue,
+  type ValidationResult,
 } from '../../../../shared/nodeslide';
 import './editorShell.css';
 import { SlideRenderer } from './SlideRenderer';
@@ -62,6 +65,9 @@ export interface SlideNavigatorProps {
   onDuplicateSlide: (slideId: string) => void;
   onDeleteSlide: (slideId: string) => void;
   onReorderSlide: (slideId: string, index: number) => void;
+
+  selectedSlideIds?: readonly string[];
+  onSelectedSlideIdsChange?: (slideIds: string[]) => void;
 
   /** Controlled rail view. It defaults to Slides only for the legacy studio call site. */
   activeTab?: SlideNavigatorTab;
@@ -108,6 +114,8 @@ export function SlideNavigator({
   onDuplicateSlide,
   onDeleteSlide,
   onReorderSlide,
+  selectedSlideIds = [],
+  onSelectedSlideIdsChange,
   activeTab = 'slides',
   onTabChange,
   onRenameSlide,
@@ -159,6 +167,7 @@ export function SlideNavigator({
   );
   const collapsedSectionSet = useMemo(() => new Set(collapsedSections), [collapsedSections]);
   const propagationSet = useMemo(() => new Set(propagationSlideIds), [propagationSlideIds]);
+  const selectedSlideSet = useMemo(() => new Set(selectedSlideIds), [selectedSlideIds]);
   const activeSlide = slides.find((slide) => slide.id === activeSlideId);
   const activeLayers = activeSlide
     ? activeSlide.elementOrder.flatMap((elementId) => {
@@ -171,6 +180,35 @@ export function SlideNavigator({
   const canUngroupSelection = activeSelection.some((elementId) =>
     Boolean(elementGroupIds[elementId] ?? elementsById.get(elementId)?.groupId),
   );
+
+  useEffect(() => {
+    if (!onSelectedSlideIdsChange) return;
+    const normalized = normalizeSelectedSlideIds(
+      slides.map((slide) => slide.id),
+      selectedSlideIds,
+    );
+    if (!sameIds(normalized, selectedSlideIds)) onSelectedSlideIdsChange(normalized);
+  }, [onSelectedSlideIdsChange, selectedSlideIds, slides]);
+
+  const toggleSlideSelection = (slideId: string) => {
+    if (!onSelectedSlideIdsChange) return;
+    onSelectedSlideIdsChange(
+      toggleBoundedSlideSelection(
+        slides.map((slide) => slide.id),
+        selectedSlideIds,
+        slideId,
+      ),
+    );
+  };
+
+  const activateOrToggleSlide = (event: ReactMouseEvent<HTMLButtonElement>, slideId: string) => {
+    if ((event.metaKey || event.ctrlKey) && onSelectedSlideIdsChange) {
+      event.preventDefault();
+      toggleSlideSelection(slideId);
+      return;
+    }
+    onSelectSlide(slideId);
+  };
 
   const statusContext: StatusContext = {
     comments,
@@ -210,11 +248,19 @@ export function SlideNavigator({
           <button
             type="button"
             key={slide.id}
-            className={slide.id === activeSlideId ? 'is-active' : ''}
-            aria-label={`Go to slide ${index + 1}: ${slide.title}`}
-            onClick={() => onSelectSlide(slide.id)}
+            className={`${slide.id === activeSlideId ? 'is-active' : ''} ${
+              selectedSlideSet.has(slide.id) ? 'is-multi-selected' : ''
+            }`}
+            aria-label={`Go to slide ${index + 1}: ${slide.title}${
+              selectedSlideSet.has(slide.id) ? ', selected for multi-slide editing' : ''
+            }`}
+            aria-pressed={selectedSlideSet.has(slide.id)}
+            onClick={(event) => activateOrToggleSlide(event, slide.id)}
           >
             {index + 1}
+            {selectedSlideSet.has(slide.id) ? (
+              <Check className="ns-slide-selection-marker" size={10} aria-hidden="true" />
+            ) : null}
             {propagationSet.has(slide.id) ? (
               <span className="ns-propagation-dot" aria-label="Affected by propagation preview" />
             ) : null}
@@ -280,10 +326,14 @@ export function SlideNavigator({
                         );
                         const slideElements = elementsBySlide.get(slide.id) ?? [];
                         const active = slide.id === activeSlideId;
+                        const selectedForMultiEdit = selectedSlideSet.has(slide.id);
                         const statusTokens = statusesForSlide(slide, slideElements, statusContext);
                         return (
                           <div
-                            className={`ns-slide-row ${active ? 'is-active' : ''} ${draggingId === slide.id ? 'is-dragging' : ''}`}
+                            className={`ns-slide-row ${active ? 'is-active' : ''} ${
+                              selectedForMultiEdit ? 'is-multi-selected' : ''
+                            } ${draggingId === slide.id ? 'is-dragging' : ''}`}
+                            data-multi-selected={selectedForMultiEdit ? 'true' : 'false'}
                             key={slide.id}
                             draggable
                             onDragStart={(event) => handleDragStart(event, slide.id, setDraggingId)}
@@ -299,18 +349,37 @@ export function SlideNavigator({
                           >
                             <span className="ns-slide-number">
                               {String(slideIndex + 1).padStart(2, '0')}
+                              {selectedForMultiEdit ? (
+                                <Check
+                                  className="ns-slide-selection-marker"
+                                  size={10}
+                                  aria-hidden="true"
+                                />
+                              ) : null}
                             </span>
                             <button
                               className="ns-thumbnail-button"
                               type="button"
                               aria-current={active ? 'page' : undefined}
-                              aria-label={`Slide ${slideIndex + 1}: ${slide.title}`}
+                              aria-label={`Slide ${slideIndex + 1}: ${slide.title}${
+                                selectedForMultiEdit ? ', selected for multi-slide editing' : ''
+                              }`}
+                              aria-pressed={selectedForMultiEdit}
                               data-testid={`slide-thumbnail-${slide.id}`}
-                              onClick={() => onSelectSlide(slide.id)}
+                              onClick={(event) => activateOrToggleSlide(event, slide.id)}
                               onDoubleClick={() => onRenameSlide?.(slide.id, slide.title)}
-                              onKeyDown={(event) =>
-                                handleRenameKeyDown(event, slide, onRenameSlide)
-                              }
+                              onKeyDown={(event) => {
+                                if (
+                                  handleSlideSelectionKeyDown(
+                                    event,
+                                    slide.id,
+                                    onSelectedSlideIdsChange,
+                                    toggleSlideSelection,
+                                  )
+                                )
+                                  return;
+                                handleRenameKeyDown(event, slide, onRenameSlide);
+                              }}
                               title={
                                 onRenameSlide
                                   ? `${slide.title} (double-click or press F2 to rename)`
@@ -328,11 +397,21 @@ export function SlideNavigator({
                               <button
                                 className="ns-slide-title-button"
                                 type="button"
-                                onClick={() => onSelectSlide(slide.id)}
+                                aria-pressed={selectedForMultiEdit}
+                                onClick={(event) => activateOrToggleSlide(event, slide.id)}
                                 onDoubleClick={() => onRenameSlide?.(slide.id, slide.title)}
-                                onKeyDown={(event) =>
-                                  handleRenameKeyDown(event, slide, onRenameSlide)
-                                }
+                                onKeyDown={(event) => {
+                                  if (
+                                    handleSlideSelectionKeyDown(
+                                      event,
+                                      slide.id,
+                                      onSelectedSlideIdsChange,
+                                      toggleSlideSelection,
+                                    )
+                                  )
+                                    return;
+                                  handleRenameKeyDown(event, slide, onRenameSlide);
+                                }}
                                 title={
                                   onRenameSlide
                                     ? `${slide.title} (double-click or press F2 to rename)`
@@ -378,6 +457,26 @@ export function SlideNavigator({
                             </button>
                             {menuSlideId === slide.id ? (
                               <div className="ns-popover ns-slide-menu" role="menu">
+                                {onSelectedSlideIdsChange ? (
+                                  <button
+                                    type="button"
+                                    role="menuitemcheckbox"
+                                    aria-checked={selectedForMultiEdit}
+                                    disabled={
+                                      !selectedForMultiEdit &&
+                                      selectedSlideIds.length >= NODESLIDE_SCOPE_SLIDE_LIMIT
+                                    }
+                                    onClick={() => {
+                                      setMenuSlideId(null);
+                                      toggleSlideSelection(slide.id);
+                                    }}
+                                  >
+                                    <Check size={14} />
+                                    {selectedForMultiEdit
+                                      ? 'Remove from multi-slide edit'
+                                      : 'Select for multi-slide edit'}
+                                  </button>
+                                ) : null}
                                 {onRenameSlide ? (
                                   <button
                                     type="button"
@@ -444,6 +543,31 @@ export function SlideNavigator({
                 );
               })}
             </div>
+            {onSelectedSlideIdsChange ? (
+              <output
+                className={`ns-slide-selection-summary ${
+                  selectedSlideIds.length > 0 ? 'has-selection' : ''
+                }`}
+                aria-live="polite"
+              >
+                {selectedSlideIds.length > 0 ? (
+                  <>
+                    <span>
+                      <strong>{selectedSlideIds.length} selected</strong>
+                      <small>Bounded AI write scope</small>
+                    </span>
+                    <button type="button" onClick={() => onSelectedSlideIdsChange([])}>
+                      Clear
+                    </button>
+                  </>
+                ) : (
+                  <span>
+                    <strong>Multi-slide edit</strong>
+                    <small>Ctrl/⌘-click slides, or use the slide actions menu.</small>
+                  </span>
+                )}
+              </output>
+            ) : null}
             <div className="ns-navigator-footer">
               <button
                 className="ns-add-slide-button"
@@ -963,6 +1087,46 @@ function selectLayer(
       ? selectedElementIds.filter((id) => id !== elementId)
       : [...selectedElementIds, elementId],
   );
+}
+
+export function normalizeSelectedSlideIds(
+  slideOrder: readonly string[],
+  selectedSlideIds: readonly string[],
+): string[] {
+  const selected = new Set(selectedSlideIds);
+  return slideOrder
+    .filter((slideId) => selected.has(slideId))
+    .slice(0, NODESLIDE_SCOPE_SLIDE_LIMIT);
+}
+
+export function toggleBoundedSlideSelection(
+  slideOrder: readonly string[],
+  selectedSlideIds: readonly string[],
+  slideId: string,
+): string[] {
+  const normalized = normalizeSelectedSlideIds(slideOrder, selectedSlideIds);
+  if (!slideOrder.includes(slideId)) return normalized;
+  if (normalized.includes(slideId)) return normalized.filter((id) => id !== slideId);
+  if (normalized.length >= NODESLIDE_SCOPE_SLIDE_LIMIT) return normalized;
+  return normalizeSelectedSlideIds(slideOrder, [...normalized, slideId]);
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
+function handleSlideSelectionKeyDown(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  slideId: string,
+  onSelectionChange: SlideNavigatorProps['onSelectedSlideIdsChange'],
+  onToggle: (slideId: string) => void,
+): boolean {
+  if (!onSelectionChange || (!event.metaKey && !event.ctrlKey)) return false;
+  if (event.key !== 'Enter' && event.key !== ' ') return false;
+  event.preventDefault();
+  event.stopPropagation();
+  onToggle(slideId);
+  return true;
 }
 
 function handleDragStart(

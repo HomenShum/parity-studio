@@ -69,6 +69,7 @@ export function nodeSlideEditTurnInputDigest(input: {
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
   memories?: readonly { id: string; contentDigest: string }[];
+  requireFactualSourceBindings?: boolean;
 }): string {
   return `turn_${nodeslideContentDigest(stableSerialize(input))}`;
 }

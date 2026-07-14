@@ -5,6 +5,9 @@ NodeSlide’s MCP server is a second front door to the same governed actions as 
 ## What stays invariant
 
 - External model and web egress require explicit consent on every task.
+- Client config, environment variables, saved keys, model selection, and tool defaults never grant
+  consent. External calls accept only a literal `consent: true` supplied for that exact call after
+  user approval; deterministic calls omit it.
 - `nodeslide.propose_edit` returns an unapplied proposal and candidate receipt. It verifies the deck version did not change.
 - `nodeslide.accept_proposal` is a separate review action and revalidates candidate digest, scope, locks, and version clocks.
 - Owner authority and quota are enforced in Convex, not trusted to the MCP client.
@@ -57,9 +60,24 @@ NODESLIDE_BYOK_MODEL = "z-ai/glm-5.2"
 
 Use `npx.cmd` as the command on Windows. In Codex, `/mcp` shows connected servers and tool state.
 
-The production tarball is pinned instead of using npm `latest`, so a copied config cannot silently
-resolve to an older MCP server. Verify it with
+The in-app config remains pinned to the already-deployed v0.4.0 archive instead of using npm
+`latest`; this interoperability port intentionally does not check in a new package archive. Verify
+that deployed archive with
 [`parity-studio-mcp-0.4.0.sha256`](../public/downloads/parity-studio-mcp-0.4.0.sha256).
+
+The v0.5.0 source in this repository adds the snapshot, element, spec-export, and exact-patch tools
+listed below. Until that version is published, build it from a trusted checkout and point the MCP
+client at the absolute `mcp/dist/index.js` path:
+
+```bash
+pnpm --dir mcp install --frozen-lockfile
+pnpm --dir mcp build
+node /absolute/path/to/parity-studio/mcp/dist/index.js
+```
+
+For a source build, set the MCP `command` to `node` and `args` to the single absolute path above;
+keep the same environment and write-approval settings. Publishing v0.5.0 is a release operation,
+not part of this source port.
 
 ## Provider routing
 
@@ -68,18 +86,24 @@ resolve to an older MCP server. Verify it with
 - OpenAI direct: model such as `openai/gpt-5.4` plus `OPENAI_API_KEY`.
 - OpenAI-compatible/local endpoint: set `NODESLIDE_BYOK_BASE_URL`, an OpenAI model id, and the endpoint’s key if required.
 
-Key presence never grants consent. The MCP call must still set `consent: true` for that single external task.
+Key presence never grants consent. Neither copied config nor a prior call stores consent. After the
+user approves the exact external task, that MCP call must set literal `consent: true`; the next task
+starts unconsented. Deterministic calls do not need or carry consent.
 
-## Tools
+## v0.5.0 source tools
 
 | Tool | Effect |
 | --- | --- |
 | `nodeslide.byok_status` | Read-only key-presence check; values never returned |
 | `nodeslide.get_deck` | Read-only structured deck summary + receipt |
+| `nodeslide.get_snapshot` | Read-only canonical snapshot with version clocks |
+| `nodeslide.list_elements` | Bounded, paginated structured element listing |
+| `nodeslide.export_spec` | Versioned `nodeslide.deck-snapshot` JSON envelope |
 | `nodeslide.list_slides` | Read-only slides and version clocks |
 | `nodeslide.get_trace` | Read-only model/cost/token/digest/validation trace |
 | `nodeslide.list_versions` | Read-only immutable version history |
 | `nodeslide.propose_edit` | Local BYOK, hosted, or deterministic planning; always unapplied |
+| `nodeslide.propose_patch` | Exact external-agent typed patch; validated and always unapplied |
 | `nodeslide.accept_proposal` | Explicit reviewed commit to a new version |
 | `nodeslide.reject_proposal` | Rejects proposal; deck unchanged |
 | `nodeslide.upload_source` | Bounded private source ingestion with server digest |
@@ -91,10 +115,11 @@ Key presence never grants consent. The MCP call must still set `consent: true` f
 ```text
 1. Call nodeslide.get_deck with deckId.
 2. Call nodeslide.list_slides and choose slide_1.
-3. Call nodeslide.propose_edit with execution="byok", scope="slide",
+3. Show the user the provider/model and the exact task context, then obtain approval for this call.
+4. Call nodeslide.propose_edit with execution="byok", scope="slide",
    slideId="slide_1", consent=true, and an explicit instruction.
-4. Inspect candidateReceipt and nodeslide.get_trace.
-5. Stop for human review. Do not call accept_proposal unless the user explicitly approves.
+5. Inspect candidateReceipt and nodeslide.get_trace.
+6. Stop for human review. Do not call accept_proposal unless the user explicitly approves.
 ```
 
 The proposal response includes `applied: false` and identical before/after deck versions. A mismatch fails closed as a governance violation.

@@ -1,3 +1,7 @@
+@layer nodeslide.tokens, nodeslide.base, nodeslide.editor, nodeslide.inspector, nodeslide.contract;
+
+/* biome-ignore format: Preserve the inspector rules while assigning explicit cascade ownership. */
+@layer nodeslide.inspector {
 .ns-route-pill.is-private {
   background: #edf6ef;
   border-color: #cce4d1;
@@ -461,46 +465,6 @@
   gap: 4px;
   margin-left: 5px;
   padding: 5px 7px;
-}
-
-.ns-inspector-context-summary {
-  min-width: 0;
-}
-
-.ns-inspector-context-chips {
-  display: flex;
-  gap: 4px;
-  margin-top: 3px;
-  min-width: 0;
-}
-
-.ns-inspector-context-chips > span {
-  background: #f1f1ee;
-  border: 1px solid var(--ns-line-soft);
-  border-radius: 999px;
-  color: var(--ns-muted);
-  display: block;
-  font-size: 7px;
-  max-width: 168px;
-  overflow: hidden;
-  padding: 3px 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ns-inspector-context-chips > span.is-selection {
-  background: var(--ns-accent-soft);
-  border-color: #d8d6ff;
-  color: var(--ns-accent-dark);
-}
-
-.ns-inspector-context-chips > span.is-empty {
-  color: var(--ns-faint);
-}
-
-.ns-inspector-collapsed-tabs button.is-active {
-  background: var(--ns-accent-soft);
-  color: var(--ns-accent);
 }
 
 /*
@@ -1575,16 +1539,6 @@
   margin: 0;
 }
 
-.ns-sr-only {
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
 .ns-ai-attachment-error {
   background: color-mix(in srgb, var(--ns-trace-danger) 8%, var(--ns-panel));
   border: 1px solid color-mix(in srgb, var(--ns-trace-danger) 28%, var(--ns-line));
@@ -1597,7 +1551,7 @@
   padding: 7px 9px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1099px) {
   .ns-ai-provider-controls,
   .ns-ai-policy-grid {
     grid-template-columns: 1fr;
@@ -1606,4 +1560,5 @@
   .ns-ai-provider-consent {
     grid-column: auto;
   }
+}
 }

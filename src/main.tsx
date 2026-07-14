@@ -10,6 +10,7 @@ import { convexWsUrl } from './lib/convexEndpoints';
 import { I18nProvider } from './lib/i18n';
 import './styles/tokens.css';
 import './styles.css';
+import './tailwind.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root not found');

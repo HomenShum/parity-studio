@@ -112,6 +112,34 @@ describe('NodeSlide create action admission boundary', () => {
     expect(callNodeSlideFreeJson).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['OpenRouter', 'openrouter_free'],
+    ['Nebius', 'nebius'],
+  ] as const)(
+    'does no provider or database work for an unconsented %s creation request',
+    async (_label, providerMode) => {
+      stubPreviewAdmission();
+      const runMutation = vi.fn();
+
+      await expect(
+        createDeckHandler(
+          { runMutation },
+          {
+            ...createActionArgs(PREVIEW_ACCESS_CODE),
+            providerMode,
+            ...(providerMode === 'nebius'
+              ? { providerModel: 'nebius/zai-org/GLM-5.2' as const }
+              : {}),
+          },
+        ),
+      ).rejects.toMatchObject({
+        data: { kind: 'nodeslide_create', code: 'provider_consent_required' },
+      });
+      expect(runMutation).not.toHaveBeenCalled();
+      expect(callNodeSlideFreeJson).not.toHaveBeenCalled();
+    },
+  );
+
   it('keeps deterministic briefs out of the provider and access codes out of persistence', async () => {
     stubPreviewAdmission();
     const workspace = { deck: { id: 'deck-created' } };
@@ -303,7 +331,7 @@ describe('NodeSlide provider consent contract', () => {
     ).toEqual({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
     });
     expect(
@@ -327,7 +355,7 @@ describe('NodeSlide provider consent contract', () => {
     expect(validateNodeSlideBriefProviderChoice('nebius', NODESLIDE_NEBIUS_BRIEF_CONSENT)).toEqual({
       providerMode: 'nebius',
       providerModel: 'nebius/zai-org/GLM-5.2',
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_BRIEF_CONSENT,
     });
     expect(() =>

@@ -34,7 +34,7 @@ import type {
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
-import { operationElementIds } from '../../../shared/nodeslide';
+import { NODESLIDE_SCOPE_SLIDE_LIMIT, operationElementIds } from '../../../shared/nodeslide';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -45,15 +45,18 @@ import {
   getOrCreateSessionId,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
+  removeDeckOwnerAccessKey,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
+import { DeleteDeckDialog } from './components/DeleteDeckDialog';
 import {
   type EditorCandidateReceipt,
   type EditorCanvasMode,
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
+import { NodeSlideConnectionsDialog } from './components/NodeSlideConnectionsDialog';
 import { NodeSlideLanding } from './components/NodeSlideLanding';
 import {
   type OwnerCapabilityRecovery,
@@ -71,6 +74,7 @@ import {
   type LayerZOrderAction,
   SlideNavigator,
   type SlideNavigatorTab,
+  normalizeSelectedSlideIds,
 } from './components/SlideNavigator';
 import { StoryArcOverview } from './components/StoryArcOverview';
 import { type StudioThemeMode, StudioToolbar } from './components/StudioToolbar';
@@ -97,6 +101,7 @@ import type {
   AiVariationRequest,
 } from './inspector/AiInspector';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
 import { extractPptxSignature } from './signature/index';
 import {
@@ -104,7 +109,17 @@ import {
   type NodeSlideTastePackId,
   getNodeSlideTastePack,
 } from './signature/packs/index';
-import { downloadDeckHtml, downloadPptx, validateSnapshot } from './slidelang/index';
+import {
+  DEFAULT_PPTX_IMPORT_BOUNDS,
+  NODESLIDE_JSON_LIMITS,
+  createPptxImportCandidate,
+  diffNodeSlideSnapshots,
+  downloadDeckHtml,
+  downloadDeckJson,
+  downloadPptx,
+  parseNodeSlideJson,
+  validateSnapshot,
+} from './slidelang/index';
 import './nodeslide.css';
 import './nodeslideV3.css';
 
@@ -184,6 +199,7 @@ interface NodeSlideGeneratedApi {
       { deckId: string; ownerAccessKey: string; sourceId: string },
       boolean
     >;
+    deleteDeck: PublicMutation<{ deckId: string; ownerAccessKey: string }, unknown>;
     listAgentRuns: PublicQuery<
       { deckId: string; ownerAccessKey: string; limit?: number },
       NodeSlideAgentRun[]
@@ -215,6 +231,7 @@ interface NodeSlideGeneratedApi {
       OwnerWorkspace
     >;
     applyPatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
+    proposePatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
     acceptPatch: PublicMutation<
       { deckId: string; ownerAccessKey: string; patchId: string },
       PatchReceipt
@@ -415,6 +432,118 @@ function mergeAgentTelemetryPages(
   };
 }
 
+type DeleteDeckMutation = (args: {
+  deckId: string;
+  ownerAccessKey: string;
+}) => Promise<unknown>;
+
+interface DeckDeletionActionProps {
+  open: boolean;
+  deckId: string;
+  deckTitle: string;
+  ownerAccessKey: string;
+  deleteDeck: DeleteDeckMutation;
+  onClose: () => void;
+  removeOwnerCapability?: (deckId: string) => unknown;
+  navigate?: (path: string) => void;
+}
+
+/** Owns the fail-open delete flow while the existing confirmation dialog owns exact-title input. */
+export function DeckDeletionAction({ open, ...props }: DeckDeletionActionProps) {
+  if (!open) return null;
+  return <OpenDeckDeletionAction key={props.deckId} {...props} />;
+}
+
+function OpenDeckDeletionAction({
+  deckId,
+  deckTitle,
+  ownerAccessKey,
+  deleteDeck,
+  onClose,
+  removeOwnerCapability = removeDeckOwnerAccessKey,
+  navigate = (path) => window.location.assign(path),
+}: Omit<DeckDeletionActionProps, 'open'>) {
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDeletion = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteDeck({ deckId, ownerAccessKey });
+      removeOwnerCapability(deckId);
+      navigate('/');
+    } catch (error) {
+      setDeleteError(errorMessage(error, 'Deck could not be deleted. Try again.'));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <DeleteDeckDialog
+      open
+      deckTitle={deckTitle}
+      deleting={deleting}
+      error={deleteError}
+      onCancel={onClose}
+      onConfirm={() => void confirmDeletion()}
+    />
+  );
+}
+
+interface EditorProjectDialogsProps {
+  deckId: string;
+  deckTitle: string;
+  ownerAccessKey: string;
+  connectionsOpen: boolean;
+  deleteDeckOpen: boolean;
+  projectsOpen: boolean;
+  ownerRecovery: OwnerCapabilityRecovery | null;
+  deleteDeck: DeleteDeckMutation;
+  onCloseConnections: () => void;
+  onCloseDeleteDeck: () => void;
+  onCloseRecovery: () => void;
+}
+
+/** Keeps editor project actions bound to the active deck instead of a stale URL parameter. */
+export function EditorProjectDialogs({
+  deckId,
+  deckTitle,
+  ownerAccessKey,
+  connectionsOpen,
+  deleteDeckOpen,
+  projectsOpen,
+  ownerRecovery,
+  deleteDeck,
+  onCloseConnections,
+  onCloseDeleteDeck,
+  onCloseRecovery,
+}: EditorProjectDialogsProps) {
+  return (
+    <>
+      <NodeSlideConnectionsDialog
+        open={connectionsOpen}
+        onClose={onCloseConnections}
+        deckId={deckId}
+      />
+      <OwnerCapabilityRecoveryDialog
+        open={Boolean(ownerRecovery) && !projectsOpen}
+        recovery={ownerRecovery}
+        onClose={onCloseRecovery}
+      />
+      <DeckDeletionAction
+        open={deleteDeckOpen}
+        deckId={deckId}
+        deckTitle={deckTitle}
+        ownerAccessKey={ownerAccessKey}
+        deleteDeck={deleteDeck}
+        onClose={onCloseDeleteDeck}
+      />
+    </>
+  );
+}
+
 export function NodeSlideStudio() {
   const convex = useConvex();
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
@@ -434,6 +563,7 @@ export function NodeSlideStudio() {
   const [recoveryAccessError, setRecoveryAccessError] = useState<string | null>(null);
   const [localWorkspace, setLocalWorkspace] = useState<NodeSlideWorkspace | null>(null);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+  const [selectedSlideIds, setSelectedSlideIds] = useState<string[]>([]);
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
   const [navigatorTab, setNavigatorTab] = useState<SlideNavigatorTab>('slides');
   const [collapsedNavigatorSections, setCollapsedNavigatorSections] = useState<string[]>([]);
@@ -471,6 +601,8 @@ export function NodeSlideStudio() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [sampleRequested, setSampleRequested] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [deleteDeckOpen, setDeleteDeckOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -503,6 +635,7 @@ export function NodeSlideStudio() {
   const redoStackRef = useRef<string[]>([]);
   const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
   const localCommitVersionsRef = useRef(new Set<number>());
+  const acceptingPatchIdsRef = useRef(new Set<string>());
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
@@ -512,6 +645,20 @@ export function NodeSlideStudio() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const before = url.toString();
+    const googleResult = url.searchParams.get('nodeslideGoogle');
+    if (googleResult === 'connected') {
+      setToast({ kind: 'success', message: 'Google Slides is connected for this deck.' });
+    } else if (googleResult === 'denied') {
+      setToast({ kind: 'error', message: 'Google Slides consent was not granted.' });
+    } else if (googleResult === 'expired') {
+      setToast({
+        kind: 'error',
+        message: 'That Google Slides connection link expired. Try again.',
+      });
+    } else if (googleResult === 'failed') {
+      setToast({ kind: 'error', message: 'Google Slides could not be connected. Try again.' });
+    }
+    url.searchParams.delete('nodeslideGoogle');
     url.searchParams.delete('qa');
     if (url.searchParams.get('domain') === 'nodeslide') url.searchParams.delete('domain');
     if (url.toString() !== before) window.history.replaceState(null, '', url);
@@ -520,6 +667,7 @@ export function NodeSlideStudio() {
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
+  const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
@@ -532,6 +680,7 @@ export function NodeSlideStudio() {
   const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
   const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
   const deleteDataSource = useMutation(nodeslideApi.nodeslide.deleteDataSource);
+  const deleteDeck = useMutation(nodeslideApi.nodeslide.deleteDeck);
   const cancelAgentRun = useMutation(nodeslideApi.nodeslide.cancelAgentRun);
   const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
   const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
@@ -812,6 +961,10 @@ export function NodeSlideStudio() {
   useEffect(() => {
     if (!workspace) return;
     setLocalWorkspace(workspace);
+    setSelectedSlideIds((current) => {
+      const normalized = normalizeSelectedSlideIds(workspace.deck.slideOrder, current);
+      return sameStringIds(current, normalized) ? current : normalized;
+    });
     setActiveSlideId((current) =>
       current && workspace.deck.slideOrder.includes(current)
         ? current
@@ -864,6 +1017,7 @@ export function NodeSlideStudio() {
 
   useEffect(() => {
     void activeDeckId;
+    setSelectedSlideIds([]);
     setAgentBusy(false);
     setVariationGenerating(false);
     setVariationDecisionBusy(false);
@@ -1341,6 +1495,222 @@ export function NodeSlideStudio() {
       runPreferenceEtl,
       workspace,
     ],
+  );
+
+  const proposeJsonOperations = useCallback(
+    async (
+      operations: PatchOperation[],
+      summary: string,
+      elementId: string,
+      baseElementVersion: number,
+    ) => {
+      if (!workspace || !ownerAccessKey || operations.length === 0) return false;
+      const requestedDeckId = workspace.deck.id;
+      return enqueueEditorWrite(
+        requestedDeckId,
+        false,
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          const requestGate = editorRequestGateRef.current;
+          const scope = scopeForOperations(currentWorkspace, operations, 'unrestricted');
+          const clocks = clocksForScope(currentWorkspace, scope, operations);
+          try {
+            const receipt = await proposePatchMutation({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: currentWorkspace.deck.version,
+              baseSlideVersions: clocks.baseSlideVersions,
+              baseElementVersions: applyExpectedElementVersions(clocks.baseElementVersions, {
+                [elementId]: baseElementVersion,
+              }),
+              scope,
+              operations,
+              summary,
+            });
+            if (!requestGate.isCurrent(requestToken)) return false;
+            if (receipt.patch.status === 'stale') {
+              if (receipt.workspace) installWorkspace(receipt.workspace, currentOwnerAccessKey);
+              setPreviewedPatchId(null);
+              setCanvasMode('edit');
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+              setToast({
+                kind: 'error',
+                message:
+                  'The JSON candidate is stale. The deck stayed unchanged; review the current version and retry.',
+              });
+              return false;
+            }
+            if (
+              receipt.patch.status !== 'ready' ||
+              !receipt.workspace ||
+              !editorCandidateCanAccept(
+                editorCandidateReceiptForPatch(receipt.patch, receipt.workspace.deck),
+              )
+            ) {
+              throw new Error(
+                'The JSON edit did not produce an exact, validated candidate for review.',
+              );
+            }
+            const candidateDeck = receipt.workspace.deck;
+            installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            setPreviewedVariation(null);
+            setPreviewedSignatureProfile(null);
+            setPreviewedPatchId(receipt.patch.id);
+            const firstAffectedSlideId =
+              'slideIds' in receipt.patch.scope ? receipt.patch.scope.slideIds[0] : undefined;
+            if (firstAffectedSlideId && candidateDeck.slideOrder.includes(firstAffectedSlideId)) {
+              selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+            }
+            setCanvasMode('compare');
+            setActiveInspectorTab('ai');
+            setInspectorCollapsed(false);
+            setToast({
+              kind: 'success',
+              message: 'JSON candidate validated. Compare it, then choose Accept or Reject.',
+            });
+            return true;
+          } catch (error) {
+            if (!requestGate.isCurrent(requestToken)) return false;
+            setToast({
+              kind: 'error',
+              message: errorMessage(error, 'The JSON edit could not be proposed.'),
+            });
+            return false;
+          }
+        },
+      );
+    },
+    [enqueueEditorWrite, installWorkspace, ownerAccessKey, proposePatchMutation, workspace],
+  );
+
+  const proposeSourceImport = useCallback(
+    async (file: File, kind: 'json' | 'pptx'): Promise<string> => {
+      const initialWorkspace = workspaceRef.current;
+      if (!initialWorkspace || !ownerAccessKeyRef.current) {
+        throw new Error('Open an owned deck before importing a source file.');
+      }
+      const maxInputBytes =
+        kind === 'json'
+          ? NODESLIDE_JSON_LIMITS.maxInputBytes
+          : DEFAULT_PPTX_IMPORT_BOUNDS.maxInputBytes;
+      if (file.size > maxInputBytes) {
+        throw new Error(
+          `${kind === 'json' ? 'Deck JSON' : 'PPTX'} is ${file.size.toLocaleString()} bytes; the limit is ${maxInputBytes.toLocaleString()} bytes.`,
+        );
+      }
+      const requestedDeckId = initialWorkspace.deck.id;
+      const payload = kind === 'json' ? await file.text() : await file.arrayBuffer();
+      return enqueueEditorWrite(
+        requestedDeckId,
+        'The active deck changed before the import could be reviewed.',
+        async ({
+          workspace: currentWorkspace,
+          ownerAccessKey: currentOwnerAccessKey,
+          requestToken,
+        }) => {
+          let args: ConvexArgs<ApplyPatchArgs>;
+          let receiptMessage: string;
+          if (kind === 'json') {
+            const parsed = parseNodeSlideJson(payload as string);
+            if (!parsed.ok) {
+              throw new Error(
+                `Deck JSON is invalid: ${parsed.issues
+                  .slice(0, 3)
+                  .map((issue) => `${issue.path} ${issue.message}`)
+                  .join(' ')}`,
+              );
+            }
+            const diff = diffNodeSlideSnapshots(currentWorkspace, parsed.snapshot);
+            if (!diff.ok) {
+              throw new Error(
+                `Deck JSON could not be compared: ${diff.issues
+                  .slice(0, 3)
+                  .map((issue) => `${issue.path} ${issue.message}`)
+                  .join(' ')}`,
+              );
+            }
+            if (!diff.fidelity.canApply) {
+              throw new Error(
+                `This JSON cannot be safely re-opened here: ${diff.fidelity.findings
+                  .filter((finding) => finding.fidelity === 'unsupported')
+                  .slice(0, 3)
+                  .map((finding) => finding.message)
+                  .join(' ')}`,
+              );
+            }
+            if (diff.operations.length === 0) {
+              return 'This JSON already matches the current deck. Nothing was proposed.';
+            }
+            const scope = scopeForOperations(currentWorkspace, diff.operations, 'unrestricted');
+            const clocks = clocksForScope(currentWorkspace, scope, diff.operations);
+            args = {
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: currentWorkspace.deck.version,
+              baseSlideVersions: clocks.baseSlideVersions,
+              baseElementVersions: clocks.baseElementVersions,
+              scope,
+              operations: diff.operations,
+              summary: `Re-open ${file.name} as a validated NodeSlide JSON change.`,
+            };
+            receiptMessage = `JSON import proposed with ${diff.operations.length} typed operation${diff.operations.length === 1 ? '' : 's'}.`;
+          } else {
+            const imported = await createPptxImportCandidate(
+              {
+                deck: currentWorkspace.deck,
+                slides: currentWorkspace.slides,
+                elements: currentWorkspace.elements,
+                sources: currentWorkspace.sources,
+              },
+              payload as ArrayBuffer,
+              { fileName: file.name },
+            );
+            if (!imported.ok) {
+              throw new Error(`PPTX import stopped: ${imported.error.message}`);
+            }
+            const { candidate } = imported;
+            args = {
+              deckId: candidate.deckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              baseDeckVersion: candidate.baseDeckVersion,
+              baseSlideVersions: candidate.baseSlideVersions,
+              baseElementVersions: candidate.baseElementVersions,
+              scope: candidate.scope,
+              operations: candidate.operations,
+              summary: candidate.summary,
+            };
+            receiptMessage = `PPTX import proposed: ${candidate.source.slideCount} slide${candidate.source.slideCount === 1 ? '' : 's'}, ${candidate.source.importedElementCount} editable object${candidate.source.importedElementCount === 1 ? '' : 's'}; ${candidate.fidelity.summary.approximated} approximated and ${candidate.fidelity.summary.dropped} dropped.`;
+          }
+
+          const receipt = await proposePatchMutation(args);
+          if (!editorRequestGateRef.current.isCurrent(requestToken)) {
+            throw new Error('The active deck changed before the proposal returned.');
+          }
+          if (receipt.workspace) installWorkspace(receipt.workspace, currentOwnerAccessKey);
+          if (receipt.patch.status === 'stale') {
+            throw new Error(
+              'The deck changed during import. Reload the source file and try again.',
+            );
+          }
+          if (receipt.patch.status !== 'ready') {
+            throw new Error('The import did not produce a reviewable proposal.');
+          }
+          setActiveInspectorTab('ai');
+          setInspectorCollapsed(false);
+          setCanvasMode('compare');
+          setToast({
+            kind: 'success',
+            message: 'Import validated. Review the candidate before accepting it.',
+          });
+          return `${receiptMessage} Nothing changed yet; review it in Compare and choose Accept or Reject.`;
+        },
+      );
+    },
+    [enqueueEditorWrite, installWorkspace, proposePatchMutation],
   );
 
   const restoreHistory = useCallback(
@@ -1827,7 +2197,16 @@ export function NodeSlideStudio() {
     setQueryParam('present', '1');
     setPresentMode(true);
   };
-  const exportDeck = (kind: 'html' | 'pptx') => {
+  const exportDeck = (kind: 'html' | 'json' | 'pptx') => {
+    if (kind === 'json') {
+      try {
+        downloadDeckJson(snapshot);
+        setToast({ kind: 'success', message: 'Validated, re-openable Deck JSON prepared.' });
+      } catch (error) {
+        setToast({ kind: 'error', message: errorMessage(error, 'Deck JSON export failed.') });
+      }
+      return;
+    }
     if (activeSignatureLoading) {
       setToast({
         kind: 'error',
@@ -2086,6 +2465,8 @@ export function NodeSlideStudio() {
 
   const handleAcceptPatch = (patch: DeckPatch) => {
     if (!ownerAccessKey || !workspace) return;
+    if (acceptingPatchIdsRef.current.has(patch.id)) return;
+    acceptingPatchIdsRef.current.add(patch.id);
     const requestedDeckId = workspace.deck.id;
     void enqueueEditorWrite(
       requestedDeckId,
@@ -2165,7 +2546,7 @@ export function NodeSlideStudio() {
           return false;
         }
       },
-    );
+    ).finally(() => acceptingPatchIdsRef.current.delete(patch.id));
   };
 
   const handleRejectPatch = (patch: DeckPatch) => {
@@ -2703,12 +3084,24 @@ export function NodeSlideStudio() {
             `Renamed deck to ${title}`,
           )
         }
+        onNewDeck={() => window.location.assign('/')}
         onOpenProjects={() => setProjectsOpen(true)}
+        onOpenConnections={() => setConnectionsOpen(true)}
+        onBackupRecoveryKey={() => {
+          if (!ownerAccessKey) return;
+          setOwnerRecovery({
+            deckId: workspace.deck.id,
+            deckTitle: workspace.deck.title,
+            ownerAccessKey,
+          });
+        }}
+        onDeleteDeck={() => setDeleteDeckOpen(true)}
         onUndo={() => void restoreHistory('undo')}
         onRedo={() => void restoreHistory('redo')}
         onShare={() => setShareOpen(true)}
         onPresent={beginPresentation}
         onExportHtml={() => exportDeck('html')}
+        onExportJson={() => exportDeck('json')}
         onExportPptx={() => exportDeck('pptx')}
         onOpenCommandPalette={() => setCommandOpen(true)}
         onToggleInspector={() => setInspectorCollapsed((value) => !value)}
@@ -2721,6 +3114,7 @@ export function NodeSlideStudio() {
           setNavigatorTab('slides');
           setCanvasMode('edit');
           setActiveInspectorTab('ai');
+          setSelectedSlideIds([]);
           setSelectedElementIds([]);
           setPreviewedPatchId(null);
           setPreviewedVariation(null);
@@ -2744,10 +3138,19 @@ export function NodeSlideStudio() {
           validations={workspace.validations}
           collapsedSections={collapsedNavigatorSections}
           propagationSlideIds={affectedSlideIds}
+          selectedSlideIds={selectedSlideIds}
           selectedElementIds={selectedElementIds}
           canAddSlide
           canDeleteSlide={orderedSlides.length > 1}
           onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
+          onSelectedSlideIdsChange={(slideIds) =>
+            setSelectedSlideIds(
+              normalizeSelectedSlideIds(
+                orderedSlides.map((slide) => slide.id),
+                slideIds.slice(0, NODESLIDE_SCOPE_SLIDE_LIMIT),
+              ),
+            )
+          }
           onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
           onTabChange={setNavigatorTab}
           onToggleSection={(section) =>
@@ -2815,8 +3218,9 @@ export function NodeSlideStudio() {
               { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
               `Deleted slide ${index + 1}`,
             ).then((accepted) => {
-              if (accepted && fallback)
-                selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
+              if (!accepted) return;
+              setSelectedSlideIds((current) => current.filter((id) => id !== slideId));
+              if (fallback) selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
             });
           }}
           onReorderSlide={(slideId, index) =>
@@ -2932,6 +3336,9 @@ export function NodeSlideStudio() {
           candidateSlide={compareCandidateSlide ?? null}
           candidateElements={compareCandidateElements}
           {...(compareCandidateLabel ? { candidateLabel: compareCandidateLabel } : {})}
+          {...(previewedPatch
+            ? { candidateScopeLabel: nodeSlideScopeLabel(previewedPatch.scope) }
+            : {})}
           compareOperations={compareOperations}
           candidateReceipt={compareCandidateReceipt}
           sliderPosition={compareSliderPosition}
@@ -3054,6 +3461,7 @@ export function NodeSlideStudio() {
           workspace={workspace}
           slide={activeSlide}
           selectedElements={selectedElements}
+          selectedSlideIds={selectedSlideIds}
           activeTab={activeInspectorTab}
           collapsed={inspectorCollapsed}
           width={inspectorWidth}
@@ -3190,6 +3598,8 @@ export function NodeSlideStudio() {
               summary,
             )
           }
+          onApplyJsonPatch={proposeJsonOperations}
+          onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
             ownerAccessKey
               ? void addComment({
@@ -3256,11 +3666,21 @@ export function NodeSlideStudio() {
         commands={commands}
         onClose={() => setCommandOpen(false)}
       />
-      <OwnerCapabilityRecoveryDialog
-        open={Boolean(ownerRecovery) && !projectsOpen}
-        recovery={ownerRecovery}
-        onClose={() => setOwnerRecovery(null)}
-      />
+      {ownerAccessKey ? (
+        <EditorProjectDialogs
+          deckId={workspace.deck.id}
+          deckTitle={workspace.deck.title}
+          ownerAccessKey={ownerAccessKey}
+          connectionsOpen={connectionsOpen}
+          deleteDeckOpen={deleteDeckOpen}
+          projectsOpen={projectsOpen}
+          ownerRecovery={ownerRecovery}
+          deleteDeck={deleteDeck}
+          onCloseConnections={() => setConnectionsOpen(false)}
+          onCloseDeleteDeck={() => setDeleteDeckOpen(false)}
+          onCloseRecovery={() => setOwnerRecovery(null)}
+        />
+      ) : null}
       <PublicationDialog
         open={shareOpen}
         publication={workspace.publication}
@@ -3769,6 +4189,10 @@ function selectSlide(
 ) {
   setSlide(slideId);
   setElements([]);
+}
+
+function sameStringIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function writeDeckToUrl(deckId: string) {

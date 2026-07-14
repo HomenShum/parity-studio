@@ -10,4 +10,19 @@ describe('NodeSlide mutation transport contract', () => {
     );
     expect(validatorSource).toContain('sourceIds: v.optional(v.array(v.string()))');
   });
+
+  it('validates claim lineage before persisting an agent proposal and stores it on the trace', () => {
+    const mutationSource = readFileSync(resolve(process.cwd(), 'convex/nodeslide.ts'), 'utf8');
+    const schemaSource = readFileSync(resolve(process.cwd(), 'convex/schema.ts'), 'utf8');
+    const lineageGate = mutationSource.indexOf('const sourceLineage = buildNodeSlideSourceLineage');
+    const persistence = mutationSource.indexOf(
+      "const proposal = await persistProposal(ctx, { ...args, source: 'agent' })",
+    );
+
+    expect(lineageGate).toBeGreaterThan(0);
+    expect(persistence).toBeGreaterThan(lineageGate);
+    expect(mutationSource).toContain('...sourceLineage');
+    expect(schemaSource).toContain('sourceBindingStatus: v.optional');
+    expect(schemaSource).toContain('claimSourceBindings: v.optional');
+  });
 });

@@ -2,30 +2,18 @@ import {
   ArrowRight,
   Check,
   Clock3,
-  FileText,
   FolderOpen,
   Layers3,
   LoaderCircle,
-  Paperclip,
   Plus,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
-import {
-  type ChangeEvent,
-  type FormEvent,
-  type KeyboardEvent,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import {
   type CreateDeckRequest,
-  NODESLIDE_AGENT_MODELS,
   NODESLIDE_DEFAULT_AGENT_MODEL,
-  NODESLIDE_DEFAULT_REASONING_EFFORT,
   NODESLIDE_REASONING_EFFORTS,
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
@@ -34,6 +22,15 @@ import {
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import {
+  NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
+  NodeSlidePromptComposer,
+} from '../composer/NodeSlidePromptComposer';
+import {
+  createNodeSlideComposerAttachmentDraft,
+  nodeSlideComposerSessionKey,
+  useNodeSlideComposerSession,
+} from '../composer/nodeSlideComposerSession';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
@@ -50,6 +47,30 @@ export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
   providerConsent?:
     | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
     | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
+}
+
+export type CreateDeckProviderAdmission = Pick<
+  CreateDeckAdmissionRequest,
+  'providerMode' | 'providerModel' | 'providerEffort' | 'providerConsent'
+>;
+
+export function createDeckProviderAdmission(
+  providerMode: NodeSlideBriefProviderMode,
+  providerModel: NodeSlideAgentModelId,
+  providerEffort: NodeSlideReasoningEffort,
+  consentedForRequest: boolean,
+): CreateDeckProviderAdmission | null {
+  if (providerMode === 'deterministic') return { providerMode };
+  if (!consentedForRequest) return null;
+  return {
+    providerMode,
+    providerModel,
+    providerEffort,
+    providerConsent:
+      providerMode === 'nebius'
+        ? NODESLIDE_NEBIUS_BRIEF_CONSENT
+        : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+  };
 }
 
 export interface RecentDeck {
@@ -132,7 +153,15 @@ export function ProjectDialog({
 }: ProjectDialogProps) {
   const [mode, setMode] = useState<'create' | 'open'>(createEnabled ? initialMode : 'open');
   const [title, setTitle] = useState(initialDraft?.title ?? '');
-  const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
+  const composerSession = useNodeSlideComposerSession(
+    nodeSlideComposerSessionKey('project', clientSessionId),
+    {
+      text: initialDraft?.prompt ?? '',
+      attachments: composerAttachmentDrafts(initialDraft?.attachments ?? []),
+    },
+  );
+  const { clear: clearComposerSession, reset: resetComposerSession } = composerSession;
+  const prompt = composerSession.text;
   const [audience, setAudience] = useState('Executive decision-makers');
   const [purpose, setPurpose] = useState('Decision briefing');
   const [successCriteria, setSuccessCriteria] = useState('');
@@ -145,12 +174,10 @@ export function ProjectDialog({
     initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL,
   );
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
-    initialDraft?.providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT,
+    initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   const [providerConsent, setProviderConsent] = useState(false);
-  const [attachments, setAttachments] = useState<NodeSlideDataAttachment[]>(
-    initialDraft?.attachments ?? [],
-  );
+  const providerConsentRef = useRef(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
@@ -162,18 +189,22 @@ export function ProjectDialog({
   const providerHeadingId = `${dialogId}-provider-heading`;
   const accessCodeDescriptionId = `${dialogId}-access-code-description`;
   const createStatusId = `${dialogId}-create-status`;
+  const createFormId = `${dialogId}-create-form`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
+  const setPerRequestProviderConsent = (consented: boolean) => {
+    providerConsentRef.current = consented;
+    setProviderConsent(consented);
+  };
   const clearAdmissionAndClose = () => {
     setAccessCode('');
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
-    setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
-    setProviderConsent(false);
-    setAttachments([]);
+    setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
+    setPerRequestProviderConsent(false);
+    clearComposerSession();
     setAttachmentError(null);
     onClose();
   };
@@ -187,13 +218,19 @@ export function ProjectDialog({
     if (open && !wasOpenRef.current) {
       setMode(createEnabled ? initialMode : 'open');
       setTitle(initialDraft?.title ?? '');
-      setPrompt(initialDraft?.prompt ?? '');
+      resetComposerSession({
+        text: initialDraft?.prompt ?? '',
+        attachments: composerAttachmentDrafts(initialDraft?.attachments ?? []),
+      });
       setProviderMode(
         initialDraft?.providerMode ?? nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL),
       );
       setProviderModel(initialDraft?.providerModel ?? NODESLIDE_DEFAULT_AGENT_MODEL);
-      setProviderEffort(initialDraft?.providerEffort ?? NODESLIDE_DEFAULT_REASONING_EFFORT);
-      setAttachments(initialDraft?.attachments ?? []);
+      setProviderEffort(
+        initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
+      );
+      providerConsentRef.current = false;
+      setProviderConsent(false);
       setAttachmentError(null);
     }
     wasOpenRef.current = open;
@@ -201,11 +238,12 @@ export function ProjectDialog({
     setAccessCode('');
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
-    setProviderEffort(NODESLIDE_DEFAULT_REASONING_EFFORT);
+    setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
+    providerConsentRef.current = false;
     setProviderConsent(false);
-    setAttachments([]);
+    clearComposerSession();
     setAttachmentError(null);
-  }, [createEnabled, initialDraft, initialMode, open]);
+  }, [clearComposerSession, createEnabled, initialDraft, initialMode, open, resetComposerSession]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
@@ -230,64 +268,49 @@ export function ProjectDialog({
     nextTab?.focus();
   };
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async ({ text, files }: { text: string; files: File[] }) => {
     if (mode === 'open') return;
     const deckTitle = title.trim();
-    const briefPrompt = prompt.trim();
+    const briefPrompt = text.trim();
     const previewAccessCode = accessCode.trim();
-    if (
-      !deckTitle ||
-      !briefPrompt ||
-      !audience.trim() ||
-      !purpose.trim() ||
-      !previewAccessCode ||
-      (providerMode !== 'deterministic' && !providerConsent)
-    ) {
+    if (!deckTitle || !briefPrompt || !audience.trim() || !purpose.trim() || !previewAccessCode) {
       return;
     }
-    onCreate({
-      accessCode: previewAccessCode,
-      clientSessionId,
-      title: deckTitle,
-      brief: {
-        prompt: briefPrompt,
-        audience: audience.trim(),
-        purpose: purpose.trim(),
-        successCriteria: successCriteria
-          .split('\n')
-          .map((criterion) => criterion.trim())
-          .filter(Boolean),
-      },
-      themeId,
-      route: 'free',
+    const providerAdmission = createDeckProviderAdmission(
       providerMode,
-      attachments,
-      ...(providerMode !== 'deterministic'
-        ? {
-            providerModel,
-            providerEffort,
-            providerConsent:
-              providerMode === 'nebius'
-                ? NODESLIDE_NEBIUS_BRIEF_CONSENT
-                : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
-          }
-        : {}),
-    });
-    setAccessCode('');
-  };
-
-  const attachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files ? Array.from(event.target.files) : [];
-    event.target.value = '';
-    if (!files.length) return;
+      providerModel,
+      providerEffort,
+      providerConsentRef.current,
+    );
+    if (!providerAdmission) return;
+    setPerRequestProviderConsent(false);
     try {
-      setAttachments(await readNodeSlideAttachmentFiles(files, attachments));
+      const attachments = await readNodeSlideAttachmentFiles(files, []);
       setAttachmentError(null);
+      onCreate({
+        accessCode: previewAccessCode,
+        clientSessionId,
+        title: deckTitle,
+        brief: {
+          prompt: briefPrompt,
+          audience: audience.trim(),
+          purpose: purpose.trim(),
+          successCriteria: successCriteria
+            .split('\n')
+            .map((criterion) => criterion.trim())
+            .filter(Boolean),
+        },
+        themeId,
+        route: 'free',
+        attachments,
+        ...providerAdmission,
+      });
+      setAccessCode('');
     } catch (fileError) {
       setAttachmentError(
         fileError instanceof Error ? fileError.message : 'The file could not be attached.',
       );
+      throw fileError;
     }
   };
 
@@ -381,12 +404,11 @@ export function ProjectDialog({
         ) : null}
 
         {createEnabled && mode === 'create' ? (
-          <form
+          <div
             id={createPanelId}
             className="ns-project-form"
             role="tabpanel"
             aria-labelledby={createTabId}
-            onSubmit={submit}
             onChangeCapture={error ? onClearError : undefined}
             data-testid="new-deck-form"
             aria-busy={creating}
@@ -413,7 +435,7 @@ export function ProjectDialog({
                     data-testid="world-cup-starter"
                     onClick={() => {
                       setTitle(WORLD_CUP_STARTER.title);
-                      setPrompt(WORLD_CUP_STARTER.prompt);
+                      composerSession.setText(WORLD_CUP_STARTER.prompt);
                       setAudience(WORLD_CUP_STARTER.audience);
                       setPurpose(WORLD_CUP_STARTER.purpose);
                       setSuccessCriteria(WORLD_CUP_STARTER.successCriteria.join('\n'));
@@ -428,6 +450,7 @@ export function ProjectDialog({
                   <input
                     ref={initialFocusRef}
                     data-testid="new-deck-title"
+                    form={createFormId}
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Q3 market narrative"
@@ -435,62 +458,59 @@ export function ProjectDialog({
                     required
                   />
                 </label>
-                <label>
-                  <span>What should this deck accomplish?</span>
-                  <textarea
-                    rows={3}
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    placeholder="Build an evidence-led story that explains…"
-                    maxLength={4000}
-                    required
-                  />
-                </label>
                 <div className="ns-create-attachments">
-                  <input
-                    ref={attachmentInputRef}
-                    className="ns-sr-only"
-                    data-testid="create-file-input"
-                    type="file"
-                    accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown"
-                    multiple
-                    onChange={(event) => void attachFiles(event)}
+                  <NodeSlidePromptComposer
+                    allowAttachments
+                    attachmentInputTestId="create-file-input"
+                    clearAttachmentsOnSubmit={false}
+                    disabled={creating}
+                    effort={providerEffort}
+                    effortLabel="Reasoning effort"
+                    effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
+                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
+                    )}
+                    effortTestId="create-effort-select"
+                    formId={createFormId}
+                    model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                    modelLabel="Model and provider"
+                    modelTestId="create-model-select"
+                    onAttachmentError={setAttachmentError}
+                    onEffortChange={(effort) => {
+                      setProviderEffort(effort);
+                      setPerRequestProviderConsent(false);
+                      onClearError?.();
+                    }}
+                    onModelChange={(model) => {
+                      if (model === 'deterministic') {
+                        setProviderMode('deterministic');
+                        setPerRequestProviderConsent(false);
+                        onClearError?.();
+                        return;
+                      }
+                      setProviderModel(model);
+                      setProviderMode(nodeSlideProviderModeForModel(model));
+                      if (!nodeSlideModelSupportsReasoningEffort(model, providerEffort)) {
+                        setProviderEffort('high');
+                      }
+                      setPerRequestProviderConsent(false);
+                      onClearError?.();
+                    }}
+                    onSubmit={submit}
+                    onTextareaKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey && (creating || createBlocker)) {
+                        event.preventDefault();
+                      }
+                    }}
+                    placeholder="Build an evidence-led story that explains…"
+                    session={composerSession}
+                    showSubmit={false}
+                    submitLabel="Create deck"
+                    textareaLabel="What should this deck accomplish?"
+                    textareaMaxLength={4000}
+                    textareaRows={3}
                   />
-                  <button
-                    type="button"
-                    className="ns-button ns-button--quiet"
-                    onClick={() => attachmentInputRef.current?.click()}
-                  >
-                    <Paperclip size={13} /> Attach data files
-                  </button>
                   <small>CSV, JSON, TXT, or Markdown · up to 3 files</small>
                   {attachmentError ? <output role="alert">{attachmentError}</output> : null}
-                  {attachments.length > 0 ? (
-                    <ul aria-label="Data files included in this deck">
-                      {attachments.map((attachment) => (
-                        <li key={attachment.title}>
-                          <FileText size={13} aria-hidden="true" />
-                          <span>
-                            <strong>{attachment.title}</strong>
-                            <small>
-                              {attachment.format.toLocaleUpperCase()} · included as a source
-                            </small>
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${attachment.title}`}
-                            onClick={() =>
-                              setAttachments((current) =>
-                                current.filter((item) => item.title !== attachment.title),
-                              )
-                            }
-                          >
-                            <X size={12} />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
                 </div>
                 <details className="ns-brief-details">
                   <summary>Improve the brief</summary>
@@ -498,6 +518,7 @@ export function ProjectDialog({
                     <label>
                       <span>Audience</span>
                       <input
+                        form={createFormId}
                         value={audience}
                         onChange={(event) => setAudience(event.target.value)}
                         placeholder="Executive leadership"
@@ -508,6 +529,7 @@ export function ProjectDialog({
                     <label>
                       <span>Purpose</span>
                       <input
+                        form={createFormId}
                         value={purpose}
                         onChange={(event) => setPurpose(event.target.value)}
                         placeholder="Decision briefing"
@@ -521,6 +543,7 @@ export function ProjectDialog({
                       Success criteria <small>one per line</small>
                     </span>
                     <textarea
+                      form={createFormId}
                       rows={3}
                       value={successCriteria}
                       onChange={(event) => setSuccessCriteria(event.target.value)}
@@ -552,7 +575,7 @@ export function ProjectDialog({
                     className={providerMode === 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode('deterministic');
-                      setProviderConsent(false);
+                      setPerRequestProviderConsent(false);
                     }}
                   >
                     <ShieldCheck size={20} aria-hidden="true" />
@@ -572,7 +595,7 @@ export function ProjectDialog({
                     className={providerMode !== 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                      setProviderConsent(false);
+                      setPerRequestProviderConsent(false);
                     }}
                   >
                     <Sparkles size={20} aria-hidden="true" />
@@ -582,60 +605,15 @@ export function ProjectDialog({
                         {selectedModel.label}
                       </strong>
                       <small>
-                        Sends the full brief{attachments.length > 0 ? ' and attached files' : ''} to
-                        the selected named model through{' '}
+                        Sends the full brief
+                        {composerSession.attachments.length > 0 ? ' and attached files' : ''} to the
+                        selected named model through{' '}
                         {providerDisplayName(nodeSlideProviderModeForModel(providerModel))}.
                       </small>
                     </span>
                     {providerMode !== 'deterministic' ? <Check size={14} /> : null}
                   </button>
                 </fieldset>
-                <label className="ns-provider-model-select">
-                  <span>Model and provider</span>
-                  <select
-                    data-testid="create-model-select"
-                    value={providerModel}
-                    disabled={providerMode === 'deterministic'}
-                    onChange={(event) => {
-                      const model = event.target.value as NodeSlideAgentModelId;
-                      setProviderModel(model);
-                      setProviderMode(nodeSlideProviderModeForModel(model));
-                      if (!nodeSlideModelSupportsReasoningEffort(model, providerEffort)) {
-                        setProviderEffort('high');
-                      }
-                      setProviderConsent(false);
-                    }}
-                  >
-                    {NODESLIDE_AGENT_MODELS.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.vendor} · {model.label} ·{' '}
-                        {providerDisplayName(nodeSlideProviderModeForModel(model.id))}
-                      </option>
-                    ))}
-                  </select>
-                  <small>{selectedModel.description}</small>
-                </label>
-                <label className="ns-provider-model-select">
-                  <span>Reasoning effort</span>
-                  <select
-                    aria-label="Reasoning effort"
-                    data-testid="create-effort-select"
-                    value={providerEffort}
-                    disabled={providerMode === 'deterministic'}
-                    onChange={(event) => {
-                      setProviderEffort(event.target.value as NodeSlideReasoningEffort);
-                      setProviderConsent(false);
-                    }}
-                  >
-                    {NODESLIDE_REASONING_EFFORTS.filter((effort) =>
-                      nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
-                    ).map((effort) => (
-                      <option key={effort.id} value={effort.id}>
-                        {effort.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label
                   className="ns-provider-consent"
                   style={{
@@ -652,10 +630,11 @@ export function ProjectDialog({
                 >
                   <input
                     type="checkbox"
+                    form={createFormId}
                     data-testid="provider-consent"
                     checked={providerConsent}
                     disabled={providerMode === 'deterministic'}
-                    onChange={(event) => setProviderConsent(event.target.checked)}
+                    onChange={(event) => setPerRequestProviderConsent(event.target.checked)}
                     style={{
                       accentColor: 'var(--ns-accent)',
                       marginTop: 2,
@@ -665,11 +644,15 @@ export function ProjectDialog({
                   />
                   <span>
                     I consent to sending this full brief
-                    {attachments.length > 0
-                      ? ` and ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`
+                    {composerSession.attachments.length > 0
+                      ? ` and ${composerSession.attachments.length} attached file${composerSession.attachments.length === 1 ? '' : 's'}`
                       : ''}{' '}
                     to {providerDisplayName(providerMode)}
-                    <small> Required for {selectedModel.label}; applies to this deck only.</small>
+                    <small>
+                      {' '}
+                      Required for {selectedModel.label}; applies to this creation request only and
+                      resets after submission.
+                    </small>
                   </span>
                 </label>
                 <label>
@@ -682,6 +665,7 @@ export function ProjectDialog({
                   </span>
                   <input
                     type="password"
+                    form={createFormId}
                     name="nodeslide-preview-access-code"
                     data-testid="preview-access-code"
                     autoComplete="off"
@@ -753,7 +737,7 @@ export function ProjectDialog({
                     <>
                       <Sparkles size={13} /> {providerDisplayName(providerMode)} ·{' '}
                       {selectedModel.label} · will send the brief
-                      {attachments.length > 0 ? ' and files' : ''} with consent
+                      {composerSession.attachments.length > 0 ? ' and files' : ''} with consent
                     </>
                   )}
                 </span>
@@ -761,13 +745,14 @@ export function ProjectDialog({
               <button
                 className="ns-button ns-button--accent"
                 type="submit"
+                form={createFormId}
                 disabled={creating || createBlocker !== null}
                 aria-describedby={createStatusId}
               >
                 {creating ? 'Creating deck…' : 'Create deck'} <ArrowRight size={14} />
               </button>
             </footer>
-          </form>
+          </div>
         ) : (
           <div
             id={openPanelId}
@@ -806,6 +791,21 @@ export function ProjectDialog({
         )}
       </dialog>
     </div>
+  );
+}
+
+function composerAttachmentDrafts(attachments: readonly NodeSlideDataAttachment[]) {
+  return attachments.map((attachment) =>
+    createNodeSlideComposerAttachmentDraft({
+      name: attachment.title,
+      mediaType:
+        attachment.format === 'csv'
+          ? 'text/csv'
+          : attachment.format === 'json'
+            ? 'application/json'
+            : 'text/plain',
+      content: attachment.content,
+    }),
   );
 }
 

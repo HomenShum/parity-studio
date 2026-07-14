@@ -28,6 +28,9 @@ dist
 runs/
 .cache/
 .playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
 tsconfig.tsbuildinfo
 mcp/dist/
 mcp/node_modules/

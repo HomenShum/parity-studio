@@ -1,23 +1,85 @@
-.nodeslide-studio {
-  --ns-ink: #20211f;
-  --ns-muted: #62665f;
-  --ns-faint: #686c65;
-  --ns-chrome-min-font: 9px;
-  --ns-line: #dedfd9;
-  --ns-line-soft: #e9eae5;
-  --ns-paper: #fbfbf9;
-  --ns-panel: #f6f6f3;
-  --ns-canvas: #e8e9e5;
-  --ns-accent: #5d57d9;
-  --ns-accent-dark: #4640b9;
-  --ns-accent-soft: #eeedff;
-  --ns-positive: #397460;
-  --ns-warning: #b16f28;
-  --ns-danger: #b14c42;
-  --ns-shadow-sm: 0 1px 2px rgb(26 28 25 / 7%), 0 4px 10px rgb(26 28 25 / 4%);
-  --ns-shadow-lg: 0 18px 60px rgb(22 24 21 / 16%), 0 3px 12px rgb(22 24 21 / 7%);
-  --ns-nav-width: 246px;
-  --ns-inspector-width: 388px;
+@layer nodeslide.tokens, nodeslide.base, nodeslide.editor, nodeslide.inspector, nodeslide.contract;
+
+/* Shared semantic ownership. Component and responsive files consume these tokens. */
+@layer nodeslide.tokens {
+  .nodeslide-studio {
+    --ns-bg: #fafafa;
+    --ns-surface: #fff;
+    --ns-raised: #f3f4f6;
+    --ns-canvas: #eff1f3;
+    --ns-ink: #111827;
+    --ns-ink2: #4b5563;
+    --ns-muted: var(--ns-ink2);
+    --ns-faint: #667085;
+    --ns-hover: rgb(15 23 42 / 5%);
+    --ns-line-a: rgb(15 23 42 / 6%);
+    --ns-line-b: rgb(15 23 42 / 8%);
+    --ns-line-c: rgb(15 23 42 / 10%);
+    --ns-line-d: rgb(15 23 42 / 12%);
+    --ns-line-e: rgb(15 23 42 / 18%);
+    --ns-line-f: rgb(15 23 42 / 25%);
+    --ns-line: var(--ns-line-c);
+    --ns-line-soft: var(--ns-line-b);
+    --ns-paper: var(--ns-surface);
+    --ns-panel: var(--ns-raised);
+    --ns-glass: rgb(255 255 255 / 60%);
+    --ns-topbar: rgb(250 248 245 / 88%);
+    --ns-chip: rgb(255 255 255 / 74%);
+    --ns-accent: #d97757;
+    --ns-accent-dark: #a8583f;
+    --ns-accent-soft: rgb(217 119 87 / 10%);
+    --ns-positive: #047857;
+    --ns-warning: #b45309;
+    --ns-danger: #dc2626;
+    --ns-collaboration: #5e6ad2;
+    --ns-shadow-sm: 0 1px 3px rgb(15 23 42 / 8%);
+    --ns-shadow-lg: 0 12px 32px rgb(15 23 42 / 12%);
+    --ns-overlay-scrim: rgb(15 23 42 / 32%);
+    --ns-overlay-shadow: -18px 0 54px rgb(15 23 42 / 18%);
+    --ns-overlay-blur: 2px;
+    --ns-font-caption: 10px;
+    --ns-font-control: 11px;
+    --ns-font-body: 12px;
+    --ns-control-min-height: 32px;
+    --ns-chrome-min-font: var(--ns-font-control);
+    --ns-nav-width: 300px;
+    --ns-inspector-width: 340px;
+    color-scheme: light;
+  }
+
+  .nodeslide-studio[data-ns-theme="dark"] {
+    --ns-bg: #0c0e11;
+    --ns-surface: #14181d;
+    --ns-raised: #1e242b;
+    --ns-canvas: #0f1216;
+    --ns-ink: #f3f4f6;
+    --ns-ink2: #a7b0bc;
+    --ns-muted: var(--ns-ink2);
+    --ns-faint: #9aa5b1;
+    --ns-accent-dark: #df8e70;
+    --ns-hover: rgb(255 255 255 / 6%);
+    --ns-line-a: rgb(255 255 255 / 6%);
+    --ns-line-b: rgb(255 255 255 / 8%);
+    --ns-line-c: rgb(255 255 255 / 11%);
+    --ns-line-d: rgb(255 255 255 / 14%);
+    --ns-line-e: rgb(255 255 255 / 16%);
+    --ns-line-f: rgb(255 255 255 / 22%);
+    --ns-line: var(--ns-line-c);
+    --ns-line-soft: var(--ns-line-b);
+    --ns-glass: rgb(17 20 24 / 60%);
+    --ns-topbar: rgb(13 16 20 / 82%);
+    --ns-chip: rgb(255 255 255 / 6%);
+    --ns-shadow-sm: 0 1px 3px rgb(0 0 0 / 28%);
+    --ns-shadow-lg: 0 12px 32px rgb(0 0 0 / 34%);
+    --ns-overlay-scrim: rgb(0 0 0 / 52%);
+    --ns-overlay-shadow: -18px 0 54px rgb(0 0 0 / 46%);
+    color-scheme: dark;
+  }
+}
+
+/* biome-ignore format: Preserve the legacy declarations while assigning explicit cascade ownership. */
+@layer nodeslide.base {
+  .nodeslide-studio {
   background: var(--ns-paper);
   color: var(--ns-ink);
   display: grid;
@@ -3475,61 +3537,7 @@
   font-size: 9px;
 }
 
-/* Tablet: navigator rail plus overlay inspector drawer. */
-@media (max-width: 1100px) {
-  .nodeslide-studio {
-    --ns-nav-width: 52px !important;
-    --ns-inspector-width: 0px !important;
-  }
-  .ns-studio-grid {
-    grid-template-columns: 52px minmax(0, 1fr) 0;
-    isolation: isolate;
-  }
-  .ns-navigator:not(.is-collapsed) {
-    bottom: 0;
-    box-shadow: var(--ns-shadow-lg);
-    grid-column: 1 / -1;
-    justify-self: start;
-    left: 0;
-    max-width: calc(100% - 52px);
-    overflow: hidden;
-    position: absolute;
-    top: 0;
-    width: 246px;
-    z-index: 30;
-  }
-  .ns-inspector:not(.is-collapsed) {
-    bottom: 0;
-    box-shadow: var(--ns-shadow-lg);
-    grid-column: 1 / -1;
-    justify-self: end;
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: min(420px, calc(100% - 52px)) !important;
-    z-index: 32;
-  }
-  .ns-inspector.is-collapsed {
-    display: none;
-  }
-  .ns-inspector-reopen {
-    display: inline-flex;
-  }
-  .ns-command-button > span,
-  .ns-command-button kbd,
-  .ns-toolbar-labeled > span {
-    display: none;
-  }
-  .ns-command-button {
-    padding: 0 8px;
-  }
-  .ns-canvas-stage {
-    padding-left: 50px;
-    padding-right: 50px;
-  }
-}
-
-/* Phone: horizontal storyboard and full-height contextual drawer. */
+/* Compact project and presenter dialogs remain owned by the base layer. */
 @media (max-width: 720px) {
   .ns-first-run-dialog > header {
     padding: 22px 18px 16px;
@@ -3554,128 +3562,6 @@
   }
   .ns-first-run-actions {
     flex-direction: column;
-  }
-  .nodeslide-studio {
-    grid-template-rows: 52px minmax(0, 1fr);
-  }
-  .ns-toolbar {
-    gap: 6px;
-    grid-template-columns: auto minmax(70px, 1fr) auto;
-    padding: 0 7px 0 9px;
-  }
-  .ns-wordmark {
-    font-size: 15px;
-  }
-  .ns-wordmark-badge,
-  .ns-version-label,
-  .ns-control-group,
-  .ns-presence,
-  .ns-command-button,
-  .ns-toolbar-actions .ns-button--quiet {
-    display: none;
-  }
-  .ns-title-input {
-    font-size: 10px;
-    max-width: 36vw;
-    padding: 3px;
-    text-align: center;
-  }
-  .ns-toolbar-actions .ns-button--dark {
-    height: 29px;
-    padding: 0 8px;
-  }
-  .ns-studio-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 112px minmax(0, 1fr) 0;
-  }
-  .ns-navigator,
-  .ns-navigator.is-collapsed,
-  .ns-navigator:not(.is-collapsed) {
-    border-bottom: 1px solid var(--ns-line);
-    border-right: 0;
-    box-shadow: none;
-    display: block;
-    grid-column: 1;
-    grid-row: 1;
-    height: 112px;
-    left: auto;
-    position: relative;
-    top: auto;
-    width: 100%;
-  }
-  .ns-navigator-heading,
-  .ns-navigator-footer,
-  .ns-section-label,
-  .ns-slide-row-copy,
-  .ns-slide-more,
-  .ns-collapsed-slides {
-    display: none !important;
-  }
-  .ns-navigator-expanded,
-  .ns-navigator.is-collapsed > .ns-navigator-expanded {
-    display: flex;
-    height: 100%;
-  }
-  .ns-slide-list {
-    display: flex;
-    gap: 7px;
-    height: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 8px 10px;
-  }
-  .ns-slide-section {
-    display: contents;
-  }
-  .ns-slide-row {
-    display: grid;
-    flex: 0 0 134px;
-    grid-template-columns: 15px 1fr;
-    height: 94px;
-    margin: 0;
-    padding: 5px;
-  }
-  .ns-slide-number {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .ns-thumbnail-button {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .ns-canvas-panel {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .ns-canvas-meta {
-    padding: 0 9px;
-  }
-  .ns-canvas-stage {
-    padding: 42px 24px 74px;
-  }
-  .ns-slide-stepper {
-    display: none;
-  }
-  .ns-zoom-controls {
-    bottom: 9px;
-  }
-  .ns-inspector:not(.is-collapsed) {
-    bottom: 0;
-    grid-column: 1;
-    grid-row: 1 / -1;
-    left: 0;
-    position: fixed;
-    right: 0;
-    top: 52px;
-    width: 100% !important;
-    z-index: 80;
-  }
-  .ns-inspector-tabs button span {
-    display: inline;
-  }
-  .ns-context-toolbar {
-    max-width: calc(100vw - 24px);
-    overflow-x: auto;
   }
   .ns-project-dialog {
     border-radius: 12px;
@@ -3716,4 +3602,5 @@
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
   }
+}
 }

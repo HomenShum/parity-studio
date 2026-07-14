@@ -7,6 +7,7 @@ import {
   nodeslideBriefValidator,
   nodeslideCandidateValidationReceiptValidator,
   nodeslideChartDataValidator,
+  nodeslideClaimSourceBindingValidator,
   nodeslideCommentAnchorValidator,
   nodeslideCursorValidator,
   nodeslideElementStyleValidator,
@@ -19,6 +20,7 @@ import {
   nodeslidePatchSourceValidator,
   nodeslidePatchStatusValidator,
   nodeslideSnapshotValidator,
+  nodeslideSourceBindingStatusValidator,
   nodeslideThemeValidator,
   nodeslideValidationIssueValidator,
   nodeslideValidationResultValidator,
@@ -228,6 +230,15 @@ const nodeslidePublishedSnapshotValidator = v.object({
   slides: v.array(nodeslidePublishedSlideValidator),
   elements: v.array(nodeslideElementValidator),
   sources: v.array(nodeslidePublishedSourceValidator),
+});
+
+const nodeslideSyncObjectLinkValidator = v.object({
+  kind: v.union(v.literal('deck'), v.literal('slide'), v.literal('element')),
+  localId: v.string(),
+  remoteId: v.string(),
+  semanticFingerprint: v.string(),
+  localSlideId: v.optional(v.string()),
+  remoteSlideId: v.optional(v.string()),
 });
 
 export default defineSchema({
@@ -523,8 +534,65 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
+    .index('by_project_id', ['projectId'])
+    .index('by_project_row', ['projectRowId'])
     .index('by_session_updated', ['clientSessionId', 'updatedAt'])
     .index('by_share_slug', ['shareSlug']),
+
+  nodeslide_sync_connections: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    remotePresentationId: v.string(),
+    remoteRevision: v.string(),
+    lastSyncedDeckVersion: v.number(),
+    objectMapping: v.array(nodeslideSyncObjectLinkValidator),
+    status: v.union(
+      v.literal('active'),
+      v.literal('syncing'),
+      v.literal('conflict'),
+      v.literal('error'),
+      v.literal('disconnected'),
+    ),
+    connectionVersion: v.number(),
+    lastMutationKey: v.string(),
+    lastMutationFingerprint: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastSyncedAt: v.number(),
+    disconnectedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_provider', ['deckId', 'provider'])
+    .index('by_provider_remote', ['provider', 'remotePresentationId']),
+
+  nodeslide_oauth_sessions: defineTable({
+    stateDigest: v.string(),
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    codeVerifierCiphertext: v.string(),
+    returnTo: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    consumedAt: v.optional(v.number()),
+  })
+    .index('by_state_digest', ['stateDigest'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_oauth_credentials: defineTable({
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    accessTokenCiphertext: v.string(),
+    refreshTokenCiphertext: v.optional(v.string()),
+    accessTokenExpiresAt: v.number(),
+    scopes: v.array(v.string()),
+    tokenType: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_deck_provider', ['deckId', 'provider'])
+    .index('by_updated', ['updatedAt']),
 
   nodeslide_slides: defineTable({
     id: v.string(),
@@ -934,6 +1002,8 @@ export default defineSchema({
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
+    sourceBindingStatus: v.optional(nodeslideSourceBindingStatusValidator),
+    claimSourceBindings: v.optional(v.array(nodeslideClaimSourceBindingValidator)),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
@@ -1011,6 +1081,7 @@ export default defineSchema({
     processedAt: v.optional(v.number()),
   })
     .index('by_stable_id', ['id'])
+    .index('by_deck_recorded', ['deckId', 'recordedAt'])
     .index('by_tenant_actor_recorded', ['tenantId', 'actorId', 'recordedAt'])
     .index('by_tenant_deck_recorded', ['tenantId', 'deckId', 'recordedAt']),
 
@@ -1045,6 +1116,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_stable_id', ['id'])
+    .index('by_tenant', ['tenantId'])
     .index('by_tenant_actor', ['tenantId', 'actorId']),
 
   nodeslide_rate_limits: defineTable({
