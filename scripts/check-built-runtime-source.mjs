@@ -2,8 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { normalizeRuntimeSourceSha, parseRuntimeSourcePayload } from './runtime-source.mjs';
 
-const manifestPath = process.argv[2];
-const expectedValue = process.argv[3];
+// pnpm preserves a conventional `--` separator when forwarding script
+// arguments. Accept both `pnpm <script> -- a b` and `node script a b` so the
+// release gate behaves identically locally and in GitHub Actions.
+const [manifestPath, expectedValue] = process.argv.slice(2).filter((value) => value !== '--');
 const expectedSha = normalizeRuntimeSourceSha(expectedValue);
 
 if (!manifestPath || !expectedSha) {
