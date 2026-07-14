@@ -365,14 +365,14 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
     expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
-    for (const tab of ['design', 'comments', 'versions', 'data', 'trace']) {
+    for (const tab of ['design', 'comments', 'versions', 'data', 'trace', 'json']) {
       expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
     }
     expect(expanded).toContain('aria-label="Resize inspector"');
     expect(expanded).toContain('Drag or use Left and Right arrow keys to resize inspector');
 
     const collapsed = renderPanel(workspace, slide, true, []);
-    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Data', 'Trace']) {
+    for (const tab of ['AI', 'Design', 'Comments', 'Versions', 'Evidence', 'Trace', 'Spec']) {
       expect(collapsed).toContain(`aria-label="Open ${tab}"`);
     }
   });

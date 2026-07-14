@@ -41,14 +41,14 @@ export function DataInspector({ sources, selectedElements, onDeleteSource }: Dat
       <section className="ns-inspector-section">
         <div className="ns-section-title-row">
           <div>
-            <span className="ns-eyebrow">Evidence layer</span>
-            <h2>Data & sources</h2>
+            <span className="ns-eyebrow">Grounding layer</span>
+            <h2>Evidence & assets</h2>
           </div>
           <span className="ns-count-pill">{sources.length}</span>
         </div>
         <p>
-          Citations stay attached to canonical elements and travel with exported artifacts.
-          NodeSlide checks attachment and disclosure; it does not independently verify facts.
+          Review uploaded tables, images, web captures, and citations bound to slide elements. They
+          travel with exports; NodeSlide checks attachment and disclosure, not factual truth.
         </p>
       </section>
 

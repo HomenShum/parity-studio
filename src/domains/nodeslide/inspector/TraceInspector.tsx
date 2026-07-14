@@ -193,9 +193,11 @@ export function TraceInspector({
         </div>
       ) : (
         <>
-          <label className="ns-trace-picker">
+          <label className="ns-trace-picker" htmlFor="nodeslide-trace-run">
             <span>Run</span>
             <select
+              id="nodeslide-trace-run"
+              name="traceRun"
               value={selected?.id ?? ''}
               onChange={(event) => {
                 const traceId = event.target.value;

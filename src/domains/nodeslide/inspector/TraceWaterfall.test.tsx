@@ -96,6 +96,7 @@ describe('TraceWaterfall', () => {
       const compactRows = compactHtml.match(/data-testid="trace-activity-row"/g)?.length ?? 0;
       expect(compactRows).toBe(count <= 6 ? count : 6);
       expect(compactHtml).toContain('Full timeline');
+      expect(compactHtml).toContain('data-observability-primitives="assistant-ui-react-o11y"');
       if (count > 6) expect(compactHtml).toContain(`${count - 6} earlier step`);
 
       const expandedHtml = renderToStaticMarkup(
@@ -104,6 +105,7 @@ describe('TraceWaterfall', () => {
       const expandedRows = expandedHtml.match(/data-testid="trace-waterfall-row"/g)?.length ?? 0;
       expect(expandedRows).toBeGreaterThan(0);
       expect(expandedRows).toBeLessThanOrEqual(count);
+      expect(expandedHtml).toContain('data-observability-primitives="assistant-ui-react-o11y"');
       if (count === 100) expect(expandedRows).toBeLessThan(40);
     },
   );

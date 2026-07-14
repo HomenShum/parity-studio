@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { NodeSlideWorkspace, SlideElement } from '../../../../shared/nodeslide';
 import { JsonInspector } from './JsonInspector';
 
-describe('JSON / Source inspector', () => {
+describe('SlideLang spec inspector', () => {
   it('exposes the snapshot, last-patch, and selected-element views', () => {
     const markup = renderToStaticMarkup(
       <JsonInspector workspace={workspace} selectedElements={[]} onApplyPatch={() => undefined} />,
     );
 
-    expect(markup).toContain('JSON / Source');
+    expect(markup).toContain('SlideLang spec');
     expect(markup).toContain('Current snapshot');
     expect(markup).toContain('Last patch');
     expect(markup).toContain('Selected element');

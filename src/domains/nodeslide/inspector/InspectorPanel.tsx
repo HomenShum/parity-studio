@@ -151,9 +151,9 @@ const tabs: Array<{ id: InspectorTab; label: string; icon: typeof Bot }> = [
   { id: 'design', label: 'Design', icon: SlidersHorizontal },
   { id: 'comments', label: 'Comments', icon: MessageCircle },
   { id: 'versions', label: 'Versions', icon: History },
-  { id: 'data', label: 'Data', icon: Database },
+  { id: 'data', label: 'Evidence', icon: Database },
   { id: 'trace', label: 'Trace', icon: Activity },
-  { id: 'json', label: 'Source', icon: Braces },
+  { id: 'json', label: 'Spec', icon: Braces },
 ];
 
 export function InspectorPanel<CommandId extends string = string>({

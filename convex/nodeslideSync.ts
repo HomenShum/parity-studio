@@ -127,8 +127,9 @@ export const createConnection = mutation({
         lastSyncedAt: now,
         disconnectedAt: undefined,
       });
+      const { disconnectedAt: _disconnectedAt, ...activeExisting } = existing;
       return connectionFromRow({
-        ...existing,
+        ...activeExisting,
         remotePresentationId,
         remoteRevision,
         lastSyncedDeckVersion,
@@ -139,7 +140,6 @@ export const createConnection = mutation({
         lastMutationFingerprint: mutationFingerprint,
         updatedAt: now,
         lastSyncedAt: now,
-        disconnectedAt: undefined,
       });
     }
 

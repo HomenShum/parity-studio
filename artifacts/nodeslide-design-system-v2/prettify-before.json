@@ -1,0 +1,11 @@
+{
+  "repo": "D:/VSCode Projects/parity-studio-integration-all",
+  "url": "http://127.0.0.1:5201/",
+  "outDir": "artifacts/nodeslide-design-system-v2/before-audit",
+  "viewport": { "width": 1512, "height": 812 },
+  "scheme": "light",
+  "clicks": ["text=Explore the editable sample workspace", "text=Trace"],
+  "waitMs": 1500,
+  "clickWaitMs": 2500,
+  "settleMs": 2500
+}

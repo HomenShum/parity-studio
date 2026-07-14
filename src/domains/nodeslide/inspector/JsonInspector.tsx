@@ -130,7 +130,7 @@ export function JsonInspector({
     try {
       const accepted = await onApplyPatch(
         result.operations,
-        `Edited ${editingElement.name} from Source JSON`,
+        `Edited ${editingElement.name} from Spec JSON`,
         editingElement.id,
         editingElement.version,
       );
@@ -173,14 +173,14 @@ export function JsonInspector({
       <section className="ns-inspector-section">
         <div className="ns-section-title-row">
           <div>
-            <span className="ns-eyebrow">Deck source</span>
-            <h2>JSON / Source</h2>
+            <span className="ns-eyebrow">Deck structure</span>
+            <h2>SlideLang spec</h2>
           </div>
           <Braces size={17} aria-hidden="true" />
         </div>
         <p>
-          Inspect the live NodeSlide source and apply selected-element edits through typed patch
-          operations. IDs, versions, kind, rotation, and other unsupported fields remain read-only.
+          Inspect and copy the live structured deck state. Selected-element JSON edits still compile
+          into typed patch operations; protected identity and version fields stay read-only.
         </p>
       </section>
 
@@ -233,7 +233,7 @@ export function JsonInspector({
       ) : null}
 
       <section className="ns-inspector-section">
-        <div className="ns-json-view-tabs" role="tablist" aria-label="JSON source views">
+        <div className="ns-json-view-tabs" role="tablist" aria-label="SlideLang spec views">
           {viewOptions.map((option) => (
             <button
               key={option.id}

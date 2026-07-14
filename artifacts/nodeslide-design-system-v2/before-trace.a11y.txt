@@ -1,0 +1,290 @@
+- main:
+  - button "Create or open a NodeSlide deck":
+    - generic: "N"
+    - generic: NodeSlide
+  - generic: /
+  - textbox "Deck title": NodeSlide — stories with structure
+  - generic: v1
+  - generic "History controls":
+    - button "Undo" [disabled]:
+    - button "Redo" [disabled]:
+  - button "Switch to dark theme":
+  - 'button "Language and clarity: English"':
+    - generic: EN
+  - button "Reset demo view":
+    - generic: Reset demo
+  - button "Share deck":
+    - generic: Share
+  - button "Present deck":
+    - generic: Present
+  - button "Export deck":
+    - generic: Export
+  - button "Open command palette":
+    - generic: Commands
+  - navigation "Slides":
+    - tablist "Navigator views":
+      - tab "Slides" [selected]
+      - tab "Outline"
+      - tab "Layers"
+    - tabpanel "Slides":
+      - region "NodeSlide / 01":
+        - button "NodeSlide / 01 1" [expanded]:
+          - generic: NodeSlide / 01
+          - generic: "1"
+        - generic: "01"
+        - 'button "Slide 1: Stories with structure"':
+          - generic: NODESLIDE / 01
+          - generic: Build the story. Keep every decision editable.
+          - generic: "NodeSlide treats a deck as a typed system: narrative, geometry, sources, comments, and changes stay connected from first brief to final room."
+          - generic: • Structured canvas
+          - generic: • Guarded edits
+          - generic: • Traceable claims
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "01"
+        - button "Stories with structure"
+        - generic: 1 source · current
+        - button "Slide 1 actions":
+      - region "Scenario / 02":
+        - button "Scenario / 02 1" [expanded]:
+          - generic: Scenario / 02
+          - generic: "1"
+        - generic: "02"
+        - 'button "Slide 2: The handoff tax compounds"':
+          - generic: SCENARIO / 02
+          - generic: Keep source context attached as the story moves.
+          - generic: "This golden scenario focuses on one design goal: keep copy, layout, citations, and feedback connected through drafting, review, revision, and handoff."
+          - generic: 01 Draft with source context
+          - generic: 02 Review on stable anchors
+          - generic: 03 Hand off editable structure
+          - generic: CONTEXT
+          - generic: Qualitative workflow label — not a measured benchmark
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "02"
+        - button "The handoff tax compounds"
+        - generic: 2 sources · current
+        - button "Slide 2 actions":
+      - region "Foundation / 03":
+        - button "Foundation / 03 1" [expanded]:
+          - generic: Foundation / 03
+          - generic: "1"
+        - generic: "03"
+        - 'button "Slide 3: A deck is a typed system"':
+          - generic: FOUNDATION / 03
+          - generic: Structure turns a visual artifact into an operating surface.
+          - generic: Slides and elements carry stable IDs, normalized geometry, source links, export capability, locks, and independent versions.
+          - generic: 01 Stable IDs survive every view
+          - generic: 02 Normalized boxes travel across renderers
+          - generic: 03 Locks protect intent
+          - img "Structured deck graph connecting slides, elements, sources, and versions":
+            - strong: Structured deck graph connecting slides, elements, sources, and versions
+            - generic: Replace image
+            - generic: A canonical deck graph keeps every artifact connected.
+          - generic: A canonical deck graph keeps every artifact connected.
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "03"
+        - button "A deck is a typed system"
+        - generic: 2 sources · current
+        - button "Slide 3 actions":
+      - region "Workflow / 04":
+        - button "Workflow / 04 1" [expanded]:
+          - generic: Workflow / 04
+          - generic: "1"
+        - generic: "04"
+        - 'button "Slide 4: One intent, three guarded passes"':
+          - generic: WORKFLOW / 04
+          - generic: Plan → propose → commit, with scope checked at every boundary.
+          - generic: The agent can reason broadly, but it may only write inside the explicit deck, slide, element, comment, or bounding-box scope.
+          - generic: 01 Read context
+          - generic: 02 Propose an inspectable patch
+          - generic: 03 Validate and accept atomically
+          - math "The agent can only mutate the intersection of requested and authorized scope.":
+            - code: authorized change = requested scope ∩ allowed scope
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "04"
+        - button "One intent, three guarded passes"
+        - generic: 2 sources · current
+        - button "Slide 4 actions":
+      - region "Proof / 05":
+        - button "Proof / 05 1" [expanded]:
+          - generic: Proof / 05
+          - generic: "1"
+        - generic: "05"
+        - 'button "Slide 5: Quality is measurable"':
+          - generic: PROOF / 05
+          - generic: A beautiful deck still needs deterministic gates.
+          - generic: Structural, geometry, source, and export checks produce separate signals for basic validity, publishing safety, and a clean handoff.
+          - generic: 01 ok · structurally valid
+          - generic: 02 publishOk · safe to present
+          - generic: 03 cleanOk · no warnings
+          - generic: 3 gates
+          - generic: "independent validation signals: ok, publishOk, cleanOk"
+          - img "ok, publish, clean bar chart":
+            - generic: ok
+            - generic: publish
+            - generic: clean
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "05"
+        - button "Quality is measurable"
+        - generic: 2 sources · current
+        - button "Slide 5 actions":
+      - region "Trust / 06":
+        - button "Trust / 06 1" [expanded]:
+          - generic: Trust / 06
+          - generic: "1"
+        - generic: "06"
+        - 'button "Slide 6: Human review stays in the loop"':
+          - generic: TRUST / 06
+          - generic: Comments become context. Patches remain choices.
+          - generic: A reviewer can anchor feedback to a deck, slide, element, or region; link the resolution to an accepted patch; and restore any prior snapshot.
+          - generic: 01 Anchored discussion
+          - generic: 02 Compare-and-set acceptance
+          - generic: 03 Version recovery
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "06"
+        - button "Human review stays in the loop"
+        - generic: 1 source · current
+        - button "Slide 6 actions":
+      - region "Next / 07":
+        - button "Next / 07 1" [expanded]:
+          - generic: Next / 07
+          - generic: "1"
+        - generic: "07"
+        - 'button "Slide 7: Ship the story, keep the structure"':
+          - generic: NEXT / 07
+          - generic: Move at presentation speed without giving up engineering-grade trust.
+          - generic: Start with a brief, shape the narrative together, and leave with a deck whose content, sources, changes, and exports are still yours.
+          - generic: • Create from brief
+          - generic: • Review every change
+          - generic: • Present with confidence
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "07"
+        - button "Ship the story, keep the structure"
+        - generic: 1 source · current
+        - button "Slide 7 actions":
+      - button "Add slide":
+        - text: Add slide
+      - text: drag rows to reorder · double-click to rename
+  - region "Editor canvas":
+    - tablist "Canvas views":
+      - tab "Edit" [selected]
+      - tab "Overview"
+      - tab "Compare"
+    - generic: "01"
+    - strong: Stories with structure
+    - generic: verified
+    - complementary "Narrative context":
+      - generic: Slide job
+      - generic: "Narrative role: NodeSlide / 01. Keep the spoken transition focused on “Build the story. Keep every decision editable.” Evidence note: Content is based on the supplied creation brief. Illustrative examples are not independently verified; replace them with measured evidence before external publication."
+    - tabpanel "Edit":
+      - region "Canvas, slide 1":
+        - button "Accent rail, shape slide element, locked"
+        - button "Section label, text slide element":
+          - generic: NODESLIDE / 01
+        - button "Headline, text slide element":
+          - generic: Build the story. Keep every decision editable.
+        - button "Body copy, text slide element":
+          - generic: "NodeSlide treats a deck as a typed system: narrative, geometry, sources, comments, and changes stay connected from first brief to final room."
+        - button "Key point 1, text slide element":
+          - generic: • Structured canvas
+        - button "Key point 2, text slide element":
+          - generic: • Guarded edits
+        - button "Key point 3, text slide element":
+          - generic: • Traceable claims
+        - button "Deck footer, text slide element, locked":
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+        - button "Page number, text slide element, locked":
+          - generic: "01"
+        - generic "Slide navigation":
+          - button "Previous slide" [disabled]:
+          - generic: 1 / 7
+          - button "Next slide":
+        - generic "Canvas zoom and pan controls":
+          - button "Zoom out":
+          - generic: 65%
+          - button "Zoom in":
+          - button "Fit slide to workspace": Fit
+  - complementary "NodeSlide inspector":
+    - button "Resize inspector"
+    - generic: Inspector
+    - generic "Current inspector context":
+      - generic: Selection · none
+    - button "Collapse inspector":
+    - tablist "Inspector views":
+      - tab "AI":
+        - generic: AI
+      - tab "Design":
+        - generic: Design
+      - tab "Comments":
+        - generic: Comments
+      - tab "Versions":
+        - generic: Versions
+      - tab "Data":
+        - generic: Data
+      - tab "Trace" [active] [selected]:
+        - generic: Trace
+      - tab "Source":
+        - generic: Source
+    - tabpanel "Trace":
+      - generic: Agent activity
+      - heading "Run details" [level=2]
+      - tablist "Trace detail level":
+        - tab "Summary":
+          - text: Summary
+        - tab "Timeline" [selected]:
+          - text: Timeline
+        - tab "Raw":
+          - text: Raw
+      - paragraph: Provider, work performed, validation, and human approval in one auditable run.
+      - 'heading "Current deck validation: passed" [level=3]':
+        - text: "Current deck validation: passed"
+      - paragraph: Deck v1 · publish ready
+      - generic: Run
+      - combobox "Run":
+        - option "Created the polished seven-slide NodeSlide golden workspace." [selected]
+      - article:
+        - generic: Completed
+        - generic: deck v1
+        - time: Started 6:59:12 PM
+        - heading "Created the polished seven-slide NodeSlide golden workspace." [level=3]
+        - generic "provider · model · reasoning effort attribution":
+          - generic: deterministic · golden-seed/v1
+        - generic "Run metrics":
+          - generic: Run time
+          - strong:
+            - text: 1s
+          - generic: Tokens
+          - strong: — → —
+          - generic: Cost
+          - strong:
+            - text: not recorded
+          - generic: Validation
+          - strong: Passed
+        - paragraph: No external provider billing was recorded for this fallback.
+        - generic: Execution
+        - generic: 6 auditable records
+        - strong: Structured timeline unavailable
+        - paragraph: Legacy runs keep their custody receipt but do not invent span timing.
+        - generic "Run events":
+          - button "Authorization — expand":
+            - text: Authorization
+            - text: Consent not required — no external egress
+          - button "Context — expand":
+            - text: Context
+            - generic "planningInputDigest — not sealed": — unsealed
+            - text: 2 context references read — attribution route degraded
+          - button "Plan — expand":
+            - text: Plan
+            - generic "planningSnapshotDigest — not sealed": — unsealed
+            - text: 7-step plan drafted
+          - button "Actions — expand":
+            - text: Actions
+            - text: Deck built deterministically (2 tool calls)
+          - button "Validation — expand":
+            - text: Validation
+            - text: Deterministic validation passed (v1)
+          - button "Approval — expand":
+            - text: Approval
+            - generic "candidateDigest — not sealed": — unsealed
+            - text: Provisional seal — machine only, not signable
+    - button "Structure, presentation, and cleanup checks passed. Open validation details.":
+      - status: Structure, presentation, and cleanup checks passed

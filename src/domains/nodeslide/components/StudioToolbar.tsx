@@ -190,6 +190,8 @@ export function StudioToolbar({
 
         <div className="ns-deck-identity ns-deck-identity--v3">
           <input
+            id="nodeslide-deck-title"
+            name="deckTitle"
             aria-label="Deck title"
             data-testid="deck-title"
             className="ns-title-input ns-title-input--v3"

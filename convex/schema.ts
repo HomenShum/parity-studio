@@ -562,6 +562,34 @@ export default defineSchema({
     .index('by_deck_provider', ['deckId', 'provider'])
     .index('by_provider_remote', ['provider', 'remotePresentationId']),
 
+  nodeslide_oauth_sessions: defineTable({
+    stateDigest: v.string(),
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    codeVerifierCiphertext: v.string(),
+    returnTo: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    consumedAt: v.optional(v.number()),
+  })
+    .index('by_state_digest', ['stateDigest'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_oauth_credentials: defineTable({
+    deckId: v.string(),
+    provider: v.literal('google_slides'),
+    accessTokenCiphertext: v.string(),
+    refreshTokenCiphertext: v.optional(v.string()),
+    accessTokenExpiresAt: v.number(),
+    scopes: v.array(v.string()),
+    tokenType: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_deck_provider', ['deckId', 'provider'])
+    .index('by_updated', ['updatedAt']),
+
   nodeslide_slides: defineTable({
     id: v.string(),
     deckId: v.string(),

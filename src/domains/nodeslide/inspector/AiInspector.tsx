@@ -1162,6 +1162,8 @@ export function AiInspector<CommandId extends string = string>({
               <label>
                 <span>Operation mode</span>
                 <select
+                  id="nodeslide-operation-mode"
+                  name="operationMode"
                   value={operationMode}
                   onChange={(event) => setOperationMode(event.target.value as OperationMode)}
                   aria-label="Operation mode"
@@ -1175,6 +1177,8 @@ export function AiInspector<CommandId extends string = string>({
               <label>
                 <span>Design behavior</span>
                 <select
+                  id="nodeslide-design-behavior"
+                  name="designBehavior"
                   value={designBehavior}
                   onChange={(event) =>
                     setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
@@ -1191,6 +1195,8 @@ export function AiInspector<CommandId extends string = string>({
               <label>
                 <span>Reference use</span>
                 <select
+                  id="nodeslide-reference-use"
+                  name="referenceUse"
                   value={referenceUse}
                   onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
                   data-testid="ai-reference-use"
@@ -1266,6 +1272,8 @@ export function AiInspector<CommandId extends string = string>({
                 <Sparkles size={12} aria-hidden="true" />
                 <span className="ns-sr-only">Agent model</span>
                 <select
+                  id="nodeslide-agent-model"
+                  name="agentModel"
                   value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
                   onChange={(event) => chooseProviderModel(event.target.value)}
                   aria-label="Agent model"
@@ -1296,6 +1304,8 @@ export function AiInspector<CommandId extends string = string>({
                 <label className="ns-ai-model-picker ns-ai-effort-picker">
                   <span className="ns-sr-only">Reasoning effort</span>
                   <select
+                    id="nodeslide-reasoning-effort"
+                    name="reasoningEffort"
                     value={providerEffort}
                     onChange={(event) => {
                       const effort = event.target.value as NodeSlideReasoningEffort;
@@ -1372,6 +1382,8 @@ export function AiInspector<CommandId extends string = string>({
               {onAttachDataFile ? (
                 <>
                   <input
+                    id="nodeslide-ai-data-file"
+                    name="aiDataFile"
                     ref={attachmentInputRef}
                     className="ns-sr-only"
                     type="file"
@@ -1435,9 +1447,11 @@ export function AiInspector<CommandId extends string = string>({
                 <label className={providerConsent ? 'is-ready' : ''}>
                   <input
                     type="checkbox"
+                    data-testid="ai-provider-consent"
+                    id="nodeslide-provider-consent"
+                    name="providerConsent"
                     checked={providerConsent}
                     onChange={(event) => setProviderConsent(event.target.checked)}
-                    data-testid="ai-provider-consent"
                   />
                   <span>
                     Allow one {providerNameForMode(providerMode)} request /{' '}
@@ -1453,6 +1467,8 @@ export function AiInspector<CommandId extends string = string>({
               {webResearch ? (
                 <label className={webResearchConsent ? 'is-ready' : ''}>
                   <input
+                    id="nodeslide-web-research-consent"
+                    name="webResearchConsent"
                     type="checkbox"
                     checked={webResearchConsent}
                     onChange={(event) => setWebResearchConsent(event.target.checked)}
