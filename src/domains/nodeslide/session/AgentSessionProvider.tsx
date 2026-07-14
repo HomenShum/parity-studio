@@ -36,6 +36,8 @@ export interface AgentSessionContextValue {
   prepareJob: (input: {
     kind: AgentSessionJobKind;
     requestFingerprint: string;
+    targetDeckId?: string;
+    ownerAccessKey?: string;
   }) => AgentSessionJobHandle;
   attachJob: (receipt: AgentSessionJobReceipt) => void;
   reconcileJob: (receipt: AgentSessionJobReceipt) => void;
@@ -107,7 +109,12 @@ export function AgentSessionProvider({
     [commit, now],
   );
   const prepareJob = useCallback(
-    (input: { kind: AgentSessionJobKind; requestFingerprint: string }) => {
+    (input: {
+      kind: AgentSessionJobKind;
+      requestFingerprint: string;
+      targetDeckId?: string;
+      ownerAccessKey?: string;
+    }) => {
       const current = stateRef.current.activeJob;
       const reusing =
         current?.kind === input.kind && current.requestFingerprint === input.requestFingerprint;
@@ -115,7 +122,9 @@ export function AgentSessionProvider({
         stateRef.current,
         {
           ...input,
-          ownerAccessKey: reusing ? current.ownerAccessKey : createSecret(),
+          ownerAccessKey: reusing
+            ? current.ownerAccessKey
+            : (input.ownerAccessKey ?? createSecret()),
           idempotencyKey: reusing ? current.idempotencyKey : `job-${createSecret()}`,
         },
         now(),

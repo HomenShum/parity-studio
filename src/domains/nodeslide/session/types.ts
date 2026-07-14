@@ -76,8 +76,10 @@ export interface AgentSessionJobHandle {
   jobId?: string;
   streamId?: string;
   workflowId?: string;
+  targetDeckId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
+  resultCandidateDigest?: string;
   conversationRunId?: string;
   memoryIds: readonly string[];
   error?: string;
@@ -108,6 +110,7 @@ export interface AgentSessionJobReceipt {
   workflowId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
+  resultCandidateDigest?: string;
   conversationRunId?: string;
   memoryIds?: readonly string[];
   error?: string;

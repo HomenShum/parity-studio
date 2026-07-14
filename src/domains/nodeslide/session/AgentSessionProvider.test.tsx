@@ -41,6 +41,14 @@ describe('AgentSessionProvider', () => {
     expect(screen.getByTestId('job-status')).toHaveTextContent('preparing');
     expect(screen.getByTestId('job-binding').textContent).toBe(firstBinding);
   });
+
+  it('binds edit jobs to the existing deck owner capability and target deck', () => {
+    renderSession();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare edit job' }));
+
+    expect(screen.getByTestId('job-binding')).toHaveTextContent('deck-owner-key|');
+    expect(screen.getByTestId('job-target')).toHaveTextContent('deck-a');
+  });
 });
 
 function renderSession() {
@@ -94,6 +102,19 @@ function SessionHarness() {
       >
         Prepare job
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          session.prepareJob({
+            kind: 'edit_proposal',
+            requestFingerprint: 'edit-request',
+            targetDeckId: 'deck-a',
+            ownerAccessKey: 'deck-owner-key',
+          })
+        }
+      >
+        Prepare edit job
+      </button>
       <output data-testid="landing-attachments">{landing.attachments.length}</output>
       <output data-testid="create-attachments">{create.attachments.length}</output>
       <output data-testid="editor-attachments">{editor.attachments.length}</output>
@@ -102,6 +123,7 @@ function SessionHarness() {
       <output data-testid="job-binding">
         {job ? `${job.ownerAccessKey}|${job.idempotencyKey}` : 'none'}
       </output>
+      <output data-testid="job-target">{job?.targetDeckId ?? 'none'}</output>
     </div>
   );
 }

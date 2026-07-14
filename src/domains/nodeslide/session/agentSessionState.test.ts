@@ -132,6 +132,43 @@ describe('NodeSlide authoritative agent session state', () => {
     expect(archived.lastJob).toMatchObject({ jobId: 'job-b', resultDeckId: 'deck-c' });
     expect(archived.lastJob).not.toHaveProperty('ownerAccessKey');
   });
+
+  it('persists an edit target and exact candidate binding across reload', () => {
+    const storage = new MemoryStorage();
+    const prepared = prepareAgentSessionJob(
+      createInitialAgentSessionState('session-edit', 1),
+      {
+        kind: 'edit_proposal',
+        requestFingerprint: 'intent-edit',
+        ownerAccessKey: 'deck-owner-key',
+        idempotencyKey: 'idempotency-edit',
+        targetDeckId: 'deck-edit',
+      },
+      2,
+    );
+    const awaitingReview = attachAgentSessionJob(prepared.state, {
+      jobId: 'job-edit',
+      kind: 'edit_proposal',
+      idempotencyKey: 'idempotency-edit',
+      status: 'awaiting_review',
+      phase: 'awaiting_review',
+      progress: 100,
+      attempt: 1,
+      maxAttempts: 3,
+      resultPatchId: 'patch-edit',
+      resultCandidateDigest: 'sha256:candidate-edit',
+      updatedAt: 3,
+    });
+
+    expect(writeAgentSessionState(storage, awaitingReview)).toBe(true);
+    expect(readAgentSessionState(storage, 'session-edit', 4).activeJob).toMatchObject({
+      kind: 'edit_proposal',
+      ownerAccessKey: 'deck-owner-key',
+      targetDeckId: 'deck-edit',
+      resultPatchId: 'patch-edit',
+      resultCandidateDigest: 'sha256:candidate-edit',
+    });
+  });
 });
 
 function receipt() {

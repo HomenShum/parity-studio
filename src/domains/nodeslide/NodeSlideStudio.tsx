@@ -47,7 +47,7 @@ import {
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
 import { NodeSlideLanding } from './components/NodeSlideLanding';
-import { type OwnerCapabilityRecovery } from './components/OwnerCapabilityRecoveryDialog';
+import type { OwnerCapabilityRecovery } from './components/OwnerCapabilityRecoveryDialog';
 import { PresenterView } from './components/PresenterView';
 import {
   type CreateDeckAdmissionRequest,
@@ -176,6 +176,14 @@ interface NodeSlideGeneratedApi {
   nodeslideJobs: {
     startCreateDeck: PublicMutation<
       CreateDeckAdmissionRequest & { ownerAccessKey: string; idempotencyKey: string },
+      AgentSessionJobReceipt
+    >;
+    startEditProposal: PublicMutation<
+      Omit<AgentEditRequest, 'idempotencyKey'> & {
+        clientSessionId: string;
+        ownerAccessKey: string;
+        idempotencyKey: string;
+      },
       AgentSessionJobReceipt
     >;
     get: PublicQuery<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
@@ -557,6 +565,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const localCommitVersionsRef = useRef(new Set<number>());
   const acceptingPatchIdsRef = useRef(new Set<string>());
   const handledCreateJobIdsRef = useRef(new Set<string>());
+  const handledEditJobIdsRef = useRef(new Set<string>());
+  const resolvingEditJobIdsRef = useRef(new Set<string>());
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
@@ -609,9 +619,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
   const removeAgentMemory = useMutation(nodeslideApi.nodeslideMemory.remove);
   const startCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.startCreateDeck);
-  const cancelCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
-  const retryCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.retry);
-  const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
+  const startEditProposalJob = useMutation(nodeslideApi.nodeslideJobs.startEditProposal);
+  const cancelDurableJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
+  const retryDurableJob = useMutation(nodeslideApi.nodeslideJobs.retry);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
   const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
   const rejectVariation = useMutation(nodeslideApi.nodeslideVariations.reject);
@@ -651,9 +661,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     nodeslideApi.nodeslide.listDecks,
     knownAccess.length > 0 ? { access: knownAccess } : 'skip',
   );
-  const durableCreateJob = useQuery(
+  const durableSessionJob = useQuery(
     nodeslideApi.nodeslideJobs.get,
-    activeSessionJob?.kind === 'create_deck' && activeSessionJob.jobId
+    activeSessionJob?.jobId
       ? {
           jobId: activeSessionJob.jobId,
           ownerAccessKey: activeSessionJob.ownerAccessKey,
@@ -661,8 +671,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       : 'skip',
   );
   useEffect(() => {
-    if (durableCreateJob) reconcileAgentSessionJob(durableCreateJob);
-  }, [durableCreateJob, reconcileAgentSessionJob]);
+    if (durableSessionJob) reconcileAgentSessionJob(durableSessionJob);
+  }, [durableSessionJob, reconcileAgentSessionJob]);
   const variationRows = useQuery(
     nodeslideApi.nodeslideVariations.list,
     activeDeckId && ownerAccessKey && activeSlideId
@@ -851,37 +861,37 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   }, [projectsOpen, setAgentSessionSurface, workspace]);
 
   useEffect(() => {
-    if (!durableCreateJob || durableCreateJob.kind !== 'create_deck') return;
-    if (durableCreateJob.status === 'queued' || durableCreateJob.status === 'running') {
-      handledCreateJobIdsRef.current.delete(durableCreateJob.jobId);
+    if (!durableSessionJob || durableSessionJob.kind !== 'create_deck') return;
+    if (durableSessionJob.status === 'queued' || durableSessionJob.status === 'running') {
+      handledCreateJobIdsRef.current.delete(durableSessionJob.jobId);
       setCreating(true);
       setProjectError(null);
       return;
     }
-    if (handledCreateJobIdsRef.current.has(durableCreateJob.jobId)) return;
-    if (durableCreateJob.status === 'failed') {
-      handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
-      const message = durableCreateJob.error ?? 'The durable deck job failed.';
+    if (handledCreateJobIdsRef.current.has(durableSessionJob.jobId)) return;
+    if (durableSessionJob.status === 'failed') {
+      handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
+      const message = durableSessionJob.error ?? 'The durable deck job failed.';
       setCreating(false);
       setProjectError(message);
       setToast({ kind: 'error', message });
       return;
     }
-    if (durableCreateJob.status === 'cancelled') {
-      handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
+    if (durableSessionJob.status === 'cancelled') {
+      handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
       setCreating(false);
       setProjectError(null);
       setToast({ kind: 'success', message: 'Deck creation cancelled before persistence.' });
       archiveAgentSessionJob();
       return;
     }
-    if (durableCreateJob.status !== 'succeeded' || !durableCreateJob.resultDeckId) return;
+    if (durableSessionJob.status !== 'succeeded' || !durableSessionJob.resultDeckId) return;
     const ownerCapability = activeSessionJob?.ownerAccessKey;
     if (!ownerCapability) return;
-    handledCreateJobIdsRef.current.add(durableCreateJob.jobId);
+    handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
     void convex
       .query(nodeslideApi.nodeslide.getWorkspace, {
-        deckId: durableCreateJob.resultDeckId,
+        deckId: durableSessionJob.resultDeckId,
         ownerAccessKey: ownerCapability,
       })
       .then((createdWorkspace) => {
@@ -908,7 +918,166 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     activeSessionJob?.ownerAccessKey,
     archiveAgentSessionJob,
     convex,
-    durableCreateJob,
+    durableSessionJob,
+    installWorkspace,
+  ]);
+
+  useEffect(() => {
+    const receipt = durableSessionJob;
+    if (!receipt || receipt.kind !== 'edit_proposal') return;
+    const jobId = receipt.jobId;
+    const targetDeckId = activeSessionJob?.targetDeckId;
+    const jobOwnerAccessKey = activeSessionJob?.ownerAccessKey;
+
+    if (receipt.status === 'queued' || receipt.status === 'running') {
+      handledEditJobIdsRef.current.delete(jobId);
+      resolvingEditJobIdsRef.current.delete(jobId);
+      setAgentBusy(true);
+      setAiAgentActivity((current) =>
+        current?.status === 'running'
+          ? current
+          : {
+              status: 'running',
+              elapsedMs: 0,
+              ask: 'Preparing a durable, reviewable slide proposal.',
+            },
+      );
+      return;
+    }
+    if (handledEditJobIdsRef.current.has(jobId)) return;
+
+    if (receipt.status === 'failed') {
+      handledEditJobIdsRef.current.add(jobId);
+      const message = receipt.error ?? 'The durable edit proposal job failed.';
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+      return;
+    }
+
+    if (receipt.status === 'cancelled') {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'cancelled',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message: 'Run cancelled. No deck changes were applied.',
+      });
+      setToast({ kind: 'success', message: 'Run cancelled. No deck changes were applied.' });
+      archiveAgentSessionJob();
+      return;
+    }
+
+    if (receipt.status !== 'awaiting_review') return;
+    if (
+      !targetDeckId ||
+      !jobOwnerAccessKey ||
+      !receipt.resultPatchId ||
+      !receipt.resultCandidateDigest
+    ) {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      const message = 'The durable proposal is missing its deck, patch, or candidate binding.';
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+      archiveAgentSessionJob();
+      return;
+    }
+
+    if (targetDeckId !== activeDeckIdRef.current) {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      setAiAgentActivity(null);
+      setToast({
+        kind: 'success',
+        message: 'The proposal is ready in its original deck and remains unchanged until review.',
+      });
+      archiveAgentSessionJob();
+      return;
+    }
+    if (resolvingEditJobIdsRef.current.has(jobId)) return;
+    resolvingEditJobIdsRef.current.add(jobId);
+
+    void convex
+      .query(nodeslideApi.nodeslide.getWorkspace, {
+        deckId: targetDeckId,
+        ownerAccessKey: jobOwnerAccessKey,
+      })
+      .then((authoritativeWorkspace) => {
+        if (!authoritativeWorkspace) {
+          throw new Error('The completed proposal workspace could not be resumed.');
+        }
+        if (!editorRequestGateRef.current?.isDeckCurrent(targetDeckId)) {
+          throw new Error('The active deck changed before the proposal could be resumed.');
+        }
+        const patch = authoritativeWorkspace.patches.find(
+          (candidate) => candidate.id === receipt.resultPatchId,
+        );
+        if (!patch || patch.candidateDigest !== receipt.resultCandidateDigest) {
+          throw new Error('The durable proposal candidate binding did not match the workspace.');
+        }
+        if (
+          !editorCandidateCanAccept(
+            editorCandidateReceiptForPatch(patch, authoritativeWorkspace.deck),
+          )
+        ) {
+          throw new Error(
+            'The durable proposal did not carry an exact successful validation receipt.',
+          );
+        }
+        installWorkspace(authoritativeWorkspace, jobOwnerAccessKey);
+        setPreviewedVariation(null);
+        setPreviewedSignatureProfile(null);
+        setPreviewedPatchId(patch.id);
+        const firstAffectedSlideId =
+          'slideIds' in patch.scope ? patch.scope.slideIds[0] : undefined;
+        if (
+          firstAffectedSlideId &&
+          authoritativeWorkspace.deck.slideOrder.includes(firstAffectedSlideId)
+        ) {
+          selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+        }
+        setCanvasMode('compare');
+        if (shouldRevealCandidateCanvas(window.innerWidth)) setInspectorCollapsed(true);
+        handledEditJobIdsRef.current.add(jobId);
+        setAgentBusy(false);
+        setAiAgentActivity(null);
+        setToast({
+          kind: 'success',
+          message: 'Validated proposal resumed from its durable job. Review it before Accept.',
+        });
+        archiveAgentSessionJob();
+      })
+      .catch((error: unknown) => {
+        handledEditJobIdsRef.current.add(jobId);
+        setAgentBusy(false);
+        const message = errorMessage(error, 'The durable proposal could not be resumed.');
+        setAiAgentActivity({
+          status: 'failed',
+          elapsedMs: 0,
+          ask: 'Resume the durable slide proposal.',
+          message,
+        });
+        setToast({ kind: 'error', message });
+      })
+      .finally(() => resolvingEditJobIdsRef.current.delete(jobId));
+  }, [
+    activeSessionJob?.ownerAccessKey,
+    activeSessionJob?.targetDeckId,
+    archiveAgentSessionJob,
+    convex,
+    durableSessionJob,
     installWorkspace,
   ]);
 
@@ -1963,7 +2132,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         idempotencyKey: prepared.idempotencyKey,
       });
       if (receipt.status === 'failed' && receipt.attempt < receipt.maxAttempts) {
-        const retried = await retryCreateDeckJob({
+        const retried = await retryDurableJob({
           jobId: receipt.jobId,
           ownerAccessKey: prepared.ownerAccessKey,
         });
@@ -1989,7 +2158,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     const job = agentSessionState.activeJob;
     if (job?.kind !== 'create_deck' || !job.jobId) return;
     try {
-      const receipt = await cancelCreateDeckJob({
+      const receipt = await cancelDurableJob({
         jobId: job.jobId,
         ownerAccessKey: job.ownerAccessKey,
       });
@@ -2459,6 +2628,26 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
   const cancelAiRun = async (runId: string) => {
     if (!ownerAccessKey) return;
+    const durableJob = agentSessionState.activeJob;
+    if (
+      durableJob?.kind === 'edit_proposal' &&
+      durableJob.jobId &&
+      (durableJob.status === 'queued' || durableJob.status === 'running')
+    ) {
+      try {
+        const receipt = await cancelDurableJob({
+          jobId: durableJob.jobId,
+          ownerAccessKey: durableJob.ownerAccessKey,
+        });
+        if (receipt) reconcileAgentSessionJob(receipt);
+      } catch (error) {
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'The durable agent job could not be cancelled.'),
+        });
+        return;
+      }
+    }
     const cancelled = await cancelAgentRun({
       deckId: workspace.deck.id,
       ownerAccessKey,
@@ -2730,29 +2919,47 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       scope.kind === 'deck' || scope.slideIds.includes(activeSlide.id)
         ? activeSlide.id
         : scope.slideIds[0];
-    const { commentContext: _commentContext, ...requestOptions } = options;
+    const {
+      commentContext: _commentContext,
+      idempotencyKey: _composerIdempotencyKey,
+      ...requestOptions
+    } = options;
     void (async () => {
       try {
-        const receipt = await proposeEdit({
+        const durableRequest: Omit<AgentEditRequest, 'idempotencyKey'> & {
+          clientSessionId: string;
+        } = {
+          clientSessionId,
           deckId: requestedDeckId,
-          ownerAccessKey: requestedOwnerAccessKey,
           instruction,
           baseDeckVersion: workspace.deck.version,
           ...clocks,
           scope,
           ...(focusSlideId ? { focusSlideId } : {}),
           ...requestOptions,
+        };
+        const prepared = prepareAgentSessionJob({
+          kind: 'edit_proposal',
+          requestFingerprint: agentSessionRequestFingerprint(durableRequest),
+          targetDeckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
         });
-        if (!requestGate.isCurrent(requestToken)) return;
-        if (!receipt.workspace) {
-          throw new Error('The proposal completed without an authoritative workspace receipt.');
+        let receipt = await startEditProposalJob({
+          ...durableRequest,
+          ownerAccessKey: prepared.ownerAccessKey,
+          idempotencyKey: prepared.idempotencyKey,
+        });
+        if (receipt.status === 'failed' && receipt.attempt < receipt.maxAttempts) {
+          const retried = await retryDurableJob({
+            jobId: receipt.jobId,
+            ownerAccessKey: prepared.ownerAccessKey,
+          });
+          if (!retried) throw new Error('The durable edit proposal could not be retried.');
+          receipt = retried;
         }
-        installWorkspace(receipt.workspace, requestedOwnerAccessKey);
-        previewPatch(
-          receipt.workspace.patches.find((candidate) => candidate.id === receipt.patch.id) ??
-            receipt.patch,
-        );
-        setAiAgentActivity(null);
+        attachAgentSessionJob(receipt);
+        if (!requestGate.isCurrent(requestToken)) return;
+        setAgentBusy(receipt.status === 'queued' || receipt.status === 'running');
       } catch (error) {
         if (!requestGate.isCurrent(requestToken)) return;
         const message = errorMessage(error, 'The agent could not create a proposal.');
@@ -2769,7 +2976,6 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         });
       } finally {
         resetAgentSessionConsent();
-        if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
       }
     })();
   };

@@ -95,6 +95,7 @@ export function prepareAgentSessionJob(
     requestFingerprint: string;
     ownerAccessKey: string;
     idempotencyKey: string;
+    targetDeckId?: string;
   },
   now = Date.now(),
 ): { state: AgentSessionState; handle: AgentSessionJobHandle } {
@@ -122,6 +123,7 @@ export function prepareAgentSessionJob(
     maxAttempts: JOB_MAX_ATTEMPTS,
     preparedAt: now,
     updatedAt: now,
+    ...(input.targetDeckId ? { targetDeckId: boundedText(input.targetDeckId, 256) } : {}),
     memoryIds: Object.freeze([...state.controls.memory.references]),
   });
   return {
@@ -187,6 +189,9 @@ export function reconcileAgentSessionJob(
     ...(receipt.workflowId ? { workflowId: receipt.workflowId } : {}),
     ...(receipt.resultDeckId ? { resultDeckId: receipt.resultDeckId } : {}),
     ...(receipt.resultPatchId ? { resultPatchId: receipt.resultPatchId } : {}),
+    ...(receipt.resultCandidateDigest
+      ? { resultCandidateDigest: boundedText(receipt.resultCandidateDigest, 256) }
+      : {}),
     ...(receipt.conversationRunId ? { conversationRunId: receipt.conversationRunId } : {}),
     memoryIds: Object.freeze(uniqueBounded(receipt.memoryIds ?? current.memoryIds, 24)),
     ...(receipt.error ? { error: boundedText(receipt.error, 600) } : {}),
@@ -373,11 +378,17 @@ function normalizeJob(value: unknown): AgentSessionJobHandle | null {
     ...(typeof value.jobId === 'string' ? { jobId: value.jobId.slice(0, 256) } : {}),
     ...(typeof value.streamId === 'string' ? { streamId: value.streamId.slice(0, 256) } : {}),
     ...(typeof value.workflowId === 'string' ? { workflowId: value.workflowId.slice(0, 256) } : {}),
+    ...(typeof value['targetDeckId'] === 'string'
+      ? { targetDeckId: value['targetDeckId'].slice(0, 256) }
+      : {}),
     ...(typeof value.resultDeckId === 'string'
       ? { resultDeckId: value.resultDeckId.slice(0, 256) }
       : {}),
     ...(typeof value.resultPatchId === 'string'
       ? { resultPatchId: value.resultPatchId.slice(0, 256) }
+      : {}),
+    ...(typeof value['resultCandidateDigest'] === 'string'
+      ? { resultCandidateDigest: value['resultCandidateDigest'].slice(0, 256) }
       : {}),
     ...(typeof value.conversationRunId === 'string'
       ? { conversationRunId: value.conversationRunId.slice(0, 256) }
