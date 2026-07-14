@@ -37,6 +37,7 @@ import {
   type DeckPatch,
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_REASONING_EFFORTS,
+  NODESLIDE_SCOPE_SLIDE_LIMIT,
   type NodeSlideAgentMemory,
   type NodeSlideAgentMemoryCategory,
   type NodeSlideAgentMessage,
@@ -86,6 +87,7 @@ import {
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_WEB_RESEARCH_CONSENT,
 } from './reviewTypes';
+import { nodeSlideScopeLabel } from './scopePresentation';
 
 export {
   AI_DRAFTING_PHASE_MS,
@@ -111,7 +113,7 @@ export type {
   AiVariationRequest,
 } from './reviewTypes';
 
-type ScopeChoice = 'deck' | 'slide' | 'elements';
+type ScopeChoice = 'deck' | 'slide' | 'selected_slides' | 'elements';
 
 interface ComposerTrigger {
   kind: 'reference' | 'command';
@@ -124,6 +126,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   deck: Deck;
   slide: Slide;
   selectedElements: readonly SlideElement[];
+  selectedSlideIds?: readonly string[];
   workspaceElements?: readonly SlideElement[];
   patches: readonly AiReviewablePatch[];
   traces: readonly AgentTrace[];
@@ -175,6 +178,7 @@ export function AiInspector<CommandId extends string = string>({
   deck,
   slide,
   selectedElements,
+  selectedSlideIds = [],
   workspaceElements = [],
   patches,
   traces,
@@ -245,6 +249,7 @@ export function AiInspector<CommandId extends string = string>({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
@@ -292,7 +297,9 @@ export function AiInspector<CommandId extends string = string>({
 
   useEffect(() => {
     if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
-  }, [scopeChoice, selectedElements.length]);
+    if (scopeChoice === 'selected_slides' && selectedSlideIds.length < 2) setScopeChoice('slide');
+    setScopeError(null);
+  }, [scopeChoice, selectedElements.length, selectedSlideIds.length]);
 
   const activeTrace = useMemo(
     () =>
@@ -437,6 +444,8 @@ export function AiInspector<CommandId extends string = string>({
     ? commentContext.label
     : scopeChoice === 'deck'
       ? 'Whole deck'
+      : scopeChoice === 'selected_slides'
+        ? `${selectedSlideIds.length} selected slides`
       : scopeChoice === 'elements'
         ? `${selectedElements.length} selected`
         : 'Whole slide';
@@ -567,7 +576,21 @@ export function AiInspector<CommandId extends string = string>({
     }
     const writeScope = commentContext
       ? createCommentScope(commentContext, operationMode, deck, workspaceElements)
-      : createScope(scopeChoice, operationMode, deck.id, slide.id, selectedElements);
+      : createScope(
+          scopeChoice,
+          operationMode,
+          deck.id,
+          slide.id,
+          selectedSlideIds,
+          selectedElements,
+        );
+    if (!writeScope) {
+      setScopeError(
+        `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
+      );
+      return;
+    }
+    setScopeError(null);
     const options: AiProposalOptions<CommandId> = {
       ...provider,
       readContext: submittedReadContext,
@@ -667,6 +690,11 @@ export function AiInspector<CommandId extends string = string>({
             Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')} ·{' '}
             {slide.title}
           </span>
+          {selectedSlideIds.length >= 2 ? (
+            <span className="ns-ai-v3-context-chip is-selection">
+              Selected slides · {selectedSlideIds.length}
+            </span>
+          ) : null}
           {selectedElements.length > 0 ? (
             <span className="ns-ai-v3-context-chip is-selection">
               Selection · {selectedElements.length}
@@ -1137,6 +1165,7 @@ export function AiInspector<CommandId extends string = string>({
                   <button
                     type="button"
                     className={scopeChoice === 'deck' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'deck'}
                     onClick={() => setScopeChoice('deck')}
                   >
                     Deck
@@ -1144,13 +1173,25 @@ export function AiInspector<CommandId extends string = string>({
                   <button
                     type="button"
                     className={scopeChoice === 'slide' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'slide'}
                     onClick={() => setScopeChoice('slide')}
                   >
                     This slide
                   </button>
+                  {selectedSlideIds.length >= 2 ? (
+                    <button
+                      type="button"
+                      className={scopeChoice === 'selected_slides' ? 'is-active' : ''}
+                      aria-pressed={scopeChoice === 'selected_slides'}
+                      onClick={() => setScopeChoice('selected_slides')}
+                    >
+                      Selected slides ({selectedSlideIds.length})
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={scopeChoice === 'elements' ? 'is-active' : ''}
+                    aria-pressed={scopeChoice === 'elements'}
                     disabled={selectedElements.length === 0}
                     onClick={() => setScopeChoice('elements')}
                   >
@@ -1159,6 +1200,12 @@ export function AiInspector<CommandId extends string = string>({
                 </div>
               </div>
             )}
+
+            {scopeError ? (
+              <p className="ns-ai-v3-inline-error" role="alert">
+                {scopeError}
+              </p>
+            ) : null}
 
             <div className="ns-ai-policy-grid">
               <label>
@@ -1284,6 +1331,7 @@ export function AiInspector<CommandId extends string = string>({
           session={composerSession}
           status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
           submitLabel="Propose edit"
+          submitContent={<span className="ns-ai-submit-label">Propose</span>}
           submitTestId="ai-submit"
           submitTools={
             <PromptInputButton
@@ -1294,6 +1342,9 @@ export function AiInspector<CommandId extends string = string>({
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
               <Maximize2 size={14} />
+              <span className="ns-ai-tool-label">
+                {composerExpanded ? 'Collapse' : 'Expand'}
+              </span>
             </PromptInputButton>
           }
           textareaAria={{
@@ -1310,15 +1361,18 @@ export function AiInspector<CommandId extends string = string>({
             <>
               <PromptInputButton
                 aria-label="Connect BYOK model or coding agent"
+                className="ns-ai-tool-button"
                 data-testid="ai-connect-agent"
                 onClick={() => setConnectionsOpen(true)}
                 title="Connect BYOK model or coding agent"
               >
                 <PlugZap size={14} />
+                <span className="ns-ai-tool-label">Connect</span>
               </PromptInputButton>
               <span style={{ display: 'contents' }}>
                 <PromptInputButton
                   aria-label="Toggle web research"
+                  className="ns-ai-tool-button"
                   aria-pressed={webResearch}
                   data-testid="ai-web-research-toggle"
                   onClick={() => {
@@ -1329,11 +1383,13 @@ export function AiInspector<CommandId extends string = string>({
                   variant={webResearch ? 'default' : 'ghost'}
                 >
                   <Globe2 size={14} />
+                  <span className="ns-ai-tool-label">Web</span>
                 </PromptInputButton>
               </span>
               {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
                 <PromptInputButton
                   aria-label="Manage deck memory"
+                  className="ns-ai-tool-button"
                   aria-pressed={useMemoryForRun}
                   data-testid="ai-memory"
                   onClick={() => setMemoryOpen(true)}
@@ -1341,6 +1397,7 @@ export function AiInspector<CommandId extends string = string>({
                   variant={useMemoryForRun ? 'default' : 'ghost'}
                 >
                   <Brain size={14} />
+                  <span className="ns-ai-tool-label">Memory</span>
                   {memories.length ? (
                     <span className="ns-prompt-badge">{activeMemoryCount}</span>
                   ) : null}
@@ -1348,18 +1405,22 @@ export function AiInspector<CommandId extends string = string>({
               ) : null}
               <PromptInputButton
                 aria-label="Add read context reference"
+                className="ns-ai-tool-button ns-ai-tool-context"
                 disabled={references.length === 0}
                 onClick={() => openTokenMenu('@')}
                 title="Add read context"
               >
                 <AtSign size={14} />
+                <span className="ns-ai-tool-label">Context</span>
               </PromptInputButton>
               <PromptInputButton
                 aria-label="Add command"
+                className="ns-ai-tool-button ns-ai-tool-command"
                 onClick={() => openTokenMenu('/')}
                 title="Add command"
               >
                 <Command size={14} />
+                <span className="ns-ai-tool-label">Command</span>
               </PromptInputButton>
             </>
           }
@@ -1760,7 +1821,7 @@ function ProposalCard({
       <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
         <div>
           <dt>Write scope</dt>
-          <dd>{scopeEvidence(patch.scope)}</dd>
+          <dd>{nodeSlideScopeLabel(patch.scope)}</dd>
         </div>
         <div>
           <dt>Base</dt>
@@ -1962,9 +2023,19 @@ function createScope(
   operationMode: OperationMode,
   deckId: string,
   slideId: string,
+  selectedSlideIds: readonly string[],
   selectedElements: readonly SlideElement[],
-): PatchScope {
+): PatchScope | null {
   if (choice === 'deck') return { kind: 'deck', deckId, operationMode };
+  if (choice === 'selected_slides') {
+    const exactSlideIds = [...new Set(selectedSlideIds)];
+    if (
+      exactSlideIds.length < 2 ||
+      exactSlideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT
+    )
+      return null;
+    return { kind: 'slide', deckId, slideIds: exactSlideIds, operationMode };
+  }
   if (choice === 'elements') {
     return {
       kind: 'elements',
@@ -2116,19 +2187,6 @@ function defaultSuggestedActions(
       instruction: 'Reduce visual and copy density while preserving the evidence.',
     },
   ];
-}
-
-function scopeEvidence(scope: PatchScope) {
-  if (scope.kind === 'deck') return 'Entire deck';
-  if (scope.kind === 'slide')
-    return `${scope.slideIds.length} slide${scope.slideIds.length === 1 ? '' : 's'}`;
-  if (scope.kind === 'elements') {
-    return `${scope.elementIds.length} element${scope.elementIds.length === 1 ? '' : 's'} on ${
-      scope.slideIds.length
-    } slide${scope.slideIds.length === 1 ? '' : 's'}`;
-  }
-  if (scope.kind === 'bounding_box') return `Bounding box on ${scope.slideIds.length} slide`;
-  return `Comment ${scope.commentId}`;
 }
 
 function baseEvidence(patch: DeckPatch) {

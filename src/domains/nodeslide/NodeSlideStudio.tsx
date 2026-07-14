@@ -34,7 +34,7 @@ import type {
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
-import { operationElementIds } from '../../../shared/nodeslide';
+import { NODESLIDE_SCOPE_SLIDE_LIMIT, operationElementIds } from '../../../shared/nodeslide';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -69,6 +69,7 @@ import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import {
   type LayerZOrderAction,
+  normalizeSelectedSlideIds,
   SlideNavigator,
   type SlideNavigatorTab,
 } from './components/SlideNavigator';
@@ -97,6 +98,7 @@ import type {
   AiVariationRequest,
 } from './inspector/AiInspector';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
 import { extractPptxSignature } from './signature/index';
 import {
@@ -445,6 +447,7 @@ export function NodeSlideStudio() {
   const [recoveryAccessError, setRecoveryAccessError] = useState<string | null>(null);
   const [localWorkspace, setLocalWorkspace] = useState<NodeSlideWorkspace | null>(null);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+  const [selectedSlideIds, setSelectedSlideIds] = useState<string[]>([]);
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
   const [navigatorTab, setNavigatorTab] = useState<SlideNavigatorTab>('slides');
   const [collapsedNavigatorSections, setCollapsedNavigatorSections] = useState<string[]>([]);
@@ -838,6 +841,10 @@ export function NodeSlideStudio() {
   useEffect(() => {
     if (!workspace) return;
     setLocalWorkspace(workspace);
+    setSelectedSlideIds((current) => {
+      const normalized = normalizeSelectedSlideIds(workspace.deck.slideOrder, current);
+      return sameStringIds(current, normalized) ? current : normalized;
+    });
     setActiveSlideId((current) =>
       current && workspace.deck.slideOrder.includes(current)
         ? current
@@ -890,6 +897,7 @@ export function NodeSlideStudio() {
 
   useEffect(() => {
     void activeDeckId;
+    setSelectedSlideIds([]);
     setAgentBusy(false);
     setVariationGenerating(false);
     setVariationDecisionBusy(false);
@@ -2973,6 +2981,7 @@ export function NodeSlideStudio() {
           setNavigatorTab('slides');
           setCanvasMode('edit');
           setActiveInspectorTab('ai');
+          setSelectedSlideIds([]);
           setSelectedElementIds([]);
           setPreviewedPatchId(null);
           setPreviewedVariation(null);
@@ -2996,10 +3005,19 @@ export function NodeSlideStudio() {
           validations={workspace.validations}
           collapsedSections={collapsedNavigatorSections}
           propagationSlideIds={affectedSlideIds}
+          selectedSlideIds={selectedSlideIds}
           selectedElementIds={selectedElementIds}
           canAddSlide
           canDeleteSlide={orderedSlides.length > 1}
           onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
+          onSelectedSlideIdsChange={(slideIds) =>
+            setSelectedSlideIds(
+              normalizeSelectedSlideIds(
+                orderedSlides.map((slide) => slide.id),
+                slideIds.slice(0, NODESLIDE_SCOPE_SLIDE_LIMIT),
+              ),
+            )
+          }
           onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
           onTabChange={setNavigatorTab}
           onToggleSection={(section) =>
@@ -3067,8 +3085,9 @@ export function NodeSlideStudio() {
               { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
               `Deleted slide ${index + 1}`,
             ).then((accepted) => {
-              if (accepted && fallback)
-                selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
+              if (!accepted) return;
+              setSelectedSlideIds((current) => current.filter((id) => id !== slideId));
+              if (fallback) selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
             });
           }}
           onReorderSlide={(slideId, index) =>
@@ -3184,6 +3203,9 @@ export function NodeSlideStudio() {
           candidateSlide={compareCandidateSlide ?? null}
           candidateElements={compareCandidateElements}
           {...(compareCandidateLabel ? { candidateLabel: compareCandidateLabel } : {})}
+          {...(previewedPatch
+            ? { candidateScopeLabel: nodeSlideScopeLabel(previewedPatch.scope) }
+            : {})}
           compareOperations={compareOperations}
           candidateReceipt={compareCandidateReceipt}
           sliderPosition={compareSliderPosition}
@@ -3306,6 +3328,7 @@ export function NodeSlideStudio() {
           workspace={workspace}
           slide={activeSlide}
           selectedElements={selectedElements}
+          selectedSlideIds={selectedSlideIds}
           activeTab={activeInspectorTab}
           collapsed={inspectorCollapsed}
           width={inspectorWidth}
@@ -4023,6 +4046,10 @@ function selectSlide(
 ) {
   setSlide(slideId);
   setElements([]);
+}
+
+function sameStringIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function writeDeckToUrl(deckId: string) {

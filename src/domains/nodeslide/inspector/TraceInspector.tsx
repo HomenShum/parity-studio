@@ -46,6 +46,7 @@ import {
   nodeSlideReasoningEffort,
 } from '../../../../shared/nodeslide';
 import { TraceWaterfall } from './TraceWaterfall';
+import { nodeSlideScopeLabel } from './scopePresentation';
 import { spanDurationMs, spanTimingState } from './traceTelemetry';
 
 /*
@@ -291,6 +292,7 @@ export function TraceInspector({
               <TraceBanner
                 trace={selected}
                 validation={traceValidation}
+                {...(patch ? { patch } : {})}
                 {...(selectedRun ? { run: selectedRun } : {})}
               />
               <div className="ns-trace-section-label">
@@ -471,10 +473,12 @@ function DensityButton({
 function TraceBanner({
   trace,
   validation,
+  patch,
   run,
 }: {
   trace: AgentTrace;
   validation: TraceValidation | null;
+  patch?: DeckPatch;
   run?: NodeSlideAgentRun;
 }) {
   const fallback = isFallbackTrace(trace);
@@ -498,6 +502,11 @@ function TraceBanner({
         Started {formatTimestamp(run?.createdAt ?? trace.createdAt)}
       </time>
       <h3 className="ns-trace-run-title">{trace.summary}</h3>
+      {patch ? (
+        <span className="ns-trace-scope" data-testid="trace-scope-label">
+          Write scope · {nodeSlideScopeLabel(patch.scope)}
+        </span>
+      ) : null}
       <div
         className={`ns-trace-attrib ${fallback ? 'is-fallback' : 'is-live'}`}
         title="provider · model · reasoning effort attribution"

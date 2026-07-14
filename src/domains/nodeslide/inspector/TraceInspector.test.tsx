@@ -188,6 +188,12 @@ const traceFullGen: AgentTrace = {
 
 const patchLive = {
   id: 'patch_7f2e19',
+  scope: {
+    kind: 'slide',
+    deckId: 'deck_wc',
+    slideIds: ['slide_02'],
+    operationMode: 'unrestricted',
+  },
   status: 'proposed',
   operations: [1, 2, 3, 4, 5],
   candidateDigest: LIVE_DIGEST,
@@ -658,5 +664,27 @@ describe('compact durable telemetry projection', () => {
     expect(html).toContain('role="tabpanel"');
     expect(html).toContain('aria-controls=');
     expect(html).toContain('Chain of custody and countersigned receipt');
+  });
+
+  it('shows the exact multi-slide write scope on the selected run', () => {
+    const multiSlidePatch = {
+      ...patchLive,
+      scope: {
+        kind: 'slide',
+        deckId: 'deck_wc',
+        slideIds: ['slide_02', 'slide_04'],
+        operationMode: 'unrestricted',
+      },
+    } as unknown as DeckPatch;
+    const html = renderToStaticMarkup(
+      <TraceInspector
+        traces={[traceLive]}
+        validations={[validationLive]}
+        patches={[multiSlidePatch]}
+      />,
+    );
+
+    expect(html).toContain('Write scope');
+    expect(html).toContain('2 slides');
   });
 });

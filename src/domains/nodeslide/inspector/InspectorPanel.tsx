@@ -74,6 +74,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   workspace: NodeSlideWorkspace;
   slide: Slide;
   selectedElements: readonly SlideElement[];
+  selectedSlideIds?: readonly string[];
   activeTab: InspectorTab;
   collapsed: boolean;
   width: number;
@@ -168,6 +169,7 @@ export function InspectorPanel<CommandId extends string = string>({
   workspace,
   slide,
   selectedElements,
+  selectedSlideIds = [],
   activeTab,
   collapsed,
   width,
@@ -361,6 +363,9 @@ export function InspectorPanel<CommandId extends string = string>({
                 <span className={selectedElements.length > 0 ? 'is-selection' : 'is-empty'}>
                   Selection · {selectedElements.length > 0 ? selectedElements.length : 'none'}
                 </span>
+                {selectedSlideIds.length >= 2 ? (
+                  <span className="is-selection">Slides · {selectedSlideIds.length}</span>
+                ) : null}
               </div>
             </div>
             <button
@@ -404,6 +409,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   deck={workspace.deck}
                   slide={slide}
                   selectedElements={selectedElements}
+                  selectedSlideIds={selectedSlideIds}
                   workspaceElements={workspace.elements}
                   patches={workspace.patches}
                   traces={workspace.traces}

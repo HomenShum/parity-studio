@@ -64,6 +64,61 @@ afterEach(() => {
 });
 
 describe('NodeSlide persisted activity AI Elements adapter', () => {
+  it('proposes against exactly the noncontiguous selected slides and labels the scope count', async () => {
+    const snapshot = fixture('multi-slide-scope');
+    const slide2 = snapshot.slides[1];
+    const slide4 = snapshot.slides[3];
+    if (!slide2 || !slide4) throw new Error('Fixture requires four slides.');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onPropose,
+      selectedSlideIds: [slide2.id, slide4.id],
+    });
+
+    const scopeButton = screen.getByRole('button', { name: 'Selected slides (2)' });
+    expect(scopeButton).toHaveAttribute('aria-pressed', 'false');
+    await user.click(scopeButton);
+    expect(scopeButton).toHaveAttribute('aria-pressed', 'true');
+    await user.type(
+      screen.getByRole('textbox', { name: 'AI instruction' }),
+      'Align these two slides to the same decision narrative.',
+    );
+    await user.click(screen.getByTestId('ai-submit'));
+
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[1]).toEqual({
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slide2.id, slide4.id],
+      operationMode: 'unrestricted',
+    });
+  });
+
+  it('shows the exact multi-slide count on a reviewable proposal card', () => {
+    const snapshot = fixture('multi-slide-proposal');
+    const slide2 = snapshot.slides[1];
+    const slide4 = snapshot.slides[3];
+    if (!slide2 || !slide4) throw new Error('Fixture requires four slides.');
+    const patch = proposal(snapshot);
+    renderInspector(snapshot, {
+      patches: [
+        {
+          ...patch,
+          scope: {
+            kind: 'slide',
+            deckId: snapshot.deck.id,
+            slideIds: [slide2.id, slide4.id],
+            operationMode: 'unrestricted',
+          },
+        },
+      ],
+    });
+
+    expect(screen.getByText('2 slides')).toBeVisible();
+  });
+
   it('fails closed before per-request provider consent and resets consent after submit', async () => {
     const snapshot = fixture('consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
