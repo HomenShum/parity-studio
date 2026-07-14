@@ -823,7 +823,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.3.0',
+      adapterVersion: '1.4.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'failed',
       terminalOutcome: 'completed',
@@ -869,7 +869,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.3.0',
+      adapterVersion: '1.4.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
@@ -907,5 +907,78 @@ describe('NodeSlide baseline edit planner extraction', () => {
     });
     if (result.ok) return;
     expect(result.message).toContain('could not safely infer');
+  });
+
+  it('falls back to one parallel action-led headline per explicitly selected slide', async () => {
+    const snapshot = buildGoldenNodeSlide('multi-slide-headline-fallback', NOW).snapshot;
+    const selectedSlides = snapshot.slides.slice(0, 2);
+    const selectedSlideIds = selectedSlides.map((slide) => slide.id);
+    const targets = selectedSlideIds.map((slideId) => {
+      const target = snapshot.elements.find(
+        (element) =>
+          element.slideId === slideId &&
+          !element.locked &&
+          element.kind === 'text' &&
+          (element.role === 'headline' || element.role === 'title'),
+      );
+      if (!target) throw new Error(`Missing editable headline for ${slideId}.`);
+      return target;
+    });
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: selectedSlideIds,
+      operationMode: 'unrestricted',
+    };
+    const planningInput = input(snapshot, targets[0] as SlideElement, scope);
+    planningInput.request.instruction =
+      'Make the selected slides use parallel, action-led headlines. Change nothing outside this two-slide write scope.';
+    planningInput.request.baseSlideVersions = Object.fromEntries(
+      selectedSlides.map((slide) => [slide.id, slide.version]),
+    );
+    planningInput.request.baseElementVersions = Object.fromEntries(
+      targets.map((element) => [element.id, element.version]),
+    );
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: { summary: 'unsafe', operations: [{ op: 'invented_operation' }] },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 24,
+          inputTokens: 120,
+          outputTokens: 30,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt).toMatchObject({
+      adapterVersion: '1.4.0',
+      origin: 'deterministic_fallback',
+      providerOutcome: 'invalid',
+      terminalOutcome: 'completed',
+    });
+    expect(result.operations).toHaveLength(2);
+    expect(result.operations).toEqual(
+      targets.map((target) =>
+        expect.objectContaining({
+          op: 'replace_text',
+          slideId: target.slideId,
+          elementId: target.id,
+          text: expect.stringMatching(/^Act on this:/),
+        }),
+      ),
+    );
+    expect(
+      new Set(
+        result.operations.flatMap((operation) =>
+          'slideId' in operation ? [operation.slideId] : [],
+        ),
+      ),
+    ).toEqual(new Set(selectedSlideIds));
   });
 });
