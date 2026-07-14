@@ -45,15 +45,18 @@ import {
   getOrCreateSessionId,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
+  removeDeckOwnerAccessKey,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
+import { DeleteDeckDialog } from './components/DeleteDeckDialog';
 import {
   type EditorCandidateReceipt,
   type EditorCanvasMode,
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
+import { NodeSlideConnectionsDialog } from './components/NodeSlideConnectionsDialog';
 import { NodeSlideLanding } from './components/NodeSlideLanding';
 import {
   type OwnerCapabilityRecovery,
@@ -69,9 +72,9 @@ import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import {
   type LayerZOrderAction,
-  normalizeSelectedSlideIds,
   SlideNavigator,
   type SlideNavigatorTab,
+  normalizeSelectedSlideIds,
 } from './components/SlideNavigator';
 import { StoryArcOverview } from './components/StoryArcOverview';
 import { type StudioThemeMode, StudioToolbar } from './components/StudioToolbar';
@@ -196,6 +199,7 @@ interface NodeSlideGeneratedApi {
       { deckId: string; ownerAccessKey: string; sourceId: string },
       boolean
     >;
+    deleteDeck: PublicMutation<{ deckId: string; ownerAccessKey: string }, unknown>;
     listAgentRuns: PublicQuery<
       { deckId: string; ownerAccessKey: string; limit?: number },
       NodeSlideAgentRun[]
@@ -428,6 +432,118 @@ function mergeAgentTelemetryPages(
   };
 }
 
+type DeleteDeckMutation = (args: {
+  deckId: string;
+  ownerAccessKey: string;
+}) => Promise<unknown>;
+
+interface DeckDeletionActionProps {
+  open: boolean;
+  deckId: string;
+  deckTitle: string;
+  ownerAccessKey: string;
+  deleteDeck: DeleteDeckMutation;
+  onClose: () => void;
+  removeOwnerCapability?: (deckId: string) => unknown;
+  navigate?: (path: string) => void;
+}
+
+/** Owns the fail-open delete flow while the existing confirmation dialog owns exact-title input. */
+export function DeckDeletionAction({ open, ...props }: DeckDeletionActionProps) {
+  if (!open) return null;
+  return <OpenDeckDeletionAction key={props.deckId} {...props} />;
+}
+
+function OpenDeckDeletionAction({
+  deckId,
+  deckTitle,
+  ownerAccessKey,
+  deleteDeck,
+  onClose,
+  removeOwnerCapability = removeDeckOwnerAccessKey,
+  navigate = (path) => window.location.assign(path),
+}: Omit<DeckDeletionActionProps, 'open'>) {
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDeletion = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteDeck({ deckId, ownerAccessKey });
+      removeOwnerCapability(deckId);
+      navigate('/');
+    } catch (error) {
+      setDeleteError(errorMessage(error, 'Deck could not be deleted. Try again.'));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <DeleteDeckDialog
+      open
+      deckTitle={deckTitle}
+      deleting={deleting}
+      error={deleteError}
+      onCancel={onClose}
+      onConfirm={() => void confirmDeletion()}
+    />
+  );
+}
+
+interface EditorProjectDialogsProps {
+  deckId: string;
+  deckTitle: string;
+  ownerAccessKey: string;
+  connectionsOpen: boolean;
+  deleteDeckOpen: boolean;
+  projectsOpen: boolean;
+  ownerRecovery: OwnerCapabilityRecovery | null;
+  deleteDeck: DeleteDeckMutation;
+  onCloseConnections: () => void;
+  onCloseDeleteDeck: () => void;
+  onCloseRecovery: () => void;
+}
+
+/** Keeps editor project actions bound to the active deck instead of a stale URL parameter. */
+export function EditorProjectDialogs({
+  deckId,
+  deckTitle,
+  ownerAccessKey,
+  connectionsOpen,
+  deleteDeckOpen,
+  projectsOpen,
+  ownerRecovery,
+  deleteDeck,
+  onCloseConnections,
+  onCloseDeleteDeck,
+  onCloseRecovery,
+}: EditorProjectDialogsProps) {
+  return (
+    <>
+      <NodeSlideConnectionsDialog
+        open={connectionsOpen}
+        onClose={onCloseConnections}
+        deckId={deckId}
+      />
+      <OwnerCapabilityRecoveryDialog
+        open={Boolean(ownerRecovery) && !projectsOpen}
+        recovery={ownerRecovery}
+        onClose={onCloseRecovery}
+      />
+      <DeckDeletionAction
+        open={deleteDeckOpen}
+        deckId={deckId}
+        deckTitle={deckTitle}
+        ownerAccessKey={ownerAccessKey}
+        deleteDeck={deleteDeck}
+        onClose={onCloseDeleteDeck}
+      />
+    </>
+  );
+}
+
 export function NodeSlideStudio() {
   const convex = useConvex();
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
@@ -485,6 +601,8 @@ export function NodeSlideStudio() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [sampleRequested, setSampleRequested] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [deleteDeckOpen, setDeleteDeckOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -561,6 +679,7 @@ export function NodeSlideStudio() {
   const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
   const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
   const deleteDataSource = useMutation(nodeslideApi.nodeslide.deleteDataSource);
+  const deleteDeck = useMutation(nodeslideApi.nodeslide.deleteDeck);
   const cancelAgentRun = useMutation(nodeslideApi.nodeslide.cancelAgentRun);
   const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
   const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
@@ -2962,7 +3081,18 @@ export function NodeSlideStudio() {
             `Renamed deck to ${title}`,
           )
         }
+        onNewDeck={() => window.location.assign('/')}
         onOpenProjects={() => setProjectsOpen(true)}
+        onOpenConnections={() => setConnectionsOpen(true)}
+        onBackupRecoveryKey={() => {
+          if (!ownerAccessKey) return;
+          setOwnerRecovery({
+            deckId: workspace.deck.id,
+            deckTitle: workspace.deck.title,
+            ownerAccessKey,
+          });
+        }}
+        onDeleteDeck={() => setDeleteDeckOpen(true)}
         onUndo={() => void restoreHistory('undo')}
         onRedo={() => void restoreHistory('redo')}
         onShare={() => setShareOpen(true)}
@@ -3533,11 +3663,21 @@ export function NodeSlideStudio() {
         commands={commands}
         onClose={() => setCommandOpen(false)}
       />
-      <OwnerCapabilityRecoveryDialog
-        open={Boolean(ownerRecovery) && !projectsOpen}
-        recovery={ownerRecovery}
-        onClose={() => setOwnerRecovery(null)}
-      />
+      {ownerAccessKey ? (
+        <EditorProjectDialogs
+          deckId={workspace.deck.id}
+          deckTitle={workspace.deck.title}
+          ownerAccessKey={ownerAccessKey}
+          connectionsOpen={connectionsOpen}
+          deleteDeckOpen={deleteDeckOpen}
+          projectsOpen={projectsOpen}
+          ownerRecovery={ownerRecovery}
+          deleteDeck={deleteDeck}
+          onCloseConnections={() => setConnectionsOpen(false)}
+          onCloseDeleteDeck={() => setDeleteDeckOpen(false)}
+          onCloseRecovery={() => setOwnerRecovery(null)}
+        />
+      ) : null}
       <PublicationDialog
         open={shareOpen}
         publication={workspace.publication}

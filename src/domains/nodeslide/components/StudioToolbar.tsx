@@ -4,18 +4,23 @@ import {
   Download,
   FileCode2,
   FileJson2,
+  FilePlus2,
   FileType2,
+  FolderOpen,
   Globe2,
+  KeyRound,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightOpen,
   Play,
+  Plug,
   Redo2,
   RotateCcw,
   Share2,
   Sparkles,
   Sun,
+  Trash2,
   Undo2,
 } from 'lucide-react';
 import {
@@ -44,7 +49,11 @@ export interface StudioToolbarProps {
   copyIncludesContextAndSources?: boolean;
   navigatorCollapsed?: boolean;
   onTitleChange: (title: string) => void;
+  onNewDeck: () => void;
   onOpenProjects: () => void;
+  onOpenConnections: () => void;
+  onBackupRecoveryKey: () => void;
+  onDeleteDeck: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onShare: () => void;
@@ -75,7 +84,11 @@ export function StudioToolbar({
   copyIncludesContextAndSources,
   navigatorCollapsed = false,
   onTitleChange,
+  onNewDeck,
   onOpenProjects,
+  onOpenConnections,
+  onBackupRecoveryKey,
+  onDeleteDeck,
   onUndo,
   onRedo,
   onShare,
@@ -93,6 +106,7 @@ export function StudioToolbar({
   onResetView,
 }: StudioToolbarProps) {
   const [draftTitle, setDraftTitle] = useState(title);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [localThemeMode, setLocalThemeMode] = useState<StudioThemeMode>('light');
@@ -100,8 +114,10 @@ export function StudioToolbar({
   const [localPlainLanguage, setLocalPlainLanguage] = useState(false);
   const [localCopyIncludesContextAndSources, setLocalCopyIncludesContextAndSources] =
     useState(true);
+  const projectTriggerRef = useRef<HTMLButtonElement>(null);
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
+  const projectPopoverId = useId();
   const exportPopoverId = useId();
   const languagePopoverId = useId();
   const languageRadioName = useId();
@@ -149,18 +165,12 @@ export function StudioToolbar({
       onKeyDown={stopStudioNavigationFromControls}
     >
       <div className="ns-toolbar-left">
-        <button
-          className="ns-toolbar-brand ns-toolbar-brand--v3"
-          type="button"
-          onClick={onOpenProjects}
-          aria-label="Create or open a NodeSlide deck"
-          data-testid="new-deck-trigger"
-        >
+        <div className="ns-toolbar-brand ns-toolbar-brand--v3">
           <span className="ns-wordmark-mark ns-wordmark-mark--v3" aria-hidden="true">
             N
           </span>
           <span className="ns-wordmark">NodeSlide</span>
-        </button>
+        </div>
 
         <span className="ns-toolbar-slash" aria-hidden="true">
           /
@@ -225,6 +235,118 @@ export function StudioToolbar({
       </div>
 
       <div className="ns-toolbar-actions ns-toolbar-actions--v3">
+        <div className="ns-export-menu ns-project-menu">
+          <button
+            ref={projectTriggerRef}
+            className="ns-button ns-button--quiet ns-toolbar-labeled"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={projectOpen}
+            aria-controls={projectPopoverId}
+            aria-label="Project actions"
+            title="Project actions"
+            data-testid="project-actions-trigger"
+            onClick={() => {
+              setExportOpen(false);
+              setLanguageOpen(false);
+              setProjectOpen((value) => !value);
+            }}
+          >
+            <FolderOpen size={14} /> <span>Project</span> <ChevronDown size={12} />
+          </button>
+          <PopoverSurface
+            open={projectOpen}
+            id={projectPopoverId}
+            surfaceRole="menu"
+            ariaLabel="Project actions"
+            className="ns-popover ns-export-popover ns-project-popover"
+            triggerRef={projectTriggerRef}
+            onClose={() => setProjectOpen(false)}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="new-deck-trigger"
+              onClick={() => {
+                setProjectOpen(false);
+                onNewDeck();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <FilePlus2 size={17} />
+              </span>
+              <span>
+                <strong>New deck</strong>
+                <small>Start from the prompt-first landing</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProjectOpen(false);
+                onOpenProjects();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <FolderOpen size={17} />
+              </span>
+              <span>
+                <strong>Open deck</strong>
+                <small>Choose a deck owned by this browser</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProjectOpen(false);
+                onOpenConnections();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <Plug size={17} />
+              </span>
+              <span>
+                <strong>Connections</strong>
+                <small>Google Slides, model keys, and MCP</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProjectOpen(false);
+                onBackupRecoveryKey();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <KeyRound size={17} />
+              </span>
+              <span>
+                <strong>Back up recovery key</strong>
+                <small>Copy this deck's private owner key</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProjectOpen(false);
+                onDeleteDeck();
+              }}
+            >
+              <span className="ns-menu-icon">
+                <Trash2 size={17} />
+              </span>
+              <span>
+                <strong>Delete deck</strong>
+                <small>Permanently erase this deck and its data</small>
+              </span>
+            </button>
+          </PopoverSurface>
+        </div>
+
         <button
           className="ns-icon-button ns-theme-toggle"
           type="button"
@@ -247,6 +369,7 @@ export function StudioToolbar({
             aria-label={`Language and clarity: ${languageLabel(activeLanguage)}`}
             title="Language & clarity"
             onClick={() => {
+              setProjectOpen(false);
               setExportOpen(false);
               setLanguageOpen((value) => !value);
             }}
@@ -340,6 +463,7 @@ export function StudioToolbar({
             className="ns-button ns-button--quiet ns-reset-view"
             type="button"
             onClick={() => {
+              setProjectOpen(false);
               setExportOpen(false);
               setLanguageOpen(false);
               onResetView();
@@ -404,6 +528,7 @@ export function StudioToolbar({
             aria-label="Export deck"
             title="Export deck"
             onClick={() => {
+              setProjectOpen(false);
               setLanguageOpen(false);
               setExportOpen((value) => !value);
             }}

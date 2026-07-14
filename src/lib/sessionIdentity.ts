@@ -80,6 +80,28 @@ export function listStoredDeckAccess(): Array<{ deckId: string; ownerAccessKey: 
   }));
 }
 
+/** Removes one deck's capability without clearing access to any other deck. */
+export function removeDeckOwnerAccessKey(deckId: string): boolean {
+  if (typeof window === 'undefined' || !deckId) return false;
+  const access = readDeckAccess();
+  const removedOwnerAccessKey = access[deckId];
+  if (!removedOwnerAccessKey) return true;
+
+  delete access[deckId];
+  const deckAccessRemoved =
+    Object.keys(access).length === 0
+      ? removeStorage(window.localStorage, DECK_ACCESS_KEY)
+      : writeStorage(window.localStorage, DECK_ACCESS_KEY, JSON.stringify(access));
+  if (!deckAccessRemoved) return false;
+
+  const primaryAccessIsOnlyForRemovedDeck =
+    readStorage(window.localStorage, OWNER_ACCESS_KEY) === removedOwnerAccessKey &&
+    !Object.values(access).includes(removedOwnerAccessKey);
+  return primaryAccessIsOnlyForRemovedDeck
+    ? removeStorage(window.localStorage, OWNER_ACCESS_KEY)
+    : true;
+}
+
 function readStorage(storage: Storage, key: string): string | null {
   try {
     return storage.getItem(key);
@@ -95,6 +117,15 @@ function writeStorage(storage: Storage, key: string, value: string): boolean {
   } catch {
     // Storage can be unavailable in hardened/private browser contexts. The
     // caller still receives a usable in-memory value for the current mount.
+    return false;
+  }
+}
+
+function removeStorage(storage: Storage, key: string): boolean {
+  try {
+    storage.removeItem(key);
+    return storage.getItem(key) === null;
+  } catch {
     return false;
   }
 }
