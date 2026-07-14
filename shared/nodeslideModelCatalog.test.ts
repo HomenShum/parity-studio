@@ -30,6 +30,7 @@ describe('NodeSlide provider-native model metadata', () => {
       'anthropic/claude-fable-5': ['low', 'medium', 'high'],
       'google/gemini-3.5-flash': ['low', 'medium', 'high'],
       'google/gemini-3.1-pro-preview': ['low', 'medium', 'high'],
+      'openai/gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
       'openai/gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max'],
       'openai/gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max'],
     });
@@ -37,5 +38,6 @@ describe('NodeSlide provider-native model metadata', () => {
     expect(nodeSlideModelSupportsReasoningEffort('z-ai/glm-5.2', 'max')).toBe(false);
     expect(nodeSlideModelSupportsReasoningEffort('anthropic/claude-fable-5', 'xhigh')).toBe(false);
     expect(nodeSlideModelSupportsReasoningEffort('anthropic/claude-sonnet-5', 'max')).toBe(true);
+    expect(nodeSlideModelSupportsReasoningEffort('openai/gpt-5.6-luna', 'xhigh')).toBe(true);
   });
 });

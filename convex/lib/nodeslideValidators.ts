@@ -563,6 +563,7 @@ export const nodeslideAgentModelValidator = v.union(
   v.literal('anthropic/claude-fable-5'),
   v.literal('google/gemini-3.5-flash'),
   v.literal('google/gemini-3.1-pro-preview'),
+  v.literal('openai/gpt-5.6-luna'),
   v.literal('openai/gpt-5.6-sol'),
   v.literal('openai/gpt-5.6-terra'),
 );

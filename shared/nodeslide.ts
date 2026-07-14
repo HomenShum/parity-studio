@@ -76,6 +76,18 @@ export const NODESLIDE_AGENT_MODELS = [
     supportedEfforts: ['low', 'medium', 'high'],
   },
   {
+    id: 'openai/gpt-5.6-luna',
+    upstreamId: 'openai/gpt-5.6-luna',
+    provider: 'openrouter',
+    vendor: 'OpenAI',
+    label: 'GPT-5.6 Luna',
+    description: 'Fast, economical OpenAI reasoning for responsive slide iteration.',
+    costTier: 'fast',
+    bestFor: 'Fast edits and interactive iteration',
+    supportsTemperature: false,
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+  },
+  {
     id: 'openai/gpt-5.6-sol',
     upstreamId: 'openai/gpt-5.6-sol',
     provider: 'openrouter',
