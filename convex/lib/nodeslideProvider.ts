@@ -88,6 +88,8 @@ export interface NodeSlideJsonSchema {
   schema: Record<string, unknown>;
 }
 
+export type NodeSlideStructuredOutputMode = 'json_schema' | 'json_object' | 'prompt';
+
 export type NodeSlideProviderResult =
   | { ok: true; value: unknown; telemetry: NodeSlideProviderTelemetry }
   | {
@@ -105,6 +107,7 @@ export interface NodeSlideCompletionRequest {
   userText: string;
   maxTokens: number;
   jsonSchema?: NodeSlideJsonSchema;
+  structuredOutputMode: NodeSlideStructuredOutputMode;
   repairAttempt: boolean;
   signal: AbortSignal;
 }
@@ -163,7 +166,9 @@ export async function callNodeSlideFreeJson(
   let telemetry = emptyTelemetry(selectedModel, reasoningEffort);
   let hasTelemetry = false;
   let invalidResponse = '';
-  let nativeSchemaEnabled = Boolean(args.jsonSchema);
+  let structuredOutputMode: NodeSlideStructuredOutputMode = args.jsonSchema
+    ? 'json_schema'
+    : 'prompt';
 
   try {
     // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
@@ -178,7 +183,10 @@ export async function callNodeSlideFreeJson(
           systemPrompt: providerSystemPrompt(args, repairAttempt),
           userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
           maxTokens: args.maxTokens,
-          ...(args.jsonSchema && nativeSchemaEnabled ? { jsonSchema: args.jsonSchema } : {}),
+          ...(args.jsonSchema && structuredOutputMode === 'json_schema'
+            ? { jsonSchema: args.jsonSchema }
+            : {}),
+          structuredOutputMode,
           repairAttempt,
           signal: controller.signal,
         }),
@@ -191,12 +199,12 @@ export async function callNodeSlideFreeJson(
         if (
           attempt === 0 &&
           args.jsonSchema &&
-          nativeSchemaEnabled &&
+          structuredOutputMode === 'json_schema' &&
           isStructuredOutputRejection(result.errorMessage)
         ) {
-          nativeSchemaEnabled = false;
+          structuredOutputMode = structuredOutputFallbackMode(result.errorMessage);
           invalidResponse =
-            '[The provider rejected native structured-output mode. Return contract-valid JSON using the schema in the system prompt.]';
+            '[The provider rejected JSON Schema mode. Return contract-valid JSON using the schema in the system prompt and the compatible JSON mode selected for this repair.]';
           continue;
         }
         return providerFailure(
@@ -236,6 +244,7 @@ export async function callNodeSlideFreeJson(
       hasTelemetry,
     );
   } finally {
+    controller.abort();
     if (timeout !== undefined) clearTimeout(timeout);
   }
 }
@@ -255,14 +264,15 @@ async function completeNodeSlideWithPiAi(
       },
     ],
   };
-  const result = await nodeSlideModels.complete(model, context, {
+  const result = await nodeSlideModels.completeSimple(model, context, {
     signal: request.signal,
     maxTokens: request.maxTokens,
     maxRetries: 0,
     reasoning: request.reasoningEffort,
     ...(request.supportsTemperature ? { temperature: 0 } : {}),
     ...(request.provider === 'openrouter' ? { headers: OPENROUTER_ATTRIBUTION_HEADERS } : {}),
-    onPayload: (payload) => nodeSlideStructuredOutputPayload(payload, request.jsonSchema),
+    onPayload: (payload) =>
+      nodeSlideStructuredOutputPayload(payload, request.jsonSchema, request.structuredOutputMode),
   });
   const text = result.content
     .filter((block): block is TextContent => block.type === 'text')
@@ -281,8 +291,16 @@ async function completeNodeSlideWithPiAi(
 export function nodeSlideStructuredOutputPayload(
   payload: unknown,
   jsonSchema: NodeSlideJsonSchema | undefined,
+  mode: NodeSlideStructuredOutputMode = jsonSchema ? 'json_schema' : 'prompt',
 ): unknown {
-  if (!jsonSchema || !isPlainObject(payload)) return payload;
+  if (!isPlainObject(payload) || mode === 'prompt') return payload;
+  if (mode === 'json_object') {
+    return {
+      ...payload,
+      response_format: { type: 'json_object' },
+    };
+  }
+  if (!jsonSchema) return payload;
   return {
     ...payload,
     response_format: {
@@ -301,8 +319,16 @@ function providerErrorReason(errorMessage: string | undefined, routeLabel: strin
   if (isStructuredOutputRejection(errorMessage)) {
     return `The ${routeLabel} route rejected the structured-output schema.`;
   }
-  if (normalized.includes('no endpoints') || normalized.includes('provider')) {
+  if (
+    normalized.includes('no endpoints') ||
+    normalized.includes('no endpoint') ||
+    normalized.includes('no compatible provider') ||
+    normalized.includes('provider routing')
+  ) {
     return `The ${routeLabel} route had no compatible provider endpoint.`;
+  }
+  if (normalized.includes('timeout') || normalized.includes('timed out')) {
+    return `The ${routeLabel} route timed out.`;
   }
   if (normalized.includes('reasoning')) {
     return `The ${routeLabel} route rejected the requested reasoning mode.`;
@@ -315,7 +341,21 @@ function providerErrorReason(errorMessage: string | undefined, routeLabel: strin
 
 function isStructuredOutputRejection(errorMessage: string | undefined): boolean {
   const normalized = errorMessage?.toLowerCase() ?? '';
-  return normalized.includes('schema') || normalized.includes('response_format');
+  return (
+    normalized.includes('schema') ||
+    normalized.includes('response_format') ||
+    normalized.includes('response format') ||
+    normalized.includes('structured output')
+  );
+}
+
+function structuredOutputFallbackMode(
+  errorMessage: string | undefined,
+): Exclude<NodeSlideStructuredOutputMode, 'json_schema'> {
+  const normalized = errorMessage?.toLowerCase() ?? '';
+  return normalized.includes('schema') || normalized.includes('json_schema')
+    ? 'json_object'
+    : 'prompt';
 }
 
 function providerSystemPrompt(
@@ -459,7 +499,14 @@ function matchesJsonSchema(value: unknown, schema: Record<string, unknown>): boo
     return value.every((item) => matchesJsonSchema(item, items as Record<string, unknown>));
   }
 
-  if (schemaType === 'string') return typeof value === 'string';
+  if (schemaType === 'string') {
+    if (typeof value !== 'string') return false;
+    const minLength = schema['minLength'];
+    const maxLength = schema['maxLength'];
+    if (typeof minLength === 'number' && value.length < minLength) return false;
+    if (typeof maxLength === 'number' && value.length > maxLength) return false;
+    return true;
+  }
   if (schemaType === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return false;
     const minimum = schema['minimum'];
@@ -468,7 +515,14 @@ function matchesJsonSchema(value: unknown, schema: Record<string, unknown>): boo
     if (typeof maximum === 'number' && value > maximum) return false;
     return true;
   }
-  if (schemaType === 'integer') return Number.isInteger(value);
+  if (schemaType === 'integer') {
+    if (!Number.isInteger(value)) return false;
+    const minimum = schema['minimum'];
+    const maximum = schema['maximum'];
+    if (typeof minimum === 'number' && (value as number) < minimum) return false;
+    if (typeof maximum === 'number' && (value as number) > maximum) return false;
+    return true;
+  }
   if (schemaType === 'boolean') return typeof value === 'boolean';
   if (schemaType === 'null') return value === null;
   return true;

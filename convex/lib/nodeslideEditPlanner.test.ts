@@ -588,6 +588,37 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.receipt.providerTelemetry).toEqual(telemetry);
   });
 
+  it('contains a thrown provider call and converges on the bounded deterministic fallback', async () => {
+    const { snapshot, target, scope } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => {
+      throw new Error('raw Convex transport failure with upstream details');
+    });
+
+    const result = await planNodeSlideEdit(input(snapshot, target, scope), {
+      callProvider: provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: target.slideId,
+        elementId: target.id,
+        text: 'After',
+      },
+    ]);
+    expect(result.receipt).toMatchObject({
+      adapterVersion: '1.2.0',
+      origin: 'deterministic_fallback',
+      providerOutcome: 'failed',
+      terminalOutcome: 'completed',
+      fallbackReason: 'The GLM 5.2 route was unavailable.',
+    });
+    expect(JSON.stringify(result)).not.toContain('transport failure');
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
+
   it('recovers an invalid GLM envelope with a validated focused whole-slide rewrite', async () => {
     const { snapshot, target } = fixture();
     const focusedSlide = snapshot.slides.find((slide) => slide.id === target.slideId);
@@ -624,7 +655,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.1.0',
+      adapterVersion: '1.2.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',

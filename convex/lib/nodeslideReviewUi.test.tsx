@@ -119,11 +119,11 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
-    expect(markup).toContain('<option value="low">Light</option>');
-    expect(markup).toContain('<option value="medium">Medium</option>');
-    expect(markup).toContain('<option value="high" selected="">High</option>');
-    expect(markup).not.toContain('<option value="xhigh">Extra High</option>');
-    expect(markup).not.toContain('<option value="max">Ultra</option>');
+    expect(markup).toContain('<option value="low">Low</option>');
+    expect(markup).toContain('<option value="medium" selected="">Medium</option>');
+    expect(markup).toContain('<option value="high">High</option>');
+    expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
+    expect(markup).not.toContain('<option value="max">Max</option>');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('Claude Sonnet 5 · Anthropic');
     expect(markup).toContain('Claude Fable 5 · Anthropic');
@@ -137,14 +137,14 @@ describe('NodeSlide AI review inspector', () => {
     expect(createAiProviderRequest('nebius', true)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
     });
     expect(createAiVariationProviderRequest('nebius', false)).toBeNull();
     expect(createAiVariationProviderRequest('nebius', true)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
     });
     expect(createAiProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject({
@@ -166,8 +166,8 @@ describe('NodeSlide AI review inspector', () => {
       initialProviderModel: 'z-ai/glm-5.2',
     });
 
-    expect(markup).toContain('<option value="xhigh">Extra High</option>');
-    expect(markup).toContain('<option value="max">Ultra</option>');
+    expect(markup).toContain('<option value="xhigh">XHigh</option>');
+    expect(markup).not.toContain('<option value="max">Max</option>');
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {

@@ -46,6 +46,7 @@ describe('NodeSlide provider consent authority', () => {
     ).toMatchObject({
       providerMode: 'openrouter_free',
       providerModel: 'anthropic/claude-sonnet-5',
+      providerEffort: 'medium',
     });
     expect(
       validateNodeSlideProviderChoice(
@@ -53,7 +54,7 @@ describe('NodeSlide provider consent authority', () => {
         'openrouter_free',
         NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
       ),
-    ).toMatchObject({ providerMode: 'openrouter_free' });
+    ).toMatchObject({ providerMode: 'openrouter_free', providerEffort: 'medium' });
     expect(() =>
       validateNodeSlideProviderChoice(
         'variations',

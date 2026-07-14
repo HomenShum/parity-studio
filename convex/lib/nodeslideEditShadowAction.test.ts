@@ -9,6 +9,7 @@ import {
 } from '../../shared/nodeslide';
 import { proposeEdit } from '../nodeslideAgent';
 import { nodeSlideSnapshotDigest } from './nodeslideDeckRepl';
+import { nodeslideStableId } from './nodeslideIds';
 import { callNodeSlideFreeJson } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 import {
@@ -48,6 +49,7 @@ type ProposeArgs = {
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
   providerConsent: typeof NODESLIDE_OPENROUTER_EDIT_CONSENT;
+  idempotencyKey?: string;
   webResearch?: boolean;
   webResearchConsent?: string;
 };
@@ -111,7 +113,7 @@ function providerSuccess(target: { id: string; slideId: string }) {
     telemetry: {
       provider: TEST_PROVIDER,
       model: TEST_MODEL,
-      reasoningEffort: 'high',
+      reasoningEffort: 'medium',
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -217,7 +219,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
         referenceUse: 'context_only',
         providerMode: args.providerMode,
         providerModel: TEST_MODEL,
-        providerEffort: 'high',
+        providerEffort: 'medium',
       }),
     );
     expect(comparison.baseline.outcome).toBe('proposed');
@@ -250,7 +252,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
       telemetry: {
         provider: TEST_PROVIDER,
         model: args.providerModel,
-        reasoningEffort: 'high',
+        reasoningEffort: 'medium',
         costMicroUsd: 2_400,
         inputTokens: 180,
         outputTokens: 44,
@@ -301,7 +303,7 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     const telemetry = {
       provider: TEST_PROVIDER,
       model: TEST_MODEL,
-      reasoningEffort: 'high' as const,
+      reasoningEffort: 'medium' as const,
       costMicroUsd: 0,
       inputTokens: 100,
       outputTokens: 20,
@@ -329,6 +331,52 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
     );
     expect(proposalArgs?.toolCalls).toContain('Used deterministic bounded edit fallback');
     expect(proposalArgs?.shadowComparison).toBeDefined();
+  });
+
+  it('contains a thrown live provider failure without leaking a raw Convex error', async () => {
+    const { workspace, args } = fixture();
+    providerMock.mockRejectedValue(new Error('raw provider transport detail and request id'));
+    const test = harness(workspace);
+
+    const result = await proposeHandler(test.context, args);
+
+    expect(result).toBe(test.baselineResponse);
+    const proposalArgs = test.calls.find((call) => 'operations' in call);
+    expect(proposalArgs).toMatchObject({
+      provider: TEST_PROVIDER,
+      model: `${TEST_MODEL} (deterministic fallback)`,
+      reasoningEffort: 'medium',
+      operations: [{ op: 'replace_text', text: 'CANDIDATE_ONLY' }],
+    });
+    expect(proposalArgs?.traceSummary).toContain('The GLM 5.2 route was unavailable.');
+    expect(JSON.stringify(proposalArgs)).not.toContain('request id');
+    expect(providerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the durable proposal and trace identity when the same run is retried', async () => {
+    const { workspace, target, args } = fixture();
+    args.idempotencyKey = 'same-live-edit-retry';
+    providerSuccess(target);
+    const test = harness(workspace);
+    let clock = NOW;
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => clock++);
+
+    try {
+      await proposeHandler(test.context, args);
+      await proposeHandler(test.context, args);
+    } finally {
+      dateNow.mockRestore();
+    }
+
+    const proposals = test.calls.filter((call) => 'operations' in call);
+    expect(proposals).toHaveLength(2);
+    const expectedPatchId = nodeslideStableId('patch_agent', args.deckId, 'agent-run-test');
+    expect(proposals.map((proposal) => proposal.id)).toEqual([expectedPatchId, expectedPatchId]);
+    expect(proposals.map((proposal) => proposal.traceId)).toEqual([
+      nodeslideStableId('trace', expectedPatchId),
+      nodeslideStableId('trace', expectedPatchId),
+    ]);
+    expect(providerMock).toHaveBeenCalledTimes(2);
   });
 
   it('binds the comparison to the baseline request clock while snapshot digest binds loaded state', async () => {

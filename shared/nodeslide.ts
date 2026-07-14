@@ -25,7 +25,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'balanced',
     bestFor: 'Long, structured deck work',
     supportsTemperature: true,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
   },
   {
     id: 'anthropic/claude-sonnet-5',
@@ -49,7 +49,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Complex planning and review',
     supportsTemperature: false,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high'],
   },
   {
     id: 'google/gemini-3.5-flash',
@@ -61,7 +61,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'fast',
     bestFor: 'Fast iteration and large context',
     supportsTemperature: true,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high'],
   },
   {
     id: 'google/gemini-3.1-pro-preview',
@@ -73,7 +73,7 @@ export const NODESLIDE_AGENT_MODELS = [
     costTier: 'premium',
     bestFor: 'Data-heavy analysis',
     supportsTemperature: true,
-    supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEfforts: ['low', 'medium', 'high'],
   },
   {
     id: 'openai/gpt-5.6-sol',
@@ -106,14 +106,14 @@ export const NODESLIDE_DEFAULT_AGENT_MODEL: NodeSlideAgentModelId = 'nebius/zai-
 export const NODESLIDE_DEFAULT_OPENROUTER_AGENT_MODEL: NodeSlideAgentModelId = 'z-ai/glm-5.2';
 
 export const NODESLIDE_REASONING_EFFORTS = [
-  { id: 'low', label: 'Light', description: 'Faster responses for straightforward work.' },
+  { id: 'low', label: 'Low', description: 'Faster responses for straightforward work.' },
   { id: 'medium', label: 'Medium', description: 'Balanced reasoning for routine deck work.' },
   { id: 'high', label: 'High', description: 'Deeper reasoning for complex edits and synthesis.' },
-  { id: 'xhigh', label: 'Extra High', description: 'More deliberation for difficult decisions.' },
-  { id: 'max', label: 'Ultra', description: 'Maximum reasoning; consumes usage limits faster.' },
+  { id: 'xhigh', label: 'XHigh', description: 'More deliberation for difficult decisions.' },
+  { id: 'max', label: 'Max', description: 'Maximum reasoning; consumes usage limits faster.' },
 ] as const;
 export type NodeSlideReasoningEffort = (typeof NODESLIDE_REASONING_EFFORTS)[number]['id'];
-export const NODESLIDE_DEFAULT_REASONING_EFFORT: NodeSlideReasoningEffort = 'high';
+export const NODESLIDE_DEFAULT_REASONING_EFFORT: NodeSlideReasoningEffort = 'medium';
 
 export function isNodeSlideReasoningEffort(value: unknown): value is NodeSlideReasoningEffort {
   return NODESLIDE_REASONING_EFFORTS.some((effort) => effort.id === value);
@@ -122,7 +122,7 @@ export function isNodeSlideReasoningEffort(value: unknown): value is NodeSlideRe
 export function nodeSlideReasoningEffort(effortId: NodeSlideReasoningEffort) {
   return (
     NODESLIDE_REASONING_EFFORTS.find((effort) => effort.id === effortId) ??
-    NODESLIDE_REASONING_EFFORTS[2]
+    NODESLIDE_REASONING_EFFORTS[1]
   );
 }
 

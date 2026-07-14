@@ -303,7 +303,7 @@ describe('NodeSlide provider consent contract', () => {
     ).toEqual({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
     });
     expect(
@@ -327,7 +327,7 @@ describe('NodeSlide provider consent contract', () => {
     expect(validateNodeSlideBriefProviderChoice('nebius', NODESLIDE_NEBIUS_BRIEF_CONSENT)).toEqual({
       providerMode: 'nebius',
       providerModel: 'nebius/zai-org/GLM-5.2',
-      providerEffort: 'high',
+      providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_BRIEF_CONSENT,
     });
     expect(() =>

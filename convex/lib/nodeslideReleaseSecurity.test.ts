@@ -246,6 +246,7 @@ type PatchRequest = {
 };
 
 const applyPatchHandler = registeredHandler<PatchRequest, { patch: DeckPatch }>(applyPatch);
+const proposePatchHandler = registeredHandler<PatchRequest, { patch: DeckPatch }>(proposePatch);
 const acceptPatchHandler = registeredHandler<
   { deckId: string; ownerAccessKey: string; patchId: string },
   { patch: DeckPatch }
@@ -653,6 +654,75 @@ describe('NodeSlide release security', () => {
     expect(
       onlyStableRow(database, 'nodeslide_traces', 'trace-wrong-link').completedAt,
     ).toBeUndefined();
+  });
+
+  it('keeps proposal creation and acceptance owner-gated and idempotent across retries', async () => {
+    const database = new MemoryDatabase();
+    const fixture = seedWorkspace(database, 'proposal-retry', OWNER_ACCESS_KEY, '9');
+    const context = { db: database } as unknown as MutationCtx;
+    const snapshot = await requiredSnapshot(context, fixture.snapshot.deck.id);
+    const edit = textEdit(snapshot, 'Reviewable retry');
+    const request: PatchRequest = {
+      id: 'idempotent-review-proposal',
+      deckId: snapshot.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: snapshot.deck.version,
+      ...clocksForNodeSlideOperations(snapshot, [edit.operation]),
+      scope: edit.scope,
+      operations: [edit.operation],
+      summary: 'Create one review proposal',
+    };
+
+    const proposed = await proposePatchHandler(context, request);
+    expect(proposed.patch).toMatchObject({
+      id: request.id,
+      status: 'ready',
+      candidateDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+    });
+    database.resetObservations();
+
+    const proposalRetry = await proposePatchHandler(context, request);
+    expect(proposalRetry.patch).toEqual(proposed.patch);
+    expect(database.writes).toEqual([]);
+
+    await expect(
+      proposePatchHandler(context, {
+        ...request,
+        operations: [{ ...edit.operation, text: 'Substituted retry payload' }],
+      }),
+    ).rejects.toThrow(/idempotency key belongs to a different proposal/i);
+    expect(database.writes).toEqual([]);
+
+    const beforeAcceptance = await requiredSnapshot(context, snapshot.deck.id);
+    await expect(
+      acceptPatchHandler(context, {
+        deckId: snapshot.deck.id,
+        ownerAccessKey: SECOND_OWNER_ACCESS_KEY,
+        patchId: proposed.patch.id,
+      }),
+    ).rejects.toThrow();
+    expect(await requiredSnapshot(context, snapshot.deck.id)).toEqual(beforeAcceptance);
+    expect(onlyStableRow(database, 'nodeslide_patches', proposed.patch.id).status).toBe('ready');
+
+    const accepted = await acceptPatchHandler(context, {
+      deckId: snapshot.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      patchId: proposed.patch.id,
+    });
+    const versionCount = database.rows('nodeslide_versions').length;
+    const validationCount = database.rows('nodeslide_validations').length;
+    database.resetObservations();
+
+    const acceptanceRetry = await acceptPatchHandler(context, {
+      deckId: snapshot.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      patchId: proposed.patch.id,
+    });
+    expect(acceptanceRetry.patch).toEqual(accepted.patch);
+    expect(acceptanceRetry.patch.candidateDigest).toBe(proposed.patch.candidateDigest);
+    expect(database.rows('nodeslide_versions')).toHaveLength(versionCount);
+    expect(database.rows('nodeslide_validations')).toHaveLength(validationCount);
+    expect(database.writes).toEqual([]);
   });
 
   it('rejects cross-deck comment idempotency collisions for comments and replies', async () => {

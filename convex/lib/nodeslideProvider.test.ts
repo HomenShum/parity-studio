@@ -50,7 +50,7 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       telemetry: {
         provider: NODESLIDE_EDIT_PROVIDER,
         model: NODESLIDE_NEBIUS_GLM_MODEL,
-        reasoningEffort: 'high',
+        reasoningEffort: 'medium',
         costMicroUsd: 1_250,
         inputTokens: 120,
         outputTokens: 30,
@@ -60,12 +60,14 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[0]?.[0]).toMatchObject({
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_NEBIUS_GLM_MODEL,
-      reasoningEffort: 'high',
+      reasoningEffort: 'medium',
       maxTokens: 500,
       jsonSchema: request.jsonSchema,
+      structuredOutputMode: 'json_schema',
       repairAttempt: false,
     });
     expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+    expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
   });
 
   it('routes an allowlisted model selection and attributes telemetry to that exact model', async () => {
@@ -108,6 +110,18 @@ describe('NodeSlide named pi-ai JSON provider', () => {
         },
       },
     });
+
+    expect(
+      nodeSlideStructuredOutputPayload(
+        { model: NODESLIDE_EDIT_MODEL, provider: { data_collection: 'deny' } },
+        undefined,
+        'json_object',
+      ),
+    ).toEqual({
+      model: NODESLIDE_EDIT_MODEL,
+      provider: { data_collection: 'deny' },
+      response_format: { type: 'json_object' },
+    });
   });
 
   it('makes exactly one repair completion after malformed JSON', async () => {
@@ -135,7 +149,10 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       },
     });
     expect(complete).toHaveBeenCalledTimes(2);
-    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({
+      repairAttempt: true,
+      structuredOutputMode: 'json_schema',
+    });
     expect(complete.mock.calls[1]?.[0].userText).toContain('Prior invalid model response');
   });
 
@@ -190,11 +207,12 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete).toHaveBeenCalledTimes(2);
     expect(complete.mock.calls[0]?.[0]).toMatchObject({ jsonSchema: request.jsonSchema });
     expect(complete.mock.calls[1]?.[0]).not.toHaveProperty('jsonSchema');
-    expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({
+      repairAttempt: true,
+      structuredOutputMode: 'json_object',
+    });
     expect(complete.mock.calls[1]?.[0].systemPrompt).toContain('JSON Schema');
-    expect(complete.mock.calls[1]?.[0].userText).toContain(
-      'provider rejected native structured-output mode',
-    );
+    expect(complete.mock.calls[1]?.[0].userText).toContain('provider rejected JSON Schema mode');
   });
 
   it('falls back honestly when the schema compatibility retry also errors', async () => {
@@ -239,6 +257,43 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
+  });
+
+  it('contains a thrown provider failure and never exposes its raw message', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(async () => {
+      throw new Error('raw upstream credential and transport details');
+    });
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'The GLM 5.2 via Nebius route was unavailable.',
+    });
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('credential');
+  });
+
+  it('shares one deadline across the initial response and its only repair', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(completion('not-json'))
+      .mockImplementationOnce(() => new Promise(() => {}));
+
+    const result = await callNodeSlideFreeJson(request, { complete, timeoutMs: 10 });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'The GLM 5.2 via Nebius route timed out.',
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_NEBIUS_GLM_MODEL,
+      },
+    });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0].repairAttempt).toBe(true);
+    expect(complete.mock.calls[1]?.[0].signal.aborted).toBe(true);
   });
 
   it('rejects reasoning efforts that the selected provider does not advertise', async () => {

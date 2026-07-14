@@ -355,30 +355,9 @@ export const proposeEdit = action({
         scopedCommentId === undefined
           ? null
           : (workspace.comments.find((candidate) => candidate.id === scopedCommentId) ?? null);
-      // The planner handles an INVALID model response gracefully (deterministic_fallback origin).
-      // But a THROWN provider failure (external GLM timeout, network, or abort after retries)
-      // would otherwise escape here as a raw Convex "Server Error Called by client". Converge every
-      // failure mode on the same graceful deterministic fallback, keeping attribution honest.
-      let baseline: Awaited<ReturnType<typeof planNodeSlideEdit>>;
-      let providerErrored = false;
-      try {
-        baseline = await planNodeSlideEdit({ snapshot, scopedComment, readContext, request });
-      } catch {
-        providerErrored = true;
-        try {
-          baseline = await planNodeSlideEdit({
-            snapshot,
-            scopedComment,
-            readContext,
-            request: { ...request, providerMode: 'deterministic' },
-          });
-        } catch {
-          throw publicAgentError(
-            'fallback_unavailable',
-            'The edit planner was unavailable. No proposal was created and your deck is unchanged.',
-          );
-        }
-      }
+      // The planner converts provider throws, timeouts, and invalid envelopes into one attributed
+      // deterministic-fallback outcome. The action never needs to issue a second planning turn.
+      const baseline = await planNodeSlideEdit({ snapshot, scopedComment, readContext, request });
 
       const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
       if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
@@ -414,8 +393,7 @@ export const proposeEdit = action({
       const requestedProviderName =
         requestedProviderRoute.provider === 'nebius' ? 'Nebius' : 'OpenRouter';
       const usedFallback =
-        providerRequested &&
-        (providerErrored || baseline.receipt.origin === 'deterministic_fallback');
+        providerRequested && baseline.receipt.origin === 'deterministic_fallback';
       const telemetry = baseline.receipt.providerTelemetry;
       const traceAttribution = telemetry
         ? {
@@ -447,8 +425,9 @@ export const proposeEdit = action({
             planningSnapshotDigest: nodeSlideSnapshotDigest(snapshot),
           }
         : null;
-      const now = Date.now();
-      const patchId = nodeslideEventId('patch_agent', now, args.deckId, instruction);
+      // Bind the durable proposal to the durable run so a retry after an interrupted action reuses
+      // the exact proposal/trace identity instead of creating a second review candidate.
+      const patchId = nodeslideStableId('patch_agent', args.deckId, runId);
       const traceId = nodeslideStableId('trace', patchId);
       const shadowComparison = shadowBinding
         ? buildEditShadowComparisonBestEffort({
@@ -529,24 +508,36 @@ export const proposeEdit = action({
       });
       return proposal;
     } catch (error) {
-      const current = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
-        deckId: args.deckId,
-        ownerAccessKey: args.ownerAccessKey,
-        runId,
-      });
-      if (current?.status !== 'cancelled') {
-        const message = agentRunErrorMessage(error);
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+      const publicError =
+        error instanceof ConvexError
+          ? error
+          : publicAgentError(
+              'fallback_unavailable',
+              'The edit request failed safely. Your deck is unchanged. Retry the same request to recover any durable proposal.',
+            );
+      try {
+        const current = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
-          status: 'failed',
-          error: message.slice(0, 600),
-          message: `No deck changes were applied. ${message}`.slice(0, 4000),
-          role: 'assistant',
         });
+        if (current?.status !== 'cancelled') {
+          const message = agentRunErrorMessage(publicError);
+          await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'failed',
+            error: message.slice(0, 600),
+            message: `No deck changes were applied. ${message}`.slice(0, 4000),
+            role: 'assistant',
+          });
+        }
+      } catch {
+        // Durable status reporting is best effort; never replace a bounded public error with a raw
+        // Convex exception from the reporting path.
       }
-      throw error;
+      throw publicError;
     }
   },
 });

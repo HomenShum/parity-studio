@@ -2123,6 +2123,20 @@ export const proposeAgentPatchInternal = internalMutation({
       throw new Error('Agent shadow comparison authorization binding is invalid.');
     }
     const proposal = await persistProposal(ctx, { ...args, source: 'agent' });
+    const existingTrace = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_patch', (query) => query.eq('patchId', args.id))
+      .first();
+    if (existingTrace) {
+      if (
+        existingTrace.deckId !== args.deckId ||
+        existingTrace.id !== args.traceId ||
+        existingTrace.patchId !== args.id
+      ) {
+        throw new Error('Agent proposal trace idempotency binding is invalid.');
+      }
+      return proposal;
+    }
     const now = Date.now();
     const validation = proposal.patch.candidateValidation
       ? validationFromCandidateReceipt(proposal.patch.candidateValidation)
@@ -2502,6 +2516,50 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function proposalReplayMatches(
+  existing: Doc<'nodeslide_patches'>,
+  args: PatchMutationArgs,
+): boolean {
+  return (
+    stableJson({
+      deckId: existing.deckId,
+      baseDeckVersion: existing.baseDeckVersion,
+      baseSlideVersions: existing.baseSlideVersions,
+      baseElementVersions: existing.baseElementVersions,
+      scope: existing.scope,
+      operations: existing.operations,
+      source: existing.source,
+      summary: existing.summary,
+      linkedCommentId: existing.linkedCommentId,
+      traceId: existing.traceId,
+      proposalKind: existing.proposalKind ?? 'edit',
+      parentPatchId: existing.parentPatchId,
+      affectedSlideIds: existing.affectedSlideIds,
+      affectedSlideDigest: existing.affectedSlideDigest,
+      profileId: existing.profileId,
+      profileDigest: existing.profileDigest,
+    }) ===
+    stableJson({
+      deckId: args.deckId,
+      baseDeckVersion: args.baseDeckVersion,
+      baseSlideVersions: args.baseSlideVersions,
+      baseElementVersions: args.baseElementVersions,
+      scope: args.scope,
+      operations: args.operations,
+      source: args.source ?? 'human',
+      summary: args.summary?.trim() || 'Scoped NodeSlide change.',
+      linkedCommentId: args.linkedCommentId,
+      traceId: args.traceId,
+      proposalKind: args.proposalKind ?? 'edit',
+      parentPatchId: args.parentPatchId,
+      affectedSlideIds: args.affectedSlideIds,
+      affectedSlideDigest: args.affectedSlideDigest,
+      profileId: args.profileId,
+      profileDigest: args.profileDigest,
+    })
+  );
+}
+
 async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
   assertPatchOperationCount(args.operations);
@@ -2512,6 +2570,9 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   if (existing) {
     if (existing.deckId !== args.deckId) {
       throw new Error('Patch is unavailable.');
+    }
+    if (!proposalReplayMatches(existing, args)) {
+      throw new Error('Patch idempotency key belongs to a different proposal.');
     }
     return {
       patch: patchFromRow(existing),

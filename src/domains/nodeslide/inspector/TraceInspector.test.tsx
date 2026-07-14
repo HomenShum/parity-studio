@@ -518,7 +518,7 @@ describe('custody rail — fixed order and honest break', () => {
 
 describe('node summaries + consent derivation + no mojibake', () => {
   it('shows the persisted reasoning effort beside provider and model', () => {
-    expect(modelAttribution(traceLive)).toBe('openrouter · z-ai/glm-5.2 · Extra High effort');
+    expect(modelAttribution(traceLive)).toBe('openrouter · z-ai/glm-5.2 · XHigh effort');
   });
 
   it('binds every node summary to a real field', () => {
