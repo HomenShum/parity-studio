@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, win32 } from 'node:path';
 
 export const ROADSHOW_STORYBOARD_SCHEMA = 'nodeslide-roadshow-storyboard/v1';
 export const ROADSHOW_CAPTIONS_SCHEMA = 'nodeslide-roadshow-captions/v1';
@@ -324,10 +324,10 @@ export function buildFfmpegCommands({
   captionsSrt,
   outputDir,
 }) {
-  const preRollMp4 = resolve(outputDir, '01-browser-preroll.mp4');
-  const productFramedMp4 = resolve(outputDir, '02-product-framed.mp4');
-  const continuousMp4 = resolve(outputDir, '03-continuous-unsubtitled.mp4');
-  const finalMp4 = resolve(outputDir, 'nodeslide-founder-roadshow.mp4');
+  const preRollMp4 = resolveRoadshowOutput(outputDir, '01-browser-preroll.mp4');
+  const productFramedMp4 = resolveRoadshowOutput(outputDir, '02-product-framed.mp4');
+  const continuousMp4 = resolveRoadshowOutput(outputDir, '03-continuous-unsubtitled.mp4');
+  const finalMp4 = resolveRoadshowOutput(outputDir, 'nodeslide-founder-roadshow.mp4');
   const size = `${ROADSHOW_VIDEO.width}:${ROADSHOW_VIDEO.height}`;
   const appSize = `${ROADSHOW_VIDEO.width}:${ROADSHOW_VIDEO.appHeight}`;
   const chromeSize = `${ROADSHOW_VIDEO.width}:${ROADSHOW_VIDEO.browserChromeHeight}`;
@@ -415,12 +415,26 @@ export function buildFfmpegCommands({
 }
 
 export function ffmpegFilterPath(path) {
-  return resolve(path)
+  return resolveRoadshowPath(path)
     .replaceAll('\\', '/')
     .replace(/^([A-Za-z]):/, '$1\\:')
     .replaceAll("'", "\\'")
     .replaceAll('[', '\\[')
     .replaceAll(']', '\\]');
+}
+
+function resolveRoadshowOutput(outputDir, filename) {
+  return isWindowsAbsolutePath(outputDir)
+    ? win32.resolve(outputDir, filename)
+    : resolve(outputDir, filename);
+}
+
+function resolveRoadshowPath(path) {
+  return isWindowsAbsolutePath(path) ? win32.resolve(path) : resolve(path);
+}
+
+function isWindowsAbsolutePath(path) {
+  return /^[A-Za-z]:[\\/]/u.test(path);
 }
 
 export function recorderEvidenceSkeleton({ targetUrl, commitSha, mode, storyboard }) {

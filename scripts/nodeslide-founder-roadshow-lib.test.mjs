@@ -176,7 +176,7 @@ describe('browser overlay and ffmpeg construction', () => {
     expect(result.commands[1].args.join(' ')).toContain('overlay=0:0:shortest=1');
     expect(result.commands[2].args.join(' ')).toContain('concat=n=2:v=1:a=0');
     expect(result.commands[3].args.join(' ')).toContain("subtitles='C\\:/tmp/captions.srt'");
-    expect(result.outputs.finalMp4).toMatch(/nodeslide-founder-roadshow\.mp4$/);
+    expect(result.outputs.finalMp4).toBe('C:\\tmp\\out\\nodeslide-founder-roadshow.mp4');
   });
 
   it('escapes Windows filter paths and redacts credential-like query values', () => {
