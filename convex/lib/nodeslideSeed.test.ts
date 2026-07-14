@@ -108,6 +108,29 @@ describe('NodeSlide seed', () => {
     ]);
   });
 
+  it('honors an explicit supported deck length in model and deterministic creation', () => {
+    const brief = {
+      prompt: 'Create a six-slide founder roadshow.',
+      audience: 'Investors',
+      purpose: 'Review the company',
+      successCriteria: ['Exactly 6 slides in the requested narrative'],
+    };
+    const rawSpec = {
+      title: 'Founder roadshow',
+      narrative: ['Decide'],
+      slides: Array.from({ length: 7 }, (_, index) => ({
+        title: `Slide ${index + 1}`,
+        section: `Story / ${index + 1}`,
+        headline: `Point ${index + 1}`,
+        body: 'Evidence-led context.',
+        bullets: ['Editable', 'Reviewable', 'Sourced'],
+      })),
+    };
+
+    expect(deterministicBriefSpec('Founder roadshow', brief).slides).toHaveLength(6);
+    expect(coerceBriefSpec(rawSpec, 'Founder roadshow', brief).slides).toHaveLength(6);
+  });
+
   it('materializes chart, formula, image-placeholder, and URL evidence as real primitives', () => {
     const brief = {
       prompt:

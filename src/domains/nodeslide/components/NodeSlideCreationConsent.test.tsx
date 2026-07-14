@@ -78,7 +78,10 @@ describe('NodeSlide creation consent', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText('Presentation brief'), 'Build a launch review deck');
+    await user.type(
+      screen.getByLabelText('Presentation brief'),
+      'Build exactly six slides for a launch review',
+    );
     const consent = screen.getByTestId('landing-provider-consent');
     const submit = screen.getByRole('button', { name: 'Create presentation' });
     const form = submit.closest('form');
@@ -101,6 +104,7 @@ describe('NodeSlide creation consent', () => {
           ? NODESLIDE_NEBIUS_BRIEF_CONSENT
           : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
     });
+    expect(request.brief.successCriteria[0]).toBe('Exactly 6 slides in the requested narrative');
     expect(consent).not.toBeChecked();
     expect(submit).toBeDisabled();
 

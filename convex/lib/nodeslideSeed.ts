@@ -13,6 +13,7 @@ import {
   type NodeSlideDataAttachment,
   nodeSlideDataAttachmentShape,
 } from '../../shared/nodeslideAttachments';
+import { inferNodeSlideRequestedSlideCount } from '../../shared/nodeslideSlideCount';
 import {
   nodeslideCleanText,
   nodeslideContentDigest,
@@ -511,9 +512,20 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
         body: `Invite ${audience} to align on the outcome, the first action, and the evidence that will guide the next decision.`,
         bullets: ['Agree the outcome', 'Name the owner', 'Set the next checkpoint'],
       },
+      {
+        title: 'Evidence appendix',
+        section: 'Appendix / 08',
+        headline: 'Keep the evidence available without crowding the main argument.',
+        body: 'Carry the supporting assumptions, definitions, and source notes into an editable appendix for follow-up review.',
+        bullets: ['State assumptions', 'Define the measures', 'Keep source notes attached'],
+      },
     ],
   };
   applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
+  spec.slides = spec.slides.slice(
+    0,
+    inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7,
+  );
   return spec;
 }
 
@@ -706,11 +718,15 @@ export function coerceBriefSpec(
 ): NodeSlideDeckSpec {
   const fallback = deterministicBriefSpec(title, brief);
   if (!isRecord(rawSpec) || !Array.isArray(rawSpec.slides)) return fallback;
+  const requestedSlideCount = inferNodeSlideRequestedSlideCount(
+    brief.prompt,
+    ...brief.successCriteria,
+  );
   const slides = rawSpec.slides
     .map((value, index) => coercePlannedSlide(value, fallback.slides[index], index))
     .filter((slide): slide is NodeSlidePlannedSlide => slide !== null)
-    .slice(0, 8);
-  if (slides.length < 6) return fallback;
+    .slice(0, requestedSlideCount ?? 8);
+  if (slides.length < (requestedSlideCount ?? 6)) return fallback;
 
   const narrative = Array.isArray(rawSpec.narrative)
     ? rawSpec.narrative

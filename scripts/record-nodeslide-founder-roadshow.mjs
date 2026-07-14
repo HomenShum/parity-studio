@@ -22,6 +22,7 @@ import {
   resolveRoadshowInputPaths,
   sanitizeEvidenceUrl,
   selectedSlidesScopePattern,
+  shouldClearBeforeHumanTyping,
   validateRoadshowContract,
 } from './nodeslide-founder-roadshow-lib.mjs';
 
@@ -1030,8 +1031,11 @@ async function humanType(page, locator, text) {
   await moveVirtualCursor(page, locator, { durationMs: 460 });
   await clickPulse(page);
   await locator.click();
-  await locator.press('Control+A').catch(() => {});
-  await locator.press('Backspace').catch(() => {});
+  const currentValue = await locator.inputValue().catch(() => null);
+  if (shouldClearBeforeHumanTyping(currentValue)) {
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+  }
   await locator.pressSequentially(text, { delay: typingDelayMs });
   await page.waitForTimeout(360);
 }

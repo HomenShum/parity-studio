@@ -228,6 +228,10 @@ export function selectedSlidesScopePattern(expectedCount = null) {
   return new RegExp(`^Selected slides \\(${count}\\)$`);
 }
 
+export function shouldClearBeforeHumanTyping(currentValue) {
+  return typeof currentValue === 'string' && currentValue.length > 0;
+}
+
 export function buildCaptionTimeline(sceneResults, captionPlan, preRollDurationMs) {
   if (!Number.isFinite(preRollDurationMs) || preRollDurationMs < 0) {
     throw new RoadshowContractError('preRollDurationMs must be a non-negative number');
