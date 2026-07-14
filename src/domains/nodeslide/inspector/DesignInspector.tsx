@@ -15,8 +15,9 @@ import {
   Plus,
   Square,
   Type,
+  X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { PatchOperation, Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
 import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
@@ -45,6 +46,38 @@ interface DesignInspectorProps {
   onApplyPatch: (operations: PatchOperation[], summary: string) => void;
 }
 
+export type DesignInspectorSectionId = 'content' | 'data' | 'appearance' | 'advanced';
+
+export type DesignInspectorSectionState = Record<DesignInspectorSectionId, boolean>;
+
+export const DEFAULT_DESIGN_INSPECTOR_SECTIONS: DesignInspectorSectionState = {
+  content: true,
+  data: true,
+  appearance: false,
+  advanced: false,
+};
+
+const DESIGN_SECTION_STORAGE_KEY = 'nodeslide.design-inspector-sections';
+
+export function toggleDesignInspectorSection(
+  state: DesignInspectorSectionState,
+  section: DesignInspectorSectionId,
+): DesignInspectorSectionState {
+  return { ...state, [section]: !state[section] };
+}
+
+function initialDesignInspectorSections(): DesignInspectorSectionState {
+  if (typeof window === 'undefined') return DEFAULT_DESIGN_INSPECTOR_SECTIONS;
+  try {
+    const stored = window.sessionStorage.getItem(DESIGN_SECTION_STORAGE_KEY);
+    if (!stored) return DEFAULT_DESIGN_INSPECTOR_SECTIONS;
+    const parsed = JSON.parse(stored) as Partial<DesignInspectorSectionState>;
+    return { ...DEFAULT_DESIGN_INSPECTOR_SECTIONS, ...parsed };
+  } catch {
+    return DEFAULT_DESIGN_INSPECTOR_SECTIONS;
+  }
+}
+
 export function DesignInspector({
   slide,
   slideElements,
@@ -66,6 +99,18 @@ export function DesignInspector({
   onClearTastePack,
   onApplyPatch,
 }: DesignInspectorProps) {
+  const [openSections, setOpenSections] = useState(initialDesignInspectorSections);
+  const toggleSection = (section: DesignInspectorSectionId) => {
+    setOpenSections((current) => {
+      const next = toggleDesignInspectorSection(current, section);
+      try {
+        window.sessionStorage.setItem(DESIGN_SECTION_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Session persistence is a convenience; the controls remain fully functional without it.
+      }
+      return next;
+    });
+  };
   const primary = selectedElements.at(-1);
   if (!primary) {
     return (
@@ -80,28 +125,42 @@ export function DesignInspector({
             active when you switch tabs.
           </p>
         </div>
-        <SlideNotesEditor slide={slide} onApplyPatch={onApplyPatch} />
-        <TastePackPanel
-          activeTastePackId={activeTastePackId}
-          activeProfileId={activeProfileId}
-          previewProfileId={previewProfileId}
-          profiles={profiles}
-          busy={busy}
-          onApply={onApplyTastePack}
-          onApplyProfile={onApplyProfile}
-          onPreviewProfile={onPreviewProfile}
-          onUploadSource={onUploadSource}
-          onClear={onClearTastePack}
-        />
-        {onEvictTasteSignal ? (
-          <TasteProfileCard
-            profile={tasteProfile ?? null}
-            loading={tasteProfileLoading}
-            onEvictSignal={onEvictTasteSignal}
-            onOpenEvidence={onOpenPreferenceEvidence}
+        <CollapsibleInspectorSection
+          id="content"
+          title="Content"
+          open={openSections.content}
+          onToggle={() => toggleSection('content')}
+        >
+          <SlideNotesEditor slide={slide} onApplyPatch={onApplyPatch} />
+        </CollapsibleInspectorSection>
+        <CollapsibleInspectorSection
+          id="advanced"
+          title="Advanced"
+          open={openSections.advanced}
+          onToggle={() => toggleSection('advanced')}
+        >
+          <TastePackPanel
+            activeTastePackId={activeTastePackId}
+            activeProfileId={activeProfileId}
+            previewProfileId={previewProfileId}
+            profiles={profiles}
+            busy={busy}
+            onApply={onApplyTastePack}
+            onApplyProfile={onApplyProfile}
+            onPreviewProfile={onPreviewProfile}
+            onUploadSource={onUploadSource}
+            onClear={onClearTastePack}
           />
-        ) : null}
-        <ThemeSummary theme={theme} />
+          {onEvictTasteSignal ? (
+            <TasteProfileCard
+              profile={tasteProfile ?? null}
+              loading={tasteProfileLoading}
+              onEvictSignal={onEvictTasteSignal}
+              onOpenEvidence={onOpenPreferenceEvidence}
+            />
+          ) : null}
+          <ThemeSummary theme={theme} />
+        </CollapsibleInspectorSection>
       </div>
     );
   }
@@ -139,301 +198,400 @@ export function DesignInspector({
         ) : null}
       </section>
 
-      <TastePackPanel
-        activeTastePackId={activeTastePackId}
-        activeProfileId={activeProfileId}
-        previewProfileId={previewProfileId}
-        profiles={profiles}
-        busy={busy}
-        onApply={onApplyTastePack}
-        onApplyProfile={onApplyProfile}
-        onPreviewProfile={onPreviewProfile}
-        onUploadSource={onUploadSource}
-        onClear={onClearTastePack}
-      />
-
-      {onEvictTasteSignal ? (
-        <TasteProfileCard
-          profile={tasteProfile ?? null}
-          loading={tasteProfileLoading}
-          onEvictSignal={onEvictTasteSignal}
-          onOpenEvidence={onOpenPreferenceEvidence}
-        />
-      ) : null}
-
-      <InspectorGroup icon={<Move size={14} />} title="Position & size">
-        <div className="ns-field-grid ns-field-grid--four">
-          <NumberField
-            label="X"
-            value={primary.bbox.x * 100}
-            suffix="%"
-            disabled={primary.locked}
-            onCommit={(value) =>
-              onApplyPatch(
-                [
-                  {
-                    op: 'move',
-                    slideId: primary.slideId,
-                    elementId: primary.id,
-                    x: clampPercent(value),
-                    y: primary.bbox.y,
-                  },
-                ],
-                `Moved ${primary.name}`,
-              )
-            }
-          />
-          <NumberField
-            label="Y"
-            value={primary.bbox.y * 100}
-            suffix="%"
-            disabled={primary.locked}
-            onCommit={(value) =>
-              onApplyPatch(
-                [
-                  {
-                    op: 'move',
-                    slideId: primary.slideId,
-                    elementId: primary.id,
-                    x: primary.bbox.x,
-                    y: clampPercent(value),
-                  },
-                ],
-                `Moved ${primary.name}`,
-              )
-            }
-          />
-          <NumberField
-            label="W"
-            value={primary.bbox.width * 100}
-            suffix="%"
-            disabled={primary.locked}
-            onCommit={(value) =>
-              onApplyPatch(
-                [
-                  {
-                    op: 'resize',
-                    slideId: primary.slideId,
-                    elementId: primary.id,
-                    width: clampSize(value),
-                    height: primary.bbox.height,
-                  },
-                ],
-                `Resized ${primary.name}`,
-              )
-            }
-          />
-          <NumberField
-            label="H"
-            value={primary.bbox.height * 100}
-            suffix="%"
-            disabled={primary.locked}
-            onCommit={(value) =>
-              onApplyPatch(
-                [
-                  {
-                    op: 'resize',
-                    slideId: primary.slideId,
-                    elementId: primary.id,
-                    width: primary.bbox.width,
-                    height: clampSize(value),
-                  },
-                ],
-                `Resized ${primary.name}`,
-              )
-            }
-          />
-        </div>
-      </InspectorGroup>
-
-      {primary.kind === 'text' || primary.kind === 'math' ? (
-        <InspectorGroup icon={<Type size={14} />} title="Content">
-          <label className="ns-text-content-field">
-            <span>{primary.kind === 'math' ? 'Math expression' : 'Text content'}</span>
-            <textarea
-              key={`${primary.id}-${primary.version}-content`}
-              defaultValue={
-                primary.kind === 'math' ? (primary.math?.expression ?? '') : (primary.content ?? '')
-              }
-              rows={5}
-              disabled={editable.length === 0}
-              onBlur={(event) => {
-                const next = event.currentTarget.value;
-                const current =
-                  primary.kind === 'math'
-                    ? (primary.math?.expression ?? '')
-                    : (primary.content ?? '');
-                if (next !== current) {
-                  const operations: PatchOperation[] = [
+      <CollapsibleInspectorSection
+        id="content"
+        title="Content"
+        open={openSections.content}
+        onToggle={() => toggleSection('content')}
+      >
+        <InspectorGroup icon={<Move size={14} />} title="Position & size">
+          <div className="ns-field-grid ns-field-grid--four">
+            <NumberField
+              label="X"
+              value={primary.bbox.x * 100}
+              suffix="%"
+              disabled={primary.locked}
+              onCommit={(value) =>
+                onApplyPatch(
+                  [
                     {
-                      op: 'replace_text',
+                      op: 'move',
                       slideId: primary.slideId,
                       elementId: primary.id,
-                      text: next,
+                      x: clampPercent(value),
+                      y: primary.bbox.y,
                     },
-                  ];
-                  if (
-                    (primary.role === 'title' || primary.role === 'headline') &&
-                    (slide.title === 'Untitled slide' || slide.title === primary.content)
-                  ) {
-                    operations.push({
-                      op: 'update_slide',
-                      slideId: slide.id,
-                      properties: { title: next.trim() || 'Untitled slide' },
-                    });
-                  }
-                  onApplyPatch(operations, `Edited ${primary.name}`);
+                  ],
+                  `Moved ${primary.name}`,
+                )
+              }
+            />
+            <NumberField
+              label="Y"
+              value={primary.bbox.y * 100}
+              suffix="%"
+              disabled={primary.locked}
+              onCommit={(value) =>
+                onApplyPatch(
+                  [
+                    {
+                      op: 'move',
+                      slideId: primary.slideId,
+                      elementId: primary.id,
+                      x: primary.bbox.x,
+                      y: clampPercent(value),
+                    },
+                  ],
+                  `Moved ${primary.name}`,
+                )
+              }
+            />
+            <NumberField
+              label="W"
+              value={primary.bbox.width * 100}
+              suffix="%"
+              disabled={primary.locked}
+              onCommit={(value) =>
+                onApplyPatch(
+                  [
+                    {
+                      op: 'resize',
+                      slideId: primary.slideId,
+                      elementId: primary.id,
+                      width: clampSize(value),
+                      height: primary.bbox.height,
+                    },
+                  ],
+                  `Resized ${primary.name}`,
+                )
+              }
+            />
+            <NumberField
+              label="H"
+              value={primary.bbox.height * 100}
+              suffix="%"
+              disabled={primary.locked}
+              onCommit={(value) =>
+                onApplyPatch(
+                  [
+                    {
+                      op: 'resize',
+                      slideId: primary.slideId,
+                      elementId: primary.id,
+                      width: primary.bbox.width,
+                      height: clampSize(value),
+                    },
+                  ],
+                  `Resized ${primary.name}`,
+                )
+              }
+            />
+          </div>
+        </InspectorGroup>
+
+        {primary.kind === 'text' || primary.kind === 'math' ? (
+          <InspectorGroup icon={<Type size={14} />} title="Content">
+            <label className="ns-text-content-field">
+              <span>{primary.kind === 'math' ? 'Math expression' : 'Text content'}</span>
+              <textarea
+                key={`${primary.id}-${primary.version}-content`}
+                defaultValue={
+                  primary.kind === 'math'
+                    ? (primary.math?.expression ?? '')
+                    : (primary.content ?? '')
                 }
-              }}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-                if (event.key === 'Escape') {
-                  event.currentTarget.value =
+                rows={5}
+                disabled={editable.length === 0}
+                onBlur={(event) => {
+                  const next = event.currentTarget.value;
+                  const current =
                     primary.kind === 'math'
                       ? (primary.math?.expression ?? '')
                       : (primary.content ?? '');
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            <small>Ctrl/⌘ + Enter to apply · Escape to cancel</small>
-          </label>
-        </InspectorGroup>
-      ) : null}
+                  if (next !== current) {
+                    const operations: PatchOperation[] = [
+                      {
+                        op: 'replace_text',
+                        slideId: primary.slideId,
+                        elementId: primary.id,
+                        text: next,
+                      },
+                    ];
+                    if (
+                      (primary.role === 'title' || primary.role === 'headline') &&
+                      (slide.title === 'Untitled slide' || slide.title === primary.content)
+                    ) {
+                      operations.push({
+                        op: 'update_slide',
+                        slideId: slide.id,
+                        properties: { title: next.trim() || 'Untitled slide' },
+                      });
+                    }
+                    onApplyPatch(operations, `Edited ${primary.name}`);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                  if (event.key === 'Escape') {
+                    event.currentTarget.value =
+                      primary.kind === 'math'
+                        ? (primary.math?.expression ?? '')
+                        : (primary.content ?? '');
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <small>Ctrl/⌘ + Enter to apply · Escape to cancel</small>
+            </label>
+          </InspectorGroup>
+        ) : null}
+
+        {primary.kind === 'image' ? (
+          <ImageAssetEditor
+            element={primary}
+            slideElements={slideElements}
+            onApplyPatch={onApplyPatch}
+          />
+        ) : null}
+      </CollapsibleInspectorSection>
 
       {primary.kind === 'chart' && primary.chart ? (
-        <ChartDataEditor element={primary} onApplyPatch={onApplyPatch} />
+        <CollapsibleInspectorSection
+          id="data"
+          title="Data"
+          open={openSections.data}
+          onToggle={() => toggleSection('data')}
+        >
+          <ChartDataEditor
+            key={`${primary.id}-${primary.version}-chart-editor`}
+            element={primary}
+            onApplyPatch={onApplyPatch}
+          />
+        </CollapsibleInspectorSection>
       ) : null}
 
-      {primary.kind === 'image' ? (
-        <ImageAssetEditor
-          element={primary}
-          slideElements={slideElements}
-          onApplyPatch={onApplyPatch}
-        />
-      ) : null}
-
-      {primary.kind === 'text' || primary.kind === 'math' ? (
-        <InspectorGroup icon={<Type size={14} />} title="Typography">
-          <label className="ns-select-field">
-            <span>Typeface</span>
-            <select
-              value={primary.style.fontFamily ?? theme.typography.body}
-              disabled={editable.length === 0}
-              onChange={(event) =>
-                patchStyle({ fontFamily: event.target.value }, 'Updated typeface')
-              }
-            >
-              <option value={theme.typography.display}>
-                {labelFont(theme.typography.display)} · Display
-              </option>
-              <option value={theme.typography.body}>
-                {labelFont(theme.typography.body)} · Body
-              </option>
-              <option value={theme.typography.data}>
-                {labelFont(theme.typography.data)} · Data
-              </option>
-              <option value="system-ui, sans-serif">System sans</option>
-              <option value="Georgia, serif">Georgia</option>
-            </select>
-            <ChevronDown size={13} />
-          </label>
-          <div className="ns-control-line">
-            <NumberStepper
-              icon={<Baseline size={14} />}
-              label="Font size"
-              value={primary.style.fontSize ?? 32}
-              min={8}
-              max={160}
-              onCommit={(value) => patchStyle({ fontSize: value }, 'Updated font size')}
-              disabled={editable.length === 0}
-            />
-            <button
-              className={`ns-square-toggle ${(primary.style.fontWeight ?? 400) >= 650 ? 'is-active' : ''}`}
-              type="button"
-              disabled={editable.length === 0}
-              aria-label="Toggle bold"
-              aria-pressed={(primary.style.fontWeight ?? 400) >= 650}
-              onClick={() =>
-                patchStyle(
-                  { fontWeight: (primary.style.fontWeight ?? 400) >= 650 ? 400 : 700 },
-                  'Updated font weight',
-                )
-              }
-            >
-              <Bold size={15} />
-            </button>
-          </div>
-          <div className="ns-segmented-control" aria-label="Text alignment">
-            {(
-              [
-                ['left', AlignLeft],
-                ['center', AlignCenter],
-                ['right', AlignRight],
-              ] as const
-            ).map(([alignment, Icon]) => (
-              <button
-                type="button"
-                key={alignment}
-                className={(primary.style.textAlign ?? 'left') === alignment ? 'is-active' : ''}
-                aria-label={`Align ${alignment}`}
-                aria-pressed={(primary.style.textAlign ?? 'left') === alignment}
+      <CollapsibleInspectorSection
+        id="appearance"
+        title="Appearance"
+        open={openSections.appearance}
+        onToggle={() => toggleSection('appearance')}
+      >
+        {primary.kind === 'text' || primary.kind === 'math' ? (
+          <InspectorGroup icon={<Type size={14} />} title="Typography">
+            <label className="ns-select-field">
+              <span>Typeface</span>
+              <select
+                value={primary.style.fontFamily ?? theme.typography.body}
                 disabled={editable.length === 0}
-                onClick={() => patchStyle({ textAlign: alignment }, `Aligned text ${alignment}`)}
+                onChange={(event) =>
+                  patchStyle({ fontFamily: event.target.value }, 'Updated typeface')
+                }
               >
-                <Icon size={15} />
+                <option value={theme.typography.display}>
+                  {labelFont(theme.typography.display)} · Display
+                </option>
+                <option value={theme.typography.body}>
+                  {labelFont(theme.typography.body)} · Body
+                </option>
+                <option value={theme.typography.data}>
+                  {labelFont(theme.typography.data)} · Data
+                </option>
+                <option value="system-ui, sans-serif">System sans</option>
+                <option value="Georgia, serif">Georgia</option>
+              </select>
+              <ChevronDown size={13} />
+            </label>
+            <div className="ns-control-line">
+              <NumberStepper
+                icon={<Baseline size={14} />}
+                label="Font size"
+                value={primary.style.fontSize ?? 32}
+                min={8}
+                max={160}
+                onCommit={(value) => patchStyle({ fontSize: value }, 'Updated font size')}
+                disabled={editable.length === 0}
+              />
+              <button
+                className={`ns-square-toggle ${(primary.style.fontWeight ?? 400) >= 650 ? 'is-active' : ''}`}
+                type="button"
+                disabled={editable.length === 0}
+                aria-label="Toggle bold"
+                aria-pressed={(primary.style.fontWeight ?? 400) >= 650}
+                onClick={() =>
+                  patchStyle(
+                    { fontWeight: (primary.style.fontWeight ?? 400) >= 650 ? 400 : 700 },
+                    'Updated font weight',
+                  )
+                }
+              >
+                <Bold size={15} aria-hidden="true" />
+                <span>Bold</span>
               </button>
-            ))}
-          </div>
-        </InspectorGroup>
-      ) : null}
+            </div>
+            <div className="ns-segmented-control" aria-label="Text alignment">
+              {(
+                [
+                  ['left', AlignLeft],
+                  ['center', AlignCenter],
+                  ['right', AlignRight],
+                ] as const
+              ).map(([alignment, Icon]) => (
+                <button
+                  type="button"
+                  key={alignment}
+                  className={(primary.style.textAlign ?? 'left') === alignment ? 'is-active' : ''}
+                  aria-label={`Align ${alignment}`}
+                  aria-pressed={(primary.style.textAlign ?? 'left') === alignment}
+                  disabled={editable.length === 0}
+                  onClick={() => patchStyle({ textAlign: alignment }, `Aligned text ${alignment}`)}
+                >
+                  <Icon size={15} aria-hidden="true" />
+                  <span>{alignment[0]?.toUpperCase() + alignment.slice(1)}</span>
+                </button>
+              ))}
+            </div>
+          </InspectorGroup>
+        ) : null}
 
-      <InspectorGroup icon={<Palette size={14} />} title="Appearance">
-        <ColorField
-          label={primary.kind === 'text' || primary.kind === 'math' ? 'Text' : 'Fill'}
-          value={
-            primary.kind === 'text' || primary.kind === 'math'
-              ? (primary.style.color ?? theme.colors.ink)
-              : (primary.style.fill ?? theme.colors.accentSoft)
-          }
-          onCommit={(value) =>
-            patchStyle(
+        <InspectorGroup icon={<Palette size={14} />} title="Appearance">
+          <ColorField
+            label={primary.kind === 'text' || primary.kind === 'math' ? 'Text' : 'Fill'}
+            value={
               primary.kind === 'text' || primary.kind === 'math'
-                ? { color: value }
-                : { fill: value },
-              `Updated ${primary.kind === 'text' || primary.kind === 'math' ? 'text color' : 'fill'}`,
-            )
-          }
-          disabled={editable.length === 0}
-        />
-        <div className="ns-control-line">
-          {primary.kind !== 'text' ? (
-            <NumberStepper
-              icon={<CornerUpLeft size={14} />}
-              label="Corner radius"
-              value={primary.style.radius ?? theme.defaultRadius}
-              min={0}
-              max={96}
-              onCommit={(value) => patchStyle({ radius: value }, 'Updated corner radius')}
-              disabled={editable.length === 0}
-            />
-          ) : null}
-          <NumberStepper
-            icon={<Square size={14} />}
-            label="Opacity"
-            value={Math.round((primary.style.opacity ?? 1) * 100)}
-            min={0}
-            max={100}
-            onCommit={(value) => patchStyle({ opacity: value / 100 }, 'Updated opacity')}
+                ? (primary.style.color ?? theme.colors.ink)
+                : (primary.style.fill ?? theme.colors.accentSoft)
+            }
+            onCommit={(value) =>
+              patchStyle(
+                primary.kind === 'text' || primary.kind === 'math'
+                  ? { color: value }
+                  : { fill: value },
+                `Updated ${primary.kind === 'text' || primary.kind === 'math' ? 'text color' : 'fill'}`,
+              )
+            }
             disabled={editable.length === 0}
           />
-        </div>
-      </InspectorGroup>
-      <SlideNotesEditor slide={slide} onApplyPatch={onApplyPatch} />
+          <div className="ns-control-line">
+            {primary.kind !== 'text' ? (
+              <NumberStepper
+                icon={<CornerUpLeft size={14} />}
+                label="Corner radius"
+                value={primary.style.radius ?? theme.defaultRadius}
+                min={0}
+                max={96}
+                onCommit={(value) => patchStyle({ radius: value }, 'Updated corner radius')}
+                disabled={editable.length === 0}
+              />
+            ) : null}
+            <NumberStepper
+              icon={<Square size={14} />}
+              label="Opacity %"
+              value={Math.round((primary.style.opacity ?? 1) * 100)}
+              min={0}
+              max={100}
+              onCommit={(value) => patchStyle({ opacity: value / 100 }, 'Updated opacity')}
+              disabled={editable.length === 0}
+            />
+          </div>
+        </InspectorGroup>
+      </CollapsibleInspectorSection>
+
+      <CollapsibleInspectorSection
+        id="advanced"
+        title="Advanced"
+        open={openSections.advanced}
+        onToggle={() => toggleSection('advanced')}
+      >
+        <TastePackPanel
+          activeTastePackId={activeTastePackId}
+          activeProfileId={activeProfileId}
+          previewProfileId={previewProfileId}
+          profiles={profiles}
+          busy={busy}
+          onApply={onApplyTastePack}
+          onApplyProfile={onApplyProfile}
+          onPreviewProfile={onPreviewProfile}
+          onUploadSource={onUploadSource}
+          onClear={onClearTastePack}
+        />
+        {onEvictTasteSignal ? (
+          <TasteProfileCard
+            profile={tasteProfile ?? null}
+            loading={tasteProfileLoading}
+            onEvictSignal={onEvictTasteSignal}
+            onOpenEvidence={onOpenPreferenceEvidence}
+          />
+        ) : null}
+        <SlideNotesEditor slide={slide} onApplyPatch={onApplyPatch} />
+        <ElementMetadata element={primary} />
+        <ThemeSummary theme={theme} />
+      </CollapsibleInspectorSection>
     </div>
+  );
+}
+
+export function CollapsibleInspectorSection({
+  id,
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  id: DesignInspectorSectionId;
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const reactId = useId();
+  const contentId = `${reactId}-${id}-content`;
+  return (
+    <section
+      className={`ns-design-section ${open ? 'is-open' : 'is-closed'}`}
+      data-testid={`design-section-${id}`}
+    >
+      <button
+        type="button"
+        className="ns-design-section-toggle"
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={onToggle}
+      >
+        <span>{title}</span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      <div id={contentId} className="ns-design-section-content" hidden={!open}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function ElementMetadata({ element }: { element: SlideElement }) {
+  return (
+    <InspectorGroup icon={<Square size={14} />} title="Element metadata">
+      <dl className="ns-element-metadata">
+        <div>
+          <dt>Kind</dt>
+          <dd>{element.kind}</dd>
+        </div>
+        <div>
+          <dt>Role</dt>
+          <dd>{element.role ?? 'None'}</dd>
+        </div>
+        <div>
+          <dt>Version</dt>
+          <dd>{element.version}</dd>
+        </div>
+        <div>
+          <dt>Element ID</dt>
+          <dd>{element.id}</dd>
+        </div>
+      </dl>
+    </InspectorGroup>
   );
 }
 
@@ -475,6 +633,82 @@ function SlideNotesEditor({
   );
 }
 
+export interface ChartDataRow {
+  id: string;
+  label: string;
+  value: string;
+}
+
+type ChartType = NonNullable<SlideElement['chart']>['chartType'];
+
+export function chartRowsFromElement(element: SlideElement): ChartDataRow[] {
+  const chart = element.chart;
+  if (!chart) return [];
+  const values = chart.series[0]?.values ?? [];
+  return chart.labels.map((label, index) => ({
+    id: `${element.id}:${index}`,
+    label,
+    value: values[index] === undefined ? '' : String(values[index]),
+  }));
+}
+
+export function appendChartDataRow(rows: readonly ChartDataRow[], id: string): ChartDataRow[] {
+  if (rows.length >= 24) return [...rows];
+  return [...rows, { id, label: '', value: '' }];
+}
+
+export function removeChartDataRow(rows: readonly ChartDataRow[], rowId: string): ChartDataRow[] {
+  if (rows.length <= 1) return [...rows];
+  return rows.filter((row) => row.id !== rowId);
+}
+
+export function buildChartUpdateOperation({
+  element,
+  rows,
+  chartType,
+  seriesName,
+  unit,
+}: {
+  element: SlideElement;
+  rows: readonly ChartDataRow[];
+  chartType: ChartType;
+  seriesName: string;
+  unit: string;
+}): { operation: PatchOperation | null; error: string | null } {
+  const chart = element.chart;
+  if (!chart) return { operation: null, error: 'This chart is no longer available.' };
+  if (rows.length === 0 || rows.length > 24 || rows.some((row) => !row.label.trim())) {
+    return { operation: null, error: 'Add a label for every point.' };
+  }
+  if (rows.some((row) => row.value.trim() === '' || !Number.isFinite(Number(row.value)))) {
+    return { operation: null, error: 'Enter a number for every point.' };
+  }
+
+  const primarySeries = chart.series[0];
+  const normalizedUnit = unit.trim();
+  return {
+    error: null,
+    operation: {
+      op: 'update_chart',
+      slideId: element.slideId,
+      elementId: element.id,
+      chart: {
+        chartType,
+        labels: rows.map((row) => row.label.trim()),
+        series: [
+          {
+            name: seriesName.trim() || 'Series',
+            values: rows.map((row) => Number(row.value)),
+            ...(primarySeries?.color ? { color: primarySeries.color } : {}),
+          },
+        ],
+        ...(normalizedUnit ? { unit: normalizedUnit } : {}),
+        ...(chart.sourceId ? { sourceId: chart.sourceId } : {}),
+      },
+    },
+  };
+}
+
 function ChartDataEditor({
   element,
   onApplyPatch,
@@ -484,6 +718,8 @@ function ChartDataEditor({
 }) {
   const [error, setError] = useState<string | null>(null);
   const chart = element.chart;
+  const [rows, setRows] = useState<ChartDataRow[]>(() => chartRowsFromElement(element));
+  const nextRowId = useRef(rows.length);
   if (!chart) return null;
   const primarySeries = chart.series[0];
 
@@ -496,48 +732,18 @@ function ChartDataEditor({
           event.preventDefault();
           setError(null);
           const form = new FormData(event.currentTarget);
-          const labels = String(form.get('labels') ?? '')
-            .split(/[,\n]/u)
-            .map((value) => value.trim())
-            .filter(Boolean);
-          const values = String(form.get('values') ?? '')
-            .split(/[,\s]+/u)
-            .filter(Boolean)
-            .map(Number);
-          if (labels.length === 0 || labels.length > 24 || labels.length !== values.length) {
-            setError('Use 1-24 labels with exactly one numeric value per label.');
+          const result = buildChartUpdateOperation({
+            element,
+            rows,
+            chartType: String(form.get('chartType')) as ChartType,
+            seriesName: String(form.get('seriesName') ?? ''),
+            unit: String(form.get('unit') ?? ''),
+          });
+          if (!result.operation) {
+            setError(result.error);
             return;
           }
-          if (values.some((value) => !Number.isFinite(value))) {
-            setError('Every chart value must be a finite number.');
-            return;
-          }
-          const chartType = String(form.get('chartType')) as typeof chart.chartType;
-          const seriesName = String(form.get('seriesName') ?? '').trim() || 'Series';
-          const unit = String(form.get('unit') ?? '').trim();
-          onApplyPatch(
-            [
-              {
-                op: 'update_chart',
-                slideId: element.slideId,
-                elementId: element.id,
-                chart: {
-                  chartType,
-                  labels,
-                  series: [
-                    {
-                      name: seriesName,
-                      values,
-                      ...(primarySeries?.color ? { color: primarySeries.color } : {}),
-                    },
-                  ],
-                  ...(unit ? { unit } : {}),
-                  ...(chart.sourceId ? { sourceId: chart.sourceId } : {}),
-                },
-              },
-            ],
-            `Updated chart data for ${element.name}`,
-          );
+          onApplyPatch([result.operation], `Updated chart data for ${element.name}`);
         }}
       >
         <label>
@@ -549,19 +755,93 @@ function ChartDataEditor({
             <option value="donut">Donut</option>
           </select>
         </label>
-        <label>
-          <span>Labels</span>
-          <input name="labels" defaultValue={chart.labels.join(', ')} data-testid="chart-labels" />
-        </label>
-        <label>
-          <span>Values</span>
-          <input
-            name="values"
-            inputMode="decimal"
-            defaultValue={(primarySeries?.values ?? []).join(', ')}
-            data-testid="chart-values"
-          />
-        </label>
+        <div className="ns-chart-data-grid">
+          <table>
+            <caption className="ns-sr-only">Chart data points</caption>
+            <thead>
+              <tr>
+                <th scope="col">Label</th>
+                <th scope="col">Value</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={row.id}>
+                  <td>
+                    <label>
+                      <span className="ns-sr-only">Label for point {index + 1}</span>
+                      <input
+                        value={row.label}
+                        aria-label={`Label for point ${index + 1}`}
+                        data-testid={`chart-label-${index}`}
+                        onChange={(event) => {
+                          const label = event.target.value;
+                          setRows((current) =>
+                            current.map((candidate) =>
+                              candidate.id === row.id ? { ...candidate, label } : candidate,
+                            ),
+                          );
+                          setError(null);
+                        }}
+                      />
+                    </label>
+                  </td>
+                  <td>
+                    <label>
+                      <span className="ns-sr-only">Value for point {index + 1}</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={row.value}
+                        aria-label={`Value for point ${index + 1}`}
+                        data-testid={`chart-value-${index}`}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setRows((current) =>
+                            current.map((candidate) =>
+                              candidate.id === row.id ? { ...candidate, value } : candidate,
+                            ),
+                          );
+                          setError(null);
+                        }}
+                      />
+                    </label>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ns-chart-data-grid__remove"
+                      disabled={rows.length <= 1}
+                      aria-label={`Remove point ${index + 1}`}
+                      onClick={() => {
+                        setRows((current) => removeChartDataRow(current, row.id));
+                        setError(null);
+                      }}
+                    >
+                      <X size={12} aria-hidden="true" />
+                      <span>Remove</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button
+          type="button"
+          className="ns-chart-data-grid__add"
+          disabled={rows.length >= 24}
+          onClick={() => {
+            const id = `${element.id}:new:${nextRowId.current}`;
+            nextRowId.current += 1;
+            setRows((current) => appendChartDataRow(current, id));
+            setError(null);
+          }}
+        >
+          <Plus size={13} aria-hidden="true" /> Add point
+        </button>
         <div className="ns-primitive-editor-grid">
           <label>
             <span>Series</span>
@@ -572,7 +852,9 @@ function ChartDataEditor({
             <input name="unit" defaultValue={chart.unit ?? ''} />
           </label>
         </div>
-        <button type="submit">Apply chart data</button>
+        <button type="submit" className="ns-chart-data-grid__apply">
+          Apply chart data
+        </button>
         {error ? <output role="alert">{error}</output> : null}
       </form>
     </InspectorGroup>
@@ -755,7 +1037,10 @@ function NumberStepper({
 }) {
   return (
     <div className="ns-stepper-field">
-      <span title={label}>{icon}</span>
+      <span className="ns-stepper-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="ns-stepper-label">{label}</span>
       <button
         type="button"
         disabled={disabled || value <= min}
