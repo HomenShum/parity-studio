@@ -47,6 +47,11 @@ import {
   validationFromCandidateReceipt,
 } from './lib/nodeslideCandidate';
 import {
+  nodeSlideCreationAuthorizationLine,
+  nodeSlideCreationRunStartedAt,
+  nodeSlideCreationTraceId,
+} from './lib/nodeslideCreationTelemetry';
+import {
   NODESLIDE_WORKSPACE_LIMITS,
   commentFromRow,
   deckFromRow,
@@ -1589,6 +1594,7 @@ export const beginAgentRunInternal = internalMutation({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    startedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
@@ -1674,6 +1680,7 @@ export const beginAgentRunInternal = internalMutation({
       return { created: false, run };
     }
     const now = Date.now();
+    const startedAt = nodeSlideCreationRunStartedAt(args.startedAt, now);
     const id = nodeslideStableId('agent_run', args.deckId, idempotencyKey);
     const otelTraceId = agentTraceId(args.deckId, id);
     const rootSpanId = agentSpanId(otelTraceId, 'invoke_agent', 1);
@@ -1696,8 +1703,8 @@ export const beginAgentRunInternal = internalMutation({
       nextTelemetrySequence: 3,
       telemetryVersion: NODESLIDE_AGENT_TELEMETRY_VERSION,
       otelExportStatus: 'pending' as const,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: startedAt,
+      updatedAt: startedAt,
     };
     await ctx.db.insert('nodeslide_agent_runs', run);
     await ctx.db.insert('nodeslide_agent_spans', {
@@ -1710,7 +1717,7 @@ export const beginAgentRunInternal = internalMutation({
       operationName: 'invoke_agent',
       kind: 'internal',
       status: 'unset',
-      startTime: now,
+      startTime: startedAt,
       provider: run.provider,
       model: run.model,
       attributes: [
@@ -1732,7 +1739,7 @@ export const beginAgentRunInternal = internalMutation({
       spanId: rootSpanId,
       name: 'agent.request.accepted',
       severity: 'info',
-      timestamp: now,
+      timestamp: startedAt,
       body: 'Agent request accepted and durably queued.',
       attributes: [{ key: 'nodeslide.checkpoint', value: 'queued' }],
       sequence: 2,
@@ -2157,6 +2164,7 @@ export const createFromBriefInternal = internalMutation({
     plan: v.array(v.string()),
     spec: v.any(),
     traceSummary: v.string(),
+    externalEgressAuthorized: v.boolean(),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
@@ -2241,6 +2249,11 @@ export const createFromBriefInternal = internalMutation({
           'Persisted deterministic plan and deck specification',
         ],
         toolCalls: [
+          nodeSlideCreationAuthorizationLine({
+            externalEgressAuthorized: args.externalEgressAuthorized,
+            ...(args.provider ? { provider: args.provider } : {}),
+            ...(args.model ? { model: args.model } : {}),
+          }),
           'Planned six-to-eight slide narrative',
           'Built normalized deck',
           'Validated snapshot',
@@ -3217,7 +3230,7 @@ async function createWorkspaceRows(
   await ctx.db.insert('nodeslide_validations', validation);
   await insertVersion(ctx, snapshot, 'Initial deck', 'system', undefined, now);
   await ctx.db.insert('nodeslide_traces', {
-    id: nodeslideStableId('trace', snapshot.deck.id, 'creation'),
+    id: nodeSlideCreationTraceId(snapshot.deck.id),
     deckId: snapshot.deck.id,
     status: 'completed',
     summary: args.trace.summary,

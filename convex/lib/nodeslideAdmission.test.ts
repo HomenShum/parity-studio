@@ -165,6 +165,7 @@ describe('NodeSlide create action admission boundary', () => {
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).not.toHaveProperty('accessCode');
     expect(persistenceArgs).not.toHaveProperty('providerConsent');
+    expect(persistenceArgs).toMatchObject({ externalEgressAuthorized: false });
   });
 
   it('does not consume creation quota again inside an authorized durable retry', async () => {
@@ -258,6 +259,7 @@ describe('NodeSlide create action admission boundary', () => {
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).toMatchObject({
       model: 'anthropic/claude-sonnet-5',
+      externalEgressAuthorized: true,
       attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
     });
   });

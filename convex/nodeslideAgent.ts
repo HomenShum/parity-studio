@@ -1339,6 +1339,7 @@ export const createDeckFromBrief = action({
       plan,
       spec: rawSpec,
       traceSummary,
+      externalEgressAuthorized: providerChoice.providerMode !== 'deterministic',
       ...(providerSucceeded && telemetry
         ? {
             provider: telemetry.provider,

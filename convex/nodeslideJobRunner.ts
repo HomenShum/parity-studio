@@ -3,6 +3,7 @@
 import { v } from 'convex/values';
 import { api, internal } from './_generated/api';
 import { internalAction } from './_generated/server';
+import { nodeSlideCreationTraceId } from './lib/nodeslideCreationTelemetry';
 import { nodeslideStableId } from './lib/nodeslideIds';
 import {
   nodeslideCreateJobRequestValidator,
@@ -34,6 +35,7 @@ export const executeCreateDeckInternal = internalAction({
     })) as {
       status: string;
       progress: number;
+      createdAt: number;
       resultDeckId?: string;
     };
     if (claimed.status === 'cancelled') throw new Error('NodeSlide job was cancelled.');
@@ -63,6 +65,12 @@ export const executeCreateDeckInternal = internalAction({
       throw new Error('NodeSlide job recovered an invalid deck output binding.');
     }
 
+    const workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
+      deckId: resultDeckId,
+      ownerAccessKey: args.ownerAccessKey,
+    })) as { sources?: Array<{ id: string }> } | null;
+    const sourceIds = (workspace?.sources ?? []).map((source) => source.id).slice(0, 32);
+
     await ctx.runMutation(jobsInternal.checkpointInternal, {
       jobId: args.jobId,
       status: 'running',
@@ -79,6 +87,7 @@ export const executeCreateDeckInternal = internalAction({
       provider: args.request.providerMode ?? 'deterministic',
       model: args.request.providerModel ?? 'brief-to-deck/v1',
       webResearch: false,
+      startedAt: claimed.createdAt,
     })) as {
       created: boolean;
       run: { id: string; status: string; memoryIds?: string[] };
@@ -92,8 +101,10 @@ export const executeCreateDeckInternal = internalAction({
         ownerAccessKey: args.ownerAccessKey,
         runId: runStart.run.id,
         status: 'completed',
+        traceId: nodeSlideCreationTraceId(resultDeckId),
         role: 'assistant',
         message: 'Created and validated the editable deck. No mutation bypassed review authority.',
+        ...(sourceIds.length > 0 ? { sourceIds } : {}),
       });
     }
     const memoryIds = Array.isArray(runStart.run.memoryIds)
