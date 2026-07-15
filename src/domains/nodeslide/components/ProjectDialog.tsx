@@ -22,6 +22,7 @@ import {
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import { nodeSlideRequestedSlideCountIssue } from '../../../../shared/nodeslideSlideCount';
 import {
   NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   NodeSlidePromptComposer,
@@ -301,6 +302,7 @@ export function ProjectDialog({
     if (mode === 'open') return;
     const deckTitle = title.trim();
     const briefPrompt = text.trim();
+    if (nodeSlideRequestedSlideCountIssue(briefPrompt, successCriteria)) return;
     const previewAccessCode = accessCode.trim();
     if (!deckTitle || !briefPrompt || !audience.trim() || !purpose.trim() || !previewAccessCode) {
       return;
@@ -343,20 +345,23 @@ export function ProjectDialog({
   };
 
   const selectedModel = nodeSlideAgentModel(providerModel);
+  const requestedSlideCountIssue = nodeSlideRequestedSlideCountIssue(prompt, successCriteria);
 
   const createBlocker = !title.trim()
     ? 'Add a deck title to continue.'
     : !prompt.trim()
       ? 'Describe what this deck should accomplish.'
-      : !audience.trim()
-        ? 'Add the intended audience under Improve the brief.'
-        : !purpose.trim()
-          ? 'Add the deck purpose under Improve the brief.'
-          : !accessCode.trim()
-            ? 'Enter the private-preview access code to continue.'
-            : providerMode !== 'deterministic' && !providerConsent
-              ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
-              : null;
+      : requestedSlideCountIssue
+        ? requestedSlideCountIssue
+        : !audience.trim()
+          ? 'Add the intended audience under Improve the brief.'
+          : !purpose.trim()
+            ? 'Add the deck purpose under Improve the brief.'
+            : !accessCode.trim()
+              ? 'Enter the private-preview access code to continue.'
+              : providerMode !== 'deterministic' && !providerConsent
+                ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
+                : null;
 
   if (!open) return null;
 

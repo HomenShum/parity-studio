@@ -266,6 +266,20 @@ describe('NodeSlide create action admission boundary', () => {
 });
 
 describe('NodeSlide create-deck bounds', () => {
+  it('fails loudly for an explicit deck length outside the supported 3–8 range', () => {
+    expect(() =>
+      validateNodeSlideCreateDeckFields({
+        title: 'Two-slide proof',
+        brief: {
+          prompt: 'Create a concise 2-slide launch proof.',
+          audience: 'Reviewers',
+          purpose: 'Show the core workflow',
+          successCriteria: [],
+        },
+      }),
+    ).toThrow(/currently creates 3–8 slides/i);
+  });
+
   it('accepts exact character/count boundaries', () => {
     const limits = NODESLIDE_CREATE_DECK_LIMITS;
     const result = validateNodeSlideCreateDeckFields({

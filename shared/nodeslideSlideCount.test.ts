@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { inferNodeSlideRequestedSlideCount } from './nodeslideSlideCount';
+import {
+  explicitNodeSlideRequestedSlideCount,
+  inferNodeSlideRequestedSlideCount,
+  nodeSlideRequestedSlideCountIssue,
+} from './nodeslideSlideCount';
 
 describe('NodeSlide requested slide count', () => {
   it.each([
@@ -18,5 +22,15 @@ describe('NodeSlide requested slide count', () => {
     expect(inferNodeSlideRequestedSlideCount('Use evidence from slides 3 and 4')).toBeNull();
     expect(inferNodeSlideRequestedSlideCount('Create two slides')).toBeNull();
     expect(inferNodeSlideRequestedSlideCount('Create nine slides')).toBeNull();
+  });
+
+  it('distinguishes unsupported explicit deck lengths from ordinary slide references', () => {
+    expect(explicitNodeSlideRequestedSlideCount('Create two slides')).toBe(2);
+    expect(explicitNodeSlideRequestedSlideCount('Build a 12-slide board update')).toBe(12);
+    expect(explicitNodeSlideRequestedSlideCount('Put the decision on slide 6')).toBeNull();
+    expect(nodeSlideRequestedSlideCountIssue('Create two slides')).toBe(
+      'NodeSlide currently creates 3–8 slides. Change the requested 2-slide deck to 3–8 slides.',
+    );
+    expect(nodeSlideRequestedSlideCountIssue('Create 6 slides')).toBeNull();
   });
 });

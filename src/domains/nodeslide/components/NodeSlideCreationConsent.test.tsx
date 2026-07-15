@@ -179,6 +179,43 @@ describe('NodeSlide creation consent', () => {
     await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
   });
 
+  it('blocks unsupported deck lengths before consuming consent and stays editable', async () => {
+    const onCreate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AgentSessionProvider clientSessionId="landing-slide-count-boundary">
+        <NodeSlideLanding
+          clientSessionId="landing-slide-count-boundary"
+          recentDecks={[]}
+          creating={false}
+          onCreate={onCreate}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
+    );
+
+    const brief = screen.getByLabelText('Presentation brief');
+    const consent = screen.getByTestId('landing-provider-consent');
+    const submit = screen.getByRole('button', { name: 'Create presentation' });
+    await user.type(brief, 'Create a concise two-slide launch proof.');
+    await user.click(consent);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'NodeSlide currently creates 3–8 slides. Change the requested 2-slide deck to 3–8 slides.',
+    );
+    expect(submit).toBeDisabled();
+    expect(onCreate).not.toHaveBeenCalled();
+
+    await user.clear(brief);
+    await user.type(brief, 'Create a concise three-slide launch proof.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(consent).not.toBeChecked();
+    await user.click(consent);
+    expect(submit).toBeEnabled();
+  });
+
   it('requires fresh keyboard consent after a landing preset rewrites the request', async () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();

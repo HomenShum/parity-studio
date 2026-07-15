@@ -520,7 +520,7 @@ function TraceBanner({
         <span>
           <small>{trace.patchId ? 'Review cycle' : 'Run time'}</small>
           <strong>
-            <Clock3 size={11} /> {duration(trace)}
+            <Clock3 size={11} /> {duration(trace, run)}
           </strong>
         </span>
         <span>
@@ -1654,9 +1654,11 @@ export function formatCost(value: number | undefined): string {
   return `$${(value / 1_000_000).toFixed(4)}`;
 }
 
-function duration(trace: AgentTrace): string {
-  if (!trace.completedAt) return humanize(trace.status);
-  const seconds = Math.max(1, Math.round((trace.completedAt - trace.createdAt) / 1000));
+function duration(trace: AgentTrace, run?: NodeSlideAgentRun): string {
+  const completedAt = run?.completedAt ?? trace.completedAt;
+  if (!completedAt) return humanize(trace.status);
+  const createdAt = run?.createdAt ?? trace.createdAt;
+  const seconds = Math.max(1, Math.round((completedAt - createdAt) / 1000));
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 

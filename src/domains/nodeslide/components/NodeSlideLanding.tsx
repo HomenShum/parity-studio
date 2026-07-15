@@ -16,7 +16,10 @@ import {
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
-import { inferNodeSlideRequestedSlideCount } from '../../../../shared/nodeslideSlideCount';
+import {
+  inferNodeSlideRequestedSlideCount,
+  nodeSlideRequestedSlideCountIssue,
+} from '../../../../shared/nodeslideSlideCount';
 import { NodeSlidePromptComposer } from '../composer/NodeSlidePromptComposer';
 import {
   nodeSlideComposerSessionKey,
@@ -92,6 +95,7 @@ export function NodeSlideLanding({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentsSyncing, setAttachmentsSyncing] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const requestedSlideCountIssue = nodeSlideRequestedSlideCountIssue(prompt);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
   const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
@@ -121,6 +125,7 @@ export function NodeSlideLanding({
   const start = async (submittedPrompt: string, files: readonly File[]) => {
     const nextPrompt = submittedPrompt.trim();
     if (!nextPrompt) return;
+    if (nodeSlideRequestedSlideCountIssue(nextPrompt)) return;
     const requestedSlideCount = inferNodeSlideRequestedSlideCount(nextPrompt);
     const providerAdmission = createDeckProviderAdmission(
       providerMode,
@@ -174,6 +179,7 @@ export function NodeSlideLanding({
     Boolean(prompt.trim()) &&
     !creating &&
     !attachmentsSyncing &&
+    requestedSlideCountIssue === null &&
     (providerMode === 'deterministic' || providerConsent !== null);
 
   return (
@@ -257,7 +263,13 @@ export function NodeSlideLanding({
           }}
           placeholder="Describe the presentation you want to make…"
           session={composerSession}
-          status={creating ? 'submitted' : error || attachmentError ? 'error' : 'ready'}
+          status={
+            creating
+              ? 'submitted'
+              : error || attachmentError || requestedSlideCountIssue
+                ? 'error'
+                : 'ready'
+          }
           submitContent={
             creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />
           }
@@ -323,6 +335,10 @@ export function NodeSlideLanding({
         ) : error ? (
           <output className="ns-landing-create-error" role="alert">
             {error}
+          </output>
+        ) : requestedSlideCountIssue ? (
+          <output className="ns-landing-create-error" role="alert">
+            {requestedSlideCountIssue}
           </output>
         ) : null}
         {attachmentError ? (
