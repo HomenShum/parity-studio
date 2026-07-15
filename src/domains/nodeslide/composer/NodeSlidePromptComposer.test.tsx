@@ -172,6 +172,35 @@ describe('NodeSlide AI Elements composer interactions', () => {
     expect(screen.getByTestId('session-attachment-count')).toHaveTextContent('0');
   });
 
+  it('reports the attachment cap after commit without updating a parent during render', async () => {
+    const sessionKey = 'editor:attachment-cap';
+    clearNodeSlideComposerSession(sessionKey);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    render(<AttachmentErrorHarness sessionKey={sessionKey} />);
+
+    await user.upload(screen.getByTestId('test-file-input'), [
+      new File(['a,b\n1,2'], 'one.csv', { type: 'text/csv' }),
+      new File(['{"value":2}'], 'two.json', { type: 'application/json' }),
+      new File(['# Evidence'], 'three.md', { type: 'text/markdown' }),
+    ]);
+    await waitFor(() =>
+      expect(screen.getByTestId('session-attachment-count')).toHaveTextContent('3'),
+    );
+
+    await user.upload(
+      screen.getByTestId('test-file-input'),
+      new File(['four'], 'four.txt', { type: 'text/plain' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many files. Some were not added.',
+    );
+    expect(screen.queryByText('four.txt')).not.toBeInTheDocument();
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain(
+      'Cannot update a component while rendering a different component',
+    );
+  });
+
   it('consumes pasted and dropped files in the submitted NodeSlide request', async () => {
     const sessionKey = 'editor:paste-drop';
     clearNodeSlideComposerSession(sessionKey);
@@ -245,11 +274,13 @@ describe('NodeSlide AI Elements composer interactions', () => {
 function ComposerPanel({
   sessionKey,
   onSubmit = async () => undefined,
+  onAttachmentError,
   insideDialog = false,
   disabled = false,
 }: {
   sessionKey: string;
   onSubmit?: (message: NodeSlidePromptComposerSubmit) => void | Promise<void>;
+  onAttachmentError?: (message: string | null) => void;
   insideDialog?: boolean;
   disabled?: boolean;
 }) {
@@ -282,6 +313,7 @@ function ComposerPanel({
         model={model}
         modelLabel="Model and provider"
         modelTestId="test-model-select"
+        {...(onAttachmentError ? { onAttachmentError } : {})}
         onEffortChange={setEffort}
         onModelChange={selectModel}
         onSubmit={onSubmit}
@@ -304,6 +336,16 @@ function ComposerPanel({
         composer
       )}
     </div>
+  );
+}
+
+function AttachmentErrorHarness({ sessionKey }: { sessionKey: string }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <ComposerPanel onAttachmentError={setError} sessionKey={sessionKey} />
+      {error ? <output role="alert">{error}</output> : null}
+    </>
   );
 }
 

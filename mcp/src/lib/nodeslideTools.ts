@@ -49,6 +49,7 @@ const NODE_SLIDE_PAGE_DEFAULT = 25;
 const NODE_SLIDE_PAGE_MAX = 100;
 const NODE_SLIDE_CLOCK_MAX = 512;
 const NODE_SLIDE_EXTERNAL_OPERATION_MAX = 8;
+const NODE_SLIDE_CANDIDATE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 export interface NodeSlideWorkspace {
   deck: {
@@ -823,20 +824,35 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
   server.registerTool(
     'nodeslide.accept_proposal',
     {
-      title: 'Accept a reviewed NodeSlide proposal',
+      title: 'Accept a validated NodeSlide proposal with delegated authority',
       description:
-        'Explicit review action. Revalidates candidate binding and CAS, then creates a new immutable deck version.',
-      inputSchema: { ...ownerArgs, patchId: z.string().min(1) },
+        'Delegated acceptance bound to the exact validated candidate digest. Uses only NODESLIDE_DELEGATION_TOKEN from the MCP process env; the broad owner capability is never accepted or sent.',
+      inputSchema: {
+        deckId: z.string().min(1),
+        patchId: z.string().min(1),
+        expectedCandidateDigest: z
+          .string()
+          .regex(NODE_SLIDE_CANDIDATE_DIGEST_PATTERN)
+          .describe('Exact candidateDigest from the validated proposal receipt.'),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async (args) =>
-      textResult(
-        await convexCall('mutation', 'nodeslide:acceptPatch', {
-          deckId: args.deckId,
-          ownerAccessKey: resolveOwnerKey(args.deckId, args.ownerAccessKey),
-          patchId: args.patchId,
-        }),
-      ),
+    async (args) => {
+      const token = resolveDelegationToken();
+      const expectedCandidateDigest = requireCandidateDigest(args.expectedCandidateDigest);
+      try {
+        return textResult(
+          await convexCall('mutation', 'nodeslideDelegation:acceptValidatedProposalWithGrant', {
+            deckId: args.deckId,
+            token,
+            patchId: args.patchId,
+            expectedCandidateDigest,
+          }),
+        );
+      } catch (error) {
+        throw capabilitySafeError(error);
+      }
+    },
   );
 
   server.registerTool(
@@ -1069,7 +1085,7 @@ export function canonicalNodeSlideSnapshot(workspace: NodeSlideWorkspace) {
     return elementDifference || left.id.localeCompare(right.id);
   });
   const sources = [...workspace.sources].sort((left, right) => left.id.localeCompare(right.id));
-  return stripOwnerCapabilities({
+  return stripCapabilitySecrets({
     deck: workspace.deck,
     slides,
     elements,
@@ -1156,16 +1172,68 @@ function decodeNodeSlideCursor(
   }
 }
 
-function stripOwnerCapabilities<T>(value: T): T {
+function stripCapabilitySecrets<T>(value: T): T {
   if (Array.isArray(value)) {
-    return value.map((item) => stripOwnerCapabilities(item)) as T;
+    return value.map((item) => stripCapabilitySecrets(item)) as T;
   }
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => key !== 'ownerAccessKey')
-      .map(([key, item]) => [key, stripOwnerCapabilities(item)]),
+      .filter(([key]) => !isCapabilitySecretField(key))
+      .map(([key, item]) => [key, stripCapabilitySecrets(item)]),
   ) as T;
+}
+
+function isCapabilitySecretField(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/giu, '').toLowerCase();
+  return (
+    normalized === 'token' ||
+    normalized.endsWith('accesstoken') ||
+    normalized.endsWith('refreshtoken') ||
+    normalized.endsWith('bearertoken') ||
+    normalized.endsWith('delegationtoken') ||
+    normalized.endsWith('granttoken') ||
+    normalized.endsWith('capabilitytoken') ||
+    normalized.endsWith('tokendigest') ||
+    normalized.endsWith('accesskey')
+  );
+}
+
+function resolveDelegationToken(): string {
+  const token = process.env.NODESLIDE_DELEGATION_TOKEN;
+  if (!token?.trim()) {
+    throw new Error(
+      'NodeSlide delegated acceptance requires NODESLIDE_DELEGATION_TOKEN in the MCP server env.',
+    );
+  }
+  return token;
+}
+
+function requireCandidateDigest(value: unknown): string {
+  if (typeof value !== 'string' || !NODE_SLIDE_CANDIDATE_DIGEST_PATTERN.test(value)) {
+    throw new Error(
+      'expectedCandidateDigest must be the exact sha256 candidate digest from the validated proposal.',
+    );
+  }
+  return value;
+}
+
+function capabilitySafeError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(redactKnownCapabilityValues(message));
+}
+
+function redactKnownCapabilityValues(value: string): string {
+  const secrets = new Set([
+    process.env.NODESLIDE_DELEGATION_TOKEN,
+    process.env.NODESLIDE_OWNER_ACCESS_KEY,
+    ...ownerKeys.values(),
+  ]);
+  let redacted = value;
+  for (const secret of secrets) {
+    if (secret && secret.length >= 8) redacted = redacted.split(secret).join('[REDACTED]');
+  }
+  return redacted;
 }
 
 function resolveOwnerKey(deckId: string, provided?: string): string {
@@ -1311,5 +1379,8 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
 }
 
 function textResult(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
+  const serialized = JSON.stringify(stripCapabilitySecrets(value), null, 2) ?? 'null';
+  return {
+    content: [{ type: 'text' as const, text: redactKnownCapabilityValues(serialized) }],
+  };
 }

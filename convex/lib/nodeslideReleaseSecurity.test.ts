@@ -763,6 +763,45 @@ describe('NodeSlide release security', () => {
     );
   });
 
+  it('keeps the canonical deck unchanged when a JSON edit candidate is Rejected', async () => {
+    const database = new MemoryDatabase();
+    const fixture = seedWorkspace(database, 'json-reject', OWNER_ACCESS_KEY, '7b');
+    const context = { db: database } as unknown as MutationCtx;
+    const before = await requiredSnapshot(context, fixture.snapshot.deck.id);
+    const edit = textEdit(before, 'Rejected JSON candidate');
+    const proposed = await proposePatchHandler(context, {
+      id: 'json-reject-candidate',
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: before.deck.version,
+      ...clocksForNodeSlideOperations(before, [edit.operation]),
+      scope: edit.scope,
+      operations: [edit.operation],
+      summary: 'Edit selected element via JSON',
+    });
+
+    expect(proposed.patch).toMatchObject({
+      status: 'ready',
+      candidateDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      candidateValidation: expect.objectContaining({ ok: true }),
+    });
+    expect(await requiredSnapshot(context, before.deck.id)).toEqual(before);
+
+    const rejected = await rejectPatchHandler(context, {
+      deckId: before.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      patchId: proposed.patch.id,
+    });
+
+    expect(rejected).toMatchObject({
+      id: proposed.patch.id,
+      status: 'rejected',
+      candidateDigest: proposed.patch.candidateDigest,
+      candidateValidation: proposed.patch.candidateValidation,
+    });
+    expect(await requiredSnapshot(context, before.deck.id)).toEqual(before);
+  });
+
   it('rejects a stale JSON candidate without overwriting a newer canonical edit', async () => {
     const database = new MemoryDatabase();
     const fixture = seedWorkspace(database, 'json-stale', OWNER_ACCESS_KEY, '8');

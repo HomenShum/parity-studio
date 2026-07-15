@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { nodeslideExecutionTraceFields } from './lib/nodeslideExecutionTraceValidator';
+import { NODESLIDE_JOB_PHASES, NODESLIDE_JOB_STATUSES } from './lib/nodeslideJobState';
 import { nodeslideShadowComparisonFields } from './lib/nodeslideShadowComparisonValidator';
 import {
   nodeslideBoundingBoxValidator,
@@ -32,6 +33,21 @@ import {
   nodeslideVersionClockValidator,
   nodeslideVideoDataValidator,
 } from './lib/nodeslideValidators';
+
+const nodeslideDecisionProvenanceValidator = v.union(
+  v.object({
+    authority: v.literal('owner_capability'),
+    decidedAt: v.number(),
+  }),
+  v.object({
+    authority: v.literal('delegated'),
+    capability: v.literal('accept_validated'),
+    grantId: v.string(),
+    clientKind: v.union(v.literal('browser'), v.literal('codex'), v.literal('claude')),
+    policyDigest: v.string(),
+    decidedAt: v.number(),
+  }),
+);
 
 const nodeslidePreferenceEventTypeValidator = v.union(
   v.literal('variation_generated'),
@@ -679,6 +695,44 @@ export default defineSchema({
     .index('by_deck_status', ['deckId', 'status'])
     .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
 
+  nodeslide_delegation_grants: defineTable({
+    schemaVersion: v.literal('nodeslide.delegation-grant/v1'),
+    id: v.string(),
+    deckId: v.string(),
+    tokenDigest: v.string(),
+    policyVersion: v.literal('nodeslide.delegation-policy/v1'),
+    clientKind: v.union(v.literal('browser'), v.literal('codex'), v.literal('claude')),
+    capability: v.literal('accept_validated'),
+    proposalSource: v.literal('agent'),
+    proposalKind: v.literal('edit'),
+    maxOperations: v.number(),
+    maxUses: v.number(),
+    useCount: v.number(),
+    policyDigest: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_token_digest', ['tokenDigest'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_delegation_uses: defineTable({
+    id: v.string(),
+    grantId: v.string(),
+    deckId: v.string(),
+    patchId: v.string(),
+    candidateDigest: v.string(),
+    resultingDeckVersion: v.number(),
+    rebased: v.boolean(),
+    usedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_grant_patch', ['grantId', 'patchId'])
+    .index('by_grant_used', ['grantId', 'usedAt'])
+    .index('by_deck_used', ['deckId', 'usedAt']),
+
   nodeslide_variation_batches: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -804,6 +858,37 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck', ['deckId']),
 
+  nodeslide_agent_jobs: defineTable({
+    id: v.string(),
+    kind: v.union(v.literal('create_deck'), v.literal('edit_proposal')),
+    clientSessionId: v.string(),
+    admissionQuotaSubject: v.string(),
+    ownerDigest: v.string(),
+    executionDigest: v.string(),
+    idempotencyKey: v.string(),
+    requestDigest: v.string(),
+    status: v.union(...NODESLIDE_JOB_STATUSES.map((status) => v.literal(status))),
+    phase: v.union(...NODESLIDE_JOB_PHASES.map((phase) => v.literal(phase))),
+    progress: v.number(),
+    attempt: v.number(),
+    maxAttempts: v.number(),
+    workflowId: v.optional(v.string()),
+    streamId: v.string(),
+    resultDeckId: v.optional(v.string()),
+    resultPatchId: v.optional(v.string()),
+    resultCandidateDigest: v.optional(v.string()),
+    conversationRunId: v.optional(v.string()),
+    memoryIds: v.array(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_session_idempotency', ['clientSessionId', 'idempotencyKey'])
+    .index('by_status_updated', ['status', 'updatedAt'])
+    .index('by_result_deck', ['resultDeckId']),
+
   nodeslide_agent_runs: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -823,6 +908,7 @@ export default defineSchema({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    memoryIds: v.optional(v.array(v.string())),
     attempt: v.number(),
     otelTraceId: v.optional(v.string()),
     rootSpanId: v.optional(v.string()),
@@ -1004,6 +1090,7 @@ export default defineSchema({
     outputTokens: v.optional(v.number()),
     sourceBindingStatus: v.optional(nodeslideSourceBindingStatusValidator),
     claimSourceBindings: v.optional(v.array(nodeslideClaimSourceBindingValidator)),
+    decisionProvenance: v.optional(nodeslideDecisionProvenanceValidator),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })

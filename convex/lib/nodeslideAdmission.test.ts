@@ -1,6 +1,7 @@
 import { ConvexError } from 'convex/values';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeckFromBrief } from '../nodeslideAgent';
+import { nodeslideStableId } from './nodeslideIds';
 import { callNodeSlideFreeJson } from './nodeslideProvider';
 import {
   NODESLIDE_CREATE_DECK_LIMITS,
@@ -164,6 +165,40 @@ describe('NodeSlide create action admission boundary', () => {
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).not.toHaveProperty('accessCode');
     expect(persistenceArgs).not.toHaveProperty('providerConsent');
+    expect(persistenceArgs).toMatchObject({ externalEgressAuthorized: false });
+  });
+
+  it('does not consume creation quota again inside an authorized durable retry', async () => {
+    const jobId = 'job-durable-create';
+    const ownerAccessKey = 'a'.repeat(43);
+    const executionAccessKey = 'b'.repeat(43);
+    const workspace = { deck: { id: nodeslideStableId('deck_job', jobId) } };
+    const runQuery = vi.fn().mockResolvedValue({ admissionQuotaSubject: 'admitted-job' });
+    const runMutation = vi.fn().mockResolvedValue(workspace);
+
+    await expect(
+      createDeckHandler(
+        { runMutation, runQuery },
+        {
+          ...createActionArgs(undefined),
+          durableJob: {
+            jobId,
+            deckId: nodeslideStableId('deck_job', jobId),
+            projectId: nodeslideStableId('project_nodeslide_job', jobId),
+            ownerAccessKey,
+            executionAccessKey,
+          },
+        },
+      ),
+    ).resolves.toBe(workspace);
+
+    expect(runQuery).toHaveBeenCalledOnce();
+    expect(runMutation).toHaveBeenCalledOnce();
+    expect(runMutation.mock.calls[0]?.[1]).toMatchObject({
+      jobId,
+      ownerAccessKey,
+      executionAccessKey,
+    });
   });
 
   it('routes the selected named model and uploaded evidence through the consented path', async () => {
@@ -188,7 +223,7 @@ describe('NodeSlide create action admission boundary', () => {
       ...createActionArgs(PREVIEW_ACCESS_CODE),
       brief: {
         ...createActionArgs(PREVIEW_ACCESS_CODE).brief,
-        prompt: 'Create a six-slide data story.',
+        prompt: 'Create a three-slide data story.',
       },
       providerMode: 'openrouter_free',
       providerModel: 'anthropic/claude-sonnet-5',
@@ -202,12 +237,12 @@ describe('NodeSlide create action admission boundary', () => {
       expect.objectContaining({ model: 'anthropic/claude-sonnet-5' }),
     );
     const providerRequest = vi.mocked(callNodeSlideFreeJson).mock.calls[0]?.[0];
-    expect(providerRequest?.systemPrompt).toContain('Produce exactly 6 concise slides');
+    expect(providerRequest?.systemPrompt).toContain('Produce exactly 3 concise slides');
     expect(providerRequest?.jsonSchema?.schema).toMatchObject({
       properties: {
         slides: {
-          minItems: 6,
-          maxItems: 6,
+          minItems: 3,
+          maxItems: 3,
           items: {
             properties: {
               diagram: {
@@ -224,12 +259,27 @@ describe('NodeSlide create action admission boundary', () => {
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(persistenceArgs).toMatchObject({
       model: 'anthropic/claude-sonnet-5',
+      externalEgressAuthorized: true,
       attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
     });
   });
 });
 
 describe('NodeSlide create-deck bounds', () => {
+  it('fails loudly for an explicit deck length outside the supported 3–8 range', () => {
+    expect(() =>
+      validateNodeSlideCreateDeckFields({
+        title: 'Two-slide proof',
+        brief: {
+          prompt: 'Create a concise 2-slide launch proof.',
+          audience: 'Reviewers',
+          purpose: 'Show the core workflow',
+          successCriteria: [],
+        },
+      }),
+    ).toThrow(/currently creates 3–8 slides/i);
+  });
+
   it('accepts exact character/count boundaries', () => {
     const limits = NODESLIDE_CREATE_DECK_LIMITS;
     const result = validateNodeSlideCreateDeckFields({
@@ -477,10 +527,20 @@ interface CreateActionArgs {
     format: 'csv' | 'json' | 'txt';
     content: string;
   }>;
+  durableJob?: {
+    jobId: string;
+    deckId: string;
+    projectId: string;
+    ownerAccessKey: string;
+    executionAccessKey: string;
+  };
 }
 
 type CreateDeckHandler = (
-  context: { runMutation: ReturnType<typeof vi.fn> },
+  context: {
+    runMutation: ReturnType<typeof vi.fn>;
+    runQuery?: ReturnType<typeof vi.fn>;
+  },
   args: CreateActionArgs,
 ) => Promise<unknown>;
 

@@ -39,13 +39,48 @@ const workspace: NodeSlideWorkspace = {
 };
 
 const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
+const originalDelegationToken = process.env.NODESLIDE_DELEGATION_TOKEN;
+const originalOwnerAccessKey = process.env.NODESLIDE_OWNER_ACCESS_KEY;
+
+type ToolHandler = (args: Record<string, unknown>) => Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+}>;
+
+function registerToolHarness(
+  convexCall: (
+    kind: 'query' | 'mutation' | 'action',
+    path: string,
+    args: Record<string, unknown>,
+  ) => Promise<unknown>,
+) {
+  const handlers = new Map<string, ToolHandler>();
+  const definitions = new Map<string, { inputSchema?: Record<string, unknown> }>();
+  const server = {
+    registerTool: (
+      name: string,
+      definition: { inputSchema?: Record<string, unknown> },
+      handler: ToolHandler,
+    ) => {
+      definitions.set(name, definition);
+      handlers.set(name, handler);
+    },
+  };
+  registerNodeSlideTools(server as never, convexCall);
+  return { definitions, handlers };
+}
+
+function restoreEnv(name: string, original: string | undefined): void {
+  if (original === undefined) {
+    Reflect.deleteProperty(process.env, name);
+  } else {
+    process.env[name] = original;
+  }
+}
 
 afterEach(() => {
-  if (originalOpenRouterKey === undefined) {
-    Reflect.deleteProperty(process.env, 'OPENROUTER_API_KEY');
-  } else {
-    process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
-  }
+  restoreEnv('OPENROUTER_API_KEY', originalOpenRouterKey);
+  restoreEnv('NODESLIDE_DELEGATION_TOKEN', originalDelegationToken);
+  restoreEnv('NODESLIDE_OWNER_ACCESS_KEY', originalOwnerAccessKey);
 });
 
 describe('NodeSlide MCP governance', () => {
@@ -232,10 +267,145 @@ describe('NodeSlide MCP governance', () => {
     expect(nodeSlidePatchOperationSchema.safeParse({ op: 'run_javascript' }).success).toBe(false);
   });
 
+  it('fails closed when delegated acceptance has no delegation token', async () => {
+    Reflect.deleteProperty(process.env, 'NODESLIDE_DELEGATION_TOKEN');
+    process.env.NODESLIDE_OWNER_ACCESS_KEY = 'broad-owner-key-must-not-be-a-fallback';
+    let callCount = 0;
+    const { handlers } = registerToolHarness(async () => {
+      callCount += 1;
+      throw new Error('Convex must not be called without delegated authority.');
+    });
+    const accept = handlers.get('nodeslide.accept_proposal');
+    expect(accept).toBeDefined();
+
+    await expect(
+      accept?.({
+        deckId: 'deck_1',
+        patchId: 'patch_1',
+        expectedCandidateDigest: `sha256:${'a'.repeat(64)}`,
+      }),
+    ).rejects.toThrow('NODESLIDE_DELEGATION_TOKEN');
+    expect(callCount).toBe(0);
+  });
+
+  it('requires an exact validated candidate digest before delegated acceptance', async () => {
+    process.env.NODESLIDE_DELEGATION_TOKEN = 'd'.repeat(43);
+    let callCount = 0;
+    const { handlers } = registerToolHarness(async () => {
+      callCount += 1;
+      throw new Error('Convex must not be called with an invalid candidate digest.');
+    });
+    const accept = handlers.get('nodeslide.accept_proposal');
+    expect(accept).toBeDefined();
+
+    for (const expectedCandidateDigest of [
+      undefined,
+      `sha256:${'A'.repeat(64)}`,
+      `sha256:${'a'.repeat(63)}`,
+      `sha256:${'a'.repeat(64)} `,
+    ]) {
+      await expect(
+        accept?.({
+          deckId: 'deck_1',
+          patchId: 'patch_1',
+          expectedCandidateDigest,
+        }),
+      ).rejects.toThrow('expectedCandidateDigest');
+    }
+    expect(callCount).toBe(0);
+  });
+
+  it('uses the delegated Convex route with exact args, sends no owner key, and redacts capabilities', async () => {
+    const delegationToken = 'g'.repeat(43);
+    const ownerAccessKey = 'broad-owner-key-never-send';
+    const expectedCandidateDigest = `sha256:${'b'.repeat(64)}`;
+    process.env.NODESLIDE_DELEGATION_TOKEN = delegationToken;
+    process.env.NODESLIDE_OWNER_ACCESS_KEY = ownerAccessKey;
+    const calls: Array<{
+      kind: string;
+      path: string;
+      args: Record<string, unknown>;
+    }> = [];
+    const { definitions, handlers } = registerToolHarness(async (kind, path, args) => {
+      calls.push({ kind, path, args });
+      return {
+        patch: { id: 'patch_1', status: 'accepted' },
+        delegation: { grantId: 'grant_1', useCount: 1, maxUses: 8, replayed: false },
+        token: delegationToken,
+        nested: {
+          ownerAccessKey,
+          delegationToken,
+          tokenDigest: `sha256:${'c'.repeat(64)}`,
+          inputTokens: 12,
+        },
+      };
+    });
+    const accept = handlers.get('nodeslide.accept_proposal');
+    expect(accept).toBeDefined();
+    expect(definitions.get('nodeslide.accept_proposal')?.inputSchema).not.toHaveProperty(
+      'ownerAccessKey',
+    );
+
+    const response = await accept?.({
+      deckId: 'deck_1',
+      patchId: 'patch_1',
+      expectedCandidateDigest,
+      ownerAccessKey,
+    });
+
+    expect(calls).toEqual([
+      {
+        kind: 'mutation',
+        path: 'nodeslideDelegation:acceptValidatedProposalWithGrant',
+        args: {
+          deckId: 'deck_1',
+          token: delegationToken,
+          patchId: 'patch_1',
+          expectedCandidateDigest,
+        },
+      },
+    ]);
+    expect(calls[0]?.args).not.toHaveProperty('ownerAccessKey');
+    const serializedResponse = JSON.stringify(response);
+    expect(serializedResponse).not.toContain(ownerAccessKey);
+    expect(serializedResponse).not.toContain(delegationToken);
+    expect(serializedResponse).not.toContain('ownerAccessKey');
+    expect(serializedResponse).not.toContain('delegationToken');
+    expect(serializedResponse).not.toContain('tokenDigest');
+    expect(JSON.parse(response?.content[0]?.text ?? '{}')).toMatchObject({
+      nested: { inputTokens: 12 },
+    });
+  });
+
+  it('redacts known capabilities from delegated acceptance errors', async () => {
+    const delegationToken = 'h'.repeat(43);
+    const ownerAccessKey = 'broad-owner-key-never-log';
+    process.env.NODESLIDE_DELEGATION_TOKEN = delegationToken;
+    process.env.NODESLIDE_OWNER_ACCESS_KEY = ownerAccessKey;
+    const { handlers } = registerToolHarness(async () => {
+      throw new Error(`backend failure ${delegationToken} ${ownerAccessKey}`);
+    });
+    const accept = handlers.get('nodeslide.accept_proposal');
+    expect(accept).toBeDefined();
+
+    let failure: unknown;
+    try {
+      await accept?.({
+        deckId: 'deck_1',
+        patchId: 'patch_1',
+        expectedCandidateDigest: `sha256:${'d'.repeat(64)}`,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('[REDACTED]');
+    expect((failure as Error).message).not.toContain(delegationToken);
+    expect((failure as Error).message).not.toContain(ownerAccessKey);
+  });
+
   it('routes exact external operations through the existing unapplied proposal action', async () => {
-    type ToolHandler = (args: Record<string, unknown>) => Promise<{
-      content: Array<{ type: 'text'; text: string }>;
-    }>;
     const handlers = new Map<string, ToolHandler>();
     const server = {
       registerTool: (name: string, _definition: unknown, handler: ToolHandler) =>

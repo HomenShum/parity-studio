@@ -22,7 +22,9 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Chromium can begin consuming a download URL on a later task. Keep it alive
+  // long enough for the browser to claim it, then release it deterministically.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export function downloadPptxBinary(binary: PptxBinary, fileName: string): void {

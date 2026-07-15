@@ -10,6 +10,15 @@ import {
 export default defineConfig(() => {
   const sourceSha = resolveRuntimeSourceSha();
   const runtimeSource = frontendRuntimeSourceManifest({ sourceSha });
+  const qaBuildInputs =
+    process.env.PARITY_INCLUDE_QA_FIXTURES === '1'
+      ? {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          'tests/fixtures/trace-waterfall': fileURLToPath(
+            new URL('./tests/fixtures/trace-waterfall.html', import.meta.url),
+          ),
+        }
+      : undefined;
   return {
     plugins: [
       react(),
@@ -31,6 +40,10 @@ export default defineConfig(() => {
     },
     test: {
       exclude: [...configDefaults.exclude, '**/.claude/**', '**/tests/e2e/**'],
+      // The NodeSlide interaction suites intentionally exercise complete jsdom
+      // journeys. Keep their assertions strict while allowing parallel CI load
+      // to finish without the 5 s Vitest default becoming a flaky failure.
+      testTimeout: 15_000,
     },
     css: {
       postcss: {
@@ -45,16 +58,22 @@ export default defineConfig(() => {
       target: 'es2022',
       sourcemap: true,
       rollupOptions: {
+        input: qaBuildInputs,
         output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'editor';
-            if (id.includes('react') || id.includes('react-dom')) return 'react';
-            if (id.includes('convex')) return 'convex';
-            if (id.includes('lucide-react')) return 'icons';
-            if (id.includes('jszip')) return 'zip';
-            return 'vendor';
-          },
+          // Let Rollup own shared-chunk ordering for the QA multi-page build.
+          // Applying the production vendor buckets to a second React entry can
+          // create a circular shared chunk that fails before either root mounts.
+          manualChunks: qaBuildInputs
+            ? undefined
+            : (id) => {
+                if (!id.includes('node_modules')) return undefined;
+                if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'editor';
+                if (id.includes('react') || id.includes('react-dom')) return 'react';
+                if (id.includes('convex')) return 'convex';
+                if (id.includes('lucide-react')) return 'icons';
+                if (id.includes('jszip')) return 'zip';
+                return 'vendor';
+              },
         },
       },
     },

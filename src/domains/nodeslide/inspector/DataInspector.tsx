@@ -13,14 +13,21 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import type { SlideElement, SourceRecord } from '../../../../shared/nodeslide';
+import { ExportMyDataAction } from './ExportMyDataAction';
 
 interface DataInspectorProps {
   sources: readonly SourceRecord[];
   selectedElements: readonly SlideElement[];
   onDeleteSource?: (sourceId: string) => Promise<void>;
+  ownerDataExport?: { deckId: string; deckTitle: string; ownerAccessKey: string };
 }
 
-export function DataInspector({ sources, selectedElements, onDeleteSource }: DataInspectorProps) {
+export function DataInspector({
+  sources,
+  selectedElements,
+  onDeleteSource,
+  ownerDataExport,
+}: DataInspectorProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const dependencyIds = new Set(
@@ -51,6 +58,20 @@ export function DataInspector({ sources, selectedElements, onDeleteSource }: Dat
           NodeSlide checks attachment and disclosure; it does not independently verify facts.
         </p>
       </section>
+
+      {ownerDataExport ? (
+        <section className="ns-data-export-card" aria-labelledby="nodeslide-data-export-title">
+          <div>
+            <span className="ns-eyebrow">Portability</span>
+            <h3 id="nodeslide-data-export-title">Your complete NodeSlide record</h3>
+            <p>
+              Download this deck, proposals, versions, evidence, memory, comments, jobs, and traces
+              as redacted machine-readable JSON.
+            </p>
+          </div>
+          <ExportMyDataAction {...ownerDataExport} />
+        </section>
+      ) : null}
 
       {selectedElements.length > 0 ? (
         <section className="ns-dependency-card">

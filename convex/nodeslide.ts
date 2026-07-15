@@ -19,6 +19,11 @@ import {
   type ValidationResult,
   clampNormalized,
 } from '../shared/nodeslide';
+import type {
+  NodeSlideDecisionProvenance,
+  NodeSlideDelegationClientKind,
+} from '../shared/nodeslideDelegation';
+import { nodeSlideDelegationCandidateViolations } from '../shared/nodeslideDelegation';
 import { applyDeckPatch } from '../shared/nodeslidePatch';
 import type { SlideVariation } from '../shared/nodeslideVariation';
 import { internal } from './_generated/api';
@@ -41,6 +46,11 @@ import {
   nodeSlideCandidateValidationId,
   validationFromCandidateReceipt,
 } from './lib/nodeslideCandidate';
+import {
+  nodeSlideCreationAuthorizationLine,
+  nodeSlideCreationRunStartedAt,
+  nodeSlideCreationTraceId,
+} from './lib/nodeslideCreationTelemetry';
 import {
   NODESLIDE_WORKSPACE_LIMITS,
   commentFromRow,
@@ -82,6 +92,7 @@ import {
   nodeslideIdDigest,
   nodeslideStableId,
 } from './lib/nodeslideIds';
+import { nodeSlideJobExecutionDigest, nodeSlideJobOwnerDigest } from './lib/nodeslideJobState';
 import {
   type NodeSlidePatchInput,
   clocksForNodeSlideOperations,
@@ -195,6 +206,29 @@ type PatchMutationArgs = {
   profileId?: string;
   profileDigest?: string;
 };
+
+export interface NodeSlideDelegatedCommitAuthority {
+  deckRow: Doc<'nodeslide_decks'>;
+  grantId: string;
+  clientKind: NodeSlideDelegationClientKind;
+  policyDigest: string;
+}
+
+/**
+ * Narrow backend bridge for the token-authenticated delegation module. It
+ * deliberately exposes only proposal acceptance, never direct patch apply or
+ * release capabilities.
+ */
+export async function commitDelegatedNodeSlideProposal(
+  ctx: MutationCtx,
+  proposal: Doc<'nodeslide_patches'>,
+  authority: NodeSlideDelegatedCommitAuthority,
+) {
+  if (authority.deckRow.id !== proposal.deckId) {
+    throw new Error('Delegated commit authority does not match the proposal deck.');
+  }
+  return await commitPatch(ctx, { ...proposal, ownerAccessKey: '' }, proposal, authority);
+}
 
 export const ensureWorkspace = mutation({
   args: { clientSessionId: v.string(), ownerAccessKey: v.optional(v.string()) },
@@ -1560,6 +1594,7 @@ export const beginAgentRunInternal = internalMutation({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    startedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
@@ -1645,6 +1680,7 @@ export const beginAgentRunInternal = internalMutation({
       return { created: false, run };
     }
     const now = Date.now();
+    const startedAt = nodeSlideCreationRunStartedAt(args.startedAt, now);
     const id = nodeslideStableId('agent_run', args.deckId, idempotencyKey);
     const otelTraceId = agentTraceId(args.deckId, id);
     const rootSpanId = agentSpanId(otelTraceId, 'invoke_agent', 1);
@@ -1667,8 +1703,8 @@ export const beginAgentRunInternal = internalMutation({
       nextTelemetrySequence: 3,
       telemetryVersion: NODESLIDE_AGENT_TELEMETRY_VERSION,
       otelExportStatus: 'pending' as const,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: startedAt,
+      updatedAt: startedAt,
     };
     await ctx.db.insert('nodeslide_agent_runs', run);
     await ctx.db.insert('nodeslide_agent_spans', {
@@ -1681,7 +1717,7 @@ export const beginAgentRunInternal = internalMutation({
       operationName: 'invoke_agent',
       kind: 'internal',
       status: 'unset',
-      startTime: now,
+      startTime: startedAt,
       provider: run.provider,
       model: run.model,
       attributes: [
@@ -1703,7 +1739,7 @@ export const beginAgentRunInternal = internalMutation({
       spanId: rootSpanId,
       name: 'agent.request.accepted',
       severity: 'info',
-      timestamp: now,
+      timestamp: startedAt,
       body: 'Agent request accepted and durably queued.',
       attributes: [{ key: 'nodeslide.checkpoint', value: 'queued' }],
       sequence: 2,
@@ -1906,6 +1942,7 @@ export const advanceAgentRunInternal = internalMutation({
       ...(terminal ? { completedAt: now } : {}),
       ...(args.patchId ? { patchId: args.patchId } : {}),
       ...(args.traceId ? { traceId: args.traceId } : {}),
+      ...(args.memoryIds ? { memoryIds: args.memoryIds.slice(0, 6) } : {}),
       ...(args.error ? { error: requiredText(args.error, 'run error', 600) } : {}),
     });
     if (terminal) {
@@ -2127,19 +2164,61 @@ export const createFromBriefInternal = internalMutation({
     plan: v.array(v.string()),
     spec: v.any(),
     traceSummary: v.string(),
+    externalEgressAuthorized: v.boolean(),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningEffort: v.optional(nodeslideReasoningEffortValidator),
     costMicroUsd: v.optional(v.number()),
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
+    jobId: v.optional(v.string()),
+    executionAccessKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (!isOwnerAccessKey(args.ownerAccessKey))
       throw new Error('Invalid NodeSlide owner access key.');
+    const jobId = args.jobId;
+    const job = jobId
+      ? await ctx.db
+          .query('nodeslide_agent_jobs')
+          .withIndex('by_stable_id', (query) => query.eq('id', jobId))
+          .unique()
+      : null;
+    if (jobId) {
+      if (
+        !job ||
+        job.kind !== 'create_deck' ||
+        job.ownerDigest !== nodeSlideJobOwnerDigest(args.ownerAccessKey) ||
+        !args.executionAccessKey ||
+        job.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey)
+      ) {
+        throw new Error('Durable NodeSlide job authorization is invalid.');
+      }
+      if (job.status === 'cancelled' || job.status === 'failed') {
+        throw new Error(`Durable NodeSlide job cannot persist while ${job.status}.`);
+      }
+      if (job.resultDeckId && job.resultDeckId !== args.deckId) {
+        throw new Error('Durable NodeSlide job output binding is invalid.');
+      }
+      if (
+        args.deckId !== nodeslideStableId('deck_job', jobId) ||
+        args.projectId !== nodeslideStableId('project_nodeslide_job', jobId)
+      ) {
+        throw new Error('Durable NodeSlide job output identity is invalid.');
+      }
+    }
     const existing = await findDeckRow(ctx, args.deckId);
     if (existing) {
       await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+      if (job) {
+        await ctx.db.patch(job._id, {
+          resultDeckId: args.deckId,
+          status: 'running',
+          phase: 'persisting',
+          progress: Math.max(job.progress, 85),
+          updatedAt: Date.now(),
+        });
+      }
       return await ownerWorkspaceResponse(ctx, args.deckId, args.ownerAccessKey, Date.now());
     }
     if (args.plan.length > 12) throw new Error('NodeSlide plans support at most 12 steps.');
@@ -2170,6 +2249,11 @@ export const createFromBriefInternal = internalMutation({
           'Persisted deterministic plan and deck specification',
         ],
         toolCalls: [
+          nodeSlideCreationAuthorizationLine({
+            externalEgressAuthorized: args.externalEgressAuthorized,
+            ...(args.provider ? { provider: args.provider } : {}),
+            ...(args.model ? { model: args.model } : {}),
+          }),
           'Planned six-to-eight slide narrative',
           'Built normalized deck',
           'Validated snapshot',
@@ -2182,6 +2266,15 @@ export const createFromBriefInternal = internalMutation({
         ...(args.outputTokens !== undefined ? { outputTokens: args.outputTokens } : {}),
       },
     });
+    if (job) {
+      await ctx.db.patch(job._id, {
+        resultDeckId: args.deckId,
+        status: 'running',
+        phase: 'persisting',
+        progress: Math.max(job.progress, 85),
+        updatedAt: Date.now(),
+      });
+    }
     return await ownerWorkspaceResponse(ctx, args.deckId, args.ownerAccessKey, Date.now());
   },
 });
@@ -2776,8 +2869,12 @@ async function commitPatch(
   ctx: MutationCtx,
   args: PatchMutationArgs,
   existing: Doc<'nodeslide_patches'> | null,
+  delegatedAuthority?: NodeSlideDelegatedCommitAuthority,
 ) {
-  const deckRow = await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+  const deckRow = delegatedAuthority
+    ? delegatedAuthority.deckRow
+    : await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+  if (deckRow.id !== args.deckId) throw new Error('Patch authority does not match the deck.');
   assertPatchOperationCount(args.operations);
   assertPatchProfileReference(args);
   assertProposalMetadata(args);
@@ -2800,7 +2897,9 @@ async function commitPatch(
     const stale = patchRow({ ...args, id }, now, 'stale', existing?.createdAt);
     if (existing) await ctx.db.patch(existing._id, { status: 'stale', updatedAt: now });
     else await ctx.db.insert('nodeslide_patches', stale);
-    if (existing) await finishPatchTrace(ctx, existing, now, 'failed');
+    if (existing) {
+      await finishPatchTrace(ctx, existing, now, 'failed', undefined, delegatedAuthority);
+    }
     return {
       patch: stale,
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
@@ -2809,6 +2908,16 @@ async function commitPatch(
     };
   }
   const candidate = preflightNodeSlideCandidate(snapshot, args, signatureProfile, id, now);
+  if (delegatedAuthority) {
+    const delegationViolations = nodeSlideDelegationCandidateViolations({
+      baseline: snapshot,
+      candidate: candidate.snapshot,
+      operations: args.operations,
+    });
+    if (delegationViolations.length > 0) {
+      throw new Error(delegationViolations.join(' '));
+    }
+  }
   const hasPersistedBinding =
     existing?.candidateDigest !== undefined || existing?.candidateValidation !== undefined;
   const bindingMatches = candidateValidationBindingMatches({
@@ -2836,7 +2945,9 @@ async function commitPatch(
     );
     if (existing) await ctx.db.patch(existing._id, { status: 'stale', updatedAt: now });
     else await ctx.db.insert('nodeslide_patches', stale);
-    if (existing) await finishPatchTrace(ctx, existing, now, 'failed');
+    if (existing) {
+      await finishPatchTrace(ctx, existing, now, 'failed', undefined, delegatedAuthority);
+    }
     return {
       patch: stale,
       workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
@@ -2886,7 +2997,7 @@ async function commitPatch(
   await ctx.db.insert('nodeslide_validations', validation);
   if (args.linkedCommentId)
     await resolveLinkedComment(ctx, args.linkedCommentId, args.deckId, id, now);
-  await finishPatchTrace(ctx, accepted, now, 'completed', validation);
+  await finishPatchTrace(ctx, accepted, now, 'completed', validation, delegatedAuthority);
   return {
     patch: accepted,
     workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
@@ -3119,7 +3230,7 @@ async function createWorkspaceRows(
   await ctx.db.insert('nodeslide_validations', validation);
   await insertVersion(ctx, snapshot, 'Initial deck', 'system', undefined, now);
   await ctx.db.insert('nodeslide_traces', {
-    id: nodeslideStableId('trace', snapshot.deck.id, 'creation'),
+    id: nodeSlideCreationTraceId(snapshot.deck.id),
     deckId: snapshot.deck.id,
     status: 'completed',
     summary: args.trace.summary,
@@ -3283,6 +3394,7 @@ async function finishPatchTrace(
   now: number,
   status: 'completed' | 'failed' | 'cancelled',
   validation?: ValidationResult,
+  delegatedAuthority?: NodeSlideDelegatedCommitAuthority,
 ): Promise<boolean> {
   if (!patch.traceId) return false;
   const trace = await ctx.db
@@ -3295,9 +3407,20 @@ async function finishPatchTrace(
     )
     .first();
   if (!trace || trace.deckId !== patch.deckId || trace.patchId !== patch.id) return false;
+  const decisionProvenance: NodeSlideDecisionProvenance = delegatedAuthority
+    ? {
+        authority: 'delegated',
+        capability: 'accept_validated',
+        grantId: delegatedAuthority.grantId,
+        clientKind: delegatedAuthority.clientKind,
+        policyDigest: delegatedAuthority.policyDigest,
+        decidedAt: now,
+      }
+    : { authority: 'owner_capability', decidedAt: now };
   await ctx.db.patch(trace._id, {
     status,
     ...(validation ? { validation } : {}),
+    decisionProvenance,
     completedAt: now,
   });
   const run = (
@@ -3313,7 +3436,21 @@ async function finishPatchTrace(
     const sequence = run.nextTelemetrySequence ?? 3;
     const otelTraceId = run.otelTraceId ?? agentTraceId(run.deckId, run.id);
     const rootSpanId = run.rootSpanId ?? agentSpanId(otelTraceId, 'invoke_agent', 1);
-    const decisionSpanId = agentSpanId(otelTraceId, 'human_decision', sequence);
+    const delegatedDecision = decisionProvenance.authority === 'delegated';
+    const decisionKind = delegatedDecision ? 'delegated_decision' : 'owner_capability_decision';
+    const decisionAttributes = delegatedDecision
+      ? [
+          { key: 'nodeslide.decision.authority', value: 'delegated' },
+          { key: 'nodeslide.delegation.capability', value: decisionProvenance.capability },
+          { key: 'nodeslide.delegation.grant_id', value: decisionProvenance.grantId },
+          { key: 'nodeslide.delegation.client_kind', value: decisionProvenance.clientKind },
+          { key: 'nodeslide.delegation.policy_digest', value: decisionProvenance.policyDigest },
+        ]
+      : [
+          { key: 'nodeslide.decision.authority', value: 'owner_capability' },
+          { key: 'nodeslide.owner_capability_decision', value: status },
+        ];
+    const decisionSpanId = agentSpanId(otelTraceId, decisionKind, sequence);
     await ctx.db.insert('nodeslide_agent_spans', {
       id: nodeslideStableId('agent_span', run.id, decisionSpanId),
       deckId: run.deckId,
@@ -3321,8 +3458,16 @@ async function finishPatchTrace(
       traceId: otelTraceId,
       spanId: decisionSpanId,
       parentSpanId: rootSpanId,
-      name: status === 'completed' ? 'Accept proposal' : 'Decline proposal',
-      operationName: 'agent.human_decision',
+      name: delegatedDecision
+        ? status === 'completed'
+          ? 'Accept validated proposal with delegated authority'
+          : 'Delegated proposal decision'
+        : status === 'completed'
+          ? 'Accept proposal with owner capability'
+          : 'Decline proposal with owner capability',
+      operationName: delegatedDecision
+        ? 'agent.delegated_decision'
+        : 'agent.owner_capability_decision',
       kind: 'internal',
       status: status === 'failed' ? 'error' : 'ok',
       startTime: now,
@@ -3330,28 +3475,28 @@ async function finishPatchTrace(
       durationMs: 0,
       provider: run.provider,
       model: run.model,
-      attributes: [
-        { key: 'nodeslide.human_decision', value: status },
-        { key: 'nodeslide.patch.id', value: patch.id },
-      ],
+      attributes: [...decisionAttributes, { key: 'nodeslide.patch.id', value: patch.id }],
       sequence,
       createdAt: now,
       updatedAt: now,
     });
     await ctx.db.insert('nodeslide_agent_events', {
-      id: nodeslideStableId('agent_event', run.id, 'human_decision', status),
+      id: nodeslideStableId('agent_event', run.id, decisionKind, status),
       deckId: run.deckId,
       runId: run.id,
       traceId: otelTraceId,
       spanId: decisionSpanId,
-      name: `agent.human_decision.${status}`,
+      name: `agent.${decisionKind}.${status}`,
       severity: status === 'failed' ? 'error' : 'info',
       timestamp: now,
-      body:
-        status === 'completed'
-          ? 'Human accepted the validated proposal.'
-          : 'Human declined or could not apply the proposal; the deck remains unchanged.',
-      attributes: [{ key: 'nodeslide.human_decision', value: status }],
+      body: delegatedDecision
+        ? status === 'completed'
+          ? 'Validated proposal accepted under delegated authority.'
+          : 'Delegated acceptance could not apply the validated proposal; the deck remains unchanged.'
+        : status === 'completed'
+          ? 'The owner capability accepted the validated proposal.'
+          : 'The owner capability declined or could not apply the proposal; the deck remains unchanged.',
+      attributes: decisionAttributes,
       sequence: sequence + 1,
     });
     await ctx.db.patch(run._id, {
@@ -3380,8 +3525,11 @@ async function finishPatchTrace(
     await ctx.scheduler.runAfter(0, internal.nodeslideTelemetry.exportRunOtlpInternal, {
       runId: run.id,
     });
-    const content =
-      status === 'completed'
+    const content = delegatedDecision
+      ? status === 'completed'
+        ? 'Accepted under delegated authority and applied as a new deck version.'
+        : 'Delegated acceptance could not apply the proposal. The deck remains unchanged.'
+      : status === 'completed'
         ? 'Accepted and applied as a new deck version.'
         : status === 'cancelled'
           ? 'Proposal declined. The deck remains unchanged.'

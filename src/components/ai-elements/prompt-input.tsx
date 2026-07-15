@@ -63,6 +63,10 @@ import {
 // Helpers
 // ============================================================================
 
+const scheduleObjectUrlRevoke = (url: string): void => {
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+};
+
 const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   try {
     const response = await fetch(url);
@@ -254,7 +258,7 @@ export const PromptInputProvider = ({
     setAttachmentFiles((prev) => {
       const found = prev.find((f) => f.id === id);
       if (found?.url) {
-        URL.revokeObjectURL(found.url);
+        scheduleObjectUrlRevoke(found.url);
       }
       return prev.filter((f) => f.id !== id);
     });
@@ -264,7 +268,7 @@ export const PromptInputProvider = ({
     setAttachmentFiles((prev) => {
       for (const f of prev) {
         if (f.url) {
-          URL.revokeObjectURL(f.url);
+          scheduleObjectUrlRevoke(f.url);
         }
       }
       return [];
@@ -283,7 +287,7 @@ export const PromptInputProvider = ({
     () => () => {
       for (const f of attachmentsRef.current) {
         if (f.url) {
-          URL.revokeObjectURL(f.url);
+          scheduleObjectUrlRevoke(f.url);
         }
       }
     },
@@ -452,6 +456,11 @@ export interface PromptInputMessage {
   files: FileUIPart[];
 }
 
+type PromptInputError = {
+  code: 'max_files' | 'max_file_size' | 'accept';
+  message: string;
+};
+
 export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' | 'onError'> & {
   // e.g., "image/*" or leave undefined for any
   accept?: string;
@@ -471,10 +480,12 @@ export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' 
     ComponentProps<'input'>,
     'accept' | 'multiple' | 'onChange' | 'ref' | 'type'
   > & { 'data-testid'?: string };
-  onError?: (err: {
-    code: 'max_files' | 'max_file_size' | 'accept';
-    message: string;
-  }) => void;
+  onError?: (err: PromptInputError) => void;
+  /**
+   * Reports the complete submit-preparation window, including asynchronous blob
+   * conversion that happens before `onSubmit` is called.
+   */
+  onSubmissionPreparingChange?: (preparing: boolean) => void;
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>,
@@ -492,6 +503,7 @@ export const PromptInput = ({
   clearOnSubmit = true,
   fileInputProps,
   onError,
+  onSubmissionPreparingChange,
   onSubmit,
   children,
   ...props
@@ -503,10 +515,23 @@ export const PromptInput = ({
   // Refs
   const inputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const submissionPreparingRef = useRef(false);
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const itemsRef = useRef(items);
   const files = usingProvider ? controller.attachments.files : items;
+
+  // Error callbacks can update a parent (for example, an inline validation message).
+  // Keep the latest callback in a ref and queue notification after the event/state
+  // transition, never from inside a React state updater.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+  const reportErrorAfterTransition = useCallback((error: PromptInputError) => {
+    queueMicrotask(() => onErrorRef.current?.(error));
+  }, []);
 
   // ----- Local referenced sources (always local to PromptInput)
   const [referencedSources, setReferencedSources] = useState<
@@ -555,7 +580,7 @@ export const PromptInput = ({
       const incoming = [...fileList];
       const accepted = incoming.filter((f) => matchesAccept(f));
       if (incoming.length && accepted.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'accept',
           message: 'No files match the accepted types.',
         });
@@ -564,50 +589,48 @@ export const PromptInput = ({
       const withinSize = (f: File) => (maxFileSize ? f.size <= maxFileSize : true);
       const sized = accepted.filter(withinSize);
       if (accepted.length > 0 && sized.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_file_size',
           message: 'All files exceed the maximum size.',
         });
         return;
       }
 
-      setItems((prev) => {
-        const capacity =
-          typeof maxFiles === 'number' ? Math.max(0, maxFiles - prev.length) : undefined;
-        const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === 'number' && sized.length > capacity) {
-          onError?.({
-            code: 'max_files',
-            message: 'Too many files. Some were not added.',
-          });
-        }
-        const next: (FileUIPart & { id: string })[] = [];
-        for (const file of capped) {
-          next.push({
-            filename: file.name,
-            id: nanoid(),
-            mediaType: file.type,
-            type: 'file',
-            url: URL.createObjectURL(file),
-          });
-        }
-        return [...prev, ...next];
-      });
+      const current = itemsRef.current;
+      const capacity =
+        typeof maxFiles === 'number' ? Math.max(0, maxFiles - current.length) : undefined;
+      const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
+      const additions: (FileUIPart & { id: string })[] = capped.map((file) => ({
+        filename: file.name,
+        id: nanoid(),
+        mediaType: file.type,
+        type: 'file',
+        url: URL.createObjectURL(file),
+      }));
+      const next = [...current, ...additions];
+      itemsRef.current = next;
+      setItems(next);
+
+      if (typeof capacity === 'number' && sized.length > capacity) {
+        reportErrorAfterTransition({
+          code: 'max_files',
+          message: 'Too many files. Some were not added.',
+        });
+      }
     },
-    [matchesAccept, maxFiles, maxFileSize, onError],
+    [matchesAccept, maxFiles, maxFileSize, reportErrorAfterTransition],
   );
 
-  const removeLocal = useCallback(
-    (id: string) =>
-      setItems((prev) => {
-        const found = prev.find((file) => file.id === id);
-        if (found?.url) {
-          URL.revokeObjectURL(found.url);
-        }
-        return prev.filter((file) => file.id !== id);
-      }),
-    [],
-  );
+  const removeLocal = useCallback((id: string) => {
+    const current = itemsRef.current;
+    const found = current.find((file) => file.id === id);
+    if (found?.url) {
+      scheduleObjectUrlRevoke(found.url);
+    }
+    const next = current.filter((file) => file.id !== id);
+    itemsRef.current = next;
+    setItems(next);
+  }, []);
 
   // Wrapper that validates files before calling provider's add
   const addWithProviderValidation = useCallback(
@@ -615,7 +638,7 @@ export const PromptInput = ({
       const incoming = [...fileList];
       const accepted = incoming.filter((f) => matchesAccept(f));
       if (incoming.length && accepted.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'accept',
           message: 'No files match the accepted types.',
         });
@@ -624,7 +647,7 @@ export const PromptInput = ({
       const withinSize = (f: File) => (maxFileSize ? f.size <= maxFileSize : true);
       const sized = accepted.filter(withinSize);
       if (accepted.length > 0 && sized.length === 0) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_file_size',
           message: 'All files exceed the maximum size.',
         });
@@ -636,7 +659,7 @@ export const PromptInput = ({
         typeof maxFiles === 'number' ? Math.max(0, maxFiles - currentCount) : undefined;
       const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized;
       if (typeof capacity === 'number' && sized.length > capacity) {
-        onError?.({
+        reportErrorAfterTransition({
           code: 'max_files',
           message: 'Too many files. Some were not added.',
         });
@@ -646,21 +669,23 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller],
+    [matchesAccept, maxFileSize, maxFiles, files.length, controller, reportErrorAfterTransition],
   );
 
   const clearAttachments = useCallback(
     () =>
       usingProvider
         ? controller?.attachments.clear()
-        : setItems((prev) => {
-            for (const file of prev) {
+        : (() => {
+            const current = itemsRef.current;
+            for (const file of current) {
               if (file.url) {
-                URL.revokeObjectURL(file.url);
+                scheduleObjectUrlRevoke(file.url);
               }
             }
-            return [];
-          }),
+            itemsRef.current = [];
+            setItems([]);
+          })(),
     [usingProvider, controller],
   );
 
@@ -756,7 +781,7 @@ export const PromptInput = ({
       if (!usingProvider) {
         for (const f of filesRef.current) {
           if (f.url) {
-            URL.revokeObjectURL(f.url);
+            scheduleObjectUrlRevoke(f.url);
           }
         }
       }
@@ -805,22 +830,25 @@ export const PromptInput = ({
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
     async (event) => {
       event.preventDefault();
-
-      const form = event.currentTarget;
-      const text = usingProvider
-        ? controller.textInput.value
-        : (() => {
-            const formData = new FormData(form);
-            return (formData.get('message') as string) || '';
-          })();
-
-      // Reset form immediately after capturing text to avoid race condition
-      // where user input during async blob conversion would be lost
-      if (!usingProvider && clearOnSubmit) {
-        form.reset();
-      }
+      if (submissionPreparingRef.current) return;
+      submissionPreparingRef.current = true;
 
       try {
+        onSubmissionPreparingChange?.(true);
+        const form = event.currentTarget;
+        const text = usingProvider
+          ? controller.textInput.value
+          : (() => {
+              const formData = new FormData(form);
+              return (formData.get('message') as string) || '';
+            })();
+
+        // Reset form immediately after capturing text to avoid race condition
+        // where user input during async blob conversion would be lost
+        if (!usingProvider && clearOnSubmit) {
+          form.reset();
+        }
+
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
           files.map(async ({ id: _id, ...item }) => {
@@ -862,9 +890,12 @@ export const PromptInput = ({
         }
       } catch {
         // Don't clear on error - user may want to retry
+      } finally {
+        submissionPreparingRef.current = false;
+        onSubmissionPreparingChange?.(false);
       }
     },
-    [usingProvider, controller, files, onSubmit, clear, clearOnSubmit],
+    [usingProvider, controller, files, onSubmit, onSubmissionPreparingChange, clear, clearOnSubmit],
   );
 
   // Render with or without local provider

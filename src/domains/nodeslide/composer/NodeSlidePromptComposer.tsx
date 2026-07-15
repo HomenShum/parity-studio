@@ -52,6 +52,7 @@ import {
   NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
   NODESLIDE_DATA_ATTACHMENT_MAX_BYTES,
 } from '../../../../shared/nodeslideAttachments';
+import { useOptionalAgentSession } from '../session/AgentSessionProvider';
 import {
   type NodeSlideComposerAttachmentDraft,
   type NodeSlideComposerSessionController,
@@ -98,6 +99,8 @@ export interface NodeSlidePromptComposerProps {
     'aria-haspopup'?: boolean | 'menu' | 'listbox' | 'tree' | 'grid' | 'dialog';
   };
   status?: ChatStatus;
+  /** Locks every submission-defining control while a request is being prepared. */
+  interactionDisabled?: boolean;
   disabled?: boolean;
   submitLabel: string;
   submitTestId?: string;
@@ -117,6 +120,11 @@ export interface NodeSlidePromptComposerProps {
   attachmentAccept?: string;
   attachmentMaxFiles?: number;
   onAttachmentError?: (message: string | null) => void;
+  onAttachmentsChange?: () => void;
+  onAttachmentSyncingChange?: (syncing: boolean) => void;
+  /** Invalidates an in-flight attachment conversion when authority or scope changes. */
+  submissionRevision?: string | number;
+  onSubmissionPreparingChange?: (preparing: boolean) => void;
   tools?: ReactNode;
   submitTools?: ReactNode;
   footerStatus?: ReactNode;
@@ -162,6 +170,7 @@ export function NodeSlidePromptComposer({
   onTextareaKeyDown,
   textareaAria,
   status = 'ready',
+  interactionDisabled = false,
   disabled = false,
   submitLabel,
   submitTestId,
@@ -177,6 +186,10 @@ export function NodeSlidePromptComposer({
   attachmentAccept = DATA_FILE_ACCEPT,
   attachmentMaxFiles = NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
   onAttachmentError,
+  onAttachmentsChange,
+  onAttachmentSyncingChange,
+  submissionRevision,
+  onSubmissionPreparingChange,
   tools,
   submitTools,
   footerStatus,
@@ -184,7 +197,14 @@ export function NodeSlidePromptComposer({
   className,
   composerClassName,
 }: NodeSlidePromptComposerProps) {
-  const attachmentControlDisabled = attachmentDisabled ?? status === 'submitted';
+  const agentSession = useOptionalAgentSession();
+  const authoritativeModel = agentSession?.state.controls.model ?? model;
+  const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
+  const attachmentControlDisabled =
+    interactionDisabled || Boolean(attachmentDisabled) || status === 'submitted';
+  const submissionRevisionRef = useRef(submissionRevision);
+  submissionRevisionRef.current = submissionRevision;
+  const preparingRevisionRef = useRef<string | number | undefined>(undefined);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -196,11 +216,59 @@ export function NodeSlidePromptComposer({
     [onAttachmentError],
   );
 
+  useEffect(() => {
+    if (!agentSession || model === authoritativeModel) return;
+    onModelChange(authoritativeModel);
+  }, [agentSession, authoritativeModel, model, onModelChange]);
+
+  useEffect(() => {
+    if (
+      !agentSession ||
+      !effort ||
+      !authoritativeEffort ||
+      effort === authoritativeEffort ||
+      !onEffortChange
+    ) {
+      return;
+    }
+    onEffortChange(authoritativeEffort);
+  }, [agentSession, authoritativeEffort, effort, onEffortChange]);
+
+  const chooseModel = useCallback(
+    (next: NodeSlideComposerModelValue) => {
+      agentSession?.updateControls({ model: next });
+      onModelChange(next);
+    },
+    [agentSession, onModelChange],
+  );
+  const chooseEffort = useCallback(
+    (next: NodeSlideReasoningEffort) => {
+      agentSession?.updateControls({ effort: next });
+      onEffortChange?.(next);
+    },
+    [agentSession, onEffortChange],
+  );
+
+  const handleSubmissionPreparingChange = useCallback(
+    (preparing: boolean) => {
+      if (preparing) preparingRevisionRef.current = submissionRevisionRef.current;
+      onSubmissionPreparingChange?.(preparing);
+      if (!preparing) preparingRevisionRef.current = undefined;
+    },
+    [onSubmissionPreparingChange],
+  );
+
   const handleSubmit = async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
+    const submittedRevision = preparingRevisionRef.current ?? submissionRevisionRef.current;
+    onAttachmentError?.(null);
     try {
       const files = await promptInputMessageFiles(message.files);
+      if (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current) {
+        throw new Error(
+          'Change handling changed while attachments were being prepared. Review and submit again.',
+        );
+      }
       await onSubmit({ text: message.text, files }, event);
-      onAttachmentError?.(null);
     } catch (error) {
       onAttachmentError?.(
         error instanceof Error ? error.message : 'The attached file could not be read.',
@@ -227,11 +295,14 @@ export function NodeSlidePromptComposer({
         maxFiles={attachmentMaxFiles}
         multiple
         onError={handleAttachmentInputError}
+        onSubmissionPreparingChange={handleSubmissionPreparingChange}
         onSubmit={handleSubmit}
       >
         <AttachmentSessionBridge
           session={session}
           {...(onAttachmentError ? { onError: onAttachmentError } : {})}
+          {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
+          {...(onAttachmentSyncingChange ? { onSyncingChange: onAttachmentSyncingChange } : {})}
         />
         {header ? <PromptInputHeader>{header}</PromptInputHeader> : null}
         <PromptInputAttachmentShelf />
@@ -239,6 +310,7 @@ export function NodeSlidePromptComposer({
           {...textareaAria}
           aria-label={textareaLabel}
           className="ns-prompt-textarea"
+          disabled={interactionDisabled}
           id={textareaId}
           maxLength={textareaMaxLength}
           onChange={(event) => {
@@ -265,22 +337,27 @@ export function NodeSlidePromptComposer({
             ) : null}
             <NodeSlideModelSelector
               label={modelLabel}
-              model={model}
-              onChange={onModelChange}
+              model={authoritativeModel}
+              onChange={chooseModel}
               portalContainer={portalContainer}
               testId={modelTestId}
+              disabled={interactionDisabled}
             />
-            {model !== 'deterministic' && effort && effortOptions.length > 0 && onEffortChange ? (
+            {authoritativeModel !== 'deterministic' &&
+            authoritativeEffort &&
+            effortOptions.length > 0 &&
+            onEffortChange ? (
               <label className="ns-prompt-effort-wrap">
                 <span className="sr-only">{effortLabel}</span>
                 <select
                   aria-label={effortLabel}
                   className="ns-prompt-effort"
                   data-testid={effortTestId}
+                  disabled={interactionDisabled}
                   onChange={(event) =>
-                    onEffortChange(event.currentTarget.value as NodeSlideReasoningEffort)
+                    chooseEffort(event.currentTarget.value as NodeSlideReasoningEffort)
                   }
-                  value={effort}
+                  value={authoritativeEffort}
                 >
                   {effortOptions.map((option) => (
                     <option key={option.id} value={option.id}>
@@ -299,7 +376,7 @@ export function NodeSlidePromptComposer({
               <PromptInputSubmit
                 aria-label={submitLabel}
                 data-testid={submitTestId}
-                disabled={disabled}
+                disabled={disabled || interactionDisabled}
                 size={submitContent ? 'sm' : 'icon-sm'}
                 status={status}
               >
@@ -314,6 +391,7 @@ export function NodeSlidePromptComposer({
 }
 
 interface NodeSlideModelSelectorProps {
+  disabled: boolean;
   label: string;
   model: NodeSlideComposerModelValue;
   onChange: (model: NodeSlideComposerModelValue) => void;
@@ -322,6 +400,7 @@ interface NodeSlideModelSelectorProps {
 }
 
 function NodeSlideModelSelector({
+  disabled,
   label,
   model,
   onChange,
@@ -330,15 +409,23 @@ function NodeSlideModelSelector({
 }: NodeSlideModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const selected = model === 'deterministic' ? null : nodeSlideAgentModel(model);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const choose = (value: NodeSlideComposerModelValue) => {
     onChange(value);
     setOpen(false);
   };
 
   return (
-    <ModelSelector onOpenChange={setOpen} open={open}>
+    <ModelSelector onOpenChange={(next) => !disabled && setOpen(next)} open={open}>
       <ModelSelectorTrigger asChild>
-        <PromptInputButton aria-label={label} data-testid={testId} className="ns-model-trigger">
+        <PromptInputButton
+          aria-label={label}
+          data-testid={testId}
+          className="ns-model-trigger"
+          disabled={disabled}
+        >
           {model === 'deterministic' ? (
             <ShieldCheck aria-hidden="true" className="size-3.5" />
           ) : (
@@ -472,15 +559,24 @@ function PromptInputAttachmentShelf() {
 function AttachmentSessionBridge({
   session,
   onError,
+  onAttachmentsChange,
+  onSyncingChange,
 }: {
   session: NodeSlideComposerSessionController;
   onError?: (message: string | null) => void;
+  onAttachmentsChange?: () => void;
+  onSyncingChange?: (syncing: boolean) => void;
 }) {
   const attachments = usePromptInputAttachments();
   const { add, files } = attachments;
   const setSessionAttachments = session.setAttachments;
   const hydration = useRef<'pending' | 'requested' | 'ready'>('pending');
   const syncVersion = useRef(0);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const filesSignature = files
+    .map((file) => [file.id, file.filename, file.mediaType].join('\u001f'))
+    .join('\u001e');
 
   useEffect(() => {
     if (hydration.current === 'ready') return;
@@ -495,25 +591,33 @@ function AttachmentSessionBridge({
   }, [add, files.length, session.attachments]);
 
   useEffect(() => {
+    void filesSignature;
     if (hydration.current !== 'ready') return;
+    onAttachmentsChange?.();
+    // A real attachment transition supersedes prior validation feedback. Clear
+    // it at the start of this committed transition so an older async draft
+    // conversion can never erase a newer max-files/accept error.
+    onError?.(null);
     const version = ++syncVersion.current;
-    const currentFiles = [...files];
+    const currentFiles = [...filesRef.current];
+    onSyncingChange?.(currentFiles.length > 0);
     if (currentFiles.length === 0) {
       setSessionAttachments([]);
-      onError?.(null);
+      onSyncingChange?.(false);
       return;
     }
     void Promise.all(currentFiles.map(attachmentDraftFromPart))
       .then((drafts) => {
         if (version !== syncVersion.current) return;
         setSessionAttachments(drafts);
-        onError?.(null);
+        onSyncingChange?.(false);
       })
       .catch((error: unknown) => {
         if (version !== syncVersion.current) return;
         onError?.(error instanceof Error ? error.message : 'The attached file could not be saved.');
+        onSyncingChange?.(false);
       });
-  }, [files, onError, setSessionAttachments]);
+  }, [filesSignature, onAttachmentsChange, onError, onSyncingChange, setSessionAttachments]);
 
   return null;
 }

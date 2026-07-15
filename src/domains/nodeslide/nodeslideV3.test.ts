@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 const css = readFileSync(new URL('./nodeslideV3.css', import.meta.url), 'utf8');
 const baseCss = readFileSync(new URL('./nodeslide.css', import.meta.url), 'utf8');
 const studioSource = readFileSync(new URL('./NodeSlideStudio.tsx', import.meta.url), 'utf8');
+const slideCanvasSource = readFileSync(
+  new URL('./components/SlideCanvas.tsx', import.meta.url),
+  'utf8',
+);
 const aiInspectorSource = readFileSync(
   new URL('./inspector/AiInspector.tsx', import.meta.url),
   'utf8',
@@ -29,6 +33,8 @@ describe('NodeSlide v3 visual contract', () => {
     expect(desktop).toMatch(
       /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: var\(--ns-inspector-width\) !important/,
     );
+    expect(baseCss).toContain('--ns-inspector-width: 400px');
+    expect(studioSource).toContain('useState(400)');
   });
 
   it('keeps navigation and inspector reachable as tablet overlays', () => {
@@ -95,6 +101,20 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
+  it('keeps selected-element actions labeled and scrollbar-free in narrow canvases', () => {
+    expect(baseCss).toMatch(
+      /\.ns-canvas-panel[\s\S]*?container-name: nodeslide-canvas;[\s\S]*?container-type: inline-size;/,
+    );
+    expect(baseCss).toMatch(/\.ns-workspace-object-toolbar[\s\S]*?overflow-x: hidden;/);
+    expect(css).toMatch(
+      /@container nodeslide-canvas \(max-width: 720px\)[\s\S]*?\.ns-object-action-label[\s\S]*?display: none;/,
+    );
+    expect(slideCanvasSource).toContain('className="ns-object-action-label"');
+    for (const label of ['Ask AI', 'Comment', 'Duplicate', 'Bring forward', 'Send backward']) {
+      expect(slideCanvasSource).toContain(`aria-label="${label}"`);
+    }
+  });
+
   it('keeps consequential AI review text above the readable inspector floor', () => {
     expect(baseCss).toContain('--ns-font-control: 11px');
     expect(baseCss).toContain('--ns-chrome-min-font: var(--ns-font-control)');
@@ -138,6 +158,42 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
+  it('switches the agent rail into a review-first state without a nested composer scroller', () => {
+    expect(aiInspectorSource).toContain("'is-awaiting-review'");
+    expect(aiInspectorSource).toContain(
+      "data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}",
+    );
+    expect(css).toMatch(
+      /Agent rail state contract[\s\S]*?\.ns-ai-v3-composer \{[\s\S]*?max-height: none;[\s\S]*?overflow: visible;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell\.is-awaiting-review \.ns-ai-v3-context-note[\s\S]*?display: none;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-shell \.ns-proposal-actions[\s\S]*?bottom: 0;[\s\S]*?position: sticky;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-composer\.is-review-compact \.ns-prompt-textarea[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    );
+    expect(studioSource).toContain(
+      "previewedPatch && (inspectorCollapsed || activeInspectorTab !== 'ai')",
+    );
+  });
+
+  it('keeps expanded agent controls in document flow instead of covering the composer', () => {
+    const stateContract = css.slice(css.indexOf('/* Agent rail state contract.'));
+
+    expect(stateContract).toMatch(
+      /\.ns-ai-v3-controls-disclosure \{[\s\S]*?overflow: hidden;[\s\S]*?position: static;/,
+    );
+    expect(stateContract).toMatch(
+      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?max-height: min\(44vh, 420px\);[\s\S]*?position: static;/,
+    );
+    expect(stateContract).not.toMatch(
+      /\.ns-ai-v3-controls-disclosure\[open\][^{]*\{[^}]*position: absolute;/,
+    );
+  });
+
   it('keeps readable canvas and inspector navigation after the global reset', () => {
     expect(css).toMatch(
       /Runtime visual-system boundary[\s\S]*?\.ns-editor-mode-controls button[\s\S]*?min-height: 28px;[\s\S]*?padding: 5px 10px;/,
@@ -159,9 +215,6 @@ describe('NodeSlide v3 visual contract', () => {
     );
 
     const narrowRail = containerBlock('@container nodeslide-inspector (max-width: 380px)');
-    expect(narrowRail).toMatch(
-      /\.ns-ai-provider-controls > label:not\(\.ns-ai-provider-consent\)[\s\S]*?flex: 1 1 100%;[\s\S]*?min-width: 0;[\s\S]*?width: 100%;/,
-    );
     expect(narrowRail).toMatch(
       /\.ns-scope-row \.ns-chip-group[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*?width: 100%;/,
     );

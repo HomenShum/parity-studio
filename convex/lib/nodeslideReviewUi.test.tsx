@@ -111,13 +111,19 @@ describe('NodeSlide AI review inspector', () => {
   });
 
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
-    const markup = renderAi();
+    const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
-    expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
-    expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
+    expect(markup).toContain('data-testid="ai-approval-summary"');
+    expect(markup).toContain('aria-label="Review changes"');
+    expect(markup).toMatch(
+      /data-testid="ai-approval-summary"[^>]*aria-expanded="false"[^>]*aria-controls="nodeslide-ai-advanced-controls"/,
+    );
+    expect(markup).not.toContain('data-testid="ai-provider-external"');
     expect(markup).toContain('Consent required');
     expect(markup).toContain('Allow one Nebius request');
-    expect(markup).toContain('It does not browse or fetch URLs');
+    expect(markup).toContain('12 hours');
+    expect(markup).toContain('64 proposals');
+    expect(markup).toContain('8 non-destructive operations each');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
     expect(markup).toContain('<option value="low">Low</option>');
@@ -128,31 +134,65 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="ai-provider-consent"/);
 
-    expect(createAiProviderRequest('nebius', false)).toBeNull();
-    expect(createAiProviderRequest('nebius', true)).toEqual({
+    expect(createAiProviderRequest('nebius', null)).toBeNull();
+    expect(createAiProviderRequest('nebius', NODESLIDE_OPENROUTER_REVIEW_CONSENT)).toBeNull();
+    expect(createAiProviderRequest('nebius', NODESLIDE_NEBIUS_REVIEW_CONSENT)).toEqual({
       providerMode: 'nebius',
       providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
       providerEffort: 'medium',
       providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
     });
-    expect(createAiVariationProviderRequest('nebius', false)).toBeNull();
-    expect(createAiVariationProviderRequest('nebius', true)).toEqual({
-      providerMode: 'nebius',
-      providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
-      providerEffort: 'medium',
-      providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
-    });
-    expect(createAiProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject({
+    expect(createAiVariationProviderRequest('nebius', null)).toBeNull();
+    expect(
+      createAiVariationProviderRequest('nebius', NODESLIDE_OPENROUTER_VARIATIONS_CONSENT),
+    ).toBeNull();
+    expect(createAiVariationProviderRequest('nebius', NODESLIDE_NEBIUS_VARIATIONS_CONSENT)).toEqual(
+      {
+        providerMode: 'nebius',
+        providerModel: NODESLIDE_DEFAULT_AGENT_MODEL,
+        providerEffort: 'medium',
+        providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
+      },
+    );
+    expect(
+      createAiProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+        'z-ai/glm-5.2',
+      ),
+    ).toMatchObject({
       providerMode: 'openrouter_free',
       providerModel: 'z-ai/glm-5.2',
       providerConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
     });
-    expect(createAiVariationProviderRequest('openrouter_free', true, 'z-ai/glm-5.2')).toMatchObject(
-      { providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT },
-    );
     expect(
-      createAiProviderRequest('openrouter_free', true, 'anthropic/claude-sonnet-5'),
+      createAiVariationProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+        'z-ai/glm-5.2',
+      ),
+    ).toMatchObject({ providerConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT });
+    expect(
+      createAiProviderRequest(
+        'openrouter_free',
+        NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+        'anthropic/claude-sonnet-5',
+      ),
     ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
+  });
+
+  it('blocks submission while delegated change handling is updating', () => {
+    const markup = renderAi({
+      initialInstruction: 'Sharpen this headline.',
+      initialProviderMode: 'deterministic',
+      onApprovalModeChange: () => undefined,
+      approvalMode: 'auto_apply',
+      approvalBusy: true,
+    });
+
+    expect(markup).toContain('aria-label="Auto-apply safe edits"');
+    expect(markup).toMatch(/<button(?=[^>]*data-testid="ai-submit")(?=[^>]*disabled="")[^>]*>/);
+    expect(markup).toContain('Updating change handling');
   });
 
   it('shows extended effort levels only for models whose provider exposes them', () => {
@@ -389,6 +429,9 @@ interface RenderAiOptions {
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   initialProviderMode?: 'deterministic' | 'openrouter_free' | 'nebius';
   initialProviderModel?: (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
+  onApprovalModeChange?: () => void;
+  approvalMode?: 'review' | 'auto_apply';
+  approvalBusy?: boolean;
 }
 
 function renderAi({
@@ -403,6 +446,9 @@ function renderAi({
   onAttachDataFile,
   initialProviderMode,
   initialProviderModel,
+  onApprovalModeChange,
+  approvalMode,
+  approvalBusy,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -428,6 +474,9 @@ function renderAi({
       {...(initialProviderModel ? { initialProviderModel } : {})}
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
+      {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
+      {...(approvalMode ? { approvalMode } : {})}
+      {...(approvalBusy !== undefined ? { approvalBusy } : {})}
       onPropose={() => undefined}
       {...(onAttachDataFile ? { onAttachDataFile } : {})}
       onAccept={() => undefined}

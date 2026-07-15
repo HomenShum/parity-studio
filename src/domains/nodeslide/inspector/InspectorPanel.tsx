@@ -48,6 +48,7 @@ import {
   useDrawerSurface,
   useViewportMatch,
 } from '../components/overlayPrimitives';
+import type { AgentSessionApprovalMode } from '../session';
 import type { NodeSlideTastePackId } from '../signature/packs/index';
 import {
   type AiAgentActivity,
@@ -63,7 +64,7 @@ import {
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
 import { DesignInspector } from './DesignInspector';
-import { JsonInspector } from './JsonInspector';
+import { JsonInspector, type JsonPatchProposalCallback } from './JsonInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
 import type { InspectorTab } from './types';
@@ -80,6 +81,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   slide: Slide;
   selectedElements: readonly SlideElement[];
   selectedSlideIds?: readonly string[];
+  ownerAccessKey?: string;
   activeTab: InspectorTab;
   collapsed: boolean;
   width: number;
@@ -98,6 +100,9 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   agentMessages?: readonly NodeSlideAgentMessage[];
   memories?: readonly NodeSlideAgentMemory[];
   memoriesLoading?: boolean;
+  approvalMode?: AgentSessionApprovalMode;
+  approvalBusy?: boolean;
+  approvalExpiresAt?: number;
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   agentTelemetryLoadingMore?: boolean;
@@ -126,8 +131,10 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
   ) => Promise<void>;
   onDeleteAiMemory?: (memoryId: string) => Promise<void>;
+  onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
+  onRetryAiRun?: () => void;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
   onAcceptPatch: (patch: DeckPatch) => void;
@@ -146,12 +153,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
-  onApplyJsonPatch?: (
-    operations: PatchOperation[],
-    summary: string,
-    elementId: string,
-    baseElementVersion: number,
-  ) => boolean | undefined | Promise<boolean | undefined>;
+  onProposeJsonPatch?: JsonPatchProposalCallback;
   onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
   onReply: (parentId: string, text: string) => void;
@@ -191,6 +193,7 @@ export function InspectorPanel<CommandId extends string = string>({
   slide,
   selectedElements,
   selectedSlideIds = [],
+  ownerAccessKey,
   activeTab,
   collapsed,
   width,
@@ -209,6 +212,9 @@ export function InspectorPanel<CommandId extends string = string>({
   agentMessages = [],
   memories = [],
   memoriesLoading = false,
+  approvalMode = 'review',
+  approvalBusy = false,
+  approvalExpiresAt,
   agentTelemetry,
   agentTelemetryRunId,
   agentTelemetryLoadingMore = false,
@@ -230,8 +236,10 @@ export function InspectorPanel<CommandId extends string = string>({
   onCreateAiMemory,
   onUpdateAiMemory,
   onDeleteAiMemory,
+  onApprovalModeChange,
   onDeleteAiDataSource,
   onCancelAiRun,
+  onRetryAiRun,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
   onAcceptPatch,
@@ -250,7 +258,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
-  onApplyJsonPatch,
+  onProposeJsonPatch,
   onImportSourceFile,
   onAddComment,
   onReply,
@@ -322,6 +330,7 @@ export function InspectorPanel<CommandId extends string = string>({
         onDismiss={onToggleCollapsed}
       />
       <aside
+        id="nodeslide-inspector"
         ref={drawerRef}
         className={`ns-inspector${collapsed ? ' is-collapsed' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
         aria-label={collapsed ? 'Inspector collapsed' : 'NodeSlide inspector'}
@@ -501,6 +510,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   agentMessages={agentMessages}
                   memories={memories}
                   memoriesLoading={memoriesLoading}
+                  approvalMode={approvalMode}
+                  approvalBusy={approvalBusy}
+                  {...(approvalExpiresAt !== undefined ? { approvalExpiresAt } : {})}
                   variations={variations}
                   variationsLoading={variationsLoading}
                   isSubmitting={agentBusy}
@@ -523,7 +535,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
                   {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
                   {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
+                  {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
                   {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
+                  {...(onRetryAiRun ? { onRetryRun: onRetryAiRun } : {})}
                   onAccept={onAcceptPatch}
                   onReject={onRejectPatch}
                   onGenerateVariations={onGenerateVariations}
@@ -592,6 +606,15 @@ export function InspectorPanel<CommandId extends string = string>({
                 <DataInspector
                   sources={workspace.sources}
                   selectedElements={selectedElements}
+                  {...(ownerAccessKey
+                    ? {
+                        ownerDataExport: {
+                          deckId: workspace.deck.id,
+                          deckTitle: workspace.deck.title,
+                          ownerAccessKey,
+                        },
+                      }
+                    : {})}
                   {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
                 />
               </InspectorTabPanel>
@@ -608,13 +631,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   slide={slide}
                   selectedElements={selectedElements}
                   patches={workspace.patches}
-                  onApplyPatch={
-                    onApplyJsonPatch ??
-                    ((operations, summary) => {
-                      onApplyDesignPatch(operations, summary);
-                      return undefined;
-                    })
-                  }
+                  {...(onProposeJsonPatch ? { onProposePatch: onProposeJsonPatch } : {})}
                   {...(onImportSourceFile ? { onImportSourceFile } : {})}
                 />
               </InspectorTabPanel>

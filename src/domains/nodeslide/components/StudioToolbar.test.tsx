@@ -96,6 +96,23 @@ describe('NodeSlide v3 studio toolbar', () => {
     expect(screen.queryByRole('menu', { name: 'Project actions' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it('gives the responsive inspector action a truthful label and matching accessible name', () => {
+    const collapsed = renderToStaticMarkup(
+      <StudioToolbar {...toolbarProps({ inspectorCollapsed: true })} />,
+    );
+    const expanded = renderToStaticMarkup(
+      <StudioToolbar {...toolbarProps({ inspectorCollapsed: false })} />,
+    );
+
+    expect(collapsed).toContain('aria-label="Ask AI"');
+    expect(collapsed).toContain('aria-controls="nodeslide-inspector"');
+    expect(collapsed).toContain('aria-expanded="false"');
+    expect(collapsed).toContain('>Ask AI</span>');
+    expect(expanded).toContain('aria-label="Close AI"');
+    expect(expanded).toContain('aria-expanded="true"');
+    expect(expanded).toContain('>Close AI</span>');
+  });
 });
 
 function toolbarProps(overrides: Partial<StudioToolbarProps> = {}): StudioToolbarProps {

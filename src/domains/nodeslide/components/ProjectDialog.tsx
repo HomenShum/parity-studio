@@ -22,6 +22,7 @@ import {
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
 import type { NodeSlideDataAttachment } from '../../../../shared/nodeslideAttachments';
+import { nodeSlideRequestedSlideCountIssue } from '../../../../shared/nodeslideSlideCount';
 import {
   NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   NodeSlidePromptComposer,
@@ -31,6 +32,7 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
+import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
@@ -38,15 +40,16 @@ export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as 
 export const NODESLIDE_NEBIUS_BRIEF_CONSENT = 'nebius_full_brief_v1' as const;
 
 export type NodeSlideBriefProviderMode = 'deterministic' | 'openrouter_free' | 'nebius';
+export type NodeSlideBriefProviderConsent =
+  | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
+  | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
 
 export interface CreateDeckAdmissionRequest extends CreateDeckRequest {
   accessCode?: string;
   providerMode: NodeSlideBriefProviderMode;
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
-  providerConsent?:
-    | typeof NODESLIDE_OPENROUTER_BRIEF_CONSENT
-    | typeof NODESLIDE_NEBIUS_BRIEF_CONSENT;
+  providerConsent?: NodeSlideBriefProviderConsent;
 }
 
 export type CreateDeckProviderAdmission = Pick<
@@ -58,19 +61,26 @@ export function createDeckProviderAdmission(
   providerMode: NodeSlideBriefProviderMode,
   providerModel: NodeSlideAgentModelId,
   providerEffort: NodeSlideReasoningEffort,
-  consentedForRequest: boolean,
+  providerConsent: NodeSlideBriefProviderConsent | null,
 ): CreateDeckProviderAdmission | null {
   if (providerMode === 'deterministic') return { providerMode };
-  if (!consentedForRequest) return null;
+  if (providerConsent === null || providerConsent !== nodeSlideBriefProviderConsent(providerMode)) {
+    return null;
+  }
   return {
     providerMode,
     providerModel,
     providerEffort,
-    providerConsent:
-      providerMode === 'nebius'
-        ? NODESLIDE_NEBIUS_BRIEF_CONSENT
-        : NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+    providerConsent,
   };
+}
+
+export function nodeSlideBriefProviderConsent(
+  providerMode: NodeSlideBriefProviderMode,
+): NodeSlideBriefProviderConsent | null {
+  if (providerMode === 'nebius') return NODESLIDE_NEBIUS_BRIEF_CONSENT;
+  if (providerMode === 'openrouter_free') return NODESLIDE_OPENROUTER_BRIEF_CONSENT;
+  return null;
 }
 
 export interface RecentDeck {
@@ -176,9 +186,27 @@ export function ProjectDialog({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
-  const providerConsentRef = useRef(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const providerConsentRequestKey = createExternalProviderRequestKey('project-create', {
+    clientSessionId,
+    mode,
+    title,
+    prompt,
+    audience,
+    purpose,
+    successCriteria,
+    themeId,
+    providerMode,
+    providerModel,
+    providerEffort,
+    attachments: composerSession.attachments,
+  });
+  const {
+    consent: providerConsent,
+    setConsent: setProviderConsent,
+    consumeConsent: consumeProviderConsent,
+    clearConsent: clearProviderConsent,
+  } = usePerRequestConsent<NodeSlideBriefProviderConsent>(providerConsentRequestKey);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
   const createTabId = `${dialogId}-create-tab`;
@@ -194,16 +222,12 @@ export function ProjectDialog({
   const wasOpenRef = useRef(false);
   const createTabRef = useRef<HTMLButtonElement>(null);
   const openTabRef = useRef<HTMLButtonElement>(null);
-  const setPerRequestProviderConsent = (consented: boolean) => {
-    providerConsentRef.current = consented;
-    setProviderConsent(consented);
-  };
   const clearAdmissionAndClose = () => {
     setAccessCode('');
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
-    setPerRequestProviderConsent(false);
+    clearProviderConsent();
     clearComposerSession();
     setAttachmentError(null);
     onClose();
@@ -229,8 +253,7 @@ export function ProjectDialog({
       setProviderEffort(
         initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
       );
-      providerConsentRef.current = false;
-      setProviderConsent(false);
+      clearProviderConsent();
       setAttachmentError(null);
     }
     wasOpenRef.current = open;
@@ -239,11 +262,18 @@ export function ProjectDialog({
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
-    providerConsentRef.current = false;
-    setProviderConsent(false);
+    clearProviderConsent();
     clearComposerSession();
     setAttachmentError(null);
-  }, [clearComposerSession, createEnabled, initialDraft, initialMode, open, resetComposerSession]);
+  }, [
+    clearComposerSession,
+    clearProviderConsent,
+    createEnabled,
+    initialDraft,
+    initialMode,
+    open,
+    resetComposerSession,
+  ]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
@@ -272,6 +302,7 @@ export function ProjectDialog({
     if (mode === 'open') return;
     const deckTitle = title.trim();
     const briefPrompt = text.trim();
+    if (nodeSlideRequestedSlideCountIssue(briefPrompt, successCriteria)) return;
     const previewAccessCode = accessCode.trim();
     if (!deckTitle || !briefPrompt || !audience.trim() || !purpose.trim() || !previewAccessCode) {
       return;
@@ -280,10 +311,9 @@ export function ProjectDialog({
       providerMode,
       providerModel,
       providerEffort,
-      providerConsentRef.current,
+      providerMode === 'deterministic' ? null : consumeProviderConsent(),
     );
     if (!providerAdmission) return;
-    setPerRequestProviderConsent(false);
     try {
       const attachments = await readNodeSlideAttachmentFiles(files, []);
       setAttachmentError(null);
@@ -315,26 +345,29 @@ export function ProjectDialog({
   };
 
   const selectedModel = nodeSlideAgentModel(providerModel);
+  const requestedSlideCountIssue = nodeSlideRequestedSlideCountIssue(prompt, successCriteria);
 
   const createBlocker = !title.trim()
     ? 'Add a deck title to continue.'
     : !prompt.trim()
       ? 'Describe what this deck should accomplish.'
-      : !audience.trim()
-        ? 'Add the intended audience under Improve the brief.'
-        : !purpose.trim()
-          ? 'Add the deck purpose under Improve the brief.'
-          : !accessCode.trim()
-            ? 'Enter the private-preview access code to continue.'
-            : providerMode !== 'deterministic' && !providerConsent
-              ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
-              : null;
+      : requestedSlideCountIssue
+        ? requestedSlideCountIssue
+        : !audience.trim()
+          ? 'Add the intended audience under Improve the brief.'
+          : !purpose.trim()
+            ? 'Add the deck purpose under Improve the brief.'
+            : !accessCode.trim()
+              ? 'Enter the private-preview access code to continue.'
+              : providerMode !== 'deterministic' && !providerConsent
+                ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
+                : null;
 
   if (!open) return null;
 
   return (
     <div
-      className="ns-modal-backdrop"
+      className="nodeslide-studio ns-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) clearAdmissionAndClose();
@@ -434,6 +467,7 @@ export function ProjectDialog({
                     type="button"
                     data-testid="world-cup-starter"
                     onClick={() => {
+                      clearProviderConsent();
                       setTitle(WORLD_CUP_STARTER.title);
                       composerSession.setText(WORLD_CUP_STARTER.prompt);
                       setAudience(WORLD_CUP_STARTER.audience);
@@ -475,15 +509,16 @@ export function ProjectDialog({
                     modelLabel="Model and provider"
                     modelTestId="create-model-select"
                     onAttachmentError={setAttachmentError}
+                    onAttachmentsChange={clearProviderConsent}
                     onEffortChange={(effort) => {
                       setProviderEffort(effort);
-                      setPerRequestProviderConsent(false);
+                      clearProviderConsent();
                       onClearError?.();
                     }}
                     onModelChange={(model) => {
                       if (model === 'deterministic') {
                         setProviderMode('deterministic');
-                        setPerRequestProviderConsent(false);
+                        clearProviderConsent();
                         onClearError?.();
                         return;
                       }
@@ -492,10 +527,11 @@ export function ProjectDialog({
                       if (!nodeSlideModelSupportsReasoningEffort(model, providerEffort)) {
                         setProviderEffort('high');
                       }
-                      setPerRequestProviderConsent(false);
+                      clearProviderConsent();
                       onClearError?.();
                     }}
                     onSubmit={submit}
+                    onTextChange={clearProviderConsent}
                     onTextareaKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey && (creating || createBlocker)) {
                         event.preventDefault();
@@ -575,7 +611,7 @@ export function ProjectDialog({
                     className={providerMode === 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode('deterministic');
-                      setPerRequestProviderConsent(false);
+                      clearProviderConsent();
                     }}
                   >
                     <ShieldCheck size={20} aria-hidden="true" />
@@ -595,7 +631,7 @@ export function ProjectDialog({
                     className={providerMode !== 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                      setPerRequestProviderConsent(false);
+                      clearProviderConsent();
                     }}
                   >
                     <Sparkles size={20} aria-hidden="true" />
@@ -632,9 +668,13 @@ export function ProjectDialog({
                     type="checkbox"
                     form={createFormId}
                     data-testid="provider-consent"
-                    checked={providerConsent}
+                    checked={providerConsent !== null}
                     disabled={providerMode === 'deterministic'}
-                    onChange={(event) => setPerRequestProviderConsent(event.target.checked)}
+                    onChange={(event) =>
+                      setProviderConsent(
+                        event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,
+                      )
+                    }
                     style={{
                       accentColor: 'var(--ns-accent)',
                       marginTop: 2,

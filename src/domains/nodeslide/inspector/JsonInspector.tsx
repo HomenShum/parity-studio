@@ -203,17 +203,28 @@ const codeStyle: CSSProperties = {
   color: 'var(--ns-text, inherit)',
 };
 
+export interface JsonPatchProposalRequest {
+  operations: PatchOperation[];
+  summary: string;
+  elementId: string;
+  baseElementVersion: number;
+}
+
+/**
+ * Hands a JSON edit to the host's proposal lane. The callback may report
+ * success only after a server-validated candidate was opened; it never returns
+ * or fabricates a mutation receipt for the editor.
+ */
+export type JsonPatchProposalCallback = (
+  request: JsonPatchProposalRequest,
+) => boolean | Promise<boolean>;
+
 function ElementJsonEditor({
   element,
   onPropose,
 }: {
   element: SlideElement;
-  onPropose: (
-    operations: PatchOperation[],
-    summary: string,
-    elementId: string,
-    baseElementVersion: number,
-  ) => boolean | undefined | Promise<boolean | undefined>;
+  onPropose: JsonPatchProposalCallback;
 }) {
   const original = useMemo(() => serializeDeckJson(element), [element]);
   const [text, setText] = useState(original);
@@ -243,13 +254,13 @@ function ElementJsonEditor({
     }
     setProposing(true);
     try {
-      const proposed = await onPropose(
-        result.ops,
-        `Edit ${element.name || element.kind} via JSON`,
-        element.id,
-        element.version,
-      );
-      if (proposed === false) {
+      const proposed = await onPropose({
+        operations: result.ops,
+        summary: `Edit ${element.name || element.kind} via JSON`,
+        elementId: element.id,
+        baseElementVersion: element.version,
+      });
+      if (!proposed) {
         setError(
           'The JSON candidate was not created. The element may have changed; review and retry.',
         );
@@ -318,12 +329,7 @@ export interface JsonInspectorProps {
   slide: Slide;
   selectedElements: readonly SlideElement[];
   patches: readonly DeckPatch[];
-  onApplyPatch?: (
-    operations: PatchOperation[],
-    summary: string,
-    elementId: string,
-    baseElementVersion: number,
-  ) => boolean | undefined | Promise<boolean | undefined>;
+  onProposePatch?: JsonPatchProposalCallback;
   onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
 }
 
@@ -332,7 +338,7 @@ export function JsonInspector({
   slide,
   selectedElements,
   patches,
-  onApplyPatch,
+  onProposePatch,
   onImportSourceFile,
 }: JsonInspectorProps) {
   const [mode, setMode] = useState<DeckJsonMode>('deck');
@@ -351,7 +357,7 @@ export function JsonInspector({
   );
 
   const selectedOne = selectedElements.length === 1 ? (selectedElements[0] ?? null) : null;
-  const editing = mode === 'selection' && onApplyPatch !== undefined && selectedOne !== null;
+  const editing = mode === 'selection' && onProposePatch !== undefined && selectedOne !== null;
 
   const copy = () => {
     if (json && typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -386,7 +392,7 @@ export function JsonInspector({
         <p>
           The canonical <code>nodeslide.slidelang/v1</code> DeckSpec — {snapshot.slides.length}{' '}
           slides · {snapshot.elements.length} elements.{' '}
-          {onApplyPatch
+          {onProposePatch
             ? 'Select a single element and switch to Selection to edit its JSON; changes create a validated candidate, open Compare, and require Accept or Reject.'
             : 'Read-only view.'}
         </p>
@@ -487,8 +493,12 @@ export function JsonInspector({
         </button>
       </div>
 
-      {editing && selectedOne && onApplyPatch ? (
-        <ElementJsonEditor key={selectedOne.id} element={selectedOne} onPropose={onApplyPatch} />
+      {editing && selectedOne && onProposePatch ? (
+        <ElementJsonEditor
+          key={`${selectedOne.id}:${selectedOne.version}`}
+          element={selectedOne}
+          onPropose={onProposePatch}
+        />
       ) : json ? (
         <pre className="ns-json-view" style={{ ...codeStyle, margin: '0 12px 12px' }}>
           {shown}

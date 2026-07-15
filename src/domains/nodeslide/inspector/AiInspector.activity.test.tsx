@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,9 +22,25 @@ import {
   clearNodeSlideComposerSession,
   nodeSlideComposerSessionKey,
 } from '../composer/nodeSlideComposerSession';
-import { AiInspector, type AiInspectorProps } from './AiInspector';
+import { AiInspector, type AiInspectorProps, type AiReadReference } from './AiInspector';
+
+const blobUrls = new Map<string, Blob>();
+let blobUrlSequence = 0;
 
 beforeAll(() => {
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: (blob: Blob) => {
+      blobUrlSequence += 1;
+      const url = `blob:nodeslide-inspector-test-${blobUrlSequence}`;
+      blobUrls.set(url, blob);
+      return url;
+    },
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: (url: string) => blobUrls.delete(url),
+  });
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
     value: () => undefined,
@@ -55,7 +71,13 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  blobUrls.clear();
   window.localStorage.clear();
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+    const blob = blobUrls.get(String(input));
+    if (!blob) throw new Error(`Unexpected test fetch: ${String(input)}`);
+    return { ok: true, blob: async () => blob } as Response;
+  });
 });
 
 afterEach(() => {
@@ -119,6 +141,25 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(screen.getByText('2 slides')).toBeVisible();
   });
 
+  it('prioritizes review while keeping an obvious expandable follow-up composer', async () => {
+    const snapshot = fixture('review-first-composer');
+    const user = userEvent.setup();
+    renderInspector(snapshot, { patches: [proposal(snapshot)] });
+
+    const composer = screen.getByTestId('ai-composer');
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    expect(composer).toHaveAttribute('data-composer-mode', 'follow-up');
+    expect(instruction).toHaveAttribute('rows', '1');
+    expect(instruction).toHaveAttribute('placeholder', 'Ask a follow-up or request a revision...');
+    expect(composer.closest('.ns-ai-v3-shell')).toHaveClass('is-awaiting-review');
+
+    await user.click(instruction);
+
+    await waitFor(() => expect(composer).toHaveAttribute('data-composer-mode', 'full'));
+    expect(instruction).toHaveAttribute('rows', '9');
+    expect(screen.getByTestId('ai-connect-agent')).toBeVisible();
+  });
+
   it('fails closed before per-request provider consent and resets consent after submit', async () => {
     const snapshot = fixture('consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
@@ -176,6 +217,63 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(onPropose).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidates consent when a keyboard-activated suggestion rewrites the request', async () => {
+    const snapshot = fixture('keyboard-suggestion-consent');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    const consent = screen.getByTestId('ai-provider-consent');
+    consent.focus();
+    await user.keyboard('[Space]');
+    expect(consent).toBeChecked();
+
+    const suggestion = screen.getByRole('button', { name: 'Sharpen the story' });
+    suggestion.focus();
+    await user.keyboard('{Enter}');
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    expect((instruction as HTMLTextAreaElement).value).toContain('Sharpen this slide');
+    expect(consent).not.toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    instruction.focus();
+    await user.keyboard('{Enter}');
+    expect(onPropose).not.toHaveBeenCalled();
+
+    consent.focus();
+    await user.keyboard('[Space]');
+    instruction.focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[2]).toMatchObject({
+      providerMode: 'nebius',
+      providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
+    });
+  });
+
+  it('invalidates consent when editor scope changes after approval', async () => {
+    const snapshot = fixture('scope-consent');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'AI instruction' }),
+      'Tighten the decision narrative.',
+    );
+    const consent = screen.getByTestId('ai-provider-consent');
+    await user.click(consent);
+    expect(consent).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Deck' }));
+
+    expect(consent).not.toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('ai-submit'));
+    expect(onPropose).not.toHaveBeenCalled();
+  });
+
   it('keeps deterministic requests private without requiring or minting consent', async () => {
     const snapshot = fixture('deterministic');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
@@ -195,6 +293,183 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
     expect(onPropose.mock.calls[0]?.[2]).toMatchObject({ providerMode: 'deterministic' });
     expect(onPropose.mock.calls[0]?.[2]).not.toHaveProperty('providerConsent');
+  });
+
+  it('keeps delegated change handling compact, explicit, and keyboard-operable', async () => {
+    const snapshot = fixture('delegated-change-handling');
+    const onApprovalModeChange = vi.fn<NonNullable<AiInspectorProps['onApprovalModeChange']>>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      approvalMode: 'auto_apply',
+      approvalExpiresAt: Date.now() + 60_000,
+      onApprovalModeChange,
+    });
+
+    const summary = screen.getByTestId('ai-approval-summary');
+    expect(summary).toHaveTextContent('Auto-apply safe edits');
+    summary.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
+    expect(screen.getByTestId('ai-approval-controls')).toBeVisible();
+    await user.click(screen.getByRole('radio', { name: /review before applying/i }));
+    expect(onApprovalModeChange).toHaveBeenCalledWith('review');
+  });
+
+  it('blocks keyboard and form submission while change authority is transitioning', async () => {
+    const snapshot = fixture('delegation-transition-lock');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      approvalBusy: true,
+      onPropose,
+    });
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(instruction, 'Change this headline.');
+    await user.keyboard('{Enter}');
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+  });
+
+  it('invalidates an attachment submission when change authority transitions mid-upload', async () => {
+    const snapshot = fixture('delegation-attachment-race');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    let resolveAttachment: ((reference: AiReadReference) => void) | undefined;
+    const onAttachDataFile = vi.fn(
+      () =>
+        new Promise<AiReadReference>((resolve) => {
+          resolveAttachment = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onAttachDataFile,
+      onPropose,
+      onApprovalModeChange: vi.fn(),
+    });
+
+    await user.upload(
+      screen.getByTestId('ai-data-file-input'),
+      new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this data.');
+    await user.click(screen.getByTestId('ai-submit'));
+    await waitFor(() => expect(onAttachDataFile).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('radio', { name: /review before applying/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deck' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Operation mode' })).toBeDisabled();
+    expect(screen.getByTestId('ai-model-select')).toBeDisabled();
+    expect(screen.getByTestId('ai-web-research-toggle')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add command' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'AI instruction' })).toBeDisabled();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+    expect(onAttachDataFile).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            approvalMode: 'auto_apply',
+            approvalExpiresAt: Date.now() + 60_000,
+            onAttachDataFile,
+            onPropose,
+            onApprovalModeChange: vi.fn(),
+          })}
+        />
+      </div>,
+    );
+    await act(async () => {
+      resolveAttachment?.({ kind: 'source', id: 'source-evidence', label: 'evidence.csv' });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: /review before applying/i })).toBeEnabled(),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/change handling.*changed/i),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
+  });
+
+  it('starts the authority guard before raw attachment conversion and preserves the retry', async () => {
+    const snapshot = fixture('delegation-raw-attachment-race');
+    const onAttachDataFile = vi.fn(async () => ({
+      kind: 'source' as const,
+      id: 'source-evidence',
+      label: 'evidence.csv',
+    }));
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    let resolveBlobFetch: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      (input: RequestInfo | URL) =>
+        new Promise<Response>((resolve, reject) => {
+          const blob = blobUrls.get(String(input));
+          if (!blob) {
+            reject(new Error(`Unexpected test fetch: ${String(input)}`));
+            return;
+          }
+          resolveBlobFetch = () => resolve({ ok: true, blob: async () => blob } as Response);
+        }),
+    );
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onAttachDataFile,
+      onPropose,
+      onApprovalModeChange: vi.fn(),
+    });
+
+    await user.upload(
+      screen.getByTestId('ai-data-file-input'),
+      new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this data.');
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+    await waitFor(() => expect(resolveBlobFetch).toBeTypeOf('function'));
+    expect(screen.getByRole('button', { name: 'Deck' })).toBeDisabled();
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            approvalMode: 'auto_apply',
+            approvalExpiresAt: Date.now() + 60_000,
+            onAttachDataFile,
+            onPropose,
+            onApprovalModeChange: vi.fn(),
+          })}
+        />
+      </div>,
+    );
+    await act(async () => {
+      resolveBlobFetch?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/change handling.*changed/i),
+    );
+    expect(onAttachDataFile).not.toHaveBeenCalled();
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'AI instruction' })).toHaveValue('Use this data.');
+    expect(screen.getByText('evidence.csv')).toBeInTheDocument();
   });
 
   it('keeps the review scroll position stable as activity arrives during proposal and direction review', () => {
@@ -331,6 +606,43 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(screen.getByText('Read scoped context')).toBeInTheDocument();
     expect(container.querySelector('.ns-plan-list .is-current')).toBeNull();
     expect(container.querySelector('.ns-plan-list .ns-spin')).toBeNull();
+  });
+
+  it('offers an explicit bounded retry only for a retryable failed durable run', async () => {
+    const snapshot = fixture('retry-failed-run');
+    const onRetryRun = vi.fn();
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 1_200,
+        ask: 'Rewrite the headline.',
+        message: 'The provider ended before a validated proposal was returned.',
+      },
+      onRetryRun,
+    });
+
+    const retry = screen.getByRole('button', { name: 'Retry the same request' });
+    expect(retry).toBeVisible();
+    await user.click(retry);
+    expect(onRetryRun).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            agentActivity: {
+              status: 'cancelled',
+              elapsedMs: 1_200,
+              ask: 'Rewrite the headline.',
+              message: 'Run cancelled. No deck changes were applied.',
+            },
+            onRetryRun,
+          })}
+        />
+      </div>,
+    );
+    expect(screen.queryByRole('button', { name: 'Retry the same request' })).toBeNull();
   });
 });
 

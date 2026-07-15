@@ -213,6 +213,7 @@ export function traceFromRow(row: Doc<'nodeslide_traces'>): AgentTrace {
     ...(row.outputTokens !== undefined ? { outputTokens: row.outputTokens } : {}),
     sourceBindingStatus: row.sourceBindingStatus ?? 'legacy_unavailable',
     claimSourceBindings: row.claimSourceBindings ?? [],
+    ...(row.decisionProvenance !== undefined ? { decisionProvenance: row.decisionProvenance } : {}),
     createdAt: row.createdAt,
     ...(row.completedAt !== undefined ? { completedAt: row.completedAt } : {}),
   };

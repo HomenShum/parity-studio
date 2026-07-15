@@ -1,0 +1,41 @@
+export {
+  AgentSessionProvider,
+  createAgentSessionSecret,
+  useAgentSession,
+  useOptionalAgentSession,
+} from './AgentSessionProvider';
+export {
+  agentSessionRequestFingerprint,
+  agentSessionApprovalForDeck,
+  agentSessionStorageKey,
+  archiveAgentSessionJob,
+  attachAgentSessionJob,
+  createInitialAgentSessionState,
+  failAgentSessionJob,
+  isAgentSessionEditAuthorityLocked,
+  isAgentSessionJobActive,
+  prepareAgentSessionJob,
+  readAgentSessionState,
+  reconcileAgentSessionJob,
+  updateAgentSessionControls,
+  updateAgentSessionSurface,
+  writeAgentSessionState,
+} from './agentSessionState';
+export type {
+  AgentSessionAttachment,
+  AgentSessionApprovalMode,
+  AgentSessionApprovalState,
+  AgentSessionControlPatch,
+  AgentSessionControls,
+  AgentSessionDelegationGrant,
+  AgentSessionJobHandle,
+  AgentSessionJobKind,
+  AgentSessionJobReceipt,
+  AgentSessionJobStatus,
+  AgentSessionMemoryMode,
+  AgentSessionModel,
+  AgentSessionScope,
+  AgentSessionState,
+  AgentSessionSurface,
+} from './types';
+export type { AgentSessionContextValue } from './AgentSessionProvider';

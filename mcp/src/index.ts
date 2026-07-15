@@ -1910,18 +1910,36 @@ function parseLooseJson(raw: string): Record<string, unknown> | null {
 
 // ---------- Server bootstrap ----------------------------------------------
 
+async function connectMcpServer(server: McpServer): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  const cleanup = async () => {
+    await shutdownRenderer();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void cleanup());
+  process.on('SIGTERM', () => void cleanup());
+}
+
 async function main() {
+  const nodeSlideOnly = process.env.PARITY_MCP_PROFILE?.trim().toLowerCase() === 'nodeslide';
+
   // Boot the local dashboard FIRST so it's already serving when the user looks.
   // No-op if PARITY_DASHBOARD=disabled. Best-effort: failures are logged to
   // stderr (which doesn't pollute MCP stdout) and tools continue without it.
-  await startDashboardAtBoot();
+  if (!nodeSlideOnly) await startDashboardAtBoot();
 
   const server = new McpServer({
-    name: 'parity-studio',
+    name: nodeSlideOnly ? 'nodeslide' : 'parity-studio',
     version: VERSION,
   });
 
   registerNodeSlideTools(server, convexCall);
+  if (nodeSlideOnly) {
+    await connectMcpServer(server);
+    return;
+  }
 
   server.registerResource(
     'parity-studio-agent-rules',
@@ -2363,16 +2381,7 @@ Use the parity_design_mission MCP tool. Use url=${appUrl ?? 'auto-detect via PAR
     handleFigmaImport,
   );
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-
-  // Cleanup on shutdown
-  const cleanup = async () => {
-    await shutdownRenderer();
-    process.exit(0);
-  };
-  process.on('SIGINT', () => void cleanup());
-  process.on('SIGTERM', () => void cleanup());
+  await connectMcpServer(server);
 }
 
 main().catch((err) => {

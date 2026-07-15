@@ -30,7 +30,16 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, type Ref, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type Ref,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type AgentTrace,
   type Deck,
@@ -54,6 +63,11 @@ import {
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
+import {
+  NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+  NODESLIDE_DELEGATION_MAX_OPERATIONS,
+  NODESLIDE_DELEGATION_MAX_USES,
+} from '../../../../shared/nodeslideDelegation';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
@@ -66,6 +80,8 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
+import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import type { AgentSessionApprovalMode } from '../session';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -114,6 +130,20 @@ export type {
 } from './reviewTypes';
 
 type ScopeChoice = 'deck' | 'slide' | 'selected_slides' | 'elements';
+type AiReviewProviderConsent = Exclude<
+  AiProviderRequest,
+  { providerMode: 'deterministic' }
+>['providerConsent'];
+type AiVariationProviderConsent = Exclude<
+  AiVariationProviderRequest,
+  { providerMode: 'deterministic' }
+>['providerConsent'];
+
+interface AiProviderConsentGrant {
+  providerMode: Exclude<AiProviderMode, 'deterministic'>;
+  reviewConsent: AiReviewProviderConsent;
+  variationConsent: AiVariationProviderConsent;
+}
 
 interface ComposerTrigger {
   kind: 'reference' | 'command';
@@ -134,6 +164,9 @@ export interface AiInspectorProps<CommandId extends string = string> {
   agentMessages?: readonly NodeSlideAgentMessage[];
   memories?: readonly NodeSlideAgentMemory[];
   memoriesLoading?: boolean;
+  approvalMode?: AgentSessionApprovalMode;
+  approvalBusy?: boolean;
+  approvalExpiresAt?: number;
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -163,7 +196,9 @@ export interface AiInspectorProps<CommandId extends string = string> {
     update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
+  onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
   onCancelRun?: (runId: string) => void;
+  onRetryRun?: () => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -186,6 +221,9 @@ export function AiInspector<CommandId extends string = string>({
   agentMessages = [],
   memories = [],
   memoriesLoading = false,
+  approvalMode = 'review',
+  approvalBusy = false,
+  approvalExpiresAt,
   variations,
   variationsLoading,
   isSubmitting,
@@ -208,7 +246,9 @@ export function AiInspector<CommandId extends string = string>({
   onCreateMemory,
   onUpdateMemory,
   onDeleteMemory,
+  onApprovalModeChange,
   onCancelRun,
+  onRetryRun,
   onAccept,
   onReject,
   onPreviewPatch,
@@ -234,9 +274,7 @@ export function AiInspector<CommandId extends string = string>({
   const [providerEffort, setProviderEffort] = useState<NodeSlideReasoningEffort>(
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
-  const [providerConsent, setProviderConsent] = useState(false);
   const [webResearch, setWebResearch] = useState(false);
-  const [webResearchConsent, setWebResearchConsent] = useState(false);
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -248,7 +286,18 @@ export function AiInspector<CommandId extends string = string>({
   const [showPlan, setShowPlan] = useState(true);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [submissionPreparing, setSubmissionPreparing] = useState(false);
+  const submissionPreparingRef = useRef(false);
+  const handleSubmissionPreparingChange = useCallback((preparing: boolean) => {
+    submissionPreparingRef.current = preparing;
+    setSubmissionPreparing(preparing);
+  }, []);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const approvalBusyRef = useRef(approvalBusy);
+  approvalBusyRef.current = approvalBusy;
+  const approvalSignature = `${approvalMode}:${approvalExpiresAt ?? 0}:${approvalBusy ? 'busy' : 'ready'}`;
+  const approvalControlLocked =
+    approvalBusy || attachmentBusy || submissionPreparing || isSubmitting;
   const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -286,8 +335,6 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
-    setProviderConsent(false);
-    setWebResearchConsent(false);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -409,14 +456,73 @@ export function AiInspector<CommandId extends string = string>({
     return [...deduped.values()];
   }, [selectedReadContext]);
 
+  const externalRequestConsentKey = createExternalProviderRequestKey('editor-action', {
+    deck: { id: deck.id, version: deck.version },
+    slide: { id: slide.id, version: slide.version },
+    instruction,
+    attachments: composerSession.attachments,
+    scopeChoice,
+    selectedSlideIds,
+    selectedElements: selectedElements.map((element) => ({
+      id: element.id,
+      slideId: element.slideId,
+      version: element.version,
+    })),
+    operationMode,
+    designBehavior,
+    referenceUse,
+    readContext: requestedReadContext,
+    commandId: selectedCommand?.id ?? null,
+    commentContext,
+    providerMode,
+    providerModel,
+    providerEffort,
+    webResearch,
+    memory: useMemoryForRun
+      ? memories
+          .filter((memory) => memory.status === 'active')
+          .map((memory) => ({
+            id: memory.id,
+            contentDigest: memory.contentDigest,
+            updatedAt: memory.updatedAt,
+          }))
+      : [],
+  });
+  const {
+    consent: providerConsent,
+    setConsent: setProviderConsent,
+    consumeConsent: consumeProviderConsent,
+    clearConsent: clearProviderConsent,
+  } = usePerRequestConsent<AiProviderConsentGrant>(externalRequestConsentKey);
+  const {
+    consent: webResearchConsent,
+    setConsent: setWebResearchConsent,
+    consumeConsent: consumeWebResearchConsent,
+    clearConsent: clearWebResearchConsent,
+  } = usePerRequestConsent<typeof NODESLIDE_WEB_RESEARCH_CONSENT>(externalRequestConsentKey);
+  const clearExternalConsent = useCallback(() => {
+    clearProviderConsent();
+    clearWebResearchConsent();
+  }, [clearProviderConsent, clearWebResearchConsent]);
+  const submissionSignature = `${externalRequestConsentKey}:${approvalSignature}:${
+    providerConsent ? 'provider-consented' : 'provider-unconsented'
+  }:${webResearchConsent ? 'web-consented' : 'web-unconsented'}`;
+  const submissionSignatureRef = useRef(submissionSignature);
+  const submissionRevisionRef = useRef(0);
+  if (submissionSignatureRef.current !== submissionSignature) {
+    submissionSignatureRef.current = submissionSignature;
+    submissionRevisionRef.current += 1;
+  }
+
   const selectedAgentModel = nodeSlideAgentModel(providerModel);
   const provider = createAiProviderRequest(
     providerMode,
-    providerConsent,
+    providerConsent?.reviewConsent ?? null,
     providerModel,
     providerEffort,
   );
-  const providerReady = provider !== null && (!webResearch || webResearchConsent);
+  const providerReady =
+    provider !== null && (!webResearch || webResearchConsent === NODESLIDE_WEB_RESEARCH_CONSENT);
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -454,8 +560,23 @@ export function AiInspector<CommandId extends string = string>({
     .reverse()
     .find((message) => message.role === 'user')?.content;
   const activityAutoScrollPaused = proposals.length > 0 || directions.length > 0;
+  const hasReviewableProposal = proposals.length > 0;
+  const compactReviewComposer =
+    hasReviewableProposal &&
+    !composerExpanded &&
+    !providerControlsOpen &&
+    !instruction.trim() &&
+    !menuOpen;
+  const inspectorState = hasReviewableProposal
+    ? 'is-awaiting-review'
+    : activeDurableRun || isSubmitting || activeTrace?.status === 'working'
+      ? 'is-running'
+      : resolvedActivity && isFailureActivity(resolvedActivity)
+        ? 'has-failed'
+        : 'is-idle';
 
   const updateInstruction = (value: string, cursor = value.length) => {
+    clearExternalConsent();
     composerSession.setText(value);
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
@@ -463,7 +584,7 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
-    setProviderConsent(false);
+    clearExternalConsent();
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -518,13 +639,22 @@ export function AiInspector<CommandId extends string = string>({
     ask?: string,
     readContext: readonly AiReadReference[] = requestedReadContext,
   ) => {
+    if (variationBusy || !providerReady) return;
+    const consumedProviderConsent =
+      providerMode === 'deterministic' ? null : consumeProviderConsent();
+    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
     const variationProvider = createAiVariationProviderRequest(
       providerMode,
-      providerConsent,
+      consumedProviderConsent?.variationConsent ?? null,
       providerModel,
       providerEffort,
     );
-    if (!variationProvider || variationBusy) return;
+    if (
+      !variationProvider ||
+      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
+    ) {
+      return;
+    }
     focusGeneratedBatch.current = true;
     batchBeforeGeneration.current = latestBatchId;
     if (ask) setOptimisticAsk(ask);
@@ -536,13 +666,23 @@ export function AiInspector<CommandId extends string = string>({
       source,
       ...(commentContext ? { commentContext } : {}),
     });
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    setWebResearchConsent(false);
   };
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
     const text = submittedInstruction.trim();
-    if (!text || isSubmitting || attachmentBusy || !provider || !providerReady) return;
+    if (!text) throw new Error('Enter an instruction before proposing an edit.');
+    if (isSubmitting || attachmentBusy) {
+      throw new Error('A request is already being prepared. Wait for it to finish and try again.');
+    }
+    if (approvalBusyRef.current) {
+      throw new Error('Change handling is updating. Review it and submit again.');
+    }
+    if (!provider || !providerReady) {
+      throw new Error('Complete the selected model and web consent before submitting.');
+    }
+    const submittedRevision = submissionRevisionRef.current;
+    const requestChanged = () =>
+      approvalBusyRef.current || submissionRevisionRef.current !== submittedRevision;
     let submittedReadContext = requestedReadContext;
     if (files.length > 0) {
       if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
@@ -550,7 +690,14 @@ export function AiInspector<CommandId extends string = string>({
       setAttachmentError(null);
       try {
         const attachedReferences: AiReadReference[] = [];
-        for (const file of files) attachedReferences.push(await onAttachDataFile(file));
+        for (const file of files) {
+          attachedReferences.push(await onAttachDataFile(file));
+          if (requestChanged()) {
+            throw new Error(
+              'Change handling or request settings changed while data was attached. Review and submit again.',
+            );
+          }
+        }
         const deduped = new Map<string, AiReadReference>();
         for (const reference of [...requestedReadContext, ...attachedReferences]) {
           deduped.set(referenceKey(reference), reference);
@@ -565,6 +712,11 @@ export function AiInspector<CommandId extends string = string>({
       } finally {
         setAttachmentBusy(false);
       }
+    }
+    if (requestChanged()) {
+      throw new Error(
+        'Change handling or request settings changed before submission. Review and submit again.',
+      );
     }
     const command =
       selectedCommand ?? commandFromInstruction(submittedInstruction, availableCommands);
@@ -591,8 +743,23 @@ export function AiInspector<CommandId extends string = string>({
       return;
     }
     setScopeError(null);
+    const consumedProviderConsent =
+      providerMode === 'deterministic' ? null : consumeProviderConsent();
+    const submittedProvider = createAiProviderRequest(
+      providerMode,
+      consumedProviderConsent?.reviewConsent ?? null,
+      providerModel,
+      providerEffort,
+    );
+    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
+    if (
+      !submittedProvider ||
+      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
+    ) {
+      return;
+    }
     const options: AiProposalOptions<CommandId> = {
-      ...provider,
+      ...submittedProvider,
       readContext: submittedReadContext,
       designBehavior,
       referenceUse,
@@ -601,10 +768,10 @@ export function AiInspector<CommandId extends string = string>({
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      ...(webResearch && webResearchConsent
+      ...(webResearch && consumedWebResearchConsent
         ? {
             webResearch: true,
-            webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
+            webResearchConsent: consumedWebResearchConsent,
           }
         : {}),
       ...(commentContext ? { commentContext } : {}),
@@ -616,8 +783,8 @@ export function AiInspector<CommandId extends string = string>({
     };
     setOptimisticAsk(text);
     onPropose(text, writeScope, options);
-    if (providerMode !== 'deterministic') setProviderConsent(false);
-    if (webResearch) setWebResearchConsent(false);
+    setProviderControlsOpen(false);
+    setComposerExpanded(false);
     updateInstruction('');
     setSelectedCommand(null);
   };
@@ -648,6 +815,7 @@ export function AiInspector<CommandId extends string = string>({
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
+      if (approvalControlLocked) return;
       event.currentTarget.form?.requestSubmit();
     }
   };
@@ -673,7 +841,7 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   return (
-    <div className="ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell">
+    <div className={`ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell ${inspectorState}`}>
       <section
         className="ns-ai-v3-context"
         aria-labelledby={`${composerId}-context-heading`}
@@ -832,6 +1000,16 @@ export function AiInspector<CommandId extends string = string>({
                         : 'The agent failed before a reviewable proposal was returned.')}
                 </strong>
                 <p>No proposal was created or applied. Your deck remains unchanged.</p>
+                {resolvedActivity.status !== 'cancelled' && onRetryRun ? (
+                  <button
+                    type="button"
+                    className="ns-agent-retry"
+                    onClick={onRetryRun}
+                    data-testid="ai-retry-run"
+                  >
+                    <RotateCcw size={12} /> Retry the same request
+                  </button>
+                ) : null}
               </div>
             ) : resolvedActivity?.status === 'delayed' ? (
               <output className="ns-agent-delay-state">
@@ -1002,8 +1180,14 @@ export function AiInspector<CommandId extends string = string>({
       </div>
 
       <div
-        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
+        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''} ${
+          compactReviewComposer ? 'is-review-compact' : ''
+        }`}
         data-testid="ai-composer"
+        data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}
+        onFocusCapture={() => {
+          if (compactReviewComposer) setComposerExpanded(true);
+        }}
       >
         {showSuggested ? (
           <section
@@ -1016,7 +1200,7 @@ export function AiInspector<CommandId extends string = string>({
                 type="button"
                 className="is-primary"
                 onClick={() => requestVariations('button')}
-                disabled={variationBusy || !providerReady}
+                disabled={approvalControlLocked || variationBusy || !providerReady}
                 data-testid="ai-generate-directions"
               >
                 <Layers3 size={12} /> Generate 3 directions
@@ -1025,6 +1209,7 @@ export function AiInspector<CommandId extends string = string>({
                 <button
                   key={action.id}
                   type="button"
+                  disabled={approvalControlLocked}
                   onClick={() => updateInstruction(action.instruction)}
                   data-testid="ai-suggested-action"
                 >
@@ -1041,9 +1226,22 @@ export function AiInspector<CommandId extends string = string>({
           <span>{operationModeLabel(operationMode)}</span>
           <span>{designBehaviorLabel(designBehavior)}</span>
           <span>{referenceUseLabel(referenceUse)}</span>
+          <button
+            type="button"
+            className={approvalMode === 'auto_apply' ? 'is-delegated' : ''}
+            data-testid="ai-approval-summary"
+            onClick={() => setProviderControlsOpen((current) => !current)}
+            aria-expanded={providerControlsOpen}
+            aria-controls="nodeslide-ai-advanced-controls"
+            aria-label={approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
+          >
+            {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
+            {approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
+          </button>
         </div>
 
         <details
+          id="nodeslide-ai-advanced-controls"
           className="ns-ai-v3-controls-disclosure"
           data-testid="ai-provider-controls"
           open={providerControlsOpen}
@@ -1086,61 +1284,66 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               )}
             </div>
-            {providerMode !== 'deterministic' ? (
-              <p className="ns-ai-model-guidance">
-                <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
-                {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
-                Trace.
-              </p>
+            {onApprovalModeChange ? (
+              <fieldset className="ns-ai-approval-controls" data-testid="ai-approval-controls">
+                <legend>Change handling</legend>
+                <label className={approvalMode === 'review' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={`${providerName}-approval`}
+                    value="review"
+                    checked={approvalMode === 'review'}
+                    disabled={approvalControlLocked}
+                    onChange={() => {
+                      if (!approvalControlLocked) onApprovalModeChange('review');
+                    }}
+                  />
+                  <Eye size={15} />
+                  <span>
+                    <strong>Review before applying</strong>
+                    <small>Compare every proposal and choose Accept or Reject.</small>
+                  </span>
+                </label>
+                <label className={approvalMode === 'auto_apply' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={`${providerName}-approval`}
+                    value="auto_apply"
+                    checked={approvalMode === 'auto_apply'}
+                    disabled={approvalControlLocked}
+                    onChange={() => {
+                      if (!approvalControlLocked) onApprovalModeChange('auto_apply');
+                    }}
+                  />
+                  {approvalBusy ? (
+                    <LoaderCircle className="ns-spin" size={15} />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                  <span>
+                    <strong>Apply validated edits automatically</strong>
+                    <small>
+                      {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours · up to{' '}
+                      {NODESLIDE_DELEGATION_MAX_USES} proposals ·{' '}
+                      {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations each. Stale,
+                      invalid, remove, hide, and publish actions stop for review.
+                    </small>
+                  </span>
+                </label>
+                {approvalBusy ? (
+                  <output className="ns-ai-approval-status">Updating change handling…</output>
+                ) : null}
+                {approvalMode === 'auto_apply' && approvalExpiresAt ? (
+                  <output className="ns-ai-approval-status">
+                    Active until{' '}
+                    {new Date(approvalExpiresAt).toLocaleTimeString([], {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </output>
+                ) : null}
+              </fieldset>
             ) : null}
-            <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
-              <legend>Provider and privacy</legend>
-              <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value="deterministic"
-                  checked={providerMode === 'deterministic'}
-                  onChange={() => {
-                    setProviderMode('deterministic');
-                    setProviderConsent(false);
-                  }}
-                  data-testid="ai-provider-deterministic"
-                />
-                <ShieldCheck size={15} />
-                <span>
-                  <strong>Deterministic and private</strong>
-                  <small>No instruction or context is sent to an external model.</small>
-                </span>
-              </label>
-              <label className={providerMode !== 'deterministic' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value={nodeSlideProviderModeForModel(providerModel)}
-                  checked={providerMode !== 'deterministic'}
-                  onChange={() => {
-                    setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                    setProviderConsent(false);
-                  }}
-                  data-testid="ai-provider-external"
-                />
-                <Sparkles size={15} />
-                <span>
-                  <strong>
-                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))} ·{' '}
-                    {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
-                  </strong>
-                  <small>
-                    Sends this ask, selected read context, and scoped slide content to the selected
-                    model through{' '}
-                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))}. It does not
-                    browse or fetch URLs.
-                  </small>
-                </span>
-              </label>
-            </fieldset>
-
             {commentContext ? (
               <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
                 <MessageCircle size={14} />
@@ -1151,6 +1354,7 @@ export function AiInspector<CommandId extends string = string>({
                 {onClearCommentContext ? (
                   <button
                     type="button"
+                    disabled={approvalControlLocked}
                     onClick={onClearCommentContext}
                     aria-label={`Remove comment scope ${commentContext.label}`}
                   >
@@ -1166,6 +1370,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'deck' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'deck'}
+                    disabled={approvalControlLocked}
                     onClick={() => setScopeChoice('deck')}
                   >
                     Deck
@@ -1174,6 +1379,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'slide' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'slide'}
+                    disabled={approvalControlLocked}
                     onClick={() => setScopeChoice('slide')}
                   >
                     This slide
@@ -1183,6 +1389,7 @@ export function AiInspector<CommandId extends string = string>({
                       type="button"
                       className={scopeChoice === 'selected_slides' ? 'is-active' : ''}
                       aria-pressed={scopeChoice === 'selected_slides'}
+                      disabled={approvalControlLocked}
                       onClick={() => setScopeChoice('selected_slides')}
                     >
                       Selected slides ({selectedSlideIds.length})
@@ -1192,7 +1399,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'elements' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'elements'}
-                    disabled={selectedElements.length === 0}
+                    disabled={approvalControlLocked || selectedElements.length === 0}
                     onClick={() => setScopeChoice('elements')}
                   >
                     Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
@@ -1212,6 +1419,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Operation mode</span>
                 <select
                   value={operationMode}
+                  disabled={approvalControlLocked}
                   onChange={(event) => setOperationMode(event.target.value as OperationMode)}
                   aria-label="Operation mode"
                 >
@@ -1225,6 +1433,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Design behavior</span>
                 <select
                   value={designBehavior}
+                  disabled={approvalControlLocked}
                   onChange={(event) =>
                     setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
                   }
@@ -1241,6 +1450,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Reference use</span>
                 <select
                   value={referenceUse}
+                  disabled={approvalControlLocked}
                   onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
                   data-testid="ai-reference-use"
                 >
@@ -1264,6 +1474,7 @@ export function AiInspector<CommandId extends string = string>({
               <button
                 key={referenceKey(reference)}
                 type="button"
+                disabled={approvalControlLocked}
                 onClick={() => removeReadReference(reference)}
                 aria-label={`Remove read context ${reference.label}`}
               >
@@ -1274,6 +1485,7 @@ export function AiInspector<CommandId extends string = string>({
               <button
                 type="button"
                 className="is-command"
+                disabled={approvalControlLocked}
                 onClick={removeCommand}
                 aria-label={`Remove command ${selectedCommand.label}`}
               >
@@ -1290,10 +1502,19 @@ export function AiInspector<CommandId extends string = string>({
           attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
           attachmentInputTestId="ai-data-file-input"
           attachmentMaxFiles={1}
+          submissionRevision={submissionRevisionRef.current}
+          onSubmissionPreparingChange={handleSubmissionPreparingChange}
           attachButtonTestId="ai-attach-data"
           attachLabel="Attach data file"
           composerClassName="ns-ai-v3-prompt"
-          disabled={!instruction.trim() || isSubmitting || attachmentBusy || !providerReady}
+          disabled={
+            !instruction.trim() ||
+            isSubmitting ||
+            approvalBusy ||
+            attachmentBusy ||
+            submissionPreparing ||
+            !providerReady
+          }
           effort={providerEffort}
           effortLabel="Reasoning effort"
           effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
@@ -1311,10 +1532,11 @@ export function AiInspector<CommandId extends string = string>({
           modelLabel="Agent model"
           modelTestId="ai-model-select"
           onAttachmentError={setAttachmentError}
+          onAttachmentsChange={clearExternalConsent}
           onEffortChange={(effort) => {
             setProviderEffort(effort);
             window.localStorage.setItem('nodeslide.agent-effort', effort);
-            setProviderConsent(false);
+            clearExternalConsent();
           }}
           onModelChange={chooseProviderModel}
           onSubmit={({ text, files }) => submit(text, files)}
@@ -1322,14 +1544,17 @@ export function AiInspector<CommandId extends string = string>({
           onTextareaSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
           onTextChange={updateInstruction}
           placeholder={
-            commentContext
-              ? 'Address this review comment without resolving it...'
-              : scopeChoice === 'elements'
-                ? 'Make this feel more decisive...'
-                : 'Turn this into a crisp executive story...'
+            compactReviewComposer
+              ? 'Ask a follow-up or request a revision...'
+              : commentContext
+                ? 'Address this review comment without resolving it...'
+                : scopeChoice === 'elements'
+                  ? 'Make this feel more decisive...'
+                  : 'Turn this into a crisp executive story...'
           }
           session={composerSession}
-          status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
+          interactionDisabled={approvalControlLocked}
+          status={isSubmitting || attachmentBusy || submissionPreparing ? 'submitted' : 'ready'}
           submitLabel="Propose edit"
           submitContent={<span className="ns-ai-submit-label">Propose</span>}
           submitTestId="ai-submit"
@@ -1338,6 +1563,7 @@ export function AiInspector<CommandId extends string = string>({
               aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
               aria-pressed={composerExpanded}
               className="ns-ai-v3-expand-composer"
+              disabled={approvalControlLocked}
               onClick={() => setComposerExpanded((expanded) => !expanded)}
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
@@ -1354,13 +1580,14 @@ export function AiInspector<CommandId extends string = string>({
           textareaId={composerId}
           textareaLabel="AI instruction"
           textareaRef={textareaRef}
-          textareaRows={composerExpanded ? 9 : 3}
+          textareaRows={compactReviewComposer ? 1 : composerExpanded ? 9 : 3}
           tools={
             <>
               <PromptInputButton
                 aria-label="Connect BYOK model or coding agent"
                 className="ns-ai-tool-button"
                 data-testid="ai-connect-agent"
+                disabled={approvalControlLocked}
                 onClick={() => setConnectionsOpen(true)}
                 title="Connect BYOK model or coding agent"
               >
@@ -1373,9 +1600,10 @@ export function AiInspector<CommandId extends string = string>({
                   className="ns-ai-tool-button"
                   aria-pressed={webResearch}
                   data-testid="ai-web-research-toggle"
+                  disabled={approvalControlLocked}
                   onClick={() => {
                     setWebResearch((enabled) => !enabled);
-                    setWebResearchConsent(false);
+                    clearExternalConsent();
                   }}
                   title="Search the web and persist source snapshots before planning"
                   variant={webResearch ? 'default' : 'ghost'}
@@ -1390,6 +1618,7 @@ export function AiInspector<CommandId extends string = string>({
                   className="ns-ai-tool-button"
                   aria-pressed={useMemoryForRun}
                   data-testid="ai-memory"
+                  disabled={approvalControlLocked}
                   onClick={() => setMemoryOpen(true)}
                   title="Manage durable deck memory"
                   variant={useMemoryForRun ? 'default' : 'ghost'}
@@ -1404,7 +1633,7 @@ export function AiInspector<CommandId extends string = string>({
               <PromptInputButton
                 aria-label="Add read context reference"
                 className="ns-ai-tool-button ns-ai-tool-context"
-                disabled={references.length === 0}
+                disabled={approvalControlLocked || references.length === 0}
                 onClick={() => openTokenMenu('@')}
                 title="Add read context"
               >
@@ -1414,6 +1643,7 @@ export function AiInspector<CommandId extends string = string>({
               <PromptInputButton
                 aria-label="Add command"
                 className="ns-ai-tool-button ns-ai-tool-command"
+                disabled={approvalControlLocked}
                 onClick={() => openTokenMenu('/')}
                 title="Add command"
               >
@@ -1430,8 +1660,13 @@ export function AiInspector<CommandId extends string = string>({
               <label className={providerConsent ? 'is-ready' : ''}>
                 <input
                   type="checkbox"
-                  checked={providerConsent}
-                  onChange={(event) => setProviderConsent(event.target.checked)}
+                  checked={providerConsent !== null}
+                  disabled={approvalControlLocked}
+                  onChange={(event) =>
+                    setProviderConsent(
+                      event.target.checked ? aiProviderConsentGrant(providerMode) : null,
+                    )
+                  }
                   data-testid="ai-provider-consent"
                 />
                 <span>
@@ -1449,8 +1684,13 @@ export function AiInspector<CommandId extends string = string>({
               <label className={webResearchConsent ? 'is-ready' : ''}>
                 <input
                   type="checkbox"
-                  checked={webResearchConsent}
-                  onChange={(event) => setWebResearchConsent(event.target.checked)}
+                  checked={webResearchConsent !== null}
+                  disabled={approvalControlLocked}
+                  onChange={(event) =>
+                    setWebResearchConsent(
+                      event.target.checked ? NODESLIDE_WEB_RESEARCH_CONSENT : null,
+                    )
+                  }
                   data-testid="ai-web-research-consent"
                 />
                 <span>
@@ -1482,6 +1722,7 @@ export function AiInspector<CommandId extends string = string>({
                 id={`${menuId}-option-${index}`}
                 type="button"
                 role="menuitem"
+                disabled={approvalControlLocked}
                 className={menuIndex === index ? 'is-active' : ''}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseReference(reference)}
@@ -1501,6 +1742,7 @@ export function AiInspector<CommandId extends string = string>({
                   id={`${menuId}-option-${index}`}
                   type="button"
                   role="menuitem"
+                  disabled={approvalControlLocked}
                   className={menuIndex === index ? 'is-active' : ''}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => chooseCommand(command)}
@@ -1919,38 +2161,70 @@ function ProposalCard({
 
 export function createAiProviderRequest(
   mode: AiProviderMode,
-  consentGranted: boolean,
+  providerConsent: AiReviewProviderConsent | null,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
   effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
+  const expectedConsent =
+    mode === 'nebius' ? NODESLIDE_NEBIUS_REVIEW_CONSENT : NODESLIDE_OPENROUTER_REVIEW_CONSENT;
+  if (
+    providerConsent === null ||
+    providerConsent !== expectedConsent ||
+    !nodeSlideModelSupportsReasoningEffort(model, effort)
+  ) {
+    return null;
+  }
   return {
     providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent:
-      mode === 'nebius' ? NODESLIDE_NEBIUS_REVIEW_CONSENT : NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+    providerConsent,
   };
 }
 
 export function createAiVariationProviderRequest(
   mode: AiProviderMode,
-  consentGranted: boolean,
+  providerConsent: AiVariationProviderConsent | null,
   model: NodeSlideAgentModelId = NODESLIDE_DEFAULT_AGENT_MODEL,
   effort: NodeSlideReasoningEffort = NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
 ): AiVariationProviderRequest | null {
   if (mode === 'deterministic') return { providerMode: 'deterministic' };
-  if (!consentGranted || !nodeSlideModelSupportsReasoningEffort(model, effort)) return null;
+  const expectedConsent =
+    mode === 'nebius'
+      ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
+      : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT;
+  if (
+    providerConsent === null ||
+    providerConsent !== expectedConsent ||
+    !nodeSlideModelSupportsReasoningEffort(model, effort)
+  ) {
+    return null;
+  }
   return {
     providerMode: mode,
     providerModel: model,
     providerEffort: effort,
-    providerConsent:
-      mode === 'nebius'
-        ? NODESLIDE_NEBIUS_VARIATIONS_CONSENT
-        : NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+    providerConsent,
   };
+}
+
+function aiProviderConsentGrant(mode: AiProviderMode): AiProviderConsentGrant | null {
+  if (mode === 'nebius') {
+    return {
+      providerMode: mode,
+      reviewConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
+      variationConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
+    };
+  }
+  if (mode === 'openrouter_free') {
+    return {
+      providerMode: mode,
+      reviewConsent: NODESLIDE_OPENROUTER_REVIEW_CONSENT,
+      variationConsent: NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
+    };
+  }
+  return null;
 }
 
 function providerNameForMode(mode: AiProviderMode): string {

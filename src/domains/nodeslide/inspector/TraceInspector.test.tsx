@@ -666,6 +666,27 @@ describe('compact durable telemetry projection', () => {
     expect(html).toContain('Chain of custody and countersigned receipt');
   });
 
+  it('uses the durable run clock for the masthead instead of a shorter legacy trace clock', () => {
+    const completedRun: NodeSlideAgentRun = {
+      ...run,
+      status: 'completed',
+      traceId: traceFullGen.id,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_035_600,
+      completedAt: 1_700_000_035_600,
+    };
+    const html = renderToStaticMarkup(
+      <TraceInspector
+        traces={[{ ...traceFullGen, createdAt: 1000, completedAt: 2000 }]}
+        validations={[validationLive]}
+        agentRuns={[completedRun]}
+      />,
+    );
+
+    expect(html).toContain('Run time');
+    expect(html).toContain('36s');
+  });
+
   it('shows the exact multi-slide write scope on the selected run', () => {
     const multiSlidePatch = {
       ...patchLive,

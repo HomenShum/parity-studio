@@ -15,6 +15,7 @@ import {
   type NodeSlideDataAttachment,
   normalizeNodeSlideDataAttachment,
 } from '../../shared/nodeslideAttachments';
+import { nodeSlideRequestedSlideCountIssue } from '../../shared/nodeslideSlideCount';
 
 export const NODESLIDE_CREATE_DECK_LIMITS = {
   title: { maxCharacters: 80, maxBytes: 240 },
@@ -115,6 +116,11 @@ export function validateNodeSlideCreateDeckFields(
       'invalid_request',
       'successCriteria exceeds the private-preview total size limit.',
     );
+  }
+
+  const slideCountIssue = nodeSlideRequestedSlideCountIssue(prompt, ...successCriteria);
+  if (slideCountIssue) {
+    throw nodeslideCreatePublicError('invalid_request', slideCountIssue);
   }
 
   return {

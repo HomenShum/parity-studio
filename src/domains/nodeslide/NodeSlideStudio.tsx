@@ -1,15 +1,7 @@
 import { useAction, useConvex, useMutation, useQuery } from 'convex/react';
 import type { DefaultFunctionArgs, FunctionReference } from 'convex/server';
-import {
-  AlertCircle,
-  CheckCircle2,
-  FolderOpen,
-  LoaderCircle,
-  RefreshCw,
-  ShieldAlert,
-  X,
-} from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LoaderCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
 import type {
   AgentEditRequest,
@@ -34,7 +26,16 @@ import type {
   Slide,
   SlideElement,
 } from '../../../shared/nodeslide';
-import { NODESLIDE_SCOPE_SLIDE_LIMIT, operationElementIds } from '../../../shared/nodeslide';
+import { operationElementIds } from '../../../shared/nodeslide';
+import {
+  NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+  NODESLIDE_DELEGATION_MAX_OPERATIONS,
+  NODESLIDE_DELEGATION_MAX_USES,
+  type NodeSlideDelegationAcceptanceReceipt,
+  type NodeSlideDelegationGrant,
+  type NodeSlideDelegationIssueReceipt,
+  nodeSlideDelegationProposalViolations,
+} from '../../../shared/nodeslideDelegation';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -45,23 +46,17 @@ import {
   getOrCreateSessionId,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
-  removeDeckOwnerAccessKey,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
-import { DeleteDeckDialog } from './components/DeleteDeckDialog';
 import {
   type EditorCandidateReceipt,
   type EditorCanvasMode,
   EditorCanvasModes,
   type EditorCompareMode,
 } from './components/EditorCanvasModes';
-import { NodeSlideConnectionsDialog } from './components/NodeSlideConnectionsDialog';
 import { NodeSlideLanding } from './components/NodeSlideLanding';
-import {
-  type OwnerCapabilityRecovery,
-  OwnerCapabilityRecoveryDialog,
-} from './components/OwnerCapabilityRecoveryDialog';
+import type { OwnerCapabilityRecovery } from './components/OwnerCapabilityRecoveryDialog';
 import { PresenterView } from './components/PresenterView';
 import {
   type CreateDeckAdmissionRequest,
@@ -72,13 +67,17 @@ import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
 import {
   type LayerZOrderAction,
-  SlideNavigator,
   type SlideNavigatorTab,
   normalizeSelectedSlideIds,
 } from './components/SlideNavigator';
 import { StoryArcOverview } from './components/StoryArcOverview';
 import { type StudioThemeMode, StudioToolbar } from './components/StudioToolbar';
 import { shouldRevealCandidateCanvas } from './components/editorShellResponsive';
+import { LoadingScreen, RecoveryScreen, Toast } from './components/shell/EditorFeedback';
+import { EditorNavigator } from './components/shell/EditorNavigator';
+import { EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
+import { elementScope } from './components/shell/editorActions';
+import { withNodeSlideDelegationDeadline } from './delegationClient';
 import {
   type EditorRequestToken,
   type WorkspaceReceiptMarker,
@@ -101,8 +100,18 @@ import type {
   AiVariationRequest,
 } from './inspector/AiInspector';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
+import {
+  type AgentSessionApprovalMode,
+  type AgentSessionJobReceipt,
+  AgentSessionProvider,
+  agentSessionApprovalForDeck,
+  agentSessionRequestFingerprint,
+  isAgentSessionEditAuthorityLocked,
+  useAgentSession,
+} from './session';
 import { extractPptxSignature } from './signature/index';
 import {
   NODESLIDE_TASTE_PACKS,
@@ -122,6 +131,8 @@ import {
 } from './slidelang/index';
 import './nodeslide.css';
 import './nodeslideV3.css';
+
+export { DeckDeletionAction, EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
 
 type ConvexArgs<Args> = Args & DefaultFunctionArgs;
 type PublicQuery<Args, Result> = FunctionReference<'query', 'public', ConvexArgs<Args>, Result>;
@@ -175,6 +186,53 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideDelegation: {
+    issueGrant: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        clientKind: 'browser' | 'codex' | 'claude';
+        maxOperations: number;
+        maxUses: number;
+        expiresAt: number;
+      },
+      NodeSlideDelegationIssueReceipt
+    >;
+    revokeGrant: PublicMutation<
+      { deckId: string; ownerAccessKey: string; grantId: string },
+      NodeSlideDelegationGrant
+    >;
+    listGrants: PublicQuery<{ deckId: string; ownerAccessKey: string }, NodeSlideDelegationGrant[]>;
+    acceptValidatedProposalWithGrant: PublicMutation<
+      {
+        deckId: string;
+        token: string;
+        patchId: string;
+        expectedCandidateDigest: string;
+      },
+      NodeSlideDelegationAcceptanceReceipt
+    >;
+  };
+  nodeslideJobs: {
+    startCreateDeck: PublicMutation<
+      CreateDeckAdmissionRequest & { ownerAccessKey: string; idempotencyKey: string },
+      AgentSessionJobReceipt
+    >;
+    startEditProposal: PublicMutation<
+      Omit<AgentEditRequest, 'idempotencyKey'> & {
+        clientSessionId: string;
+        ownerAccessKey: string;
+        idempotencyKey: string;
+      },
+      AgentSessionJobReceipt
+    >;
+    get: PublicQuery<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
+    cancel: PublicMutation<
+      { jobId: string; ownerAccessKey: string },
+      AgentSessionJobReceipt | null
+    >;
+    retry: PublicMutation<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
+  };
   nodeslide: {
     getWorkspace: PublicQuery<
       { deckId: string; ownerAccessKey: string },
@@ -432,121 +490,31 @@ function mergeAgentTelemetryPages(
   };
 }
 
-type DeleteDeckMutation = (args: {
-  deckId: string;
-  ownerAccessKey: string;
-}) => Promise<unknown>;
-
-interface DeckDeletionActionProps {
-  open: boolean;
-  deckId: string;
-  deckTitle: string;
-  ownerAccessKey: string;
-  deleteDeck: DeleteDeckMutation;
-  onClose: () => void;
-  removeOwnerCapability?: (deckId: string) => unknown;
-  navigate?: (path: string) => void;
-}
-
-/** Owns the fail-open delete flow while the existing confirmation dialog owns exact-title input. */
-export function DeckDeletionAction({ open, ...props }: DeckDeletionActionProps) {
-  if (!open) return null;
-  return <OpenDeckDeletionAction key={props.deckId} {...props} />;
-}
-
-function OpenDeckDeletionAction({
-  deckId,
-  deckTitle,
-  ownerAccessKey,
-  deleteDeck,
-  onClose,
-  removeOwnerCapability = removeDeckOwnerAccessKey,
-  navigate = (path) => window.location.assign(path),
-}: Omit<DeckDeletionActionProps, 'open'>) {
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const confirmDeletion = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteDeck({ deckId, ownerAccessKey });
-      removeOwnerCapability(deckId);
-      navigate('/');
-    } catch (error) {
-      setDeleteError(errorMessage(error, 'Deck could not be deleted. Try again.'));
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <DeleteDeckDialog
-      open
-      deckTitle={deckTitle}
-      deleting={deleting}
-      error={deleteError}
-      onCancel={onClose}
-      onConfirm={() => void confirmDeletion()}
-    />
-  );
-}
-
-interface EditorProjectDialogsProps {
-  deckId: string;
-  deckTitle: string;
-  ownerAccessKey: string;
-  connectionsOpen: boolean;
-  deleteDeckOpen: boolean;
-  projectsOpen: boolean;
-  ownerRecovery: OwnerCapabilityRecovery | null;
-  deleteDeck: DeleteDeckMutation;
-  onCloseConnections: () => void;
-  onCloseDeleteDeck: () => void;
-  onCloseRecovery: () => void;
-}
-
-/** Keeps editor project actions bound to the active deck instead of a stale URL parameter. */
-export function EditorProjectDialogs({
-  deckId,
-  deckTitle,
-  ownerAccessKey,
-  connectionsOpen,
-  deleteDeckOpen,
-  projectsOpen,
-  ownerRecovery,
-  deleteDeck,
-  onCloseConnections,
-  onCloseDeleteDeck,
-  onCloseRecovery,
-}: EditorProjectDialogsProps) {
-  return (
-    <>
-      <NodeSlideConnectionsDialog
-        open={connectionsOpen}
-        onClose={onCloseConnections}
-        deckId={deckId}
-      />
-      <OwnerCapabilityRecoveryDialog
-        open={Boolean(ownerRecovery) && !projectsOpen}
-        recovery={ownerRecovery}
-        onClose={onCloseRecovery}
-      />
-      <DeckDeletionAction
-        open={deleteDeckOpen}
-        deckId={deckId}
-        deckTitle={deckTitle}
-        ownerAccessKey={ownerAccessKey}
-        deleteDeck={deleteDeck}
-        onClose={onCloseDeleteDeck}
-      />
-    </>
-  );
-}
-
 export function NodeSlideStudio() {
-  const convex = useConvex();
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
+  return (
+    <AgentSessionProvider clientSessionId={clientSessionId}>
+      <NodeSlideStudioSession clientSessionId={clientSessionId} />
+    </AgentSessionProvider>
+  );
+}
+
+function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }) {
+  const convex = useConvex();
+  const {
+    state: agentSessionState,
+    setSurface: setAgentSessionSurface,
+    updateControls: updateAgentSessionControls,
+    prepareJob: prepareAgentSessionJob,
+    attachJob: attachAgentSessionJob,
+    reconcileJob: reconcileAgentSessionJob,
+    failPreparedJob: failPreparedAgentSessionJob,
+    failJob: failAgentSessionJob,
+    archiveJob: archiveAgentSessionJob,
+    resetTransientConsent: resetAgentSessionConsent,
+    installApprovalGrant,
+    clearApprovalGrant,
+  } = useAgentSession();
   const requestedDeck = useMemo(() => new URLSearchParams(window.location.search).get('deck'), []);
   const requestedShare = useMemo(
     () => new URLSearchParams(window.location.search).get('share'),
@@ -589,7 +557,7 @@ export function NodeSlideStudio() {
     () => window.innerWidth >= 700 && window.innerWidth < 1100,
   );
   const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth < 1100);
-  const [inspectorWidth, setInspectorWidth] = useState(340);
+  const [inspectorWidth, setInspectorWidth] = useState(400);
   const [zoom, setZoom] = useState(() => {
     if (window.innerWidth < 700) return 40;
     if (window.innerWidth < 1100) return 55;
@@ -605,7 +573,11 @@ export function NodeSlideStudio() {
   const [deleteDeckOpen, setDeleteDeckOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(() =>
+    isAgentSessionEditAuthorityLocked(agentSessionState.activeJob),
+  );
+  const [delegationBusy, setDelegationBusy] = useState(false);
+  const [revokingDelegationGrantId, setRevokingDelegationGrantId] = useState<string | null>(null);
   const [variationGenerating, setVariationGenerating] = useState(false);
   const [variationDecisionBusy, setVariationDecisionBusy] = useState(false);
   const [tastePackBusy, setTastePackBusy] = useState(false);
@@ -613,7 +585,10 @@ export function NodeSlideStudio() {
   const [previewedVariation, setPreviewedVariation] = useState<SlideVariation | null>(null);
   const [previewedSignatureProfile, setPreviewedSignatureProfile] =
     useState<SignatureProfile | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => {
+    const job = agentSessionState.activeJob;
+    return job?.kind === 'create_deck' && (job.status === 'queued' || job.status === 'running');
+  });
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -636,11 +611,86 @@ export function NodeSlideStudio() {
   const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
   const localCommitVersionsRef = useRef(new Set<number>());
   const acceptingPatchIdsRef = useRef(new Set<string>());
+  const delegationRevocationTimerRef = useRef<number | null>(null);
+  const blockedDelegationGrantIdsRef = useRef(new Set<string>());
+  const handledCreateJobIdsRef = useRef(new Set<string>());
+  const handledEditJobIdsRef = useRef(new Set<string>());
+  const resolvingEditJobIdsRef = useRef(new Set<string>());
+  const restoredUnrecoverableEditJobKeyRef = useRef(
+    agentSessionState.activeJob?.kind === 'edit_proposal' &&
+      isAgentSessionEditAuthorityLocked(agentSessionState.activeJob) &&
+      !agentSessionState.activeJob.jobId
+      ? agentSessionState.activeJob.idempotencyKey
+      : null,
+  );
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
   activeDeckIdRef.current = activeDeckId;
   ownerAccessKeyRef.current = ownerAccessKey;
+
+  const recordSuccessfulCommit = useCallback(
+    (predecessor: DeckVersion | undefined, resultingVersion: number) => {
+      localCommitVersionsRef.current.add(resultingVersion);
+      if (!predecessor) return;
+      const nextUndoStack = appendDistinctHistoryVersion(undoStackRef.current, predecessor.id);
+      undoStackRef.current = nextUndoStack;
+      redoStackRef.current = [];
+      setUndoStack(nextUndoStack);
+      setRedoStack([]);
+    },
+    [],
+  );
+
+  const activeSessionJob = agentSessionState.activeJob;
+  const authorityChangeBusy =
+    agentBusy ||
+    isAgentSessionEditAuthorityLocked(activeSessionJob) ||
+    delegationBusy ||
+    Boolean(revokingDelegationGrantId);
+  const releaseUnrecoverableEditJob = useCallback(
+    (message: string) => {
+      failAgentSessionJob(message);
+      archiveAgentSessionJob();
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Resume the durable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+    },
+    [archiveAgentSessionJob, failAgentSessionJob],
+  );
+  const storedApproval = agentSessionState.controls.approval;
+  const activeApproval =
+    storedApproval.mode === 'auto_apply' && storedApproval.grantId === revokingDelegationGrantId
+      ? ({ mode: 'review' } as const)
+      : activeDeckId
+        ? agentSessionApprovalForDeck(agentSessionState, activeDeckId)
+        : ({ mode: 'review' } as const);
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (approval.mode !== 'auto_apply') return;
+    const remainingMs = approval.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearApprovalGrant();
+      setToast({
+        kind: 'error',
+        message: 'Auto-apply expired. Review mode is active again.',
+      });
+      return;
+    }
+    const expiryTimer = window.setTimeout(() => {
+      clearApprovalGrant();
+      setToast({
+        kind: 'error',
+        message: 'Auto-apply expired. Review mode is active again.',
+      });
+    }, remainingMs);
+    return () => window.clearTimeout(expiryTimer);
+  }, [agentSessionState.controls.approval, clearApprovalGrant]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -670,6 +720,127 @@ export function NodeSlideStudio() {
   const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
+  const issueDelegationGrant = useMutation(nodeslideApi.nodeslideDelegation.issueGrant);
+  const revokeDelegationGrant = useMutation(nodeslideApi.nodeslideDelegation.revokeGrant);
+  const acceptPatchWithDelegation = useMutation(
+    nodeslideApi.nodeslideDelegation.acceptValidatedProposalWithGrant,
+  );
+  const queueDelegationRevocation = useCallback(
+    (
+      approval: Extract<typeof agentSessionState.controls.approval, { mode: 'auto_apply' }>,
+      approvalOwnerAccessKey: string,
+    ) => {
+      if (delegationRevocationTimerRef.current !== null) {
+        window.clearTimeout(delegationRevocationTimerRef.current);
+        delegationRevocationTimerRef.current = null;
+      }
+      blockedDelegationGrantIdsRef.current.add(approval.grantId);
+      clearApprovalGrant();
+      setRevokingDelegationGrantId(approval.grantId);
+      let attempts = 0;
+      const attempt = async () => {
+        attempts += 1;
+        try {
+          await withNodeSlideDelegationDeadline(
+            revokeDelegationGrant({
+              deckId: approval.deckId,
+              ownerAccessKey: approvalOwnerAccessKey,
+              grantId: approval.grantId,
+            }),
+            'Delegation revocation',
+          );
+          setRevokingDelegationGrantId(null);
+        } catch {
+          if (Date.now() >= approval.expiresAt || attempts >= 3) {
+            setRevokingDelegationGrantId(null);
+            setToast({
+              kind: 'error',
+              message:
+                'Review mode is active locally, but server revocation could not be confirmed.',
+            });
+            return;
+          }
+          delegationRevocationTimerRef.current = window.setTimeout(attempt, attempts * 5_000);
+        }
+      };
+      void attempt();
+    },
+    [clearApprovalGrant, revokeDelegationGrant],
+  );
+  useEffect(
+    () => () => {
+      if (delegationRevocationTimerRef.current !== null) {
+        window.clearTimeout(delegationRevocationTimerRef.current);
+      }
+    },
+    [],
+  );
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (
+      approval.mode !== 'auto_apply' ||
+      approval.deckId === activeDeckId ||
+      approval.grantId === revokingDelegationGrantId
+    ) {
+      return;
+    }
+    const approvalOwnerAccessKey = getDeckOwnerAccessKey(approval.deckId);
+    if (!approvalOwnerAccessKey) {
+      clearApprovalGrant();
+      return;
+    }
+    queueDelegationRevocation(approval, approvalOwnerAccessKey);
+  }, [
+    activeDeckId,
+    agentSessionState.controls.approval,
+    clearApprovalGrant,
+    queueDelegationRevocation,
+    revokingDelegationGrantId,
+  ]);
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (approval.mode !== 'auto_apply' || approval.grantId === revokingDelegationGrantId) {
+      return;
+    }
+    const approvalOwnerAccessKey = getDeckOwnerAccessKey(approval.deckId);
+    if (!approvalOwnerAccessKey) return;
+    let cancelled = false;
+    const reconcile = async () => {
+      try {
+        const grants = await convex.query(nodeslideApi.nodeslideDelegation.listGrants, {
+          deckId: approval.deckId,
+          ownerAccessKey: approvalOwnerAccessKey,
+        });
+        if (cancelled) return;
+        const current = grants.find((grant) => grant.id === approval.grantId);
+        if (current?.status === 'active') return;
+        clearApprovalGrant();
+        setToast({
+          kind: 'error',
+          message: 'Auto-apply is no longer active. Review mode has been restored.',
+        });
+      } catch {
+        if (cancelled) return;
+        queueDelegationRevocation(approval, approvalOwnerAccessKey);
+        setToast({
+          kind: 'error',
+          message: 'Auto-apply could not be verified. Review mode has been restored.',
+        });
+      }
+    };
+    void reconcile();
+    const interval = window.setInterval(() => void reconcile(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    agentSessionState.controls.approval,
+    clearApprovalGrant,
+    convex,
+    queueDelegationRevocation,
+    revokingDelegationGrantId,
+  ]);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
   const addComment = useMutation(nodeslideApi.nodeslide.addComment);
   const replyComment = useMutation(nodeslideApi.nodeslide.replyComment);
@@ -685,8 +856,10 @@ export function NodeSlideStudio() {
   const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
   const updateAgentMemory = useMutation(nodeslideApi.nodeslideMemory.update);
   const removeAgentMemory = useMutation(nodeslideApi.nodeslideMemory.remove);
-  const createDeckFromBrief = useAction(nodeslideApi.nodeslideAgent.createDeckFromBrief);
-  const proposeEdit = useAction(nodeslideApi.nodeslideAgent.proposeEdit);
+  const startCreateDeckJob = useMutation(nodeslideApi.nodeslideJobs.startCreateDeck);
+  const startEditProposalJob = useMutation(nodeslideApi.nodeslideJobs.startEditProposal);
+  const cancelDurableJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
+  const retryDurableJob = useMutation(nodeslideApi.nodeslideJobs.retry);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
   const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
   const rejectVariation = useMutation(nodeslideApi.nodeslideVariations.reject);
@@ -726,6 +899,34 @@ export function NodeSlideStudio() {
     nodeslideApi.nodeslide.listDecks,
     knownAccess.length > 0 ? { access: knownAccess } : 'skip',
   );
+  const durableSessionJob = useQuery(
+    nodeslideApi.nodeslideJobs.get,
+    activeSessionJob?.jobId
+      ? {
+          jobId: activeSessionJob.jobId,
+          ownerAccessKey: activeSessionJob.ownerAccessKey,
+        }
+      : 'skip',
+  );
+  useEffect(() => {
+    const job = activeSessionJob;
+    if (!job || job.kind !== 'edit_proposal') return;
+    if (restoredUnrecoverableEditJobKeyRef.current === job.idempotencyKey && !job.jobId) {
+      restoredUnrecoverableEditJobKeyRef.current = null;
+      releaseUnrecoverableEditJob(
+        'The restored edit did not have a durable job receipt. Submit the request again.',
+      );
+      return;
+    }
+    if (job.jobId && durableSessionJob === null) {
+      releaseUnrecoverableEditJob(
+        'The restored edit job is no longer available. Submit the request again.',
+      );
+    }
+  }, [activeSessionJob, durableSessionJob, releaseUnrecoverableEditJob]);
+  useEffect(() => {
+    if (durableSessionJob) reconcileAgentSessionJob(durableSessionJob);
+  }, [durableSessionJob, reconcileAgentSessionJob]);
   const variationRows = useQuery(
     nodeslideApi.nodeslideVariations.list,
     activeDeckId && ownerAccessKey && activeSlideId
@@ -753,6 +954,13 @@ export function NodeSlideStudio() {
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const latestAgentRunId = agentRuns?.[0]?.id;
+  const latestAgentMemoryIds = agentRuns?.[0]?.memoryIds;
+  useEffect(() => {
+    if (!latestAgentRunId) return;
+    updateAgentSessionControls({
+      memory: { references: latestAgentMemoryIds ?? [] },
+    });
+  }, [latestAgentMemoryIds, latestAgentRunId, updateAgentSessionControls]);
   const selectedTelemetryRunId =
     traceTelemetryRunId && agentRuns?.some((run) => run.id === traceTelemetryRunId)
       ? traceTelemetryRunId
@@ -901,6 +1109,355 @@ export function NodeSlideStudio() {
     },
     [],
   );
+
+  useEffect(() => {
+    setAgentSessionSurface(workspace ? 'editor' : projectsOpen ? 'create' : 'landing');
+  }, [projectsOpen, setAgentSessionSurface, workspace]);
+
+  useEffect(() => {
+    if (!durableSessionJob || durableSessionJob.kind !== 'create_deck') return;
+    if (durableSessionJob.status === 'queued' || durableSessionJob.status === 'running') {
+      handledCreateJobIdsRef.current.delete(durableSessionJob.jobId);
+      setCreating(true);
+      setProjectError(null);
+      return;
+    }
+    if (handledCreateJobIdsRef.current.has(durableSessionJob.jobId)) return;
+    if (durableSessionJob.status === 'failed') {
+      handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
+      const message = durableSessionJob.error ?? 'The durable deck job failed.';
+      setCreating(false);
+      setProjectError(message);
+      setToast({ kind: 'error', message });
+      return;
+    }
+    if (durableSessionJob.status === 'cancelled') {
+      handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
+      setCreating(false);
+      setProjectError(null);
+      setToast({ kind: 'success', message: 'Deck creation cancelled before persistence.' });
+      archiveAgentSessionJob();
+      return;
+    }
+    if (durableSessionJob.status !== 'succeeded' || !durableSessionJob.resultDeckId) return;
+    const ownerCapability = activeSessionJob?.ownerAccessKey;
+    if (!ownerCapability) return;
+    handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
+    void convex
+      .query(nodeslideApi.nodeslide.getWorkspace, {
+        deckId: durableSessionJob.resultDeckId,
+        ownerAccessKey: ownerCapability,
+      })
+      .then((createdWorkspace) => {
+        if (!createdWorkspace) throw new Error('The completed deck could not be resumed.');
+        setCreating(false);
+        setProjectError(null);
+        const accessDurable = installWorkspace(createdWorkspace, ownerCapability, false, true);
+        setProjectsOpen(false);
+        if (accessDurable) {
+          setToast({
+            kind: 'success',
+            message: 'Deck created and resumed from its durable job.',
+          });
+          archiveAgentSessionJob();
+        }
+      })
+      .catch((error: unknown) => {
+        const message = errorMessage(error, 'The completed deck could not be resumed.');
+        setCreating(false);
+        setProjectError(message);
+        setToast({ kind: 'error', message });
+      });
+  }, [
+    activeSessionJob?.ownerAccessKey,
+    archiveAgentSessionJob,
+    convex,
+    durableSessionJob,
+    installWorkspace,
+  ]);
+
+  useEffect(() => {
+    const receipt = durableSessionJob;
+    if (!receipt || receipt.kind !== 'edit_proposal') return;
+    const jobId = receipt.jobId;
+    const targetDeckId = activeSessionJob?.targetDeckId;
+    const jobOwnerAccessKey = activeSessionJob?.ownerAccessKey;
+
+    if (receipt.status === 'queued' || receipt.status === 'running') {
+      handledEditJobIdsRef.current.delete(jobId);
+      resolvingEditJobIdsRef.current.delete(jobId);
+      setAgentBusy(true);
+      setAiAgentActivity((current) =>
+        current?.status === 'running'
+          ? current
+          : {
+              status: 'running',
+              elapsedMs: 0,
+              ask: 'Preparing a durable, reviewable slide proposal.',
+            },
+      );
+      return;
+    }
+    if (handledEditJobIdsRef.current.has(jobId)) return;
+
+    if (receipt.status === 'failed') {
+      handledEditJobIdsRef.current.add(jobId);
+      const message = receipt.error ?? 'The durable edit proposal job failed.';
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+      return;
+    }
+
+    if (receipt.status === 'cancelled') {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'cancelled',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message: 'Run cancelled. No deck changes were applied.',
+      });
+      setToast({ kind: 'success', message: 'Run cancelled. No deck changes were applied.' });
+      archiveAgentSessionJob();
+      return;
+    }
+
+    if (receipt.status !== 'awaiting_review') return;
+    setAgentBusy(true);
+    if (
+      !targetDeckId ||
+      !jobOwnerAccessKey ||
+      !receipt.resultPatchId ||
+      !receipt.resultCandidateDigest
+    ) {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      const message = 'The durable proposal is missing its deck, patch, or candidate binding.';
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Prepare a reviewable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+      archiveAgentSessionJob();
+      return;
+    }
+    const resultPatchId = receipt.resultPatchId;
+    const resultCandidateDigest = receipt.resultCandidateDigest;
+
+    if (targetDeckId !== activeDeckIdRef.current) {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      setAiAgentActivity(null);
+      setToast({
+        kind: 'success',
+        message: 'The proposal is ready in its original deck and remains unchanged until review.',
+      });
+      archiveAgentSessionJob();
+      return;
+    }
+    if (resolvingEditJobIdsRef.current.has(jobId)) return;
+    resolvingEditJobIdsRef.current.add(jobId);
+
+    void convex
+      .query(nodeslideApi.nodeslide.getWorkspace, {
+        deckId: targetDeckId,
+        ownerAccessKey: jobOwnerAccessKey,
+      })
+      .then(async (authoritativeWorkspace) => {
+        if (!authoritativeWorkspace) {
+          throw new Error('The completed proposal workspace could not be resumed.');
+        }
+        if (!editorRequestGateRef.current?.isDeckCurrent(targetDeckId)) {
+          throw new Error('The active deck changed before the proposal could be resumed.');
+        }
+        const patch = authoritativeWorkspace.patches.find(
+          (candidate) => candidate.id === resultPatchId,
+        );
+        if (!patch || patch.candidateDigest !== resultCandidateDigest) {
+          throw new Error('The durable proposal candidate binding did not match the workspace.');
+        }
+        if (
+          !editorCandidateCanAccept(
+            editorCandidateReceiptForPatch(patch, authoritativeWorkspace.deck),
+          )
+        ) {
+          throw new Error(
+            'The durable proposal did not carry an exact successful validation receipt.',
+          );
+        }
+
+        const delegatedApproval = agentSessionApprovalForDeck(agentSessionState, targetDeckId);
+        let delegationFallback: string | null = null;
+        let delegationStoppedForReview = false;
+        if (
+          delegatedApproval.mode === 'auto_apply' &&
+          blockedDelegationGrantIdsRef.current.has(delegatedApproval.grantId)
+        ) {
+          delegationFallback = 'Auto-apply authority is no longer active for this run.';
+          delegationStoppedForReview = true;
+        } else if (delegatedApproval.mode === 'auto_apply') {
+          const [preflightViolation] = nodeSlideDelegationProposalViolations({
+            grant: delegatedApproval,
+            proposal: patch,
+          });
+          if (preflightViolation) {
+            delegationFallback = preflightViolation;
+            delegationStoppedForReview = true;
+          } else {
+            try {
+              const delegatedReceipt = await acceptPatchWithDelegation({
+                deckId: targetDeckId,
+                token: delegatedApproval.token,
+                patchId: patch.id,
+                expectedCandidateDigest: resultCandidateDigest,
+              });
+              if (delegatedReceipt.patch.status === 'stale') {
+                const staleWorkspace =
+                  delegatedReceipt.workspace ??
+                  (await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+                    deckId: targetDeckId,
+                    ownerAccessKey: jobOwnerAccessKey,
+                  }));
+                if (staleWorkspace) {
+                  installWorkspace(staleWorkspace, jobOwnerAccessKey);
+                }
+                queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+                setActiveInspectorTab('versions');
+                setInspectorCollapsed(false);
+                handledEditJobIdsRef.current.add(jobId);
+                setAgentBusy(false);
+                setAiAgentActivity(null);
+                setToast({
+                  kind: 'error',
+                  message:
+                    'Auto-apply paused because the proposal became stale. The newer deck was preserved.',
+                });
+                archiveAgentSessionJob();
+                return;
+              }
+              if (delegatedReceipt.patch.status !== 'accepted') {
+                throw new Error('Delegated acceptance completed without a commit receipt.');
+              }
+              let acceptedWorkspace = delegatedReceipt.workspace;
+              if (!acceptedWorkspace) {
+                acceptedWorkspace = await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+                  deckId: targetDeckId,
+                  ownerAccessKey: jobOwnerAccessKey,
+                });
+              }
+              const resultingDeckVersion = delegatedReceipt.patch.resultingDeckVersion;
+              if (
+                !acceptedWorkspace ||
+                resultingDeckVersion === undefined ||
+                acceptedWorkspace.deck.version < resultingDeckVersion
+              ) {
+                throw new Error(
+                  'Delegated acceptance completed without a durable version receipt.',
+                );
+              }
+              if (acceptedWorkspace.deck.version === resultingDeckVersion) {
+                recordSuccessfulCommit(
+                  authoritativePredecessorVersion(acceptedWorkspace),
+                  resultingDeckVersion,
+                );
+              }
+              installWorkspace(acceptedWorkspace, jobOwnerAccessKey);
+              setPreviewedPatchId(null);
+              setCanvasMode('edit');
+              if (patch.linkedCommentId) setAiCommentContext(null);
+              handledEditJobIdsRef.current.add(jobId);
+              setAgentBusy(false);
+              setAiAgentActivity(null);
+              const exhausted =
+                delegatedReceipt.delegation.useCount >= delegatedReceipt.delegation.maxUses;
+              if (exhausted) clearApprovalGrant();
+              setToast({
+                kind: 'success',
+                message: exhausted
+                  ? `Validated edit applied as deck v${acceptedWorkspace.deck.version}. Auto-apply reached its use limit, so review mode is active again.`
+                  : `Validated edit applied automatically as deck v${acceptedWorkspace.deck.version}. Undo remains available.`,
+              });
+              void recordPreferencePatch({
+                deckId: targetDeckId,
+                ownerAccessKey: jobOwnerAccessKey,
+                patchId: delegatedReceipt.patch.id,
+              })
+                .then(() =>
+                  runPreferenceEtl({
+                    deckId: targetDeckId,
+                    ownerAccessKey: jobOwnerAccessKey,
+                  }),
+                )
+                .catch(() => undefined);
+              archiveAgentSessionJob();
+              return;
+            } catch (error) {
+              queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+              delegationFallback = errorMessage(
+                error,
+                'The delegated grant could not apply this proposal.',
+              );
+            }
+          }
+        }
+
+        installWorkspace(authoritativeWorkspace, jobOwnerAccessKey);
+        setPreviewedVariation(null);
+        setPreviewedSignatureProfile(null);
+        setPreviewedPatchId(patch.id);
+        const firstAffectedSlideId =
+          'slideIds' in patch.scope ? patch.scope.slideIds[0] : undefined;
+        if (
+          firstAffectedSlideId &&
+          authoritativeWorkspace.deck.slideOrder.includes(firstAffectedSlideId)
+        ) {
+          selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+        }
+        setCanvasMode('compare');
+        if (shouldRevealCandidateCanvas(window.innerWidth)) setInspectorCollapsed(true);
+        handledEditJobIdsRef.current.add(jobId);
+        setAgentBusy(false);
+        setAiAgentActivity(null);
+        setToast({
+          kind: delegationFallback && !delegationStoppedForReview ? 'error' : 'success',
+          message: delegationStoppedForReview
+            ? `Review required: ${delegationFallback} The validated proposal remains unchanged until Accept.`
+            : delegationFallback
+              ? `Auto-apply paused: ${delegationFallback} Review this validated proposal before Accept.`
+              : 'Validated proposal resumed from its durable job. Review it before Accept.',
+        });
+        archiveAgentSessionJob();
+      })
+      .catch((error: unknown) => {
+        handledEditJobIdsRef.current.add(jobId);
+        const message = errorMessage(error, 'The durable proposal could not be resumed.');
+        releaseUnrecoverableEditJob(message);
+      })
+      .finally(() => resolvingEditJobIdsRef.current.delete(jobId));
+  }, [
+    activeSessionJob?.ownerAccessKey,
+    activeSessionJob?.targetDeckId,
+    acceptPatchWithDelegation,
+    agentSessionState,
+    archiveAgentSessionJob,
+    clearApprovalGrant,
+    convex,
+    durableSessionJob,
+    installWorkspace,
+    queueDelegationRevocation,
+    recordSuccessfulCommit,
+    releaseUnrecoverableEditJob,
+    recordPreferencePatch,
+    runPreferenceEtl,
+  ]);
 
   useEffect(() => {
     if (!recoveryAccessRequest || recoveredWorkspace === undefined) return;
@@ -1067,6 +1624,12 @@ export function NodeSlideStudio() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    if (window.innerWidth < 1100 && !inspectorCollapsed && !navigatorCollapsed) {
+      setNavigatorCollapsed(true);
+    }
+  }, [inspectorCollapsed, navigatorCollapsed]);
 
   const orderedSlides = useMemo(
     () =>
@@ -1372,19 +1935,6 @@ export function NodeSlideStudio() {
     [],
   );
 
-  const recordSuccessfulCommit = useCallback(
-    (predecessor: DeckVersion | undefined, resultingVersion: number) => {
-      localCommitVersionsRef.current.add(resultingVersion);
-      if (!predecessor) return;
-      const nextUndoStack = appendDistinctHistoryVersion(undoStackRef.current, predecessor.id);
-      undoStackRef.current = nextUndoStack;
-      redoStackRef.current = [];
-      setUndoStack(nextUndoStack);
-      setRedoStack([]);
-    },
-    [],
-  );
-
   const applyOperations = useCallback(
     async (
       operations: PatchOperation[],
@@ -1498,12 +2048,7 @@ export function NodeSlideStudio() {
   );
 
   const proposeJsonOperations = useCallback(
-    async (
-      operations: PatchOperation[],
-      summary: string,
-      elementId: string,
-      baseElementVersion: number,
-    ) => {
+    async ({ operations, summary, elementId, baseElementVersion }: JsonPatchProposalRequest) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
       const requestedDeckId = workspace.deck.id;
       return enqueueEditorWrite(
@@ -1934,7 +2479,19 @@ export function NodeSlideStudio() {
 
   const openInspector = (tab: InspectorTab) => {
     setActiveInspectorTab(tab);
+    if (window.innerWidth < 1100) setNavigatorCollapsed(true);
     setInspectorCollapsed(false);
+  };
+  const toggleInspector = () => {
+    if (inspectorCollapsed) {
+      openInspector('ai');
+      return;
+    }
+    setInspectorCollapsed(true);
+  };
+  const toggleNavigator = () => {
+    if (navigatorCollapsed && window.innerWidth < 1100) setInspectorCollapsed(true);
+    setNavigatorCollapsed(!navigatorCollapsed);
   };
   const selectElements = (ids: string[]) => {
     setSelectedElementIds(ids);
@@ -1945,29 +2502,53 @@ export function NodeSlideStudio() {
     const requestGate = editorRequestGateRef.current;
     const requestToken = requestGate.begin('create-deck', activeDeckId);
     setProjectError(null);
-    setCreating(true);
     try {
-      const result = await createDeckFromBrief({ ...request });
+      const { accessCode: _accessCode, ...durableIntent } = request;
+      const prepared = prepareAgentSessionJob({
+        kind: 'create_deck',
+        requestFingerprint: agentSessionRequestFingerprint(durableIntent),
+      });
+      setCreating(true);
+      let receipt = await startCreateDeckJob({
+        ...request,
+        ownerAccessKey: prepared.ownerAccessKey,
+        idempotencyKey: prepared.idempotencyKey,
+      });
+      if (receipt.status === 'failed' && receipt.attempt < receipt.maxAttempts) {
+        const retried = await retryDurableJob({
+          jobId: receipt.jobId,
+          ownerAccessKey: prepared.ownerAccessKey,
+        });
+        if (!retried) throw new Error('The durable deck job could not be retried.');
+        receipt = retried;
+      }
+      attachAgentSessionJob(receipt);
+      if (!requestGate.isCurrent(requestToken)) return;
+      setCreating(receipt.status === 'queued' || receipt.status === 'running');
+    } catch (error) {
+      const message = errorMessage(error, 'The deck could not be created.');
+      failPreparedAgentSessionJob(message);
       if (!requestGate.isCurrent(requestToken)) return;
       setCreating(false);
-      const accessDurable = installWorkspace(result, undefined, false, true);
-      setProjectsOpen(false);
-      if (accessDurable) {
-        setToast({
-          kind: 'success',
-          message:
-            request.providerMode === 'deterministic'
-              ? 'Deck created deterministically. Your brief stayed inside NodeSlide.'
-              : `Deck created after your consented ${request.providerMode === 'nebius' ? 'Nebius' : 'OpenRouter'} attempt. Trace shows the provider result and any deterministic fallback.`,
-        });
-      }
-    } catch (error) {
-      if (!requestGate.isCurrent(requestToken)) return;
-      const message = errorMessage(error, 'The deck could not be created.');
       setProjectError(message);
       setToast({ kind: 'error', message });
     } finally {
-      if (requestGate.isCurrent(requestToken)) setCreating(false);
+      resetAgentSessionConsent();
+    }
+  };
+
+  const cancelCreateDeck = async () => {
+    const job = agentSessionState.activeJob;
+    if (job?.kind !== 'create_deck' || !job.jobId) return;
+    try {
+      const receipt = await cancelDurableJob({
+        jobId: job.jobId,
+        ownerAccessKey: job.ownerAccessKey,
+      });
+      if (receipt) reconcileAgentSessionJob(receipt);
+    } catch (error) {
+      const message = errorMessage(error, 'The durable deck job could not be cancelled.');
+      setToast({ kind: 'error', message });
     }
   };
 
@@ -2082,6 +2663,7 @@ export function NodeSlideStudio() {
           creating={creating}
           error={projectError}
           onClearError={() => setProjectError(null)}
+          onCancelCreate={() => void cancelCreateDeck()}
           onCreate={(request) => void createDeck(request)}
           onExploreSample={() => setSampleRequested(true)}
           onOpenProjects={() => {
@@ -2429,6 +3011,26 @@ export function NodeSlideStudio() {
 
   const cancelAiRun = async (runId: string) => {
     if (!ownerAccessKey) return;
+    const durableJob = agentSessionState.activeJob;
+    if (
+      durableJob?.kind === 'edit_proposal' &&
+      durableJob.jobId &&
+      (durableJob.status === 'queued' || durableJob.status === 'running')
+    ) {
+      try {
+        const receipt = await cancelDurableJob({
+          jobId: durableJob.jobId,
+          ownerAccessKey: durableJob.ownerAccessKey,
+        });
+        if (receipt) reconcileAgentSessionJob(receipt);
+      } catch (error) {
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'The durable agent job could not be cancelled.'),
+        });
+        return;
+      }
+    }
     const cancelled = await cancelAgentRun({
       deckId: workspace.deck.id,
       ownerAccessKey,
@@ -2439,6 +3041,123 @@ export function NodeSlideStudio() {
       setAiAgentActivity(null);
       setToast({ kind: 'success', message: 'Agent run cancelled. No changes were applied.' });
     }
+  };
+
+  const retryAiRun = async () => {
+    const durableJob = agentSessionState.activeJob;
+    if (
+      durableJob?.kind !== 'edit_proposal' ||
+      !durableJob.jobId ||
+      durableJob.status !== 'failed' ||
+      durableJob.attempt >= durableJob.maxAttempts
+    ) {
+      setToast({
+        kind: 'error',
+        message: 'This run has no safe retry remaining. Submit a new request instead.',
+      });
+      return;
+    }
+
+    handledEditJobIdsRef.current.delete(durableJob.jobId);
+    resolvingEditJobIdsRef.current.delete(durableJob.jobId);
+    setAgentBusy(true);
+    setAiAgentActivity({
+      status: 'running',
+      elapsedMs: 0,
+      ask: 'Retrying the same durable, reviewable slide proposal.',
+    });
+    try {
+      const receipt = await retryDurableJob({
+        jobId: durableJob.jobId,
+        ownerAccessKey: durableJob.ownerAccessKey,
+      });
+      if (!receipt) throw new Error('The durable edit proposal could not be retried.');
+      reconcileAgentSessionJob(receipt);
+      setAgentBusy(receipt.status === 'queued' || receipt.status === 'running');
+      if (receipt.status === 'failed') {
+        throw new Error(receipt.error ?? 'The durable edit proposal retry failed.');
+      }
+      setToast({ kind: 'success', message: 'Retry resumed with the same bounded request.' });
+    } catch (error) {
+      const message = errorMessage(error, 'The durable edit proposal could not be retried.');
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Retry the same durable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+    }
+  };
+
+  const handleApprovalModeChange = (mode: AgentSessionApprovalMode) => {
+    if (!activeDeckId || !ownerAccessKey || authorityChangeBusy) return;
+    if (mode === activeApproval.mode) return;
+    const deckId = activeDeckId;
+    const ownerKey = ownerAccessKey;
+    setDelegationBusy(true);
+    void (async () => {
+      if (mode === 'review') {
+        if (activeApproval.mode === 'auto_apply') {
+          queueDelegationRevocation(activeApproval, ownerKey);
+        } else {
+          clearApprovalGrant();
+        }
+        setToast({
+          kind: 'success',
+          message: 'Review mode restored. Every proposed change now waits for your decision.',
+        });
+        return;
+      }
+
+      const issueReceipt = await withNodeSlideDelegationDeadline(
+        issueDelegationGrant({
+          deckId,
+          ownerAccessKey: ownerKey,
+          clientKind: 'browser',
+          maxOperations: NODESLIDE_DELEGATION_MAX_OPERATIONS,
+          maxUses: NODESLIDE_DELEGATION_MAX_USES,
+          expiresAt: Date.now() + NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+        }),
+        'Delegation grant issuance',
+      );
+      try {
+        installApprovalGrant({
+          mode: 'auto_apply',
+          deckId,
+          grantId: issueReceipt.grant.id,
+          token: issueReceipt.token,
+          policyDigest: issueReceipt.grant.policyDigest,
+          issuedAt: issueReceipt.grant.createdAt,
+          expiresAt: issueReceipt.grant.expiresAt,
+          maxUses: issueReceipt.grant.maxUses,
+          maxOperations: issueReceipt.grant.maxOperations,
+        });
+      } catch (error) {
+        await withNodeSlideDelegationDeadline(
+          revokeDelegationGrant({
+            deckId,
+            ownerAccessKey: ownerKey,
+            grantId: issueReceipt.grant.id,
+          }),
+          'Delegation cleanup',
+        ).catch(() => undefined);
+        throw error;
+      }
+      setToast({
+        kind: 'success',
+        message:
+          'Auto-apply is active for validated in-scope edits. Publishing and destructive actions remain manual.',
+      });
+    })()
+      .catch((error: unknown) => {
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'Change handling could not be updated.'),
+        });
+      })
+      .finally(() => setDelegationBusy(false));
   };
 
   const previewPatch = (patch: DeckPatch | null) => {
@@ -2619,6 +3338,34 @@ export function NodeSlideStudio() {
     options: AiProposalOptions<NodeSlideEditorCommandId>,
   ) => {
     if (!ownerAccessKey) return;
+    const scopedSlideIds = 'slideIds' in scope ? scope.slideIds : [];
+    const scopedElementIds = 'elementIds' in scope ? scope.elementIds : [];
+    updateAgentSessionControls({
+      model: options.providerMode === 'deterministic' ? 'deterministic' : options.providerModel,
+      effort:
+        options.providerMode === 'deterministic'
+          ? agentSessionState.controls.effort
+          : options.providerEffort,
+      scope: {
+        kind:
+          scope.kind === 'deck'
+            ? 'deck'
+            : scope.kind === 'slide' && scopedSlideIds.length > 1
+              ? 'selected_slides'
+              : scope.kind === 'slide'
+                ? 'slide'
+                : 'elements',
+        deckId: scope.deckId,
+        operationMode: scope.operationMode,
+        slideIds: scopedSlideIds,
+        elementIds: scopedElementIds,
+      },
+      web: {
+        enabled: options.webResearch === true,
+        consentGranted: Boolean(options.webResearchConsent),
+      },
+      memory: { mode: options.memoryMode ?? 'off' },
+    });
     const requestedDeckId = workspace.deck.id;
     const requestedOwnerAccessKey = ownerAccessKey;
     const requestGate = editorRequestGateRef.current;
@@ -2628,6 +3375,7 @@ export function NodeSlideStudio() {
     if (options.commandId === 'propagate') {
       const parent = latestPropagatablePatch(workspace.patches);
       if (!parent) {
+        resetAgentSessionConsent();
         setAgentBusy(false);
         setAiAgentActivity(null);
         setToast({
@@ -2659,6 +3407,7 @@ export function NodeSlideStudio() {
           setAiAgentActivity({ status: 'failed', elapsedMs: 0, ask: instruction, message });
           setToast({ kind: 'error', message });
         } finally {
+          resetAgentSessionConsent();
           if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
         }
       })();
@@ -2670,29 +3419,47 @@ export function NodeSlideStudio() {
       scope.kind === 'deck' || scope.slideIds.includes(activeSlide.id)
         ? activeSlide.id
         : scope.slideIds[0];
-    const { commentContext: _commentContext, ...requestOptions } = options;
+    const {
+      commentContext: _commentContext,
+      idempotencyKey: _composerIdempotencyKey,
+      ...requestOptions
+    } = options;
     void (async () => {
       try {
-        const receipt = await proposeEdit({
+        const durableRequest: Omit<AgentEditRequest, 'idempotencyKey'> & {
+          clientSessionId: string;
+        } = {
+          clientSessionId,
           deckId: requestedDeckId,
-          ownerAccessKey: requestedOwnerAccessKey,
           instruction,
           baseDeckVersion: workspace.deck.version,
           ...clocks,
           scope,
           ...(focusSlideId ? { focusSlideId } : {}),
           ...requestOptions,
+        };
+        const prepared = prepareAgentSessionJob({
+          kind: 'edit_proposal',
+          requestFingerprint: agentSessionRequestFingerprint(durableRequest),
+          targetDeckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
         });
-        if (!requestGate.isCurrent(requestToken)) return;
-        if (!receipt.workspace) {
-          throw new Error('The proposal completed without an authoritative workspace receipt.');
+        let receipt = await startEditProposalJob({
+          ...durableRequest,
+          ownerAccessKey: prepared.ownerAccessKey,
+          idempotencyKey: prepared.idempotencyKey,
+        });
+        if (receipt.status === 'failed' && receipt.attempt < receipt.maxAttempts) {
+          const retried = await retryDurableJob({
+            jobId: receipt.jobId,
+            ownerAccessKey: prepared.ownerAccessKey,
+          });
+          if (!retried) throw new Error('The durable edit proposal could not be retried.');
+          receipt = retried;
         }
-        installWorkspace(receipt.workspace, requestedOwnerAccessKey);
-        previewPatch(
-          receipt.workspace.patches.find((candidate) => candidate.id === receipt.patch.id) ??
-            receipt.patch,
-        );
-        setAiAgentActivity(null);
+        attachAgentSessionJob(receipt);
+        if (!requestGate.isCurrent(requestToken)) return;
+        setAgentBusy(receipt.status === 'queued' || receipt.status === 'running');
       } catch (error) {
         if (!requestGate.isCurrent(requestToken)) return;
         const message = errorMessage(error, 'The agent could not create a proposal.');
@@ -2708,7 +3475,7 @@ export function NodeSlideStudio() {
           message: cancelled ? 'Run cancelled. No deck changes were applied.' : message,
         });
       } finally {
-        if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
+        resetAgentSessionConsent();
       }
     })();
   };
@@ -3112,12 +3879,12 @@ export function NodeSlideStudio() {
         onExportJson={() => exportDeck('json')}
         onExportPptx={() => exportDeck('pptx')}
         onOpenCommandPalette={() => setCommandOpen(true)}
-        onToggleInspector={() => setInspectorCollapsed((value) => !value)}
+        onToggleInspector={toggleInspector}
         onThemeModeChange={(mode) => {
           setStudioTheme(mode);
           writeStudioPreference('theme', mode);
         }}
-        onToggleNavigator={() => setNavigatorCollapsed((value) => !value)}
+        onToggleNavigator={toggleNavigator}
         onResetView={() => {
           setNavigatorTab('slides');
           setCanvasMode('edit');
@@ -3133,175 +3900,27 @@ export function NodeSlideStudio() {
       />
 
       <div className="ns-studio-grid">
-        <SlideNavigator
-          slides={orderedSlides}
-          elements={workspace.elements}
-          theme={workspace.deck.theme}
-          activeSlideId={activeSlide.id}
+        <EditorNavigator
+          workspace={workspace}
+          orderedSlides={orderedSlides}
+          activeSlide={activeSlide}
+          activeSlideIndex={activeSlideIndex}
           collapsed={navigatorCollapsed}
           activeTab={navigatorTab}
-          comments={workspace.comments}
-          patches={workspace.patches}
-          sources={workspace.sources}
-          validations={workspace.validations}
           collapsedSections={collapsedNavigatorSections}
           propagationSlideIds={affectedSlideIds}
           selectedSlideIds={selectedSlideIds}
           selectedElementIds={selectedElementIds}
-          canAddSlide
-          canDeleteSlide={orderedSlides.length > 1}
           onSelectSlide={(slideId) => selectSlide(slideId, setActiveSlideId, setSelectedElementIds)}
-          onSelectedSlideIdsChange={(slideIds) =>
-            setSelectedSlideIds(
-              normalizeSelectedSlideIds(
-                orderedSlides.map((slide) => slide.id),
-                slideIds.slice(0, NODESLIDE_SCOPE_SLIDE_LIMIT),
-              ),
-            )
+          onSelectedSlideIdsChange={setSelectedSlideIds}
+          onRemoveSelectedSlide={(slideId) =>
+            setSelectedSlideIds((current) => current.filter((id) => id !== slideId))
           }
-          onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
+          onToggleCollapsed={toggleNavigator}
           onTabChange={setNavigatorTab}
-          onToggleSection={(section) =>
-            setCollapsedNavigatorSections((current) =>
-              current.includes(section)
-                ? current.filter((candidate) => candidate !== section)
-                : [...current, section],
-            )
-          }
+          onCollapsedSectionsChange={setCollapsedNavigatorSections}
           onSelectedElementIdsChange={selectElements}
-          onRenameSlide={(slideId, currentTitle) => {
-            const title = window.prompt('Rename slide', currentTitle)?.trim();
-            if (!title || title === currentTitle) return;
-            void applyOperations(
-              [{ op: 'update_slide', slideId, properties: { title } }],
-              {
-                kind: 'slide',
-                deckId: workspace.deck.id,
-                slideIds: [slideId],
-                operationMode: 'unrestricted',
-              },
-              `Renamed slide to ${title}`,
-            );
-          }}
-          onAddSlide={() => {
-            const added = createBlankSlide(workspace, activeSlideIndex + 1);
-            void applyOperations(
-              [
-                {
-                  op: 'add_slide',
-                  slide: added.slide,
-                  elements: added.elements,
-                  index: added.index,
-                },
-              ],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Added slide ${added.index + 1}`,
-            ).then((accepted) => {
-              if (accepted) selectSlide(added.slide.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onDuplicateSlide={(slideId) => {
-            const added = duplicateSlide(workspace, slideId);
-            if (!added) return;
-            void applyOperations(
-              [
-                {
-                  op: 'add_slide',
-                  slide: added.slide,
-                  elements: added.elements,
-                  index: added.index,
-                },
-              ],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Duplicated ${added.slide.title}`,
-            ).then((accepted) => {
-              if (accepted) selectSlide(added.slide.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onDeleteSlide={(slideId) => {
-            const index = orderedSlides.findIndex((slide) => slide.id === slideId);
-            const fallback = orderedSlides[index + 1] ?? orderedSlides[index - 1];
-            void applyOperations(
-              [{ op: 'remove_slide', slideId }],
-              { kind: 'deck', deckId: workspace.deck.id, operationMode: 'unrestricted' },
-              `Deleted slide ${index + 1}`,
-            ).then((accepted) => {
-              if (!accepted) return;
-              setSelectedSlideIds((current) => current.filter((id) => id !== slideId));
-              if (fallback) selectSlide(fallback.id, setActiveSlideId, setSelectedElementIds);
-            });
-          }}
-          onReorderSlide={(slideId, index) =>
-            void applyOperations(
-              [{ op: 'reorder_slide', slideId, index }],
-              {
-                kind: 'slide',
-                deckId: workspace.deck.id,
-                slideIds: [slideId],
-                operationMode: 'layout',
-              },
-              `Moved slide to position ${index + 1}`,
-            )
-          }
-          onToggleElementVisibility={(elementId, visible) => {
-            const element = workspace.elements.find((candidate) => candidate.id === elementId);
-            if (!element) return;
-            void applyOperations(
-              [{ op: 'set_visibility_v1', slideId: element.slideId, elementId, visible }],
-              elementScope(workspace.deck.id, [element]),
-              `${visible ? 'Showed' : 'Hid'} ${element.name}`,
-            );
-          }}
-          onGroupElements={(elementIds) => {
-            const targets = elementIds
-              .map((id) => workspace.elements.find((element) => element.id === id))
-              .filter((element): element is SlideElement => element !== undefined);
-            if (
-              targets.length < 2 ||
-              targets.some((element) => element.slideId !== activeSlide.id)
-            ) {
-              return;
-            }
-            void applyOperations(
-              [
-                {
-                  op: 'group_elements_v1',
-                  slideId: activeSlide.id,
-                  elementIds: targets.map((element) => element.id),
-                  groupId: uniqueClientId('group'),
-                },
-              ],
-              elementScope(workspace.deck.id, targets),
-              `Grouped ${targets.length} layers`,
-            );
-          }}
-          onUngroupElements={(elementIds) => {
-            const groupIds = new Set(
-              elementIds.flatMap((id) => {
-                const groupId = workspace.elements.find((element) => element.id === id)?.groupId;
-                return groupId ? [groupId] : [];
-              }),
-            );
-            const operations: PatchOperation[] = [];
-            const members: SlideElement[] = [];
-            for (const groupId of groupIds) {
-              const groupMembers = workspace.elements.filter(
-                (element) => element.slideId === activeSlide.id && element.groupId === groupId,
-              );
-              members.push(...groupMembers);
-              operations.push({
-                op: 'ungroup_elements_v1',
-                slideId: activeSlide.id,
-                elementIds: groupMembers.map((element) => element.id),
-                groupId,
-              });
-            }
-            void applyOperations(
-              operations,
-              elementScope(workspace.deck.id, members),
-              `Ungrouped ${groupIds.size} layer group${groupIds.size === 1 ? '' : 's'}`,
-            );
-          }}
+          applyOperations={applyOperations}
           onChangeElementZOrder={changeElementZOrder}
         />
 
@@ -3355,7 +3974,7 @@ export function NodeSlideStudio() {
           onOverlayOpacityChange={setCompareOverlayOpacity}
           blinkPaused={compareBlinkPaused}
           onBlinkPausedChange={setCompareBlinkPaused}
-          {...(previewedPatch
+          {...(previewedPatch && (inspectorCollapsed || activeInspectorTab !== 'ai')
             ? {
                 onAcceptCandidate: () => handleAcceptPatch(previewedPatch),
                 onDeclineCandidate: () => handleRejectPatch(previewedPatch),
@@ -3470,6 +4089,7 @@ export function NodeSlideStudio() {
           slide={activeSlide}
           selectedElements={selectedElements}
           selectedSlideIds={selectedSlideIds}
+          {...(ownerAccessKey ? { ownerAccessKey } : {})}
           activeTab={activeInspectorTab}
           collapsed={inspectorCollapsed}
           width={inspectorWidth}
@@ -3489,6 +4109,12 @@ export function NodeSlideStudio() {
           agentMessages={agentMessages ?? []}
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
+          approvalMode={activeApproval.mode}
+          approvalBusy={authorityChangeBusy}
+          {...(activeApproval.mode === 'auto_apply'
+            ? { approvalExpiresAt: activeApproval.expiresAt }
+            : {})}
+          onApprovalModeChange={handleApprovalModeChange}
           {...(selectedTelemetryRunId ? { agentTelemetryRunId: selectedTelemetryRunId } : {})}
           agentTelemetryLoadingMore={telemetryLoadingRunId === selectedTelemetryRunId}
           {...(telemetryLoadError ? { agentTelemetryLoadError: telemetryLoadError } : {})}
@@ -3512,7 +4138,7 @@ export function NodeSlideStudio() {
             if (tab !== 'design') setPreviewedSignatureProfile(null);
             setActiveInspectorTab(tab);
           }}
-          onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
+          onToggleCollapsed={toggleInspector}
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
           onAttachAiDataFile={attachAiDataFile}
@@ -3535,6 +4161,11 @@ export function NodeSlideStudio() {
           }}
           onDeleteAiDataSource={deleteAiDataSource}
           onCancelAiRun={(runId) => void cancelAiRun(runId)}
+          {...(activeSessionJob?.kind === 'edit_proposal' &&
+          activeSessionJob.status === 'failed' &&
+          activeSessionJob.attempt < activeSessionJob.maxAttempts
+            ? { onRetryAiRun: () => void retryAiRun() }
+            : {})}
           onAcceptPatch={handleAcceptPatch}
           onRejectPatch={handleRejectPatch}
           onPreviewPatch={previewPatch}
@@ -3606,7 +4237,7 @@ export function NodeSlideStudio() {
               summary,
             )
           }
-          onApplyJsonPatch={proposeJsonOperations}
+          onProposeJsonPatch={proposeJsonOperations}
           onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
             ownerAccessKey
@@ -4039,16 +4670,6 @@ function scopeForOperations(
     : { kind: 'slide', deckId: workspace.deck.id, slideIds, operationMode };
 }
 
-function elementScope(deckId: string, elements: readonly SlideElement[]): PatchScope {
-  return {
-    kind: 'elements',
-    deckId,
-    slideIds: [...new Set(elements.map((element) => element.slideId))],
-    elementIds: elements.map((element) => element.id),
-    operationMode: 'unrestricted',
-  };
-}
-
 function duplicateElement(element: SlideElement, index: number): SlideElement {
   const suffix = `${Date.now().toString(36)}-${index}`;
   return {
@@ -4067,120 +4688,6 @@ function duplicateElement(element: SlideElement, index: number): SlideElement {
 function pasteElement(element: SlideElement, slideId: string, index: number): SlideElement {
   const copy = duplicateElement(element, index);
   return { ...copy, slideId };
-}
-
-function createBlankSlide(
-  workspace: NodeSlideWorkspace,
-  requestedIndex: number,
-): { slide: Slide; elements: SlideElement[]; index: number } {
-  const index = Math.max(0, Math.min(requestedIndex, workspace.deck.slideOrder.length));
-  const slideId = uniqueClientId('slide');
-  const titleId = uniqueClientId('element-title');
-  const bodyId = uniqueClientId('element-body');
-  const capabilities: SlideElement['exportCapabilities'] = [
-    'web_native',
-    'pptx_editable',
-    'google_importable',
-  ];
-  const elements: SlideElement[] = [
-    {
-      id: titleId,
-      slideId,
-      name: 'Slide title',
-      kind: 'text',
-      role: 'headline',
-      bbox: { x: 0.08, y: 0.1, width: 0.84, height: 0.16 },
-      rotation: 0,
-      content: 'Untitled slide',
-      style: {
-        color: workspace.deck.theme.colors.ink,
-        fontFamily: workspace.deck.theme.typography.display,
-        fontSize: 40,
-        fontWeight: 700,
-        lineHeight: 1.08,
-      },
-      sourceIds: [],
-      locked: false,
-      exportCapabilities: [...capabilities],
-      version: 1,
-    },
-    {
-      id: bodyId,
-      slideId,
-      name: 'Body copy',
-      kind: 'text',
-      role: 'body',
-      bbox: { x: 0.08, y: 0.33, width: 0.72, height: 0.3 },
-      rotation: 0,
-      content: 'Add the point this slide needs to make.',
-      style: {
-        color: workspace.deck.theme.colors.muted,
-        fontFamily: workspace.deck.theme.typography.body,
-        fontSize: 24,
-        fontWeight: 450,
-        lineHeight: 1.35,
-      },
-      sourceIds: [],
-      locked: false,
-      exportCapabilities: [...capabilities],
-      version: 1,
-    },
-  ];
-  return {
-    index,
-    slide: {
-      id: slideId,
-      deckId: workspace.deck.id,
-      title: 'Untitled slide',
-      section: 'Deck',
-      notes: '',
-      background: workspace.deck.theme.colors.canvas,
-      elementOrder: elements.map((element) => element.id),
-      version: 1,
-    },
-    elements,
-  };
-}
-
-function duplicateSlide(
-  workspace: NodeSlideWorkspace,
-  sourceSlideId: string,
-): { slide: Slide; elements: SlideElement[]; index: number } | null {
-  const source = workspace.slides.find((slide) => slide.id === sourceSlideId);
-  const sourceIndex = workspace.deck.slideOrder.indexOf(sourceSlideId);
-  if (!source || sourceIndex < 0) return null;
-  const slideId = uniqueClientId('slide');
-  const sourceElements = source.elementOrder
-    .map((elementId) => workspace.elements.find((element) => element.id === elementId))
-    .filter((element): element is SlideElement => element !== undefined);
-  const elementIds = new Map(
-    sourceElements.map((element) => [element.id, uniqueClientId('element')]),
-  );
-  const elements = sourceElements.map((element) => ({
-    ...structuredClone(element),
-    id: elementIds.get(element.id) as string,
-    slideId,
-    version: 1,
-  }));
-  return {
-    index: sourceIndex + 1,
-    slide: {
-      ...structuredClone(source),
-      id: slideId,
-      title: `${source.title} copy`,
-      elementOrder: source.elementOrder.map((id) => elementIds.get(id) as string),
-      version: 1,
-    },
-    elements,
-  };
-}
-
-function uniqueClientId(prefix: string) {
-  const random =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  return `${prefix}_${random}`;
 }
 
 function currentVersion(workspace: NodeSlideWorkspace): DeckVersion | undefined {
@@ -4205,17 +4712,19 @@ function sameStringIds(left: readonly string[], right: readonly string[]): boole
 
 function writeDeckToUrl(deckId: string) {
   const url = new URL(window.location.href);
+  const before = url.toString();
   url.searchParams.set('deck', deckId);
   url.searchParams.delete('share');
   url.searchParams.delete('slide');
-  window.history.replaceState(null, '', url);
+  if (url.toString() !== before) window.history.replaceState(null, '', url);
 }
 
 function setQueryParam(key: string, value: string | null) {
   const url = new URL(window.location.href);
+  const before = url.toString();
   if (value === null) url.searchParams.delete(key);
   else url.searchParams.set(key, value);
-  window.history.replaceState(null, '', url);
+  if (url.toString() !== before) window.history.replaceState(null, '', url);
 }
 
 async function shareDeck(shareSlug: string) {
@@ -4295,55 +4804,6 @@ function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlide
   return id === 'finance-ibcs' || id === 'startup-narrative' ? id : null;
 }
 
-function LoadingScreen({ title }: { title: string }) {
-  return (
-    <main
-      className="nodeslide-studio ns-loading-screen"
-      data-testid="nodeslide-studio"
-      aria-busy="true"
-    >
-      <output className="ns-sr-only" aria-live="polite">
-        {title}
-      </output>
-      <span className="ns-loading-mark" aria-hidden="true">
-        <LoaderCircle className="ns-spin" size={20} />
-      </span>
-      <strong>{title}</strong>
-      <p>Loading canonical slides, sources, comments, and revision clocks.</p>
-    </main>
-  );
-}
-
-function RecoveryScreen({
-  title,
-  detail,
-  primaryLabel,
-  onPrimary,
-  children,
-}: {
-  title: string;
-  detail: string;
-  primaryLabel: string;
-  onPrimary: () => void;
-  children?: ReactNode;
-}) {
-  return (
-    <main className="nodeslide-studio ns-recovery-screen" data-testid="nodeslide-studio">
-      <span className="ns-recovery-mark" aria-hidden="true">
-        <ShieldAlert size={22} />
-      </span>
-      <span className="ns-eyebrow">Safe recovery</span>
-      <h1>{title}</h1>
-      <p>{detail}</p>
-      {children}
-      <button className="ns-button ns-button--accent" type="button" onClick={onPrimary}>
-        {primaryLabel === 'Retry' ? <RefreshCw size={15} /> : <FolderOpen size={15} />}
-        {primaryLabel}
-      </button>
-    </main>
-  );
-}
-
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'data' in error) {
     const data = error.data;
@@ -4352,24 +4812,4 @@ function errorMessage(error: unknown, fallback: string) {
     }
   }
   return error instanceof Error ? error.message : fallback;
-}
-
-function Toast({
-  toast,
-  onClose,
-}: { toast: { kind: 'success' | 'error'; message: string }; onClose: () => void }) {
-  useEffect(() => {
-    if (toast.kind === 'error') return;
-    const timeout = window.setTimeout(onClose, 4200);
-    return () => window.clearTimeout(timeout);
-  }, [onClose, toast.kind]);
-  return (
-    <output className={`ns-toast is-${toast.kind}`} aria-live="polite">
-      {toast.kind === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-      <span>{toast.message}</span>
-      <button type="button" onClick={onClose} aria-label="Dismiss notification">
-        <X size={14} />
-      </button>
-    </output>
-  );
 }
