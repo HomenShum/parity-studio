@@ -41,7 +41,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm check:built-runtime-source -- dist/runtime-source.json "$GITHUB_SHA"
-      - run: pnpm audit --prod
+      # pnpm 10's legacy npm audit endpoints were retired (HTTP 410). Keep the
+      # install toolchain stable while using the maintained bulk-advisory client.
+      - run: pnpm dlx pnpm@11.13.0 audit --prod
 
   deploy_preview:
     name: Deploy isolated preview
