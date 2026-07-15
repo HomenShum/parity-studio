@@ -3,6 +3,9 @@ import { inferNodeSlideRequestedSlideCount } from './nodeslideSlideCount';
 
 describe('NodeSlide requested slide count', () => {
   it.each([
+    ['Create a concise 3-slide launch update', 3],
+    ['Prepare exactly four slides', 4],
+    ['Create five slides', 5],
     ['Create a six-slide founder roadshow', 6],
     ['Build exactly 7 slides', 7],
     ['An eight — slide narrative', 8],
@@ -12,6 +15,8 @@ describe('NodeSlide requested slide count', () => {
 
   it('does not confuse slide references or unsupported counts with a deck-length request', () => {
     expect(inferNodeSlideRequestedSlideCount('Put the decision on slide 6')).toBeNull();
-    expect(inferNodeSlideRequestedSlideCount('Create five slides')).toBeNull();
+    expect(inferNodeSlideRequestedSlideCount('Use evidence from slides 3 and 4')).toBeNull();
+    expect(inferNodeSlideRequestedSlideCount('Create two slides')).toBeNull();
+    expect(inferNodeSlideRequestedSlideCount('Create nine slides')).toBeNull();
   });
 });
