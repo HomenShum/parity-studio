@@ -273,8 +273,12 @@ export const proposeEdit = action({
           return {
             patch,
             workspace: current,
-            conversationRunId: runId,
-            memoryIds: runStart.run.memoryIds ?? [],
+            ...(durableJob
+              ? {
+                  conversationRunId: runId,
+                  memoryIds: runStart.run.memoryIds ?? [],
+                }
+              : {}),
           };
         }
       }
@@ -599,6 +603,7 @@ export const proposeEdit = action({
         role: 'assistant',
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
+      if (!durableJob) return proposal;
       return {
         ...proposal,
         conversationRunId: runId,
