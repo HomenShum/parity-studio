@@ -586,6 +586,49 @@ describe('NodeSlide delegated acceptance', () => {
       ).rejects.toThrow(/destructive operations require explicit review/i);
       expect(patchRow(harness.database, proposal.patch.id)['status']).toBe('ready');
     }
+
+    const baselineSensitiveElement = snapshot.elements.find(
+      (candidate) =>
+        !candidate.locked &&
+        candidate.style.fill !== undefined &&
+        candidate.style.color !== undefined,
+    );
+    if (!baselineSensitiveElement?.style.fill) {
+      throw new Error('Destructive policy fixture needs an element with foreground and fill.');
+    }
+    const baselineSensitiveOperation: PatchOperation = {
+      op: 'update_style',
+      slideId: baselineSensitiveElement.slideId,
+      elementId: baselineSensitiveElement.id,
+      properties: { color: baselineSensitiveElement.style.fill },
+    };
+    const baselineClocks = clocksForNodeSlideOperations(snapshot, [baselineSensitiveOperation]);
+    const baselineProposal = await proposeAgentHandler(harness.context, {
+      id: 'destructive-baseline-paint',
+      deckId: snapshot.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: snapshot.deck.version,
+      ...baselineClocks,
+      scope: {
+        kind: 'elements',
+        deckId: snapshot.deck.id,
+        slideIds: [baselineSensitiveElement.slideId],
+        elementIds: [baselineSensitiveElement.id],
+        operationMode: 'unrestricted',
+      },
+      operations: [baselineSensitiveOperation],
+      summary: 'Baseline-sensitive paint erase',
+      traceId: 'destructive-baseline-paint-trace',
+      instruction: 'Match the foreground to the existing fill.',
+      shadowComparisonRequested: false,
+      traceSummary: 'Baseline-sensitive paint erase',
+      traceContext: [],
+      toolCalls: [],
+    });
+    await expect(
+      delegatedAcceptHandler(harness.context, acceptArgs(issued, baselineProposal.patch)),
+    ).rejects.toThrow(/composed candidate makes content unreadable/i);
+    expect(patchRow(harness.database, baselineProposal.patch.id)['status']).toBe('ready');
     expect(grantRow(harness.database, issued.grant.id)['useCount']).toBe(0);
     expect(harness.database.rows('nodeslide_delegation_uses')).toEqual([]);
   });

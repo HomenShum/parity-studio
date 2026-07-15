@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildGoldenNodeSlide } from '../convex/lib/nodeslideSeed';
 import type { PatchOperation } from './nodeslide';
-import { nodeSlideDelegationOperationRequiresReview } from './nodeslideDelegation';
+import {
+  nodeSlideDelegationCandidateViolations,
+  nodeSlideDelegationCompositionRequiresReview,
+  nodeSlideDelegationOperationRequiresReview,
+} from './nodeslideDelegation';
 
 describe('NodeSlide delegated semantic review policy', () => {
   it.each([
@@ -10,8 +14,94 @@ describe('NodeSlide delegated semantic review policy', () => {
     ['modern RGB alpha', styleOperation({ color: 'rgb(0 0 0 / 0)' })],
     ['modern percentage alpha', styleOperation({ color: 'oklch(50% 0.2 20 / 0%)' })],
     ['same opaque foreground and fill', styleOperation({ color: '#fff', fill: '#ffffff' })],
+    [
+      'equivalent RGB foreground and fill',
+      styleOperation({ color: '#fff', fill: 'rgb(255, 255, 255)' }),
+    ],
+    ['current color paint', styleOperation({ fill: 'currentColor' })],
+    ['negative alpha', styleOperation({ fill: 'rgb(0 0 0 / -1)' })],
+    ['exponent alpha', styleOperation({ fill: 'rgb(0 0 0 / 0e0)' })],
+    ['calculated alpha', styleOperation({ fill: 'rgb(0 0 0 / calc(0))' })],
+    ['hangul filler text', textOperation('\u115F\u1160')],
+    ['oversized padding', styleOperation({ padding: 10_000 })],
+    ['oversized stroke', styleOperation({ strokeWidth: 10_000 })],
+    ['unbounded shadow', styleOperation({ shadow: '0 0 0 100vmax #000' })],
   ])('requires review for %s', (_label, operation) => {
     expect(nodeSlideDelegationOperationRequiresReview(operation)).toBe(true);
+  });
+
+  it('requires review for any image replacement and transparent chart series', () => {
+    expect(
+      nodeSlideDelegationOperationRequiresReview({
+        op: 'update_image',
+        slideId: 'slide-a',
+        elementId: 'element-a',
+        imageUrl: 'data:image/png;base64,transparent',
+        altText: 'A meaningful description',
+      }),
+    ).toBe(true);
+    expect(
+      nodeSlideDelegationOperationRequiresReview({
+        op: 'update_chart',
+        slideId: 'slide-a',
+        elementId: 'element-a',
+        chart: {
+          chartType: 'line',
+          labels: ['A'],
+          series: [{ name: 'Series', values: [1], color: 'transparent' }],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('requires review when individually bounded operations compose into a cover or erase', () => {
+    const snapshot = buildGoldenNodeSlide('delegation-composition-test', 1_000).snapshot;
+    const element = structuredClone(snapshot.elements[0]);
+    if (!element) throw new Error('Expected a seeded slide element.');
+    element.id = 'element-composed-cover';
+    element.locked = false;
+    element.bbox = { x: 0, y: 0, width: 0.1, height: 0.1 };
+    element.style = { fill: '#000000', opacity: 1 };
+    expect(
+      nodeSlideDelegationCompositionRequiresReview([
+        { op: 'add_element', slideId: element.slideId, element },
+        {
+          op: 'resize',
+          slideId: element.slideId,
+          elementId: element.id,
+          width: 1,
+          height: 1,
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      nodeSlideDelegationCompositionRequiresReview([
+        styleOperation({ color: '#fff' }),
+        styleOperation({ fill: 'rgb(255 255 255)' }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('evaluates the authoritative composed candidate against existing style', () => {
+    const baseline = buildGoldenNodeSlide('delegation-candidate-test', 1_000).snapshot;
+    const before = baseline.elements[0];
+    if (!before) throw new Error('Expected a seeded slide element.');
+    before.style.fill = '#ffffff';
+    const candidate = structuredClone(baseline);
+    const after = candidate.elements.find((element) => element.id === before.id);
+    if (!after) throw new Error('Expected candidate element.');
+    after.style.color = 'rgb(255, 255, 255)';
+    const operations: PatchOperation[] = [
+      {
+        op: 'update_style',
+        slideId: before.slideId,
+        elementId: before.id,
+        properties: { color: 'rgb(255, 255, 255)' },
+      },
+    ];
+    expect(nodeSlideDelegationCandidateViolations({ baseline, candidate, operations })).toContain(
+      'The composed candidate makes content unreadable.',
+    );
   });
 
   it('requires review for a locked full-slide cover added above existing content', () => {
@@ -46,6 +136,18 @@ describe('NodeSlide delegated semantic review policy', () => {
         elementId: 'element-a',
         x: 0.1,
         y: 0.2,
+      }),
+    ).toBe(false);
+    expect(
+      nodeSlideDelegationOperationRequiresReview({
+        op: 'update_chart',
+        slideId: 'slide-a',
+        elementId: 'element-a',
+        chart: {
+          chartType: 'bar',
+          labels: ['A'],
+          series: [{ name: 'Series', values: [1], color: '#1b2430' }],
+        },
       }),
     ).toBe(false);
   });

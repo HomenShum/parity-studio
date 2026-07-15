@@ -23,6 +23,7 @@ import type {
   NodeSlideDecisionProvenance,
   NodeSlideDelegationClientKind,
 } from '../shared/nodeslideDelegation';
+import { nodeSlideDelegationCandidateViolations } from '../shared/nodeslideDelegation';
 import { applyDeckPatch } from '../shared/nodeslidePatch';
 import type { SlideVariation } from '../shared/nodeslideVariation';
 import { internal } from './_generated/api';
@@ -2894,6 +2895,16 @@ async function commitPatch(
     };
   }
   const candidate = preflightNodeSlideCandidate(snapshot, args, signatureProfile, id, now);
+  if (delegatedAuthority) {
+    const delegationViolations = nodeSlideDelegationCandidateViolations({
+      baseline: snapshot,
+      candidate: candidate.snapshot,
+      operations: args.operations,
+    });
+    if (delegationViolations.length > 0) {
+      throw new Error(delegationViolations.join(' '));
+    }
+  }
   const hasPersistedBinding =
     existing?.candidateDigest !== undefined || existing?.candidateValidation !== undefined;
   const bindingMatches = candidateValidationBindingMatches({
