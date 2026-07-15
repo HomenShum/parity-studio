@@ -19,6 +19,8 @@ describe('NodeSlide delegated semantic review policy', () => {
       styleOperation({ color: '#fff', fill: 'rgb(255, 255, 255)' }),
     ],
     ['current color paint', styleOperation({ fill: 'currentColor' })],
+    ['named paint alias', styleOperation({ fill: 'red' })],
+    ['unparsed HSL paint', styleOperation({ fill: 'hsl(0 100% 50%)' })],
     ['negative alpha', styleOperation({ fill: 'rgb(0 0 0 / -1)' })],
     ['exponent alpha', styleOperation({ fill: 'rgb(0 0 0 / 0e0)' })],
     ['calculated alpha', styleOperation({ fill: 'rgb(0 0 0 / calc(0))' })],
@@ -50,6 +52,14 @@ describe('NodeSlide delegated semantic review policy', () => {
           labels: ['A'],
           series: [{ name: 'Series', values: [1], color: 'transparent' }],
         },
+      }),
+    ).toBe(true);
+    expect(
+      nodeSlideDelegationOperationRequiresReview({
+        op: 'reorder_element_v1',
+        slideId: 'slide-a',
+        elementId: 'element-a',
+        index: 0,
       }),
     ).toBe(true);
   });
@@ -102,6 +112,71 @@ describe('NodeSlide delegated semantic review policy', () => {
     expect(nodeSlideDelegationCandidateViolations({ baseline, candidate, operations })).toContain(
       'The composed candidate makes content unreadable.',
     );
+  });
+
+  it('stops geometry, style, and visibility aliases that can reveal a full-slide cover', () => {
+    const baseline = buildGoldenNodeSlide('delegation-cover-alias-test', 1_000).snapshot;
+    const before = baseline.elements[0];
+    if (!before) throw new Error('Expected a seeded slide element.');
+    before.locked = false;
+    before.visible = true;
+    before.bbox = { x: 0, y: 0, width: 1, height: 1 };
+    before.style = { fill: '#000000', opacity: 1 };
+
+    const moved = structuredClone(baseline);
+    expect(
+      nodeSlideDelegationCandidateViolations({
+        baseline,
+        candidate: moved,
+        operations: [{ op: 'move', slideId: before.slideId, elementId: before.id, x: 0, y: 0 }],
+      }),
+    ).toContain('The composed candidate hides or covers slide content.');
+
+    const styleBaseline = structuredClone(baseline);
+    const styleBefore = styleBaseline.elements[0];
+    if (!styleBefore) throw new Error('Expected a seeded style element.');
+    styleBefore.style = { opacity: 1 };
+    const styled = structuredClone(styleBaseline);
+    const styleAfter = styled.elements[0];
+    if (!styleAfter) throw new Error('Expected a candidate style element.');
+    styleAfter.style.fill = '#000000';
+    expect(
+      nodeSlideDelegationCandidateViolations({
+        baseline: styleBaseline,
+        candidate: styled,
+        operations: [
+          {
+            op: 'update_style',
+            slideId: styleBefore.slideId,
+            elementId: styleBefore.id,
+            properties: { fill: '#000000' },
+          },
+        ],
+      }),
+    ).toContain('The composed candidate hides or covers slide content.');
+
+    const hiddenBaseline = structuredClone(baseline);
+    const hiddenBefore = hiddenBaseline.elements[0];
+    if (!hiddenBefore) throw new Error('Expected a seeded hidden element.');
+    hiddenBefore.visible = false;
+    const revealed = structuredClone(hiddenBaseline);
+    const revealedAfter = revealed.elements[0];
+    if (!revealedAfter) throw new Error('Expected a candidate revealed element.');
+    revealedAfter.visible = true;
+    expect(
+      nodeSlideDelegationCandidateViolations({
+        baseline: hiddenBaseline,
+        candidate: revealed,
+        operations: [
+          {
+            op: 'set_visibility_v1',
+            slideId: hiddenBefore.slideId,
+            elementId: hiddenBefore.id,
+            visible: true,
+          },
+        ],
+      }),
+    ).toContain('The composed candidate reveals content that can cover the slide.');
   });
 
   it('requires review for a locked full-slide cover added above existing content', () => {

@@ -193,9 +193,10 @@ export function nodeSlideDelegationOperationRequiresReview(operation: PatchOpera
     case 'move':
     case 'group_elements_v1':
     case 'ungroup_elements_v1':
-    case 'reorder_element_v1':
     case 'reorder_slide':
       return false;
+    case 'reorder_element_v1':
+      return true;
     case 'update_chart':
       return chartRequiresReview(operation.chart);
     default: {
@@ -334,10 +335,10 @@ function isUnsafePaint(value: string | undefined): boolean {
 
 function isAmbiguousPaint(value: string): boolean {
   const normalized = value.trim().toLocaleLowerCase();
-  return (
-    /^(?:currentcolor|inherit|initial|unset|revert|revert-layer|none)$/u.test(normalized) ||
-    /(?:var|env|calc|color-mix)\(/u.test(normalized)
-  );
+  if (/^#[0-9a-f]{3,8}$/u.test(normalized)) return false;
+  if (/^rgba?\(/u.test(normalized)) return false;
+  if (normalized === 'white' || normalized === 'black') return false;
+  return true;
 }
 
 function samePaint(left: string, right: string): boolean {
@@ -414,6 +415,7 @@ function chartRequiresReview(chart: ChartData): boolean {
 
 function elementCanOcclude(element: SlideElement): boolean {
   return (
+    element.visible !== false &&
     (element.style.opacity ?? 1) >= 0.5 &&
     element.style.fill !== undefined &&
     !isUnsafePaint(element.style.fill)
@@ -500,9 +502,7 @@ export function nodeSlideDelegationCandidateViolations(args: {
       policy.geometry &&
       (after.bbox.width < 0.01 ||
         after.bbox.height < 0.01 ||
-        (after.bbox.width * after.bbox.height >= 0.45 &&
-          elementCanOcclude(after) &&
-          (!before || before.bbox.width * before.bbox.height < 0.45)))
+        (after.bbox.width * after.bbox.height >= 0.45 && elementCanOcclude(after)))
     ) {
       violations.push('The composed candidate hides or covers slide content.');
     }
@@ -520,11 +520,25 @@ export function nodeSlideDelegationCandidateViolations(args: {
       if (styleRequiresReview(properties)) {
         violations.push('The composed candidate makes content unreadable.');
       }
+      if (
+        after.bbox.width * after.bbox.height >= 0.45 &&
+        elementCanOcclude(after) &&
+        (!before || !elementCanOcclude(before))
+      ) {
+        violations.push('The composed candidate hides or covers slide content.');
+      }
     }
     if (policy.chart && (!after.chart || chartRequiresReview(after.chart))) {
       violations.push('The composed candidate hides chart data.');
     }
     if (policy.image) violations.push('Image replacement requires explicit review.');
+    if (
+      policy.visibility &&
+      after.bbox.width * after.bbox.height >= 0.45 &&
+      elementCanOcclude(after)
+    ) {
+      violations.push('The composed candidate reveals content that can cover the slide.');
+    }
   }
   return [...new Set(violations)];
 }
@@ -536,6 +550,7 @@ interface TouchedElementPolicy {
   image: boolean;
   style: Partial<ElementStyle> | null;
   text: boolean;
+  visibility: boolean;
 }
 
 function touchedElementPolicies(
@@ -553,6 +568,7 @@ function touchedElementPolicies(
         image: false,
         style: null,
         text: false,
+        visibility: false,
       } satisfies TouchedElementPolicy);
     result.set(key, policy);
     return policy;
@@ -570,6 +586,7 @@ function touchedElementPolicies(
         policy.style = { ...policy.style, ...operation.properties };
       } else if (operation.op === 'update_chart') policy.chart = true;
       else if (operation.op === 'update_image') policy.image = true;
+      else if (operation.op === 'set_visibility_v1') policy.visibility = true;
     }
   }
   return result;
