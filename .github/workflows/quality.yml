@@ -88,6 +88,7 @@ jobs:
           deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force \
             --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
             --build-env PARITY_CONVEX_DEPLOY_MODE=preview \
+            --build-env PARITY_INCLUDE_QA_FIXTURES=1 \
             --build-env PARITY_CONVEX_PREVIEW_NAME="$PARITY_CONVEX_PREVIEW_NAME" \
             --build-env CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY" \
             --token="$VERCEL_TOKEN")"

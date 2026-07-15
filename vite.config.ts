@@ -10,6 +10,15 @@ import {
 export default defineConfig(() => {
   const sourceSha = resolveRuntimeSourceSha();
   const runtimeSource = frontendRuntimeSourceManifest({ sourceSha });
+  const qaBuildInputs =
+    process.env.PARITY_INCLUDE_QA_FIXTURES === '1'
+      ? {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          'tests/fixtures/trace-waterfall': fileURLToPath(
+            new URL('./tests/fixtures/trace-waterfall.html', import.meta.url),
+          ),
+        }
+      : undefined;
   return {
     plugins: [
       react(),
@@ -49,6 +58,7 @@ export default defineConfig(() => {
       target: 'es2022',
       sourcemap: true,
       rollupOptions: {
+        input: qaBuildInputs,
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;

@@ -118,7 +118,9 @@ async function openVisualWorkspace(page: Page) {
 
   const composer = page.getByTestId('ai-composer');
   if (!(await composer.isVisible())) {
-    const openInspector = page.locator('button[aria-label="Open inspector"]:visible').first();
+    const openInspector = page
+      .locator('button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible')
+      .first();
     await expect(openInspector).toBeVisible();
     await openInspector.click();
   }

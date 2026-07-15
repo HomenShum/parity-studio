@@ -529,7 +529,12 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
 
       const inspector = page.getByTestId('inspector');
       if ((await inspector.getAttribute('aria-label')) !== 'NodeSlide inspector') {
-        await page.getByRole('button', { name: 'Open inspector' }).first().click();
+        await page
+          .locator(
+            'button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible',
+          )
+          .first()
+          .click();
       }
       await expect(page.getByTestId('ai-composer')).toBeVisible();
       await expectKeyboardFocusVisible(page.getByTestId('inspector-tab-ai'), 'AI inspector tab');
