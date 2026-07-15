@@ -131,6 +131,78 @@ describe('NodeSlide seed', () => {
     expect(coerceBriefSpec(rawSpec, 'Founder roadshow', brief).slides).toHaveLength(3);
   });
 
+  it('keeps explicit slide directions and chart values in a compact deterministic fallback', () => {
+    const brief = {
+      prompt:
+        'Create a concise three-slide launch proof. Slide 1 explains editable agent-assisted authoring. Slide 2 shows a data-bound chart with values 40, 65, and 90 percent. Slide 3 states the launch decision. Keep every object editable.',
+      audience: 'Launch reviewers',
+      purpose: 'Make the launch decision',
+      successCriteria: ['Exactly 3 slides in the requested narrative'],
+    };
+
+    const spec = deterministicBriefSpec('Launch proof', brief);
+    expect(spec.slides).toHaveLength(3);
+    expect(spec.slides[0]?.headline).toMatch(/editable agent-assisted authoring/i);
+    expect(spec.slides[1]?.chart).toEqual({
+      labels: ['Point 1', 'Point 2', 'Point 3'],
+      values: [40, 65, 90],
+      unit: '%',
+    });
+    expect(spec.slides[2]?.headline).toMatch(/launch decision/i);
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-compact-chart-fallback',
+      projectId: 'project-compact-chart-fallback',
+      title: 'Launch proof',
+      brief,
+      themeId: 'editorial-signal',
+      now: 1_000,
+    });
+    const chart = built.snapshot.elements.find((element) => element.kind === 'chart');
+    expect(chart?.slideId).toBe(built.snapshot.slides[1]?.id);
+    expect(chart?.chart?.series[0]?.values).toEqual([40, 65, 90]);
+    expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
+  });
+
+  it('relocates requested formula and image primitives into their compact slide targets', () => {
+    const brief = {
+      prompt:
+        'Create three slides. Slide 2 shows formula 172 / 64 = 2.69 goals per match. Slide 3 shows an editable stadium image placeholder.',
+      audience: 'Reviewers',
+      purpose: 'Prove compact structured primitives',
+      successCriteria: ['Exactly 3 slides in the requested narrative'],
+    };
+
+    const spec = deterministicBriefSpec('Compact primitive proof', brief);
+    expect(spec.slides).toHaveLength(3);
+    expect(spec.slides[1]?.formula).toMatchObject({
+      expression: '172 / 64',
+      variables: [
+        { label: 'Numerator', value: 172 },
+        { label: 'Denominator', value: 64 },
+      ],
+    });
+    expect(spec.slides[2]?.image).toMatchObject({
+      altText: 'stadium — replace with a licensed image',
+    });
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-compact-media-fallback',
+      projectId: 'project-compact-media-fallback',
+      title: 'Compact primitive proof',
+      brief,
+      themeId: 'quiet-precision',
+      now: 1_000,
+    });
+    expect(built.snapshot.elements.find((element) => element.kind === 'math')?.slideId).toBe(
+      built.snapshot.slides[1]?.id,
+    );
+    expect(built.snapshot.elements.find((element) => element.kind === 'image')?.slideId).toBe(
+      built.snapshot.slides[2]?.id,
+    );
+    expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
+  });
+
   it('materializes chart, formula, image-placeholder, and URL evidence as real primitives', () => {
     const brief = {
       prompt:

@@ -527,12 +527,190 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
       },
     ],
   };
+  const requestedSlideCount =
+    inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7;
   applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
-  spec.slides = spec.slides.slice(
-    0,
-    inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7,
-  );
+  applyExplicitSlideDirectives(spec.slides, brief.prompt, requestedSlideCount);
+  preserveRequestedPrimitives(spec.slides, brief.prompt, requestedSlideCount);
+  spec.slides = spec.slides.slice(0, requestedSlideCount);
   return spec;
+}
+
+interface ExplicitSlideDirective {
+  index: number;
+  instruction: string;
+}
+
+type BriefPrimaryPrimitive = 'formula' | 'chart' | 'image';
+
+const BRIEF_PRIMARY_PRIMITIVE_PATTERNS: Record<BriefPrimaryPrimitive, RegExp> = {
+  formula: /\b(?:formula|equation|math|mathematical)\b/iu,
+  chart: /\b(?:chart|graph|plot)\b/iu,
+  image: /\b(?:image|images|photo|photos|portrait|portraits)\b/iu,
+};
+
+function explicitSlideDirectives(prompt: string, slideCount: number): ExplicitSlideDirective[] {
+  return Array.from(
+    prompt.matchAll(/\bslide\s+([1-8])\s*(?::|[-–—])?\s*([^.!?\r\n]{3,220})/giu),
+  ).flatMap((match) => {
+    const slideNumber = Number(match[1]);
+    if (!Number.isInteger(slideNumber) || slideNumber < 1 || slideNumber > slideCount) return [];
+    const instruction = nodeslideCleanText(match[2] ?? '', 200);
+    return instruction ? [{ index: slideNumber - 1, instruction }] : [];
+  });
+}
+
+function applyExplicitSlideDirectives(
+  slides: NodeSlidePlannedSlide[],
+  prompt: string,
+  slideCount: number,
+): void {
+  for (const directive of explicitSlideDirectives(prompt, slideCount)) {
+    const slide = slides[directive.index];
+    if (!slide) continue;
+    const subject = nodeslideCleanText(
+      directive.instruction.replace(
+        /^(?:(?:should|must|will|can|to)\s+)?(?:explain|explains|show|shows|state|states|cover|covers|present|presents|use|uses|contain|contains|feature|features)\s+/iu,
+        '',
+      ),
+      160,
+    );
+    if (!subject) continue;
+    slide.title = nodeslideCleanText(sentenceCase(subject), 80);
+    slide.headline = sentenceCase(subject);
+  }
+}
+
+function preserveRequestedPrimitives(
+  slides: NodeSlidePlannedSlide[],
+  prompt: string,
+  slideCount: number,
+): void {
+  const directives = explicitSlideDirectives(prompt, slideCount);
+  const claimedTargets = new Set<number>();
+  for (const kind of ['formula', 'chart', 'image'] as const) {
+    if (!requestsBriefPrimitive(prompt, BRIEF_PRIMARY_PRIMITIVE_PATTERNS[kind])) continue;
+    const sourceIndex = slides.findIndex((slide) => Boolean(slide[kind]));
+    if (sourceIndex < 0) continue;
+    const directive = directives.find((candidate) =>
+      BRIEF_PRIMARY_PRIMITIVE_PATTERNS[kind].test(candidate.instruction),
+    );
+    const targetIndex =
+      directive?.index ??
+      (sourceIndex < slideCount && !claimedTargets.has(sourceIndex)
+        ? sourceIndex
+        : lastAvailableSlideIndex(slideCount, claimedTargets));
+    if (targetIndex < 0) continue;
+    moveBriefPrimaryPrimitive(slides, kind, sourceIndex, targetIndex);
+    claimedTargets.add(targetIndex);
+
+    const target = slides[targetIndex];
+    if (!target) continue;
+    if (!directive) {
+      target.title =
+        kind === 'chart'
+          ? 'Data-bound evidence'
+          : kind === 'formula'
+            ? 'Editable calculation'
+            : 'Editable visual evidence';
+      target.headline =
+        kind === 'chart'
+          ? 'The requested values remain an editable chart.'
+          : kind === 'formula'
+            ? 'The requested calculation remains a structured formula.'
+            : 'The requested visual remains replaceable and credited.';
+    }
+    if (kind === 'chart' && target.chart) {
+      const requestedChart = requestedChartValues(directive?.instruction ?? prompt);
+      if (requestedChart) target.chart = requestedChart;
+    }
+  }
+}
+
+function requestsBriefPrimitive(prompt: string, pattern: RegExp): boolean {
+  return prompt.split(/[.!?\r\n]+/u).some((clause) => {
+    const match = clause.match(pattern);
+    if (!match || match.index === undefined) return false;
+    const prefix = clause.slice(Math.max(0, match.index - 48), match.index);
+    return !/\b(?:no|not|without|avoid|do not|don't)\b/iu.test(prefix);
+  });
+}
+
+function lastAvailableSlideIndex(slideCount: number, claimedTargets: ReadonlySet<number>): number {
+  for (let index = slideCount - 1; index >= 0; index -= 1) {
+    if (!claimedTargets.has(index)) return index;
+  }
+  return -1;
+}
+
+function moveBriefPrimaryPrimitive(
+  slides: NodeSlidePlannedSlide[],
+  kind: BriefPrimaryPrimitive,
+  sourceIndex: number,
+  targetIndex: number,
+): void {
+  const source = slides[sourceIndex];
+  const target = slides[targetIndex];
+  if (!source || !target) return;
+  const primitive = source[kind];
+  if (!primitive) return;
+  if (sourceIndex !== targetIndex) {
+    slides[sourceIndex] = withoutBriefPrimaryPrimitive(source, kind);
+  }
+  const targetBase = withoutAllPrimaryPrimitives(target);
+  if (kind === 'chart') {
+    slides[targetIndex] = { ...targetBase, chart: primitive as NodeSlidePlannedChart };
+  }
+  if (kind === 'formula') {
+    slides[targetIndex] = { ...targetBase, formula: primitive as NodeSlidePlannedFormula };
+  }
+  if (kind === 'image') {
+    slides[targetIndex] = { ...targetBase, image: primitive as NodeSlidePlannedImage };
+  }
+}
+
+function withoutBriefPrimaryPrimitive(
+  slide: NodeSlidePlannedSlide,
+  kind: BriefPrimaryPrimitive,
+): NodeSlidePlannedSlide {
+  if (kind === 'chart') {
+    const { chart: _chart, ...rest } = slide;
+    return rest;
+  }
+  if (kind === 'formula') {
+    const { formula: _formula, ...rest } = slide;
+    return rest;
+  }
+  const { image: _image, ...rest } = slide;
+  return rest;
+}
+
+function withoutAllPrimaryPrimitives(slide: NodeSlidePlannedSlide): NodeSlidePlannedSlide {
+  const {
+    chart: _chart,
+    formula: _formula,
+    image: _image,
+    video: _video,
+    diagram: _diagram,
+    ...rest
+  } = slide;
+  return rest;
+}
+
+function requestedChartValues(instruction: string): NodeSlidePlannedChart | null {
+  const chartMatch = instruction.match(BRIEF_PRIMARY_PRIMITIVE_PATTERNS.chart);
+  if (!chartMatch || chartMatch.index === undefined) return null;
+  const chartClause = instruction.slice(chartMatch.index);
+  const values = Array.from(chartClause.matchAll(/-?\d+(?:\.\d+)?/gu))
+    .map((match) => Number(match[0]))
+    .filter((value) => Number.isFinite(value))
+    .slice(0, 8);
+  if (values.length < 2) return null;
+  return {
+    labels: values.map((_, index) => `Point ${index + 1}`),
+    values,
+    ...(/%|\bpercent(?:age)?\b/iu.test(chartClause) ? { unit: '%' } : {}),
+  };
 }
 
 function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prompt: string): void {
