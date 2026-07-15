@@ -465,7 +465,10 @@ describe('NodeSlide fail-closed auto routing policy', () => {
       ['deterministic availability', { deterministicAvailable: 'yes' }],
     ] as const)('rejects an invalid %s field', (_name, override) => {
       const decision = refused(
-        decideNodeSlideAutoRoute({ ...input(), ...override } as NodeSlideRoutingPolicyInput),
+        decideNodeSlideAutoRoute({
+          ...input(),
+          ...override,
+        } as unknown as NodeSlideRoutingPolicyInput),
       );
 
       expect(decision.refusal.code).toBe('invalid_input');

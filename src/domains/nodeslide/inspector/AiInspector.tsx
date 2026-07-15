@@ -63,6 +63,11 @@ import {
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
+import {
+  NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+  NODESLIDE_DELEGATION_MAX_OPERATIONS,
+  NODESLIDE_DELEGATION_MAX_USES,
+} from '../../../../shared/nodeslideDelegation';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
@@ -76,6 +81,7 @@ import {
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
 import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import type { AgentSessionApprovalMode } from '../session';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -158,6 +164,9 @@ export interface AiInspectorProps<CommandId extends string = string> {
   agentMessages?: readonly NodeSlideAgentMessage[];
   memories?: readonly NodeSlideAgentMemory[];
   memoriesLoading?: boolean;
+  approvalMode?: AgentSessionApprovalMode;
+  approvalBusy?: boolean;
+  approvalExpiresAt?: number;
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -187,6 +196,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
+  onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
   onCancelRun?: (runId: string) => void;
   onRetryRun?: () => void;
   onAccept: (patch: DeckPatch) => void;
@@ -211,6 +221,9 @@ export function AiInspector<CommandId extends string = string>({
   agentMessages = [],
   memories = [],
   memoriesLoading = false,
+  approvalMode = 'review',
+  approvalBusy = false,
+  approvalExpiresAt,
   variations,
   variationsLoading,
   isSubmitting,
@@ -233,6 +246,7 @@ export function AiInspector<CommandId extends string = string>({
   onCreateMemory,
   onUpdateMemory,
   onDeleteMemory,
+  onApprovalModeChange,
   onCancelRun,
   onRetryRun,
   onAccept,
@@ -1166,9 +1180,26 @@ export function AiInspector<CommandId extends string = string>({
           <span>{operationModeLabel(operationMode)}</span>
           <span>{designBehaviorLabel(designBehavior)}</span>
           <span>{referenceUseLabel(referenceUse)}</span>
+          <button
+            type="button"
+            className={approvalMode === 'auto_apply' ? 'is-delegated' : ''}
+            data-testid="ai-approval-summary"
+            onClick={() => setProviderControlsOpen((current) => !current)}
+            aria-expanded={providerControlsOpen}
+            aria-controls="nodeslide-ai-advanced-controls"
+            aria-label={`Change handling: ${
+              approvalMode === 'auto_apply'
+                ? 'apply validated edits automatically'
+                : 'review changes'
+            }`}
+          >
+            {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
+            {approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
+          </button>
         </div>
 
         <details
+          id="nodeslide-ai-advanced-controls"
           className="ns-ai-v3-controls-disclosure"
           data-testid="ai-provider-controls"
           open={providerControlsOpen}
@@ -1211,61 +1242,62 @@ export function AiInspector<CommandId extends string = string>({
                 </>
               )}
             </div>
-            {providerMode !== 'deterministic' ? (
-              <p className="ns-ai-model-guidance">
-                <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
-                {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
-                Trace.
-              </p>
+            {onApprovalModeChange ? (
+              <fieldset className="ns-ai-approval-controls" data-testid="ai-approval-controls">
+                <legend>Change handling</legend>
+                <label className={approvalMode === 'review' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={`${providerName}-approval`}
+                    value="review"
+                    checked={approvalMode === 'review'}
+                    disabled={approvalBusy}
+                    onChange={() => onApprovalModeChange('review')}
+                  />
+                  <Eye size={15} />
+                  <span>
+                    <strong>Review before applying</strong>
+                    <small>Compare every proposal and choose Accept or Reject.</small>
+                  </span>
+                </label>
+                <label className={approvalMode === 'auto_apply' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={`${providerName}-approval`}
+                    value="auto_apply"
+                    checked={approvalMode === 'auto_apply'}
+                    disabled={approvalBusy}
+                    onChange={() => onApprovalModeChange('auto_apply')}
+                  />
+                  {approvalBusy ? (
+                    <LoaderCircle className="ns-spin" size={15} />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                  <span>
+                    <strong>Apply validated edits automatically</strong>
+                    <small>
+                      {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours · up to{' '}
+                      {NODESLIDE_DELEGATION_MAX_USES} proposals ·{' '}
+                      {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations each. Stale,
+                      invalid, remove, hide, and publish actions stop for review.
+                    </small>
+                  </span>
+                </label>
+                {approvalBusy ? (
+                  <output className="ns-ai-approval-status">Updating change handling…</output>
+                ) : null}
+                {approvalMode === 'auto_apply' && approvalExpiresAt ? (
+                  <output className="ns-ai-approval-status">
+                    Active until{' '}
+                    {new Date(approvalExpiresAt).toLocaleTimeString([], {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </output>
+                ) : null}
+              </fieldset>
             ) : null}
-            <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
-              <legend>Provider and privacy</legend>
-              <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value="deterministic"
-                  checked={providerMode === 'deterministic'}
-                  onChange={() => {
-                    setProviderMode('deterministic');
-                    clearExternalConsent();
-                  }}
-                  data-testid="ai-provider-deterministic"
-                />
-                <ShieldCheck size={15} />
-                <span>
-                  <strong>Deterministic and private</strong>
-                  <small>No instruction or context is sent to an external model.</small>
-                </span>
-              </label>
-              <label className={providerMode !== 'deterministic' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value={nodeSlideProviderModeForModel(providerModel)}
-                  checked={providerMode !== 'deterministic'}
-                  onChange={() => {
-                    setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                    clearExternalConsent();
-                  }}
-                  data-testid="ai-provider-external"
-                />
-                <Sparkles size={15} />
-                <span>
-                  <strong>
-                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))} ·{' '}
-                    {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
-                  </strong>
-                  <small>
-                    Sends this ask, selected read context, and scoped slide content to the selected
-                    model through{' '}
-                    {providerNameForMode(nodeSlideProviderModeForModel(providerModel))}. It does not
-                    browse or fetch URLs.
-                  </small>
-                </span>
-              </label>
-            </fieldset>
-
             {commentContext ? (
               <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
                 <MessageCircle size={14} />

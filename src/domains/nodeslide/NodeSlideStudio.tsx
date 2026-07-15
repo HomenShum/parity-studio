@@ -27,6 +27,14 @@ import type {
   SlideElement,
 } from '../../../shared/nodeslide';
 import { operationElementIds } from '../../../shared/nodeslide';
+import {
+  NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+  NODESLIDE_DELEGATION_MAX_OPERATIONS,
+  NODESLIDE_DELEGATION_MAX_USES,
+  type NodeSlideDelegationAcceptanceReceipt,
+  type NodeSlideDelegationGrant,
+  type NodeSlideDelegationIssueReceipt,
+} from '../../../shared/nodeslideDelegation';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
@@ -94,8 +102,10 @@ import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
 import {
+  type AgentSessionApprovalMode,
   type AgentSessionJobReceipt,
   AgentSessionProvider,
+  agentSessionApprovalForDeck,
   agentSessionRequestFingerprint,
   useAgentSession,
 } from './session';
@@ -173,6 +183,33 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideDelegation: {
+    issueGrant: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        clientKind: 'browser' | 'codex' | 'claude';
+        maxOperations: number;
+        maxUses: number;
+        expiresAt: number;
+      },
+      NodeSlideDelegationIssueReceipt
+    >;
+    revokeGrant: PublicMutation<
+      { deckId: string; ownerAccessKey: string; grantId: string },
+      NodeSlideDelegationGrant
+    >;
+    listGrants: PublicQuery<{ deckId: string; ownerAccessKey: string }, NodeSlideDelegationGrant[]>;
+    acceptValidatedProposalWithGrant: PublicMutation<
+      {
+        deckId: string;
+        token: string;
+        patchId: string;
+        expectedCandidateDigest: string;
+      },
+      NodeSlideDelegationAcceptanceReceipt
+    >;
+  };
   nodeslideJobs: {
     startCreateDeck: PublicMutation<
       CreateDeckAdmissionRequest & { ownerAccessKey: string; idempotencyKey: string },
@@ -471,6 +508,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     failPreparedJob: failPreparedAgentSessionJob,
     archiveJob: archiveAgentSessionJob,
     resetTransientConsent: resetAgentSessionConsent,
+    installApprovalGrant,
+    clearApprovalGrant,
   } = useAgentSession();
   const requestedDeck = useMemo(() => new URLSearchParams(window.location.search).get('deck'), []);
   const requestedShare = useMemo(
@@ -531,6 +570,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [delegationBusy, setDelegationBusy] = useState(false);
+  const [revokingDelegationGrantId, setRevokingDelegationGrantId] = useState<string | null>(null);
   const [variationGenerating, setVariationGenerating] = useState(false);
   const [variationDecisionBusy, setVariationDecisionBusy] = useState(false);
   const [tastePackBusy, setTastePackBusy] = useState(false);
@@ -564,6 +605,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const historyVersionRef = useRef<{ deckId: string; version: number } | null>(null);
   const localCommitVersionsRef = useRef(new Set<number>());
   const acceptingPatchIdsRef = useRef(new Set<string>());
+  const delegationRevocationTimerRef = useRef<number | null>(null);
   const handledCreateJobIdsRef = useRef(new Set<string>());
   const handledEditJobIdsRef = useRef(new Set<string>());
   const resolvingEditJobIdsRef = useRef(new Set<string>());
@@ -573,7 +615,48 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   activeDeckIdRef.current = activeDeckId;
   ownerAccessKeyRef.current = ownerAccessKey;
 
+  const recordSuccessfulCommit = useCallback(
+    (predecessor: DeckVersion | undefined, resultingVersion: number) => {
+      localCommitVersionsRef.current.add(resultingVersion);
+      if (!predecessor) return;
+      const nextUndoStack = appendDistinctHistoryVersion(undoStackRef.current, predecessor.id);
+      undoStackRef.current = nextUndoStack;
+      redoStackRef.current = [];
+      setUndoStack(nextUndoStack);
+      setRedoStack([]);
+    },
+    [],
+  );
+
   const activeSessionJob = agentSessionState.activeJob;
+  const storedApproval = agentSessionState.controls.approval;
+  const activeApproval =
+    storedApproval.mode === 'auto_apply' && storedApproval.grantId === revokingDelegationGrantId
+      ? ({ mode: 'review' } as const)
+      : activeDeckId
+        ? agentSessionApprovalForDeck(agentSessionState, activeDeckId)
+        : ({ mode: 'review' } as const);
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (approval.mode !== 'auto_apply') return;
+    const remainingMs = approval.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearApprovalGrant();
+      setToast({
+        kind: 'error',
+        message: 'Auto-apply expired. Review mode is active again.',
+      });
+      return;
+    }
+    const expiryTimer = window.setTimeout(() => {
+      clearApprovalGrant();
+      setToast({
+        kind: 'error',
+        message: 'Auto-apply expired. Review mode is active again.',
+      });
+    }, remainingMs);
+    return () => window.clearTimeout(expiryTimer);
+  }, [agentSessionState.controls.approval, clearApprovalGrant]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -603,6 +686,107 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
+  const issueDelegationGrant = useMutation(nodeslideApi.nodeslideDelegation.issueGrant);
+  const revokeDelegationGrant = useMutation(nodeslideApi.nodeslideDelegation.revokeGrant);
+  const acceptPatchWithDelegation = useMutation(
+    nodeslideApi.nodeslideDelegation.acceptValidatedProposalWithGrant,
+  );
+  const queueDelegationRevocation = useCallback(
+    (
+      approval: Extract<typeof agentSessionState.controls.approval, { mode: 'auto_apply' }>,
+      approvalOwnerAccessKey: string,
+    ) => {
+      if (delegationRevocationTimerRef.current !== null) {
+        window.clearTimeout(delegationRevocationTimerRef.current);
+        delegationRevocationTimerRef.current = null;
+      }
+      setRevokingDelegationGrantId(approval.grantId);
+      const attempt = async () => {
+        try {
+          await revokeDelegationGrant({
+            deckId: approval.deckId,
+            ownerAccessKey: approvalOwnerAccessKey,
+            grantId: approval.grantId,
+          });
+          clearApprovalGrant();
+          setRevokingDelegationGrantId(null);
+        } catch {
+          if (Date.now() >= approval.expiresAt) {
+            clearApprovalGrant();
+            setRevokingDelegationGrantId(null);
+            return;
+          }
+          delegationRevocationTimerRef.current = window.setTimeout(attempt, 5_000);
+        }
+      };
+      void attempt();
+    },
+    [clearApprovalGrant, revokeDelegationGrant],
+  );
+  useEffect(
+    () => () => {
+      if (delegationRevocationTimerRef.current !== null) {
+        window.clearTimeout(delegationRevocationTimerRef.current);
+      }
+    },
+    [],
+  );
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (
+      approval.mode !== 'auto_apply' ||
+      approval.deckId === activeDeckId ||
+      approval.grantId === revokingDelegationGrantId
+    ) {
+      return;
+    }
+    const approvalOwnerAccessKey = getDeckOwnerAccessKey(approval.deckId);
+    if (!approvalOwnerAccessKey) {
+      clearApprovalGrant();
+      return;
+    }
+    queueDelegationRevocation(approval, approvalOwnerAccessKey);
+  }, [
+    activeDeckId,
+    agentSessionState.controls.approval,
+    clearApprovalGrant,
+    queueDelegationRevocation,
+    revokingDelegationGrantId,
+  ]);
+  useEffect(() => {
+    const approval = agentSessionState.controls.approval;
+    if (approval.mode !== 'auto_apply' || approval.grantId === revokingDelegationGrantId) {
+      return;
+    }
+    const approvalOwnerAccessKey = getDeckOwnerAccessKey(approval.deckId);
+    if (!approvalOwnerAccessKey) return;
+    let cancelled = false;
+    const reconcile = async () => {
+      try {
+        const grants = await convex.query(nodeslideApi.nodeslideDelegation.listGrants, {
+          deckId: approval.deckId,
+          ownerAccessKey: approvalOwnerAccessKey,
+        });
+        if (cancelled) return;
+        const current = grants.find((grant) => grant.id === approval.grantId);
+        if (current?.status === 'active') return;
+        clearApprovalGrant();
+        setToast({
+          kind: 'error',
+          message: 'Auto-apply is no longer active. Review mode has been restored.',
+        });
+      } catch {
+        // Migration-safe: a frontend can overlap an older backend briefly.
+        // The exact token gate still fails closed on every delegated commit.
+      }
+    };
+    void reconcile();
+    const interval = window.setInterval(() => void reconcile(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [agentSessionState.controls.approval, clearApprovalGrant, convex, revokingDelegationGrantId]);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
   const addComment = useMutation(nodeslideApi.nodeslide.addComment);
   const replyComment = useMutation(nodeslideApi.nodeslide.replyComment);
@@ -994,6 +1178,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       archiveAgentSessionJob();
       return;
     }
+    const resultPatchId = receipt.resultPatchId;
+    const resultCandidateDigest = receipt.resultCandidateDigest;
 
     if (targetDeckId !== activeDeckIdRef.current) {
       handledEditJobIdsRef.current.add(jobId);
@@ -1014,7 +1200,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         deckId: targetDeckId,
         ownerAccessKey: jobOwnerAccessKey,
       })
-      .then((authoritativeWorkspace) => {
+      .then(async (authoritativeWorkspace) => {
         if (!authoritativeWorkspace) {
           throw new Error('The completed proposal workspace could not be resumed.');
         }
@@ -1022,9 +1208,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           throw new Error('The active deck changed before the proposal could be resumed.');
         }
         const patch = authoritativeWorkspace.patches.find(
-          (candidate) => candidate.id === receipt.resultPatchId,
+          (candidate) => candidate.id === resultPatchId,
         );
-        if (!patch || patch.candidateDigest !== receipt.resultCandidateDigest) {
+        if (!patch || patch.candidateDigest !== resultCandidateDigest) {
           throw new Error('The durable proposal candidate binding did not match the workspace.');
         }
         if (
@@ -1036,6 +1222,98 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             'The durable proposal did not carry an exact successful validation receipt.',
           );
         }
+
+        const delegatedApproval = agentSessionApprovalForDeck(agentSessionState, targetDeckId);
+        let delegationFallback: string | null = null;
+        if (delegatedApproval.mode === 'auto_apply') {
+          try {
+            const delegatedReceipt = await acceptPatchWithDelegation({
+              deckId: targetDeckId,
+              token: delegatedApproval.token,
+              patchId: patch.id,
+              expectedCandidateDigest: resultCandidateDigest,
+            });
+            if (delegatedReceipt.patch.status === 'stale') {
+              if (delegatedReceipt.workspace) {
+                installWorkspace(delegatedReceipt.workspace, jobOwnerAccessKey);
+              }
+              queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+              handledEditJobIdsRef.current.add(jobId);
+              setAgentBusy(false);
+              setAiAgentActivity(null);
+              setToast({
+                kind: 'error',
+                message:
+                  'Auto-apply paused because the proposal became stale. The newer deck was preserved.',
+              });
+              archiveAgentSessionJob();
+              return;
+            }
+            if (delegatedReceipt.patch.status !== 'accepted') {
+              throw new Error('Delegated acceptance completed without a commit receipt.');
+            }
+            let acceptedWorkspace = delegatedReceipt.workspace;
+            if (!acceptedWorkspace && delegatedReceipt.delegation.replayed) {
+              acceptedWorkspace = await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+                deckId: targetDeckId,
+                ownerAccessKey: jobOwnerAccessKey,
+              });
+            }
+            const resultingDeckVersion = delegatedReceipt.patch.resultingDeckVersion;
+            if (
+              !acceptedWorkspace ||
+              resultingDeckVersion === undefined ||
+              acceptedWorkspace.deck.version < resultingDeckVersion
+            ) {
+              throw new Error('Delegated acceptance completed without a durable version receipt.');
+            }
+            if (acceptedWorkspace.deck.version === resultingDeckVersion) {
+              recordSuccessfulCommit(
+                authoritativePredecessorVersion(acceptedWorkspace),
+                resultingDeckVersion,
+              );
+            }
+            installWorkspace(acceptedWorkspace, jobOwnerAccessKey);
+            setPreviewedPatchId(null);
+            setCanvasMode('edit');
+            if (patch.linkedCommentId) setAiCommentContext(null);
+            handledEditJobIdsRef.current.add(jobId);
+            setAgentBusy(false);
+            setAiAgentActivity(null);
+            const exhausted =
+              delegatedReceipt.delegation.useCount >= delegatedReceipt.delegation.maxUses;
+            if (exhausted) clearApprovalGrant();
+            setToast({
+              kind: 'success',
+              message: exhausted
+                ? `Validated edit applied as deck v${acceptedWorkspace.deck.version}. Auto-apply reached its use limit, so review mode is active again.`
+                : `Validated edit applied automatically as deck v${acceptedWorkspace.deck.version}. Undo remains available.`,
+            });
+            void recordPreferencePatch({
+              deckId: targetDeckId,
+              ownerAccessKey: jobOwnerAccessKey,
+              patchId: delegatedReceipt.patch.id,
+            })
+              .then(() =>
+                runPreferenceEtl({
+                  deckId: targetDeckId,
+                  ownerAccessKey: jobOwnerAccessKey,
+                }),
+              )
+              .catch(() => undefined);
+            archiveAgentSessionJob();
+            return;
+          } catch (error) {
+            queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+            delegationFallback = errorMessage(
+              error,
+              'The delegated grant could not apply this proposal.',
+            );
+          }
+        }
+
         installWorkspace(authoritativeWorkspace, jobOwnerAccessKey);
         setPreviewedVariation(null);
         setPreviewedSignatureProfile(null);
@@ -1054,8 +1332,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         setAgentBusy(false);
         setAiAgentActivity(null);
         setToast({
-          kind: 'success',
-          message: 'Validated proposal resumed from its durable job. Review it before Accept.',
+          kind: delegationFallback ? 'error' : 'success',
+          message: delegationFallback
+            ? `Auto-apply paused: ${delegationFallback} Review this validated proposal before Accept.`
+            : 'Validated proposal resumed from its durable job. Review it before Accept.',
         });
         archiveAgentSessionJob();
       })
@@ -1075,10 +1355,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   }, [
     activeSessionJob?.ownerAccessKey,
     activeSessionJob?.targetDeckId,
+    acceptPatchWithDelegation,
+    agentSessionState,
     archiveAgentSessionJob,
+    clearApprovalGrant,
     convex,
     durableSessionJob,
     installWorkspace,
+    queueDelegationRevocation,
+    recordSuccessfulCommit,
+    recordPreferencePatch,
+    runPreferenceEtl,
   ]);
 
   useEffect(() => {
@@ -1554,19 +1841,6 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           requestToken: requestGate.begin('write', deckId),
         });
       }),
-    [],
-  );
-
-  const recordSuccessfulCommit = useCallback(
-    (predecessor: DeckVersion | undefined, resultingVersion: number) => {
-      localCommitVersionsRef.current.add(resultingVersion);
-      if (!predecessor) return;
-      const nextUndoStack = appendDistinctHistoryVersion(undoStackRef.current, predecessor.id);
-      undoStackRef.current = nextUndoStack;
-      redoStackRef.current = [];
-      setUndoStack(nextUndoStack);
-      setRedoStack([]);
-    },
     [],
   );
 
@@ -2723,6 +2997,72 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     }
   };
 
+  const handleApprovalModeChange = (mode: AgentSessionApprovalMode) => {
+    if (!activeDeckId || !ownerAccessKey || delegationBusy || revokingDelegationGrantId) return;
+    if (mode === activeApproval.mode) return;
+    const deckId = activeDeckId;
+    const ownerKey = ownerAccessKey;
+    setDelegationBusy(true);
+    void (async () => {
+      if (mode === 'review') {
+        if (activeApproval.mode === 'auto_apply') {
+          await revokeDelegationGrant({
+            deckId,
+            ownerAccessKey: ownerKey,
+            grantId: activeApproval.grantId,
+          });
+        }
+        clearApprovalGrant();
+        setToast({
+          kind: 'success',
+          message: 'Review mode restored. Every proposed change now waits for your decision.',
+        });
+        return;
+      }
+
+      const issueReceipt = await issueDelegationGrant({
+        deckId,
+        ownerAccessKey: ownerKey,
+        clientKind: 'browser',
+        maxOperations: NODESLIDE_DELEGATION_MAX_OPERATIONS,
+        maxUses: NODESLIDE_DELEGATION_MAX_USES,
+        expiresAt: Date.now() + NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+      });
+      try {
+        installApprovalGrant({
+          mode: 'auto_apply',
+          deckId,
+          grantId: issueReceipt.grant.id,
+          token: issueReceipt.token,
+          policyDigest: issueReceipt.grant.policyDigest,
+          issuedAt: issueReceipt.grant.createdAt,
+          expiresAt: issueReceipt.grant.expiresAt,
+          maxUses: issueReceipt.grant.maxUses,
+          maxOperations: issueReceipt.grant.maxOperations,
+        });
+      } catch (error) {
+        await revokeDelegationGrant({
+          deckId,
+          ownerAccessKey: ownerKey,
+          grantId: issueReceipt.grant.id,
+        }).catch(() => undefined);
+        throw error;
+      }
+      setToast({
+        kind: 'success',
+        message:
+          'Auto-apply is active for validated in-scope edits. Publishing and destructive actions remain manual.',
+      });
+    })()
+      .catch((error: unknown) => {
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'Change handling could not be updated.'),
+        });
+      })
+      .finally(() => setDelegationBusy(false));
+  };
+
   const previewPatch = (patch: DeckPatch | null) => {
     setPreviewedVariation(null);
     setPreviewedSignatureProfile(null);
@@ -3672,6 +4012,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           agentMessages={agentMessages ?? []}
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
+          approvalMode={activeApproval.mode}
+          approvalBusy={delegationBusy || Boolean(revokingDelegationGrantId)}
+          {...(activeApproval.mode === 'auto_apply'
+            ? { approvalExpiresAt: activeApproval.expiresAt }
+            : {})}
+          onApprovalModeChange={handleApprovalModeChange}
           {...(selectedTelemetryRunId ? { agentTelemetryRunId: selectedTelemetryRunId } : {})}
           agentTelemetryLoadingMore={telemetryLoadingRunId === selectedTelemetryRunId}
           {...(telemetryLoadError ? { agentTelemetryLoadError: telemetryLoadError } : {})}

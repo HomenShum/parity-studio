@@ -621,6 +621,9 @@ export function StudioToolbar({
           title={inspectorCollapsed ? 'Open inspector' : 'Collapse inspector'}
         >
           <PanelRightOpen size={16} />
+          <span className="ns-inspector-reopen-label">
+            {inspectorCollapsed ? 'Ask AI' : 'Close AI'}
+          </span>
         </button>
       </div>
     </header>

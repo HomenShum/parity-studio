@@ -48,6 +48,7 @@ import {
   useDrawerSurface,
   useViewportMatch,
 } from '../components/overlayPrimitives';
+import type { AgentSessionApprovalMode } from '../session';
 import type { NodeSlideTastePackId } from '../signature/packs/index';
 import {
   type AiAgentActivity,
@@ -99,6 +100,9 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   agentMessages?: readonly NodeSlideAgentMessage[];
   memories?: readonly NodeSlideAgentMemory[];
   memoriesLoading?: boolean;
+  approvalMode?: AgentSessionApprovalMode;
+  approvalBusy?: boolean;
+  approvalExpiresAt?: number;
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   agentTelemetryLoadingMore?: boolean;
@@ -127,6 +131,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     update: Partial<Pick<NodeSlideAgentMemory, 'category' | 'content' | 'status'>>,
   ) => Promise<void>;
   onDeleteAiMemory?: (memoryId: string) => Promise<void>;
+  onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
   onRetryAiRun?: () => void;
@@ -207,6 +212,9 @@ export function InspectorPanel<CommandId extends string = string>({
   agentMessages = [],
   memories = [],
   memoriesLoading = false,
+  approvalMode = 'review',
+  approvalBusy = false,
+  approvalExpiresAt,
   agentTelemetry,
   agentTelemetryRunId,
   agentTelemetryLoadingMore = false,
@@ -228,6 +236,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onCreateAiMemory,
   onUpdateAiMemory,
   onDeleteAiMemory,
+  onApprovalModeChange,
   onDeleteAiDataSource,
   onCancelAiRun,
   onRetryAiRun,
@@ -500,6 +509,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   agentMessages={agentMessages}
                   memories={memories}
                   memoriesLoading={memoriesLoading}
+                  approvalMode={approvalMode}
+                  approvalBusy={approvalBusy}
+                  {...(approvalExpiresAt !== undefined ? { approvalExpiresAt } : {})}
                   variations={variations}
                   variationsLoading={variationsLoading}
                   isSubmitting={agentBusy}
@@ -522,6 +534,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
                   {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
                   {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
+                  {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
                   {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
                   {...(onRetryAiRun ? { onRetryRun: onRetryAiRun } : {})}
                   onAccept={onAcceptPatch}

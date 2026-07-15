@@ -28,6 +28,17 @@ describe('NodeSlide authoritative agent session state', () => {
         attachments: [attachment()],
         web: { enabled: true, consentGranted: true },
         memory: { mode: 'relevant', references: ['memory-a'] },
+        approval: {
+          mode: 'auto_apply',
+          deckId: 'deck-a',
+          grantId: 'grant-a',
+          token: 'token-a',
+          policyDigest: 'sha256:policy-a',
+          issuedAt: 2,
+          expiresAt: 100,
+          maxUses: 20,
+          maxOperations: 8,
+        },
       },
       2,
     );
@@ -65,6 +76,17 @@ describe('NodeSlide authoritative agent session state', () => {
       scope: { kind: 'elements', deckId: 'deck-a', operationMode: 'layout' },
       web: { enabled: true, consentGranted: false },
       memory: { mode: 'relevant', references: ['memory-a'] },
+      approval: {
+        mode: 'auto_apply',
+        deckId: 'deck-a',
+        grantId: 'grant-a',
+        token: 'token-a',
+        policyDigest: 'sha256:policy-a',
+        issuedAt: 2,
+        expiresAt: 100,
+        maxUses: 20,
+        maxOperations: 8,
+      },
     });
     expect(reloaded.controls.attachments).toEqual([attachment()]);
     expect(reloaded.activeJob).toMatchObject({
@@ -75,6 +97,39 @@ describe('NodeSlide authoritative agent session state', () => {
       progress: 42,
       conversationRunId: 'run-a',
       memoryIds: ['memory-a'],
+    });
+  });
+
+  it('fails closed when a persisted auto-apply grant is incomplete', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      'nodeslide.agent-session:v1:session-approval',
+      JSON.stringify({
+        version: 1,
+        clientSessionId: 'session-approval',
+        surface: 'editor',
+        controls: {
+          model: 'deterministic',
+          effort: 'medium',
+          scope: {
+            kind: 'slide',
+            operationMode: 'unrestricted',
+            slideIds: [],
+            elementIds: [],
+          },
+          attachments: [],
+          web: { enabled: false, consentGranted: false },
+          memory: { mode: 'off', references: [] },
+          approval: { mode: 'auto_apply', deckId: 'deck-a' },
+        },
+        activeJob: null,
+        lastJob: null,
+        updatedAt: 1,
+      }),
+    );
+
+    expect(readAgentSessionState(storage, 'session-approval', 2).controls.approval).toEqual({
+      mode: 'review',
     });
   });
 

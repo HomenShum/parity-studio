@@ -6,6 +6,7 @@ import {
   NODESLIDE_NEBIUS_BRIEF_CONSENT as UI_NEBIUS_CONSENT,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT as UI_OPENROUTER_CONSENT,
 } from '../../src/domains/nodeslide/components/ProjectDialog';
+import { AgentSessionProvider } from '../../src/domains/nodeslide/session/AgentSessionProvider';
 import {
   NODESLIDE_NEBIUS_BRIEF_CONSENT,
   NODESLIDE_OPENROUTER_BRIEF_CONSENT,
@@ -77,15 +78,17 @@ describe('NodeSlide informed provider controls', () => {
 
   it('recommends a live model and keeps consent inline before direct creation', () => {
     const markup = renderToStaticMarkup(
-      <NodeSlideLanding
-        clientSessionId="session-test"
-        recentDecks={[]}
-        creating={false}
-        onCreate={() => undefined}
-        onExploreSample={() => undefined}
-        onOpenProjects={() => undefined}
-        onOpenDeck={() => undefined}
-      />,
+      <AgentSessionProvider clientSessionId="session-test" storage={null}>
+        <NodeSlideLanding
+          clientSessionId="session-test"
+          recentDecks={[]}
+          creating={false}
+          onCreate={() => undefined}
+          onExploreSample={() => undefined}
+          onOpenProjects={() => undefined}
+          onOpenDeck={() => undefined}
+        />
+      </AgentSessionProvider>,
     );
 
     expect(markup).toContain('data-testid="nodeslide-landing"');

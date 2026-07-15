@@ -9,6 +9,7 @@ export const NODESLIDE_AGENT_SESSION_VERSION = 1 as const;
 export type AgentSessionSurface = 'landing' | 'create' | 'editor';
 export type AgentSessionModel = 'deterministic' | NodeSlideAgentModelId;
 export type AgentSessionMemoryMode = 'off' | 'relevant';
+export type AgentSessionApprovalMode = 'review' | 'auto_apply';
 export type AgentSessionScopeKind = 'deck' | 'slide' | 'selected_slides' | 'elements';
 export type AgentSessionJobKind = 'create_deck' | 'edit_proposal';
 export type AgentSessionJobStatus =
@@ -46,6 +47,34 @@ export interface AgentSessionMemoryState {
   references: readonly string[];
 }
 
+/**
+ * Browser-held delegation for the existing validated proposal lane.
+ *
+ * This is deliberately separate from provider/web consent. It authorizes the
+ * owner-capability client to call the normal Accept mutation after the exact
+ * candidate passes scope, CAS, digest, and validation checks. It never grants
+ * publish, share, export, deletion, or external egress authority.
+ */
+export type AgentSessionApprovalState =
+  | { mode: 'review' }
+  | {
+      mode: 'auto_apply';
+      deckId: string;
+      grantId: string;
+      /** Raw, browser-held capability. The backend stores only its digest. */
+      token: string;
+      policyDigest: string;
+      issuedAt: number;
+      expiresAt: number;
+      maxUses: number;
+      maxOperations: number;
+    };
+
+export type AgentSessionDelegationGrant = Extract<
+  AgentSessionApprovalState,
+  { mode: 'auto_apply' }
+>;
+
 export interface AgentSessionControls {
   model: AgentSessionModel;
   effort: NodeSlideReasoningEffort;
@@ -53,6 +82,7 @@ export interface AgentSessionControls {
   attachments: readonly AgentSessionAttachment[];
   web: AgentSessionWebState;
   memory: AgentSessionMemoryState;
+  approval: AgentSessionApprovalState;
 }
 
 /**
@@ -124,4 +154,7 @@ export interface AgentSessionControlPatch {
   attachments?: readonly AgentSessionAttachment[];
   web?: Partial<AgentSessionWebState>;
   memory?: Partial<AgentSessionMemoryState>;
+  approval?:
+    | AgentSessionApprovalState
+    | Partial<Extract<AgentSessionApprovalState, { mode: 'auto_apply' }>>;
 }

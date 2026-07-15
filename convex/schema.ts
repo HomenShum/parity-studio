@@ -34,6 +34,21 @@ import {
   nodeslideVideoDataValidator,
 } from './lib/nodeslideValidators';
 
+const nodeslideDecisionProvenanceValidator = v.union(
+  v.object({
+    authority: v.literal('owner_capability'),
+    decidedAt: v.number(),
+  }),
+  v.object({
+    authority: v.literal('delegated'),
+    capability: v.literal('accept_validated'),
+    grantId: v.string(),
+    clientKind: v.union(v.literal('browser'), v.literal('codex'), v.literal('claude')),
+    policyDigest: v.string(),
+    decidedAt: v.number(),
+  }),
+);
+
 const nodeslidePreferenceEventTypeValidator = v.union(
   v.literal('variation_generated'),
   v.literal('variation_selected'),
@@ -680,6 +695,44 @@ export default defineSchema({
     .index('by_deck_status', ['deckId', 'status'])
     .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
 
+  nodeslide_delegation_grants: defineTable({
+    schemaVersion: v.literal('nodeslide.delegation-grant/v1'),
+    id: v.string(),
+    deckId: v.string(),
+    tokenDigest: v.string(),
+    policyVersion: v.literal('nodeslide.delegation-policy/v1'),
+    clientKind: v.union(v.literal('browser'), v.literal('codex'), v.literal('claude')),
+    capability: v.literal('accept_validated'),
+    proposalSource: v.literal('agent'),
+    proposalKind: v.literal('edit'),
+    maxOperations: v.number(),
+    maxUses: v.number(),
+    useCount: v.number(),
+    policyDigest: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_token_digest', ['tokenDigest'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
+
+  nodeslide_delegation_uses: defineTable({
+    id: v.string(),
+    grantId: v.string(),
+    deckId: v.string(),
+    patchId: v.string(),
+    candidateDigest: v.string(),
+    resultingDeckVersion: v.number(),
+    rebased: v.boolean(),
+    usedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_grant_patch', ['grantId', 'patchId'])
+    .index('by_grant_used', ['grantId', 'usedAt'])
+    .index('by_deck_used', ['deckId', 'usedAt']),
+
   nodeslide_variation_batches: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -1037,6 +1090,7 @@ export default defineSchema({
     outputTokens: v.optional(v.number()),
     sourceBindingStatus: v.optional(nodeslideSourceBindingStatusValidator),
     claimSourceBindings: v.optional(v.array(nodeslideClaimSourceBindingValidator)),
+    decisionProvenance: v.optional(nodeslideDecisionProvenanceValidator),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })

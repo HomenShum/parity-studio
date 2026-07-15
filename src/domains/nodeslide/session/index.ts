@@ -6,6 +6,7 @@ export {
 } from './AgentSessionProvider';
 export {
   agentSessionRequestFingerprint,
+  agentSessionApprovalForDeck,
   agentSessionStorageKey,
   archiveAgentSessionJob,
   attachAgentSessionJob,
@@ -20,8 +21,11 @@ export {
 } from './agentSessionState';
 export type {
   AgentSessionAttachment,
+  AgentSessionApprovalMode,
+  AgentSessionApprovalState,
   AgentSessionControlPatch,
   AgentSessionControls,
+  AgentSessionDelegationGrant,
   AgentSessionJobHandle,
   AgentSessionJobKind,
   AgentSessionJobReceipt,

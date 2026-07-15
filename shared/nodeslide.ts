@@ -1,4 +1,5 @@
 import type { NodeSlideDataAttachment } from './nodeslideAttachments';
+import type { NodeSlideDecisionProvenance } from './nodeslideDelegation';
 
 export const NODESLIDE_SCHEMA_VERSION = 'nodeslide.slidelang/v1' as const;
 export const NODESLIDE_TOOLCHAIN_VERSION = 'local-slidelang-adapter/1.1.0' as const;
@@ -837,6 +838,8 @@ export interface AgentTrace {
   sourceBindingStatus?: NodeSlideSourceBindingStatus;
   /** Empty for non-factual runs and honestly unavailable on legacy traces. */
   claimSourceBindings?: NodeSlideClaimSourceBinding[];
+  /** Explicit authority behind the terminal proposal decision. */
+  decisionProvenance?: NodeSlideDecisionProvenance;
   createdAt: number;
   completedAt?: number;
 }

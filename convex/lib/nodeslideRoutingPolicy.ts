@@ -829,7 +829,7 @@ function providerNativeMetadata(catalog: NodeSlideCatalogModel): RoutingModelMet
   };
 }
 
-function exactRouteFor(catalog: NodeSlideCatalogModel): NodeSlideSelectedRoute {
+function exactRouteFor(catalog: NodeSlideCatalogModel): NodeSlideExternalSelectedRoute {
   return {
     provider: catalog.provider,
     catalogModelId: catalog.id,

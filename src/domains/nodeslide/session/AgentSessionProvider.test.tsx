@@ -49,6 +49,23 @@ describe('AgentSessionProvider', () => {
     expect(screen.getByTestId('job-binding')).toHaveTextContent('deck-owner-key|');
     expect(screen.getByTestId('job-target')).toHaveTextContent('deck-a');
   });
+
+  it('persists a revocable deck-scoped auto-apply grant', () => {
+    const first = renderSession();
+    fireEvent.click(screen.getByRole('button', { name: 'Install auto-apply grant' }));
+
+    expect(screen.getByTestId('approval-mode')).toHaveTextContent('auto_apply');
+    expect(screen.getByTestId('approval-deck')).toHaveTextContent('deck-a');
+    expect(screen.getByTestId('approval-grant')).toHaveTextContent('grant-a');
+
+    first.unmount();
+    renderSession();
+    expect(screen.getByTestId('approval-mode')).toHaveTextContent('auto_apply');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke auto-apply grant' }));
+    expect(screen.getByTestId('approval-mode')).toHaveTextContent('review');
+    expect(screen.getByTestId('approval-grant')).toHaveTextContent('none');
+  });
 });
 
 function renderSession() {
@@ -57,6 +74,7 @@ function renderSession() {
     <AgentSessionProvider
       clientSessionId="shared-session"
       createSecret={() => `secret-${++secret}`}
+      now={() => 10}
     >
       <SessionHarness />
     </AgentSessionProvider>,
@@ -115,6 +133,27 @@ function SessionHarness() {
       >
         Prepare edit job
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          session.installApprovalGrant({
+            mode: 'auto_apply',
+            deckId: 'deck-a',
+            grantId: 'grant-a',
+            token: 'delegation-token-a',
+            policyDigest: 'sha256:policy-a',
+            issuedAt: 1,
+            expiresAt: 100,
+            maxUses: 20,
+            maxOperations: 8,
+          })
+        }
+      >
+        Install auto-apply grant
+      </button>
+      <button type="button" onClick={session.clearApprovalGrant}>
+        Revoke auto-apply grant
+      </button>
       <output data-testid="landing-attachments">{landing.attachments.length}</output>
       <output data-testid="create-attachments">{create.attachments.length}</output>
       <output data-testid="editor-attachments">{editor.attachments.length}</output>
@@ -124,6 +163,17 @@ function SessionHarness() {
         {job ? `${job.ownerAccessKey}|${job.idempotencyKey}` : 'none'}
       </output>
       <output data-testid="job-target">{job?.targetDeckId ?? 'none'}</output>
+      <output data-testid="approval-mode">{session.state.controls.approval.mode}</output>
+      <output data-testid="approval-deck">
+        {session.state.controls.approval.mode === 'auto_apply'
+          ? session.state.controls.approval.deckId
+          : 'none'}
+      </output>
+      <output data-testid="approval-grant">
+        {session.state.controls.approval.mode === 'auto_apply'
+          ? session.state.controls.approval.grantId
+          : 'none'}
+      </output>
     </div>
   );
 }

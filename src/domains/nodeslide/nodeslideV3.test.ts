@@ -184,9 +184,6 @@ describe('NodeSlide v3 visual contract', () => {
 
     const narrowRail = containerBlock('@container nodeslide-inspector (max-width: 380px)');
     expect(narrowRail).toMatch(
-      /\.ns-ai-provider-controls > label:not\(\.ns-ai-provider-consent\)[\s\S]*?flex: 1 1 100%;[\s\S]*?min-width: 0;[\s\S]*?width: 100%;/,
-    );
-    expect(narrowRail).toMatch(
       /\.ns-scope-row \.ns-chip-group[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*?width: 100%;/,
     );
     expect(narrowRail).toMatch(

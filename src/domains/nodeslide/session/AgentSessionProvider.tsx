@@ -22,6 +22,7 @@ import {
 } from './agentSessionState';
 import type {
   AgentSessionControlPatch,
+  AgentSessionDelegationGrant,
   AgentSessionJobHandle,
   AgentSessionJobKind,
   AgentSessionJobReceipt,
@@ -44,6 +45,8 @@ export interface AgentSessionContextValue {
   failPreparedJob: (error: string) => void;
   archiveJob: () => void;
   resetTransientConsent: () => void;
+  installApprovalGrant: (grant: AgentSessionDelegationGrant) => void;
+  clearApprovalGrant: () => void;
 }
 
 interface AgentSessionProviderProps {
@@ -161,6 +164,19 @@ export function AgentSessionProvider({
   const resetTransientConsent = useCallback(() => {
     commit(updateAgentSessionControls(stateRef.current, { web: { consentGranted: false } }, now()));
   }, [commit, now]);
+  const installApprovalGrant = useCallback(
+    (grant: AgentSessionDelegationGrant) => {
+      const next = updateAgentSessionControls(stateRef.current, { approval: grant }, now());
+      if (next.controls.approval.mode !== 'auto_apply') {
+        throw new Error('The delegation grant is incomplete or expired.');
+      }
+      commit(next);
+    },
+    [commit, now],
+  );
+  const clearApprovalGrant = useCallback(() => {
+    commit(updateAgentSessionControls(stateRef.current, { approval: { mode: 'review' } }, now()));
+  }, [commit, now]);
 
   const value = useMemo<AgentSessionContextValue>(
     () => ({
@@ -173,14 +189,18 @@ export function AgentSessionProvider({
       failPreparedJob,
       archiveJob,
       resetTransientConsent,
+      installApprovalGrant,
+      clearApprovalGrant,
     }),
     [
       archiveJob,
       attachJob,
+      clearApprovalGrant,
       failPreparedJob,
       prepareJob,
       reconcileJob,
       resetTransientConsent,
+      installApprovalGrant,
       setSurface,
       state,
       updateControls,

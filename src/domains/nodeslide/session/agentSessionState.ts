@@ -82,6 +82,7 @@ export function updateAgentSessionControls(
         uniqueBounded(patch.memory?.references ?? state.controls.memory.references, 24),
       ),
     }),
+    approval: normalizeApproval(patch.approval ?? state.controls.approval, now),
   };
   const frozenControls = freezeControls(controls);
   if (controlsEqual(state.controls, frozenControls)) return state;
@@ -276,6 +277,17 @@ export function isAgentSessionJobActive(status: AgentSessionJobStatus): boolean 
   return ACTIVE_JOB_STATUSES.has(status);
 }
 
+export function agentSessionApprovalForDeck(
+  state: AgentSessionState,
+  deckId: string,
+  now = Date.now(),
+): AgentSessionControls['approval'] {
+  const approval = state.controls.approval;
+  return approval.mode === 'auto_apply' && approval.deckId === deckId && approval.expiresAt > now
+    ? approval
+    : Object.freeze({ mode: 'review' as const });
+}
+
 function defaultControls(): AgentSessionControls {
   return freezeControls({
     model: NODESLIDE_DEFAULT_AGENT_MODEL,
@@ -289,6 +301,7 @@ function defaultControls(): AgentSessionControls {
     attachments: Object.freeze([]),
     web: Object.freeze({ enabled: false, consentGranted: false }),
     memory: Object.freeze({ mode: 'off', references: Object.freeze([]) }),
+    approval: Object.freeze({ mode: 'review' as const }),
   });
 }
 
@@ -335,6 +348,7 @@ function normalizeState(value: unknown, clientSessionId: string, now: number): A
           },
         }
       : {}),
+    approval: normalizeApproval(controlsValue.approval, now),
   };
   const controls = updateAgentSessionControls(initial, controlsPatch, now).controls;
   const activeJob = normalizeJob(value.activeJob);
@@ -454,6 +468,7 @@ function freezeControls(controls: AgentSessionControls): AgentSessionControls {
       ...controls.memory,
       references: Object.freeze([...controls.memory.references]),
     }),
+    approval: Object.freeze(controls.approval),
   });
 }
 
@@ -469,6 +484,8 @@ function controlsEqual(left: AgentSessionControls, right: AgentSessionControls):
     left.web.consentGranted === right.web.consentGranted &&
     left.memory.mode === right.memory.mode &&
     sameStrings(left.memory.references, right.memory.references) &&
+    left.approval.mode === right.approval.mode &&
+    approvalEqual(left.approval, right.approval) &&
     left.scope.kind === right.scope.kind &&
     left.scope.operationMode === right.scope.operationMode &&
     left.scope.deckId === right.scope.deckId &&
@@ -515,6 +532,67 @@ function normalizeScopeKind(value: unknown): AgentSessionScope['kind'] {
 
 function normalizeOperationMode(value: unknown): AgentSessionScope['operationMode'] {
   return value === 'copy' || value === 'style' || value === 'layout' ? value : 'unrestricted';
+}
+
+function normalizeApproval(value: unknown, now: number): AgentSessionControls['approval'] {
+  if (!isRecord(value) || value.mode !== 'auto_apply') {
+    return Object.freeze({ mode: 'review' as const });
+  }
+  const deckId = typeof value.deckId === 'string' ? value.deckId.trim().slice(0, 256) : '';
+  const grantId = typeof value.grantId === 'string' ? value.grantId.trim().slice(0, 160) : '';
+  const token = typeof value.token === 'string' ? value.token.trim().slice(0, 512) : '';
+  const policyDigest =
+    typeof value.policyDigest === 'string' ? value.policyDigest.trim().slice(0, 256) : '';
+  const issuedAt = finiteNumber(value.issuedAt, 0);
+  const expiresAt = finiteNumber(value.expiresAt, 0);
+  const maxUses = boundedPositiveInteger(value.maxUses, 100);
+  const maxOperations = boundedPositiveInteger(value.maxOperations, 8);
+  if (
+    !deckId ||
+    !grantId ||
+    !token ||
+    !policyDigest ||
+    issuedAt <= 0 ||
+    expiresAt <= now ||
+    maxUses <= 0 ||
+    maxOperations <= 0
+  ) {
+    return Object.freeze({ mode: 'review' as const });
+  }
+  return Object.freeze({
+    mode: 'auto_apply' as const,
+    deckId,
+    grantId,
+    token,
+    policyDigest,
+    issuedAt,
+    expiresAt,
+    maxUses,
+    maxOperations,
+  });
+}
+
+function approvalEqual(
+  left: AgentSessionControls['approval'],
+  right: AgentSessionControls['approval'],
+): boolean {
+  if (left.mode !== right.mode) return false;
+  if (left.mode === 'review' || right.mode === 'review') return true;
+  return (
+    left.deckId === right.deckId &&
+    left.grantId === right.grantId &&
+    left.token === right.token &&
+    left.policyDigest === right.policyDigest &&
+    left.issuedAt === right.issuedAt &&
+    left.expiresAt === right.expiresAt &&
+    left.maxUses === right.maxUses &&
+    left.maxOperations === right.maxOperations
+  );
+}
+
+function boundedPositiveInteger(value: unknown, maximum: number): number {
+  const numeric = finiteNumber(value, 0);
+  return Math.max(0, Math.min(maximum, Math.floor(numeric)));
 }
 
 function isJobStatus(value: unknown): value is AgentSessionJobStatus {
@@ -584,6 +662,14 @@ interface UnknownRecord extends Record<string, unknown> {
   memory?: unknown;
   mode?: unknown;
   references?: unknown;
+  approval?: unknown;
+  grantId?: unknown;
+  token?: unknown;
+  policyDigest?: unknown;
+  issuedAt?: unknown;
+  expiresAt?: unknown;
+  maxUses?: unknown;
+  maxOperations?: unknown;
   activeJob?: unknown;
   lastJob?: unknown;
   surface?: unknown;

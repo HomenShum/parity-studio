@@ -29,7 +29,6 @@ import {
   retryNodeSlideJob,
 } from './lib/nodeslideJobState';
 import {
-  type NodeSlideCreateJobRequest,
   type NodeSlideEditProposalJobRequest,
   nodeSlideCreateJobRequestFromArgs,
   nodeSlideEditProposalJobRequestFromArgs,

@@ -273,6 +273,27 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(onPropose.mock.calls[0]?.[2]).not.toHaveProperty('providerConsent');
   });
 
+  it('keeps delegated change handling compact, explicit, and keyboard-operable', async () => {
+    const snapshot = fixture('delegated-change-handling');
+    const onApprovalModeChange = vi.fn<NonNullable<AiInspectorProps['onApprovalModeChange']>>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      approvalMode: 'auto_apply',
+      approvalExpiresAt: Date.now() + 60_000,
+      onApprovalModeChange,
+    });
+
+    const summary = screen.getByTestId('ai-approval-summary');
+    expect(summary).toHaveTextContent('Auto-apply safe edits');
+    summary.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
+    expect(screen.getByTestId('ai-approval-controls')).toBeVisible();
+    await user.click(screen.getByRole('radio', { name: /review before applying/i }));
+    expect(onApprovalModeChange).toHaveBeenCalledWith('review');
+  });
+
   it('keeps the review scroll position stable as activity arrives during proposal and direction review', () => {
     const snapshot = fixture('scroll');
     const firstMessage = message({ id: 'message-1', content: 'First persisted update.' });

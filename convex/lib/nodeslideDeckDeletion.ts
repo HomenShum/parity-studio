@@ -6,6 +6,8 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_slides',
   'nodeslide_elements',
   'nodeslide_patches',
+  'nodeslide_delegation_grants',
+  'nodeslide_delegation_uses',
   'nodeslide_variation_batches',
   'nodeslide_variations',
   'nodeslide_variation_decisions',
@@ -115,6 +117,18 @@ export async function deleteNodeSlideDeckRows(
     await ctx.db
       .query('nodeslide_patches')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_delegation_grants')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_delegation_uses')
+      .withIndex('by_deck_used', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
   );
   addGroup(

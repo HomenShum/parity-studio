@@ -111,13 +111,18 @@ describe('NodeSlide AI review inspector', () => {
   });
 
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
-    const markup = renderAi();
+    const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
-    expect(markup).toMatch(/data-testid="ai-provider-external"[^>]*checked=""/);
-    expect(markup).toContain('Nebius · Z.ai · GLM 5.2 — external');
+    expect(markup).toContain('data-testid="ai-approval-summary"');
+    expect(markup).toMatch(
+      /data-testid="ai-approval-summary"[^>]*aria-expanded="false"[^>]*aria-controls="nodeslide-ai-advanced-controls"/,
+    );
+    expect(markup).not.toContain('data-testid="ai-provider-external"');
     expect(markup).toContain('Consent required');
     expect(markup).toContain('Allow one Nebius request');
-    expect(markup).toContain('It does not browse or fetch URLs');
+    expect(markup).toContain('12 hours');
+    expect(markup).toContain('64 proposals');
+    expect(markup).toContain('8 non-destructive operations each');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
     expect(markup).toContain('<option value="low">Low</option>');
@@ -409,6 +414,7 @@ interface RenderAiOptions {
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   initialProviderMode?: 'deterministic' | 'openrouter_free' | 'nebius';
   initialProviderModel?: (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
+  onApprovalModeChange?: () => void;
 }
 
 function renderAi({
@@ -423,6 +429,7 @@ function renderAi({
   onAttachDataFile,
   initialProviderMode,
   initialProviderModel,
+  onApprovalModeChange,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -448,6 +455,7 @@ function renderAi({
       {...(initialProviderModel ? { initialProviderModel } : {})}
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
+      {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
       onPropose={() => undefined}
       {...(onAttachDataFile ? { onAttachDataFile } : {})}
       onAccept={() => undefined}
