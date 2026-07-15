@@ -173,7 +173,7 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toContain('grid-template-columns: 28px minmax(0, 1fr);');
     expect(css).toContain('.nodeslide-studio .ns-ai-v3-tool');
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 104px;[\s\S]*?padding: 15px 14px 10px;/,
+      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 76px;[\s\S]*?padding: 15px 14px 10px;/,
     );
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: wrap;/,
@@ -182,8 +182,9 @@ describe('NodeSlide v3 visual contract', () => {
       /@container nodeslide-inspector \(max-width: 430px\)[\s\S]*?\.ns-prompt-footer-status[\s\S]*?display: none;[\s\S]*?\.ns-ai-tool-label[\s\S]*?display: none;/,
     );
     expect(aiInspectorSource).toContain(
-      'follow={!activityAutoScrollPaused && activityHasScrollTarget}',
+      'autoScroll={!activityAutoScrollPaused && activityHasScrollTarget}',
     );
+    expect(aiInspectorSource).toContain('<ThreadPrimitive.ViewportFooter');
   });
 
   it('switches the agent rail into a review-first state without a nested composer scroller', () => {
@@ -217,17 +218,17 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
-  it('keeps expanded agent controls in document flow instead of covering the composer', () => {
+  it('opens advanced controls upward without moving or covering the bottom composer', () => {
     const stateContract = css.slice(css.indexOf('/* Agent rail state contract.'));
 
     expect(stateContract).toMatch(
-      /\.ns-ai-v3-controls-disclosure \{[\s\S]*?overflow: hidden;[\s\S]*?position: static;/,
+      /\.ns-ai-v3-controls-disclosure \{[\s\S]*?overflow: visible;[\s\S]*?position: relative;/,
     );
     expect(stateContract).toMatch(
-      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?max-height: min\(44vh, 420px\);[\s\S]*?position: static;/,
+      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?bottom: calc\(100% \+ 7px\);[\s\S]*?max-height: min\(32vh, 230px\);[\s\S]*?overflow-y: auto;[\s\S]*?position: absolute;/,
     );
-    expect(stateContract).not.toMatch(
-      /\.ns-ai-v3-controls-disclosure\[open\][^{]*\{[^}]*position: absolute;/,
+    expect(stateContract).toMatch(
+      /\.ns-ai-v3-composer > \.ns-ai-v3-prompt,[\s\S]*?\.ns-ai-v3-composer-field \{[\s\S]*?order: 5;/,
     );
   });
 

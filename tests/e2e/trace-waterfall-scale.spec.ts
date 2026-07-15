@@ -45,6 +45,7 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       expect(compactMetrics.documentOverflow).toBeLessThanOrEqual(2);
       expect(compactMetrics.domNodes).toBeLessThan(TRACE_SCALE_DOM_NODE_BUDGET);
 
+      await settleTracePixels(page);
       await page.screenshot({
         path: resolve(artifactDir, `exact-${count}-compact.png`),
         animations: 'disabled',
@@ -69,6 +70,7 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       expect(expandedMetrics.waterfallOverflowX).toBe('hidden');
       expect(runtimeErrors).toEqual([]);
 
+      await settleTracePixels(page);
       await page.screenshot({
         path: resolve(artifactDir, `exact-${count}-expanded.png`),
         animations: 'disabled',

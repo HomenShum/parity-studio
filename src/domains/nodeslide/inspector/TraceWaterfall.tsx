@@ -19,6 +19,8 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type UIEvent,
+  createContext,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -86,6 +88,7 @@ const MAX_VISIBLE_EVENTS = 40;
 const MAX_VISIBLE_ATTRIBUTES = 24;
 const MAX_VISIBLE_EVIDENCE = 12;
 const MAX_VISIBLE_GROUPS = 12;
+const MAX_RECURSIVE_O11Y_SPANS = 64;
 
 function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: string): boolean {
   if (filter === 'errors' && span.status !== 'error') return false;
@@ -491,6 +494,7 @@ function traceRowDomId(spanId: string): string {
 
 interface O11yRowProps {
   index: number;
+  mode?: 'virtualized' | 'tree';
   rowBySpanId: ReadonlyMap<string, TraceWaterfallRow>;
   eventsBySpan: ReadonlyMap<string, readonly NodeSlideAgentEvent[]>;
   selectedSpanId: string | null;
@@ -503,6 +507,7 @@ interface O11yRowProps {
 
 function O11ySpanRow({
   index,
+  mode = 'virtualized',
   rowBySpanId,
   eventsBySpan,
   selectedSpanId,
@@ -523,7 +528,7 @@ function O11ySpanRow({
   const visibleEvents = allEvents.slice(-MAX_EVENT_MARKERS);
   const hiddenEventCount = allEvents.length - visibleEvents.length;
   const rangeDuration = Math.max(1, rangeEnd - rangeStart);
-  const isCollapsed = collapsed.has(sourceSpan.spanId);
+  const isCollapsed = mode === 'tree' ? o11ySpan.isCollapsed : collapsed.has(sourceSpan.spanId);
   const timing = spanTimingState(sourceSpan);
   const tickLeft = Math.max(
     0,
@@ -533,8 +538,8 @@ function O11ySpanRow({
   return (
     <SpanPrimitive.Root
       id={traceRowDomId(sourceSpan.spanId)}
-      className={`ns-waterfall-row is-${spanTone(sourceSpan)} ${selectedSpanId === sourceSpan.spanId ? 'is-selected' : ''}`}
-      style={{ top: index * ROW_HEIGHT }}
+      className={`ns-waterfall-row is-${spanTone(sourceSpan)} ${mode === 'tree' ? 'is-o11y-tree' : 'is-virtualized'} ${selectedSpanId === sourceSpan.spanId ? 'is-selected' : ''}`}
+      {...(mode === 'virtualized' ? { style: { top: index * ROW_HEIGHT } } : {})}
       role="treeitem"
       aria-level={row.depth + 1}
       aria-selected={selectedSpanId === sourceSpan.spanId}
@@ -547,21 +552,33 @@ function O11ySpanRow({
       onClick={() => onSelect(sourceSpan.spanId)}
     >
       <SpanPrimitive.Indent className="ns-waterfall-label" baseIndent={8} indentPerLevel={13}>
-        {row.childCount > 0 ? (
-          <button
-            type="button"
-            tabIndex={-1}
-            className="ns-waterfall-disclosure"
-            aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${sourceSpan.name}`}
-            aria-expanded={!isCollapsed}
-            data-collapsed={isCollapsed ? 'true' : 'false'}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggle(sourceSpan.spanId);
-            }}
-          >
-            {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-          </button>
+        {o11ySpan.hasChildren ? (
+          mode === 'tree' ? (
+            <SpanPrimitive.CollapseToggle
+              tabIndex={-1}
+              className="ns-waterfall-disclosure"
+              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${sourceSpan.name}`}
+              aria-expanded={!isCollapsed}
+              onClick={() => onSelect(sourceSpan.spanId)}
+            >
+              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            </SpanPrimitive.CollapseToggle>
+          ) : (
+            <button
+              type="button"
+              tabIndex={-1}
+              className="ns-waterfall-disclosure"
+              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${sourceSpan.name}`}
+              aria-expanded={!isCollapsed}
+              data-collapsed={isCollapsed ? 'true' : 'false'}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggle(sourceSpan.spanId);
+              }}
+            >
+              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )
         ) : (
           <span className="ns-waterfall-disclosure" />
         )}
@@ -640,6 +657,42 @@ function O11ySpanRow({
   );
 }
 
+interface O11yTreeContextValue {
+  rowBySpanId: ReadonlyMap<string, TraceWaterfallRow>;
+  eventsBySpan: ReadonlyMap<string, readonly NodeSlideAgentEvent[]>;
+  selectedSpanId: string | null;
+  rangeStart: number;
+  rangeEnd: number;
+  onSelect: (spanId: string) => void;
+}
+
+const O11yTreeContext = createContext<O11yTreeContextValue | null>(null);
+const NO_COLLAPSED_SPANS = new Set<string>();
+
+function RecursiveO11ySpanRow() {
+  const context = useContext(O11yTreeContext);
+  if (!context) throw new Error('Recursive trace row requires an observability tree context.');
+  return (
+    <>
+      <O11ySpanRow
+        index={0}
+        mode="tree"
+        rowBySpanId={context.rowBySpanId}
+        eventsBySpan={context.eventsBySpan}
+        selectedSpanId={context.selectedSpanId}
+        collapsed={NO_COLLAPSED_SPANS}
+        rangeStart={context.rangeStart}
+        rangeEnd={context.rangeEnd}
+        onSelect={context.onSelect}
+        onToggle={context.onSelect}
+      />
+      <SpanPrimitive.Children components={RECURSIVE_O11Y_COMPONENTS} />
+    </>
+  );
+}
+
+const RECURSIVE_O11Y_COMPONENTS = { Span: RecursiveO11ySpanRow } as const;
+
 function VirtualizedO11yRows({
   rows,
   scrollTop,
@@ -710,11 +763,18 @@ function O11ySpanTimelineResource({
   onKeyDown,
   flatten,
 }: O11ySpanTimelineProps) {
+  const useRecursiveTree = !flatten && rows.length <= MAX_RECURSIVE_O11Y_SPANS;
   const o11ySpans = useMemo(() => {
     const adapted = toO11ySpans(rows.map((row) => row.span));
-    return flatten ? adapted.map((span) => ({ ...span, parentSpanId: null })) : adapted;
-  }, [flatten, rows]);
+    return flatten || !useRecursiveTree
+      ? adapted.map((span) => ({ ...span, parentSpanId: null }))
+      : adapted;
+  }, [flatten, rows, useRecursiveTree]);
   const aui = useAui({ span: SpanResource({ spans: o11ySpans }) }, { parent: null });
+  const rowBySpanId = useMemo(
+    () => new Map(rows.map((row) => [row.span.spanId, row] as const)),
+    [rows],
+  );
 
   return (
     <AuiProvider value={aui}>
@@ -728,18 +788,35 @@ function O11ySpanTimelineResource({
         data-observability-primitives="assistant-ui-react-o11y"
         onKeyDown={onKeyDown}
       >
-        <VirtualizedO11yRows
-          rows={rows}
-          scrollTop={scrollTop}
-          viewportHeight={viewportHeight}
-          eventsBySpan={eventsBySpan}
-          selectedSpanId={selectedSpanId}
-          collapsed={collapsed}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEnd}
-          onSelect={onSelect}
-          onToggle={onToggle}
-        />
+        {useRecursiveTree ? (
+          <O11yTreeContext.Provider
+            value={{
+              rowBySpanId,
+              eventsBySpan,
+              selectedSpanId,
+              rangeStart,
+              rangeEnd,
+              onSelect,
+            }}
+          >
+            <div className="ns-waterfall-rows is-o11y-tree" data-testid="trace-o11y-tree">
+              <SpanPrimitive.Children components={RECURSIVE_O11Y_COMPONENTS} />
+            </div>
+          </O11yTreeContext.Provider>
+        ) : (
+          <VirtualizedO11yRows
+            rows={rows}
+            scrollTop={scrollTop}
+            viewportHeight={viewportHeight}
+            eventsBySpan={eventsBySpan}
+            selectedSpanId={selectedSpanId}
+            collapsed={collapsed}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            onSelect={onSelect}
+            onToggle={onToggle}
+          />
+        )}
       </SpanPrimitive.Timeline>
     </AuiProvider>
   );
@@ -908,9 +985,14 @@ function TraceWaterfallRun({
     [telemetry.spans],
   );
   const hasActiveFilter = filter !== 'all' || Boolean(query.trim());
+  const usesRecursiveO11yTree =
+    !hasActiveFilter && grouping === 'trace' && spans.length <= MAX_RECURSIVE_O11Y_SPANS;
   const effectiveCollapsed = useMemo(
-    () => (hasActiveFilter || grouping !== 'trace' ? new Set<string>() : collapsed),
-    [collapsed, grouping, hasActiveFilter],
+    () =>
+      hasActiveFilter || grouping !== 'trace' || usesRecursiveO11yTree
+        ? new Set<string>()
+        : collapsed,
+    [collapsed, grouping, hasActiveFilter, usesRecursiveO11yTree],
   );
   const rows = useMemo(
     () => buildGroupedWaterfallRows(spans, grouping, effectiveCollapsed, filter, query),
@@ -1305,7 +1387,7 @@ function TraceWaterfallRun({
           onSelect={setSelectedSpanId}
           onToggle={toggleSpan}
           onKeyDown={onTreeKeyDown}
-          flatten={grouping !== 'trace'}
+          flatten={grouping !== 'trace' || hasActiveFilter}
         />
       </div>
 

@@ -46,6 +46,10 @@ beforeAll(() => {
     configurable: true,
     value: () => undefined,
   });
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    configurable: true,
+    value: () => undefined,
+  });
   Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
     configurable: true,
     value: () => false,
@@ -95,7 +99,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('NodeSlide persisted activity AI Elements adapter', () => {
+describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
   it('proposes against exactly the noncontiguous selected slides and labels the scope count', async () => {
     const snapshot = fixture('multi-slide-scope');
     const slide2 = snapshot.slides[1];
@@ -636,7 +640,8 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     );
 
     expect(reviewScroll.scrollTop).toBe(215);
-    expect(reviewScroll.querySelector('[role="log"]')).toHaveAttribute('data-follow', 'false');
+    expect(reviewScroll).toHaveAttribute('role', 'log');
+    expect(reviewScroll).toHaveAttribute('data-follow', 'false');
   });
 
   it('links only referenced source records with resolved titles and safe URLs', async () => {
