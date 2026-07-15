@@ -201,6 +201,13 @@ describe('NodeSlide baseline edit planner extraction', () => {
         summary: 'Remove the body text',
         operations: [{ op: 'remove_element', slideId: target.slideId, elementId: target.id }],
       },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 0,
+        inputTokens: 1,
+        outputTokens: 1,
+      },
     }));
 
     const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
@@ -233,6 +240,13 @@ describe('NodeSlide baseline edit planner extraction', () => {
             visible: false,
           },
         ],
+      },
+      telemetry: {
+        provider: NODESLIDE_EDIT_PROVIDER,
+        model: NODESLIDE_EDIT_MODEL,
+        costMicroUsd: 0,
+        inputTokens: 1,
+        outputTokens: 1,
       },
     }));
 
@@ -272,6 +286,13 @@ describe('NodeSlide baseline edit planner extraction', () => {
               y: target.bbox.y,
             },
           ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 0,
+          inputTokens: 1,
+          outputTokens: 1,
         },
       }),
     });
