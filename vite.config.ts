@@ -60,15 +60,20 @@ export default defineConfig(() => {
       rollupOptions: {
         input: qaBuildInputs,
         output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'editor';
-            if (id.includes('react') || id.includes('react-dom')) return 'react';
-            if (id.includes('convex')) return 'convex';
-            if (id.includes('lucide-react')) return 'icons';
-            if (id.includes('jszip')) return 'zip';
-            return 'vendor';
-          },
+          // Let Rollup own shared-chunk ordering for the QA multi-page build.
+          // Applying the production vendor buckets to a second React entry can
+          // create a circular shared chunk that fails before either root mounts.
+          manualChunks: qaBuildInputs
+            ? undefined
+            : (id) => {
+                if (!id.includes('node_modules')) return undefined;
+                if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'editor';
+                if (id.includes('react') || id.includes('react-dom')) return 'react';
+                if (id.includes('convex')) return 'convex';
+                if (id.includes('lucide-react')) return 'icons';
+                if (id.includes('jszip')) return 'zip';
+                return 'vendor';
+              },
         },
       },
     },
