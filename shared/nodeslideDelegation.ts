@@ -507,11 +507,16 @@ export function nodeSlideDelegationCandidateViolations(args: {
       violations.push('The composed candidate hides or covers slide content.');
     }
     if (policy.style) {
-      const properties = { ...policy.style };
-      if ('color' in policy.style || 'fill' in policy.style) {
-        properties.color = after.style.color;
-        properties.fill = after.style.fill;
-      }
+      const compareForegroundAndFill = 'color' in policy.style || 'fill' in policy.style;
+      const properties: Partial<ElementStyle> = {
+        ...policy.style,
+        ...(compareForegroundAndFill && after.style.color !== undefined
+          ? { color: after.style.color }
+          : {}),
+        ...(compareForegroundAndFill && after.style.fill !== undefined
+          ? { fill: after.style.fill }
+          : {}),
+      };
       if (styleRequiresReview(properties)) {
         violations.push('The composed candidate makes content unreadable.');
       }
