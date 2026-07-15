@@ -190,6 +190,102 @@ describe('NodeSlide baseline edit planner extraction', () => {
     if (result.ok) expect(result.receipt.providerOutcome).toBe('not_requested');
   });
 
+  it('keeps an explicitly requested element removal as a reviewable provider proposal', async () => {
+    const { snapshot, target, scope } = fixture();
+    scope.operationMode = 'unrestricted';
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.instruction = 'Delete the current body text element.';
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true,
+      value: {
+        summary: 'Remove the body text',
+        operations: [{ op: 'remove_element', slideId: target.slideId, elementId: target.id }],
+      },
+    }));
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      { op: 'remove_element', slideId: target.slideId, elementId: target.id },
+    ]);
+    expect(operationResponseSchema(provider, 'remove_element')).toBeDefined();
+    expect(provider.mock.calls[0]?.[0].systemPrompt).toContain(
+      'destructive proposals always stop for explicit review',
+    );
+  });
+
+  it('keeps an explicitly requested hide as a reviewable visibility proposal', async () => {
+    const { snapshot, target, scope } = fixture();
+    scope.operationMode = 'unrestricted';
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.instruction = 'Hide the current body text element.';
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true,
+      value: {
+        summary: 'Hide the body text',
+        operations: [
+          {
+            op: 'set_visibility_v1',
+            slideId: target.slideId,
+            elementId: target.id,
+            visible: false,
+          },
+        ],
+      },
+    }));
+
+    const result = await planNodeSlideEdit(planningInput, { callProvider: provider });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toEqual([
+      {
+        op: 'set_visibility_v1',
+        slideId: target.slideId,
+        elementId: target.id,
+        visible: false,
+      },
+    ]);
+    expect(operationResponseSchema(provider, 'set_visibility_v1')).toBeDefined();
+  });
+
+  it('rejects an unrelated safe substitution for an explicit removal request', async () => {
+    const { snapshot, target, scope } = fixture();
+    scope.operationMode = 'unrestricted';
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.instruction =
+      'Delete the current body text element and make no other changes.';
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Moved an unrelated element',
+          operations: [
+            {
+              op: 'move',
+              slideId: target.slideId,
+              elementId: target.id,
+              x: Math.min(0.95, target.bbox.x + 0.01),
+              y: target.bbox.y,
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'proposal_invalid',
+      message: expect.stringContaining(
+        'did not contain the explicitly requested removal operation',
+      ),
+      receipt: { terminalOutcome: 'proposal_invalid' },
+    });
+  });
+
   it('turns a common decisive-headline request into a bounded visual emphasis fallback', async () => {
     const { snapshot, target, scope } = fixture();
     target.name = 'Headline';
@@ -823,7 +919,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.4.0',
+      adapterVersion: '1.5.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'failed',
       terminalOutcome: 'completed',
@@ -869,7 +965,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.4.0',
+      adapterVersion: '1.5.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
@@ -957,7 +1053,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.4.0',
+      adapterVersion: '1.5.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
