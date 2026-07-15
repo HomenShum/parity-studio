@@ -15,12 +15,16 @@ describe('NodeSlide delegated-mode fail-closed UI contract', () => {
     expect(studioSource).toContain(
       'blockedDelegationGrantIdsRef.current.has(delegatedApproval.grantId)',
     );
-    expect(studioSource).toMatch(
-      /!activeDeckId \|\|\s+!ownerAccessKey \|\|\s+agentBusy \|\|\s+delegationBusy/,
-    );
-    expect(studioSource).toContain(
-      'approvalBusy={agentBusy || delegationBusy || Boolean(revokingDelegationGrantId)}',
-    );
+    expect(studioSource).toMatch(/!activeDeckId \|\|\s+!ownerAccessKey \|\|\s+authorityChangeBusy/);
+    expect(studioSource).toContain('approvalBusy={authorityChangeBusy}');
+    expect(studioSource).toContain('isAgentSessionEditAuthorityLocked(activeSessionJob)');
+  });
+
+  it('bounds grant issuance, revocation, and failed-install cleanup', () => {
+    expect(studioSource.match(/withNodeSlideDelegationDeadline\(/g)).toHaveLength(3);
+    expect(studioSource).toContain("'Delegation grant issuance'");
+    expect(studioSource).toContain("'Delegation revocation'");
+    expect(studioSource).toContain("'Delegation cleanup'");
   });
 
   it('uses the owner capability to reload workspace after every delegated receipt', () => {

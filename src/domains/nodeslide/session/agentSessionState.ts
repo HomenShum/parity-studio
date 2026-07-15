@@ -26,6 +26,10 @@ import { NODESLIDE_AGENT_SESSION_VERSION } from './types';
 
 const STORAGE_PREFIX = 'nodeslide.agent-session:v1:';
 const ACTIVE_JOB_STATUSES = new Set<AgentSessionJobStatus>(['preparing', 'queued', 'running']);
+const AUTHORITY_LOCK_JOB_STATUSES = new Set<AgentSessionJobStatus>([
+  ...ACTIVE_JOB_STATUSES,
+  'awaiting_review',
+]);
 const JOB_MAX_ATTEMPTS = 3;
 
 export function createInitialAgentSessionState(
@@ -275,6 +279,12 @@ export function agentSessionRequestFingerprint(value: unknown): string {
 
 export function isAgentSessionJobActive(status: AgentSessionJobStatus): boolean {
   return ACTIVE_JOB_STATUSES.has(status);
+}
+
+export function isAgentSessionEditAuthorityLocked(job: AgentSessionJobHandle | null): boolean {
+  return Boolean(
+    job && job.kind === 'edit_proposal' && AUTHORITY_LOCK_JOB_STATUSES.has(job.status),
+  );
 }
 
 export function agentSessionApprovalForDeck(

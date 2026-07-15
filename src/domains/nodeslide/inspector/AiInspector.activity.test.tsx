@@ -294,6 +294,27 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(onApprovalModeChange).toHaveBeenCalledWith('review');
   });
 
+  it('blocks keyboard and form submission while change authority is transitioning', async () => {
+    const snapshot = fixture('delegation-transition-lock');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      approvalBusy: true,
+      onPropose,
+    });
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(instruction, 'Change this headline.');
+    await user.keyboard('{Enter}');
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+  });
+
   it('keeps the review scroll position stable as activity arrives during proposal and direction review', () => {
     const snapshot = fixture('scroll');
     const firstMessage = message({ id: 'message-1', content: 'First persisted update.' });

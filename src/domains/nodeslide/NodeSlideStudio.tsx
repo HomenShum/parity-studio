@@ -77,6 +77,7 @@ import { LoadingScreen, RecoveryScreen, Toast } from './components/shell/EditorF
 import { EditorNavigator } from './components/shell/EditorNavigator';
 import { EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
 import { elementScope } from './components/shell/editorActions';
+import { withNodeSlideDelegationDeadline } from './delegationClient';
 import {
   type EditorRequestToken,
   type WorkspaceReceiptMarker,
@@ -108,6 +109,7 @@ import {
   AgentSessionProvider,
   agentSessionApprovalForDeck,
   agentSessionRequestFingerprint,
+  isAgentSessionEditAuthorityLocked,
   useAgentSession,
 } from './session';
 import { extractPptxSignature } from './signature/index';
@@ -570,7 +572,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const [deleteDeckOpen, setDeleteDeckOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(() =>
+    isAgentSessionEditAuthorityLocked(agentSessionState.activeJob),
+  );
   const [delegationBusy, setDelegationBusy] = useState(false);
   const [revokingDelegationGrantId, setRevokingDelegationGrantId] = useState<string | null>(null);
   const [variationGenerating, setVariationGenerating] = useState(false);
@@ -631,6 +635,11 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   );
 
   const activeSessionJob = agentSessionState.activeJob;
+  const authorityChangeBusy =
+    agentBusy ||
+    isAgentSessionEditAuthorityLocked(activeSessionJob) ||
+    delegationBusy ||
+    Boolean(revokingDelegationGrantId);
   const storedApproval = agentSessionState.controls.approval;
   const activeApproval =
     storedApproval.mode === 'auto_apply' && storedApproval.grantId === revokingDelegationGrantId
@@ -709,11 +718,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       const attempt = async () => {
         attempts += 1;
         try {
-          await revokeDelegationGrant({
-            deckId: approval.deckId,
-            ownerAccessKey: approvalOwnerAccessKey,
-            grantId: approval.grantId,
-          });
+          await withNodeSlideDelegationDeadline(
+            revokeDelegationGrant({
+              deckId: approval.deckId,
+              ownerAccessKey: approvalOwnerAccessKey,
+              grantId: approval.grantId,
+            }),
+            'Delegation revocation',
+          );
           setRevokingDelegationGrantId(null);
         } catch {
           if (Date.now() >= approval.expiresAt || attempts >= 3) {
@@ -1178,6 +1190,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     }
 
     if (receipt.status !== 'awaiting_review') return;
+    setAgentBusy(true);
     if (
       !targetDeckId ||
       !jobOwnerAccessKey ||
@@ -3046,14 +3059,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   };
 
   const handleApprovalModeChange = (mode: AgentSessionApprovalMode) => {
-    if (
-      !activeDeckId ||
-      !ownerAccessKey ||
-      agentBusy ||
-      delegationBusy ||
-      revokingDelegationGrantId
-    )
-      return;
+    if (!activeDeckId || !ownerAccessKey || authorityChangeBusy) return;
     if (mode === activeApproval.mode) return;
     const deckId = activeDeckId;
     const ownerKey = ownerAccessKey;
@@ -3072,14 +3078,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         return;
       }
 
-      const issueReceipt = await issueDelegationGrant({
-        deckId,
-        ownerAccessKey: ownerKey,
-        clientKind: 'browser',
-        maxOperations: NODESLIDE_DELEGATION_MAX_OPERATIONS,
-        maxUses: NODESLIDE_DELEGATION_MAX_USES,
-        expiresAt: Date.now() + NODESLIDE_BROWSER_DELEGATION_TTL_MS,
-      });
+      const issueReceipt = await withNodeSlideDelegationDeadline(
+        issueDelegationGrant({
+          deckId,
+          ownerAccessKey: ownerKey,
+          clientKind: 'browser',
+          maxOperations: NODESLIDE_DELEGATION_MAX_OPERATIONS,
+          maxUses: NODESLIDE_DELEGATION_MAX_USES,
+          expiresAt: Date.now() + NODESLIDE_BROWSER_DELEGATION_TTL_MS,
+        }),
+        'Delegation grant issuance',
+      );
       try {
         installApprovalGrant({
           mode: 'auto_apply',
@@ -3093,11 +3102,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           maxOperations: issueReceipt.grant.maxOperations,
         });
       } catch (error) {
-        await revokeDelegationGrant({
-          deckId,
-          ownerAccessKey: ownerKey,
-          grantId: issueReceipt.grant.id,
-        }).catch(() => undefined);
+        await withNodeSlideDelegationDeadline(
+          revokeDelegationGrant({
+            deckId,
+            ownerAccessKey: ownerKey,
+            grantId: issueReceipt.grant.id,
+          }),
+          'Delegation cleanup',
+        ).catch(() => undefined);
         throw error;
       }
       setToast({
@@ -4065,7 +4077,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           approvalMode={activeApproval.mode}
-          approvalBusy={agentBusy || delegationBusy || Boolean(revokingDelegationGrantId)}
+          approvalBusy={authorityChangeBusy}
           {...(activeApproval.mode === 'auto_apply'
             ? { approvalExpiresAt: activeApproval.expiresAt }
             : {})}

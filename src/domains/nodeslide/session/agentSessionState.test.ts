@@ -3,6 +3,7 @@ import {
   archiveAgentSessionJob,
   attachAgentSessionJob,
   createInitialAgentSessionState,
+  isAgentSessionEditAuthorityLocked,
   prepareAgentSessionJob,
   readAgentSessionState,
   reconcileAgentSessionJob,
@@ -223,6 +224,13 @@ describe('NodeSlide authoritative agent session state', () => {
       resultPatchId: 'patch-edit',
       resultCandidateDigest: 'sha256:candidate-edit',
     });
+    expect(isAgentSessionEditAuthorityLocked(awaitingReview.activeJob)).toBe(true);
+    expect(
+      isAgentSessionEditAuthorityLocked(
+        readAgentSessionState(storage, 'session-edit', 4).activeJob,
+      ),
+    ).toBe(true);
+    expect(isAgentSessionEditAuthorityLocked(null)).toBe(false);
   });
 });
 

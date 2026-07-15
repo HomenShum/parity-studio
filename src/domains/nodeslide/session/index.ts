@@ -11,6 +11,7 @@ export {
   archiveAgentSessionJob,
   attachAgentSessionJob,
   createInitialAgentSessionState,
+  isAgentSessionEditAuthorityLocked,
   isAgentSessionJobActive,
   prepareAgentSessionJob,
   readAgentSessionState,

@@ -650,7 +650,8 @@ export function AiInspector<CommandId extends string = string>({
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
     const text = submittedInstruction.trim();
-    if (!text || isSubmitting || attachmentBusy || !provider || !providerReady) return;
+    if (!text || isSubmitting || approvalBusy || attachmentBusy || !provider || !providerReady)
+      return;
     let submittedReadContext = requestedReadContext;
     if (files.length > 0) {
       if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
@@ -771,6 +772,7 @@ export function AiInspector<CommandId extends string = string>({
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
+      if (approvalBusy) return;
       event.currentTarget.form?.requestSubmit();
     }
   };
