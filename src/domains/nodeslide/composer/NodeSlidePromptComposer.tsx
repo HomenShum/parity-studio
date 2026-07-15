@@ -99,6 +99,8 @@ export interface NodeSlidePromptComposerProps {
     'aria-haspopup'?: boolean | 'menu' | 'listbox' | 'tree' | 'grid' | 'dialog';
   };
   status?: ChatStatus;
+  /** Locks every submission-defining control while a request is being prepared. */
+  interactionDisabled?: boolean;
   disabled?: boolean;
   submitLabel: string;
   submitTestId?: string;
@@ -168,6 +170,7 @@ export function NodeSlidePromptComposer({
   onTextareaKeyDown,
   textareaAria,
   status = 'ready',
+  interactionDisabled = false,
   disabled = false,
   submitLabel,
   submitTestId,
@@ -197,9 +200,11 @@ export function NodeSlidePromptComposer({
   const agentSession = useOptionalAgentSession();
   const authoritativeModel = agentSession?.state.controls.model ?? model;
   const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
-  const attachmentControlDisabled = attachmentDisabled ?? status === 'submitted';
+  const attachmentControlDisabled =
+    interactionDisabled || Boolean(attachmentDisabled) || status === 'submitted';
   const submissionRevisionRef = useRef(submissionRevision);
   submissionRevisionRef.current = submissionRevision;
+  const preparingRevisionRef = useRef<string | number | undefined>(undefined);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -244,10 +249,18 @@ export function NodeSlidePromptComposer({
     [agentSession, onEffortChange],
   );
 
+  const handleSubmissionPreparingChange = useCallback(
+    (preparing: boolean) => {
+      if (preparing) preparingRevisionRef.current = submissionRevisionRef.current;
+      onSubmissionPreparingChange?.(preparing);
+      if (!preparing) preparingRevisionRef.current = undefined;
+    },
+    [onSubmissionPreparingChange],
+  );
+
   const handleSubmit = async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
-    const submittedRevision = submissionRevisionRef.current;
+    const submittedRevision = preparingRevisionRef.current ?? submissionRevisionRef.current;
     onAttachmentError?.(null);
-    onSubmissionPreparingChange?.(true);
     try {
       const files = await promptInputMessageFiles(message.files);
       if (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current) {
@@ -261,8 +274,6 @@ export function NodeSlidePromptComposer({
         error instanceof Error ? error.message : 'The attached file could not be read.',
       );
       throw error;
-    } finally {
-      onSubmissionPreparingChange?.(false);
     }
   };
 
@@ -284,6 +295,7 @@ export function NodeSlidePromptComposer({
         maxFiles={attachmentMaxFiles}
         multiple
         onError={handleAttachmentInputError}
+        onSubmissionPreparingChange={handleSubmissionPreparingChange}
         onSubmit={handleSubmit}
       >
         <AttachmentSessionBridge
@@ -298,6 +310,7 @@ export function NodeSlidePromptComposer({
           {...textareaAria}
           aria-label={textareaLabel}
           className="ns-prompt-textarea"
+          disabled={interactionDisabled}
           id={textareaId}
           maxLength={textareaMaxLength}
           onChange={(event) => {
@@ -328,6 +341,7 @@ export function NodeSlidePromptComposer({
               onChange={chooseModel}
               portalContainer={portalContainer}
               testId={modelTestId}
+              disabled={interactionDisabled}
             />
             {authoritativeModel !== 'deterministic' &&
             authoritativeEffort &&
@@ -339,6 +353,7 @@ export function NodeSlidePromptComposer({
                   aria-label={effortLabel}
                   className="ns-prompt-effort"
                   data-testid={effortTestId}
+                  disabled={interactionDisabled}
                   onChange={(event) =>
                     chooseEffort(event.currentTarget.value as NodeSlideReasoningEffort)
                   }
@@ -361,7 +376,7 @@ export function NodeSlidePromptComposer({
               <PromptInputSubmit
                 aria-label={submitLabel}
                 data-testid={submitTestId}
-                disabled={disabled}
+                disabled={disabled || interactionDisabled}
                 size={submitContent ? 'sm' : 'icon-sm'}
                 status={status}
               >
@@ -376,6 +391,7 @@ export function NodeSlidePromptComposer({
 }
 
 interface NodeSlideModelSelectorProps {
+  disabled: boolean;
   label: string;
   model: NodeSlideComposerModelValue;
   onChange: (model: NodeSlideComposerModelValue) => void;
@@ -384,6 +400,7 @@ interface NodeSlideModelSelectorProps {
 }
 
 function NodeSlideModelSelector({
+  disabled,
   label,
   model,
   onChange,
@@ -392,15 +409,23 @@ function NodeSlideModelSelector({
 }: NodeSlideModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const selected = model === 'deterministic' ? null : nodeSlideAgentModel(model);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const choose = (value: NodeSlideComposerModelValue) => {
     onChange(value);
     setOpen(false);
   };
 
   return (
-    <ModelSelector onOpenChange={setOpen} open={open}>
+    <ModelSelector onOpenChange={(next) => !disabled && setOpen(next)} open={open}>
       <ModelSelectorTrigger asChild>
-        <PromptInputButton aria-label={label} data-testid={testId} className="ns-model-trigger">
+        <PromptInputButton
+          aria-label={label}
+          data-testid={testId}
+          className="ns-model-trigger"
+          disabled={disabled}
+        >
           {model === 'deterministic' ? (
             <ShieldCheck aria-hidden="true" className="size-3.5" />
           ) : (

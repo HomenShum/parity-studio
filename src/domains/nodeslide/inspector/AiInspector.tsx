@@ -287,16 +287,15 @@ export function AiInspector<CommandId extends string = string>({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [submissionPreparing, setSubmissionPreparing] = useState(false);
+  const submissionPreparingRef = useRef(false);
+  const handleSubmissionPreparingChange = useCallback((preparing: boolean) => {
+    submissionPreparingRef.current = preparing;
+    setSubmissionPreparing(preparing);
+  }, []);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const approvalBusyRef = useRef(approvalBusy);
   approvalBusyRef.current = approvalBusy;
   const approvalSignature = `${approvalMode}:${approvalExpiresAt ?? 0}:${approvalBusy ? 'busy' : 'ready'}`;
-  const approvalSignatureRef = useRef(approvalSignature);
-  const approvalRevisionRef = useRef(0);
-  if (approvalSignatureRef.current !== approvalSignature) {
-    approvalSignatureRef.current = approvalSignature;
-    approvalRevisionRef.current += 1;
-  }
   const approvalControlLocked =
     approvalBusy || attachmentBusy || submissionPreparing || isSubmitting;
   const [scopeError, setScopeError] = useState<string | null>(null);
@@ -505,6 +504,15 @@ export function AiInspector<CommandId extends string = string>({
     clearProviderConsent();
     clearWebResearchConsent();
   }, [clearProviderConsent, clearWebResearchConsent]);
+  const submissionSignature = `${externalRequestConsentKey}:${approvalSignature}:${
+    providerConsent ? 'provider-consented' : 'provider-unconsented'
+  }:${webResearchConsent ? 'web-consented' : 'web-unconsented'}`;
+  const submissionSignatureRef = useRef(submissionSignature);
+  const submissionRevisionRef = useRef(0);
+  if (submissionSignatureRef.current !== submissionSignature) {
+    submissionSignatureRef.current = submissionSignature;
+    submissionRevisionRef.current += 1;
+  }
 
   const selectedAgentModel = nodeSlideAgentModel(providerModel);
   const provider = createAiProviderRequest(
@@ -662,18 +670,19 @@ export function AiInspector<CommandId extends string = string>({
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
     const text = submittedInstruction.trim();
-    if (
-      !text ||
-      isSubmitting ||
-      approvalBusyRef.current ||
-      attachmentBusy ||
-      !provider ||
-      !providerReady
-    )
-      return;
-    const submittedApprovalRevision = approvalRevisionRef.current;
-    const authorityChanged = () =>
-      approvalBusyRef.current || approvalRevisionRef.current !== submittedApprovalRevision;
+    if (!text) throw new Error('Enter an instruction before proposing an edit.');
+    if (isSubmitting || attachmentBusy) {
+      throw new Error('A request is already being prepared. Wait for it to finish and try again.');
+    }
+    if (approvalBusyRef.current) {
+      throw new Error('Change handling is updating. Review it and submit again.');
+    }
+    if (!provider || !providerReady) {
+      throw new Error('Complete the selected model and web consent before submitting.');
+    }
+    const submittedRevision = submissionRevisionRef.current;
+    const requestChanged = () =>
+      approvalBusyRef.current || submissionRevisionRef.current !== submittedRevision;
     let submittedReadContext = requestedReadContext;
     if (files.length > 0) {
       if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
@@ -683,9 +692,9 @@ export function AiInspector<CommandId extends string = string>({
         const attachedReferences: AiReadReference[] = [];
         for (const file of files) {
           attachedReferences.push(await onAttachDataFile(file));
-          if (authorityChanged()) {
+          if (requestChanged()) {
             throw new Error(
-              'Change handling changed while data was attached. Review and submit again.',
+              'Change handling or request settings changed while data was attached. Review and submit again.',
             );
           }
         }
@@ -704,8 +713,10 @@ export function AiInspector<CommandId extends string = string>({
         setAttachmentBusy(false);
       }
     }
-    if (authorityChanged()) {
-      throw new Error('Change handling changed before submission. Review and submit again.');
+    if (requestChanged()) {
+      throw new Error(
+        'Change handling or request settings changed before submission. Review and submit again.',
+      );
     }
     const command =
       selectedCommand ?? commandFromInstruction(submittedInstruction, availableCommands);
@@ -804,7 +815,7 @@ export function AiInspector<CommandId extends string = string>({
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      if (approvalBusy) return;
+      if (approvalControlLocked) return;
       event.currentTarget.form?.requestSubmit();
     }
   };
@@ -1189,7 +1200,7 @@ export function AiInspector<CommandId extends string = string>({
                 type="button"
                 className="is-primary"
                 onClick={() => requestVariations('button')}
-                disabled={variationBusy || !providerReady}
+                disabled={approvalControlLocked || variationBusy || !providerReady}
                 data-testid="ai-generate-directions"
               >
                 <Layers3 size={12} /> Generate 3 directions
@@ -1198,6 +1209,7 @@ export function AiInspector<CommandId extends string = string>({
                 <button
                   key={action.id}
                   type="button"
+                  disabled={approvalControlLocked}
                   onClick={() => updateInstruction(action.instruction)}
                   data-testid="ai-suggested-action"
                 >
@@ -1342,6 +1354,7 @@ export function AiInspector<CommandId extends string = string>({
                 {onClearCommentContext ? (
                   <button
                     type="button"
+                    disabled={approvalControlLocked}
                     onClick={onClearCommentContext}
                     aria-label={`Remove comment scope ${commentContext.label}`}
                   >
@@ -1357,6 +1370,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'deck' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'deck'}
+                    disabled={approvalControlLocked}
                     onClick={() => setScopeChoice('deck')}
                   >
                     Deck
@@ -1365,6 +1379,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'slide' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'slide'}
+                    disabled={approvalControlLocked}
                     onClick={() => setScopeChoice('slide')}
                   >
                     This slide
@@ -1374,6 +1389,7 @@ export function AiInspector<CommandId extends string = string>({
                       type="button"
                       className={scopeChoice === 'selected_slides' ? 'is-active' : ''}
                       aria-pressed={scopeChoice === 'selected_slides'}
+                      disabled={approvalControlLocked}
                       onClick={() => setScopeChoice('selected_slides')}
                     >
                       Selected slides ({selectedSlideIds.length})
@@ -1383,7 +1399,7 @@ export function AiInspector<CommandId extends string = string>({
                     type="button"
                     className={scopeChoice === 'elements' ? 'is-active' : ''}
                     aria-pressed={scopeChoice === 'elements'}
-                    disabled={selectedElements.length === 0}
+                    disabled={approvalControlLocked || selectedElements.length === 0}
                     onClick={() => setScopeChoice('elements')}
                   >
                     Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
@@ -1403,6 +1419,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Operation mode</span>
                 <select
                   value={operationMode}
+                  disabled={approvalControlLocked}
                   onChange={(event) => setOperationMode(event.target.value as OperationMode)}
                   aria-label="Operation mode"
                 >
@@ -1416,6 +1433,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Design behavior</span>
                 <select
                   value={designBehavior}
+                  disabled={approvalControlLocked}
                   onChange={(event) =>
                     setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
                   }
@@ -1432,6 +1450,7 @@ export function AiInspector<CommandId extends string = string>({
                 <span>Reference use</span>
                 <select
                   value={referenceUse}
+                  disabled={approvalControlLocked}
                   onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
                   data-testid="ai-reference-use"
                 >
@@ -1455,6 +1474,7 @@ export function AiInspector<CommandId extends string = string>({
               <button
                 key={referenceKey(reference)}
                 type="button"
+                disabled={approvalControlLocked}
                 onClick={() => removeReadReference(reference)}
                 aria-label={`Remove read context ${reference.label}`}
               >
@@ -1465,6 +1485,7 @@ export function AiInspector<CommandId extends string = string>({
               <button
                 type="button"
                 className="is-command"
+                disabled={approvalControlLocked}
                 onClick={removeCommand}
                 aria-label={`Remove command ${selectedCommand.label}`}
               >
@@ -1481,13 +1502,18 @@ export function AiInspector<CommandId extends string = string>({
           attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
           attachmentInputTestId="ai-data-file-input"
           attachmentMaxFiles={1}
-          submissionRevision={approvalRevisionRef.current}
-          onSubmissionPreparingChange={setSubmissionPreparing}
+          submissionRevision={submissionRevisionRef.current}
+          onSubmissionPreparingChange={handleSubmissionPreparingChange}
           attachButtonTestId="ai-attach-data"
           attachLabel="Attach data file"
           composerClassName="ns-ai-v3-prompt"
           disabled={
-            !instruction.trim() || isSubmitting || approvalBusy || attachmentBusy || !providerReady
+            !instruction.trim() ||
+            isSubmitting ||
+            approvalBusy ||
+            attachmentBusy ||
+            submissionPreparing ||
+            !providerReady
           }
           effort={providerEffort}
           effortLabel="Reasoning effort"
@@ -1527,7 +1553,8 @@ export function AiInspector<CommandId extends string = string>({
                   : 'Turn this into a crisp executive story...'
           }
           session={composerSession}
-          status={isSubmitting || attachmentBusy ? 'submitted' : 'ready'}
+          interactionDisabled={approvalControlLocked}
+          status={isSubmitting || attachmentBusy || submissionPreparing ? 'submitted' : 'ready'}
           submitLabel="Propose edit"
           submitContent={<span className="ns-ai-submit-label">Propose</span>}
           submitTestId="ai-submit"
@@ -1536,6 +1563,7 @@ export function AiInspector<CommandId extends string = string>({
               aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
               aria-pressed={composerExpanded}
               className="ns-ai-v3-expand-composer"
+              disabled={approvalControlLocked}
               onClick={() => setComposerExpanded((expanded) => !expanded)}
               title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
             >
@@ -1559,6 +1587,7 @@ export function AiInspector<CommandId extends string = string>({
                 aria-label="Connect BYOK model or coding agent"
                 className="ns-ai-tool-button"
                 data-testid="ai-connect-agent"
+                disabled={approvalControlLocked}
                 onClick={() => setConnectionsOpen(true)}
                 title="Connect BYOK model or coding agent"
               >
@@ -1571,6 +1600,7 @@ export function AiInspector<CommandId extends string = string>({
                   className="ns-ai-tool-button"
                   aria-pressed={webResearch}
                   data-testid="ai-web-research-toggle"
+                  disabled={approvalControlLocked}
                   onClick={() => {
                     setWebResearch((enabled) => !enabled);
                     clearExternalConsent();
@@ -1588,6 +1618,7 @@ export function AiInspector<CommandId extends string = string>({
                   className="ns-ai-tool-button"
                   aria-pressed={useMemoryForRun}
                   data-testid="ai-memory"
+                  disabled={approvalControlLocked}
                   onClick={() => setMemoryOpen(true)}
                   title="Manage durable deck memory"
                   variant={useMemoryForRun ? 'default' : 'ghost'}
@@ -1602,7 +1633,7 @@ export function AiInspector<CommandId extends string = string>({
               <PromptInputButton
                 aria-label="Add read context reference"
                 className="ns-ai-tool-button ns-ai-tool-context"
-                disabled={references.length === 0}
+                disabled={approvalControlLocked || references.length === 0}
                 onClick={() => openTokenMenu('@')}
                 title="Add read context"
               >
@@ -1612,6 +1643,7 @@ export function AiInspector<CommandId extends string = string>({
               <PromptInputButton
                 aria-label="Add command"
                 className="ns-ai-tool-button ns-ai-tool-command"
+                disabled={approvalControlLocked}
                 onClick={() => openTokenMenu('/')}
                 title="Add command"
               >
@@ -1629,6 +1661,7 @@ export function AiInspector<CommandId extends string = string>({
                 <input
                   type="checkbox"
                   checked={providerConsent !== null}
+                  disabled={approvalControlLocked}
                   onChange={(event) =>
                     setProviderConsent(
                       event.target.checked ? aiProviderConsentGrant(providerMode) : null,
@@ -1652,6 +1685,7 @@ export function AiInspector<CommandId extends string = string>({
                 <input
                   type="checkbox"
                   checked={webResearchConsent !== null}
+                  disabled={approvalControlLocked}
                   onChange={(event) =>
                     setWebResearchConsent(
                       event.target.checked ? NODESLIDE_WEB_RESEARCH_CONSENT : null,
@@ -1688,6 +1722,7 @@ export function AiInspector<CommandId extends string = string>({
                 id={`${menuId}-option-${index}`}
                 type="button"
                 role="menuitem"
+                disabled={approvalControlLocked}
                 className={menuIndex === index ? 'is-active' : ''}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseReference(reference)}
@@ -1707,6 +1742,7 @@ export function AiInspector<CommandId extends string = string>({
                   id={`${menuId}-option-${index}`}
                   type="button"
                   role="menuitem"
+                  disabled={approvalControlLocked}
                   className={menuIndex === index ? 'is-active' : ''}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => chooseCommand(command)}

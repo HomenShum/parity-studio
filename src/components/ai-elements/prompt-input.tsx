@@ -481,6 +481,11 @@ export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' 
     'accept' | 'multiple' | 'onChange' | 'ref' | 'type'
   > & { 'data-testid'?: string };
   onError?: (err: PromptInputError) => void;
+  /**
+   * Reports the complete submit-preparation window, including asynchronous blob
+   * conversion that happens before `onSubmit` is called.
+   */
+  onSubmissionPreparingChange?: (preparing: boolean) => void;
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>,
@@ -498,6 +503,7 @@ export const PromptInput = ({
   clearOnSubmit = true,
   fileInputProps,
   onError,
+  onSubmissionPreparingChange,
   onSubmit,
   children,
   ...props
@@ -509,6 +515,7 @@ export const PromptInput = ({
   // Refs
   const inputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const submissionPreparingRef = useRef(false);
 
   // ----- Local attachments (only used when no provider)
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
@@ -823,22 +830,25 @@ export const PromptInput = ({
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
     async (event) => {
       event.preventDefault();
-
-      const form = event.currentTarget;
-      const text = usingProvider
-        ? controller.textInput.value
-        : (() => {
-            const formData = new FormData(form);
-            return (formData.get('message') as string) || '';
-          })();
-
-      // Reset form immediately after capturing text to avoid race condition
-      // where user input during async blob conversion would be lost
-      if (!usingProvider && clearOnSubmit) {
-        form.reset();
-      }
+      if (submissionPreparingRef.current) return;
+      submissionPreparingRef.current = true;
 
       try {
+        onSubmissionPreparingChange?.(true);
+        const form = event.currentTarget;
+        const text = usingProvider
+          ? controller.textInput.value
+          : (() => {
+              const formData = new FormData(form);
+              return (formData.get('message') as string) || '';
+            })();
+
+        // Reset form immediately after capturing text to avoid race condition
+        // where user input during async blob conversion would be lost
+        if (!usingProvider && clearOnSubmit) {
+          form.reset();
+        }
+
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
           files.map(async ({ id: _id, ...item }) => {
@@ -880,9 +890,12 @@ export const PromptInput = ({
         }
       } catch {
         // Don't clear on error - user may want to retry
+      } finally {
+        submissionPreparingRef.current = false;
+        onSubmissionPreparingChange?.(false);
       }
     },
-    [usingProvider, controller, files, onSubmit, clear, clearOnSubmit],
+    [usingProvider, controller, files, onSubmit, onSubmissionPreparingChange, clear, clearOnSubmit],
   );
 
   // Render with or without local provider

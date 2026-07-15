@@ -363,6 +363,17 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     await user.click(screen.getByTestId('ai-submit'));
     await waitFor(() => expect(onAttachDataFile).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('radio', { name: /review before applying/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deck' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Operation mode' })).toBeDisabled();
+    expect(screen.getByTestId('ai-model-select')).toBeDisabled();
+    expect(screen.getByTestId('ai-web-research-toggle')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add command' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'AI instruction' })).toBeDisabled();
+    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+    expect(onAttachDataFile).toHaveBeenCalledTimes(1);
 
     view.rerender(
       <div className="nodeslide-studio">
@@ -388,9 +399,77 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     );
     expect(onPropose).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/change handling changed/i),
+      expect(screen.getByRole('alert')).toHaveTextContent(/change handling.*changed/i),
     );
     expect(onPropose).not.toHaveBeenCalled();
+  });
+
+  it('starts the authority guard before raw attachment conversion and preserves the retry', async () => {
+    const snapshot = fixture('delegation-raw-attachment-race');
+    const onAttachDataFile = vi.fn(async () => ({
+      kind: 'source' as const,
+      id: 'source-evidence',
+      label: 'evidence.csv',
+    }));
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    let resolveBlobFetch: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      (input: RequestInfo | URL) =>
+        new Promise<Response>((resolve, reject) => {
+          const blob = blobUrls.get(String(input));
+          if (!blob) {
+            reject(new Error(`Unexpected test fetch: ${String(input)}`));
+            return;
+          }
+          resolveBlobFetch = () => resolve({ ok: true, blob: async () => blob } as Response);
+        }),
+    );
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onAttachDataFile,
+      onPropose,
+      onApprovalModeChange: vi.fn(),
+    });
+
+    await user.upload(
+      screen.getByTestId('ai-data-file-input'),
+      new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this data.');
+    const form = screen.getByTestId('ai-submit').closest('form');
+    if (!form) throw new Error('Expected the AI composer form.');
+    fireEvent.submit(form);
+    await waitFor(() => expect(resolveBlobFetch).toBeTypeOf('function'));
+    expect(screen.getByRole('button', { name: 'Deck' })).toBeDisabled();
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            approvalMode: 'auto_apply',
+            approvalExpiresAt: Date.now() + 60_000,
+            onAttachDataFile,
+            onPropose,
+            onApprovalModeChange: vi.fn(),
+          })}
+        />
+      </div>,
+    );
+    await act(async () => {
+      resolveBlobFetch?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/change handling.*changed/i),
+    );
+    expect(onAttachDataFile).not.toHaveBeenCalled();
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'AI instruction' })).toHaveValue('Use this data.');
+    expect(screen.getByText('evidence.csv')).toBeInTheDocument();
   });
 
   it('keeps the review scroll position stable as activity arrives during proposal and direction review', () => {
