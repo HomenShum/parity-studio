@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+
+import { render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -123,6 +126,58 @@ const source: SourceRecord = {
 };
 
 describe('TraceWaterfall deterministic fixture matrix', () => {
+  it('survives a live trace growing from 4 to 10 to 100 spans', () => {
+    const four = createTraceWaterfallFixture(4);
+    const view = render(
+      <TraceWaterfall
+        compact
+        run={four.run}
+        trace={four.trace}
+        telemetry={four.telemetry}
+        messages={four.messages}
+        sources={four.sources}
+        onExpand={() => {}}
+      />,
+    );
+
+    expect(screen.getAllByTestId('trace-activity-row')).toHaveLength(4);
+
+    const ten = createTraceWaterfallFixture(10);
+    view.rerender(
+      <TraceWaterfall
+        compact
+        run={ten.run}
+        trace={ten.trace}
+        telemetry={ten.telemetry}
+        messages={ten.messages}
+        sources={ten.sources}
+        onExpand={() => {}}
+      />,
+    );
+    expect(screen.getAllByTestId('trace-activity-row')).toHaveLength(6);
+
+    const hundred = createTraceWaterfallFixture(100);
+    view.rerender(
+      <TraceWaterfall
+        compact
+        run={hundred.run}
+        trace={hundred.trace}
+        telemetry={hundred.telemetry}
+        messages={hundred.messages}
+        sources={hundred.sources}
+        onExpand={() => {}}
+      />,
+    );
+    expect(screen.getAllByTestId('trace-activity-row')).toHaveLength(6);
+    expect(
+      screen.getByText(
+        '94 earlier loaded steps hidden here; open the full timeline to inspect them.',
+      ),
+    ).toBeTruthy();
+
+    view.unmount();
+  });
+
   it.each([4, 10, 100])(
     'keeps compact and expanded %i-span layouts bounded and OTel-readable',
     (count) => {

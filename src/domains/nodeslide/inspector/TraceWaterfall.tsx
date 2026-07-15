@@ -672,20 +672,7 @@ function VirtualizedO11yRows({
   );
 }
 
-function O11ySpanTimeline({
-  rows,
-  rangeStart,
-  rangeEnd,
-  scrollTop,
-  viewportHeight,
-  eventsBySpan,
-  selectedSpanId,
-  collapsed,
-  onSelect,
-  onToggle,
-  onKeyDown,
-  flatten,
-}: {
+interface O11ySpanTimelineProps {
   rows: readonly TraceWaterfallRow[];
   rangeStart: number;
   rangeEnd: number;
@@ -698,7 +685,31 @@ function O11ySpanTimeline({
   onToggle: (spanId: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   flatten: boolean;
-}) {
+}
+
+function spanResourceKey(spans: readonly { id: string }[]): string {
+  return spans.map((span) => span.id).join('\u001f');
+}
+
+function O11ySpanTimeline(props: O11ySpanTimelineProps) {
+  const resourceKey = spanResourceKey(props.rows.map((row) => row.span));
+  return <O11ySpanTimelineResource key={resourceKey} {...props} />;
+}
+
+function O11ySpanTimelineResource({
+  rows,
+  rangeStart,
+  rangeEnd,
+  scrollTop,
+  viewportHeight,
+  eventsBySpan,
+  selectedSpanId,
+  collapsed,
+  onSelect,
+  onToggle,
+  onKeyDown,
+  flatten,
+}: O11ySpanTimelineProps) {
   const o11ySpans = useMemo(() => {
     const adapted = toO11ySpans(rows.map((row) => row.span));
     return flatten ? adapted.map((span) => ({ ...span, parentSpanId: null })) : adapted;
@@ -735,6 +746,10 @@ function O11ySpanTimeline({
 }
 
 function CompactO11yActivity({ spans }: { spans: readonly NodeSlideAgentSpan[] }) {
+  return <CompactO11yActivityResource key={spanResourceKey(spans)} spans={spans} />;
+}
+
+function CompactO11yActivityResource({ spans }: { spans: readonly NodeSlideAgentSpan[] }) {
   const o11ySpans = useMemo(
     () => toO11ySpans(spans).map((span) => ({ ...span, parentSpanId: null })),
     [spans],
