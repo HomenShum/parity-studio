@@ -49,26 +49,12 @@ test('connections dialog is centered, readable, scrollable, and restores focus',
   await expect(trigger).toBeFocused();
 });
 
-test('open-deck dialog keeps a useful centered empty state and closes outside', async ({
-  page,
-}) => {
+test('landing omits the editor-owned Open deck dialog entry point', async ({ page }) => {
   await openFreshLanding(page);
-  await page.getByRole('button', { name: 'Open deck' }).click();
-
-  const dialog = page.getByRole('dialog', { name: 'Open a deck' });
-  await expect(dialog).toBeVisible();
-  const box = await dialog.boundingBox();
-  if (!box) throw new Error('Open-deck dialog has no rendered geometry.');
-  expect(box.width).toBeGreaterThanOrEqual(700);
-  expect(box.height).toBeGreaterThanOrEqual(400);
-  expect(Math.abs(box.x - (1440 - box.width) / 2)).toBeLessThanOrEqual(2);
-  expect(Math.abs(box.y - (1000 - box.height) / 2)).toBeLessThanOrEqual(2);
-  await expect(dialog.getByText('No owned decks are stored in this browser yet.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Open a deck' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'BYOK / Agents' })).toBeVisible();
   await expectNoDocumentOverflow(page);
-  await page.screenshot({ path: resolve(proofDir, 'open-deck-desktop.png') });
-
-  await page.mouse.click(4, 4);
-  await expect(dialog).toBeHidden();
 });
 
 test('connections dialog remains usable on a mobile viewport', async ({ page }) => {

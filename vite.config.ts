@@ -53,6 +53,12 @@ export default defineConfig(() => {
     server: {
       port: 5180,
       strictPort: true,
+      // Pixel-proof and Playwright outputs are written while other browser
+      // journeys are still active. They are not app inputs, so never let a
+      // proof artifact trigger a full-page reload and detach an in-flight UI.
+      watch: {
+        ignored: ['**/.tmp/**', '**/artifacts/**', '**/playwright-report/**', '**/test-results/**'],
+      },
     },
     build: {
       target: 'es2022',

@@ -27,14 +27,25 @@ describe('NodeSlide v3 visual contract', () => {
   it('locks the desktop navigator while preserving the user-resizable inspector width', () => {
     const desktop = mediaBlock('@media (min-width: 1100px)', '@media (min-width: 700px)');
 
-    expect(desktop).toContain('--ns-nav-width: 300px !important');
+    expect(desktop).toContain('--ns-nav-width: 260px !important');
     expect(desktop).not.toContain('--ns-inspector-width: 340px !important');
-    expect(desktop).toMatch(/\.ns-navigator:not\(\.is-collapsed\)[\s\S]*width: 300px/);
+    expect(desktop).toMatch(/\.ns-navigator:not\(\.is-collapsed\)[\s\S]*width: 260px/);
     expect(desktop).toMatch(
       /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: var\(--ns-inspector-width\) !important/,
     );
     expect(baseCss).toContain('--ns-inspector-width: 400px');
     expect(studioSource).toContain('useState(400)');
+  });
+
+  it('protects a 500px canvas floor at the narrow desktop breakpoint', () => {
+    const constrainedDesktop = mediaBlock(
+      '@media (min-width: 1100px) and (max-width: 1339px)',
+      '@media (min-width: 700px)',
+    );
+
+    expect(constrainedDesktop).toContain(
+      '--ns-inspector-width: clamp(304px, calc(100vw - 760px), 400px) !important',
+    );
   });
 
   it('keeps navigation and inspector reachable as tablet overlays', () => {
@@ -43,7 +54,7 @@ describe('NodeSlide v3 visual contract', () => {
       '@media (max-width: 699px)',
     );
 
-    expect(tablet).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 300px/);
+    expect(tablet).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 260px/);
     expect(tablet).toMatch(
       /\.ns-inspector\.is-drawer-open[\s\S]*position: fixed[\s\S]*width: clamp\(360px, 46vw, 480px\) !important/,
     );
@@ -72,16 +83,24 @@ describe('NodeSlide v3 visual contract', () => {
     expect(phone).toMatch(/\.ns-slide-more[\s\S]*display: flex !important/);
     expect(phone).toMatch(/\.ns-navigator-footer[\s\S]*display: flex !important/);
     expect(phone).toMatch(/\.ns-add-slide-button[\s\S]*font-size: 0/);
+    expect(phone).toMatch(/\.ns-slide-row[\s\S]*grid-template-columns: 12px 72px 40px/);
+    expect(phone).toMatch(/\.ns-slide-more[\s\S]*height: 40px[\s\S]*width: 40px/);
+    expect(phone).toMatch(/\.ns-add-slide-button[\s\S]*height: 44px[\s\S]*width: 44px/);
   });
 
   it('gives the root landing a single responsive composer instead of editor chrome', () => {
+    const runtimeLanding = css.slice(css.lastIndexOf('/* Landing runtime contract'));
     expect(css).toMatch(
       /\.nodeslide-studio\.ns-landing[\s\S]*?display: flex;[\s\S]*?overflow-y: auto;/,
     );
-    expect(css).toMatch(/\.ns-landing-composer[\s\S]*?border-radius: 22px;[\s\S]*?width: 100%;/);
-    expect(css).toMatch(
-      /@media \(max-width: 699px\)[\s\S]*?\.ns-landing-main[\s\S]*?padding: 48px 15px 30px;/,
+    expect(runtimeLanding).toMatch(
+      /\.ns-landing-composer[\s\S]*?border-radius: 20px;[\s\S]*?overflow: hidden;/,
     );
+    expect(runtimeLanding).toMatch(
+      /@media \(max-width: 699px\)[\s\S]*?\.ns-landing-main[\s\S]*?padding: 36px 14px 28px;/,
+    );
+    expect(runtimeLanding).toContain('.ns-landing-recents-toggle');
+    expect(css).not.toContain('.ns-provider-consent');
     expect(studioSource).toContain('<NodeSlideLanding');
     expect(studioSource).not.toContain('<FirstRunDialog');
   });
@@ -145,16 +164,25 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(/\.ns-composer-field textarea[\s\S]*?min-height: 92px;/);
 
     // The composer remains primary while external egress stays fail-closed behind
-    // an unchecked, per-request consent control.
+    // one compact, revocable browser-tab consent control.
     expect(aiInspectorSource).toContain('<NodeSlidePromptComposer');
     expect(aiInspectorSource).toContain('composerClassName="ns-ai-v3-prompt"');
-    expect(aiInspectorSource).toContain('className="ns-ai-inline-consent"');
+    expect(aiInspectorSource).toContain('ns-session-consent-pill ns-ai-session-consent');
     expect(aiInspectorSource).toContain('data-testid="ai-provider-consent"');
+    expect(css).toContain('.nodeslide-studio .ns-agent-message:not(.is-user)');
+    expect(css).toContain('grid-template-columns: 28px minmax(0, 1fr);');
+    expect(css).toContain('.nodeslide-studio .ns-ai-v3-tool');
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 104px;[\s\S]*?padding: 15px 14px 10px;/,
     );
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: wrap;/,
+    );
+    expect(css).toMatch(
+      /@container nodeslide-inspector \(max-width: 430px\)[\s\S]*?\.ns-prompt-footer-status[\s\S]*?display: none;[\s\S]*?\.ns-ai-tool-label[\s\S]*?display: none;/,
+    );
+    expect(aiInspectorSource).toContain(
+      'follow={!activityAutoScrollPaused && activityHasScrollTarget}',
     );
   });
 
@@ -174,6 +202,15 @@ describe('NodeSlide v3 visual contract', () => {
     );
     expect(css).toMatch(
       /\.ns-ai-v3-composer\.is-review-compact \.ns-prompt-textarea[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-composer\.is-review-compact\s+\.ns-prompt-tools\s+:is\([\s\S]*?\.ns-ai-tool-button[\s\S]*?display: none;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-composer\.is-review-compact \.ns-prompt-tools[\s\S]*?display: contents;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-composer\.is-review-compact \.ns-ai-session-consent[\s\S]*?grid-column: 1 \/ -1;[\s\S]*?grid-row: 2;/,
     );
     expect(studioSource).toContain(
       "previewedPatch && (inspectorCollapsed || activeInspectorTab !== 'ai')",
@@ -236,6 +273,9 @@ describe('NodeSlide v3 visual contract', () => {
     expect(contrast('#a5b4fc', '#14181d')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#f0a080', '#14181d')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#34d399', '#14181d')).toBeGreaterThanOrEqual(4.5);
+    expect(baseCss).toMatch(
+      /\.nodeslide-studio\[data-ns-theme="dark"\][\s\S]*?--ns-positive: #34d399;/,
+    );
     expect(contrast('#f6ad55', '#14181d')).toBeGreaterThanOrEqual(4.5);
     expect(contrast('#fb7185', '#14181d')).toBeGreaterThanOrEqual(4.5);
   });

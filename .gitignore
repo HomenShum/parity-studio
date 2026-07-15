@@ -11,6 +11,7 @@ dist
 .vite
 .turbo
 .tmp/
+.understand-anything/.trash-*/
 
 # Convex
 .convex/

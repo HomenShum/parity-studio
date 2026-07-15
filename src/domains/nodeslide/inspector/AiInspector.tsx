@@ -80,7 +80,10 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
-import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import {
+  createExternalProviderRequestKey,
+  useSessionExternalConsent,
+} from '../externalProviderConsent';
 import type { AgentSessionApprovalMode } from '../session';
 import {
   AI_DRAFTING_PHASE_MS,
@@ -293,6 +296,7 @@ export function AiInspector<CommandId extends string = string>({
     setSubmissionPreparing(preparing);
   }, []);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const clearAttachmentError = useCallback(() => setAttachmentError(null), []);
   const approvalBusyRef = useRef(approvalBusy);
   approvalBusyRef.current = approvalBusy;
   const approvalSignature = `${approvalMode}:${approvalExpiresAt ?? 0}:${approvalBusy ? 'busy' : 'ready'}`;
@@ -455,6 +459,7 @@ export function AiInspector<CommandId extends string = string>({
     for (const reference of selectedReadContext) deduped.set(referenceKey(reference), reference);
     return [...deduped.values()];
   }, [selectedReadContext]);
+  const showExplicitContext = Boolean(commentContext || requestedReadContext.length > 0);
 
   const externalRequestConsentKey = createExternalProviderRequestKey('editor-action', {
     deck: { id: deck.id, version: deck.version },
@@ -488,25 +493,17 @@ export function AiInspector<CommandId extends string = string>({
           }))
       : [],
   });
-  const {
-    consent: providerConsent,
-    setConsent: setProviderConsent,
-    consumeConsent: consumeProviderConsent,
-    clearConsent: clearProviderConsent,
-  } = usePerRequestConsent<AiProviderConsentGrant>(externalRequestConsentKey);
-  const {
-    consent: webResearchConsent,
-    setConsent: setWebResearchConsent,
-    consumeConsent: consumeWebResearchConsent,
-    clearConsent: clearWebResearchConsent,
-  } = usePerRequestConsent<typeof NODESLIDE_WEB_RESEARCH_CONSENT>(externalRequestConsentKey);
-  const clearExternalConsent = useCallback(() => {
-    clearProviderConsent();
-    clearWebResearchConsent();
-  }, [clearProviderConsent, clearWebResearchConsent]);
-  const submissionSignature = `${externalRequestConsentKey}:${approvalSignature}:${
-    providerConsent ? 'provider-consented' : 'provider-unconsented'
-  }:${webResearchConsent ? 'web-consented' : 'web-unconsented'}`;
+  const externalConsent = useSessionExternalConsent();
+  const deterministicWebResearch = providerMode === 'deterministic' && webResearch;
+  const requiresExternalConsent = providerMode !== 'deterministic' || webResearch;
+  const providerConfigurationValid =
+    providerMode === 'deterministic' ||
+    nodeSlideModelSupportsReasoningEffort(providerModel, providerEffort);
+  const providerReady =
+    providerConfigurationValid && (!requiresExternalConsent || externalConsent.granted);
+  const submissionSignature = `${externalRequestConsentKey}:${approvalSignature}:session-${
+    externalConsent.granted ? 'consented' : 'unconsented'
+  }`;
   const submissionSignatureRef = useRef(submissionSignature);
   const submissionRevisionRef = useRef(0);
   if (submissionSignatureRef.current !== submissionSignature) {
@@ -515,14 +512,6 @@ export function AiInspector<CommandId extends string = string>({
   }
 
   const selectedAgentModel = nodeSlideAgentModel(providerModel);
-  const provider = createAiProviderRequest(
-    providerMode,
-    providerConsent?.reviewConsent ?? null,
-    providerModel,
-    providerEffort,
-  );
-  const providerReady =
-    provider !== null && (!webResearch || webResearchConsent === NODESLIDE_WEB_RESEARCH_CONSENT);
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
@@ -560,6 +549,9 @@ export function AiInspector<CommandId extends string = string>({
     .reverse()
     .find((message) => message.role === 'user')?.content;
   const activityAutoScrollPaused = proposals.length > 0 || directions.length > 0;
+  const activityHasScrollTarget = Boolean(
+    recentMessages.length > 0 || visibleAsk || resolvedActivity || activeTrace,
+  );
   const hasReviewableProposal = proposals.length > 0;
   const compactReviewComposer =
     hasReviewableProposal &&
@@ -576,7 +568,6 @@ export function AiInspector<CommandId extends string = string>({
         : 'is-idle';
 
   const updateInstruction = (value: string, cursor = value.length) => {
-    clearExternalConsent();
     composerSession.setText(value);
     setCursorPosition(cursor);
     setDismissedMenuKey(null);
@@ -584,7 +575,6 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   const chooseProviderModel = (value: string) => {
-    clearExternalConsent();
     if (value === 'deterministic') {
       setProviderMode('deterministic');
       setProviderControlsOpen(false);
@@ -640,21 +630,16 @@ export function AiInspector<CommandId extends string = string>({
     readContext: readonly AiReadReference[] = requestedReadContext,
   ) => {
     if (variationBusy || !providerReady) return;
-    const consumedProviderConsent =
-      providerMode === 'deterministic' ? null : consumeProviderConsent();
-    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
+    const variationConsentGrant = externalConsent.granted
+      ? aiProviderConsentGrant(providerMode)
+      : null;
     const variationProvider = createAiVariationProviderRequest(
       providerMode,
-      consumedProviderConsent?.variationConsent ?? null,
+      variationConsentGrant?.variationConsent ?? null,
       providerModel,
       providerEffort,
     );
-    if (
-      !variationProvider ||
-      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
-    ) {
-      return;
-    }
+    if (!variationProvider || (webResearch && !externalConsent.granted)) return;
     focusGeneratedBatch.current = true;
     batchBeforeGeneration.current = latestBatchId;
     if (ask) setOptimisticAsk(ask);
@@ -677,8 +662,12 @@ export function AiInspector<CommandId extends string = string>({
     if (approvalBusyRef.current) {
       throw new Error('Change handling is updating. Review it and submit again.');
     }
-    if (!provider || !providerReady) {
-      throw new Error('Complete the selected model and web consent before submitting.');
+    if (!providerReady) {
+      throw new Error(
+        deterministicWebResearch
+          ? 'Allow Web for this browser tab once, then press Enter or Propose again.'
+          : 'Allow external AI for this browser tab once, then press Enter or Propose again.',
+      );
     }
     const submittedRevision = submissionRevisionRef.current;
     const requestChanged = () =>
@@ -743,18 +732,20 @@ export function AiInspector<CommandId extends string = string>({
       return;
     }
     setScopeError(null);
-    const consumedProviderConsent =
-      providerMode === 'deterministic' ? null : consumeProviderConsent();
+    const submittedConsentGrant = externalConsent.granted
+      ? aiProviderConsentGrant(providerMode)
+      : null;
     const submittedProvider = createAiProviderRequest(
       providerMode,
-      consumedProviderConsent?.reviewConsent ?? null,
+      submittedConsentGrant?.reviewConsent ?? null,
       providerModel,
       providerEffort,
     );
-    const consumedWebResearchConsent = webResearch ? consumeWebResearchConsent() : null;
+    const submittedWebResearchConsent =
+      externalConsent.granted && webResearch ? NODESLIDE_WEB_RESEARCH_CONSENT : null;
     if (
       !submittedProvider ||
-      (webResearch && consumedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
+      (webResearch && submittedWebResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT)
     ) {
       return;
     }
@@ -768,10 +759,10 @@ export function AiInspector<CommandId extends string = string>({
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      ...(webResearch && consumedWebResearchConsent
+      ...(webResearch && submittedWebResearchConsent
         ? {
             webResearch: true,
-            webResearchConsent: consumedWebResearchConsent,
+            webResearchConsent: submittedWebResearchConsent,
           }
         : {}),
       ...(commentContext ? { commentContext } : {}),
@@ -798,7 +789,7 @@ export function AiInspector<CommandId extends string = string>({
       });
       return;
     }
-    if (menuOpen && event.key === 'Enter' && !event.metaKey && !event.ctrlKey) {
+    if (menuOpen && event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
       const reference = matchingReferences[menuIndex];
       if (reference) chooseReference(reference);
@@ -813,11 +804,8 @@ export function AiInspector<CommandId extends string = string>({
       setDismissedMenuKey(rawTriggerKey);
       return;
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      if (approvalControlLocked) return;
-      event.currentTarget.form?.requestSubmit();
-    }
+    // The shared PromptInputTextarea owns plain Enter-to-submit and Shift+Enter.
+    // Keeping one keyboard path avoids duplicate requestSubmit behavior here.
   };
 
   const removeReadReference = (reference: AiReadReference) => {
@@ -842,52 +830,35 @@ export function AiInspector<CommandId extends string = string>({
 
   return (
     <div className={`ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell ${inspectorState}`}>
-      <section
-        className="ns-ai-v3-context"
-        aria-labelledby={`${composerId}-context-heading`}
-        data-testid="ai-context-header"
-      >
-        <div className="ns-ai-v3-context-heading">
-          <span className="ns-eyebrow" id={`${composerId}-context-heading`}>
-            Context
-          </span>
-          <span className="ns-ai-v3-context-policy">Read context · locked write scope</span>
-        </div>
-        <div className="ns-ai-v3-context-chips" aria-label="Active AI context">
-          <span className="ns-ai-v3-context-chip is-slide">
-            Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')} ·{' '}
-            {slide.title}
-          </span>
-          {selectedSlideIds.length >= 2 ? (
-            <span className="ns-ai-v3-context-chip is-selection">
-              Selected slides · {selectedSlideIds.length}
+      {showExplicitContext ? (
+        <section
+          className="ns-ai-v3-context"
+          aria-labelledby={`${composerId}-context-heading`}
+          data-testid="ai-context-header"
+        >
+          <div className="ns-ai-v3-context-heading">
+            <span className="ns-eyebrow" id={`${composerId}-context-heading`}>
+              Added context
             </span>
-          ) : null}
-          {selectedElements.length > 0 ? (
-            <span className="ns-ai-v3-context-chip is-selection">
-              Selection · {selectedElements.length}
-            </span>
-          ) : null}
-          {commentContext ? (
-            <span className="ns-ai-v3-context-chip is-comment">
-              <MessageCircle size={11} /> {commentContext.label}
-            </span>
-          ) : null}
-          {requestedReadContext.map((reference) => (
-            <span
-              className="ns-ai-v3-context-chip is-reference"
-              key={`context-${referenceKey(reference)}`}
-            >
-              @{reference.label}
-            </span>
-          ))}
-        </div>
-        <p className="ns-ai-v3-context-note">
-          {requestedReadContext.length > 0
-            ? `${requestedReadContext.length} explicit read reference${requestedReadContext.length === 1 ? '' : 's'} added to scoped context.`
-            : 'Scoped context by default; explicit @ references are additive.'}
-        </p>
-      </section>
+            <span className="ns-ai-v3-context-policy">Read-only</span>
+          </div>
+          <div className="ns-ai-v3-context-chips" aria-label="Explicit AI context">
+            {commentContext ? (
+              <span className="ns-ai-v3-context-chip is-comment">
+                <MessageCircle size={11} /> {commentContext.label}
+              </span>
+            ) : null}
+            {requestedReadContext.map((reference) => (
+              <span
+                className="ns-ai-v3-context-chip is-reference"
+                key={`context-${referenceKey(reference)}`}
+              >
+                @{reference.label}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll" ref={reviewScrollRef}>
         {!visibleAsk &&
@@ -913,7 +884,7 @@ export function AiInspector<CommandId extends string = string>({
 
         <Conversation
           className="ns-ai-v3-conversation flex-none overflow-visible"
-          follow={!activityAutoScrollPaused}
+          follow={!activityAutoScrollPaused && activityHasScrollTarget}
           scrollOwnerRef={reviewScrollRef}
         >
           <ConversationContent className="ns-ai-v3-conversation-content gap-0 p-0">
@@ -1278,8 +1249,8 @@ export function AiInspector<CommandId extends string = string>({
                 <>
                   <Sparkles size={13} /> External model: on · {providerNameForMode(providerMode)} ·{' '}
                   {selectedAgentModel.label} · {nodeSlideNativeEffortLabel(providerEffort)} effort
-                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                    {providerConsent ? 'Consent attached' : 'Consent required'}
+                  <span className={externalConsent.granted ? 'has-consent' : 'needs-consent'}>
+                    {externalConsent.granted ? 'Consent attached' : 'Consent required'}
                   </span>
                 </>
               )}
@@ -1512,8 +1483,7 @@ export function AiInspector<CommandId extends string = string>({
             isSubmitting ||
             approvalBusy ||
             attachmentBusy ||
-            submissionPreparing ||
-            !providerReady
+            submissionPreparing
           }
           effort={providerEffort}
           effortLabel="Reasoning effort"
@@ -1532,11 +1502,10 @@ export function AiInspector<CommandId extends string = string>({
           modelLabel="Agent model"
           modelTestId="ai-model-select"
           onAttachmentError={setAttachmentError}
-          onAttachmentsChange={clearExternalConsent}
+          onAttachmentsChange={clearAttachmentError}
           onEffortChange={(effort) => {
             setProviderEffort(effort);
             window.localStorage.setItem('nodeslide.agent-effort', effort);
-            clearExternalConsent();
           }}
           onModelChange={chooseProviderModel}
           onSubmit={({ text, files }) => submit(text, files)}
@@ -1603,7 +1572,6 @@ export function AiInspector<CommandId extends string = string>({
                   disabled={approvalControlLocked}
                   onClick={() => {
                     setWebResearch((enabled) => !enabled);
-                    clearExternalConsent();
                   }}
                   title="Search the web and persist source snapshots before planning"
                   variant={webResearch ? 'default' : 'ghost'}
@@ -1612,6 +1580,39 @@ export function AiInspector<CommandId extends string = string>({
                   <span className="ns-ai-tool-label">Web</span>
                 </PromptInputButton>
               </span>
+              {requiresExternalConsent || externalConsent.granted ? (
+                <label
+                  className={`ns-session-consent-pill ns-ai-session-consent ${
+                    externalConsent.granted ? 'is-ready' : ''
+                  }`}
+                  title={
+                    deterministicWebResearch
+                      ? 'Allow web research for this browser tab'
+                      : 'Allow selected external models and optional web research for this browser tab'
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={externalConsent.granted}
+                    onChange={(event) => {
+                      externalConsent.setGranted(event.target.checked);
+                      setAttachmentError(null);
+                    }}
+                    data-agent-web-consent="session"
+                    data-testid="ai-provider-consent"
+                  />
+                  <ShieldCheck size={13} aria-hidden="true" />
+                  <span>
+                    {deterministicWebResearch
+                      ? externalConsent.granted
+                        ? 'Web allowed'
+                        : 'Allow Web'
+                      : externalConsent.granted
+                        ? 'Session allowed'
+                        : 'Allow this session'}
+                  </span>
+                </label>
+              ) : null}
               {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
                 <PromptInputButton
                   aria-label="Manage deck memory"
@@ -1653,54 +1654,6 @@ export function AiInspector<CommandId extends string = string>({
             </>
           }
         />
-
-        {providerMode !== 'deterministic' || webResearch ? (
-          <div className="ns-ai-inline-consent" aria-label="External request consent">
-            {providerMode !== 'deterministic' ? (
-              <label className={providerConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={providerConsent !== null}
-                  disabled={approvalControlLocked}
-                  onChange={(event) =>
-                    setProviderConsent(
-                      event.target.checked ? aiProviderConsentGrant(providerMode) : null,
-                    )
-                  }
-                  data-testid="ai-provider-consent"
-                />
-                <span>
-                  Allow one {providerNameForMode(providerMode)} request / {selectedAgentModel.label}{' '}
-                  / {nodeSlideNativeEffortLabel(providerEffort)}
-                  <small>
-                    Sends this ask and scoped context
-                    {useMemoryForRun ? ' with relevant deck memory' : ''}; usage is recorded in
-                    Trace.
-                  </small>
-                </span>
-              </label>
-            ) : null}
-            {webResearch ? (
-              <label className={webResearchConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={webResearchConsent !== null}
-                  disabled={approvalControlLocked}
-                  onChange={(event) =>
-                    setWebResearchConsent(
-                      event.target.checked ? NODESLIDE_WEB_RESEARCH_CONSENT : null,
-                    )
-                  }
-                  data-testid="ai-web-research-consent"
-                />
-                <span>
-                  Allow web research for this request
-                  <small>Source URLs and excerpts are saved in Data and Trace.</small>
-                </span>
-              </label>
-            ) : null}
-          </div>
-        ) : null}
 
         {attachmentError ? (
           <output className="ns-ai-attachment-error" role="alert">
@@ -1760,12 +1713,7 @@ export function AiInspector<CommandId extends string = string>({
 
         <small className="ns-shortcut-hint">
           <kbd>↵</kbd> to propose · <kbd>⇧</kbd>
-          <kbd>↵</kbd> for a new line ·{' '}
-          {providerMode === 'deterministic'
-            ? 'private deterministic processing'
-            : providerConsent
-              ? `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent attached`
-              : `${selectedAgentModel.label} · ${nodeSlideNativeEffortLabel(providerEffort)} effort · consent required`}
+          <kbd>↵</kbd> for a new line
         </small>
       </div>
       <NodeSlideConnectionsDialog

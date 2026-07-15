@@ -3,13 +3,13 @@ import { expect, test } from 'playwright/test';
 import {
   LANDING_MODEL_MATRIX,
   LANDING_STARTERS,
-  armLandingConsent,
   chooseDeterministicLandingModel,
   chooseLandingModel,
   expectCleanRuntime,
-  expectLandingConsentInvalidated,
+  expectLandingSessionConsent,
   expectNoDocumentOverflow,
   expectNoMojibake,
+  grantLandingSessionConsent,
   openIsolatedLanding,
   readSelectOptions,
   visibleControlNames,
@@ -34,10 +34,11 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expect(page.getByLabel('Reasoning effort')).toBeVisible();
     await expect(page.getByLabel('Attached data files')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Create presentation' })).toBeDisabled();
+    await expect(page.locator('.ns-landing-consent, .ns-landing-privacy')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
 
     expect(await visibleControlNames(page)).toEqual([
       'BYOK / Agents',
-      'Open deck',
       'Attach data',
       'Generation model',
       'Create presentation',
@@ -50,12 +51,19 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await prompt.press('Shift+Enter');
     await prompt.type('Second line');
     await expect(prompt).toHaveValue('First line\nSecond line');
+    const submit = page.getByRole('button', { name: 'Create presentation' });
+    await expect(submit).toBeEnabled();
+    await expectLandingSessionConsent(page, false);
 
-    // Enter with the default external route and no consent must remain a no-op.
+    // Submission stays operable so it can explain the browser-tab gate inline.
     await prompt.press('Enter');
     await expect(prompt).toHaveValue('First line\nSecond line');
-    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeDisabled();
+    await expect(page.getByRole('alert')).toContainText(
+      'Allow external AI for this browser tab once',
+    );
+    await expect(submit).toBeEnabled();
     await expect(page.getByText(/Planning, composing, and validating/i)).toHaveCount(0);
+    await expect(page.getByTestId('nodeslide-landing')).toBeVisible();
 
     const unnamed = await page
       .locator('button:visible, a:visible, input:visible, select:visible, textarea:visible')
@@ -82,21 +90,20 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expectCleanRuntime(runtime);
   });
 
-  test('every starter prefills only, never submits or grants provider consent', async ({
-    page,
-  }) => {
+  test('every starter prefills only, never submits or grants session consent', async ({ page }) => {
     const runtime = watchLandingRuntime(page);
     await openIsolatedLanding(page);
 
     for (const starter of LANDING_STARTERS) {
       await page.getByRole('button', { name: starter.label }).click();
       await expect(page.getByLabel('Presentation brief')).toHaveValue(starter.prompt);
-      await expectLandingConsentInvalidated(page);
+      await expectLandingSessionConsent(page, false);
+      await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
       await expect(page.getByTestId('nodeslide-landing')).toBeVisible();
     }
 
     await page.getByLabel('Presentation brief').fill('A fresh idea typed directly by the user.');
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, false);
     expect(runtime.providerRequests).toEqual([]);
     await expectCleanRuntime(runtime);
   });
@@ -122,7 +129,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
       await chooseLandingModel(page, model);
       await expect(page.getByTestId('landing-model-select')).toContainText(model.label);
       await expect(page.locator('.ns-landing-web')).toHaveText(model.provider);
-      await expect(page.getByTestId('landing-provider-consent')).not.toBeChecked();
+      await expectLandingSessionConsent(page, false);
       await expect(readSelectOptions(page.getByTestId('landing-effort-select'))).resolves.toEqual(
         model.efforts,
       );
@@ -132,13 +139,13 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expect(page.getByTestId('landing-model-select')).toContainText('Deterministic');
     await expect(page.getByTestId('landing-effort-select')).toHaveCount(0);
     await expect(page.getByTestId('landing-provider-consent')).toHaveCount(0);
-    await expect(page.locator('.ns-landing-privacy')).toContainText('No external model egress');
+    await expect(page.locator('.ns-landing-consent, .ns-landing-privacy')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
     expect(runtime.providerRequests).toEqual([]);
     await expectCleanRuntime(runtime);
   });
 
-  test('invalidates one-shot consent whenever the exact request snapshot changes', async ({
+  test('reuses browser-tab session consent across request changes until explicitly revoked', async ({
     page,
   }) => {
     const runtime = watchLandingRuntime(page);
@@ -146,37 +153,49 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     const prompt = page.getByLabel('Presentation brief');
     await prompt.fill('Build a consent-bound presentation.');
 
-    await armLandingConsent(page);
+    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
+    await grantLandingSessionConsent(page);
     await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
     await prompt.press('End');
     await prompt.type(' Updated.');
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, true);
 
-    await armLandingConsent(page);
     await page.getByTestId('landing-effort-select').selectOption('low');
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, true);
 
-    await armLandingConsent(page);
     await chooseLandingModel(page, LANDING_MODEL_MATRIX[1]);
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, true);
 
-    await armLandingConsent(page);
     await page.getByRole('button', { name: LANDING_STARTERS[0].label }).click();
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, true);
 
-    await armLandingConsent(page);
     await page.getByTestId('landing-file-input').setInputFiles({
-      name: 'consent-snapshot.csv',
+      name: 'session-consent.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from('label,value\nA,1\n'),
     });
-    await expect(page.getByLabel('Attached data files')).toContainText('consent-snapshot.csv');
-    await expectLandingConsentInvalidated(page);
+    await expect(page.getByLabel('Attached data files')).toContainText('session-consent.csv');
+    await expectLandingSessionConsent(page, true);
 
-    await armLandingConsent(page);
-    await page.getByRole('button', { name: 'Remove consent-snapshot.csv' }).click();
+    await page.getByRole('button', { name: 'Remove session-consent.csv' }).click();
     await expect(page.getByLabel('Attached data files')).toHaveCount(0);
-    await expectLandingConsentInvalidated(page);
+    await expectLandingSessionConsent(page, true);
+
+    await page.reload();
+    await expect(page.getByTestId('nodeslide-landing')).toBeVisible();
+    await expectLandingSessionConsent(page, true);
+
+    await page.getByTestId('landing-model-select').click();
+    const modelDialog = page.getByRole('dialog', { name: 'Generation model' });
+    await modelDialog.getByText('Deterministic', { exact: true }).click();
+    await expect(page.getByTestId('landing-provider-consent')).toBeEnabled();
+
+    const consent = page.getByTestId('landing-provider-consent');
+    await consent.click();
+    await expect(consent).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId('nodeslide-landing')).toBeVisible();
+    await expect(page.getByTestId('landing-provider-consent')).toHaveCount(0);
 
     expect(runtime.providerRequests).toEqual([]);
     await expectCleanRuntime(runtime);
@@ -329,26 +348,12 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expectCleanRuntime(runtime);
   });
 
-  test('opens and closes the capability-honest owned-deck dialog', async ({ page }) => {
+  test('keeps editor-owned deck opening controls off the landing surface', async ({ page }) => {
     const runtime = watchLandingRuntime(page);
     await openIsolatedLanding(page);
-    const trigger = page.getByRole('button', { name: 'Open deck' });
-    await trigger.click();
-
-    const dialog = page.getByRole('dialog', { name: 'Open a deck' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/A deck ID alone never grants access/i)).toBeVisible();
-    await expect(dialog.getByText('No owned decks are stored in this browser yet.')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /import/i })).toHaveCount(0);
-    await expect(dialog.getByRole('tab')).toHaveCount(0);
-
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await expect(trigger).toBeFocused();
-
-    await trigger.click();
-    await dialog.getByRole('button', { name: 'Close project dialog' }).click();
-    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Open a deck' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View all' })).toHaveCount(0);
     expect(runtime.providerRequests).toEqual([]);
     await expectCleanRuntime(runtime);
   });
@@ -371,7 +376,7 @@ for (const visualCase of [
     await expect(page.getByLabel('Presentation brief')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create presentation' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'BYOK / Agents' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open deck' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
     await expectNoDocumentOverflow(page);
     await expectNoMojibake(page);
 

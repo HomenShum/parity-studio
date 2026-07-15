@@ -63,8 +63,16 @@ test.describe('NodeSlide editor visual-system boundary', () => {
 
       const textarea = page.getByRole('textbox', { name: 'AI instruction' });
       await expect(textarea).toBeVisible();
-      for (const label of ['Connect', 'Web', 'Memory', 'Context', 'Command', 'Expand', 'Propose']) {
-        await expect(composer.getByText(label, { exact: true })).toBeVisible();
+      for (const label of [
+        'Connect BYOK model or coding agent',
+        'Toggle web research',
+        'Manage deck memory',
+        'Add read context reference',
+        'Add command',
+        'Expand composer',
+        'Propose edit',
+      ]) {
+        await expect(composer.getByRole('button', { name: label })).toBeVisible();
       }
       await expect(page.getByTestId('ai-model-select')).toBeVisible();
       await expect(page.getByTestId('ai-effort-select')).toBeVisible();

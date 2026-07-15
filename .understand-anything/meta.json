@@ -1,0 +1,8 @@
+{
+  "lastAnalyzedAt": "2026-07-15T21:50:16.129Z",
+  "gitCommitHash": "b03130fbcd5c0790c51de6bd0d0ac80ceb8e8e88",
+  "version": "1.0.0",
+  "analyzedFiles": 623,
+  "analysisDepth": "deterministic-structural-partial",
+  "warning": "Symbol-level semantic enrichment did not run because the delegated analysis account reached its usage limit."
+}

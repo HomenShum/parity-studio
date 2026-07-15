@@ -120,7 +120,10 @@ describe('NodeSlide AI review inspector', () => {
     );
     expect(markup).not.toContain('data-testid="ai-provider-external"');
     expect(markup).toContain('Consent required');
-    expect(markup).toContain('Allow one Nebius request');
+    expect(markup).toContain('Allow this session');
+    expect(markup).toContain(
+      'title="Allow selected external models and optional web research for this browser tab"',
+    );
     expect(markup).toContain('12 hours');
     expect(markup).toContain('64 proposals');
     expect(markup).toContain('8 non-destructive operations each');
@@ -312,7 +315,8 @@ describe('NodeSlide AI review inspector', () => {
     expect(referenceMenu).toContain('role="menu"');
     expect(referenceMenu).toContain('Quarterly source');
     expect(referenceMenu).toContain('@Quarterly source');
-    expect(referenceMenu).toContain('Read context · locked write scope');
+    expect(referenceMenu).toContain('Added context');
+    expect(referenceMenu).toContain('Read-only');
 
     const commands: readonly AiComposerCommand<string>[] = [
       { id: '/edit', label: 'Edit the current scope' },
@@ -325,6 +329,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('data-testid="ai-model-select"');
     expect(commandMenu).toContain('data-testid="ai-effort-select"');
     expect(commandMenu).toContain('Advanced controls');
+    expect(commandMenu).not.toContain('data-testid="ai-context-header"');
   });
 
   it('keeps comment-to-AI context implicit when no @ reference was selected', () => {
@@ -341,7 +346,8 @@ describe('NodeSlide AI review inspector', () => {
 
     const markup = renderAi({ commentContext });
 
-    expect(markup).toContain('Scoped context by default');
+    expect(markup).toContain('Added context');
+    expect(markup).toContain('Read-only');
     expect(markup).toContain(`@${commentContext.label}`);
     expect(markup).not.toContain('1 explicit reference');
   });

@@ -42,7 +42,7 @@
     --ns-font-body: 12px;
     --ns-control-min-height: 32px;
     --ns-chrome-min-font: var(--ns-font-control);
-    --ns-nav-width: 300px;
+    --ns-nav-width: 260px;
     --ns-inspector-width: 400px;
     color-scheme: light;
   }
@@ -57,6 +57,7 @@
     --ns-muted: var(--ns-ink2);
     --ns-faint: #9aa5b1;
     --ns-accent-dark: #df8e70;
+    --ns-positive: #34d399;
     --ns-hover: rgb(255 255 255 / 6%);
     --ns-line-a: rgb(255 255 255 / 6%);
     --ns-line-b: rgb(255 255 255 / 8%);

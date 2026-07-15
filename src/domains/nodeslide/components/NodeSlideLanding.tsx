@@ -1,18 +1,17 @@
 import {
   ArrowRight,
-  FolderOpen,
+  ChevronDown,
+  ChevronUp,
   Globe2,
   Layers3,
   LoaderCircle,
   PlugZap,
   ShieldCheck,
-  Sparkles,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   NODESLIDE_REASONING_EFFORTS,
-  nodeSlideAgentModel,
   nodeSlideModelSupportsReasoningEffort,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
@@ -25,12 +24,15 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
-import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import {
+  createExternalProviderRequestKey,
+  readSessionExternalConsent,
+  useSessionExternalConsent,
+} from '../externalProviderConsent';
 import { useAgentSession } from '../session/AgentSessionProvider';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
-  type NodeSlideBriefProviderConsent,
   type NodeSlideBriefProviderMode,
   type RecentDeck,
   createDeckProviderAdmission,
@@ -47,7 +49,6 @@ interface NodeSlideLandingProps {
   onCancelCreate?: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onExploreSample: () => void;
-  onOpenProjects: () => void;
   onOpenDeck: (deckId: string) => void;
 }
 
@@ -81,7 +82,6 @@ export function NodeSlideLanding({
   onCancelCreate,
   onCreate,
   onExploreSample,
-  onOpenProjects,
   onOpenDeck,
 }: NodeSlideLandingProps) {
   const agentSession = useAgentSession();
@@ -94,48 +94,79 @@ export function NodeSlideLanding({
   const reasoningEffort = agentSession.state.controls.effort;
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentsSyncing, setAttachmentsSyncing] = useState(false);
+  const [submissionPreparing, setSubmissionPreparing] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [recentDecksExpanded, setRecentDecksExpanded] = useState(false);
+  const handleAttachmentsChange = useCallback(() => {
+    setAttachmentError(null);
+    onClearError?.();
+  }, [onClearError]);
   const requestedSlideCountIssue = nodeSlideRequestedSlideCountIssue(prompt);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
-  const selectedModel = generation === 'deterministic' ? null : nodeSlideAgentModel(generation);
-  const providerConsentRequestKey = createExternalProviderRequestKey('landing-create', {
-    clientSessionId,
+  const externalConsent = useSessionExternalConsent();
+  const providerConsent =
+    providerMode === 'deterministic' || !externalConsent.granted
+      ? null
+      : nodeSlideBriefProviderConsent(providerMode);
+  const submissionSignature = createExternalProviderRequestKey('landing-create', {
     prompt,
-    starterTitle,
-    generation,
-    providerMode,
-    reasoningEffort,
     attachments: composerSession.attachments,
+    providerMode,
+    generation,
+    reasoningEffort,
+    externalConsentGranted: externalConsent.granted,
   });
-  const {
-    consent: providerConsent,
-    setConsent: setProviderConsent,
-    consumeConsent: consumeProviderConsent,
-    clearConsent: clearProviderConsent,
-  } = usePerRequestConsent<NodeSlideBriefProviderConsent>(providerConsentRequestKey);
+  const submissionTrackerRef = useRef({ signature: submissionSignature, revision: 0 });
+  if (submissionTrackerRef.current.signature !== submissionSignature) {
+    submissionTrackerRef.current = {
+      signature: submissionSignature,
+      revision: submissionTrackerRef.current.revision + 1,
+    };
+  }
+  const lifecycleRevisionRef = useRef(0);
   const activeCreateJob =
     agentSession.state.activeJob?.kind === 'create_deck' ? agentSession.state.activeJob : null;
   const { setSurface } = agentSession;
 
   useEffect(() => {
     setSurface('landing');
+    return () => {
+      lifecycleRevisionRef.current += 1;
+    };
   }, [setSurface]);
 
   const start = async (submittedPrompt: string, files: readonly File[]) => {
+    const submittedRevision = submissionTrackerRef.current.revision;
+    const submittedLifecycleRevision = lifecycleRevisionRef.current;
+    const requestChanged = () =>
+      lifecycleRevisionRef.current !== submittedLifecycleRevision ||
+      submissionTrackerRef.current.revision !== submittedRevision;
     const nextPrompt = submittedPrompt.trim();
     if (!nextPrompt) return;
     if (nodeSlideRequestedSlideCountIssue(nextPrompt)) return;
+    if (providerMode !== 'deterministic' && !externalConsent.granted) {
+      throw new Error(
+        `Allow external AI for this browser tab once to create with ${providerDisplayName(providerMode)}.`,
+      );
+    }
     const requestedSlideCount = inferNodeSlideRequestedSlideCount(nextPrompt);
-    const providerAdmission = createDeckProviderAdmission(
-      providerMode,
-      generation === 'deterministic' ? NODESLIDE_DEFAULT_AGENT_MODEL : generation,
-      reasoningEffort,
-      providerMode === 'deterministic' ? null : consumeProviderConsent(),
-    );
-    if (!providerAdmission) return;
     try {
       const attachments = await readNodeSlideAttachmentFiles(files, []);
+      if (requestChanged() || (providerMode !== 'deterministic' && !readSessionExternalConsent())) {
+        throw new Error(
+          'The model, consent, or request changed while files were being prepared. Review and submit again.',
+        );
+      }
+      const providerAdmission = createDeckProviderAdmission(
+        providerMode,
+        generation === 'deterministic' ? NODESLIDE_DEFAULT_AGENT_MODEL : generation,
+        reasoningEffort,
+        providerConsent,
+      );
+      if (!providerAdmission) {
+        throw new Error('The selected provider is no longer authorized. Review and submit again.');
+      }
       setAttachmentError(null);
       onCreate({
         clientSessionId,
@@ -163,13 +194,12 @@ export function NodeSlideLanding({
     } catch (fileError) {
       const message =
         fileError instanceof Error ? fileError.message : 'The file could not be attached.';
-      setAttachmentError(message);
+      if (!requestChanged()) setAttachmentError(message);
       throw fileError;
     }
   };
 
   const applyStarter = (starter: (typeof starters)[number]) => {
-    clearProviderConsent();
     composerSession.setText(starter.prompt);
     setStarterTitle(starter.title);
     onClearError?.();
@@ -179,8 +209,13 @@ export function NodeSlideLanding({
     Boolean(prompt.trim()) &&
     !creating &&
     !attachmentsSyncing &&
-    requestedSlideCountIssue === null &&
-    (providerMode === 'deterministic' || providerConsent !== null);
+    !submissionPreparing &&
+    requestedSlideCountIssue === null;
+  const recentDeckLimit = 4;
+  const visibleRecentDecks = recentDecksExpanded
+    ? recentDecks
+    : recentDecks.slice(0, recentDeckLimit);
+  const hiddenRecentDeckCount = Math.max(0, recentDecks.length - recentDeckLimit);
 
   return (
     <main
@@ -202,9 +237,6 @@ export function NodeSlideLanding({
             onClick={() => setConnectionsOpen(true)}
           >
             <PlugZap size={14} /> BYOK / Agents
-          </button>
-          <button className="ns-landing-open" type="button" onClick={onOpenProjects}>
-            <FolderOpen size={15} /> Open deck
           </button>
         </div>
       </header>
@@ -238,10 +270,10 @@ export function NodeSlideLanding({
           modelTestId="landing-model-select"
           onAttachmentError={setAttachmentError}
           onAttachmentSyncingChange={setAttachmentsSyncing}
-          onAttachmentsChange={clearProviderConsent}
+          onAttachmentsChange={handleAttachmentsChange}
+          onSubmissionPreparingChange={setSubmissionPreparing}
           onEffortChange={(effort) => {
             agentSession.updateControls({ effort });
-            clearProviderConsent();
             onClearError?.();
           }}
           onModelChange={(model) => {
@@ -252,19 +284,19 @@ export function NodeSlideLanding({
             ) {
               agentSession.updateControls({ effort: 'high' });
             }
-            clearProviderConsent();
             onClearError?.();
           }}
           onSubmit={({ text, files }) => start(text, files)}
           onTextChange={() => {
-            clearProviderConsent();
             setStarterTitle(null);
+            setAttachmentError(null);
             onClearError?.();
           }}
           placeholder="Describe the presentation you want to make…"
           session={composerSession}
+          submissionRevision={submissionTrackerRef.current.revision}
           status={
-            creating
+            creating || submissionPreparing
               ? 'submitted'
               : error || attachmentError || requestedSlideCountIssue
                 ? 'error'
@@ -279,35 +311,34 @@ export function NodeSlideLanding({
           textareaMaxLength={4000}
           textareaRows={4}
           tools={
-            <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
-              <Globe2 size={13} aria-hidden="true" />
-              {providerDisplayName(providerMode)}
-            </span>
+            <>
+              <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
+                <Globe2 size={13} aria-hidden="true" />
+                {providerDisplayName(providerMode)}
+              </span>
+              {providerMode !== 'deterministic' || externalConsent.granted ? (
+                <label
+                  className={`ns-session-consent-pill ${externalConsent.granted ? 'is-ready' : ''}`}
+                  title="Allow selected external models and optional web research for this browser tab"
+                >
+                  <input
+                    type="checkbox"
+                    data-testid="landing-provider-consent"
+                    checked={externalConsent.granted}
+                    onChange={(event) => {
+                      externalConsent.setGranted(event.target.checked);
+                      setAttachmentError(null);
+                    }}
+                  />
+                  <ShieldCheck size={13} aria-hidden="true" />
+                  <span>
+                    {externalConsent.granted ? 'AI allowed this session' : 'Allow prompt + files'}
+                  </span>
+                </label>
+              ) : null}
+            </>
           }
         />
-        {providerMode !== 'deterministic' ? (
-          <label className="ns-provider-consent ns-landing-consent">
-            <input
-              type="checkbox"
-              data-testid="landing-provider-consent"
-              checked={providerConsent !== null}
-              disabled={attachmentsSyncing}
-              onChange={(event) =>
-                setProviderConsent(
-                  event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,
-                )
-              }
-            />
-            <span>
-              I consent to sending this full brief
-              {composerSession.attachments.length > 0
-                ? ` and ${composerSession.attachments.length} attached file${composerSession.attachments.length === 1 ? '' : 's'}`
-                : ''}{' '}
-              to {providerDisplayName(providerMode)} for this creation request.
-              <small> Consent resets immediately after submission.</small>
-            </span>
-          </label>
-        ) : null}
         {creating ? (
           <output
             className="ns-landing-create-status"
@@ -347,24 +378,6 @@ export function NodeSlideLanding({
           </output>
         ) : null}
 
-        <p className="ns-landing-privacy" aria-live="polite">
-          {providerMode === 'deterministic' ? (
-            <>
-              <ShieldCheck size={13} /> Private deterministic generation. No external model egress.
-            </>
-          ) : (
-            <>
-              <Sparkles size={13} /> Recommended: {selectedModel?.label ?? 'the selected model'} via{' '}
-              {providerDisplayName(providerMode)}
-              {composerSession.attachments.length > 0
-                ? ` + ${composerSession.attachments.length} file${composerSession.attachments.length === 1 ? '' : 's'}`
-                : ''}
-              . Check consent for this request before creation; route, tokens, and cost are recorded
-              in Trace.
-            </>
-          )}
-        </p>
-
         <div className="ns-landing-starters" aria-label="Presentation starters">
           <span>Try an idea</span>
           {starters.map((starter) => (
@@ -374,14 +387,7 @@ export function NodeSlideLanding({
           ))}
         </div>
 
-        <button
-          className="ns-landing-sample"
-          type="button"
-          onClick={() => {
-            clearProviderConsent();
-            onExploreSample();
-          }}
-        >
+        <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
           <Layers3 size={15} /> Explore the editable sample workspace
         </button>
 
@@ -391,12 +397,9 @@ export function NodeSlideLanding({
               <span className="ns-eyebrow" id="nodeslide-recent-title">
                 Recent decks
               </span>
-              <button type="button" onClick={onOpenProjects}>
-                View all
-              </button>
             </div>
             <ul>
-              {recentDecks.slice(0, 3).map((deck) => (
+              {visibleRecentDecks.map((deck) => (
                 <li key={deck.id}>
                   <button type="button" onClick={() => onOpenDeck(deck.id)}>
                     <span>
@@ -408,6 +411,24 @@ export function NodeSlideLanding({
                 </li>
               ))}
             </ul>
+            {hiddenRecentDeckCount > 0 ? (
+              <button
+                aria-expanded={recentDecksExpanded}
+                className="ns-landing-recents-toggle"
+                type="button"
+                onClick={() => setRecentDecksExpanded((expanded) => !expanded)}
+              >
+                {recentDecksExpanded ? (
+                  <>
+                    <ChevronUp size={14} /> Show fewer
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={14} /> Show {hiddenRecentDeckCount} more
+                  </>
+                )}
+              </button>
+            ) : null}
           </section>
         ) : null}
       </section>
