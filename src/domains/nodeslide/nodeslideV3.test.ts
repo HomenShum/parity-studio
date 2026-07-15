@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 const css = readFileSync(new URL('./nodeslideV3.css', import.meta.url), 'utf8');
 const baseCss = readFileSync(new URL('./nodeslide.css', import.meta.url), 'utf8');
 const studioSource = readFileSync(new URL('./NodeSlideStudio.tsx', import.meta.url), 'utf8');
+const slideCanvasSource = readFileSync(
+  new URL('./components/SlideCanvas.tsx', import.meta.url),
+  'utf8',
+);
 const aiInspectorSource = readFileSync(
   new URL('./inspector/AiInspector.tsx', import.meta.url),
   'utf8',
@@ -95,6 +99,20 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: calc\(var\(--ns-inspector-width\) \+ 14px\);[\s\S]*?top: 64px;/,
     );
+  });
+
+  it('keeps selected-element actions labeled and scrollbar-free in narrow canvases', () => {
+    expect(baseCss).toMatch(
+      /\.ns-canvas-panel[\s\S]*?container-name: nodeslide-canvas;[\s\S]*?container-type: inline-size;/,
+    );
+    expect(baseCss).toMatch(/\.ns-workspace-object-toolbar[\s\S]*?overflow-x: hidden;/);
+    expect(css).toMatch(
+      /@container nodeslide-canvas \(max-width: 720px\)[\s\S]*?\.ns-object-action-label[\s\S]*?display: none;/,
+    );
+    expect(slideCanvasSource).toContain('className="ns-object-action-label"');
+    for (const label of ['Ask AI', 'Comment', 'Duplicate', 'Bring forward', 'Send backward']) {
+      expect(slideCanvasSource).toContain(`aria-label="${label}"`);
+    }
   });
 
   it('keeps consequential AI review text above the readable inspector floor', () => {

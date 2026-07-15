@@ -1391,6 +1391,23 @@
   color: #fff;
 }
 
+@container nodeslide-canvas (max-width: 720px) {
+  .nodeslide-studio .ns-workspace-object-toolbar {
+    gap: 4px;
+    max-width: calc(100% - 24px);
+  }
+
+  .nodeslide-studio .ns-workspace-object-toolbar button {
+    justify-content: center;
+    padding: 0;
+    width: 30px;
+  }
+
+  .nodeslide-studio .ns-workspace-object-toolbar .ns-object-action-label {
+    display: none;
+  }
+}
+
 .nodeslide-studio .ns-selection-box,
 .nodeslide-studio .ns-resize-handle {
   border-color: var(--ns-accent);

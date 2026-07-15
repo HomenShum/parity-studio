@@ -956,6 +956,8 @@
 
 .ns-canvas-panel {
   background: var(--ns-canvas);
+  container-name: nodeslide-canvas;
+  container-type: inline-size;
   display: grid;
   grid-column: 2;
   grid-template-rows: 38px minmax(0, 1fr);
@@ -975,7 +977,7 @@
   align-items: center;
   gap: 2px;
   padding: 5px;
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid var(--ns-line);
   border-radius: 9px;
   background: color-mix(in srgb, var(--ns-panel) 94%, transparent);

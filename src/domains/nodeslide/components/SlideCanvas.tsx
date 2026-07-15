@@ -386,34 +386,43 @@ export function SlideCanvas({
 
       {selectedUnion && !readOnly ? (
         <div className="ns-workspace-object-toolbar" role="toolbar" aria-label="Element actions">
-          <button type="button" onClick={onOpenAi}>
-            <Bot size={14} /> Ask AI
+          <button type="button" onClick={onOpenAi} aria-label="Ask AI" title="Ask AI">
+            <Bot size={14} /> <span className="ns-object-action-label">Ask AI</span>
           </button>
-          <button type="button" onClick={onOpenComments}>
-            <MessageSquarePlus size={14} /> Comment
+          <button type="button" onClick={onOpenComments} aria-label="Comment" title="Comment">
+            <MessageSquarePlus size={14} />
+            <span className="ns-object-action-label">Comment</span>
           </button>
-          <button type="button" onClick={() => onDuplicateElements([...selectedElementIds])}>
-            <Copy size={14} /> Duplicate
+          <button
+            type="button"
+            onClick={() => onDuplicateElements([...selectedElementIds])}
+            aria-label="Duplicate"
+            title="Duplicate"
+          >
+            <Copy size={14} /> <span className="ns-object-action-label">Duplicate</span>
           </button>
           <button
             type="button"
             onClick={() => onReorderElements([...selectedElementIds], 'forward')}
+            aria-label="Bring forward"
             title="Bring selected elements forward"
           >
-            <ArrowUp size={14} /> Forward
+            <ArrowUp size={14} /> <span className="ns-object-action-label">Forward</span>
           </button>
           <button
             type="button"
             onClick={() => onReorderElements([...selectedElementIds], 'backward')}
+            aria-label="Send backward"
             title="Send selected elements backward"
           >
-            <ArrowDown size={14} /> Backward
+            <ArrowDown size={14} /> <span className="ns-object-action-label">Backward</span>
           </button>
           <button
             type="button"
             className="is-danger"
             onClick={() => onDeleteElements([...selectedElementIds])}
             aria-label="Delete selected elements"
+            title="Delete selected elements"
           >
             <Trash2 size={14} />
           </button>
