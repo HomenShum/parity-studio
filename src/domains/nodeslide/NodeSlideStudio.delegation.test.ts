@@ -27,6 +27,12 @@ describe('NodeSlide delegated-mode fail-closed UI contract', () => {
     expect(studioSource).toContain("'Delegation cleanup'");
   });
 
+  it('releases authority for restored jobs with missing receipts or failed resolution', () => {
+    expect(studioSource).toContain('restoredUnrecoverableEditJobKeyRef');
+    expect(studioSource).toContain('durableSessionJob === null');
+    expect(studioSource.match(/releaseUnrecoverableEditJob\(/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('uses the owner capability to reload workspace after every delegated receipt', () => {
     expect(studioSource).toMatch(
       /let acceptedWorkspace = delegatedReceipt\.workspace;\s+if \(!acceptedWorkspace\) \{\s+acceptedWorkspace = await convex\.query/,

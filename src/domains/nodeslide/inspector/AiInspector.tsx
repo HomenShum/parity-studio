@@ -286,7 +286,19 @@ export function AiInspector<CommandId extends string = string>({
   const [showPlan, setShowPlan] = useState(true);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [submissionPreparing, setSubmissionPreparing] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const approvalBusyRef = useRef(approvalBusy);
+  approvalBusyRef.current = approvalBusy;
+  const approvalSignature = `${approvalMode}:${approvalExpiresAt ?? 0}:${approvalBusy ? 'busy' : 'ready'}`;
+  const approvalSignatureRef = useRef(approvalSignature);
+  const approvalRevisionRef = useRef(0);
+  if (approvalSignatureRef.current !== approvalSignature) {
+    approvalSignatureRef.current = approvalSignature;
+    approvalRevisionRef.current += 1;
+  }
+  const approvalControlLocked =
+    approvalBusy || attachmentBusy || submissionPreparing || isSubmitting;
   const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -650,8 +662,18 @@ export function AiInspector<CommandId extends string = string>({
 
   const submit = async (submittedInstruction: string, files: readonly File[]) => {
     const text = submittedInstruction.trim();
-    if (!text || isSubmitting || approvalBusy || attachmentBusy || !provider || !providerReady)
+    if (
+      !text ||
+      isSubmitting ||
+      approvalBusyRef.current ||
+      attachmentBusy ||
+      !provider ||
+      !providerReady
+    )
       return;
+    const submittedApprovalRevision = approvalRevisionRef.current;
+    const authorityChanged = () =>
+      approvalBusyRef.current || approvalRevisionRef.current !== submittedApprovalRevision;
     let submittedReadContext = requestedReadContext;
     if (files.length > 0) {
       if (!onAttachDataFile) throw new Error('Data attachments are unavailable for this deck.');
@@ -659,7 +681,14 @@ export function AiInspector<CommandId extends string = string>({
       setAttachmentError(null);
       try {
         const attachedReferences: AiReadReference[] = [];
-        for (const file of files) attachedReferences.push(await onAttachDataFile(file));
+        for (const file of files) {
+          attachedReferences.push(await onAttachDataFile(file));
+          if (authorityChanged()) {
+            throw new Error(
+              'Change handling changed while data was attached. Review and submit again.',
+            );
+          }
+        }
         const deduped = new Map<string, AiReadReference>();
         for (const reference of [...requestedReadContext, ...attachedReferences]) {
           deduped.set(referenceKey(reference), reference);
@@ -674,6 +703,9 @@ export function AiInspector<CommandId extends string = string>({
       } finally {
         setAttachmentBusy(false);
       }
+    }
+    if (authorityChanged()) {
+      throw new Error('Change handling changed before submission. Review and submit again.');
     }
     const command =
       selectedCommand ?? commandFromInstruction(submittedInstruction, availableCommands);
@@ -1249,8 +1281,10 @@ export function AiInspector<CommandId extends string = string>({
                     name={`${providerName}-approval`}
                     value="review"
                     checked={approvalMode === 'review'}
-                    disabled={approvalBusy}
-                    onChange={() => onApprovalModeChange('review')}
+                    disabled={approvalControlLocked}
+                    onChange={() => {
+                      if (!approvalControlLocked) onApprovalModeChange('review');
+                    }}
                   />
                   <Eye size={15} />
                   <span>
@@ -1264,8 +1298,10 @@ export function AiInspector<CommandId extends string = string>({
                     name={`${providerName}-approval`}
                     value="auto_apply"
                     checked={approvalMode === 'auto_apply'}
-                    disabled={approvalBusy}
-                    onChange={() => onApprovalModeChange('auto_apply')}
+                    disabled={approvalControlLocked}
+                    onChange={() => {
+                      if (!approvalControlLocked) onApprovalModeChange('auto_apply');
+                    }}
                   />
                   {approvalBusy ? (
                     <LoaderCircle className="ns-spin" size={15} />
@@ -1445,6 +1481,8 @@ export function AiInspector<CommandId extends string = string>({
           attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
           attachmentInputTestId="ai-data-file-input"
           attachmentMaxFiles={1}
+          submissionRevision={approvalRevisionRef.current}
+          onSubmissionPreparingChange={setSubmissionPreparing}
           attachButtonTestId="ai-attach-data"
           attachLabel="Attach data file"
           composerClassName="ns-ai-v3-prompt"

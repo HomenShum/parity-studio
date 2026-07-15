@@ -157,6 +157,22 @@ export function failPreparedAgentSessionJob(
 ): AgentSessionState {
   const current = state.activeJob;
   if (!current || current.status !== 'preparing') return state;
+  return failAgentSessionJob(state, error, now);
+}
+
+export function failAgentSessionJob(
+  state: AgentSessionState,
+  error: string,
+  now = Date.now(),
+): AgentSessionState {
+  const current = state.activeJob;
+  if (
+    !current ||
+    current.status === 'succeeded' ||
+    current.status === 'failed' ||
+    current.status === 'cancelled'
+  )
+    return state;
   return freezeState({
     ...state,
     activeJob: Object.freeze({

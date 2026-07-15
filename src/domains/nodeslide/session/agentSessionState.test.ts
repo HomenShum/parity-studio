@@ -3,6 +3,7 @@ import {
   archiveAgentSessionJob,
   attachAgentSessionJob,
   createInitialAgentSessionState,
+  failAgentSessionJob,
   isAgentSessionEditAuthorityLocked,
   prepareAgentSessionJob,
   readAgentSessionState,
@@ -231,6 +232,30 @@ describe('NodeSlide authoritative agent session state', () => {
       ),
     ).toBe(true);
     expect(isAgentSessionEditAuthorityLocked(null)).toBe(false);
+  });
+
+  it('fails and archives an unrecoverable active edit job to release its authority lock', () => {
+    const prepared = prepareAgentSessionJob(
+      createInitialAgentSessionState('session-unrecoverable', 1),
+      {
+        kind: 'edit_proposal',
+        requestFingerprint: 'intent-unrecoverable',
+        ownerAccessKey: 'owner-unrecoverable',
+        idempotencyKey: 'idempotency-unrecoverable',
+        targetDeckId: 'deck-unrecoverable',
+      },
+      2,
+    ).state;
+    expect(isAgentSessionEditAuthorityLocked(prepared.activeJob)).toBe(true);
+
+    const failed = failAgentSessionJob(prepared, 'The durable receipt is unavailable.', 3);
+    expect(failed.activeJob).toMatchObject({ status: 'failed' });
+    const archived = archiveAgentSessionJob(failed, 4);
+    expect(archived.activeJob).toBeNull();
+    expect(archived.lastJob).toMatchObject({
+      status: 'failed',
+      error: 'The durable receipt is unavailable.',
+    });
   });
 });
 

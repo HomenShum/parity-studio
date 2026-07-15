@@ -509,6 +509,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     attachJob: attachAgentSessionJob,
     reconcileJob: reconcileAgentSessionJob,
     failPreparedJob: failPreparedAgentSessionJob,
+    failJob: failAgentSessionJob,
     archiveJob: archiveAgentSessionJob,
     resetTransientConsent: resetAgentSessionConsent,
     installApprovalGrant,
@@ -615,6 +616,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const handledCreateJobIdsRef = useRef(new Set<string>());
   const handledEditJobIdsRef = useRef(new Set<string>());
   const resolvingEditJobIdsRef = useRef(new Set<string>());
+  const restoredUnrecoverableEditJobKeyRef = useRef(
+    agentSessionState.activeJob?.kind === 'edit_proposal' &&
+      isAgentSessionEditAuthorityLocked(agentSessionState.activeJob) &&
+      !agentSessionState.activeJob.jobId
+      ? agentSessionState.activeJob.idempotencyKey
+      : null,
+  );
   const editorRequestGateRef = useRef(createEditorRequestGate(activeDeckId));
   const editorWriteQueueRef = useRef(createSerializedEditorWriteQueue());
   editorRequestGateRef.current.setActiveDeck(activeDeckId);
@@ -640,6 +648,21 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     isAgentSessionEditAuthorityLocked(activeSessionJob) ||
     delegationBusy ||
     Boolean(revokingDelegationGrantId);
+  const releaseUnrecoverableEditJob = useCallback(
+    (message: string) => {
+      failAgentSessionJob(message);
+      archiveAgentSessionJob();
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Resume the durable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+    },
+    [archiveAgentSessionJob, failAgentSessionJob],
+  );
   const storedApproval = agentSessionState.controls.approval;
   const activeApproval =
     storedApproval.mode === 'auto_apply' && storedApproval.grantId === revokingDelegationGrantId
@@ -885,6 +908,22 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         }
       : 'skip',
   );
+  useEffect(() => {
+    const job = activeSessionJob;
+    if (!job || job.kind !== 'edit_proposal') return;
+    if (restoredUnrecoverableEditJobKeyRef.current === job.idempotencyKey && !job.jobId) {
+      restoredUnrecoverableEditJobKeyRef.current = null;
+      releaseUnrecoverableEditJob(
+        'The restored edit did not have a durable job receipt. Submit the request again.',
+      );
+      return;
+    }
+    if (job.jobId && durableSessionJob === null) {
+      releaseUnrecoverableEditJob(
+        'The restored edit job is no longer available. Submit the request again.',
+      );
+    }
+  }, [activeSessionJob, durableSessionJob, releaseUnrecoverableEditJob]);
   useEffect(() => {
     if (durableSessionJob) reconcileAgentSessionJob(durableSessionJob);
   }, [durableSessionJob, reconcileAgentSessionJob]);
@@ -1399,15 +1438,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       })
       .catch((error: unknown) => {
         handledEditJobIdsRef.current.add(jobId);
-        setAgentBusy(false);
         const message = errorMessage(error, 'The durable proposal could not be resumed.');
-        setAiAgentActivity({
-          status: 'failed',
-          elapsedMs: 0,
-          ask: 'Resume the durable slide proposal.',
-          message,
-        });
-        setToast({ kind: 'error', message });
+        releaseUnrecoverableEditJob(message);
       })
       .finally(() => resolvingEditJobIdsRef.current.delete(jobId));
   }, [
@@ -1422,6 +1454,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     installWorkspace,
     queueDelegationRevocation,
     recordSuccessfulCommit,
+    releaseUnrecoverableEditJob,
     recordPreferencePatch,
     runPreferenceEtl,
   ]);

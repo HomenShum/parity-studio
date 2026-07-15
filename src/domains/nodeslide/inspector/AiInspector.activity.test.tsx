@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,9 +22,25 @@ import {
   clearNodeSlideComposerSession,
   nodeSlideComposerSessionKey,
 } from '../composer/nodeSlideComposerSession';
-import { AiInspector, type AiInspectorProps } from './AiInspector';
+import { AiInspector, type AiInspectorProps, type AiReadReference } from './AiInspector';
+
+const blobUrls = new Map<string, Blob>();
+let blobUrlSequence = 0;
 
 beforeAll(() => {
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: (blob: Blob) => {
+      blobUrlSequence += 1;
+      const url = `blob:nodeslide-inspector-test-${blobUrlSequence}`;
+      blobUrls.set(url, blob);
+      return url;
+    },
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: (url: string) => blobUrls.delete(url),
+  });
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
     value: () => undefined,
@@ -55,7 +71,13 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  blobUrls.clear();
   window.localStorage.clear();
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+    const blob = blobUrls.get(String(input));
+    if (!blob) throw new Error(`Unexpected test fetch: ${String(input)}`);
+    return { ok: true, blob: async () => blob } as Response;
+  });
 });
 
 afterEach(() => {
@@ -313,6 +335,62 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
 
     expect(onPropose).not.toHaveBeenCalled();
     expect(screen.getByTestId('ai-submit')).toBeDisabled();
+  });
+
+  it('invalidates an attachment submission when change authority transitions mid-upload', async () => {
+    const snapshot = fixture('delegation-attachment-race');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    let resolveAttachment: ((reference: AiReadReference) => void) | undefined;
+    const onAttachDataFile = vi.fn(
+      () =>
+        new Promise<AiReadReference>((resolve) => {
+          resolveAttachment = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onAttachDataFile,
+      onPropose,
+      onApprovalModeChange: vi.fn(),
+    });
+
+    await user.upload(
+      screen.getByTestId('ai-data-file-input'),
+      new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this data.');
+    await user.click(screen.getByTestId('ai-submit'));
+    await waitFor(() => expect(onAttachDataFile).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('radio', { name: /review before applying/i })).toBeDisabled();
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            approvalMode: 'auto_apply',
+            approvalExpiresAt: Date.now() + 60_000,
+            onAttachDataFile,
+            onPropose,
+            onApprovalModeChange: vi.fn(),
+          })}
+        />
+      </div>,
+    );
+    await act(async () => {
+      resolveAttachment?.({ kind: 'source', id: 'source-evidence', title: 'evidence.csv' });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: /review before applying/i })).toBeEnabled(),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/change handling changed/i),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
   });
 
   it('keeps the review scroll position stable as activity arrives during proposal and direction review', () => {

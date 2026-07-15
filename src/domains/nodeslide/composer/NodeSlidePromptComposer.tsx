@@ -120,6 +120,9 @@ export interface NodeSlidePromptComposerProps {
   onAttachmentError?: (message: string | null) => void;
   onAttachmentsChange?: () => void;
   onAttachmentSyncingChange?: (syncing: boolean) => void;
+  /** Invalidates an in-flight attachment conversion when authority or scope changes. */
+  submissionRevision?: string | number;
+  onSubmissionPreparingChange?: (preparing: boolean) => void;
   tools?: ReactNode;
   submitTools?: ReactNode;
   footerStatus?: ReactNode;
@@ -182,6 +185,8 @@ export function NodeSlidePromptComposer({
   onAttachmentError,
   onAttachmentsChange,
   onAttachmentSyncingChange,
+  submissionRevision,
+  onSubmissionPreparingChange,
   tools,
   submitTools,
   footerStatus,
@@ -193,6 +198,8 @@ export function NodeSlidePromptComposer({
   const authoritativeModel = agentSession?.state.controls.model ?? model;
   const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
   const attachmentControlDisabled = attachmentDisabled ?? status === 'submitted';
+  const submissionRevisionRef = useRef(submissionRevision);
+  submissionRevisionRef.current = submissionRevision;
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -238,15 +245,24 @@ export function NodeSlidePromptComposer({
   );
 
   const handleSubmit = async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
+    const submittedRevision = submissionRevisionRef.current;
+    onAttachmentError?.(null);
+    onSubmissionPreparingChange?.(true);
     try {
       const files = await promptInputMessageFiles(message.files);
+      if (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current) {
+        throw new Error(
+          'Change handling changed while attachments were being prepared. Review and submit again.',
+        );
+      }
       await onSubmit({ text: message.text, files }, event);
-      onAttachmentError?.(null);
     } catch (error) {
       onAttachmentError?.(
         error instanceof Error ? error.message : 'The attached file could not be read.',
       );
       throw error;
+    } finally {
+      onSubmissionPreparingChange?.(false);
     }
   };
 

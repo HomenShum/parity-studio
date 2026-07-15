@@ -12,6 +12,7 @@ import {
   agentSessionStorageKey,
   archiveAgentSessionJob,
   attachAgentSessionJob,
+  failAgentSessionJob,
   failPreparedAgentSessionJob,
   prepareAgentSessionJob,
   readAgentSessionState,
@@ -43,6 +44,7 @@ export interface AgentSessionContextValue {
   attachJob: (receipt: AgentSessionJobReceipt) => void;
   reconcileJob: (receipt: AgentSessionJobReceipt) => void;
   failPreparedJob: (error: string) => void;
+  failJob: (error: string) => void;
   archiveJob: () => void;
   resetTransientConsent: () => void;
   installApprovalGrant: (grant: AgentSessionDelegationGrant) => void;
@@ -157,6 +159,13 @@ export function AgentSessionProvider({
     },
     [commit, now],
   );
+  const failJob = useCallback(
+    (error: string) => {
+      const next = failAgentSessionJob(stateRef.current, error, now());
+      if (next !== stateRef.current) commit(next);
+    },
+    [commit, now],
+  );
   const archiveJob = useCallback(() => {
     const next = archiveAgentSessionJob(stateRef.current, now());
     if (next !== stateRef.current) commit(next);
@@ -187,6 +196,7 @@ export function AgentSessionProvider({
       attachJob,
       reconcileJob,
       failPreparedJob,
+      failJob,
       archiveJob,
       resetTransientConsent,
       installApprovalGrant,
@@ -197,6 +207,7 @@ export function AgentSessionProvider({
       attachJob,
       clearApprovalGrant,
       failPreparedJob,
+      failJob,
       prepareJob,
       reconcileJob,
       resetTransientConsent,
