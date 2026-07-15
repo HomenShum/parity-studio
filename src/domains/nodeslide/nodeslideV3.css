@@ -6489,23 +6489,19 @@
 }
 
 .nodeslide-studio .ns-ai-v3-controls-disclosure {
-  overflow: visible;
-  position: relative;
+  overflow: hidden;
+  position: static;
 }
 
 .nodeslide-studio .ns-ai-v3-controls-disclosure[open] > .ns-ai-v3-controls-body {
   background: var(--ns-surface);
-  border: 1px solid var(--ns-line-c);
-  border-radius: 12px;
-  bottom: calc(100% + 8px);
-  box-shadow: var(--ns-overlay-shadow);
-  left: 0;
-  max-height: min(58vh, 520px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: min(44vh, 420px);
   overflow-y: auto;
-  padding: 12px;
-  position: absolute;
-  right: 0;
-  z-index: 140;
+  padding: 10px;
+  position: static;
 }
 
 .nodeslide-studio .ns-ai-v3-shell.is-awaiting-review .ns-ai-v3-context {

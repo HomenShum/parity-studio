@@ -162,6 +162,20 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
+  it('keeps expanded agent controls in document flow instead of covering the composer', () => {
+    const stateContract = css.slice(css.indexOf('/* Agent rail state contract.'));
+
+    expect(stateContract).toMatch(
+      /\.ns-ai-v3-controls-disclosure \{[\s\S]*?overflow: hidden;[\s\S]*?position: static;/,
+    );
+    expect(stateContract).toMatch(
+      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?max-height: min\(44vh, 420px\);[\s\S]*?position: static;/,
+    );
+    expect(stateContract).not.toMatch(
+      /\.ns-ai-v3-controls-disclosure\[open\][^{]*\{[^}]*position: absolute;/,
+    );
+  });
+
   it('keeps readable canvas and inspector navigation after the global reset', () => {
     expect(css).toMatch(
       /Runtime visual-system boundary[\s\S]*?\.ns-editor-mode-controls button[\s\S]*?min-height: 28px;[\s\S]*?padding: 5px 10px;/,
