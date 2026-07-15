@@ -31,6 +31,10 @@ export default defineConfig(() => {
     },
     test: {
       exclude: [...configDefaults.exclude, '**/.claude/**', '**/tests/e2e/**'],
+      // The NodeSlide interaction suites intentionally exercise complete jsdom
+      // journeys. Keep their assertions strict while allowing parallel CI load
+      // to finish without the 5 s Vitest default becoming a flaky failure.
+      testTimeout: 15_000,
     },
     css: {
       postcss: {
