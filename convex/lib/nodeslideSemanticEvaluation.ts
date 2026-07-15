@@ -2585,7 +2585,7 @@ function addCompanionFinding(
 }
 
 function claimFindingDraft(
-  context: EvaluationContext,
+  _context: EvaluationContext,
   occurrences: ClaimOccurrence[],
   draft: Pick<
     FindingDraft,
@@ -2918,8 +2918,8 @@ function numericEquivalent(left: number, right: number, unit: string | undefined
   return false;
 }
 
-function normalizedNumber(value: number): string {
-  if (!Number.isFinite(value)) return String(value);
+function normalizedNumber(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return String(value);
   return Number(value.toPrecision(12)).toString();
 }
 
@@ -3052,45 +3052,46 @@ function resolvedRequiredPrimitives(
 }
 
 function isDeckSnapshot(value: unknown): value is DeckSnapshot {
-  if (!isRecord(value) || !isRecord(value.deck)) return false;
+  if (!isRecord(value) || !isRecord(value['deck'])) return false;
+  const deck = value['deck'];
   return (
-    typeof value.deck.id === 'string' &&
-    typeof value.deck.version === 'number' &&
-    typeof value.deck.updatedAt === 'number' &&
-    Array.isArray(value.slides) &&
-    Array.isArray(value.elements) &&
-    Array.isArray(value.sources)
+    typeof deck['id'] === 'string' &&
+    typeof deck['version'] === 'number' &&
+    typeof deck['updatedAt'] === 'number' &&
+    Array.isArray(value['slides']) &&
+    Array.isArray(value['elements']) &&
+    Array.isArray(value['sources'])
   );
 }
 
 function isSemanticPatch(value: unknown): value is NodeSlideSemanticPatch {
   return (
     isRecord(value) &&
-    Number.isSafeInteger(value.baseDeckVersion) &&
-    isRecord(value.scope) &&
-    Array.isArray(value.operations)
+    Number.isSafeInteger(value['baseDeckVersion']) &&
+    isRecord(value['scope']) &&
+    Array.isArray(value['operations'])
   );
 }
 
 function isDeckSpec(value: unknown): value is NodeSlideSemanticDeckSpec {
   if (
     !isRecord(value) ||
-    typeof value.title !== 'string' ||
-    !Array.isArray(value.narrative) ||
-    !value.narrative.every((item) => typeof item === 'string') ||
-    !Array.isArray(value.slides)
+    typeof value['title'] !== 'string' ||
+    !Array.isArray(value['narrative']) ||
+    !value['narrative'].every((item) => typeof item === 'string') ||
+    !Array.isArray(value['slides'])
   ) {
     return false;
   }
-  return value.slides.every(
+  return value['slides'].every(
     (slide) =>
       isRecord(slide) &&
-      typeof slide.title === 'string' &&
-      typeof slide.section === 'string' &&
-      typeof slide.headline === 'string' &&
-      typeof slide.body === 'string' &&
-      Array.isArray(slide.bullets) &&
-      slide.bullets.every((item) => typeof item === 'string'),
+      typeof slide['title'] === 'string' &&
+      typeof slide['section'] === 'string' &&
+      typeof slide['headline'] === 'string' &&
+      typeof slide['body'] === 'string' &&
+      Array.isArray(slide['bullets']) &&
+      slide['bullets'].every((item) => typeof item === 'string'),
   );
 }
 
