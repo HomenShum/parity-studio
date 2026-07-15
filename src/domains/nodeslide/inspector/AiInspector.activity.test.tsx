@@ -408,6 +408,43 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(container.querySelector('.ns-plan-list .is-current')).toBeNull();
     expect(container.querySelector('.ns-plan-list .ns-spin')).toBeNull();
   });
+
+  it('offers an explicit bounded retry only for a retryable failed durable run', async () => {
+    const snapshot = fixture('retry-failed-run');
+    const onRetryRun = vi.fn();
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 1_200,
+        ask: 'Rewrite the headline.',
+        message: 'The provider ended before a validated proposal was returned.',
+      },
+      onRetryRun,
+    });
+
+    const retry = screen.getByRole('button', { name: 'Retry the same request' });
+    expect(retry).toBeVisible();
+    await user.click(retry);
+    expect(onRetryRun).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            agentActivity: {
+              status: 'cancelled',
+              elapsedMs: 1_200,
+              ask: 'Rewrite the headline.',
+              message: 'Run cancelled. No deck changes were applied.',
+            },
+            onRetryRun,
+          })}
+        />
+      </div>,
+    );
+    expect(screen.queryByRole('button', { name: 'Retry the same request' })).toBeNull();
+  });
 });
 
 function renderInspector(

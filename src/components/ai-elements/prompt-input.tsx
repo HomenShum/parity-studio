@@ -63,6 +63,10 @@ import {
 // Helpers
 // ============================================================================
 
+const scheduleObjectUrlRevoke = (url: string): void => {
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+};
+
 const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   try {
     const response = await fetch(url);
@@ -254,7 +258,7 @@ export const PromptInputProvider = ({
     setAttachmentFiles((prev) => {
       const found = prev.find((f) => f.id === id);
       if (found?.url) {
-        URL.revokeObjectURL(found.url);
+        scheduleObjectUrlRevoke(found.url);
       }
       return prev.filter((f) => f.id !== id);
     });
@@ -264,7 +268,7 @@ export const PromptInputProvider = ({
     setAttachmentFiles((prev) => {
       for (const f of prev) {
         if (f.url) {
-          URL.revokeObjectURL(f.url);
+          scheduleObjectUrlRevoke(f.url);
         }
       }
       return [];
@@ -283,7 +287,7 @@ export const PromptInputProvider = ({
     () => () => {
       for (const f of attachmentsRef.current) {
         if (f.url) {
-          URL.revokeObjectURL(f.url);
+          scheduleObjectUrlRevoke(f.url);
         }
       }
     },
@@ -614,7 +618,7 @@ export const PromptInput = ({
     const current = itemsRef.current;
     const found = current.find((file) => file.id === id);
     if (found?.url) {
-      URL.revokeObjectURL(found.url);
+      scheduleObjectUrlRevoke(found.url);
     }
     const next = current.filter((file) => file.id !== id);
     itemsRef.current = next;
@@ -669,7 +673,7 @@ export const PromptInput = ({
             const current = itemsRef.current;
             for (const file of current) {
               if (file.url) {
-                URL.revokeObjectURL(file.url);
+                scheduleObjectUrlRevoke(file.url);
               }
             }
             itemsRef.current = [];
@@ -770,7 +774,7 @@ export const PromptInput = ({
       if (!usingProvider) {
         for (const f of filesRef.current) {
           if (f.url) {
-            URL.revokeObjectURL(f.url);
+            scheduleObjectUrlRevoke(f.url);
           }
         }
       }

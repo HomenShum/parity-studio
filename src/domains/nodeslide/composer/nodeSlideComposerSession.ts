@@ -63,6 +63,7 @@ export function useNodeSlideComposerSession(
   const getServerSnapshot = useCallback(() => serverSnapshot, [serverSnapshot]);
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const sharedAttachments = agentSession?.state.controls.attachments;
+  const updateSharedControls = agentSession?.updateControls;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -82,8 +83,8 @@ export function useNodeSlideComposerSession(
     seededSharedAttachments.current = true;
     if (agentSession.state.controls.attachments.length > 0 || state.attachments.length === 0)
       return;
-    agentSession.updateControls({ attachments: state.attachments });
-  }, [agentSession, state.attachments]);
+    updateSharedControls?.({ attachments: state.attachments });
+  }, [agentSession, state.attachments, updateSharedControls]);
 
   const setText = useCallback(
     (text: string) => updateSession(key, { ...ensureSession(key), text }),
@@ -92,29 +93,29 @@ export function useNodeSlideComposerSession(
   const setAttachments = useCallback(
     (attachments: readonly NodeSlideComposerAttachmentDraft[]) => {
       const normalized = normalizeAttachments(attachments);
-      if (agentSession) {
-        agentSession.updateControls({ attachments: normalized });
+      if (updateSharedControls) {
+        updateSharedControls({ attachments: normalized });
         return;
       }
       updateSession(key, { ...ensureSession(key), attachments: normalized });
     },
-    [agentSession, key],
+    [key, updateSharedControls],
   );
   const reset = useCallback(
     (next: Partial<NodeSlideComposerSessionState> = EMPTY_SESSION) => {
       const normalized = normalizeSession(next);
       updateSession(key, {
         ...normalized,
-        attachments: agentSession ? ensureSession(key).attachments : normalized.attachments,
+        attachments: updateSharedControls ? ensureSession(key).attachments : normalized.attachments,
       });
-      agentSession?.updateControls({ attachments: normalized.attachments });
+      updateSharedControls?.({ attachments: normalized.attachments });
     },
-    [agentSession, key],
+    [key, updateSharedControls],
   );
   const clear = useCallback(() => {
     clearNodeSlideComposerSession(key);
-    agentSession?.updateControls({ attachments: [] });
-  }, [agentSession, key]);
+    updateSharedControls?.({ attachments: [] });
+  }, [key, updateSharedControls]);
   const controllerState = useMemo<NodeSlideComposerSessionState>(
     () =>
       sharedAttachments

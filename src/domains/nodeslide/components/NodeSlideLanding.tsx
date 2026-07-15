@@ -90,6 +90,7 @@ export function NodeSlideLanding({
   const generation = agentSession.state.controls.model;
   const reasoningEffort = agentSession.state.controls.effort;
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [attachmentsSyncing, setAttachmentsSyncing] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const providerMode: NodeSlideBriefProviderMode =
     generation === 'deterministic' ? 'deterministic' : nodeSlideProviderModeForModel(generation);
@@ -172,6 +173,7 @@ export function NodeSlideLanding({
   const canCreate =
     Boolean(prompt.trim()) &&
     !creating &&
+    !attachmentsSyncing &&
     (providerMode === 'deterministic' || providerConsent !== null);
 
   return (
@@ -229,6 +231,7 @@ export function NodeSlideLanding({
           modelLabel="Generation model"
           modelTestId="landing-model-select"
           onAttachmentError={setAttachmentError}
+          onAttachmentSyncingChange={setAttachmentsSyncing}
           onAttachmentsChange={clearProviderConsent}
           onEffortChange={(effort) => {
             agentSession.updateControls({ effort });
@@ -276,6 +279,7 @@ export function NodeSlideLanding({
               type="checkbox"
               data-testid="landing-provider-consent"
               checked={providerConsent !== null}
+              disabled={attachmentsSyncing}
               onChange={(event) =>
                 setProviderConsent(
                   event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,

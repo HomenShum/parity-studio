@@ -119,6 +119,7 @@ export interface NodeSlidePromptComposerProps {
   attachmentMaxFiles?: number;
   onAttachmentError?: (message: string | null) => void;
   onAttachmentsChange?: () => void;
+  onAttachmentSyncingChange?: (syncing: boolean) => void;
   tools?: ReactNode;
   submitTools?: ReactNode;
   footerStatus?: ReactNode;
@@ -180,6 +181,7 @@ export function NodeSlidePromptComposer({
   attachmentMaxFiles = NODESLIDE_CREATE_ATTACHMENT_MAX_FILES,
   onAttachmentError,
   onAttachmentsChange,
+  onAttachmentSyncingChange,
   tools,
   submitTools,
   footerStatus,
@@ -272,6 +274,7 @@ export function NodeSlidePromptComposer({
           session={session}
           {...(onAttachmentError ? { onError: onAttachmentError } : {})}
           {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
+          {...(onAttachmentSyncingChange ? { onSyncingChange: onAttachmentSyncingChange } : {})}
         />
         {header ? <PromptInputHeader>{header}</PromptInputHeader> : null}
         <PromptInputAttachmentShelf />
@@ -516,16 +519,23 @@ function AttachmentSessionBridge({
   session,
   onError,
   onAttachmentsChange,
+  onSyncingChange,
 }: {
   session: NodeSlideComposerSessionController;
   onError?: (message: string | null) => void;
   onAttachmentsChange?: () => void;
+  onSyncingChange?: (syncing: boolean) => void;
 }) {
   const attachments = usePromptInputAttachments();
   const { add, files } = attachments;
   const setSessionAttachments = session.setAttachments;
   const hydration = useRef<'pending' | 'requested' | 'ready'>('pending');
   const syncVersion = useRef(0);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const filesSignature = files
+    .map((file) => [file.id, file.filename, file.mediaType].join('\u001f'))
+    .join('\u001e');
 
   useEffect(() => {
     if (hydration.current === 'ready') return;
@@ -540,6 +550,7 @@ function AttachmentSessionBridge({
   }, [add, files.length, session.attachments]);
 
   useEffect(() => {
+    void filesSignature;
     if (hydration.current !== 'ready') return;
     onAttachmentsChange?.();
     // A real attachment transition supersedes prior validation feedback. Clear
@@ -547,21 +558,25 @@ function AttachmentSessionBridge({
     // conversion can never erase a newer max-files/accept error.
     onError?.(null);
     const version = ++syncVersion.current;
-    const currentFiles = [...files];
+    const currentFiles = [...filesRef.current];
+    onSyncingChange?.(currentFiles.length > 0);
     if (currentFiles.length === 0) {
       setSessionAttachments([]);
+      onSyncingChange?.(false);
       return;
     }
     void Promise.all(currentFiles.map(attachmentDraftFromPart))
       .then((drafts) => {
         if (version !== syncVersion.current) return;
         setSessionAttachments(drafts);
+        onSyncingChange?.(false);
       })
       .catch((error: unknown) => {
         if (version !== syncVersion.current) return;
         onError?.(error instanceof Error ? error.message : 'The attached file could not be saved.');
+        onSyncingChange?.(false);
       });
-  }, [files, onAttachmentsChange, onError, setSessionAttachments]);
+  }, [filesSignature, onAttachmentsChange, onError, onSyncingChange, setSessionAttachments]);
 
   return null;
 }

@@ -1247,6 +1247,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  useEffect(() => {
+    if (window.innerWidth < 1100 && !inspectorCollapsed && !navigatorCollapsed) {
+      setNavigatorCollapsed(true);
+    }
+  }, [inspectorCollapsed, navigatorCollapsed]);
+
   const orderedSlides = useMemo(
     () =>
       workspace?.deck.slideOrder
@@ -2108,7 +2114,16 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
   const openInspector = (tab: InspectorTab) => {
     setActiveInspectorTab(tab);
+    if (window.innerWidth < 1100) setNavigatorCollapsed(true);
     setInspectorCollapsed(false);
+  };
+  const toggleInspector = () => {
+    if (inspectorCollapsed && window.innerWidth < 1100) setNavigatorCollapsed(true);
+    setInspectorCollapsed(!inspectorCollapsed);
+  };
+  const toggleNavigator = () => {
+    if (navigatorCollapsed && window.innerWidth < 1100) setInspectorCollapsed(true);
+    setNavigatorCollapsed(!navigatorCollapsed);
   };
   const selectElements = (ids: string[]) => {
     setSelectedElementIds(ids);
@@ -2657,6 +2672,54 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       setAgentBusy(false);
       setAiAgentActivity(null);
       setToast({ kind: 'success', message: 'Agent run cancelled. No changes were applied.' });
+    }
+  };
+
+  const retryAiRun = async () => {
+    const durableJob = agentSessionState.activeJob;
+    if (
+      durableJob?.kind !== 'edit_proposal' ||
+      !durableJob.jobId ||
+      durableJob.status !== 'failed' ||
+      durableJob.attempt >= durableJob.maxAttempts
+    ) {
+      setToast({
+        kind: 'error',
+        message: 'This run has no safe retry remaining. Submit a new request instead.',
+      });
+      return;
+    }
+
+    handledEditJobIdsRef.current.delete(durableJob.jobId);
+    resolvingEditJobIdsRef.current.delete(durableJob.jobId);
+    setAgentBusy(true);
+    setAiAgentActivity({
+      status: 'running',
+      elapsedMs: 0,
+      ask: 'Retrying the same durable, reviewable slide proposal.',
+    });
+    try {
+      const receipt = await retryDurableJob({
+        jobId: durableJob.jobId,
+        ownerAccessKey: durableJob.ownerAccessKey,
+      });
+      if (!receipt) throw new Error('The durable edit proposal could not be retried.');
+      reconcileAgentSessionJob(receipt);
+      setAgentBusy(receipt.status === 'queued' || receipt.status === 'running');
+      if (receipt.status === 'failed') {
+        throw new Error(receipt.error ?? 'The durable edit proposal retry failed.');
+      }
+      setToast({ kind: 'success', message: 'Retry resumed with the same bounded request.' });
+    } catch (error) {
+      const message = errorMessage(error, 'The durable edit proposal could not be retried.');
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Retry the same durable slide proposal.',
+        message,
+      });
+      setToast({ kind: 'error', message });
     }
   };
 
@@ -3379,12 +3442,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         onExportJson={() => exportDeck('json')}
         onExportPptx={() => exportDeck('pptx')}
         onOpenCommandPalette={() => setCommandOpen(true)}
-        onToggleInspector={() => setInspectorCollapsed((value) => !value)}
+        onToggleInspector={toggleInspector}
         onThemeModeChange={(mode) => {
           setStudioTheme(mode);
           writeStudioPreference('theme', mode);
         }}
-        onToggleNavigator={() => setNavigatorCollapsed((value) => !value)}
+        onToggleNavigator={toggleNavigator}
         onResetView={() => {
           setNavigatorTab('slides');
           setCanvasMode('edit');
@@ -3416,7 +3479,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           onRemoveSelectedSlide={(slideId) =>
             setSelectedSlideIds((current) => current.filter((id) => id !== slideId))
           }
-          onToggleCollapsed={() => setNavigatorCollapsed((value) => !value)}
+          onToggleCollapsed={toggleNavigator}
           onTabChange={setNavigatorTab}
           onCollapsedSectionsChange={setCollapsedNavigatorSections}
           onSelectedElementIdsChange={selectElements}
@@ -3589,6 +3652,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           slide={activeSlide}
           selectedElements={selectedElements}
           selectedSlideIds={selectedSlideIds}
+          {...(ownerAccessKey ? { ownerAccessKey } : {})}
           activeTab={activeInspectorTab}
           collapsed={inspectorCollapsed}
           width={inspectorWidth}
@@ -3631,7 +3695,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             if (tab !== 'design') setPreviewedSignatureProfile(null);
             setActiveInspectorTab(tab);
           }}
-          onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
+          onToggleCollapsed={toggleInspector}
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
           onAttachAiDataFile={attachAiDataFile}
@@ -3654,6 +3718,11 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           }}
           onDeleteAiDataSource={deleteAiDataSource}
           onCancelAiRun={(runId) => void cancelAiRun(runId)}
+          {...(activeSessionJob?.kind === 'edit_proposal' &&
+          activeSessionJob.status === 'failed' &&
+          activeSessionJob.attempt < activeSessionJob.maxAttempts
+            ? { onRetryAiRun: () => void retryAiRun() }
+            : {})}
           onAcceptPatch={handleAcceptPatch}
           onRejectPatch={handleRejectPatch}
           onPreviewPatch={previewPatch}
@@ -4200,17 +4269,19 @@ function sameStringIds(left: readonly string[], right: readonly string[]): boole
 
 function writeDeckToUrl(deckId: string) {
   const url = new URL(window.location.href);
+  const before = url.toString();
   url.searchParams.set('deck', deckId);
   url.searchParams.delete('share');
   url.searchParams.delete('slide');
-  window.history.replaceState(null, '', url);
+  if (url.toString() !== before) window.history.replaceState(null, '', url);
 }
 
 function setQueryParam(key: string, value: string | null) {
   const url = new URL(window.location.href);
+  const before = url.toString();
   if (value === null) url.searchParams.delete(key);
   else url.searchParams.set(key, value);
-  window.history.replaceState(null, '', url);
+  if (url.toString() !== before) window.history.replaceState(null, '', url);
 }
 
 async function shareDeck(shareSlug: string) {

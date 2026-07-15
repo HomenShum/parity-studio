@@ -23,6 +23,7 @@ export interface InteractiveControlSnapshot {
   bottom: number;
   width: number;
   height: number;
+  horizontallyScrollable: boolean;
   horizontallyClipped: boolean;
 }
 
@@ -168,10 +169,24 @@ export async function snapshotSurface(
         }
         return element.tagName.toLowerCase();
       };
+      const hasHorizontalScrollPath = (element: Element) => {
+        let current: Element | null = element.parentElement;
+        while (current) {
+          const style = getComputedStyle(current);
+          const scrollable =
+            current.scrollWidth > current.clientWidth + 2 &&
+            ['auto', 'scroll', 'overlay'].includes(style.overflowX);
+          if (scrollable) return true;
+          if (current === root) break;
+          current = current.parentElement;
+        }
+        return false;
+      };
       const controls = Array.from(root.querySelectorAll<HTMLElement>(interactiveSelector))
         .filter(visible)
         .map((element, index) => {
           const rect = element.getBoundingClientRect();
+          const horizontallyScrollable = hasHorizontalScrollPath(element);
           const testId = element.getAttribute('data-testid');
           const role = roleFor(element);
           const controlName = accessibleName(element);
@@ -202,11 +217,13 @@ export async function snapshotSurface(
             bottom: Math.round(rect.bottom * 10) / 10,
             width: Math.round(rect.width * 10) / 10,
             height: Math.round(rect.height * 10) / 10,
+            horizontallyScrollable,
             horizontallyClipped:
-              rect.left < rootRect.left - 2 ||
-              rect.right > rootRect.right + 2 ||
-              rect.left < -2 ||
-              rect.right > viewport.width + 2,
+              !horizontallyScrollable &&
+              (rect.left < rootRect.left - 2 ||
+                rect.right > rootRect.right + 2 ||
+                rect.left < -2 ||
+                rect.right > viewport.width + 2),
           };
         });
       return {

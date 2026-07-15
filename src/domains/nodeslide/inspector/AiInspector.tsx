@@ -188,6 +188,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
   onCancelRun?: (runId: string) => void;
+  onRetryRun?: () => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -233,6 +234,7 @@ export function AiInspector<CommandId extends string = string>({
   onUpdateMemory,
   onDeleteMemory,
   onCancelRun,
+  onRetryRun,
   onAccept,
   onReject,
   onPreviewPatch,
@@ -939,6 +941,16 @@ export function AiInspector<CommandId extends string = string>({
                         : 'The agent failed before a reviewable proposal was returned.')}
                 </strong>
                 <p>No proposal was created or applied. Your deck remains unchanged.</p>
+                {resolvedActivity.status !== 'cancelled' && onRetryRun ? (
+                  <button
+                    type="button"
+                    className="ns-agent-retry"
+                    onClick={onRetryRun}
+                    data-testid="ai-retry-run"
+                  >
+                    <RotateCcw size={12} /> Retry the same request
+                  </button>
+                ) : null}
               </div>
             ) : resolvedActivity?.status === 'delayed' ? (
               <output className="ns-agent-delay-state">

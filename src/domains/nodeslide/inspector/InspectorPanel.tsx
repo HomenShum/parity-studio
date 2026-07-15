@@ -80,6 +80,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   slide: Slide;
   selectedElements: readonly SlideElement[];
   selectedSlideIds?: readonly string[];
+  ownerAccessKey?: string;
   activeTab: InspectorTab;
   collapsed: boolean;
   width: number;
@@ -128,6 +129,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onDeleteAiMemory?: (memoryId: string) => Promise<void>;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
+  onRetryAiRun?: () => void;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
   onAcceptPatch: (patch: DeckPatch) => void;
@@ -186,6 +188,7 @@ export function InspectorPanel<CommandId extends string = string>({
   slide,
   selectedElements,
   selectedSlideIds = [],
+  ownerAccessKey,
   activeTab,
   collapsed,
   width,
@@ -227,6 +230,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onDeleteAiMemory,
   onDeleteAiDataSource,
   onCancelAiRun,
+  onRetryAiRun,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
   onAcceptPatch,
@@ -519,6 +523,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
                   {...(onDeleteAiMemory ? { onDeleteMemory: onDeleteAiMemory } : {})}
                   {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
+                  {...(onRetryAiRun ? { onRetryRun: onRetryAiRun } : {})}
                   onAccept={onAcceptPatch}
                   onReject={onRejectPatch}
                   onGenerateVariations={onGenerateVariations}
@@ -587,6 +592,15 @@ export function InspectorPanel<CommandId extends string = string>({
                 <DataInspector
                   sources={workspace.sources}
                   selectedElements={selectedElements}
+                  {...(ownerAccessKey
+                    ? {
+                        ownerDataExport: {
+                          deckId: workspace.deck.id,
+                          deckTitle: workspace.deck.title,
+                          ownerAccessKey,
+                        },
+                      }
+                    : {})}
                   {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
                 />
               </InspectorTabPanel>

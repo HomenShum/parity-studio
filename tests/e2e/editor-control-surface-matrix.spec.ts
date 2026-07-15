@@ -393,6 +393,9 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
 
     await page.getByTestId('inspector-tab-data').click();
     await expect(page.getByRole('heading', { name: 'Data & sources' })).toBeVisible();
+    const ownerExport = page.getByTestId('export-my-data');
+    await expect(ownerExport).toBeVisible();
+    await expect(ownerExport).toHaveAccessibleName('Export my data');
     inventories.push(await snapshotSurface(page, inspector, 'inspector-evidence'));
 
     await page.getByTestId('inspector-tab-trace').click();
@@ -540,10 +543,30 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
       await artifacts.screenshot(`${visualCase.name}-inspector`);
 
       const navigator = page.getByTestId('slide-navigator');
-      if (await navigator.evaluate((element) => element.classList.contains('is-collapsed'))) {
-        const closeInspector = page.getByRole('button', { name: 'Collapse inspector' });
+      if (visualCase.width < 1100) {
+        const closeInspector = page.locator('[aria-label="Collapse inspector"]:visible').last();
         if (await closeInspector.isVisible()) await closeInspector.click();
-        await page.getByRole('button', { name: 'Open slide navigator' }).first().click();
+      }
+      if (visualCase.width < 700) {
+        await expect(navigator).toBeVisible();
+      } else if (!(await navigator.isVisible())) {
+        const openNavigator = page
+          .locator(
+            '[aria-label="Open slide navigator"]:visible, [aria-label="Expand slide navigator"]:visible',
+          )
+          .first();
+        await expect(openNavigator).toBeVisible();
+        await openNavigator.click();
+      }
+      if (visualCase.width < 700) {
+        const slideCount = await navigator.locator('.ns-slide-row').count();
+        const lastSlideActions = navigator.locator('.ns-slide-more').last();
+        await expect(lastSlideActions).toHaveAttribute('aria-label', `Slide ${slideCount} actions`);
+        await lastSlideActions.scrollIntoViewIfNeeded();
+        await expect(lastSlideActions).toBeVisible();
+        await lastSlideActions.click();
+        await expect(page.getByRole('menu')).toBeVisible();
+        await page.keyboard.press('Escape');
       }
       const navigatorSnapshot = await snapshotSurface(
         page,
@@ -567,10 +590,6 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
           })),
         });
       }
-      test.fail(
-        clippedNavigatorControls.length > 0,
-        'P1: the mobile slide navigator expands beyond the viewport and clips later slide actions.',
-      );
       expectSurfaceSnapshotOperable(navigatorSnapshot);
       await expectDocumentHasNoHorizontalOverflow(page);
       await artifacts.screenshot(`${visualCase.name}-navigator`);

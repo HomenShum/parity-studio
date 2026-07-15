@@ -16,8 +16,6 @@ import {
   watchLandingRuntime,
 } from './landing-start-flow.helpers';
 
-const acknowledgeKnownSourceFailures = process.env['NODESLIDE_ACKNOWLEDGE_KNOWN_FAILURES'] === '1';
-
 test.describe('NodeSlide landing and start-flow control matrix', () => {
   test('accounts for every first-paint control and keeps the composer keyboard-operable', async ({
     page,
@@ -187,10 +185,6 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
   test('accepts, removes, rejects, bounds, and recovers from attachment input edge cases', async ({
     page,
   }) => {
-    test.fail(
-      acknowledgeKnownSourceFailures,
-      'Known product defect: attachment churn triggers React setState-during-render in PromptInput.',
-    );
     const runtime = watchLandingRuntime(page);
     await openIsolatedLanding(page);
     const input = page.getByTestId('landing-file-input');

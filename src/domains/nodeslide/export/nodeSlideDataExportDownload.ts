@@ -39,7 +39,7 @@ export function downloadNodeSlideDataExport(
     anchor.click();
   } finally {
     anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(href), 0);
+    window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
   }
   return payload;
 }
