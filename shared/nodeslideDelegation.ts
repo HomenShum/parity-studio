@@ -152,25 +152,97 @@ export function nodeSlideDelegationProposalViolations(args: {
  * even when they use a nominally non-destructive opcode.
  */
 export function nodeSlideDelegationOperationRequiresReview(operation: PatchOperation): boolean {
-  if (operation.op === 'remove_element' || operation.op === 'remove_slide') return true;
-  if (operation.op === 'set_visibility_v1') return !operation.visible;
-  if (operation.op === 'replace_text') return operation.text.trim().length === 0;
-  if (operation.op === 'resize') return operation.width < 0.01 || operation.height < 0.01;
-  if (operation.op !== 'update_style') return false;
+  switch (operation.op) {
+    case 'remove_element':
+    case 'remove_slide':
+      return true;
+    case 'set_visibility_v1':
+      return !operation.visible;
+    case 'replace_text':
+      return !hasVisibleText(operation.text);
+    case 'resize':
+      return operation.width < 0.01 || operation.height < 0.01;
+    case 'update_style':
+      return styleRequiresReview(operation.properties);
+    case 'add_element':
+      return addedElementRequiresReview(operation.element, true);
+    case 'add_slide':
+      return (
+        !hasVisibleText(operation.slide.title) ||
+        operation.elements.some((element) => addedElementRequiresReview(element, false))
+      );
+    case 'update_image':
+      return !hasVisibleText(operation.imageUrl) || !hasVisibleText(operation.altText);
+    case 'update_slide':
+      return (
+        operation.properties.background !== undefined ||
+        (operation.properties.title !== undefined && !hasVisibleText(operation.properties.title)) ||
+        (operation.properties.notes !== undefined && !hasVisibleText(operation.properties.notes))
+      );
+    case 'update_deck':
+      return (
+        operation.properties.title !== undefined && !hasVisibleText(operation.properties.title)
+      );
+    case 'move':
+    case 'update_chart':
+    case 'group_elements_v1':
+    case 'ungroup_elements_v1':
+    case 'reorder_element_v1':
+    case 'reorder_slide':
+      return false;
+    default: {
+      const exhaustiveOperation: never = operation;
+      return exhaustiveOperation;
+    }
+  }
+}
 
-  const { color, fill, fontSize, opacity, stroke } = operation.properties;
+function styleRequiresReview(
+  properties: Extract<PatchOperation, { op: 'update_style' }>['properties'],
+) {
+  const { color, fill, fontSize, opacity, stroke } = properties;
   if (opacity !== undefined && opacity < 0.05) return true;
   if (fontSize !== undefined && fontSize < NODESLIDE_MIN_READABLE_FONT_SIZE) return true;
-  return [color, fill, stroke].some(isTransparentPaint);
+  if ([color, fill, stroke].some(isTransparentPaint)) return true;
+  return (
+    color !== undefined && fill !== undefined && canonicalPaint(color) === canonicalPaint(fill)
+  );
+}
+
+function addedElementRequiresReview(
+  element: Extract<PatchOperation, { op: 'add_element' }>['element'],
+  canOccludeExistingContent: boolean,
+): boolean {
+  if (element.locked || element.visible === false) return true;
+  if (element.bbox.width < 0.01 || element.bbox.height < 0.01) return true;
+  if (element.style.opacity !== undefined && element.style.opacity < 0.05) return true;
+  if (canOccludeExistingContent && element.bbox.width * element.bbox.height >= 0.45) {
+    return (element.style.opacity ?? 1) >= 0.5;
+  }
+  return false;
+}
+
+function hasVisibleText(value: string): boolean {
+  return value.normalize('NFKD').replace(/[\s\p{Cf}\p{M}]/gu, '').length > 0;
 }
 
 function isTransparentPaint(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim().toLocaleLowerCase();
   if (normalized === 'transparent') return true;
-  if (/^#[0-9a-f]{8}$/u.test(normalized)) {
-    return Number.parseInt(normalized.slice(-2), 16) < 13;
-  }
-  const alpha = normalized.match(/^(?:rgba|hsla)\([^)]*,\s*(\d*\.?\d+)\s*\)$/u)?.[1];
-  return alpha !== undefined && Number(alpha) < 0.05;
+  const paint = canonicalPaint(normalized);
+  if (/^#[0-9a-f]{8}$/u.test(paint)) return Number.parseInt(paint.slice(-2), 16) < 13;
+  const alpha =
+    normalized.match(/\/\s*(\d*\.?\d+%?)\s*\)$/u)?.[1] ??
+    normalized.match(/^(?:rgba|hsla)\([^)]*,\s*(\d*\.?\d+%?)\s*\)$/u)?.[1];
+  if (alpha === undefined) return false;
+  const numericAlpha = alpha.endsWith('%') ? Number(alpha.slice(0, -1)) / 100 : Number(alpha);
+  return Number.isFinite(numericAlpha) && numericAlpha < 0.05;
+}
+
+function canonicalPaint(value: string): string {
+  const normalized = value.trim().toLocaleLowerCase();
+  const shortHex = normalized.match(/^#([0-9a-f]{3,4})$/u)?.[1];
+  if (shortHex) return `#${[...shortHex].map((digit) => `${digit}${digit}`).join('')}`;
+  return normalized.replace(/[\s,]+/gu, '');
 }

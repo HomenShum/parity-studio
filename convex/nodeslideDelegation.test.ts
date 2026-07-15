@@ -494,6 +494,15 @@ describe('NodeSlide delegated acceptance', () => {
         { op: 'replace_text', slideId: element.slideId, elementId: element.id, text: '   ' },
       ],
       [
+        'zero-width-copy',
+        {
+          op: 'replace_text',
+          slideId: element.slideId,
+          elementId: element.id,
+          text: '\u200B\u200D',
+        },
+      ],
+      [
         'zero-opacity',
         {
           op: 'update_style',
@@ -518,6 +527,33 @@ describe('NodeSlide delegated acceptance', () => {
           slideId: element.slideId,
           elementId: element.id,
           properties: { color: 'transparent' },
+        },
+      ],
+      [
+        'short-hex-alpha',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { fill: '#0000' },
+        },
+      ],
+      [
+        'modern-rgb-alpha',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { color: 'rgb(0 0 0 / 0)' },
+        },
+      ],
+      [
+        'same-color-and-fill',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { color: '#fff', fill: '#ffffff' },
         },
       ],
     ] satisfies Array<[string, PatchOperation]>) {
