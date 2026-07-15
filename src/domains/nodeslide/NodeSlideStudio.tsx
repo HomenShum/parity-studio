@@ -34,6 +34,7 @@ import {
   type NodeSlideDelegationAcceptanceReceipt,
   type NodeSlideDelegationGrant,
   type NodeSlideDelegationIssueReceipt,
+  nodeSlideDelegationProposalViolations,
 } from '../../../shared/nodeslideDelegation';
 import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
@@ -1225,92 +1226,104 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
         const delegatedApproval = agentSessionApprovalForDeck(agentSessionState, targetDeckId);
         let delegationFallback: string | null = null;
+        let delegationStoppedForReview = false;
         if (delegatedApproval.mode === 'auto_apply') {
-          try {
-            const delegatedReceipt = await acceptPatchWithDelegation({
-              deckId: targetDeckId,
-              token: delegatedApproval.token,
-              patchId: patch.id,
-              expectedCandidateDigest: resultCandidateDigest,
-            });
-            if (delegatedReceipt.patch.status === 'stale') {
-              if (delegatedReceipt.workspace) {
-                installWorkspace(delegatedReceipt.workspace, jobOwnerAccessKey);
+          const [preflightViolation] = nodeSlideDelegationProposalViolations({
+            grant: delegatedApproval,
+            proposal: patch,
+          });
+          if (preflightViolation) {
+            delegationFallback = preflightViolation;
+            delegationStoppedForReview = true;
+          } else {
+            try {
+              const delegatedReceipt = await acceptPatchWithDelegation({
+                deckId: targetDeckId,
+                token: delegatedApproval.token,
+                patchId: patch.id,
+                expectedCandidateDigest: resultCandidateDigest,
+              });
+              if (delegatedReceipt.patch.status === 'stale') {
+                if (delegatedReceipt.workspace) {
+                  installWorkspace(delegatedReceipt.workspace, jobOwnerAccessKey);
+                }
+                queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+                setActiveInspectorTab('versions');
+                setInspectorCollapsed(false);
+                handledEditJobIdsRef.current.add(jobId);
+                setAgentBusy(false);
+                setAiAgentActivity(null);
+                setToast({
+                  kind: 'error',
+                  message:
+                    'Auto-apply paused because the proposal became stale. The newer deck was preserved.',
+                });
+                archiveAgentSessionJob();
+                return;
               }
-              queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
-              setActiveInspectorTab('versions');
-              setInspectorCollapsed(false);
+              if (delegatedReceipt.patch.status !== 'accepted') {
+                throw new Error('Delegated acceptance completed without a commit receipt.');
+              }
+              let acceptedWorkspace = delegatedReceipt.workspace;
+              if (!acceptedWorkspace && delegatedReceipt.delegation.replayed) {
+                acceptedWorkspace = await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+                  deckId: targetDeckId,
+                  ownerAccessKey: jobOwnerAccessKey,
+                });
+              }
+              const resultingDeckVersion = delegatedReceipt.patch.resultingDeckVersion;
+              if (
+                !acceptedWorkspace ||
+                resultingDeckVersion === undefined ||
+                acceptedWorkspace.deck.version < resultingDeckVersion
+              ) {
+                throw new Error(
+                  'Delegated acceptance completed without a durable version receipt.',
+                );
+              }
+              if (acceptedWorkspace.deck.version === resultingDeckVersion) {
+                recordSuccessfulCommit(
+                  authoritativePredecessorVersion(acceptedWorkspace),
+                  resultingDeckVersion,
+                );
+              }
+              installWorkspace(acceptedWorkspace, jobOwnerAccessKey);
+              setPreviewedPatchId(null);
+              setCanvasMode('edit');
+              if (patch.linkedCommentId) setAiCommentContext(null);
               handledEditJobIdsRef.current.add(jobId);
               setAgentBusy(false);
               setAiAgentActivity(null);
+              const exhausted =
+                delegatedReceipt.delegation.useCount >= delegatedReceipt.delegation.maxUses;
+              if (exhausted) clearApprovalGrant();
               setToast({
-                kind: 'error',
-                message:
-                  'Auto-apply paused because the proposal became stale. The newer deck was preserved.',
+                kind: 'success',
+                message: exhausted
+                  ? `Validated edit applied as deck v${acceptedWorkspace.deck.version}. Auto-apply reached its use limit, so review mode is active again.`
+                  : `Validated edit applied automatically as deck v${acceptedWorkspace.deck.version}. Undo remains available.`,
               });
-              archiveAgentSessionJob();
-              return;
-            }
-            if (delegatedReceipt.patch.status !== 'accepted') {
-              throw new Error('Delegated acceptance completed without a commit receipt.');
-            }
-            let acceptedWorkspace = delegatedReceipt.workspace;
-            if (!acceptedWorkspace && delegatedReceipt.delegation.replayed) {
-              acceptedWorkspace = await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+              void recordPreferencePatch({
                 deckId: targetDeckId,
                 ownerAccessKey: jobOwnerAccessKey,
-              });
-            }
-            const resultingDeckVersion = delegatedReceipt.patch.resultingDeckVersion;
-            if (
-              !acceptedWorkspace ||
-              resultingDeckVersion === undefined ||
-              acceptedWorkspace.deck.version < resultingDeckVersion
-            ) {
-              throw new Error('Delegated acceptance completed without a durable version receipt.');
-            }
-            if (acceptedWorkspace.deck.version === resultingDeckVersion) {
-              recordSuccessfulCommit(
-                authoritativePredecessorVersion(acceptedWorkspace),
-                resultingDeckVersion,
+                patchId: delegatedReceipt.patch.id,
+              })
+                .then(() =>
+                  runPreferenceEtl({
+                    deckId: targetDeckId,
+                    ownerAccessKey: jobOwnerAccessKey,
+                  }),
+                )
+                .catch(() => undefined);
+              archiveAgentSessionJob();
+              return;
+            } catch (error) {
+              queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
+              delegationFallback = errorMessage(
+                error,
+                'The delegated grant could not apply this proposal.',
               );
             }
-            installWorkspace(acceptedWorkspace, jobOwnerAccessKey);
-            setPreviewedPatchId(null);
-            setCanvasMode('edit');
-            if (patch.linkedCommentId) setAiCommentContext(null);
-            handledEditJobIdsRef.current.add(jobId);
-            setAgentBusy(false);
-            setAiAgentActivity(null);
-            const exhausted =
-              delegatedReceipt.delegation.useCount >= delegatedReceipt.delegation.maxUses;
-            if (exhausted) clearApprovalGrant();
-            setToast({
-              kind: 'success',
-              message: exhausted
-                ? `Validated edit applied as deck v${acceptedWorkspace.deck.version}. Auto-apply reached its use limit, so review mode is active again.`
-                : `Validated edit applied automatically as deck v${acceptedWorkspace.deck.version}. Undo remains available.`,
-            });
-            void recordPreferencePatch({
-              deckId: targetDeckId,
-              ownerAccessKey: jobOwnerAccessKey,
-              patchId: delegatedReceipt.patch.id,
-            })
-              .then(() =>
-                runPreferenceEtl({
-                  deckId: targetDeckId,
-                  ownerAccessKey: jobOwnerAccessKey,
-                }),
-              )
-              .catch(() => undefined);
-            archiveAgentSessionJob();
-            return;
-          } catch (error) {
-            queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
-            delegationFallback = errorMessage(
-              error,
-              'The delegated grant could not apply this proposal.',
-            );
           }
         }
 
@@ -1332,10 +1345,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         setAgentBusy(false);
         setAiAgentActivity(null);
         setToast({
-          kind: delegationFallback ? 'error' : 'success',
-          message: delegationFallback
-            ? `Auto-apply paused: ${delegationFallback} Review this validated proposal before Accept.`
-            : 'Validated proposal resumed from its durable job. Review it before Accept.',
+          kind: delegationFallback && !delegationStoppedForReview ? 'error' : 'success',
+          message: delegationStoppedForReview
+            ? `Review required: ${delegationFallback} The validated proposal remains unchanged until Accept.`
+            : delegationFallback
+              ? `Auto-apply paused: ${delegationFallback} Review this validated proposal before Accept.`
+              : 'Validated proposal resumed from its durable job. Review it before Accept.',
         });
         archiveAgentSessionJob();
       })
