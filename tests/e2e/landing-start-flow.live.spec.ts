@@ -32,9 +32,11 @@ test.describe('NodeSlide landing backend transitions', () => {
     await expect(page.getByTestId('nodeslide-landing')).toBeVisible({ timeout: 60_000 });
     const recents = page.getByRole('region', { name: 'Recent decks' });
     await expect(recents).toBeVisible();
+    await expect(recents.getByRole('button', { name: 'View all' })).toHaveCount(0);
     const recentDeck = recents.locator('li button').first();
     await expect(recentDeck).toBeVisible();
     await recentDeck.click();
+    await expect(page.getByRole('dialog', { name: 'Open a deck' })).toHaveCount(0);
     await expect(page.getByTestId('deck-title')).toBeVisible({ timeout: 60_000 });
     expect(page.url()).toBe(sampleDeckUrl);
   });
@@ -90,9 +92,11 @@ test.describe('NodeSlide landing backend transitions', () => {
 
     await page.goto('/');
     await expect(page.getByTestId('nodeslide-landing')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('button', { name: 'View all' })).toHaveCount(0);
     const matchingRecent = page.getByRole('button', { name: new RegExp(unique.slice(0, 24), 'i') });
     await expect(matchingRecent).toHaveCount(1);
     await matchingRecent.click();
+    await expect(page.getByRole('dialog', { name: 'Open a deck' })).toHaveCount(0);
     await expect(page).toHaveURL(deckUrl);
   });
 });

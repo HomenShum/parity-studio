@@ -29,10 +29,7 @@ const checks = [
   ],
   ['composer exposes model selection', contents.agent.includes('data-testid="ai-model-select"')],
   ['composer exposes file attachment', contents.agent.includes('data-testid="ai-data-file-input"')],
-  [
-    'composer exposes web consent',
-    contents.agent.includes('data-testid="ai-web-research-consent"'),
-  ],
+  ['composer exposes web consent', contents.agent.includes('data-agent-web-consent="session"')],
   ['composer exposes cancellation', contents.agent.includes('data-testid="ai-cancel-run"')],
   [
     'trace exposes durable journal',

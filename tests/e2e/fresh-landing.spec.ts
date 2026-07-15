@@ -19,25 +19,33 @@ test.describe('canonical fresh landing', () => {
     await expect(prompt).toHaveValue('Build a concise quarterly review');
 
     const model = page.getByTestId('landing-model-select');
+    const submit = page.getByRole('button', { name: 'Create presentation' });
     const recommendedLabel = (await model.innerText()).trim();
     await model.click();
     const modelDialog = page.getByRole('dialog', { name: 'Generation model' });
     await modelDialog.getByText('Deterministic', { exact: true }).click();
-    await expect(page.locator('.ns-landing-privacy')).toContainText('No external model egress');
+    await expect(page.locator('.ns-landing-web')).toHaveText('Private');
+    await expect(page.getByTestId('landing-provider-consent')).toHaveCount(0);
+    await expect(submit).toBeEnabled();
 
     await model.click();
     await modelDialog
       .getByLabel('Recommended')
       .getByText(recommendedLabel, { exact: true })
       .click();
-    await expect(page.locator('.ns-landing-privacy')).toContainText(
-      'Check consent for this request before creation',
-    );
     const consent = page.getByTestId('landing-provider-consent');
     await expect(consent).not.toBeChecked();
-    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeDisabled();
+    await expect(submit).toBeEnabled();
+    await expect(page.locator('.ns-landing-consent, .ns-landing-privacy')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View all' })).toHaveCount(0);
     await consent.check();
-    await expect(page.getByRole('button', { name: 'Create presentation' })).toBeEnabled();
+    await expect(consent).toBeChecked();
+    await expect(
+      page.getByTitle(
+        'Allow selected external models and optional web research for this browser tab',
+      ),
+    ).toContainText('AI allowed this session');
   });
 
   test('attaches and removes a local data file before creation', async ({ page }) => {
@@ -113,13 +121,7 @@ test.describe('canonical fresh landing', () => {
     });
     expect(sampleGap).toBeGreaterThanOrEqual(8);
 
-    const viewAll = page.getByRole('button', { name: 'View all' });
-    if (await viewAll.count()) {
-      const viewAllHeight = await viewAll.evaluate(
-        (button) => button.getBoundingClientRect().height,
-      );
-      expect(viewAllHeight).toBeGreaterThanOrEqual(24);
-    }
+    await expect(page.getByRole('button', { name: 'View all' })).toHaveCount(0);
   });
 });
 

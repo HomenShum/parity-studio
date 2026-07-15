@@ -138,17 +138,21 @@ export async function readSelectOptions(select: Locator): Promise<string[]> {
     .then((labels) => labels.map((label) => label.trim()));
 }
 
-export async function armLandingConsent(page: Page): Promise<void> {
+export async function grantLandingSessionConsent(page: Page): Promise<void> {
   const consent = page.getByTestId('landing-provider-consent');
   await expect(consent).toBeVisible();
   await consent.check();
-  await expect(consent).toBeChecked();
+  await expectLandingSessionConsent(page, true);
 }
 
-export async function expectLandingConsentInvalidated(page: Page): Promise<void> {
+export async function expectLandingSessionConsent(page: Page, granted: boolean): Promise<void> {
   const consent = page.getByTestId('landing-provider-consent');
-  await expect(consent).not.toBeChecked();
-  await expect(page.getByRole('button', { name: 'Create presentation' })).toBeDisabled();
+  await expect(consent).toBeVisible();
+  if (granted) {
+    await expect(consent).toBeChecked();
+  } else {
+    await expect(consent).not.toBeChecked();
+  }
 }
 
 export async function expectNoDocumentOverflow(page: Page): Promise<void> {

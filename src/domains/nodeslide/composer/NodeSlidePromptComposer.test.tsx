@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { useState } from 'react';
@@ -241,6 +241,46 @@ describe('NodeSlide AI Elements composer interactions', () => {
     ]);
   });
 
+  it('does not submit after the composer unmounts while attachment content is resolving', async () => {
+    const sessionKey = 'editor-unmount-attachment-race';
+    clearNodeSlideComposerSession(sessionKey);
+    const onSubmit = vi.fn(async (_message: NodeSlidePromptComposerSubmit) => undefined);
+    const user = userEvent.setup();
+    const view = render(<ComposerPanel onSubmit={onSubmit} sessionKey={sessionKey} />);
+
+    await user.upload(
+      screen.getByTestId('test-file-input'),
+      new File(['metric,value\nTrust,91'], 'trust.csv', { type: 'text/csv' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('session-attachment-count')).toHaveTextContent('1'),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this evidence');
+
+    let resolveFetch: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(resolveFetch).toBeTypeOf('function'));
+
+    view.unmount();
+    await act(async () => {
+      resolveFetch?.({
+        ok: true,
+        blob: async () => new Blob(['metric,value\nTrust,91'], { type: 'text/csv' }),
+      } as Response);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('restores a keyed draft and attachments after AI to Trace to AI remount', async () => {
     const sessionKey = 'editor:tab-remount';
     clearNodeSlideComposerSession(sessionKey);
@@ -275,12 +315,14 @@ function ComposerPanel({
   sessionKey,
   onSubmit = async () => undefined,
   onAttachmentError,
+  onAttachmentsChange,
   insideDialog = false,
   disabled = false,
 }: {
   sessionKey: string;
   onSubmit?: (message: NodeSlidePromptComposerSubmit) => void | Promise<void>;
   onAttachmentError?: (message: string | null) => void;
+  onAttachmentsChange?: () => void;
   insideDialog?: boolean;
   disabled?: boolean;
 }) {
@@ -314,6 +356,7 @@ function ComposerPanel({
         modelLabel="Model and provider"
         modelTestId="test-model-select"
         {...(onAttachmentError ? { onAttachmentError } : {})}
+        {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
         onEffortChange={setEffort}
         onModelChange={selectModel}
         onSubmit={onSubmit}
@@ -343,7 +386,11 @@ function AttachmentErrorHarness({ sessionKey }: { sessionKey: string }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <>
-      <ComposerPanel onAttachmentError={setError} sessionKey={sessionKey} />
+      <ComposerPanel
+        onAttachmentError={setError}
+        onAttachmentsChange={() => setError(null)}
+        sessionKey={sessionKey}
+      />
       {error ? <output role="alert">{error}</output> : null}
     </>
   );

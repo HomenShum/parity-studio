@@ -4,6 +4,7 @@
     "ignore": [
       ".convex",
       ".claude",
+      ".understand-anything",
       ".playwright-mcp",
       ".tmp",
       ".vercel",

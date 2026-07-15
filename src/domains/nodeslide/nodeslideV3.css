@@ -973,9 +973,9 @@
   border: 0;
   border-radius: 9px;
   gap: 8px;
-  grid-template-columns: 18px 116px minmax(0, 1fr) 18px;
+  grid-template-columns: 16px 96px minmax(0, 1fr) 18px;
   margin: 1px 0;
-  min-height: 72px;
+  min-height: 62px;
   padding: 6px 5px 6px 8px;
 }
 
@@ -1018,9 +1018,9 @@
 .nodeslide-studio .ns-thumbnail-button {
   border: 0;
   border-radius: 6px;
-  height: 65px;
+  height: 54px;
   overflow: hidden;
-  width: 116px;
+  width: 96px;
 }
 
 .nodeslide-studio .ns-thumbnail {
@@ -2331,48 +2331,38 @@
   order: 1;
 }
 
-.nodeslide-studio .ns-ai-inline-consent {
-  display: grid;
-  gap: 5px;
-  border-top: 1px solid var(--ns-line-b);
-  margin-top: 0;
-  padding: 5px 7px 7px;
-}
-
-.nodeslide-studio .ns-ai-inline-consent > label {
+.nodeslide-studio .ns-session-consent-pill {
   align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  color: var(--ns-ink2);
+  background: color-mix(in srgb, var(--ns-accent) 6%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 28%, var(--ns-line-c));
+  border-radius: 999px;
+  color: var(--ns-accent-dark);
   cursor: pointer;
-  display: grid;
-  font-size: 10px;
-  gap: 6px;
-  grid-template-columns: auto minmax(0, 1fr);
-  line-height: 1.3;
-  padding: 3px 4px;
+  display: inline-flex;
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 650;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 9px;
+  white-space: nowrap;
 }
 
-.nodeslide-studio .ns-ai-inline-consent > label.is-ready {
-  background: color-mix(in srgb, var(--ns-positive) 7%, var(--ns-raised));
-  border-color: color-mix(in srgb, var(--ns-positive) 28%, var(--ns-line-c));
+.nodeslide-studio .ns-session-consent-pill:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--ns-accent) 58%, var(--ns-line-c));
 }
 
-.nodeslide-studio .ns-ai-inline-consent input {
-  accent-color: var(--ns-accent);
-  margin: 2px 0 0;
+.nodeslide-studio .ns-session-consent-pill.is-ready {
+  background: color-mix(in srgb, var(--ns-positive) 9%, var(--ns-surface));
+  border-color: color-mix(in srgb, var(--ns-positive) 38%, var(--ns-line-c));
+  color: var(--ns-positive);
 }
 
-.nodeslide-studio .ns-ai-inline-consent span,
-.nodeslide-studio .ns-ai-inline-consent small {
-  display: block;
-}
-
-.nodeslide-studio .ns-ai-inline-consent small {
-  color: var(--ns-faint);
-  font-size: 9px;
-  margin-top: 1px;
+.nodeslide-studio .ns-session-consent-pill input {
+  accent-color: currentColor;
+  height: 13px;
+  margin: 0;
+  width: 13px;
 }
 
 .nodeslide-studio .ns-ai-v3-composer > .ns-ai-attachment-error {
@@ -4324,9 +4314,6 @@
     display: none;
   }
 
-  .nodeslide-studio .ns-ai-inline-consent small {
-    display: none;
-  }
 }
 
 .nodeslide-studio .ns-ai-optimistic-ask p {
@@ -4415,7 +4402,7 @@
 
 @media (min-width: 1100px) {
   .nodeslide-studio {
-    --ns-nav-width: 300px !important;
+    --ns-nav-width: 260px !important;
   }
 
   .nodeslide-studio .ns-navigator:not(.is-collapsed) {
@@ -4429,7 +4416,7 @@
     max-width: none;
     position: relative;
     top: auto;
-    width: 300px;
+    width: 260px;
   }
 
   .nodeslide-studio .ns-inspector:not(.is-collapsed) {
@@ -4454,6 +4441,14 @@
 
   .nodeslide-studio .ns-rail-toggle {
     display: none;
+  }
+}
+
+@media (min-width: 1100px) and (max-width: 1339px) {
+  .nodeslide-studio {
+    /* Keep a usable 500px canvas floor while the editor still uses all three
+       desktop columns. Wider viewports continue to honor the user's resize. */
+    --ns-inspector-width: clamp(304px, calc(100vw - 760px), 400px) !important;
   }
 }
 
@@ -4486,7 +4481,7 @@
     left: 0;
     position: absolute;
     top: 0;
-    width: 300px;
+    width: 260px;
     z-index: 40;
   }
 
@@ -4667,8 +4662,8 @@
 
   .nodeslide-studio .ns-slide-row {
     display: grid;
-    flex: 0 0 112px;
-    grid-template-columns: 12px 72px 20px;
+    flex: 0 0 132px;
+    grid-template-columns: 12px 72px 40px;
     height: 62px;
     margin: 0;
     min-height: 62px;
@@ -4693,6 +4688,9 @@
     grid-column: 3;
     grid-row: 1;
     opacity: 1;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
   }
 
   .nodeslide-studio .ns-navigator-footer {
@@ -4717,9 +4715,9 @@
 
   .nodeslide-studio .ns-add-slide-button {
     font-size: 0;
-    height: 38px;
+    height: 44px;
     padding: 0;
-    width: 38px;
+    width: 44px;
   }
 
   .nodeslide-studio .ns-editor-canvas-modes,
@@ -4833,7 +4831,6 @@
   gap: 8px;
 }
 
-.nodeslide-studio .ns-landing-open,
 .nodeslide-studio .ns-landing-connect,
 .nodeslide-studio .ns-landing-sample {
   align-items: center;
@@ -4847,7 +4844,6 @@
   padding: 9px 13px;
 }
 
-.nodeslide-studio .ns-landing-open:hover,
 .nodeslide-studio .ns-landing-connect:hover,
 .nodeslide-studio .ns-landing-sample:hover {
   background: #fff;
@@ -5727,37 +5723,6 @@
   color: #fff;
 }
 
-.nodeslide-studio .ns-landing-consent {
-  align-items: start;
-  background: color-mix(in srgb, var(--ns-accent) 4%, #fff);
-  border-top: 1px solid var(--ns-line-b);
-  color: var(--ns-ink2);
-  cursor: pointer;
-  display: grid;
-  font-size: 10.5px;
-  gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-  line-height: 1.35;
-  margin: 4px -8px -8px;
-  padding: 10px 14px 11px;
-}
-
-.nodeslide-studio .ns-landing-consent input {
-  accent-color: var(--ns-accent);
-  margin-top: 2px;
-}
-
-.nodeslide-studio .ns-landing-consent span,
-.nodeslide-studio .ns-landing-consent small {
-  display: block;
-}
-
-.nodeslide-studio .ns-landing-consent small {
-  color: var(--ns-faint);
-  font-size: 9.5px;
-  margin-top: 2px;
-}
-
 .nodeslide-studio .ns-landing-create-status,
 .nodeslide-studio .ns-landing-create-error {
   align-items: center;
@@ -5879,28 +5844,6 @@
   font-size: 9px;
 }
 
-.ns-provider-consent > span {
-  line-height: 1.35;
-}
-
-.ns-provider-consent small {
-  color: var(--ns-faint);
-  display: block;
-  font-size: 8px;
-  margin-top: 3px;
-}
-
-.nodeslide-studio .ns-landing-privacy {
-  align-items: center;
-  color: var(--ns-faint);
-  display: flex;
-  font-size: 10px;
-  gap: 5px;
-  justify-content: center;
-  margin: 11px 0 0;
-  min-height: 16px;
-}
-
 .nodeslide-studio .ns-landing-starters {
   display: flex;
   flex-wrap: wrap;
@@ -5956,19 +5899,7 @@
 .nodeslide-studio .ns-landing-recents > div {
   align-items: center;
   display: flex;
-  justify-content: space-between;
   padding: 0 4px 9px;
-}
-
-.nodeslide-studio .ns-landing-recents > div button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--ns-faint);
-  display: inline-flex;
-  font-size: 11px;
-  min-height: 24px;
-  padding: 4px 6px;
 }
 
 .nodeslide-studio .ns-landing-recents ul {
@@ -6281,6 +6212,80 @@
   background: var(--ns-surface);
 }
 
+/* AI Elements supplies the semantics; NodeSlide owns the rail composition.
+ * Keep persisted assistant/tool turns aligned like a conversation instead of
+ * stacking their avatar above an unstyled generic card at narrow widths. */
+.nodeslide-studio .ns-agent-message {
+  max-width: 100%;
+}
+
+.nodeslide-studio .ns-agent-message:not(.is-user) {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 2px 10px;
+}
+
+.nodeslide-studio .ns-agent-message:not(.is-user) > .ns-ai-v3-agent-mark {
+  grid-column: 1;
+  margin-top: 1px;
+}
+
+.nodeslide-studio .ns-agent-message:not(.is-user) > div {
+  grid-column: 2;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-agent-message.is-user {
+  align-items: flex-end;
+  margin-left: 0;
+  padding: 2px 10px;
+}
+
+.nodeslide-studio .ns-agent-message.is-user > div {
+  background: color-mix(in srgb, var(--ns-accent-soft) 74%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 22%, var(--ns-line-c));
+  border-radius: 11px 11px 3px 11px;
+  max-width: 92%;
+  padding: 7px 9px;
+}
+
+.nodeslide-studio .ns-ai-v3-tool {
+  background: color-mix(in srgb, var(--ns-chip) 62%, var(--ns-surface));
+  border: 1px solid var(--ns-line-c);
+  border-radius: 9px;
+  margin: 6px 0 4px;
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-ai-v3-tool > button {
+  color: var(--ns-ink2);
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.nodeslide-studio .ns-ai-v3-tool > button > div {
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-ai-v3-tool > button span {
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.nodeslide-studio .ns-ai-v3-tool > [data-state] {
+  color: var(--ns-ink2);
+  padding: 0 8px 8px;
+}
+
+.nodeslide-studio .ns-ai-v3-tool > [data-state] > p {
+  margin: 0;
+}
+
 .nodeslide-studio .ns-ai-v3-context {
   padding: 10px 12px 9px;
 }
@@ -6402,18 +6407,24 @@
   padding-inline: 13px;
 }
 
-.nodeslide-studio .ns-ai-inline-consent {
-  background: color-mix(in srgb, var(--ns-raised) 72%, transparent);
-  border: 1px solid var(--ns-line-c);
-  border-radius: 10px;
-  gap: 4px;
-  margin: 0 1px;
-  padding: 6px 7px;
-}
+/* The standard desktop inspector is intentionally narrow. Keep the model,
+ * effort, and consent readable, then collapse already-labeled secondary tools
+ * to their icons so the prompt footer never turns into a four-row control wall. */
+@container nodeslide-inspector (max-width: 430px) {
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-footer-status {
+    display: none;
+  }
 
-.nodeslide-studio .ns-ai-inline-consent > label {
-  min-height: 32px;
-  padding: 4px 5px;
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-tools .ns-ai-tool-button {
+    flex: 0 0 32px;
+    justify-content: center;
+    padding-inline: 0;
+    width: 32px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-tools .ns-ai-tool-button .ns-ai-tool-label {
+    display: none;
+  }
 }
 
 @container nodeslide-inspector (max-width: 340px) {
@@ -6441,6 +6452,7 @@
 
   .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"],
   .nodeslide-studio .ns-ai-v3-prompt .ns-ai-tool-button,
+  .nodeslide-studio .ns-ai-v3-prompt .ns-session-consent-pill,
   .nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer,
   .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-submit"] {
     padding-inline: 7px;
@@ -6566,7 +6578,6 @@
     .ns-ai-v3-suggested-actions,
     .ns-ai-v3-policy-summary,
     .ns-ai-v3-controls-disclosure,
-    .ns-ai-inline-consent,
     .ns-composer-tokens,
     .ns-shortcut-hint
   ) {
@@ -6593,22 +6604,30 @@
 }
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-prompt-tools {
-  flex-wrap: nowrap;
-  grid-column: 1;
-  overflow: hidden;
+  display: contents;
 }
 
 .nodeslide-studio
   .ns-ai-v3-composer.is-review-compact
   .ns-prompt-tools
-  > :is([data-testid="ai-attach-data"], .ns-ai-tool-button, .ns-prompt-effort-wrap) {
+  :is([data-testid="ai-attach-data"], .ns-ai-tool-button, .ns-prompt-effort-wrap) {
   display: none;
 }
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-model-trigger {
-  flex: 0 1 180px;
-  max-width: 180px;
+  grid-column: 1;
+  grid-row: 1;
+  max-width: none;
   min-width: 0;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-ai-session-consent {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-prompt-footer-status {
@@ -6617,6 +6636,7 @@
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-prompt-submit-tools {
   grid-column: 2;
+  grid-row: 1;
 }
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-ai-v3-expand-composer {
@@ -8094,7 +8114,7 @@
   gap: 8px;
 }
 
-.nodeslide-studio :is(.ns-landing-open, .ns-landing-connect, .ns-landing-sample) {
+.nodeslide-studio :is(.ns-landing-connect, .ns-landing-sample) {
   align-items: center;
   background: color-mix(in srgb, var(--ns-surface) 82%, transparent);
   border: 1px solid var(--ns-line-c);
@@ -8109,7 +8129,7 @@
   padding: 8px 13px;
 }
 
-.nodeslide-studio :is(.ns-landing-open, .ns-landing-connect, .ns-landing-sample):hover {
+.nodeslide-studio :is(.ns-landing-connect, .ns-landing-sample):hover {
   background: var(--ns-surface);
   border-color: var(--ns-line-d);
   color: var(--ns-ink);
@@ -8271,6 +8291,11 @@
   color: #315b9b;
 }
 
+.nodeslide-studio .ns-landing-composer .ns-session-consent-pill {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
 .nodeslide-studio .ns-landing-composer .ns-prompt-submit-tools button {
   align-items: center;
   background: linear-gradient(180deg, #b86246, #a74f37);
@@ -8293,57 +8318,6 @@
 .nodeslide-studio .ns-landing-composer .ns-prompt-submit-tools button:disabled {
   background: var(--ns-line-d);
   color: var(--ns-faint);
-}
-
-.nodeslide-studio .ns-landing-consent {
-  align-items: start;
-  background: color-mix(in srgb, var(--ns-accent) 4%, var(--ns-surface));
-  border: 1px solid color-mix(in srgb, var(--ns-accent) 20%, var(--ns-line-c));
-  border-radius: 12px;
-  color: var(--ns-ink2);
-  cursor: pointer;
-  display: grid;
-  font-size: 12px;
-  gap: 9px;
-  grid-template-columns: auto minmax(0, 1fr);
-  line-height: 1.45;
-  margin-top: 10px;
-  max-width: 760px;
-  padding: 10px 12px;
-  width: calc(100% - 32px);
-}
-
-.nodeslide-studio .ns-landing-consent input {
-  accent-color: var(--ns-accent);
-  height: 16px;
-  margin: 2px 0 0;
-  width: 16px;
-}
-
-.nodeslide-studio .ns-landing-consent small {
-  color: var(--ns-faint);
-  display: block;
-  font-size: 10px;
-  margin-top: 2px;
-}
-
-.nodeslide-studio .ns-landing-privacy {
-  align-items: flex-start;
-  color: var(--ns-faint);
-  display: flex;
-  font-size: 11px;
-  gap: 6px;
-  justify-content: center;
-  line-height: 1.45;
-  margin: 10px auto 0;
-  max-width: 700px;
-  min-height: 18px;
-  text-align: center;
-}
-
-.nodeslide-studio .ns-landing-privacy svg {
-  flex: none;
-  margin-top: 2px;
 }
 
 .nodeslide-studio .ns-landing-starters {
@@ -8394,17 +8368,7 @@
 .nodeslide-studio .ns-landing-recents > div {
   align-items: center;
   display: flex;
-  justify-content: space-between;
   padding: 0 4px 9px;
-}
-
-.nodeslide-studio .ns-landing-recents > div button {
-  background: transparent;
-  border: 0;
-  color: var(--ns-faint);
-  font-size: 11px;
-  min-height: 32px;
-  padding: 5px 7px;
 }
 
 .nodeslide-studio .ns-landing-recents ul {
@@ -8443,6 +8407,28 @@
   font-size: 10px;
 }
 
+.nodeslide-studio .ns-landing-recents-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: var(--ns-ink2);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 5px;
+  justify-content: center;
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-landing-recents-toggle:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--ns-surface) 72%, transparent);
+  color: var(--ns-ink);
+}
+
 .nodeslide-studio .ns-landing-footer {
   color: var(--ns-faint);
   font: 8px / 1.4 var(--ns-font-mono);
@@ -8464,10 +8450,6 @@
     min-height: 40px;
     padding: 10px;
     width: 40px;
-  }
-
-  .nodeslide-studio .ns-landing-open {
-    min-height: 40px;
   }
 
   .nodeslide-studio .ns-landing-main {
@@ -8519,12 +8501,9 @@
   }
 
   .nodeslide-studio .ns-landing-composer .ns-prompt-effort-wrap,
-  .nodeslide-studio .ns-landing-composer .ns-prompt-effort {
+  .nodeslide-studio .ns-landing-composer .ns-prompt-effort,
+  .nodeslide-studio .ns-landing-composer .ns-session-consent-pill {
     min-height: 40px;
-  }
-
-  .nodeslide-studio .ns-landing-consent {
-    width: 100%;
   }
 
   .nodeslide-studio .ns-landing-starters {

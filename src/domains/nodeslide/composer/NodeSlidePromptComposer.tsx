@@ -37,6 +37,7 @@ import {
   type SyntheticEvent,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from 'react';
@@ -197,6 +198,8 @@ export function NodeSlidePromptComposer({
   className,
   composerClassName,
 }: NodeSlidePromptComposerProps) {
+  const generatedFormId = useId();
+  const resolvedFormId = formId ?? `nodeslide-prompt-${generatedFormId.replace(/:/g, '')}`;
   const agentSession = useOptionalAgentSession();
   const authoritativeModel = agentSession?.state.controls.model ?? model;
   const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
@@ -205,6 +208,7 @@ export function NodeSlidePromptComposer({
   const submissionRevisionRef = useRef(submissionRevision);
   submissionRevisionRef.current = submissionRevision;
   const preparingRevisionRef = useRef<string | number | undefined>(undefined);
+  const lifecycleRevisionRef = useRef(0);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const capturePortalContainer = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -214,6 +218,14 @@ export function NodeSlidePromptComposer({
   const handleAttachmentInputError = useCallback(
     (error: { message: string }) => onAttachmentError?.(error.message),
     [onAttachmentError],
+  );
+
+  useEffect(
+    () => () => {
+      lifecycleRevisionRef.current += 1;
+      preparingRevisionRef.current = undefined;
+    },
+    [],
   );
 
   useEffect(() => {
@@ -260,19 +272,25 @@ export function NodeSlidePromptComposer({
 
   const handleSubmit = async (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
     const submittedRevision = preparingRevisionRef.current ?? submissionRevisionRef.current;
+    const submittedLifecycleRevision = lifecycleRevisionRef.current;
     onAttachmentError?.(null);
     try {
       const files = await promptInputMessageFiles(message.files);
-      if (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current) {
+      if (
+        submittedLifecycleRevision !== lifecycleRevisionRef.current ||
+        (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current)
+      ) {
         throw new Error(
           'Change handling changed while attachments were being prepared. Review and submit again.',
         );
       }
       await onSubmit({ text: message.text, files }, event);
     } catch (error) {
-      onAttachmentError?.(
-        error instanceof Error ? error.message : 'The attached file could not be read.',
-      );
+      if (submittedLifecycleRevision === lifecycleRevisionRef.current) {
+        onAttachmentError?.(
+          error instanceof Error ? error.message : 'The attached file could not be read.',
+        );
+      }
       throw error;
     }
   };
@@ -286,10 +304,12 @@ export function NodeSlidePromptComposer({
         {...(allowAttachments ? { accept: attachmentAccept } : {})}
         className={`ns-prompt-input ${className ?? ''}`.trim()}
         clearOnSubmit={clearAttachmentsOnSubmit}
-        {...(attachmentInputTestId
-          ? { fileInputProps: { 'data-testid': attachmentInputTestId } }
-          : {})}
-        id={formId}
+        fileInputProps={{
+          ...(attachmentInputTestId ? { 'data-testid': attachmentInputTestId } : {}),
+          id: `${resolvedFormId}-attachments`,
+          name: `${resolvedFormId}-attachments`,
+        }}
+        id={resolvedFormId}
         key={session.key}
         maxFileSize={NODESLIDE_DATA_ATTACHMENT_MAX_BYTES}
         maxFiles={attachmentMaxFiles}
@@ -572,6 +592,7 @@ function AttachmentSessionBridge({
   const setSessionAttachments = session.setAttachments;
   const hydration = useRef<'pending' | 'requested' | 'ready'>('pending');
   const syncVersion = useRef(0);
+  const committedFilesSignature = useRef<string | null>(null);
   const filesRef = useRef(files);
   filesRef.current = files;
   const filesSignature = files
@@ -593,6 +614,13 @@ function AttachmentSessionBridge({
   useEffect(() => {
     void filesSignature;
     if (hydration.current !== 'ready') return;
+    // Parent callbacks can legitimately change identity after an attachment
+    // validation error updates the surrounding surface. Only a real file-list
+    // transition may clear that feedback or start another persistence pass.
+    // Otherwise a rejected fourth file (whose signature is unchanged) can
+    // briefly report the cap and then erase its own explanation on rerender.
+    if (committedFilesSignature.current === filesSignature) return;
+    committedFilesSignature.current = filesSignature;
     onAttachmentsChange?.();
     // A real attachment transition supersedes prior validation feedback. Clear
     // it at the start of this committed transition so an older async draft

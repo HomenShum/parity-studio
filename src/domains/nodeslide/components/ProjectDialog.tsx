@@ -10,7 +10,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   type CreateDeckRequest,
   NODESLIDE_DEFAULT_AGENT_MODEL,
@@ -32,7 +32,11 @@ import {
   nodeSlideComposerSessionKey,
   useNodeSlideComposerSession,
 } from '../composer/nodeSlideComposerSession';
-import { createExternalProviderRequestKey, usePerRequestConsent } from '../externalProviderConsent';
+import {
+  createExternalProviderRequestKey,
+  readSessionExternalConsent,
+  useSessionExternalConsent,
+} from '../externalProviderConsent';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
 import { useModalDialog } from './useModalDialog';
 
@@ -187,8 +191,14 @@ export function ProjectDialog({
     initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const providerConsentRequestKey = createExternalProviderRequestKey('project-create', {
-    clientSessionId,
+  const [submissionPreparing, setSubmissionPreparing] = useState(false);
+  const clearAttachmentError = useCallback(() => setAttachmentError(null), []);
+  const externalConsent = useSessionExternalConsent();
+  const providerConsent =
+    providerMode === 'deterministic' || !externalConsent.granted
+      ? null
+      : nodeSlideBriefProviderConsent(providerMode);
+  const submissionSignature = createExternalProviderRequestKey('project-create', {
     mode,
     title,
     prompt,
@@ -196,17 +206,27 @@ export function ProjectDialog({
     purpose,
     successCriteria,
     themeId,
+    accessCode,
+    attachments: composerSession.attachments,
     providerMode,
     providerModel,
     providerEffort,
-    attachments: composerSession.attachments,
+    externalConsentGranted: externalConsent.granted,
   });
-  const {
-    consent: providerConsent,
-    setConsent: setProviderConsent,
-    consumeConsent: consumeProviderConsent,
-    clearConsent: clearProviderConsent,
-  } = usePerRequestConsent<NodeSlideBriefProviderConsent>(providerConsentRequestKey);
+  const submissionTrackerRef = useRef({ signature: submissionSignature, revision: 0 });
+  if (submissionTrackerRef.current.signature !== submissionSignature) {
+    submissionTrackerRef.current = {
+      signature: submissionSignature,
+      revision: submissionTrackerRef.current.revision + 1,
+    };
+  }
+  const dialogLifecycleRef = useRef({ open, revision: 0 });
+  if (dialogLifecycleRef.current.open !== open) {
+    dialogLifecycleRef.current = {
+      open,
+      revision: dialogLifecycleRef.current.revision + 1,
+    };
+  }
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
   const createTabId = `${dialogId}-create-tab`;
@@ -227,7 +247,6 @@ export function ProjectDialog({
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
-    clearProviderConsent();
     clearComposerSession();
     setAttachmentError(null);
     onClose();
@@ -237,6 +256,16 @@ export function ProjectDialog({
     onClose: clearAdmissionAndClose,
     initialFocusRef,
   });
+
+  useEffect(
+    () => () => {
+      dialogLifecycleRef.current = {
+        open: false,
+        revision: dialogLifecycleRef.current.revision + 1,
+      };
+    },
+    [],
+  );
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -253,7 +282,6 @@ export function ProjectDialog({
       setProviderEffort(
         initialDraft?.providerEffort ?? NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
       );
-      clearProviderConsent();
       setAttachmentError(null);
     }
     wasOpenRef.current = open;
@@ -262,18 +290,9 @@ export function ProjectDialog({
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
     setProviderModel(NODESLIDE_DEFAULT_AGENT_MODEL);
     setProviderEffort(NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT);
-    clearProviderConsent();
     clearComposerSession();
     setAttachmentError(null);
-  }, [
-    clearComposerSession,
-    clearProviderConsent,
-    createEnabled,
-    initialDraft,
-    initialMode,
-    open,
-    resetComposerSession,
-  ]);
+  }, [clearComposerSession, createEnabled, initialDraft, initialMode, open, resetComposerSession]);
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextMode: 'create' | 'open';
@@ -299,6 +318,12 @@ export function ProjectDialog({
   };
 
   const submit = async ({ text, files }: { text: string; files: File[] }) => {
+    const submittedRevision = submissionTrackerRef.current.revision;
+    const submittedLifecycleRevision = dialogLifecycleRef.current.revision;
+    const requestChanged = () =>
+      !dialogLifecycleRef.current.open ||
+      dialogLifecycleRef.current.revision !== submittedLifecycleRevision ||
+      submissionTrackerRef.current.revision !== submittedRevision;
     if (mode === 'open') return;
     const deckTitle = title.trim();
     const briefPrompt = text.trim();
@@ -307,15 +332,27 @@ export function ProjectDialog({
     if (!deckTitle || !briefPrompt || !audience.trim() || !purpose.trim() || !previewAccessCode) {
       return;
     }
-    const providerAdmission = createDeckProviderAdmission(
-      providerMode,
-      providerModel,
-      providerEffort,
-      providerMode === 'deterministic' ? null : consumeProviderConsent(),
-    );
-    if (!providerAdmission) return;
+    if (providerMode !== 'deterministic' && !externalConsent.granted) {
+      throw new Error(
+        `Allow external AI for this browser tab once to create with ${providerDisplayName(providerMode)}.`,
+      );
+    }
     try {
       const attachments = await readNodeSlideAttachmentFiles(files, []);
+      if (requestChanged() || (providerMode !== 'deterministic' && !readSessionExternalConsent())) {
+        throw new Error(
+          'The model, consent, or request changed while files were being prepared. Review and submit again.',
+        );
+      }
+      const providerAdmission = createDeckProviderAdmission(
+        providerMode,
+        providerModel,
+        providerEffort,
+        providerConsent,
+      );
+      if (!providerAdmission) {
+        throw new Error('The selected provider is no longer authorized. Review and submit again.');
+      }
       setAttachmentError(null);
       onCreate({
         accessCode: previewAccessCode,
@@ -337,9 +374,11 @@ export function ProjectDialog({
       });
       setAccessCode('');
     } catch (fileError) {
-      setAttachmentError(
-        fileError instanceof Error ? fileError.message : 'The file could not be attached.',
-      );
+      if (!requestChanged()) {
+        setAttachmentError(
+          fileError instanceof Error ? fileError.message : 'The file could not be attached.',
+        );
+      }
       throw fileError;
     }
   };
@@ -359,9 +398,7 @@ export function ProjectDialog({
             ? 'Add the deck purpose under Improve the brief.'
             : !accessCode.trim()
               ? 'Enter the private-preview access code to continue.'
-              : providerMode !== 'deterministic' && !providerConsent
-                ? `Confirm consent before sending this brief to ${providerDisplayName(providerMode)}.`
-                : null;
+              : null;
 
   if (!open) return null;
 
@@ -444,7 +481,7 @@ export function ProjectDialog({
             aria-labelledby={createTabId}
             onChangeCapture={error ? onClearError : undefined}
             data-testid="new-deck-form"
-            aria-busy={creating}
+            aria-busy={creating || submissionPreparing}
           >
             <div className="ns-project-form-scroll">
               <section>
@@ -467,7 +504,6 @@ export function ProjectDialog({
                     type="button"
                     data-testid="world-cup-starter"
                     onClick={() => {
-                      clearProviderConsent();
                       setTitle(WORLD_CUP_STARTER.title);
                       composerSession.setText(WORLD_CUP_STARTER.prompt);
                       setAudience(WORLD_CUP_STARTER.audience);
@@ -497,7 +533,7 @@ export function ProjectDialog({
                     allowAttachments
                     attachmentInputTestId="create-file-input"
                     clearAttachmentsOnSubmit={false}
-                    disabled={creating}
+                    disabled={creating || submissionPreparing}
                     effort={providerEffort}
                     effortLabel="Reasoning effort"
                     effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
@@ -509,16 +545,15 @@ export function ProjectDialog({
                     modelLabel="Model and provider"
                     modelTestId="create-model-select"
                     onAttachmentError={setAttachmentError}
-                    onAttachmentsChange={clearProviderConsent}
+                    onAttachmentsChange={clearAttachmentError}
+                    onSubmissionPreparingChange={setSubmissionPreparing}
                     onEffortChange={(effort) => {
                       setProviderEffort(effort);
-                      clearProviderConsent();
                       onClearError?.();
                     }}
                     onModelChange={(model) => {
                       if (model === 'deterministic') {
                         setProviderMode('deterministic');
-                        clearProviderConsent();
                         onClearError?.();
                         return;
                       }
@@ -527,18 +562,22 @@ export function ProjectDialog({
                       if (!nodeSlideModelSupportsReasoningEffort(model, providerEffort)) {
                         setProviderEffort('high');
                       }
-                      clearProviderConsent();
                       onClearError?.();
                     }}
                     onSubmit={submit}
-                    onTextChange={clearProviderConsent}
+                    onTextChange={() => setAttachmentError(null)}
                     onTextareaKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey && (creating || createBlocker)) {
+                      if (
+                        event.key === 'Enter' &&
+                        !event.shiftKey &&
+                        (creating || submissionPreparing || createBlocker)
+                      ) {
                         event.preventDefault();
                       }
                     }}
                     placeholder="Build an evidence-led story that explains…"
                     session={composerSession}
+                    submissionRevision={submissionTrackerRef.current.revision}
                     showSubmit={false}
                     submitLabel="Create deck"
                     textareaLabel="What should this deck accomplish?"
@@ -611,7 +650,6 @@ export function ProjectDialog({
                     className={providerMode === 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode('deterministic');
-                      clearProviderConsent();
                     }}
                   >
                     <ShieldCheck size={20} aria-hidden="true" />
@@ -631,7 +669,6 @@ export function ProjectDialog({
                     className={providerMode !== 'deterministic' ? 'is-active' : ''}
                     onClick={() => {
                       setProviderMode(nodeSlideProviderModeForModel(providerModel));
-                      clearProviderConsent();
                     }}
                   >
                     <Sparkles size={20} aria-hidden="true" />
@@ -651,48 +688,26 @@ export function ProjectDialog({
                   </button>
                 </fieldset>
                 <label
-                  className="ns-provider-consent"
-                  style={{
-                    alignItems: 'start',
-                    background: '#f3f3ef',
-                    border: '1px solid var(--ns-line-soft)',
-                    borderRadius: 9,
-                    display: 'grid',
-                    gap: 8,
-                    gridTemplateColumns: 'auto 1fr',
-                    opacity: providerMode !== 'deterministic' ? 1 : 0.62,
-                    padding: 10,
-                  }}
+                  className={`ns-session-consent-pill ns-project-session-consent ${
+                    externalConsent.granted ? 'is-ready' : ''
+                  }`}
+                  title="Allow selected external models and optional web research for this browser tab"
                 >
                   <input
                     type="checkbox"
                     form={createFormId}
                     data-testid="provider-consent"
-                    checked={providerConsent !== null}
-                    disabled={providerMode === 'deterministic'}
-                    onChange={(event) =>
-                      setProviderConsent(
-                        event.target.checked ? nodeSlideBriefProviderConsent(providerMode) : null,
-                      )
-                    }
-                    style={{
-                      accentColor: 'var(--ns-accent)',
-                      marginTop: 2,
-                      padding: 0,
-                      width: 'auto',
+                    checked={externalConsent.granted}
+                    onChange={(event) => {
+                      externalConsent.setGranted(event.target.checked);
+                      setAttachmentError(null);
                     }}
                   />
+                  <ShieldCheck size={13} aria-hidden="true" />
                   <span>
-                    I consent to sending this full brief
-                    {composerSession.attachments.length > 0
-                      ? ` and ${composerSession.attachments.length} attached file${composerSession.attachments.length === 1 ? '' : 's'}`
-                      : ''}{' '}
-                    to {providerDisplayName(providerMode)}
-                    <small>
-                      {' '}
-                      Required for {selectedModel.label}; applies to this creation request only and
-                      resets after submission.
-                    </small>
+                    {externalConsent.granted
+                      ? 'External AI allowed this session'
+                      : 'Allow external AI this session'}
                   </span>
                 </label>
                 <label>
@@ -758,7 +773,7 @@ export function ProjectDialog({
                 <output className="ns-project-error" id={createStatusId} role="alert">
                   {error}
                 </output>
-              ) : creating ? (
+              ) : creating || submissionPreparing ? (
                 <output id={createStatusId} aria-live="polite">
                   <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and
                   validating…
@@ -786,10 +801,11 @@ export function ProjectDialog({
                 className="ns-button ns-button--accent"
                 type="submit"
                 form={createFormId}
-                disabled={creating || createBlocker !== null}
+                disabled={creating || submissionPreparing || createBlocker !== null}
                 aria-describedby={createStatusId}
               >
-                {creating ? 'Creating deck…' : 'Create deck'} <ArrowRight size={14} />
+                {creating || submissionPreparing ? 'Preparing deck…' : 'Create deck'}{' '}
+                <ArrowRight size={14} />
               </button>
             </footer>
           </div>

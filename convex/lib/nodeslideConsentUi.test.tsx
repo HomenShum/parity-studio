@@ -31,7 +31,10 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).not.toMatch(/type="checkbox"[^>]*data-testid="provider-consent"[^>]*disabled/);
     expect(markup).toContain('Nebius');
     expect(markup).toContain('Sends the full brief to the selected named model through Nebius.');
-    expect(markup).toContain('I consent to sending this full brief to Nebius');
+    expect(markup).toContain('Allow external AI this session');
+    expect(markup).toContain(
+      'title="Allow selected external models and optional web research for this browser tab"',
+    );
     expect(markup).toContain('data-testid="create-model-select"');
     expect(markup).toContain('data-testid="create-effort-select"');
     expect(markup).toContain('<option value="low">Low</option>');
@@ -85,7 +88,6 @@ describe('NodeSlide informed provider controls', () => {
           creating={false}
           onCreate={() => undefined}
           onExploreSample={() => undefined}
-          onOpenProjects={() => undefined}
           onOpenDeck={() => undefined}
         />
       </AgentSessionProvider>,
@@ -93,7 +95,8 @@ describe('NodeSlide informed provider controls', () => {
 
     expect(markup).toContain('data-testid="nodeslide-landing"');
     expect(markup).toContain('What presentation should we build?');
-    expect(markup).toContain('Recommended: GLM 5.2 via Nebius');
+    expect(markup).toContain('>GLM 5.2</span>');
+    expect(markup).toContain('>Nebius</span>');
     expect(markup).toContain('data-testid="landing-effort-select"');
     expect(markup).toContain('<option value="medium" selected="">Medium</option>');
     expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
@@ -102,8 +105,11 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('data-testid="landing-provider-consent"');
     expect(markup).not.toMatch(/data-testid="landing-provider-consent"[^>]*checked/);
     expect(markup).toContain('Attach data');
-    expect(markup).toContain('Check consent for this request before creation');
-    expect(markup).toContain('Consent resets immediately after submission.');
+    expect(markup).toContain('Allow prompt + files');
+    expect(markup).toContain(
+      'title="Allow selected external models and optional web research for this browser tab"',
+    );
+    expect(markup).not.toContain('Consent resets immediately after submission.');
     expect(markup).not.toContain('Create directly');
     expect(markup).toContain('aria-label="Create presentation"');
     expect(markup).toContain('Explore the editable sample workspace');
@@ -135,7 +141,7 @@ describe('NodeSlide informed provider controls', () => {
     expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
     expect(markup).toMatch(/data-testid="provider-external"[^>]*aria-pressed="true"/);
     expect(markup).toContain('>Claude Sonnet 5</span>');
-    expect(markup).toContain('and 1 attached file');
+    expect(markup).toContain('and attached files');
     expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
     expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);
   });

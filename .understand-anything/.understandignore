@@ -1,0 +1,16 @@
+# Understand Anything scan policy for parity-studio.
+# Built-in exclusions already cover generated dependencies and binary assets.
+# Keep product source, tests, scripts, configuration, and documentation visible
+# so the architecture map can connect behavior to verification evidence.
+
+# Local execution output and browser proof are release artifacts, not architecture.
+artifacts/
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# Generated build/runtime output.
+dist/
+coverage/
+mcp/dist/
+mcp/node_modules/

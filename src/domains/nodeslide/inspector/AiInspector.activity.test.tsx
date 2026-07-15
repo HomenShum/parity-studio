@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import {
   NODESLIDE_NEBIUS_REVIEW_CONSENT,
   NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
   NODESLIDE_TOOLCHAIN_VERSION,
+  NODESLIDE_WEB_RESEARCH_CONSENT,
   type NodeSlideAgentMessage,
 } from '../../../../shared/nodeslide';
 import {
@@ -73,6 +74,15 @@ beforeAll(() => {
 beforeEach(() => {
   blobUrls.clear();
   window.localStorage.clear();
+  window.sessionStorage.clear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
     const blob = blobUrls.get(String(input));
     if (!blob) throw new Error(`Unexpected test fetch: ${String(input)}`);
@@ -160,7 +170,7 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     expect(screen.getByTestId('ai-connect-agent')).toBeVisible();
   });
 
-  it('fails closed before per-request provider consent and resets consent after submit', async () => {
+  it('fails closed before session consent and reuses the grant across editor requests', async () => {
     const snapshot = fixture('consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
     const onGenerateVariations = vi.fn<AiInspectorProps<string>['onGenerateVariations']>();
@@ -190,18 +200,13 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
       providerMode: 'nebius',
       providerConsent: NODESLIDE_NEBIUS_VARIATIONS_CONSENT,
     });
-    await waitFor(() => expect(consent).not.toBeChecked());
+    await waitFor(() => expect(consent).toBeChecked());
 
     await user.type(
       screen.getByRole('textbox', { name: 'AI instruction' }),
       'Sharpen the executive takeaway.',
     );
-    expect(submit).toBeDisabled();
-    fireEvent.submit(form);
-    expect(onPropose).not.toHaveBeenCalled();
-
-    await user.click(consent);
-    await waitFor(() => expect(submit).toBeEnabled());
+    expect(submit).toBeEnabled();
     await user.click(submit);
 
     await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
@@ -209,15 +214,81 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
       providerMode: 'nebius',
       providerConsent: NODESLIDE_NEBIUS_REVIEW_CONSENT,
     });
-    await waitFor(() => expect(consent).not.toBeChecked());
+    await waitFor(() => expect(consent).toBeChecked());
 
     await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Second request');
-    expect(submit).toBeDisabled();
-    fireEvent.submit(form);
-    expect(onPropose).toHaveBeenCalledTimes(1);
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(2));
+    expect(consent).toBeChecked();
   });
 
-  it('invalidates consent when a keyboard-activated suggestion rewrites the request', async () => {
+  it('keeps session revocation reachable after switching back to private mode', async () => {
+    const snapshot = fixture('private-mode-revoke');
+    const user = userEvent.setup();
+    renderInspector(snapshot);
+
+    const consent = screen.getByTestId('ai-provider-consent');
+    await user.click(consent);
+    expect(consent).toBeChecked();
+
+    await user.click(screen.getByTestId('ai-model-select'));
+    const dialog = await screen.findByRole('dialog', { name: 'Agent model' });
+    await user.click(within(dialog).getByText('Deterministic', { exact: true }));
+
+    expect(screen.getByTestId('ai-provider-consent')).toBeEnabled();
+    await user.click(screen.getByTestId('ai-provider-consent'));
+    expect(screen.queryByTestId('ai-provider-consent')).not.toBeInTheDocument();
+  });
+
+  it('keeps Enter operable and explains the one-time session gate before egress', async () => {
+    const snapshot = fixture('session-consent-enter');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(instruction, 'Make the headline more decisive.');
+    expect(screen.getByTestId('ai-submit')).toBeEnabled();
+
+    instruction.focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Allow external AI for this browser tab once',
+      ),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('ai-provider-consent')).not.toBeChecked();
+    expect(instruction).toHaveValue('Make the headline more decisive.');
+
+    await user.click(screen.getByTestId('ai-provider-consent'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps Shift+Enter as a newline while reference and command menus are open', async () => {
+    const snapshot = fixture('autocomplete-newline');
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      references: [{ id: 'source-one', kind: 'source', label: 'Source one' }],
+    });
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(instruction, '@');
+    expect(screen.getByRole('menu', { name: 'Read context' })).toBeVisible();
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(instruction).toHaveValue('@\n');
+
+    await user.clear(instruction);
+    await user.type(instruction, '/');
+    expect(screen.getByRole('menu', { name: 'Commands' })).toBeVisible();
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(instruction).toHaveValue('/\n');
+  });
+
+  it('keeps session consent when a keyboard-activated suggestion rewrites the request', async () => {
     const snapshot = fixture('keyboard-suggestion-consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
     const user = userEvent.setup();
@@ -234,14 +305,8 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
 
     const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
     expect((instruction as HTMLTextAreaElement).value).toContain('Sharpen this slide');
-    expect(consent).not.toBeChecked();
-    expect(screen.getByTestId('ai-submit')).toBeDisabled();
-    instruction.focus();
-    await user.keyboard('{Enter}');
-    expect(onPropose).not.toHaveBeenCalled();
-
-    consent.focus();
-    await user.keyboard('[Space]');
+    expect(consent).toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeEnabled();
     instruction.focus();
     await user.keyboard('{Enter}');
 
@@ -252,7 +317,7 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     });
   });
 
-  it('invalidates consent when editor scope changes after approval', async () => {
+  it('keeps session consent when editor scope changes after approval', async () => {
     const snapshot = fixture('scope-consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
     const user = userEvent.setup();
@@ -268,10 +333,11 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
 
     await user.click(screen.getByRole('button', { name: 'Deck' }));
 
-    expect(consent).not.toBeChecked();
-    expect(screen.getByTestId('ai-submit')).toBeDisabled();
+    expect(consent).toBeChecked();
+    expect(screen.getByTestId('ai-submit')).toBeEnabled();
     fireEvent.click(screen.getByTestId('ai-submit'));
-    expect(onPropose).not.toHaveBeenCalled();
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[1]).toMatchObject({ kind: 'deck' });
   });
 
   it('keeps deterministic requests private without requiring or minting consent', async () => {
@@ -293,6 +359,64 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
     await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
     expect(onPropose.mock.calls[0]?.[2]).toMatchObject({ providerMode: 'deterministic' });
     expect(onPropose.mock.calls[0]?.[2]).not.toHaveProperty('providerConsent');
+  });
+
+  it('gates deterministic Web, submits after one session grant, and fails closed after revoke', async () => {
+    const snapshot = fixture('deterministic-web-consent');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      onPropose,
+    });
+
+    const instruction = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(instruction, 'Ground the market claim in current sources.');
+    expect(screen.queryByTestId('ai-provider-consent')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('ai-web-research-toggle'));
+
+    const consent = screen.getByTestId('ai-provider-consent');
+    const submit = screen.getByTestId('ai-submit');
+    expect(consent).not.toBeChecked();
+    expect(screen.getByText('Allow Web')).toBeVisible();
+    expect(submit).toBeEnabled();
+
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Allow Web for this browser tab once'),
+    );
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(instruction).toHaveValue('Ground the market claim in current sources.');
+
+    await user.click(consent);
+    expect(consent).toBeChecked();
+    expect(screen.getByText('Web allowed')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(submit);
+
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[2]).toMatchObject({
+      providerMode: 'deterministic',
+      webResearch: true,
+      webResearchConsent: NODESLIDE_WEB_RESEARCH_CONSENT,
+    });
+    expect(onPropose.mock.calls[0]?.[2]).not.toHaveProperty('providerConsent');
+    expect(consent).toBeChecked();
+
+    await user.type(instruction, 'Check one more claim.');
+    await user.click(consent);
+    expect(consent).not.toBeChecked();
+    expect(screen.getByText('Allow Web')).toBeVisible();
+
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Allow Web for this browser tab once'),
+    );
+    expect(onPropose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps delegated change handling compact, explicit, and keyboard-operable', async () => {

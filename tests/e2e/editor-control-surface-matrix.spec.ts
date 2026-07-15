@@ -294,6 +294,53 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     expectRuntimeClean(runtime);
   });
 
+  test('entering phone layout restores the expanded Slides navigator', async ({ page }) => {
+    const runtime = watchRuntimeProblems(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await openSampleWorkspace(page);
+
+    const navigator = page.getByTestId('slide-navigator');
+    const navigatorTabs = navigator.getByRole('tablist', { name: 'Navigator views' });
+    const layersTab = navigatorTabs.getByRole('tab', { name: 'Layers' });
+    const firstSection = navigator.locator('.ns-section-toggle').first();
+
+    await firstSection.click();
+    await expect(firstSection).toHaveAttribute('aria-expanded', 'false');
+    await layersTab.click();
+    await expect(layersTab).toHaveAttribute('aria-selected', 'true');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await expect(navigator).not.toHaveClass(/is-collapsed/);
+    await expect(navigator).toHaveAttribute('data-active-tab', 'slides');
+    await expect(firstSection).toHaveAttribute('aria-expanded', 'true');
+    await expect(navigator.locator('.ns-slide-row').first()).toBeVisible();
+    expectRuntimeClean(runtime);
+  });
+
+  test('inspector resize keys do not also navigate the deck', async ({ page }) => {
+    const runtime = watchRuntimeProblems(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await openSampleWorkspace(page);
+
+    const inspector = page.getByTestId('inspector');
+    const resizer = page.getByRole('button', { name: 'Resize inspector' });
+    const activeSlideNumber = page.locator('.ns-slide-row.is-active .ns-slide-number');
+    const slideBefore = (await activeSlideNumber.innerText()).trim();
+    const widthBefore = await inspector.evaluate(
+      (element) => element.getBoundingClientRect().width,
+    );
+
+    await resizer.focus();
+    await resizer.press('ArrowRight');
+
+    await expect
+      .poll(() => inspector.evaluate((element) => element.getBoundingClientRect().width))
+      .toBe(widthBefore - 16);
+    await expect(activeSlideNumber).toHaveText(slideBefore);
+    expectRuntimeClean(runtime);
+  });
+
   test('AI, Design, Comments, Evidence, Trace, Versions, and JSON retain local state', async ({
     page,
   }, testInfo) => {

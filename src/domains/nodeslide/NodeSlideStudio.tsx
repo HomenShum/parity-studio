@@ -1611,6 +1611,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       if (nextBreakpoint === previousBreakpoint) return;
       previousBreakpoint = nextBreakpoint;
       if (nextBreakpoint === 'phone') {
+        setNavigatorTab('slides');
+        setCollapsedNavigatorSections([]);
         setNavigatorCollapsed(false);
         setInspectorCollapsed(true);
       } else if (nextBreakpoint === 'tablet') {
@@ -2342,6 +2344,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Respect focused controls (for example the inspector resizer) that have
+      // already consumed an arrow key. Global deck shortcuts must never turn a
+      // local adjustment into a second, unrelated action.
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setCommandOpen(true);
@@ -2666,12 +2672,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           onCancelCreate={() => void cancelCreateDeck()}
           onCreate={(request) => void createDeck(request)}
           onExploreSample={() => setSampleRequested(true)}
-          onOpenProjects={() => {
-            setProjectsOpen(true);
-          }}
           onOpenDeck={openOwnedDeck}
         />
-        {projectsDialog}
         {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
       </>
     );
@@ -3838,7 +3840,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       data-ns-theme={studioTheme}
       style={
         {
-          '--ns-nav-width': navigatorCollapsed ? '0px' : '300px',
+          '--ns-nav-width': navigatorCollapsed ? '0px' : '260px',
           '--ns-inspector-width': inspectorCollapsed ? '48px' : `${inspectorWidth}px`,
         } as React.CSSProperties
       }
