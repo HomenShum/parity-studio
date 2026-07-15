@@ -379,7 +379,7 @@ describe('NodeSlide persisted activity AI Elements adapter', () => {
       </div>,
     );
     await act(async () => {
-      resolveAttachment?.({ kind: 'source', id: 'source-evidence', title: 'evidence.csv' });
+      resolveAttachment?.({ kind: 'source', id: 'source-evidence', label: 'evidence.csv' });
       await Promise.resolve();
     });
 
