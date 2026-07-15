@@ -464,15 +464,7 @@ function decideDeterministicOnly(input: NodeSlideRoutingPolicyInput): NodeSlideR
       'The deterministic route is not explicitly available, and privacy forbids external fallback.';
   }
 
-  const routeEvaluation = evaluation(
-    'primary',
-    0,
-    route,
-    outcome,
-    costEstimate,
-    [message],
-    null,
-  );
+  const routeEvaluation = evaluation('primary', 0, route, outcome, costEstimate, [message], null);
   const receipt: NodeSlideFallbackReceipt = {
     policy: input.fallbackPolicy.mode,
     primaryRoute: route,
@@ -507,46 +499,67 @@ function evaluateRoute(
 ): NodeSlideRouteEvaluation {
   const exactRoute = exactRouteFor(route.catalog);
   const costEstimate = estimateCost(route, input);
+  const evaluated = (
+    outcome: NodeSlideRouteEvaluationOutcome,
+    reasons: readonly string[],
+  ): NodeSlideRouteEvaluation =>
+    evaluation(
+      source,
+      index,
+      exactRoute,
+      outcome,
+      costEstimate,
+      reasons,
+      input.requestedReasoningEffort,
+    );
 
   if (!isConsented(route, input.consent)) {
-    return evaluation(source, index, exactRoute, 'not_consented', costEstimate, [
+    return evaluated('not_consented', [
       'Exact provider and model consent are both required for this route.',
     ]);
   }
   if (!route.metadata || costEstimate.status === 'unavailable') {
-    return evaluation(source, index, exactRoute, 'pricing_unavailable', costEstimate, [
+    return evaluated('pricing_unavailable', [
       'Provider-native pricing metadata is unavailable; the policy will not guess a cost.',
     ]);
   }
   if (!supportsRequiredCapabilities(route, input)) {
     const missing = missingCapabilities(route, input.capabilities);
-    return evaluation(source, index, exactRoute, 'capability_mismatch', costEstimate, [
+    return evaluated('capability_mismatch', [
       `Provider-native metadata does not attest ${capabilityLabel(missing)}.`,
     ]);
   }
   if (!fitsExpectedTokens(route, input)) {
-    return evaluation(source, index, exactRoute, 'context_window_exceeded', costEstimate, [
+    return evaluated('context_window_exceeded', [
       `Expected tokens exceed the route's ${route.metadata.contextWindow}-token context window or ${route.metadata.maxTokens}-token output limit.`,
+    ]);
+  }
+  if (!supportsRequestedReasoningEffort(route, input.requestedReasoningEffort)) {
+    return evaluated('reasoning_effort_unsupported', [
+      `The exact provider-native effort "${input.requestedReasoningEffort}" is not supported by ${routeLabel(exactRoute)}; the policy will not map it to another level.`,
     ]);
   }
 
   const liveAvailability = availability.get(routeKey(exactRoute));
   if (liveAvailability !== true) {
-    return evaluation(source, index, exactRoute, 'availability_unconfirmed', costEstimate, [
+    return evaluated('availability_unconfirmed', [
       liveAvailability === false
         ? 'Live availability explicitly reports this route unavailable.'
         : 'No exact live availability record confirms this route.',
     ]);
   }
   if (!costEstimate.withinCap) {
-    return evaluation(source, index, exactRoute, 'cost_cap_exceeded', costEstimate, [
+    return evaluated('cost_cap_exceeded', [
       `Conservative estimated cost ${formatUsd(costEstimate.totalUsd)} exceeds the ${formatUsd(input.maxUsd)} request cap.`,
     ]);
   }
 
-  return evaluation(source, index, exactRoute, 'selected', costEstimate, [
+  return evaluated('selected', [
     'Exact provider and model consent are present.',
     'Required provider-native capabilities and token limits are satisfied.',
+    input.requestedReasoningEffort === null
+      ? 'No provider-native reasoning effort was requested.'
+      : `Exact provider-native reasoning effort "${input.requestedReasoningEffort}" is preserved.`,
     'Live availability is explicitly confirmed.',
     `Conservative estimated cost ${formatUsd(costEstimate.totalUsd)} is within the ${formatUsd(input.maxUsd)} request cap.`,
   ]);
@@ -565,6 +578,7 @@ function duplicatePrimaryEvaluation(
     'duplicate_primary',
     estimateCost(route, input),
     ['The fallback entry repeats the stable primary and cannot change its eligibility.'],
+    input.requestedReasoningEffort,
   );
 }
 
@@ -575,8 +589,9 @@ function evaluation(
   outcome: NodeSlideRouteEvaluationOutcome,
   costEstimate: NodeSlideRoutingCostEstimate,
   reasons: readonly string[],
+  providerNativeEffort: NodeSlideReasoningEffort | null = null,
 ): NodeSlideRouteEvaluation {
-  return { source, index, route, outcome, costEstimate, reasons };
+  return { source, index, route, outcome, providerNativeEffort, costEstimate, reasons };
 }
 
 function estimateCost(
@@ -634,11 +649,48 @@ function estimateCost(
   };
 }
 
+function deterministicCostEstimate(
+  input: Pick<
+    NodeSlideRoutingPolicyInput,
+    'expectedInputTokens' | 'expectedOutputTokens' | 'maxUsd'
+  >,
+): NodeSlideEstimatedCost {
+  return {
+    status: 'estimated',
+    route: NODESLIDE_DETERMINISTIC_ROUTE,
+    expectedInputTokens: input.expectedInputTokens,
+    expectedOutputTokens: input.expectedOutputTokens,
+    inputMicroUsd: 0,
+    outputMicroUsd: 0,
+    totalMicroUsd: 0,
+    totalUsd: 0,
+    capMicroUsd: Math.floor(input.maxUsd * MICRO_USD_PER_USD),
+    capUsd: input.maxUsd,
+    withinCap: true,
+    pricing: {
+      source: 'nodeslide-deterministic',
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
+      inputTokensAbove: null,
+    },
+  };
+}
+
 function supportsRequiredCapabilities(
   route: CatalogRoute,
   input: Pick<NodeSlideRoutingPolicyInput, 'capabilities'>,
 ): boolean {
   return missingCapabilities(route, input.capabilities).length === 0;
+}
+
+function supportsRequestedReasoningEffort(
+  route: CatalogRoute,
+  effort: NodeSlideReasoningEffort | null,
+): boolean {
+  return (
+    effort === null ||
+    (route.catalog.supportedEfforts as readonly NodeSlideReasoningEffort[]).includes(effort)
+  );
 }
 
 function missingCapabilities(
@@ -738,6 +790,12 @@ function refusalForPrimary(evaluation: NodeSlideRouteEvaluation): NodeSlideRouti
     return {
       code: 'context_window_exceeded',
       message: `${routeLabel(evaluation.route)} cannot hold the expected tokens.`,
+    };
+  }
+  if (evaluation.outcome === 'reasoning_effort_unsupported') {
+    return {
+      code: 'reasoning_effort_unsupported',
+      message: `${routeLabel(evaluation.route)} does not support the exact requested provider-native reasoning effort.`,
     };
   }
   return {
@@ -840,6 +898,18 @@ function validateInput(input: unknown): string | null {
     if (typeof capabilities[key] !== 'boolean') {
       return `Capability ${key} must be an explicit boolean.`;
     }
+  }
+
+  const privacy = input['privacy'];
+  if (privacy !== 'deterministic_only' && privacy !== 'external_if_consented') {
+    return 'Privacy must be deterministic_only or external_if_consented.';
+  }
+  const requestedReasoningEffort = input['requestedReasoningEffort'];
+  if (requestedReasoningEffort !== null && !isNodeSlideReasoningEffort(requestedReasoningEffort)) {
+    return 'Requested reasoning effort must be null or an exact provider-native effort.';
+  }
+  if (typeof input['deterministicAvailable'] !== 'boolean') {
+    return 'Deterministic availability must be an explicit boolean.';
   }
 
   const expectedInputTokens = input['expectedInputTokens'];

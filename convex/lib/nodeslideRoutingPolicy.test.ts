@@ -37,6 +37,9 @@ function input(overrides: Partial<NodeSlideRoutingPolicyInput> = {}): NodeSlideR
   return {
     task: 'compose-deck',
     capabilities: TEXT_CAPABILITIES,
+    privacy: 'external_if_consented',
+    requestedReasoningEffort: null,
+    deterministicAvailable: true,
     consent: consentFor(OPENROUTER_GLM),
     availability: [availability(OPENROUTER_GLM)],
     expectedInputTokens: 1_000,
@@ -383,5 +386,89 @@ describe('NodeSlide fail-closed auto routing policy', () => {
         });
       },
     );
+  });
+
+  describe('provider-native reasoning effort', () => {
+    it('preserves an exact supported effort without mapping it', () => {
+      const decision = selected(
+        decideNodeSlideAutoRoute(
+          input({
+            requestedReasoningEffort: 'xhigh',
+            consent: consentFor(OPENROUTER_GLM),
+            availability: [availability(OPENROUTER_GLM)],
+          }),
+        ),
+      );
+
+      expect(decision.providerNativeEffort).toBe('xhigh');
+      expect(decision.fallbackReceipt.evaluations[0]?.providerNativeEffort).toBe('xhigh');
+    });
+
+    it('refuses an effort the exact provider route does not support', () => {
+      const decision = refused(
+        decideNodeSlideAutoRoute(
+          input({
+            requestedReasoningEffort: 'xhigh',
+            consent: consentFor(NATIVE_NEBIUS_GLM),
+            availability: [availability(NATIVE_NEBIUS_GLM)],
+          }),
+        ),
+      );
+
+      expect(decision.refusal.code).toBe('reasoning_effort_unsupported');
+      expect(decision.fallbackReceipt.evaluations[0]).toMatchObject({
+        outcome: 'reasoning_effort_unsupported',
+        providerNativeEffort: 'xhigh',
+      });
+    });
+  });
+
+  describe('privacy and deterministic routing', () => {
+    it('selects the zero-egress route only when deterministic execution is explicitly available', () => {
+      const decision = selected(
+        decideNodeSlideAutoRoute(
+          input({
+            privacy: 'deterministic_only',
+            consent: { providers: [], models: [] },
+            availability: [],
+          }),
+        ),
+      );
+
+      expect(decision.route).toEqual({
+        provider: 'nodeslide',
+        catalogModelId: null,
+        modelId: 'bounded-edit-v1',
+      });
+      expect(decision.costEstimate).toMatchObject({ totalUsd: 0, withinCap: true });
+      expect(decision.providerNativeEffort).toBeNull();
+    });
+
+    it('fails closed when deterministic execution is unavailable', () => {
+      const decision = refused(
+        decideNodeSlideAutoRoute(
+          input({
+            privacy: 'deterministic_only',
+            deterministicAvailable: false,
+            consent: { providers: [], models: [] },
+            availability: [],
+          }),
+        ),
+      );
+
+      expect(decision.refusal.code).toBe('route_unavailable');
+    });
+
+    it.each([
+      ['privacy', { privacy: 'sometimes_external' }],
+      ['reasoning effort', { requestedReasoningEffort: 'ultra' }],
+      ['deterministic availability', { deterministicAvailable: 'yes' }],
+    ] as const)('rejects an invalid %s field', (_name, override) => {
+      const decision = refused(
+        decideNodeSlideAutoRoute({ ...input(), ...override } as NodeSlideRoutingPolicyInput),
+      );
+
+      expect(decision.refusal.code).toBe('invalid_input');
+    });
   });
 });
