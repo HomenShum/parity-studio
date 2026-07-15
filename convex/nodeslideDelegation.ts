@@ -21,12 +21,7 @@ import type { MutationCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { requireOwnerAccess } from './lib/nodeslideAccess';
 import { validationFromCandidateReceipt } from './lib/nodeslideCandidate';
-import {
-  findDeckRow,
-  findPatchRow,
-  loadNodeSlideWorkspace,
-  patchFromRow,
-} from './lib/nodeslideData';
+import { findDeckRow, findPatchRow, patchFromRow } from './lib/nodeslideData';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
 import { commitDelegatedNodeSlideProposal } from './nodeslide';
 
@@ -160,7 +155,7 @@ export const acceptValidatedProposalWithGrant = mutation({
     if (proposal.status === 'stale') {
       return {
         patch: patchFromRow(proposal),
-        workspace: await loadNodeSlideWorkspace(ctx, args.deckId, now),
+        workspace: null,
         rebased: false,
         staleReasons: ['The validated proposal is already stale.'],
         delegation: delegationUseReceipt(grant, false),
@@ -178,6 +173,7 @@ export const acceptValidatedProposalWithGrant = mutation({
     if (committed.patch.status !== 'accepted') {
       return {
         ...committed,
+        workspace: null,
         rebased: committed.rebased,
         delegation: delegationUseReceipt(grant, false),
       };
@@ -208,6 +204,7 @@ export const acceptValidatedProposalWithGrant = mutation({
     });
     return {
       ...committed,
+      workspace: null,
       rebased: committed.rebased,
       delegation: delegationUseReceipt(updatedGrant, false),
     };

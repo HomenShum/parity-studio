@@ -114,6 +114,7 @@ describe('NodeSlide AI review inspector', () => {
     const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toContain('data-testid="ai-approval-summary"');
+    expect(markup).toContain('aria-label="Review changes"');
     expect(markup).toMatch(
       /data-testid="ai-approval-summary"[^>]*aria-expanded="false"[^>]*aria-controls="nodeslide-ai-advanced-controls"/,
     );
@@ -178,6 +179,20 @@ describe('NodeSlide AI review inspector', () => {
         'anthropic/claude-sonnet-5',
       ),
     ).toMatchObject({ providerModel: 'anthropic/claude-sonnet-5' });
+  });
+
+  it('blocks submission while delegated change handling is updating', () => {
+    const markup = renderAi({
+      initialInstruction: 'Sharpen this headline.',
+      initialProviderMode: 'deterministic',
+      onApprovalModeChange: () => undefined,
+      approvalMode: 'auto_apply',
+      approvalBusy: true,
+    });
+
+    expect(markup).toContain('aria-label="Auto-apply safe edits"');
+    expect(markup).toMatch(/<button(?=[^>]*data-testid="ai-submit")(?=[^>]*disabled="")[^>]*>/);
+    expect(markup).toContain('Updating change handling');
   });
 
   it('shows extended effort levels only for models whose provider exposes them', () => {
@@ -415,6 +430,8 @@ interface RenderAiOptions {
   initialProviderMode?: 'deterministic' | 'openrouter_free' | 'nebius';
   initialProviderModel?: (typeof NODESLIDE_AGENT_MODELS)[number]['id'];
   onApprovalModeChange?: () => void;
+  approvalMode?: 'review' | 'auto_apply';
+  approvalBusy?: boolean;
 }
 
 function renderAi({
@@ -430,6 +447,8 @@ function renderAi({
   initialProviderMode,
   initialProviderModel,
   onApprovalModeChange,
+  approvalMode,
+  approvalBusy,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
   const slide = requiredSlide(snapshot);
@@ -456,6 +475,8 @@ function renderAi({
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
       {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
+      {...(approvalMode ? { approvalMode } : {})}
+      {...(approvalBusy !== undefined ? { approvalBusy } : {})}
       onPropose={() => undefined}
       {...(onAttachDataFile ? { onAttachDataFile } : {})}
       onAccept={() => undefined}

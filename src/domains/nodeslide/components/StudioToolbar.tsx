@@ -616,9 +616,10 @@ export function StudioToolbar({
           className="ns-icon-button ns-inspector-reopen"
           type="button"
           onClick={onToggleInspector}
-          aria-label={inspectorCollapsed ? 'Open inspector' : 'Collapse inspector'}
-          aria-pressed={!inspectorCollapsed}
-          title={inspectorCollapsed ? 'Open inspector' : 'Collapse inspector'}
+          aria-label={inspectorCollapsed ? 'Ask AI' : 'Close AI'}
+          aria-controls="nodeslide-inspector"
+          aria-expanded={!inspectorCollapsed}
+          title={inspectorCollapsed ? 'Ask AI' : 'Close AI'}
         >
           <PanelRightOpen size={16} />
           <span className="ns-inspector-reopen-label">

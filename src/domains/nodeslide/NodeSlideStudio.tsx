@@ -607,6 +607,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const localCommitVersionsRef = useRef(new Set<number>());
   const acceptingPatchIdsRef = useRef(new Set<string>());
   const delegationRevocationTimerRef = useRef<number | null>(null);
+  const blockedDelegationGrantIdsRef = useRef(new Set<string>());
   const handledCreateJobIdsRef = useRef(new Set<string>());
   const handledEditJobIdsRef = useRef(new Set<string>());
   const resolvingEditJobIdsRef = useRef(new Set<string>());
@@ -701,23 +702,30 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         window.clearTimeout(delegationRevocationTimerRef.current);
         delegationRevocationTimerRef.current = null;
       }
+      blockedDelegationGrantIdsRef.current.add(approval.grantId);
+      clearApprovalGrant();
       setRevokingDelegationGrantId(approval.grantId);
+      let attempts = 0;
       const attempt = async () => {
+        attempts += 1;
         try {
           await revokeDelegationGrant({
             deckId: approval.deckId,
             ownerAccessKey: approvalOwnerAccessKey,
             grantId: approval.grantId,
           });
-          clearApprovalGrant();
           setRevokingDelegationGrantId(null);
         } catch {
-          if (Date.now() >= approval.expiresAt) {
-            clearApprovalGrant();
+          if (Date.now() >= approval.expiresAt || attempts >= 3) {
             setRevokingDelegationGrantId(null);
+            setToast({
+              kind: 'error',
+              message:
+                'Review mode is active locally, but server revocation could not be confirmed.',
+            });
             return;
           }
-          delegationRevocationTimerRef.current = window.setTimeout(attempt, 5_000);
+          delegationRevocationTimerRef.current = window.setTimeout(attempt, attempts * 5_000);
         }
       };
       void attempt();
@@ -777,8 +785,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           message: 'Auto-apply is no longer active. Review mode has been restored.',
         });
       } catch {
-        // Migration-safe: a frontend can overlap an older backend briefly.
-        // The exact token gate still fails closed on every delegated commit.
+        if (cancelled) return;
+        queueDelegationRevocation(approval, approvalOwnerAccessKey);
+        setToast({
+          kind: 'error',
+          message: 'Auto-apply could not be verified. Review mode has been restored.',
+        });
       }
     };
     void reconcile();
@@ -787,7 +799,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [agentSessionState.controls.approval, clearApprovalGrant, convex, revokingDelegationGrantId]);
+  }, [
+    agentSessionState.controls.approval,
+    clearApprovalGrant,
+    convex,
+    queueDelegationRevocation,
+    revokingDelegationGrantId,
+  ]);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
   const addComment = useMutation(nodeslideApi.nodeslide.addComment);
   const replyComment = useMutation(nodeslideApi.nodeslide.replyComment);
@@ -1227,7 +1245,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         const delegatedApproval = agentSessionApprovalForDeck(agentSessionState, targetDeckId);
         let delegationFallback: string | null = null;
         let delegationStoppedForReview = false;
-        if (delegatedApproval.mode === 'auto_apply') {
+        if (
+          delegatedApproval.mode === 'auto_apply' &&
+          blockedDelegationGrantIdsRef.current.has(delegatedApproval.grantId)
+        ) {
+          delegationFallback = 'Auto-apply authority is no longer active for this run.';
+          delegationStoppedForReview = true;
+        } else if (delegatedApproval.mode === 'auto_apply') {
           const [preflightViolation] = nodeSlideDelegationProposalViolations({
             grant: delegatedApproval,
             proposal: patch,
@@ -1244,8 +1268,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
                 expectedCandidateDigest: resultCandidateDigest,
               });
               if (delegatedReceipt.patch.status === 'stale') {
-                if (delegatedReceipt.workspace) {
-                  installWorkspace(delegatedReceipt.workspace, jobOwnerAccessKey);
+                const staleWorkspace =
+                  delegatedReceipt.workspace ??
+                  (await convex.query(nodeslideApi.nodeslide.getWorkspace, {
+                    deckId: targetDeckId,
+                    ownerAccessKey: jobOwnerAccessKey,
+                  }));
+                if (staleWorkspace) {
+                  installWorkspace(staleWorkspace, jobOwnerAccessKey);
                 }
                 queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
                 setActiveInspectorTab('versions');
@@ -1265,7 +1295,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
                 throw new Error('Delegated acceptance completed without a commit receipt.');
               }
               let acceptedWorkspace = delegatedReceipt.workspace;
-              if (!acceptedWorkspace && delegatedReceipt.delegation.replayed) {
+              if (!acceptedWorkspace) {
                 acceptedWorkspace = await convex.query(nodeslideApi.nodeslide.getWorkspace, {
                   deckId: targetDeckId,
                   ownerAccessKey: jobOwnerAccessKey,
@@ -2407,8 +2437,11 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     setInspectorCollapsed(false);
   };
   const toggleInspector = () => {
-    if (inspectorCollapsed && window.innerWidth < 1100) setNavigatorCollapsed(true);
-    setInspectorCollapsed(!inspectorCollapsed);
+    if (inspectorCollapsed) {
+      openInspector('ai');
+      return;
+    }
+    setInspectorCollapsed(true);
   };
   const toggleNavigator = () => {
     if (navigatorCollapsed && window.innerWidth < 1100) setInspectorCollapsed(true);
@@ -3013,7 +3046,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   };
 
   const handleApprovalModeChange = (mode: AgentSessionApprovalMode) => {
-    if (!activeDeckId || !ownerAccessKey || delegationBusy || revokingDelegationGrantId) return;
+    if (
+      !activeDeckId ||
+      !ownerAccessKey ||
+      agentBusy ||
+      delegationBusy ||
+      revokingDelegationGrantId
+    )
+      return;
     if (mode === activeApproval.mode) return;
     const deckId = activeDeckId;
     const ownerKey = ownerAccessKey;
@@ -3021,13 +3061,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     void (async () => {
       if (mode === 'review') {
         if (activeApproval.mode === 'auto_apply') {
-          await revokeDelegationGrant({
-            deckId,
-            ownerAccessKey: ownerKey,
-            grantId: activeApproval.grantId,
-          });
+          queueDelegationRevocation(activeApproval, ownerKey);
+        } else {
+          clearApprovalGrant();
         }
-        clearApprovalGrant();
         setToast({
           kind: 'success',
           message: 'Review mode restored. Every proposed change now waits for your decision.',
@@ -4028,7 +4065,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           approvalMode={activeApproval.mode}
-          approvalBusy={delegationBusy || Boolean(revokingDelegationGrantId)}
+          approvalBusy={agentBusy || delegationBusy || Boolean(revokingDelegationGrantId)}
           {...(activeApproval.mode === 'auto_apply'
             ? { approvalExpiresAt: activeApproval.expiresAt }
             : {})}

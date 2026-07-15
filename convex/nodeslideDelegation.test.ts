@@ -468,12 +468,14 @@ describe('NodeSlide delegated acceptance', () => {
     expect(harness.database.rows('nodeslide_delegation_uses')).toEqual([]);
   });
 
-  it('requires explicit review for destructive remove and hide operations', async () => {
+  it('requires explicit review for destructive and content-erasing operations', async () => {
     const harness = workspaceHarness('destructive-policy');
     const issued = await issueGrantHandler(harness.context, grantArgs(harness.snapshot.deck.id));
     setNow(START_TIME + 1);
     const snapshot = await requiredSnapshot(harness.context, harness.snapshot.deck.id);
-    const element = snapshot.elements.find((candidate) => !candidate.locked);
+    const element = snapshot.elements.find(
+      (candidate) => candidate.kind === 'text' && !candidate.locked,
+    );
     if (!element) throw new Error('Destructive policy fixture needs an unlocked element.');
 
     for (const [suffix, operation] of [
@@ -485,6 +487,37 @@ describe('NodeSlide delegated acceptance', () => {
           slideId: element.slideId,
           elementId: element.id,
           visible: false,
+        },
+      ],
+      [
+        'blank-copy',
+        { op: 'replace_text', slideId: element.slideId, elementId: element.id, text: '   ' },
+      ],
+      [
+        'zero-opacity',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { opacity: 0 },
+        },
+      ],
+      [
+        'unreadable-font',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { fontSize: 0 },
+        },
+      ],
+      [
+        'transparent-text',
+        {
+          op: 'update_style',
+          slideId: element.slideId,
+          elementId: element.id,
+          properties: { color: 'transparent' },
         },
       ],
     ] satisfies Array<[string, PatchOperation]>) {
@@ -539,7 +572,7 @@ describe('NodeSlide delegated acceptance', () => {
       maxUses: 1,
       replayed: false,
     });
-    expect(accepted.workspace?.deck.version).toBe(2);
+    expect(accepted.workspace).toBeNull();
     harness.database.resetQueryCalls();
     const replay = await delegatedAcceptHandler(harness.context, args);
     expect(replay.patch).toEqual(accepted.patch);
@@ -679,6 +712,7 @@ describe('NodeSlide delegated acceptance', () => {
     setNow(START_TIME + 3);
     const stale = await delegatedAcceptHandler(harness.context, acceptArgs(issued, proposal.patch));
     expect(stale.patch.status).toBe('stale');
+    expect(stale.workspace).toBeNull();
     expect(stale.staleReasons).toEqual(expect.arrayContaining([expect.any(String)]));
     expect(stale.delegation.useCount).toBe(0);
     expect(grantRow(harness.database, issued.grant.id)['useCount']).toBe(0);

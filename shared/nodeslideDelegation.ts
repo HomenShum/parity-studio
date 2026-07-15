@@ -1,4 +1,10 @@
-import type { DeckPatch, NodeSlideWorkspace, ValidationResult } from './nodeslide';
+import {
+  type DeckPatch,
+  NODESLIDE_MIN_READABLE_FONT_SIZE,
+  type NodeSlideWorkspace,
+  type PatchOperation,
+  type ValidationResult,
+} from './nodeslide';
 import { validatePatchScope } from './nodeslidePatch';
 
 export const NODESLIDE_DELEGATION_GRANT_VERSION = 'nodeslide.delegation-grant/v1' as const;
@@ -133,16 +139,38 @@ export function nodeSlideDelegationProposalViolations(args: {
   ) {
     violations.push('The proposal exceeds the delegated operation policy.');
   }
-  if (
-    proposal.operations.some(
-      (operation) =>
-        operation.op === 'remove_element' ||
-        operation.op === 'remove_slide' ||
-        (operation.op === 'set_visibility_v1' && !operation.visible),
-    )
-  ) {
+  if (proposal.operations.some(nodeSlideDelegationOperationRequiresReview)) {
     violations.push('Destructive operations require explicit review.');
   }
   violations.push(...validatePatchScope(proposal.scope, proposal.operations));
   return [...new Set(violations)];
+}
+
+/**
+ * Delegated mode is intentionally narrower than the general patch contract.
+ * Operations that erase, hide, or make content unreadable remain review-only,
+ * even when they use a nominally non-destructive opcode.
+ */
+export function nodeSlideDelegationOperationRequiresReview(operation: PatchOperation): boolean {
+  if (operation.op === 'remove_element' || operation.op === 'remove_slide') return true;
+  if (operation.op === 'set_visibility_v1') return !operation.visible;
+  if (operation.op === 'replace_text') return operation.text.trim().length === 0;
+  if (operation.op === 'resize') return operation.width < 0.01 || operation.height < 0.01;
+  if (operation.op !== 'update_style') return false;
+
+  const { color, fill, fontSize, opacity, stroke } = operation.properties;
+  if (opacity !== undefined && opacity < 0.05) return true;
+  if (fontSize !== undefined && fontSize < NODESLIDE_MIN_READABLE_FONT_SIZE) return true;
+  return [color, fill, stroke].some(isTransparentPaint);
+}
+
+function isTransparentPaint(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLocaleLowerCase();
+  if (normalized === 'transparent') return true;
+  if (/^#[0-9a-f]{8}$/u.test(normalized)) {
+    return Number.parseInt(normalized.slice(-2), 16) < 13;
+  }
+  const alpha = normalized.match(/^(?:rgba|hsla)\([^)]*,\s*(\d*\.?\d+)\s*\)$/u)?.[1];
+  return alpha !== undefined && Number(alpha) < 0.05;
 }

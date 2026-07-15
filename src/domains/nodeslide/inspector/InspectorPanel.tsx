@@ -330,6 +330,7 @@ export function InspectorPanel<CommandId extends string = string>({
         onDismiss={onToggleCollapsed}
       />
       <aside
+        id="nodeslide-inspector"
         ref={drawerRef}
         className={`ns-inspector${collapsed ? ' is-collapsed' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
         aria-label={collapsed ? 'Inspector collapsed' : 'NodeSlide inspector'}

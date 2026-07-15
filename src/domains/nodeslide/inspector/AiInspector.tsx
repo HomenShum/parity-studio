@@ -1187,11 +1187,7 @@ export function AiInspector<CommandId extends string = string>({
             onClick={() => setProviderControlsOpen((current) => !current)}
             aria-expanded={providerControlsOpen}
             aria-controls="nodeslide-ai-advanced-controls"
-            aria-label={`Change handling: ${
-              approvalMode === 'auto_apply'
-                ? 'apply validated edits automatically'
-                : 'review changes'
-            }`}
+            aria-label={approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
           >
             {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
             {approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
@@ -1450,7 +1446,9 @@ export function AiInspector<CommandId extends string = string>({
           attachButtonTestId="ai-attach-data"
           attachLabel="Attach data file"
           composerClassName="ns-ai-v3-prompt"
-          disabled={!instruction.trim() || isSubmitting || attachmentBusy || !providerReady}
+          disabled={
+            !instruction.trim() || isSubmitting || approvalBusy || attachmentBusy || !providerReady
+          }
           effort={providerEffort}
           effortLabel="Reasoning effort"
           effortOptions={NODESLIDE_REASONING_EFFORTS.filter((effort) =>
