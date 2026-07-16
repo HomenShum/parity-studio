@@ -550,6 +550,8 @@ export interface DeckPatch {
   summary: string;
   linkedCommentId?: string;
   traceId?: string;
+  /** Stable durable-job binding for proposals created by the hosted agent workflow. */
+  jobId?: string;
   /** Defaults to edit for rows created before proposal provenance v1. */
   proposalKind?: NodeSlideProposalKind;
   /** Present only for a separately reviewed propagation proposal. */

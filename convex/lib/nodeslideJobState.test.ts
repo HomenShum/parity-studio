@@ -54,6 +54,12 @@ describe('NodeSlide durable job state', () => {
     );
   });
 
+  it('reuses the current attempt when the workflow retries the same running action', () => {
+    const running = claimNodeSlideJobAttempt(job(), 2_000);
+    expect(claimNodeSlideJobAttempt(running, 3_000)).toBe(running);
+    expect(running.attempt).toBe(1);
+  });
+
   it('makes cancel terminal so a late workflow completion cannot mutate the outcome', () => {
     const running = claimNodeSlideJobAttempt(job(), 2_000);
     const cancelled = cancelNodeSlideJob(running, 3_000);

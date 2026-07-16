@@ -2,6 +2,11 @@ import { PersistentTextStreaming, type StreamId } from '@convex-dev/persistent-t
 import type { WorkflowId } from '@convex-dev/workflow';
 import { v } from 'convex/values';
 import { NODESLIDE_WEB_RESEARCH_CONSENT } from '../shared/nodeslide';
+import {
+  type NodeSlideCapabilityMaterial,
+  type NodeSlideDurableJobStatus,
+  createNodeSlideCapabilityDigestMetadata,
+} from '../shared/nodeslideDurableSession';
 import { components, internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
@@ -26,6 +31,7 @@ import {
   nodeSlideJobProgressLine,
   nodeSlideJobRequestDigest,
   publicNodeSlideJob,
+  resolveNodeSlideReviewJob,
   retryNodeSlideJob,
 } from './lib/nodeslideJobState';
 import {
@@ -66,9 +72,14 @@ const jobsInternal: any = (internal as any).nodeslideJobs;
 const nodeslideInternal: any = (internal as any).nodeslide;
 // biome-ignore lint/suspicious/noExplicitAny: generated Convex workflow reference boundary
 const jobWorkflowInternal: any = (internal as any).nodeslideJobWorkflow;
+// biome-ignore lint/suspicious/noExplicitAny: generated durable-session mutation cycle
+const nodeslideSessionsInternal: any = (internal as any).nodeslideSessions;
+// biome-ignore lint/suspicious/noExplicitAny: generated durable-budget mutation cycle
+const nodeslideBudgetsInternal: any = (internal as any).nodeslideBudgets;
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
 const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
 const NODESLIDE_PUBLIC_CREATION_ENV = 'NODESLIDE_PUBLIC_CREATION';
+const NODESLIDE_DURABLE_SESSION_LEASE_MS = 3_900_000;
 
 export const startCreateDeck = mutation({
   args: {
@@ -149,6 +160,22 @@ export const startCreateDeck = mutation({
       clientSessionId,
       idempotencyKey,
     );
+    const budgetId = nodeslideStableId('nsbudget', jobId);
+    await enqueueNodeSlideDurableSession(ctx, {
+      jobId,
+      request,
+      capability: {
+        provider: request.providerMode ?? 'deterministic',
+        ...(request.providerModel ? { model: request.providerModel } : {}),
+        scopes: ['create_deck'],
+        egress: request.providerMode && request.providerMode !== 'deterministic' ? 'model' : 'none',
+        secret: `${ownerAccessKey}\u001f${executionAccessKey}`,
+        ...(request.providerConsent
+          ? { consent: { providerConsent: request.providerConsent } }
+          : {}),
+        ...(request.attachments?.length ? { attachments: request.attachments } : {}),
+      },
+    });
     const streamId = await streaming.createStream(ctx);
     const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
       id: jobId,
@@ -166,6 +193,7 @@ export const startCreateDeck = mutation({
       maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
       streamId,
       memoryIds: [],
+      ...(request.providerMode && request.providerMode !== 'deterministic' ? { budgetId } : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -242,6 +270,28 @@ export const startEditProposal = mutation({
       clientSessionId,
       idempotencyKey,
     );
+    const budgetId = nodeslideStableId('nsbudget', jobId);
+    await enqueueNodeSlideDurableSession(ctx, {
+      jobId,
+      request,
+      capability: {
+        provider: request.providerMode ?? 'deterministic',
+        ...(request.providerModel ? { model: request.providerModel } : {}),
+        scopes: ['edit_proposal', `write:${nodeSlideJobRequestDigest(request.scope)}`],
+        egress: nodeSlideJobEgress(request),
+        secret: `${ownerAccessKey}\u001f${executionAccessKey}`,
+        ...(request.providerConsent || request.webResearchConsent
+          ? {
+              consent: {
+                ...(request.providerConsent ? { providerConsent: request.providerConsent } : {}),
+                ...(request.webResearchConsent
+                  ? { webResearchConsent: request.webResearchConsent }
+                  : {}),
+              },
+            }
+          : {}),
+      },
+    });
     const streamId = await streaming.createStream(ctx);
     const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
       id: jobId,
@@ -259,6 +309,7 @@ export const startEditProposal = mutation({
       maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
       streamId,
       memoryIds: [],
+      ...(request.providerMode && request.providerMode !== 'deterministic' ? { budgetId } : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -285,6 +336,74 @@ export const get = query({
   handler: async (ctx, args) => {
     const row = await findAuthorizedJob(ctx, args.jobId, args.ownerAccessKey);
     return row ? publicNodeSlideJob(jobFromRow(row)) : null;
+  },
+});
+
+/** Owner-authorized, secret-free accounting proof for hard-budget QA and trace hydration. */
+export const getBudgetReceipt = query({
+  args: { jobId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, args) => {
+    const job = await findAuthorizedJob(ctx, args.jobId, args.ownerAccessKey);
+    if (!job?.budgetId) return null;
+    const budget = await ctx.db
+      .query('nodeslide_run_budgets')
+      .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', job.budgetId as string))
+      .unique();
+    if (!budget) return null;
+    const [calls, events] = await Promise.all([
+      ctx.db
+        .query('nodeslide_billable_calls')
+        .withIndex('by_budget_status', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
+        .take(64),
+      ctx.db
+        .query('nodeslide_budget_events')
+        .withIndex('by_budget_sequence', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
+        .order('asc')
+        .take(128),
+    ]);
+    return {
+      budgetId: budget.id,
+      status: budget.status,
+      enforcement: budget.budget.enforcement,
+      cap: {
+        maxCostMicroUsd: budget.budget.maxCostMicroUsd,
+        maxInputTokens: budget.budget.maxInputTokens,
+        maxOutputTokens: budget.budget.maxOutputTokens,
+        maxDurationMs: budget.budget.maxDurationMs,
+        maxIterations: budget.budget.maxIterations,
+        maxToolCalls: budget.budget.maxToolCalls,
+      },
+      spend: {
+        actualMicroUsd: budget.actualMicroUsd,
+        reservedMicroUsd: budget.reservedMicroUsd,
+        unreconciledMicroUsd: budget.unreconciledMicroUsd,
+      },
+      accumulated: budget.accumulated,
+      revision: budget.revision,
+      stateDigest: budget.stateDigest,
+      calls: calls.map((call) => ({
+        callId: call.callId,
+        status: call.status,
+        model: call.model,
+        quoteMicroUsd: call.quoteMicroUsd,
+        ...(call.actualMicroUsd !== undefined ? { actualMicroUsd: call.actualMicroUsd } : {}),
+        ...(call.inputTokens !== undefined ? { inputTokens: call.inputTokens } : {}),
+        ...(call.outputTokens !== undefined ? { outputTokens: call.outputTokens } : {}),
+        providerSafeOutputTokenCeiling: call.providerSafeOutputTokenCeiling,
+        providerTimeoutMs: call.providerTimeoutMs,
+      })),
+      events: events.map((event) => ({
+        sequence: event.sequence,
+        kind: event.kind,
+        status: event.status,
+        actualMicroUsd: event.actualMicroUsd,
+        reservedMicroUsd: event.reservedMicroUsd,
+        unreconciledMicroUsd: event.unreconciledMicroUsd,
+        capMicroUsd: event.capMicroUsd,
+        eventDigest: event.eventDigest,
+        createdAt: event.createdAt,
+      })),
+    };
   },
 });
 
@@ -331,6 +450,12 @@ export const cancel = mutation({
     const current = jobFromRow(row);
     const next = cancelNodeSlideJob(current, Date.now());
     if (next === current) return publicNodeSlideJob(current);
+    await transitionNodeSlideDurableSession(ctx, {
+      jobId: current.id,
+      toStatus: 'cancelled',
+      reason: 'Cancelled by the user before canonical mutation.',
+    });
+    await finalizeNodeSlideJobBudgetBestEffort(ctx, current.budgetId);
     if (row.workflowId) {
       await workflow.cancel(ctx, row.workflowId as WorkflowId);
     }
@@ -348,6 +473,7 @@ export const retry = mutation({
     if (!row.workflowId) throw new Error('NodeSlide job has no durable workflow to resume.');
     const streamId = await streaming.createStream(ctx);
     const next = { ...retryNodeSlideJob(jobFromRow(row), Date.now()), streamId };
+    await retryNodeSlideDurableSession(ctx, next.id);
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, false);
     await workflow.restart(ctx, row.workflowId as WorkflowId, {
@@ -366,6 +492,7 @@ export const claimAttemptInternal = internalMutation({
     const current = jobFromRow(row);
     const next = claimNodeSlideJobAttempt(current, Date.now());
     if (next === current) return publicNodeSlideJob(current);
+    await claimNodeSlideDurableSession(ctx, next.id, next.attempt);
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, false);
     return publicNodeSlideJob(next);
@@ -439,6 +566,11 @@ export const completeCreateDeckInternal = internalMutation({
       Date.now(),
     );
     if (next === current) return publicNodeSlideJob(current);
+    await finalizeNodeSlideJobBudget(ctx, next.budgetId);
+    await transitionNodeSlideDurableSession(ctx, {
+      jobId: next.id,
+      toStatus: 'succeeded',
+    });
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, true);
     return publicNodeSlideJob(next);
@@ -474,6 +606,57 @@ export const completeEditProposalInternal = internalMutation({
       Date.now(),
     );
     if (next === current) return publicNodeSlideJob(current);
+    await finalizeNodeSlideJobBudget(ctx, next.budgetId);
+    await transitionNodeSlideDurableSession(ctx, {
+      jobId: next.id,
+      toStatus: 'awaiting_review',
+    });
+    await patchJob(ctx, row, next);
+    await appendProgress(ctx, next, true);
+    return publicNodeSlideJob(next);
+  },
+});
+
+export const resolveReviewInternal = internalMutation({
+  args: {
+    jobId: v.string(),
+    deckId: v.string(),
+    patchId: v.string(),
+    outcome: v.union(v.literal('accepted'), v.literal('rejected'), v.literal('stale')),
+  },
+  handler: async (ctx, args) => {
+    const row = await findJob(ctx, args.jobId);
+    if (!row) throw new Error('Durable NodeSlide review job not found.');
+    const current = jobFromRow(row);
+    if (
+      current.kind !== 'edit_proposal' ||
+      current.resultDeckId !== args.deckId ||
+      current.resultPatchId !== args.patchId
+    ) {
+      throw new Error('Durable NodeSlide review bindings do not match this patch.');
+    }
+    if (
+      (current.status === 'succeeded' && args.outcome !== 'accepted') ||
+      (current.status === 'rejected' && args.outcome !== 'rejected') ||
+      (current.status === 'stale' && args.outcome !== 'stale') ||
+      current.status === 'failed' ||
+      current.status === 'cancelled'
+    ) {
+      throw new Error('Durable NodeSlide review outcome conflicts with its terminal job state.');
+    }
+    const next = resolveNodeSlideReviewJob(current, args.outcome, Date.now());
+    if (next === current) return publicNodeSlideJob(current);
+    await finalizeNodeSlideJobBudget(ctx, next.budgetId);
+    await transitionNodeSlideDurableSession(ctx, {
+      jobId: next.id,
+      toStatus:
+        args.outcome === 'accepted'
+          ? 'succeeded'
+          : args.outcome === 'rejected'
+            ? 'rejected'
+            : 'stale',
+      ...(next.error ? { reason: next.error } : {}),
+    });
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, true);
     return publicNodeSlideJob(next);
@@ -490,13 +673,31 @@ export const onWorkflowComplete = internalMutation({
     const row = await findJob(ctx, args.context.jobId);
     if (!row) return;
     const current = jobFromRow(row);
-    if (current.status === 'succeeded' || current.status === 'cancelled') return;
+    if (
+      current.status === 'succeeded' ||
+      current.status === 'cancelled' ||
+      current.status === 'rejected' ||
+      current.status === 'stale' ||
+      current.status === 'awaiting_review'
+    )
+      return;
     if (args.result.kind === 'success') return;
     const now = Date.now();
     const next =
       args.result.kind === 'canceled'
         ? cancelNodeSlideJob(current, now)
         : failNodeSlideJob(current, args.result.error, now);
+    if (
+      args.result.kind === 'canceled' ||
+      (args.result.kind === 'failed' && next.attempt >= next.maxAttempts)
+    ) {
+      await finalizeNodeSlideJobBudgetBestEffort(ctx, next.budgetId);
+    }
+    await transitionNodeSlideDurableSession(ctx, {
+      jobId: next.id,
+      toStatus: args.result.kind === 'canceled' ? 'cancelled' : 'failed',
+      ...(args.result.kind === 'failed' ? { reason: args.result.error } : {}),
+    });
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, true);
   },
@@ -505,6 +706,27 @@ export const onWorkflowComplete = internalMutation({
 function jobFromRow(row: Doc<'nodeslide_agent_jobs'>): NodeSlideJobRecord {
   const { _id: _rowId, _creationTime, ...job } = row;
   return job;
+}
+
+async function finalizeNodeSlideJobBudget(
+  ctx: Pick<MutationCtx, 'runMutation'>,
+  budgetId?: string,
+): Promise<void> {
+  if (!budgetId) return;
+  await ctx.runMutation(nodeslideBudgetsInternal.finalizeForJob, { budgetId });
+}
+
+async function finalizeNodeSlideJobBudgetBestEffort(
+  ctx: Pick<MutationCtx, 'runMutation'>,
+  budgetId?: string,
+): Promise<void> {
+  if (!budgetId) return;
+  try {
+    await finalizeNodeSlideJobBudget(ctx, budgetId);
+  } catch {
+    // Cancellation still fences the worker/session. The unresolved ledger remains
+    // explicitly open for reconciliation instead of claiming a fabricated close.
+  }
 }
 
 async function findJob(ctx: ReadCtx, jobId: string) {
@@ -545,11 +767,163 @@ async function patchJob(
     ...(next.resultPatchId ? { resultPatchId: next.resultPatchId } : {}),
     ...(next.resultCandidateDigest ? { resultCandidateDigest: next.resultCandidateDigest } : {}),
     ...(next.conversationRunId ? { conversationRunId: next.conversationRunId } : {}),
+    ...(next.budgetId ? { budgetId: next.budgetId } : {}),
     memoryIds: [...next.memoryIds],
     ...(next.error ? { error: next.error } : { error: undefined }),
     updatedAt: next.updatedAt,
     ...(next.completedAt ? { completedAt: next.completedAt } : { completedAt: undefined }),
   });
+}
+
+type DurableSessionProjection = {
+  sessionId: string;
+  requestBinding: {
+    schemaVersion: 'nodeslide.request-binding/v2';
+    requestDigest: string;
+    capabilityDigest: string;
+  };
+  stateVersion: number;
+  egressEpoch: number;
+  jobs: Array<{
+    jobId: string;
+    status: NodeSlideDurableJobStatus;
+    attempt: number;
+  }>;
+};
+
+function nodeSlideDurableSessionId(jobId: string): string {
+  return nodeslideStableId('nsession', jobId);
+}
+
+function nodeSlideDurableLeaseId(jobId: string, attempt: number): string {
+  return nodeslideStableId('session_lease', jobId, String(attempt));
+}
+
+async function enqueueNodeSlideDurableSession(
+  ctx: Pick<MutationCtx, 'runMutation'>,
+  args: {
+    jobId: string;
+    request: unknown;
+    capability: NodeSlideCapabilityMaterial;
+  },
+): Promise<void> {
+  const sessionId = nodeSlideDurableSessionId(args.jobId);
+  const capability = createNodeSlideCapabilityDigestMetadata(args.capability);
+  const created = (await ctx.runMutation(nodeslideSessionsInternal.create, {
+    sessionId,
+    request: args.request,
+    capability,
+  })) as { session: DurableSessionProjection };
+  if (created.session.jobs.some((job) => job.jobId === args.jobId)) return;
+  await ctx.runMutation(nodeslideSessionsInternal.applyCommand, {
+    sessionId,
+    commandId: `enqueue:${args.jobId}`,
+    command: {
+      type: 'enqueue',
+      expectedStateVersion: created.session.stateVersion,
+      requestBinding: created.session.requestBinding,
+      jobId: args.jobId,
+      maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
+    },
+  });
+}
+
+async function readNodeSlideDurableSession(
+  ctx: Pick<MutationCtx, 'runQuery'>,
+  jobId: string,
+): Promise<DurableSessionProjection | null> {
+  return (await ctx.runQuery(nodeslideSessionsInternal.get, {
+    sessionId: nodeSlideDurableSessionId(jobId),
+  })) as DurableSessionProjection | null;
+}
+
+async function claimNodeSlideDurableSession(
+  ctx: Pick<MutationCtx, 'runMutation' | 'runQuery'>,
+  jobId: string,
+  attempt: number,
+): Promise<void> {
+  const session = await readNodeSlideDurableSession(ctx, jobId);
+  if (!session) return;
+  const job = session.jobs.find((candidate) => candidate.jobId === jobId);
+  if (job?.status === 'running' && job.attempt === attempt) return;
+  if (!job || (job.status !== 'queued' && job.status !== 'retrying')) {
+    throw new Error('Durable NodeSlide session cannot claim this job attempt.');
+  }
+  const issuedAt = Date.now();
+  await ctx.runMutation(nodeslideSessionsInternal.applyCommand, {
+    sessionId: session.sessionId,
+    commandId: `claim:${jobId}:${attempt}`,
+    command: {
+      type: 'claim',
+      expectedStateVersion: session.stateVersion,
+      requestBinding: session.requestBinding,
+      jobId,
+      lease: {
+        leaseId: nodeSlideDurableLeaseId(jobId, attempt),
+        workerId: nodeslideStableId('session_worker', jobId),
+        issuedAt,
+        expiresAt: issuedAt + NODESLIDE_DURABLE_SESSION_LEASE_MS,
+      },
+    },
+  });
+}
+
+async function retryNodeSlideDurableSession(
+  ctx: Pick<MutationCtx, 'runMutation' | 'runQuery'>,
+  jobId: string,
+): Promise<void> {
+  const session = await readNodeSlideDurableSession(ctx, jobId);
+  if (!session) return;
+  const job = session.jobs.find((candidate) => candidate.jobId === jobId);
+  if (job?.status === 'retrying') return;
+  if (!job || job.status !== 'failed') {
+    throw new Error('Durable NodeSlide session cannot retry this job.');
+  }
+  await ctx.runMutation(nodeslideSessionsInternal.applyCommand, {
+    sessionId: session.sessionId,
+    commandId: `retry:${jobId}:${job.attempt}`,
+    command: {
+      type: 'retry',
+      expectedStateVersion: session.stateVersion,
+      requestBinding: session.requestBinding,
+      jobId,
+    },
+  });
+}
+
+async function transitionNodeSlideDurableSession(
+  ctx: Pick<MutationCtx, 'runMutation' | 'runQuery'>,
+  args: {
+    jobId: string;
+    toStatus: NodeSlideDurableJobStatus;
+    reason?: string;
+  },
+): Promise<void> {
+  const session = await readNodeSlideDurableSession(ctx, args.jobId);
+  if (!session) return;
+  const job = session.jobs.find((candidate) => candidate.jobId === args.jobId);
+  if (!job || job.status === args.toStatus) return;
+  await ctx.runMutation(nodeslideSessionsInternal.applyCommand, {
+    sessionId: session.sessionId,
+    commandId: `transition:${args.jobId}:${job.status}:${args.toStatus}:${job.attempt}`,
+    command: {
+      type: 'transition',
+      expectedStateVersion: session.stateVersion,
+      requestBinding: session.requestBinding,
+      jobId: args.jobId,
+      toStatus: args.toStatus,
+      ...(job.status === 'running'
+        ? { leaseId: nodeSlideDurableLeaseId(args.jobId, job.attempt) }
+        : {}),
+      ...(args.reason ? { reason: args.reason } : {}),
+    },
+  });
+}
+
+function nodeSlideJobEgress(request: NodeSlideEditProposalJobRequest) {
+  const model = request.providerMode && request.providerMode !== 'deterministic';
+  const web = request.webResearch === true;
+  return model && web ? 'model_and_web' : model ? 'model' : web ? 'web' : 'none';
 }
 
 function validateEditProposalRequest(request: NodeSlideEditProposalJobRequest): void {

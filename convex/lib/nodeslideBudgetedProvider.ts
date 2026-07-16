@@ -317,7 +317,9 @@ export async function callNodeSlideBudgetedJson(
       dependencies.ledger,
       baseAccounting,
       reservation,
-      providerResult.reason,
+      providerResult.ok === false
+        ? providerResult.reason
+        : 'The provider omitted its required accounting telemetry.',
       providerResult,
     );
   }

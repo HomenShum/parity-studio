@@ -145,6 +145,8 @@ const PRESENCE_TTL_MS = 45_000;
 const MAX_PATCH_OPERATIONS = NODESLIDE_PATCH_OPERATION_LIMIT;
 const MAX_PRESENCE_ELEMENTS = 64;
 const MAX_LISTED_DECKS = 32;
+// biome-ignore lint/suspicious/noExplicitAny: generated mutation cycle for atomic review finalization
+const nodeslideJobsInternal: any = (internal as any).nodeslideJobs;
 const patchCoreArgs = {
   id: v.optional(v.string()),
   deckId: v.string(),
@@ -164,6 +166,9 @@ const internalAgentPatchArgs = {
   ...patchCoreArgs,
   id: v.string(),
   traceId: v.string(),
+  jobId: v.optional(v.string()),
+  executionAccessKey: v.optional(v.string()),
+  durableRequestDigest: v.optional(v.string()),
   // Kept temporarily for the existing internal action caller; the handler
   // ignores it and always records agent provenance.
   source: v.optional(v.literal('agent')),
@@ -197,6 +202,7 @@ type PatchMutationArgs = {
   summary?: string;
   linkedCommentId?: string;
   traceId?: string;
+  jobId?: string;
   proposalKind?: 'edit' | 'propagation';
   parentPatchId?: string;
   affectedSlideIds?: string[];
@@ -801,13 +807,21 @@ export const acceptPatch = mutation({
     const row = await findPatchRow(ctx, patchId);
     if (!row || row.deckId !== deckId) throw new Error(`Patch ${patchId} not found.`);
     if (row.status === 'accepted' || row.status === 'stale') {
+      await resolveLinkedDurableReview(ctx, row, row.status);
       return {
         patch: patchFromRow(row),
         workspace: await loadNodeSlideWorkspace(ctx, row.deckId, Date.now()),
       };
     }
     if (row.status === 'rejected') throw new Error(`Patch ${patchId} was rejected.`);
-    return await commitPatch(ctx, { ...row, ownerAccessKey }, row);
+    await requireLinkedDurableReviewable(ctx, row, ownerAccessKey);
+    const receipt = await commitPatch(ctx, { ...row, ownerAccessKey }, row);
+    await resolveLinkedDurableReview(
+      ctx,
+      row,
+      receipt.patch.status === 'accepted' ? 'accepted' : 'stale',
+    );
+    return receipt;
   },
 });
 
@@ -1030,14 +1044,57 @@ export const rejectPatch = mutation({
     if (!row || row.deckId !== deckId) throw new Error(`Patch ${patchId} not found.`);
     if (row.status === 'accepted') throw new Error('Accepted patches cannot be rejected.');
     if (row.status !== 'rejected') {
+      await requireLinkedDurableReviewable(ctx, row, ownerAccessKey);
       const now = Date.now();
       await ctx.db.patch(row._id, { status: 'rejected', updatedAt: now });
       await finishPatchTrace(ctx, row, now, 'cancelled');
     }
+    await resolveLinkedDurableReview(ctx, row, 'rejected');
     const updated = await findPatchRow(ctx, patchId);
     return updated ? patchFromRow(updated) : null;
   },
 });
+
+async function resolveLinkedDurableReview(
+  ctx: Pick<MutationCtx, 'runMutation'>,
+  patch: Pick<Doc<'nodeslide_patches'>, 'id' | 'deckId' | 'jobId'>,
+  outcome: 'accepted' | 'rejected' | 'stale',
+): Promise<void> {
+  if (!patch.jobId) return;
+  await ctx.runMutation(nodeslideJobsInternal.resolveReviewInternal, {
+    jobId: patch.jobId,
+    deckId: patch.deckId,
+    patchId: patch.id,
+    outcome,
+  });
+}
+
+async function requireLinkedDurableReviewable(
+  ctx: Pick<MutationCtx, 'db'>,
+  patch: Pick<Doc<'nodeslide_patches'>, 'id' | 'deckId' | 'jobId' | 'candidateDigest' | 'status'>,
+  ownerAccessKey: string,
+): Promise<void> {
+  if (!patch.jobId) return;
+  const jobs = await ctx.db
+    .query('nodeslide_agent_jobs')
+    .withIndex('by_stable_id', (query) => query.eq('id', patch.jobId as string))
+    .take(2);
+  const job = jobs.length === 1 ? jobs[0] : null;
+  if (
+    !job ||
+    job.kind !== 'edit_proposal' ||
+    job.status !== 'awaiting_review' ||
+    job.ownerDigest !== nodeSlideJobOwnerDigest(ownerAccessKey) ||
+    job.resultDeckId !== patch.deckId ||
+    job.resultPatchId !== patch.id ||
+    !patch.candidateDigest ||
+    job.resultCandidateDigest !== patch.candidateDigest
+  ) {
+    throw new Error(
+      'This durable proposal is no longer awaiting review with the exact bound candidate.',
+    );
+  }
+}
 
 export const restoreVersion = mutation({
   args: {
@@ -2181,6 +2238,7 @@ export const createFromBriefInternal = internalMutation({
     outputTokens: v.optional(v.number()),
     jobId: v.optional(v.string()),
     executionAccessKey: v.optional(v.string()),
+    durableRequestDigest: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (!isOwnerAccessKey(args.ownerAccessKey))
@@ -2198,12 +2256,12 @@ export const createFromBriefInternal = internalMutation({
         job.kind !== 'create_deck' ||
         job.ownerDigest !== nodeSlideJobOwnerDigest(args.ownerAccessKey) ||
         !args.executionAccessKey ||
-        job.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey)
+        job.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey) ||
+        !args.durableRequestDigest ||
+        job.requestDigest !== args.durableRequestDigest ||
+        (job.status !== 'queued' && job.status !== 'running')
       ) {
         throw new Error('Durable NodeSlide job authorization is invalid.');
-      }
-      if (job.status === 'cancelled' || job.status === 'failed') {
-        throw new Error(`Durable NodeSlide job cannot persist while ${job.status}.`);
       }
       if (job.resultDeckId && job.resultDeckId !== args.deckId) {
         throw new Error('Durable NodeSlide job output binding is invalid.');
@@ -2214,6 +2272,8 @@ export const createFromBriefInternal = internalMutation({
       ) {
         throw new Error('Durable NodeSlide job output identity is invalid.');
       }
+    } else if (args.executionAccessKey !== undefined || args.durableRequestDigest !== undefined) {
+      throw new Error('Durable NodeSlide creation capability requires a job binding.');
     }
     const existing = await findDeckRow(ctx, args.deckId);
     if (existing) {
@@ -2308,6 +2368,53 @@ async function requireAgentSourceAuthorization(
   }
 }
 
+type DurableEditProposalBindingArgs = {
+  id: string;
+  deckId: string;
+  ownerAccessKey: string;
+  jobId?: string;
+  executionAccessKey?: string;
+  durableRequestDigest?: string;
+};
+
+async function requireDurableEditProposalBinding(
+  ctx: Pick<MutationCtx, 'db'>,
+  args: DurableEditProposalBindingArgs,
+): Promise<Doc<'nodeslide_agent_jobs'> | null> {
+  if (!args.jobId) {
+    if (args.executionAccessKey !== undefined || args.durableRequestDigest !== undefined) {
+      throw new Error('Durable proposal capability material requires a job binding.');
+    }
+    return null;
+  }
+  if (!args.executionAccessKey || !args.durableRequestDigest) {
+    throw new Error('Durable proposal capability material is incomplete.');
+  }
+  const jobId = args.jobId;
+  const jobs = await ctx.db
+    .query('nodeslide_agent_jobs')
+    .withIndex('by_stable_id', (query) => query.eq('id', jobId))
+    .take(2);
+  const job = jobs.length === 1 ? jobs[0] : null;
+  if (
+    !job ||
+    job.kind !== 'edit_proposal' ||
+    job.ownerDigest !== nodeSlideJobOwnerDigest(args.ownerAccessKey) ||
+    job.executionDigest !== nodeSlideJobExecutionDigest(args.executionAccessKey) ||
+    job.requestDigest !== args.durableRequestDigest ||
+    !['queued', 'running', 'awaiting_review'].includes(job.status)
+  ) {
+    throw new Error('Durable NodeSlide proposal authorization is invalid.');
+  }
+  if (
+    (job.resultDeckId !== undefined && job.resultDeckId !== args.deckId) ||
+    (job.resultPatchId !== undefined && job.resultPatchId !== args.id)
+  ) {
+    throw new Error('Durable NodeSlide proposal output binding is invalid.');
+  }
+  return job;
+}
+
 export const proposeAgentPatchInternal = internalMutation({
   args: {
     ...internalAgentPatchArgs,
@@ -2333,6 +2440,7 @@ export const proposeAgentPatchInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    const durableJob = await requireDurableEditProposalBinding(ctx, args);
     if (args.toolCalls.length > 16) throw new Error('Too many agent tool calls recorded.');
     if (
       args.traceContext.length > 40 ||
@@ -2361,6 +2469,36 @@ export const proposeAgentPatchInternal = internalMutation({
       throw new Error('Agent shadow comparison authorization binding is invalid.');
     }
     const proposal = await persistProposal(ctx, { ...args, source: 'agent' });
+    if (durableJob) {
+      if (proposal.patch.status !== 'ready' || !proposal.patch.candidateDigest) {
+        throw new Error('Durable NodeSlide proposal did not produce a reviewable candidate.');
+      }
+      if (
+        durableJob.resultCandidateDigest !== undefined &&
+        durableJob.resultCandidateDigest !== proposal.patch.candidateDigest
+      ) {
+        throw new Error('Durable NodeSlide proposal candidate binding is invalid.');
+      }
+      if (durableJob.status === 'awaiting_review') {
+        if (
+          durableJob.resultDeckId !== args.deckId ||
+          durableJob.resultPatchId !== args.id ||
+          durableJob.resultCandidateDigest !== proposal.patch.candidateDigest
+        ) {
+          throw new Error('Durable NodeSlide proposal replay binding is invalid.');
+        }
+      } else {
+        await ctx.db.patch(durableJob._id, {
+          status: 'running',
+          phase: 'validating',
+          progress: Math.max(durableJob.progress, 95),
+          resultDeckId: args.deckId,
+          resultPatchId: args.id,
+          resultCandidateDigest: proposal.patch.candidateDigest,
+          updatedAt: Date.now(),
+        });
+      }
+    }
     const existingTrace = await ctx.db
       .query('nodeslide_traces')
       .withIndex('by_patch', (query) => query.eq('patchId', args.id))
@@ -2789,6 +2927,7 @@ function proposalReplayMatches(
       summary: existing.summary,
       linkedCommentId: existing.linkedCommentId,
       traceId: existing.traceId,
+      jobId: existing.jobId,
       proposalKind: existing.proposalKind ?? 'edit',
       parentPatchId: existing.parentPatchId,
       affectedSlideIds: existing.affectedSlideIds,
@@ -2807,6 +2946,7 @@ function proposalReplayMatches(
       summary: args.summary?.trim() || 'Scoped NodeSlide change.',
       linkedCommentId: args.linkedCommentId,
       traceId: args.traceId,
+      jobId: args.jobId,
       proposalKind: args.proposalKind ?? 'edit',
       parentPatchId: args.parentPatchId,
       affectedSlideIds: args.affectedSlideIds,
@@ -3138,6 +3278,7 @@ function patchRow(
     summary: args.summary?.trim() || 'Scoped NodeSlide change.',
     ...(args.linkedCommentId ? { linkedCommentId: args.linkedCommentId } : {}),
     ...(args.traceId ? { traceId: args.traceId } : {}),
+    ...(args.jobId ? { jobId: args.jobId } : {}),
     ...(args.proposalKind !== undefined ? { proposalKind: args.proposalKind } : {}),
     ...(args.parentPatchId !== undefined ? { parentPatchId: args.parentPatchId } : {}),
     ...(args.affectedSlideIds !== undefined ? { affectedSlideIds: args.affectedSlideIds } : {}),

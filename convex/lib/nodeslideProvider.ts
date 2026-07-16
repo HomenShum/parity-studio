@@ -503,7 +503,7 @@ function addTelemetry(
     costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),
     inputTokens: telemetry.inputTokens + Math.max(0, result.inputTokens),
     outputTokens: telemetry.outputTokens + Math.max(0, result.outputTokens),
-    attempts: telemetry.attempts,
+    ...(telemetry.attempts ? { attempts: telemetry.attempts } : {}),
   };
 }
 

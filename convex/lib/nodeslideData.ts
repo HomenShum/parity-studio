@@ -133,6 +133,7 @@ export function patchFromRow(row: Doc<'nodeslide_patches'>): DeckPatch {
     summary: row.summary,
     ...(row.linkedCommentId !== undefined ? { linkedCommentId: row.linkedCommentId } : {}),
     ...(row.traceId !== undefined ? { traceId: row.traceId } : {}),
+    ...(row.jobId !== undefined ? { jobId: row.jobId } : {}),
     ...(row.proposalKind !== undefined ? { proposalKind: row.proposalKind } : {}),
     ...(row.parentPatchId !== undefined ? { parentPatchId: row.parentPatchId } : {}),
     ...(row.affectedSlideIds !== undefined ? { affectedSlideIds: row.affectedSlideIds } : {}),

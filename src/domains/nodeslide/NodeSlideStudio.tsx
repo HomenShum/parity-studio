@@ -1228,6 +1228,36 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       return;
     }
 
+    if (receipt.status === 'rejected') {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      setAiAgentActivity({
+        status: 'cancelled',
+        elapsedMs: 0,
+        ask: 'Review a proposed slide change.',
+        message: 'Proposal rejected. No deck changes were applied.',
+      });
+      setToast({ kind: 'success', message: 'Proposal rejected. No deck changes were applied.' });
+      archiveAgentSessionJob();
+      return;
+    }
+
+    if (receipt.status === 'stale') {
+      handledEditJobIdsRef.current.add(jobId);
+      setAgentBusy(false);
+      const message =
+        receipt.error ?? 'The proposal became stale. The newer deck was preserved unchanged.';
+      setAiAgentActivity({
+        status: 'failed',
+        elapsedMs: 0,
+        ask: 'Review a proposed slide change.',
+        message,
+      });
+      setToast({ kind: 'error', message });
+      archiveAgentSessionJob();
+      return;
+    }
+
     if (receipt.status !== 'awaiting_review') return;
     setAgentBusy(true);
     if (
