@@ -1725,7 +1725,7 @@ export function AiInspector<CommandId extends string = string>({
                         className="ns-ai-tools-menu"
                         {...(composerExpanded ? { open: true } : {})}
                       >
-                        <summary aria-label="Open composer tools">
+                        <summary aria-label="Open composer tools" data-testid="ai-tools-toggle">
                           <PlugZap size={14} /> <span>Tools</span>
                         </summary>
                         <div>
@@ -2090,7 +2090,11 @@ function ProposalCard({
               }`}
               data-testid="candidate-validation"
             >
-              <strong>{candidateValidation.ok ? 'Validated' : 'Validation needs review'}</strong>
+              <strong>
+                {candidateValidation.ok
+                  ? 'Candidate validation passed'
+                  : 'Candidate validation needs review'}
+              </strong>
               {candidateValidation.issues.length > 0 ? (
                 <span>{candidateValidation.issues.length} candidate-specific issue(s)</span>
               ) : (

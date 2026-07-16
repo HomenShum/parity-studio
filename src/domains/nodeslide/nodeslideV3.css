@@ -4572,9 +4572,23 @@
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .nodeslide-studio .ns-navigator,
-  .nodeslide-studio .ns-navigator.is-collapsed,
   .nodeslide-studio .ns-navigator:not(.is-collapsed) {
+    border-bottom: 0;
+    border-right: 1px solid var(--ns-line-b);
+    bottom: 0;
+    box-shadow: var(--ns-shadow-lg);
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    height: auto;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 260px;
+    z-index: 40;
+  }
+
+  .nodeslide-studio .ns-navigator.is-collapsed {
     display: none;
   }
 

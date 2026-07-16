@@ -363,7 +363,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(withReceipt).toContain('Operations');
     expect(withReceipt).toContain('Historical route');
     expect(withReceipt).toContain(`${trace.provider} · ${trace.model}`);
-    expect(withReceipt).toContain('Validated');
+    expect(withReceipt).toContain('Candidate validation passed');
     expect(withReceipt).toContain('Validation receipt');
     expect(withReceipt).toContain('data-testid="proposal-accept"');
     expect(withReceipt).toContain('data-testid="proposal-reject"');

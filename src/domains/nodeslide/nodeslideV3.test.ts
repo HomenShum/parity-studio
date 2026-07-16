@@ -64,7 +64,7 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
-  it('keeps the canvas interactive beside a docked inspector on compact desktops', () => {
+  it('keeps the canvas interactive beside a docked inspector and offers the navigator as an overlay on compact desktops', () => {
     const compactDesktop = mediaBlock(
       '@media (min-width: 900px) and (max-width: 1099px)',
       '@media (max-width: 699px)',
@@ -76,7 +76,10 @@ describe('NodeSlide v3 visual contract', () => {
     expect(compactDesktop).toMatch(
       /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*grid-column: 2[\s\S]*position: relative/,
     );
-    expect(compactDesktop).toMatch(/\.ns-navigator,[\s\S]*display: none/);
+    expect(compactDesktop).toMatch(
+      /\.ns-navigator:not\(\.is-collapsed\)[\s\S]*display: flex[\s\S]*position: absolute/,
+    );
+    expect(compactDesktop).toMatch(/\.ns-navigator\.is-collapsed[\s\S]*display: none/);
   });
 
   it('anchors the assistant thread and composer to the full inspector content row', () => {
