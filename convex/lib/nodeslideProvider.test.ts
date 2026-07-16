@@ -42,7 +42,13 @@ describe('NodeSlide named pi-ai JSON provider', () => {
       completion('{"summary":"Sharper thesis","operations":[{"op":"replace_text"}]}'),
     );
 
-    const result = await callNodeSlideFreeJson(request, { complete });
+    const result = await callNodeSlideFreeJson(
+      { ...request, maxTokens: 5_000 },
+      {
+        complete,
+        dispatchPolicy: { maxOutputTokens: 5_000, timeoutMs: 60_000 },
+      },
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -58,11 +64,20 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[0]?.[0]).toMatchObject({
       provider: NODESLIDE_EDIT_PROVIDER,
       model: NODESLIDE_EDIT_MODEL,
-      maxTokens: 500,
+      maxTokens: 2_200,
       jsonSchema: request.jsonSchema,
       repairAttempt: false,
     });
     expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+    expect(result.ok && result.telemetry.attempts).toEqual([
+      expect.objectContaining({
+        attempt: 'initial',
+        attempted: true,
+        settled: true,
+        ambiguous: false,
+        unreconciled: false,
+      }),
+    ]);
   });
 
   it('routes an allowlisted model selection and attributes telemetry to that exact model', async () => {
@@ -132,6 +147,10 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete).toHaveBeenCalledTimes(2);
     expect(complete.mock.calls[1]?.[0]).toMatchObject({ repairAttempt: true });
     expect(complete.mock.calls[1]?.[0].userText).toContain('Prior invalid model response');
+    expect(result.ok && result.telemetry.attempts).toEqual([
+      expect.objectContaining({ attempt: 'initial', settled: true, ambiguous: false }),
+      expect.objectContaining({ attempt: 'repair', settled: true, ambiguous: false }),
+    ]);
   });
 
   it('uses the same single repair attempt for a schema-invalid JSON envelope', async () => {
@@ -228,11 +247,53 @@ describe('NodeSlide named pi-ai JSON provider', () => {
 
     const result = await callNodeSlideFreeJson(request, { complete, timeoutMs: 10 });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       reason: 'The GLM 5.2 route timed out.',
+      telemetry: {
+        costMicroUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        attempts: [
+          expect.objectContaining({
+            attempt: 'initial',
+            attempted: true,
+            settled: false,
+            ambiguous: true,
+            unreconciled: true,
+          }),
+        ],
+      },
     });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(complete.mock.calls[0]?.[0].signal.aborted).toBe(true);
+  });
+
+  it('records a thrown dispatched completion as ambiguous rather than settled at zero cost', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(() => {
+      throw new Error('connection reset after dispatch');
+    });
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'The GLM 5.2 route was unavailable.',
+      telemetry: {
+        costMicroUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        attempts: [
+          expect.objectContaining({
+            attempt: 'initial',
+            attempted: true,
+            settled: false,
+            ambiguous: true,
+            unreconciled: true,
+          }),
+        ],
+      },
+    });
+    expect(complete).toHaveBeenCalledTimes(1);
   });
 });
