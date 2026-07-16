@@ -20,4 +20,22 @@ describe('NodeSlide user-facing errors', () => {
       'Request failed.',
     );
   });
+
+  it('removes Convex operation and request wrappers from server failures', () => {
+    expect(
+      nodeSlideUserErrorMessage(
+        new Error(
+          '[CONVEX M(nodeslide:acceptPatch)] [Request ID: abc123] Server Error\nUncaught Error: The durable proposal is still finalizing.\n    at handler (../convex/nodeslide.ts:803:3)',
+        ),
+        'The proposal could not be accepted.',
+      ),
+    ).toBe('The durable proposal is still finalizing.');
+
+    expect(
+      nodeSlideUserErrorMessage(
+        new Error('[CONVEX M(nodeslide:acceptPatch)] [Request ID: abc123] Server Error'),
+        'The proposal could not be accepted.',
+      ),
+    ).toBe('The proposal could not be accepted.');
+  });
 });

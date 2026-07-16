@@ -24,9 +24,21 @@ export function sanitizeNodeSlideUserError(message: string | undefined, fallback
     }
   }
 
-  const firstLine = raw.split(/\r?\n/u, 1)[0]?.trim() ?? '';
+  const firstLine =
+    raw
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .find(
+        (line) =>
+          line.length > 0 &&
+          !/^\[CONVEX\s+[QMA]\(/iu.test(line) &&
+          !/^\[Request ID:/iu.test(line) &&
+          !/^Server Error$/iu.test(line) &&
+          !/^at\s+/iu.test(line),
+      ) ?? '';
   const withoutWrapper = firstLine
     .replace(/^(?:Error:\s*)?(?:Uncaught\s+)?ConvexError:\s*/iu, '')
+    .replace(/^(?:Error:\s*)?(?:Uncaught\s+)?Error:\s*/iu, '')
     .replace(/\s+at\s+(?:async\s+)?[\w./<(].*$/u, '')
     .trim();
 

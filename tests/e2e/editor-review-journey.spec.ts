@@ -85,6 +85,7 @@ test.describe('deployed editor review boundary', () => {
       fullPage: true,
     });
 
+    await expect(proposal.getByTestId('proposal-accept')).toBeEnabled({ timeout: 120_000 });
     await proposal.getByTestId('proposal-accept').dblclick();
     await expect(page.getByText('Validated proposal accepted as a new deck version.')).toBeVisible({
       timeout: 60_000,

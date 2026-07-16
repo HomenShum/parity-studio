@@ -1087,6 +1087,7 @@ export function AiInspector<CommandId extends string = string>({
                           ),
                       )}
                       previewed={patch.id === previewedPatchId}
+                      decisionLocked={isSubmitting}
                       {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
                       onAccept={onAccept}
                       onReject={onReject}
@@ -2007,6 +2008,7 @@ function ProposalCard({
   active,
   duplicateCandidate,
   previewed,
+  decisionLocked,
   onSelect,
   onPreview,
   onAccept,
@@ -2018,6 +2020,7 @@ function ProposalCard({
   active: boolean;
   duplicateCandidate: boolean;
   previewed: boolean;
+  decisionLocked: boolean;
   onSelect: () => void;
   onPreview?: (patch: AiReviewablePatch | null) => void;
   onAccept: (patch: DeckPatch) => void;
@@ -2172,16 +2175,26 @@ function ProposalCard({
                 className="ns-button ns-button--accent"
                 type="button"
                 onClick={() => onAccept(patch)}
-                disabled={patch.status !== 'ready'}
+                disabled={patch.status !== 'ready' || decisionLocked}
+                title={
+                  decisionLocked
+                    ? 'Finalizing the durable review receipt'
+                    : 'Accept this validated proposal'
+                }
                 data-testid="proposal-accept"
               >
-                <Check size={14} /> Accept
+                {decisionLocked ? <LoaderCircle size={14} /> : <Check size={14} />}
+                {decisionLocked ? ' Finalizing' : ' Accept'}
               </button>
             )}
             <button
               className="ns-button ns-button--quiet"
               type="button"
               onClick={() => onReject(patch)}
+              disabled={decisionLocked}
+              title={
+                decisionLocked ? 'Finalizing the durable review receipt' : 'Reject this proposal'
+              }
               data-testid="proposal-reject"
             >
               <X size={14} /> Reject

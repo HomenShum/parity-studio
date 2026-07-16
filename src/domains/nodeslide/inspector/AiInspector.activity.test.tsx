@@ -220,6 +220,25 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.getAllByTestId('proposal-accept')).toHaveLength(1);
   });
 
+  it('holds review decisions until the durable candidate receipt is finalized', async () => {
+    const snapshot = fixture('durable-review-finalizing');
+    const readyPatch = proposal(snapshot);
+    const view = renderInspector(snapshot, { patches: [readyPatch], isSubmitting: true });
+
+    expect(screen.getByTestId('proposal-accept')).toBeDisabled();
+    expect(screen.getByTestId('proposal-reject')).toBeDisabled();
+    expect(screen.getByTestId('proposal-accept')).toHaveTextContent('Finalizing');
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector {...inspectorProps(snapshot, { patches: [readyPatch] })} />
+      </div>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('proposal-accept')).toBeEnabled());
+    expect(screen.getByTestId('proposal-reject')).toBeEnabled();
+  });
+
   it('makes the typing target and write authority explicit before a deictic element request', async () => {
     const snapshot = fixture('explicit-write-authority');
     const user = userEvent.setup();
