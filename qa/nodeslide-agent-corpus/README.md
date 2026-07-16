@@ -76,6 +76,20 @@ byte-equivalent JSON values and report IDs.
 
 ## Gates
 
+The automation gate has two lanes. The PR lane validates the full 167-request registry, all 20
+fixtures, the evidence schemas, deterministic runner behavior, and the runner's no-network and
+no-model-invocation rule. The evidence lane accepts only explicitly supplied manifests. It writes
+deterministic reports plus append-only hash-chained run and reward logs under its output directory.
+
+```text
+pnpm nodeslide:bench:pr
+pnpm nodeslide:bench:evidence -- --evidence path/to/manifests --out benchmark-results
+```
+
+Evidence is never inferred from the repository. With no manifests, the evidence lane reports
+`UNSCORED` and exits 2; `--enforce` converts both `FAIL` and `UNSCORED` into a failing gate (exit
+1). Generated CI output belongs in workflow artifacts, not in the repository.
+
 ```text
 pnpm exec vitest run scripts/tests/nodeslide-uxbench.test.mjs \
   scripts/tests/nodeslide-tastebench.test.mjs
