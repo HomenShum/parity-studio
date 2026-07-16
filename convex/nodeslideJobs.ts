@@ -624,6 +624,12 @@ export const checkpointInternal = internalMutation({
       Date.now(),
     );
     if (next === current) return publicNodeSlideJob(current);
+    if (current.kind === 'edit_proposal' && next.status === 'awaiting_review') {
+      await transitionNodeSlideDurableSessionBestEffort(ctx, {
+        jobId: next.id,
+        toStatus: 'awaiting_review',
+      });
+    }
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next, false);
     return publicNodeSlideJob(next);
@@ -696,7 +702,7 @@ export const completeEditProposalInternal = internalMutation({
     );
     if (next === current) return publicNodeSlideJob(current);
     await finalizeNodeSlideJobBudget(ctx, next.budgetId);
-    await transitionNodeSlideDurableSession(ctx, {
+    await transitionNodeSlideDurableSessionBestEffort(ctx, {
       jobId: next.id,
       toStatus: 'awaiting_review',
     });
@@ -736,7 +742,7 @@ export const resolveReviewInternal = internalMutation({
     const next = resolveNodeSlideReviewJob(current, args.outcome, Date.now());
     if (next === current) return publicNodeSlideJob(current);
     await finalizeNodeSlideJobBudget(ctx, next.budgetId);
-    await transitionNodeSlideDurableSession(ctx, {
+    await transitionNodeSlideDurableSessionBestEffort(ctx, {
       jobId: next.id,
       toStatus:
         args.outcome === 'accepted'
@@ -782,7 +788,7 @@ export const onWorkflowComplete = internalMutation({
     ) {
       await finalizeNodeSlideJobBudgetBestEffort(ctx, next.budgetId);
     }
-    await transitionNodeSlideDurableSession(ctx, {
+    await transitionNodeSlideDurableSessionBestEffort(ctx, {
       jobId: next.id,
       toStatus: args.result.kind === 'canceled' ? 'cancelled' : 'failed',
       ...(args.result.kind === 'failed' ? { reason: args.result.error } : {}),
@@ -1302,6 +1308,23 @@ async function transitionNodeSlideDurableSession(
       ...(args.reason ? { reason: args.reason } : {}),
     },
   });
+}
+
+async function transitionNodeSlideDurableSessionBestEffort(
+  ctx: Pick<MutationCtx, 'runMutation' | 'runQuery'>,
+  args: {
+    jobId: string;
+    toStatus: NodeSlideDurableJobStatus;
+    reason?: string;
+  },
+): Promise<void> {
+  try {
+    await transitionNodeSlideDurableSession(ctx, args);
+  } catch {
+    // The owner-authorized job row is the review authority. A projection-side
+    // conflict must not hide a persisted candidate or strand its public receipt
+    // in `running`; later completion or review resolution reconciles the session.
+  }
 }
 
 function nodeSlideJobEgress(request: NodeSlideEditProposalJobRequest) {

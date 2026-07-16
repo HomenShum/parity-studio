@@ -110,13 +110,16 @@ describe('NodeSlide durable job state', () => {
         status: 'awaiting_review',
         phase: 'awaiting_review',
         progress: 100,
+        resultDeckId: 'deck_1',
         resultPatchId: 'patch_proposal_only',
+        resultCandidateDigest: 'candidate_sha256:proposal',
         conversationRunId: 'agent_run_1',
       },
       3_000,
     );
     expect(awaitingReview.status).toBe('awaiting_review');
     expect(awaitingReview.resultPatchId).toBe('patch_proposal_only');
+    expect(awaitingReview.resultCandidateDigest).toBe('candidate_sha256:proposal');
     expect(awaitingReview).not.toHaveProperty('acceptedAt');
   });
 
@@ -231,6 +234,14 @@ describe('NodeSlide durable job state', () => {
         status: 'succeeded',
       }),
     ).toThrow(/must stop at the review gate/i);
+    expect(() =>
+      assertNodeSlideJobCheckpointKind(job({ kind: 'edit_proposal' }), {
+        phase: 'awaiting_review',
+        status: 'awaiting_review',
+        resultDeckId: 'deck_1',
+        resultPatchId: 'patch_1',
+      }),
+    ).toThrow(/requires its deck, patch, and candidate digest bindings/i);
   });
 });
 

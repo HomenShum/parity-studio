@@ -180,6 +180,16 @@ export function assertNodeSlideJobCheckpointKind(
     throw new Error('An edit-proposal job must stop at the review gate, not completion.');
   }
   if (
+    (update.status === 'awaiting_review' || update.phase === 'awaiting_review') &&
+    (update.resultDeckId === undefined ||
+      update.resultPatchId === undefined ||
+      update.resultCandidateDigest === undefined)
+  ) {
+    throw new Error(
+      'An edit-proposal review checkpoint requires its deck, patch, and candidate digest bindings.',
+    );
+  }
+  if (
     update.resultCandidateDigest !== undefined &&
     (update.resultDeckId === undefined || update.resultPatchId === undefined)
   ) {
