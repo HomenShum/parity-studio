@@ -4890,7 +4890,7 @@
   }
 
   .nodeslide-studio .ns-ai-v3-expand-composer {
-    display: none;
+    display: inline-flex;
   }
 
   .nodeslide-studio .ns-ai-v3-policy-summary span:not(.is-scope) {

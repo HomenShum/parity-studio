@@ -2959,6 +2959,16 @@
   margin-top: 6px;
 }
 
+.ns-inspector-loading {
+  align-items: center;
+  color: var(--ns-muted);
+  display: flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-content: center;
+  min-width: var(--ns-inspector-width);
+}
+
 .nodeslide-studio.ns-recovery-screen {
   align-items: center;
   display: flex;

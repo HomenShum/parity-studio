@@ -2,27 +2,19 @@ import { z } from 'zod';
 import {
   type DeckSnapshot,
   type ElementKind,
-  NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT,
   NODESLIDE_GROUP_ID_LIMIT,
   NODESLIDE_GROUP_MEMBER_LIMIT,
-  NODESLIDE_PATCH_OPERATION_LIMIT,
   NODESLIDE_SCHEMA_VERSION,
   type PatchOperation,
   type Slide,
   type SlideElement,
 } from '../../../../shared/nodeslide';
+import { NODESLIDE_JSON_LIMITS } from './importBounds';
+
+export { NODESLIDE_JSON_LIMITS } from './importBounds';
 
 export const NODESLIDE_JSON_FORMAT = 'nodeslide.deck-snapshot' as const;
 export const NODESLIDE_JSON_VERSION = 1 as const;
-
-export const NODESLIDE_JSON_LIMITS = {
-  maxInputBytes: 16 * 1024 * 1024,
-  maxSlides: 256,
-  maxElementsPerSlide: NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT,
-  maxElements: 8_192,
-  maxSources: 2_048,
-  maxOperations: NODESLIDE_PATCH_OPERATION_LIMIT,
-} as const;
 
 export interface NodeSlideJsonBounds {
   maxInputBytes: number;
@@ -361,7 +353,7 @@ const sourceSchema = z
     retrievedAt: nonNegativeIntegerSchema,
     citation: contentSchema,
     license: shortTextSchema.optional(),
-    format: z.enum(['csv', 'json', 'txt', 'web']).optional(),
+    format: z.enum(['csv', 'json', 'txt', 'md', 'pdf', 'web']).optional(),
     contentDigest: shortTextSchema.optional(),
     byteSize: nonNegativeIntegerSchema.optional(),
     rowCount: nonNegativeIntegerSchema.optional(),

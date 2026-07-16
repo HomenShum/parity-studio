@@ -4,12 +4,18 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from 'playwright/test';
 import { readVersionState } from './helpers';
-import { chooseDeterministicLandingModel, openIsolatedLanding } from './landing-start-flow.helpers';
+import {
+  chooseDeterministicLandingModel,
+  chooseLandingModel,
+  grantLandingSessionConsent,
+  openIsolatedLanding,
+} from './landing-start-flow.helpers';
 
 const enabled =
   process.env['NODESLIDE_JOURNEY_PROOF'] === '1' &&
   process.env['NODESLIDE_E2E_LIVE_BACKEND'] === '1' &&
   process.env['NODESLIDE_E2E_MUTATIONS'] === '1';
+const journeyMode = process.env['NODESLIDE_JOURNEY_MODE'] === 'live' ? 'live' : 'deterministic';
 
 test.describe('NodeSlide self-authored browser journey proof', () => {
   test.skip(
@@ -35,11 +41,24 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     };
 
     await openIsolatedLanding(page);
-    await chooseDeterministicLandingModel(page);
+    if (journeyMode === 'live') {
+      await chooseLandingModel(page, { group: 'More live models', label: 'GLM 5.2' });
+      await grantLandingSessionConsent(page);
+    } else {
+      await chooseDeterministicLandingModel(page);
+    }
     const brief = [
-      'Create exactly seven concise, claim-led slides explaining why NodeSlide should dogfood its own authoring system.',
-      'Audience: product and design leadership.',
-      'Slide 1 states that NodeSlide should ship governed creativity, not one-shot generation. Slide 2 benchmarks Canva AI, Gamma AI, NodeSlide, and Meta HyperAgent. Slide 3 defines the communication job, evidence ledger, and claim-led storyboard. Slide 4 shows the editable authoring workflow as a native diagram. Slide 5 separates specialist critics, bounded repair, and policy evolution. Slide 6 proves the browser journey, durable receipt, version advance, and editable export. Slide 7 ends with the adoption checklist.',
+      'Create exactly seven visually ambitious, claim-led slides explaining why NodeSlide should dogfood its own authoring system.',
+      'Audience: product and design leadership. Decision: approve the governed live-agent authoring roadmap and require recorded browser proof for every release.',
+      'Use a refined editorial product-design aesthetic: warm off-white canvas, near-black typography, electric blue and coral accents, generous whitespace, strong hierarchy, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
+      'Slide 1 is a bold thesis cover: “NodeSlide must beat one-shot generation on governed creativity,” with one supporting line and a visual tension motif.',
+      'Slide 2 is a three-column competitive landscape. Canva AI wins brand and asset velocity; Gamma AI wins research-to-story speed; NodeSlide must own editable, governed execution.',
+      'Slide 3 is an authoring contract that locks audience, decision, evidence ledger, and claim-led storyboard before layout. Show it as a structured editorial artifact, not bullets.',
+      'Slide 4 is the only diagram: a native editable flow from strategy through a planner, visual-material agents, specialist critics, validation, human review, and PPTX export.',
+      'Slide 5 uses a split composition: bounded repair on the left; HyperAgent-inspired versioned policy evolution, held-out evaluation, and safe promotion on the right.',
+      'Slide 6 is an evidence board with labeled proof slots for provider, named model, input and output tokens, nonzero cost, candidate digest, durable validation receipt, version delta, and export artifact. Do not invent values.',
+      'Slide 7 is a decisive release-gate checklist ending with “Approve the quality gate and require recorded proof for every release.”',
+      'Keep copy concise, use sentence-case headlines, preserve source notes for external references, and do not invent data or benchmark metrics.',
       'Treat Canva and Gamma as design inspirations rather than unverified performance claims. Treat HyperAgent as inspiration for versioned policy evolution, held-out evaluation, and safe promotion—not permission to mutate production code. Keep every object editable and do not invent data.',
     ].join(' ');
     await page.getByLabel('Presentation brief').fill(brief);
@@ -54,8 +73,19 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     await expect(page.getByRole('button', { name: /^Slide \d+:/u })).toHaveCount(7);
     const base = await readVersionState(page);
 
+    const creationTrace =
+      journeyMode === 'live' ? await captureLiveTrace(page, 'brief-to-deck') : null;
+    if (creationTrace) step('live_creation_verified', creationTrace);
+
     await page.getByTestId('inspector-tab-ai').click();
-    await expect(page.getByTestId('ai-model-select')).toContainText('Deterministic');
+    await expect(page.getByTestId('ai-model-select')).toContainText(
+      journeyMode === 'live' ? 'GLM 5.2' : 'Deterministic',
+    );
+    if (journeyMode === 'live') {
+      const consent = page.getByTestId('ai-provider-consent');
+      await expect(consent).toBeVisible();
+      if (!(await consent.isChecked())) await consent.check();
+    }
     const turbo = page.getByRole('switch', { name: 'Turbo for this session' });
     if (await turbo.isChecked()) await turbo.uncheck();
     await page
@@ -72,6 +102,10 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const proposal = page.getByTestId('proposal-card').first();
     await expect(proposal).toBeVisible({ timeout: 120_000 });
     step('proposal_ready', { deckVersion: base.version });
+
+    const editTrace = journeyMode === 'live' ? await captureLiveTrace(page, 'edit-proposal') : null;
+    if (editTrace) step('live_edit_verified', editTrace);
+    await page.getByTestId('inspector-tab-ai').click();
 
     const preview = proposal.getByTestId('proposal-preview');
     await expect(preview).toBeEnabled();
@@ -123,6 +157,10 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       `${JSON.stringify(
         {
           deckId,
+          journeyMode,
+          modelExpectation: journeyMode === 'live' ? 'openrouter / z-ai/glm-5.2' : 'deterministic',
+          liveCreationTrace: creationTrace,
+          liveEditTrace: editTrace,
           expectedCreationProvenance: 'brief_to_new_deck',
           actualCreationProvenance: 'brief_to_new_deck',
           baseVersion: base.version,
@@ -144,6 +182,30 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     runNodeScript('scripts/nodeslide-journey-proof.mjs', ['--manifest', runManifestPath]);
   });
 });
+
+async function captureLiveTrace(page: import('playwright/test').Page, phase: string) {
+  await page.getByTestId('inspector-tab-trace').click();
+  const trace = page.locator('.ns-trace-summary').first();
+  await expect(trace).toBeVisible({ timeout: 120_000 });
+  const traceText = (await trace.innerText()).replace(/\s+/gu, ' ').trim();
+  expect(traceText, `${phase} must identify OpenRouter`).toMatch(/openrouter/iu);
+  expect(traceText, `${phase} must identify GLM 5.2`).toMatch(/(?:z-ai\/glm-5\.2|GLM 5\.2)/iu);
+  expect(traceText, `${phase} must not be a deterministic fallback`).not.toMatch(
+    /deterministic|fallback/iu,
+  );
+  const tokenMatch = traceText.match(/Tokens\s+([\d,]+)\s*(?:→|->)\s*([\d,]+)/u);
+  expect(tokenMatch, `${phase} must expose input and output token usage`).not.toBeNull();
+  const inputTokens = Number(tokenMatch?.[1]?.replaceAll(',', ''));
+  const outputTokens = Number(tokenMatch?.[2]?.replaceAll(',', ''));
+  expect(inputTokens).toBeGreaterThan(0);
+  expect(outputTokens).toBeGreaterThan(0);
+  const costMatch = traceText.match(/Cost\s+\$(\d+\.\d+)/u);
+  expect(costMatch, `${phase} must expose cost`).not.toBeNull();
+  const costUsd = Number(costMatch?.[1]);
+  expect(costUsd).toBeGreaterThan(0);
+  expect(traceText, `${phase} must expose passing validation`).toMatch(/Validation\s+Passed/iu);
+  return { phase, inputTokens, outputTokens, costUsd, traceText };
+}
 
 function digest(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;

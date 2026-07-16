@@ -2,6 +2,7 @@ export * from './capabilities';
 export * from './download';
 export * from './hosted';
 export * from './html';
+export * from './importBounds';
 export * from './jsonSpec';
 export * from './localAdapter';
 export * from './pptx';
