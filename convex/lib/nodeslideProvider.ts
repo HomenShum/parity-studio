@@ -26,6 +26,7 @@ export const NODESLIDE_EDIT_MODEL = NODESLIDE_DEFAULT_AGENT_MODEL;
 export const NODESLIDE_NEBIUS_GLM_MODEL = 'zai-org/GLM-5.2' as const;
 
 const MODEL_TIMEOUT_MS = 30_000;
+const MAX_OUTPUT_TOKENS = 2_200;
 const MAX_RESPONSE_BYTES = 200_000;
 const MAX_REPAIR_CONTEXT_CHARS = 24_000;
 const OPENROUTER_ATTRIBUTION_HEADERS = {
@@ -81,6 +82,24 @@ export interface NodeSlideProviderTelemetry {
   costMicroUsd: number;
   inputTokens: number;
   outputTokens: number;
+  attempts: NodeSlideProviderAttemptTelemetry[];
+}
+
+export interface NodeSlideProviderAttemptTelemetry {
+  attempt: 'initial' | 'repair';
+  attempted: true;
+  settled: boolean;
+  ambiguous: boolean;
+  unreconciled: boolean;
+  elapsedMs: number;
+}
+
+/**
+ * Optional per-call limits. Values may tighten the provider limits but can never relax them.
+ */
+export interface NodeSlideDispatchPolicy {
+  maxOutputTokens?: number;
+  timeoutMs?: number;
 }
 
 export interface NodeSlideJsonSchema {
@@ -127,7 +146,9 @@ export type NodeSlideCompletion = (
 
 interface NodeSlideProviderDependencies {
   complete?: NodeSlideCompletion;
+  /** @deprecated Use dispatchPolicy.timeoutMs for new callers. */
   timeoutMs?: number;
+  dispatchPolicy?: NodeSlideDispatchPolicy;
 }
 
 export async function callNodeSlideFreeJson(
@@ -155,13 +176,14 @@ export async function callNodeSlideFreeJson(
   }
   const selectedRoute = nodeSlideAgentModel(selectedModel);
   const routeLabel = `${selectedRoute.label} via ${providerDisplayName(selectedRoute.provider)}`;
+  const dispatchPolicy = resolveDispatchPolicy(args.maxTokens, dependencies);
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       controller.abort();
       reject(new Error('nodeslide_provider_timeout'));
-    }, dependencies.timeoutMs ?? MODEL_TIMEOUT_MS);
+    }, dispatchPolicy.timeoutMs);
   });
   let telemetry = emptyTelemetry(selectedModel, reasoningEffort);
   let hasTelemetry = false;
@@ -174,24 +196,37 @@ export async function callNodeSlideFreeJson(
     // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const repairAttempt = attempt === 1;
-      const result = await Promise.race([
-        complete({
-          provider: selectedRoute.provider,
-          model: selectedRoute.upstreamId,
-          supportsTemperature: selectedRoute.supportsTemperature,
-          reasoningEffort,
-          systemPrompt: providerSystemPrompt(args, repairAttempt),
-          userText: repairAttempt ? repairUserText(args.userText, invalidResponse) : args.userText,
-          maxTokens: args.maxTokens,
-          ...(args.jsonSchema && structuredOutputMode === 'json_schema'
-            ? { jsonSchema: args.jsonSchema }
-            : {}),
-          structuredOutputMode,
-          repairAttempt,
-          signal: controller.signal,
-        }),
-        deadline,
-      ]);
+      const attemptTelemetry = startAttemptTelemetry(repairAttempt);
+      telemetry.attempts.push(attemptTelemetry);
+      let result: NodeSlideCompletionResult;
+      try {
+        result = await Promise.race([
+          complete({
+            provider: selectedRoute.provider,
+            model: selectedRoute.upstreamId,
+            supportsTemperature: selectedRoute.supportsTemperature,
+            reasoningEffort,
+            systemPrompt: providerSystemPrompt(args, repairAttempt),
+            userText: repairAttempt
+              ? repairUserText(args.userText, invalidResponse)
+              : args.userText,
+            maxTokens: dispatchPolicy.maxOutputTokens,
+            ...(args.jsonSchema && structuredOutputMode === 'json_schema'
+              ? { jsonSchema: args.jsonSchema }
+              : {}),
+            structuredOutputMode,
+            repairAttempt,
+            signal: controller.signal,
+          }),
+          deadline,
+        ]);
+      } catch (error) {
+        finishAttemptTelemetry(attemptTelemetry, true);
+        hasTelemetry = true;
+        throw error;
+      }
+      const timedOut = controller.signal.aborted || result.stopReason === 'aborted';
+      finishAttemptTelemetry(attemptTelemetry, timedOut);
       telemetry = addTelemetry(telemetry, result);
       hasTelemetry = true;
 
@@ -213,7 +248,7 @@ export async function callNodeSlideFreeJson(
           hasTelemetry,
         );
       }
-      if (result.stopReason === 'aborted' || controller.signal.aborted) {
+      if (timedOut) {
         return providerFailure(`The ${routeLabel} route timed out.`, telemetry, hasTelemetry);
       }
       if (responseBytes(result.text) > MAX_RESPONSE_BYTES) {
@@ -398,7 +433,62 @@ function emptyTelemetry(
     costMicroUsd: 0,
     inputTokens: 0,
     outputTokens: 0,
+    attempts: [],
   };
+}
+
+function resolveDispatchPolicy(
+  requestedMaxTokens: number,
+  dependencies: NodeSlideProviderDependencies,
+): Required<NodeSlideDispatchPolicy> {
+  return {
+    maxOutputTokens: cappedPositiveInteger(
+      requestedMaxTokens,
+      dependencies.dispatchPolicy?.maxOutputTokens,
+      MAX_OUTPUT_TOKENS,
+    ),
+    timeoutMs: cappedPositiveInteger(
+      dependencies.timeoutMs,
+      dependencies.dispatchPolicy?.timeoutMs,
+      MODEL_TIMEOUT_MS,
+    ),
+  };
+}
+
+function cappedPositiveInteger(
+  requested: number | undefined,
+  policyLimit: number | undefined,
+  hardLimit: number,
+): number {
+  const requestedLimit = positiveIntegerOr(requested, hardLimit);
+  const policyCap = positiveIntegerOr(policyLimit, hardLimit);
+  return Math.min(requestedLimit, policyCap, hardLimit);
+}
+
+function positiveIntegerOr(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.floor(value));
+}
+
+function startAttemptTelemetry(repairAttempt: boolean): NodeSlideProviderAttemptTelemetry {
+  return {
+    attempt: repairAttempt ? 'repair' : 'initial',
+    attempted: true,
+    settled: false,
+    ambiguous: false,
+    unreconciled: false,
+    elapsedMs: Date.now(),
+  };
+}
+
+function finishAttemptTelemetry(
+  attempt: NodeSlideProviderAttemptTelemetry,
+  ambiguous: boolean,
+): void {
+  attempt.elapsedMs = Math.max(0, Date.now() - attempt.elapsedMs);
+  attempt.settled = !ambiguous;
+  attempt.ambiguous = ambiguous;
+  attempt.unreconciled = ambiguous;
 }
 
 function addTelemetry(
@@ -412,6 +502,7 @@ function addTelemetry(
     costMicroUsd: telemetry.costMicroUsd + Math.max(0, result.costMicroUsd),
     inputTokens: telemetry.inputTokens + Math.max(0, result.inputTokens),
     outputTokens: telemetry.outputTokens + Math.max(0, result.outputTokens),
+    attempts: telemetry.attempts,
   };
 }
 
@@ -429,7 +520,7 @@ function responseBytes(text: string): number {
 
 function usdToMicroUsd(usd: number): number {
   if (!Number.isFinite(usd) || usd < 0) return 0;
-  return Math.floor(usd * 1_000_000);
+  return Math.ceil(usd * 1_000_000);
 }
 
 function parseStrictJson(text: string): unknown | undefined {
