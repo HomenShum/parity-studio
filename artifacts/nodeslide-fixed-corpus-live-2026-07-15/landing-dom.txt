@@ -1,0 +1,36 @@
+- main:
+  - link "NodeSlide home":
+    - /url: /
+    - generic: "N"
+    - strong: NodeSlide
+  - button "BYOK / Agents":
+    - text: BYOK / Agents
+  - region "What presentation should we build?":
+    - generic: Decks that stay editable
+    - heading "What presentation should we build?" [level=1]
+    - paragraph: Start with an idea, a structured spec, or evidence. NodeSlide turns it into a reviewable deck—not a stack of static images.
+    - textbox "Presentation brief":
+      - /placeholder: Describe the presentation you want to make…
+    - button "Attach data":
+      - text: Attach
+    - button "Generation model":
+      - generic: GLM 5.2
+    - generic: Reasoning effort
+    - combobox "Reasoning effort":
+      - option "Low"
+      - option "Medium" [selected]
+      - option "High"
+    - text: Nebius
+    - generic "Allow selected external models and optional web research for this browser tab":
+      - checkbox "Allow prompt + files"
+      - generic: Allow prompt + files
+    - button "Create presentation" [disabled]:
+      - text: Create
+    - generic "Presentation starters":
+      - generic: Try an idea
+      - button "World Cup data story"
+      - button "AI 2027 scenario"
+      - button "AI Fund product narrative"
+    - button "Explore the editable sample workspace":
+      - text: Explore the editable sample workspace
+  - generic: Editable primitives · scoped AI changes · validation before publish

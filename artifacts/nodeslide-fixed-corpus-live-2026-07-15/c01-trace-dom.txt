@@ -1,0 +1,287 @@
+- main:
+  - generic: "N"
+  - generic: NodeSlide
+  - generic: /
+  - textbox "Deck title": Create a six-slide investor deck explaining the problem, product, tra…
+  - generic: v1
+  - generic "History controls":
+    - button "Undo" [disabled]:
+    - button "Redo" [disabled]:
+  - button "Project actions":
+    - generic: Project
+  - button "Switch to dark theme":
+  - 'button "Language and clarity: English"':
+    - generic: EN
+  - button "Reset demo view":
+    - generic: Reset demo
+  - button "Share deck":
+    - generic: Share
+  - button "Present deck":
+    - generic: Present
+  - button "Export deck":
+    - generic: Export
+  - button "Open command palette":
+    - generic: Commands
+  - navigation "Slides":
+    - tablist "Navigator views":
+      - tab "Slides" [selected]
+      - tab "Outline"
+      - tab "Layers"
+    - tabpanel "Slides":
+      - region "Opening / 01":
+        - button "Opening / 01 1" [expanded]:
+          - generic: Opening / 01
+          - generic: "1"
+        - generic: "01"
+        - 'button "Slide 1: Create a six-slide investor deck explaining the problem, product, tra…"':
+          - generic: OPENING / 01
+          - generic: Create an editable, reviewable presentation from this idea
+          - generic: A focused narrative for Decision-makers described in the brief, built from the supplied brief and kept editable from first draft onward.
+          - generic: • Exactly 6 slides in the requested narrative
+          - generic: • Structured chart, formula, and image primitives where relevant
+          - generic: • Validation passes before presentation or export
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "01"
+        - button "Create a six-slide investor deck explaining the problem, product, tra…"
+        - generic: 1 source · current
+        - button "Slide 1 actions":
+      - region "Context / 02":
+        - button "Context / 02 1" [expanded]:
+          - generic: Context / 02
+          - generic: "1"
+        - generic: "02"
+        - 'button "Slide 2: The moment to solve"':
+          - generic: CONTEXT / 02
+          - generic: The cost of waiting is usually hidden in repeated work.
+          - generic: "Frame the current reality for Decision-makers described in the brief: what is fragmented today, why it matters now, and where momentum is being lost."
+          - generic: 01 Name the friction
+          - generic: 02 Expose the consequence
+          - generic: 03 Create urgency without hype
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "02"
+        - button "The moment to solve"
+        - generic: 1 source · current
+        - button "Slide 2 actions":
+      - region "Insight / 03":
+        - button "Insight / 03 1" [expanded]:
+          - generic: Insight / 03
+          - generic: "1"
+        - generic: "03"
+        - 'button "Slide 3: The decisive insight"':
+          - generic: INSIGHT / 03
+          - generic: A better outcome starts with a sharper point of view.
+          - generic: Create a six-slide investor deck explaining the problem, product, traction, market, business model, and next milestone.
+          - generic: 01 Exactly 6 slides in the requested narrative
+          - generic: 02 Structured chart, formula, and image primitives where relevant
+          - generic: 03 Validation passes before presentation or export
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "03"
+        - button "The decisive insight"
+        - generic: 1 source · current
+        - button "Slide 3 actions":
+      - region "Approach / 04":
+        - button "Approach / 04 1" [expanded]:
+          - generic: Approach / 04
+          - generic: "1"
+        - generic: "04"
+        - 'button "Slide 4: How the approach works"':
+          - generic: APPROACH / 04
+          - generic: Turn the idea into a sequence people can understand and own.
+          - generic: Connect intent, action, and feedback in one visible operating path so the audience can see both the destination and the mechanics.
+          - generic: 01 Align on intent
+          - generic: 02 Execute the critical moves
+          - generic: 03 Review measurable outcomes
+          - math "Only the authorized portion of a proposal may be accepted.":
+            - code: accepted change = proposal ∩ authorized scope
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "04"
+        - button "How the approach works"
+        - generic: 2 sources · current
+        - button "Slide 4 actions":
+      - region "Evidence / 05":
+        - button "Evidence / 05 1" [expanded]:
+          - generic: Evidence / 05
+          - generic: "1"
+        - generic: "05"
+        - 'button "Slide 5: What success looks like"':
+          - generic: EVIDENCE / 05
+          - generic: Define proof before asking for commitment.
+          - generic: Use the brief’s success criteria as explicit evaluation signals, with assumptions clearly separated from measured evidence.
+          - generic: 01 Exactly 6 slides in the requested narrative
+          - generic: 02 Structured chart, formula, and image primitives where relevant
+          - generic: 03 Validation passes before presentation or export
+          - generic: 3 signals
+          - generic: agreed measures of a successful outcome
+          - img "S1, S2, S3 bar chart":
+            - generic: S1
+            - generic: S2
+            - generic: S3
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "05"
+        - button "What success looks like"
+        - generic: 2 sources · current
+        - button "Slide 5 actions":
+      - region "Delivery / 06":
+        - button "Delivery / 06 1" [expanded]:
+          - generic: Delivery / 06
+          - generic: "1"
+        - generic: "06"
+        - 'button "Slide 6: A practical path forward"':
+          - generic: DELIVERY / 06
+          - generic: Start narrow, learn quickly, and preserve room to adapt.
+          - generic: Sequence the work into a focused launch, an evidence review, and a deliberate scale decision with named ownership at every step.
+          - generic: 01 Launch the smallest credible move
+          - generic: 02 Review evidence with stakeholders
+          - generic: 03 Scale what earns confidence
+          - img "Structured evidence map derived from the supplied brief":
+            - strong: Structured evidence map derived from the supplied brief
+            - generic: Replace image
+            - generic: The visual is illustrative and remains replaceable as an image object.
+          - generic: The visual is illustrative and remains replaceable as an image object.
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+          - generic: "06"
+        - button "A practical path forward"
+        - generic: 2 sources · current
+        - button "Slide 6 actions":
+      - status:
+        - strong: Multi-slide edit
+        - generic: Ctrl/⌘-click slides, or use the slide actions menu.
+      - button "Add slide":
+        - text: Add slide
+      - text: drag rows to reorder · double-click to rename
+  - region "Editor canvas":
+    - tablist "Canvas views":
+      - tab "Edit" [selected]
+      - tab "Overview"
+      - tab "Compare"
+    - generic: "01"
+    - strong: Create a six-slide investor deck explaining the problem, product, tra…
+    - generic: verified
+    - complementary "Narrative context":
+      - generic: Slide job
+      - generic: "Narrative role: Opening / 01. Keep the spoken transition focused on “Create an editable, reviewable presentation from this idea” Evidence note: Content is based on the supplied creation brief. Illustrative examples are not independently verified; replace them with measured evidence before external publication."
+    - tabpanel "Edit":
+      - region "Canvas, slide 1":
+        - button "Accent rail, shape slide element, locked"
+        - button "Section label, text slide element":
+          - generic: OPENING / 01
+        - button "Headline, text slide element":
+          - generic: Create an editable, reviewable presentation from this idea
+        - button "Body copy, text slide element":
+          - generic: A focused narrative for Decision-makers described in the brief, built from the supplied brief and kept editable from first draft onward.
+        - button "Key point 1, text slide element":
+          - generic: • Exactly 6 slides in the requested narrative
+        - button "Key point 2, text slide element":
+          - generic: • Structured chart, formula, and image primitives where relevant
+        - button "Key point 3, text slide element":
+          - generic: • Validation passes before presentation or export
+        - button "Deck footer, text slide element, locked":
+          - generic: NODESLIDE · SOURCE-AWARE · EDITABLE
+        - button "Page number, text slide element, locked":
+          - generic: "01"
+        - generic "Slide navigation":
+          - button "Previous slide" [disabled]:
+          - generic: 1 / 6
+          - button "Next slide":
+        - generic "Canvas zoom and pan controls":
+          - button "Zoom out":
+          - generic: 65%
+          - button "Zoom in":
+          - button "Fit slide to workspace": Fit
+  - complementary "NodeSlide inspector":
+    - button "Resize inspector"
+    - generic: Inspector
+    - generic "Current inspector context":
+      - generic: Selection · none
+    - button "Collapse inspector":
+    - navigation "Inspector views":
+      - tablist "Primary inspector views":
+        - tab "AI":
+          - generic: AI
+        - tab "Design":
+          - generic: Design
+        - tab "Comments":
+          - generic: Comments
+        - tab "Evidence":
+          - generic: Evidence
+        - tab "Trace" [active] [selected]:
+          - generic: Trace
+      - button "More inspector views":
+        - generic: More
+    - text: › ▸ Data
+    - tabpanel "Trace":
+      - region "Trace inspector":
+        - generic: Agent activity
+        - heading "Run details" [level=2]
+        - tablist "Trace detail level":
+          - tab "Summary":
+            - text: Summary
+          - tab "Timeline" [selected]:
+            - text: Timeline
+          - tab "Raw":
+            - text: Raw
+        - button "Expand trace view":
+        - paragraph: Provider, work performed, validation, and human approval in one auditable run.
+        - 'heading "Current deck validation: passed" [level=3]':
+          - text: "Current deck validation: passed"
+        - paragraph: Deck v1 · publish ready
+        - generic: Run
+        - combobox "Run":
+          - option "The user consented to send the full brief to Nebius. NodeSlide used its deterministic fallback because The GLM 5.2 via Nebius route timed out." [selected]
+        - article:
+          - generic: Completed
+          - generic: deck v1
+          - time: Started 5:33:27 PM
+          - heading "The user consented to send the full brief to Nebius. NodeSlide used its deterministic fallback because The GLM 5.2 via Nebius route timed out." [level=3]
+          - generic "provider · model · reasoning effort attribution":
+            - generic: nebius · zai-org/GLM-5.2 (deterministic fallback) · Medium effort
+          - generic "Run metrics":
+            - generic: Run time
+            - strong:
+              - text: 35s
+            - generic: Tokens
+            - strong: — → —
+            - generic: Cost
+            - strong:
+              - text: not recorded
+            - generic: Validation
+            - strong: Passed
+          - paragraph: No external provider billing was recorded for this fallback.
+          - generic: Execution
+          - generic: 4 auditable records
+          - tabpanel "Timeline":
+            - region "Compact trace activity":
+              - strong: Activity
+              - generic: 2 spans · 34.5 s
+              - button "Open full trace timeline":
+                - text: Full timeline
+              - generic "Trace health summary":
+                - generic: 4 loaded
+                - generic: 0 errors
+                - generic: 1 cited
+              - generic "Model and receipt accounting":
+                - term: Route
+                - definition: nebius · zai-org/GLM-5.2 (deterministic fallback)
+                - term: Tokens
+                - definition: not recorded in · not recorded out
+                - term: Cost
+                - definition: not recorded
+                - term: Digest
+                - definition: not recorded
+              - list "Latest trace activity":
+                - listitem "Invoke NodeSlide agent, Ok, 34.5 s":
+                  - generic: Invoke NodeSlide agent
+                  - generic: invoke_agent
+                  - time: 34.5 s
+                - listitem "Queue and authorize, Ok, 34.5 s":
+                  - generic: Queue and authorize
+                  - generic: agent.queue
+                  - time: 34.5 s
+                  - generic "Span-bound sources": 2 sources
+            - generic "Chain of custody and countersigned receipt"
+        - group "Durable agent run journal":
+          - generic "Run journal 1 server persisted":
+            - text: Run journal
+            - generic: 1 server persisted
+    - button "Structure, presentation, and cleanup checks passed. Open validation details.":
+      - status: Structure, presentation, and cleanup checks passed
