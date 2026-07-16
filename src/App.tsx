@@ -1,5 +1,5 @@
 import { useQuery } from 'convex/react';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 import { Breadcrumb } from './components/Breadcrumb';
@@ -8,10 +8,15 @@ import { Wordmark } from './components/Wordmark';
 import { AgentRail } from './components/agent/AgentRail';
 import { CanvasPanel, type CanvasTab } from './components/canvas/CanvasPanel';
 import { ParityPanel } from './components/parity/ParityPanel';
-import { NodeSlideStudio } from './domains/nodeslide/NodeSlideStudio';
 import { convexHttpUrl } from './lib/convexEndpoints';
 import { useT } from './lib/i18n';
 import { getOrCreateSessionId, resetSessionId } from './lib/sessionIdentity';
+
+const NodeSlideStudio = lazy(() =>
+  import('./domains/nodeslide/NodeSlideStudio').then(({ NodeSlideStudio: Studio }) => ({
+    default: Studio,
+  })),
+);
 
 /**
  * App shell — reference layout (docs/plans/2026-04-28-shell-revamp-from-reference.md).
@@ -39,7 +44,33 @@ export default function App() {
         : configuredDomain === 'parity' && parityEnabled
           ? 'parity'
           : 'nodeslide';
-  return domain === 'parity' ? <ParityApp /> : <NodeSlideStudio />;
+  return domain === 'parity' ? (
+    <ParityApp />
+  ) : (
+    <Suspense fallback={<NodeSlideBootScreen />}>
+      <NodeSlideStudio />
+    </Suspense>
+  );
+}
+
+function NodeSlideBootScreen() {
+  return (
+    <main
+      data-testid="nodeslide-boot-screen"
+      aria-busy="true"
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 32,
+        background: '#f4f4f1',
+        color: '#20211f',
+        fontFamily: 'var(--font-sans, system-ui, sans-serif)',
+      }}
+    >
+      <span style={{ fontSize: 13, letterSpacing: '0.02em' }}>Opening NodeSlide…</span>
+    </main>
+  );
 }
 
 function ParityApp() {

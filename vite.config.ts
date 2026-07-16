@@ -72,13 +72,28 @@ export default defineConfig(() => {
           manualChunks: qaBuildInputs
             ? undefined
             : (id) => {
-                if (!id.includes('node_modules')) return undefined;
-                if (id.includes('@monaco-editor') || id.includes('monaco-editor')) return 'editor';
-                if (id.includes('react') || id.includes('react-dom')) return 'react';
-                if (id.includes('convex')) return 'convex';
-                if (id.includes('lucide-react')) return 'icons';
-                if (id.includes('jszip')) return 'zip';
-                return 'vendor';
+                const moduleId = id.replaceAll('\\', '/');
+                if (!moduleId.includes('/node_modules/')) return undefined;
+                // Match package directories, not arbitrary pnpm peer suffixes such as
+                // `_react@19.2.5`. The old substring test pulled Convex, Radix,
+                // assistant-ui, and OpenUI into the React chunk and created a
+                // vendor -> react -> vendor cycle.
+                if (
+                  moduleId.includes('/node_modules/react/') ||
+                  moduleId.includes('/node_modules/react-dom/') ||
+                  moduleId.includes('/node_modules/scheduler/')
+                ) {
+                  return 'react';
+                }
+                if (moduleId.includes('/node_modules/monaco-editor/')) return 'editor';
+                if (moduleId.includes('/node_modules/convex/')) return 'convex';
+                if (moduleId.includes('/node_modules/lucide-react/')) return 'icons';
+                if (moduleId.includes('/node_modules/jszip/')) return 'zip';
+                // Preserve source-level async boundaries for heavyweight packages.
+                // A generic vendor bucket would otherwise make dynamic PPTX export
+                // part of the startup graph again.
+                if (moduleId.includes('/node_modules/pptxgenjs/')) return 'pptx-export';
+                return undefined;
               },
         },
       },

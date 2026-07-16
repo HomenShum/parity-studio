@@ -23,6 +23,7 @@ import {
 } from '../signature/parsers';
 import { getXmlAttribute, isSafePackagePath, relationshipPartName } from '../signature/xml';
 import { type ZipDirectoryEntry, ZipMetadataFailure, readZipDirectory } from '../signature/zip';
+import { DEFAULT_PPTX_IMPORT_BOUNDS } from './importBounds';
 import type {
   PptxImportBounds,
   PptxImportCandidateResult,
@@ -34,6 +35,7 @@ import type {
   PptxImportOptions,
   PptxImportResult,
 } from './pptxImportTypes';
+export { DEFAULT_PPTX_IMPORT_BOUNDS } from './importBounds';
 import {
   type PptxXmlNode,
   childNodes,
@@ -70,20 +72,6 @@ const OFFICE_RELATIONSHIP_NS = new Set([
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
   'http://purl.oclc.org/ooxml/officeDocument/relationships',
 ]);
-
-export const DEFAULT_PPTX_IMPORT_BOUNDS: PptxImportBounds = {
-  maxInputBytes: 64 * 1024 * 1024,
-  maxEntries: 2_048,
-  maxAggregateUncompressedBytes: 160 * 1024 * 1024,
-  maxXmlPartBytes: 4 * 1024 * 1024,
-  maxMediaPartBytes: 16 * 1024 * 1024,
-  maxAggregateMediaBytes: 64 * 1024 * 1024,
-  maxSlides: 64,
-  maxItemsPerSlide: NODESLIDE_ADD_SLIDE_ELEMENT_LIMIT,
-  maxTotalItems: 1_024,
-  maxFidelityItems: 2_048,
-  maxDurationMs: 8_000,
-};
 
 const DEFAULT_COLOR_MAP: Readonly<Record<string, string>> = {
   bg1: 'lt1',

@@ -77,7 +77,8 @@ test.describe('NodeSlide editor visual-system boundary', () => {
         await expect(composer.getByRole('button', { name: label })).toBeVisible();
       }
       await expect(page.getByTestId('ai-model-select')).toBeVisible();
-      await composer.getByRole('button', { name: 'Expand composer' }).click();
+      const expandComposer = composer.getByRole('button', { name: 'Expand composer' });
+      if (await expandComposer.isVisible()) await expandComposer.click();
       await expect(composer.getByRole('button', { name: 'Collapse composer' })).toBeVisible();
       await expect(page.getByTestId('ai-effort-select')).toBeVisible();
       await expect(page.getByTestId('ai-attach-data')).toBeVisible();

@@ -7,7 +7,6 @@ import type {
   Slide,
   SlideElement,
 } from '../../../../shared/nodeslide';
-import { downloadDeckJson } from '../slidelang/download';
 import {
   JSON_EDITOR_CHARACTER_LIMIT,
   boundedJsonPreview,
@@ -480,12 +479,14 @@ export function JsonInspector({
           type="button"
           onClick={() => {
             setActionError(null);
-            try {
-              downloadDeckJson(snapshot);
-              setActionNotice('Validated NodeSlide JSON download prepared.');
-            } catch (error) {
-              setActionError(error instanceof Error ? error.message : 'Deck JSON export failed.');
-            }
+            void import('../slidelang/download')
+              .then(({ downloadDeckJson }) => {
+                downloadDeckJson(snapshot);
+                setActionNotice('Validated NodeSlide JSON download prepared.');
+              })
+              .catch((error: unknown) => {
+                setActionError(error instanceof Error ? error.message : 'Deck JSON export failed.');
+              });
           }}
           style={actionStyle}
         >
