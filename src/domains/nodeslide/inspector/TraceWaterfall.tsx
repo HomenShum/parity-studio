@@ -11,7 +11,9 @@ import {
   ExternalLink,
   FileText,
   Globe2,
+  Image as ImageIcon,
   Maximize2,
+  ScanSearch,
   Search,
   Wrench,
 } from 'lucide-react';
@@ -33,6 +35,10 @@ import type {
   NodeSlideAgentRun,
   NodeSlideAgentSpan,
   NodeSlideAgentTelemetryPage,
+  NodeSlideEvidenceBox,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
+  NodeSlideEvidenceStepDetail,
   SourceRecord,
 } from '../../../../shared/nodeslide';
 import {
@@ -73,11 +79,13 @@ interface TraceWaterfallProps {
   telemetry: NodeSlideAgentTelemetryPage;
   messages: readonly NodeSlideAgentMessage[];
   sources: readonly SourceRecord[];
+  evidenceCaptures?: readonly NodeSlideEvidenceCaptureSummary[];
   loadingMore?: boolean;
   loadError?: string;
   compact?: boolean;
   onExpand?: () => void;
   onLoadMore?: (runId: string, beforeSequence: number) => void | Promise<void>;
+  onLoadEvidenceCapture?: (captureId: string) => Promise<NodeSlideEvidenceCaptureDetail | null>;
 }
 
 const ROW_HEIGHT = 38;
@@ -960,11 +968,13 @@ function TraceWaterfallRun({
   telemetry,
   messages,
   sources,
+  evidenceCaptures = [],
   loadingMore = false,
   loadError,
   compact = false,
   onExpand,
   onLoadMore,
+  onLoadEvidenceCapture,
 }: TraceWaterfallProps) {
   const [filter, setFilter] = useState<WaterfallFilter>('all');
   const [query, setQuery] = useState('');
@@ -978,6 +988,10 @@ function TraceWaterfallRun({
   const [expandedEventsFor, setExpandedEventsFor] = useState<string | null>(null);
   const [expandedAttributesFor, setExpandedAttributesFor] = useState<string | null>(null);
   const [expandedEvidenceFor, setExpandedEvidenceFor] = useState<string | null>(null);
+  const [selectedCaptureId, setSelectedCaptureId] = useState<string | null>(null);
+  const [captureDetail, setCaptureDetail] = useState<NodeSlideEvidenceCaptureDetail | null>(null);
+  const [captureLoading, setCaptureLoading] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const spans = useMemo(
@@ -1100,6 +1114,27 @@ function TraceWaterfallRun({
   const resolvedEvidenceIds = new Set(evidence.map((source) => source.id));
   const missingEvidenceIds = visibleEvidenceIds.filter((id) => !resolvedEvidenceIds.has(id));
   const hiddenEvidenceCount = Math.max(0, evidenceIds.length - visibleEvidenceIds.length);
+  const selectedCaptures = selected
+    ? evidenceCaptures.filter(
+        (capture) =>
+          capture.runId === run.id &&
+          (capture.spanId === selected.spanId || capture.parentSpanId === selected.spanId),
+      )
+    : [];
+  const claimBindingsBySource = useMemo(() => {
+    const bindings = new Map<
+      string,
+      Array<NonNullable<AgentTrace['claimSourceBindings']>[number]>
+    >();
+    for (const binding of trace?.claimSourceBindings ?? []) {
+      for (const sourceId of binding.sourceIds) {
+        const bucket = bindings.get(sourceId) ?? [];
+        bucket.push(binding);
+        bindings.set(sourceId, bucket);
+      }
+    }
+    return bindings;
+  }, [trace?.claimSourceBindings]);
   const selectedEvents = selected ? (eventsBySpan.get(selected.spanId) ?? []) : [];
   const showAllEvents = expandedEventsFor === selected?.spanId;
   const showAllAttributes = expandedAttributesFor === selected?.spanId;
@@ -1114,6 +1149,38 @@ function TraceWaterfallRun({
   )?.value;
   const selectedDigestAttributes =
     selected?.attributes.filter((attribute) => /digest|receipt/i.test(attribute.key)) ?? [];
+  const activeSelectedSpanId = selected?.spanId;
+
+  useEffect(() => {
+    // Reset lazy evidence whenever the active waterfall row changes.
+    void activeSelectedSpanId;
+    setSelectedCaptureId(null);
+    setCaptureDetail(null);
+    setCaptureError(null);
+    setCaptureLoading(false);
+  }, [activeSelectedSpanId]);
+
+  const openEvidenceCapture = async (capture: NodeSlideEvidenceCaptureSummary) => {
+    setSelectedCaptureId(capture.id);
+    setCaptureDetail(null);
+    setCaptureError(null);
+    if (!onLoadEvidenceCapture) {
+      setCaptureError('Visual evidence detail loading is unavailable.');
+      return;
+    }
+    setCaptureLoading(true);
+    try {
+      const detail = await onLoadEvidenceCapture(capture.id);
+      if (!detail) setCaptureError('This visual evidence record is no longer available.');
+      else setCaptureDetail(detail);
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error ? error.message : 'Visual evidence could not be loaded.',
+      );
+    } finally {
+      setCaptureLoading(false);
+    }
+  };
 
   if (compact) {
     const orderedSpans = [...spans].sort((left, right) => left.sequence - right.sequence);
@@ -1648,7 +1715,7 @@ function TraceWaterfallRun({
                       )}
                       {source.rowCount !== undefined ? <span>{source.rowCount} rows</span> : null}
                       {source.columns?.length ? <span>{source.columns.length} columns</span> : null}
-                      <span>claim/output binding not recorded</span>
+                      <ClaimBindingSummary bindings={claimBindingsBySource.get(source.id) ?? []} />
                     </footer>
                   </article>
                 ))
@@ -1666,9 +1733,227 @@ function TraceWaterfallRun({
                 </button>
               ) : null}
             </section>
+            <EvidenceCapturePanel
+              captures={selectedCaptures}
+              selectedCaptureId={selectedCaptureId}
+              detail={captureDetail}
+              loading={captureLoading}
+              error={captureError}
+              onOpen={openEvidenceCapture}
+            />
           </div>
         </aside>
       ) : null}
     </section>
   );
+}
+
+function ClaimBindingSummary({
+  bindings,
+}: {
+  bindings: NonNullable<AgentTrace['claimSourceBindings']>;
+}) {
+  if (bindings.length === 0) return <span>source record only / no claim-output binding</span>;
+  return (
+    <details className="ns-waterfall-claim-bindings">
+      <summary>
+        {bindings.length} claim/output binding{bindings.length === 1 ? '' : 's'}
+      </summary>
+      <ul>
+        {bindings.map((binding) => (
+          <li key={`${binding.operationIndex}:${binding.elementId}:${binding.claimDigest}`}>
+            <span>
+              Slide <code>{binding.slideId}</code> / element <code>{binding.elementId}</code>
+            </span>
+            <code title={binding.claimDigest}>{shortDigest(binding.claimDigest)}</code>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function EvidenceCapturePanel({
+  captures,
+  selectedCaptureId,
+  detail,
+  loading,
+  error,
+  onOpen,
+}: {
+  captures: readonly NodeSlideEvidenceCaptureSummary[];
+  selectedCaptureId: string | null;
+  detail: NodeSlideEvidenceCaptureDetail | null;
+  loading: boolean;
+  error: string | null;
+  onOpen: (capture: NodeSlideEvidenceCaptureSummary) => void | Promise<void>;
+}) {
+  return (
+    <section className="ns-waterfall-captures" data-testid="trace-visual-evidence">
+      <h3>
+        Visual evidence <span>{captures.length}</span>
+      </h3>
+      {captures.length === 0 ? (
+        <p>No screenshot or PDF capture is bound to this span.</p>
+      ) : (
+        <div className="ns-waterfall-capture-list">
+          {captures.map((capture) => (
+            <button
+              key={capture.id}
+              type="button"
+              className={selectedCaptureId === capture.id ? 'is-selected' : ''}
+              data-status={capture.status}
+              aria-pressed={selectedCaptureId === capture.id}
+              onClick={() => void onOpen(capture)}
+            >
+              <span>
+                {capture.screenshotCount > 0 ? <ImageIcon size={13} /> : <ScanSearch size={13} />}
+              </span>
+              <span>
+                <strong>{capture.sourceTitle}</strong>
+                <small>
+                  {capture.status === 'failed'
+                    ? 'Capture failed'
+                    : capture.status === 'expired'
+                      ? 'Attachment expired'
+                      : `${capture.screenshotCount} screenshot${capture.screenshotCount === 1 ? '' : 's'} / ${capture.pdfCount} PDF`}
+                </small>
+              </span>
+              <ChevronRight size={13} />
+            </button>
+          ))}
+        </div>
+      )}
+      {loading ? (
+        <p className="ns-waterfall-capture-state">Resolving selected attachment...</p>
+      ) : null}
+      {error ? <p className="ns-waterfall-capture-error">{error}</p> : null}
+      {detail ? <EvidenceCaptureDetail detail={detail} /> : null}
+    </section>
+  );
+}
+
+function EvidenceCaptureDetail({ detail }: { detail: NodeSlideEvidenceCaptureDetail }) {
+  return (
+    <article className="ns-waterfall-capture-detail" data-testid="trace-evidence-detail">
+      <header>
+        <div>
+          <strong>{detail.sourceTitle}</strong>
+          <small>
+            {detail.provider} / captured{' '}
+            <time dateTime={new Date(detail.createdAt).toISOString()}>
+              {formatDateTime(detail.createdAt)}
+            </time>
+          </small>
+        </div>
+        <a href={detail.url} target="_blank" rel="noreferrer">
+          Open source <ExternalLink size={12} />
+        </a>
+      </header>
+      {detail.status === 'expired' ? (
+        <p className="ns-waterfall-capture-error">
+          The attachment expired under the evidence retention policy. Its digest and trace binding
+          remain available.
+        </p>
+      ) : null}
+      {detail.status === 'failed' ? (
+        <p className="ns-waterfall-capture-error">
+          {detail.error ?? 'The visual capture failed; the text citation remains available.'}
+        </p>
+      ) : null}
+      <div className="ns-waterfall-capture-steps">
+        {detail.steps.map((step) => (
+          <EvidenceCaptureStep key={step.id} step={step} />
+        ))}
+      </div>
+      <footer>
+        <code title={detail.traceId}>{detail.spanId}</code>
+        {detail.contentDigest ? (
+          <code title={detail.contentDigest}>{shortDigest(detail.contentDigest)}</code>
+        ) : (
+          <span>digest not recorded</span>
+        )}
+      </footer>
+    </article>
+  );
+}
+
+function EvidenceCaptureStep({ step }: { step: NodeSlideEvidenceStepDetail }) {
+  const attachment = step.attachment;
+  return (
+    <section className="ns-waterfall-capture-step" data-status={step.status}>
+      <header>
+        <span>{step.sequence}</span>
+        <div>
+          <strong>{step.label}</strong>
+          <small>
+            {step.phase} / span <code>{step.spanId}</code>
+          </small>
+        </div>
+      </header>
+      {step.detail ? <p>{step.detail}</p> : null}
+      {attachment?.kind === 'screenshot' ? (
+        <a
+          className="ns-waterfall-shot-link"
+          href={attachment.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="ns-waterfall-shot-frame">
+            <img src={attachment.url} alt={`Captured evidence: ${step.label}`} loading="lazy" />
+            {attachment.box ? <EvidenceBoxOverlay box={attachment.box} /> : null}
+          </span>
+        </a>
+      ) : attachment?.kind === 'pdf' ? (
+        <div className="ns-waterfall-pdf-frame">
+          <object
+            data={`${attachment.url}#page=${attachment.page ?? attachment.box?.page ?? 1}`}
+            type="application/pdf"
+            aria-label={`PDF evidence: ${step.label}`}
+          >
+            <a href={attachment.url} target="_blank" rel="noreferrer">
+              Open PDF evidence
+            </a>
+          </object>
+          {attachment.box ? <EvidenceBoxOverlay box={attachment.box} /> : null}
+        </div>
+      ) : (
+        <p className="ns-waterfall-capture-state">No visual attachment was stored for this step.</p>
+      )}
+      {step.quote ? <blockquote>{step.quote}</blockquote> : null}
+      {step.selector ? (
+        <p>
+          Selector <code>{step.selector}</code>
+        </p>
+      ) : null}
+      {step.box ? (
+        <small className="ns-waterfall-box-coordinates">
+          Region x {formatDecimal(step.box.x)} / y {formatDecimal(step.box.y)} / w{' '}
+          {formatDecimal(step.box.w)} / h {formatDecimal(step.box.h)}
+          {step.box.page ? ` / page ${step.box.page}` : ''}
+        </small>
+      ) : (
+        <small className="ns-waterfall-box-coordinates">Exact region not recorded.</small>
+      )}
+    </section>
+  );
+}
+
+function EvidenceBoxOverlay({ box }: { box: NodeSlideEvidenceBox }) {
+  return (
+    <span
+      className="ns-waterfall-evidence-box"
+      aria-hidden="true"
+      style={{
+        left: `${box.x * 100}%`,
+        top: `${box.y * 100}%`,
+        width: `${box.w * 100}%`,
+        height: `${box.h * 100}%`,
+      }}
+    />
+  );
+}
+
+function formatDecimal(value: number): string {
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
 }

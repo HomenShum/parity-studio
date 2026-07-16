@@ -49,6 +49,19 @@ const nodeslideDecisionProvenanceValidator = v.union(
   }),
 );
 
+const nodeslideEvidenceBoxValidator = v.object({
+  x: v.number(),
+  y: v.number(),
+  w: v.number(),
+  h: v.number(),
+  page: v.optional(v.number()),
+});
+
+const nodeslideEvidenceViewportValidator = v.object({
+  width: v.number(),
+  height: v.number(),
+});
+
 const nodeslidePreferenceEventTypeValidator = v.union(
   v.literal('variation_generated'),
   v.literal('variation_selected'),
@@ -1386,6 +1399,64 @@ export default defineSchema({
     .index('by_run_sequence', ['runId', 'sequence'])
     .index('by_trace_sequence', ['traceId', 'sequence'])
     .index('by_deck_timestamp', ['deckId', 'timestamp']),
+
+  nodeslide_evidence_captures: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    parentSpanId: v.string(),
+    sourceId: v.string(),
+    url: v.string(),
+    goal: v.string(),
+    provider: v.string(),
+    status: v.union(v.literal('ready'), v.literal('failed'), v.literal('expired')),
+    error: v.optional(v.string()),
+    contentDigest: v.optional(v.string()),
+    stepCount: v.number(),
+    screenshotCount: v.number(),
+    pdfCount: v.number(),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_run_created', ['runId', 'createdAt'])
+    .index('by_trace_span', ['traceId', 'spanId'])
+    .index('by_source_created', ['sourceId', 'createdAt'])
+    .index('by_expiry', ['expiresAt']),
+
+  nodeslide_evidence_steps: defineTable({
+    id: v.string(),
+    captureId: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    sequence: v.number(),
+    phase: v.string(),
+    label: v.string(),
+    status: v.union(v.literal('ok'), v.literal('warning'), v.literal('error')),
+    detail: v.optional(v.string()),
+    attachmentKind: v.optional(v.union(v.literal('screenshot'), v.literal('pdf'))),
+    screenshotStorageId: v.optional(v.id('_storage')),
+    pdfStorageId: v.optional(v.id('_storage')),
+    box: v.optional(nodeslideEvidenceBoxValidator),
+    selector: v.optional(v.string()),
+    quote: v.optional(v.string()),
+    viewport: v.optional(nodeslideEvidenceViewportValidator),
+    contentDigest: v.optional(v.string()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_capture_sequence', ['captureId', 'sequence'])
+    .index('by_run_sequence', ['runId', 'sequence'])
+    .index('by_trace_span_sequence', ['traceId', 'spanId', 'sequence'])
+    .index('by_deck_created', ['deckId', 'createdAt']),
 
   nodeslide_validations: defineTable({
     id: v.string(),

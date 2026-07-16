@@ -97,13 +97,8 @@ export function VisualMaterialWorkbench({
   const actionInFlight = useRef(false);
   const validation = validateVisualMaterialSpec(AI2027_TRANSFORMATION_LADDER);
 
-  const handleAction = async (event: VisualMaterialAction) => {
-    if (
-      disabled ||
-      actionInFlight.current ||
-      event.type !== NODESLIDE_OPENUI_ACTION ||
-      event.params['specId'] !== AI2027_TRANSFORMATION_LADDER.id
-    ) {
+  const proposeVisualMaterial = async () => {
+    if (disabled || actionInFlight.current) {
       return;
     }
     actionInFlight.current = true;
@@ -119,6 +114,16 @@ export function VisualMaterialWorkbench({
       setMessage(error instanceof Error ? error.message : 'The proposal could not be created.');
       actionInFlight.current = false;
     }
+  };
+
+  const handleAction = (event: VisualMaterialAction) => {
+    if (
+      event.type !== NODESLIDE_OPENUI_ACTION ||
+      event.params['specId'] !== AI2027_TRANSFORMATION_LADDER.id
+    ) {
+      return;
+    }
+    void proposeVisualMaterial();
   };
 
   return (
@@ -141,7 +146,7 @@ export function VisualMaterialWorkbench({
           response={AI2027_OPENUI_PROGRAM}
           library={nodeslideVisualMaterialLibrary}
           isStreaming={status === 'working' || disabled}
-          onAction={(event) => void handleAction(event)}
+          onAction={handleAction}
         />
         <div className="ns-openui-host-action">
           <span>NodeSlide will create one reviewable add-slide proposal.</span>
@@ -150,12 +155,7 @@ export function VisualMaterialWorkbench({
             className="ns-button ns-button--accent"
             data-testid="openui-create-proposal"
             disabled={disabled || status === 'working' || status === 'proposed'}
-            onClick={() =>
-              void handleAction({
-                type: NODESLIDE_OPENUI_ACTION,
-                params: { specId: AI2027_TRANSFORMATION_LADDER.id },
-              })
-            }
+            onClick={() => void proposeVisualMaterial()}
           >
             <Sparkles size={13} /> Create slide proposal
           </button>

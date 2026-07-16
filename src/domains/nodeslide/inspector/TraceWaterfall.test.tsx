@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentTrace,
   NodeSlideAgentEvent,
@@ -10,6 +10,8 @@ import type {
   NodeSlideAgentRun,
   NodeSlideAgentSpan,
   NodeSlideAgentTelemetryPage,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
   SourceRecord,
 } from '../../../../shared/nodeslide';
 import {
@@ -402,6 +404,95 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
     );
     expect(legacyHtml).toContain('Run-level evidence; not span-bound');
     expect(legacyHtml).not.toContain('Bound directly to OTel span');
+  });
+
+  it('loads only the selected visual capture and overlays its exact evidence region', async () => {
+    const summary: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_fifa_home',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_1',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: source.title,
+      url: source.url as string,
+      goal: 'Preserve the cited tournament evidence',
+      provider: 'firecrawl',
+      status: 'ready',
+      contentDigest: 'sha256:capture0123456789abcdef',
+      stepCount: 1,
+      screenshotCount: 1,
+      pdfCount: 0,
+      createdAt: startedAt + 500,
+      completedAt: startedAt + 900,
+    };
+    const attachmentUrl = 'data:image/png;base64,iVBORw0KGgo=';
+    const detail: NodeSlideEvidenceCaptureDetail = {
+      ...summary,
+      steps: [
+        {
+          id: 'capture_step_1',
+          captureId: summary.id,
+          spanId: summary.spanId,
+          sequence: 1,
+          phase: 'observe',
+          label: 'Captured FIFA evidence',
+          status: 'ok',
+          attachmentKind: 'screenshot',
+          box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25 },
+          quote: 'Official tournament source snapshot.',
+          contentDigest: 'sha256:capture0123456789abcdef',
+          createdAt: summary.createdAt,
+          attachment: {
+            kind: 'screenshot',
+            url: attachmentUrl,
+            box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25 },
+          },
+        },
+      ],
+    };
+    const loadEvidence = vi.fn().mockResolvedValue(detail);
+    const claimBoundTrace: AgentTrace = {
+      ...trace,
+      claimSourceBindings: [
+        {
+          operationIndex: 0,
+          operation: 'replace_text',
+          slideId: 'slide_1',
+          elementId: 'headline_1',
+          sourceIds: [source.id],
+          claimDigest: 'sha256:claim0123456789abcdef',
+        },
+      ],
+    };
+
+    render(
+      <TraceWaterfall
+        run={run}
+        trace={claimBoundTrace}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[summary]}
+        onLoadEvidenceCapture={loadEvidence}
+      />,
+    );
+
+    expect(loadEvidence).not.toHaveBeenCalled();
+    expect(screen.getByText('1 claim/output binding')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /FIFA World Cup data/i }));
+
+    await waitFor(() => expect(loadEvidence).toHaveBeenCalledWith(summary.id));
+    expect(screen.getByTestId('trace-evidence-detail')).toBeTruthy();
+    expect(
+      screen.getByAltText('Captured evidence: Captured FIFA evidence').getAttribute('src'),
+    ).toBe(attachmentUrl);
+    const overlay = document.querySelector<HTMLElement>('.ns-waterfall-evidence-box');
+    expect(overlay?.style.left).toBe('10%');
+    expect(overlay?.style.top).toBe('20%');
+    expect(overlay?.style.width).toBe('30%');
+    expect(overlay?.style.height).toBe('25%');
   });
 
   it('shows missing bound source records instead of silently dropping citations', () => {

@@ -245,7 +245,11 @@ export function createAgentSessionSecret(): string {
 function browserStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage;
+    // Agent capabilities (owner keys and Turbo delegation tokens) are intentionally
+    // scoped to the current browser session. Keeping them out of localStorage makes
+    // "allow this session" literal: reloads recover durable jobs, while closing the
+    // tab/session drops the bearer capabilities instead of leaving them on disk.
+    return window.sessionStorage;
   } catch {
     return null;
   }

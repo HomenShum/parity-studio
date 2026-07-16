@@ -692,6 +692,82 @@ export interface NodeSlideAgentTelemetryPage {
   totalRecorded: number;
 }
 
+export type NodeSlideEvidenceCaptureStatus = 'ready' | 'failed' | 'expired';
+export type NodeSlideEvidenceStepStatus = 'ok' | 'warning' | 'error';
+export type NodeSlideEvidenceAttachmentKind = 'screenshot' | 'pdf';
+
+/** Normalized evidence region. Coordinates are 0..1 in the rendered screenshot or PDF page. */
+export interface NodeSlideEvidenceBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  page?: number;
+}
+
+export interface NodeSlideEvidenceViewport {
+  width: number;
+  height: number;
+}
+
+/** Lightweight capture row. It never contains storage IDs or signed attachment URLs. */
+export interface NodeSlideEvidenceCaptureSummary {
+  id: string;
+  deckId: string;
+  runId: string;
+  traceId: string;
+  spanId: string;
+  parentSpanId: string;
+  sourceId: string;
+  sourceTitle: string;
+  url: string;
+  goal: string;
+  provider: string;
+  status: NodeSlideEvidenceCaptureStatus;
+  error?: string;
+  contentDigest?: string;
+  stepCount: number;
+  screenshotCount: number;
+  pdfCount: number;
+  createdAt: number;
+  completedAt?: number;
+  expiresAt?: number;
+}
+
+export interface NodeSlideEvidenceStepSummary {
+  id: string;
+  captureId: string;
+  spanId: string;
+  sequence: number;
+  phase: string;
+  label: string;
+  status: NodeSlideEvidenceStepStatus;
+  detail?: string;
+  attachmentKind?: NodeSlideEvidenceAttachmentKind;
+  box?: NodeSlideEvidenceBox;
+  selector?: string;
+  quote?: string;
+  viewport?: NodeSlideEvidenceViewport;
+  contentDigest?: string;
+  createdAt: number;
+}
+
+export interface NodeSlideEvidenceAttachment {
+  kind: NodeSlideEvidenceAttachmentKind;
+  url: string;
+  box?: NodeSlideEvidenceBox;
+  page?: number;
+}
+
+export interface NodeSlideEvidenceStepDetail extends NodeSlideEvidenceStepSummary {
+  attachment?: NodeSlideEvidenceAttachment;
+}
+
+/** Owner-only detail resolved on demand for the single selected capture. */
+export interface NodeSlideEvidenceCaptureDetail extends NodeSlideEvidenceCaptureSummary {
+  steps: NodeSlideEvidenceStepDetail[];
+}
+
 export type NodeSlideAgentToolState =
   | 'input-streaming'
   | 'input-available'

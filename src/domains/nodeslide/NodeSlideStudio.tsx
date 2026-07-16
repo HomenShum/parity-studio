@@ -18,6 +18,8 @@ import type {
   NodeSlideAgentTelemetryPage,
   NodeSlideEditorCapabilityRegistry,
   NodeSlideEditorCommandId,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
   NodeSlidePublication,
   NodeSlideWorkspace,
   PatchOperation,
@@ -277,6 +279,14 @@ interface NodeSlideGeneratedApi {
         limit?: number;
       },
       NodeSlideAgentTelemetryPage
+    >;
+    listEvidenceCaptureSummaries: PublicQuery<
+      { deckId: string; ownerAccessKey: string; runId: string; limit?: number },
+      NodeSlideEvidenceCaptureSummary[]
+    >;
+    getEvidenceCaptureDetail: PublicQuery<
+      { deckId: string; ownerAccessKey: string; captureId: string },
+      NodeSlideEvidenceCaptureDetail | null
     >;
     cancelAgentRun: PublicMutation<
       { deckId: string; ownerAccessKey: string; runId: string },
@@ -978,6 +988,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         }
       : 'skip',
   );
+  const evidenceCaptures = useQuery(
+    nodeslideApi.nodeslide.listEvidenceCaptureSummaries,
+    activeDeckId && ownerAccessKey && selectedTelemetryRunId
+      ? {
+          deckId: activeDeckId,
+          ownerAccessKey,
+          runId: selectedTelemetryRunId,
+          limit: 20,
+        }
+      : 'skip',
+  );
   const agentTelemetry = useMemo(
     () =>
       selectedTelemetryRunId
@@ -1009,6 +1030,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       }
     },
     [activeDeckId, convex, ownerAccessKey, telemetryLoadingRunId],
+  );
+  const loadEvidenceCapture = useCallback(
+    async (captureId: string) => {
+      if (!activeDeckId || !ownerAccessKey) return null;
+      return await convex.query(nodeslideApi.nodeslide.getEvidenceCaptureDetail, {
+        deckId: activeDeckId,
+        ownerAccessKey,
+        captureId,
+      });
+    },
+    [activeDeckId, convex, ownerAccessKey],
   );
   const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
   const localReceiptMarker =
@@ -4153,6 +4185,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           aiAgentActivity={aiAgentActivity}
           agentRuns={agentRuns ?? []}
           agentMessages={agentMessages ?? []}
+          evidenceCaptures={evidenceCaptures ?? []}
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           approvalMode={activeApproval.mode}
@@ -4169,6 +4202,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             setTelemetryLoadError(null);
           }}
           onLoadMoreAgentTelemetry={loadOlderAgentTelemetry}
+          onLoadEvidenceCapture={loadEvidenceCapture}
           {...(agentTelemetry ? { agentTelemetry } : {})}
           aiCommentContext={aiCommentContext}
           previewedPatchId={previewedPatchId}

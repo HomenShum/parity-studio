@@ -5,8 +5,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useNodeSlideComposerSession } from '../composer/nodeSlideComposerSession';
 import { AgentSessionProvider, useAgentSession } from './AgentSessionProvider';
+import { agentSessionStorageKey } from './agentSessionState';
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
 afterEach(cleanup);
 
 describe('AgentSessionProvider', () => {
@@ -65,6 +69,18 @@ describe('AgentSessionProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revoke auto-apply grant' }));
     expect(screen.getByTestId('approval-mode')).toHaveTextContent('review');
     expect(screen.getByTestId('approval-grant')).toHaveTextContent('none');
+  });
+
+  it('keeps bearer capabilities in session storage instead of persistent local storage', () => {
+    renderSession();
+    fireEvent.click(screen.getByRole('button', { name: 'Install auto-apply grant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare edit job' }));
+
+    const storedSession = window.sessionStorage.getItem(agentSessionStorageKey('shared-session'));
+    expect(window.sessionStorage.length).toBeGreaterThan(0);
+    expect(storedSession).toContain('delegation-token-a');
+    expect(storedSession).toContain('deck-owner-key');
+    expect(window.localStorage.length).toBe(0);
   });
 });
 

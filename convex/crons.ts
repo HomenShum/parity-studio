@@ -24,4 +24,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  'prune expired NodeSlide visual evidence',
+  { hours: 1 },
+  internal.nodeslide.pruneExpiredEvidenceCapturesInternal,
+  {},
+);
+
 export default crons;

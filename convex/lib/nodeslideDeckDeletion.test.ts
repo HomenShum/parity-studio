@@ -65,6 +65,7 @@ class MemoryDatabase {
   readonly collectCalls: string[] = [];
   readonly takeCalls: Array<{ tableName: string; count: number }> = [];
   readonly writes: Array<{ kind: 'delete'; tableName: string; rowId: string }> = [];
+  readonly storageDeletes: string[] = [];
 
   query(tableName: string): MemoryQuery {
     return new MemoryQuery(this, tableName);
@@ -142,7 +143,14 @@ function seedDeck(
 }
 
 function mutationContext(database: MemoryDatabase): MutationCtx {
-  return { db: database } as unknown as MutationCtx;
+  return {
+    db: database,
+    storage: {
+      delete: async (storageId: string) => {
+        database.storageDeletes.push(storageId);
+      },
+    },
+  } as unknown as MutationCtx;
 }
 
 describe('deleteDeck', () => {
@@ -278,10 +286,16 @@ describe('deleteDeck', () => {
       database.seed(tableName, {
         id: `${tableName}:target`,
         [key]: key === 'tenantId' ? 'deck:target:tenant' : 'deck:target',
+        ...(tableName === 'nodeslide_evidence_steps'
+          ? { screenshotStorageId: 'storage:target' }
+          : {}),
       });
       database.seed(tableName, {
         id: `${tableName}:other`,
         [key]: key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+        ...(tableName === 'nodeslide_evidence_steps'
+          ? { screenshotStorageId: 'storage:other' }
+          : {}),
       });
     }
 
@@ -311,6 +325,7 @@ describe('deleteDeck', () => {
     expect(database.rows('projects')).toEqual([other.project]);
     expect(database.rows('nodeslide_decks')).not.toContain(target.deck);
     expect(database.rows('projects')).not.toContain(target.project);
+    expect(database.storageDeletes).toEqual(['storage:target']);
   });
 
   it('rejects an oversized record set before the first write', async () => {

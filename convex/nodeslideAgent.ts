@@ -53,6 +53,7 @@ import {
   NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
   planNodeSlideEditShadow,
 } from './lib/nodeslideEditShadowPlanner';
+import { captureNodeSlideWebEvidence } from './lib/nodeslideEvidenceCapture';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
 import { nodeSlideJobRequestDigest } from './lib/nodeslideJobState';
@@ -345,18 +346,19 @@ export const proposeEdit = action({
             references: search.references,
           });
         }
+        const webSourceInputs = search.references
+          .filter((reference) => reference.mediaType === 'website')
+          .slice(0, 10)
+          .map((reference) => ({
+            title: reference.title,
+            url: reference.sourceUrl,
+            snippet: reference.snippet || `Search result from ${reference.provider}.`,
+            provider: reference.provider,
+          }));
         const webRefs = await ctx.runMutation(nodeslideInternal.attachWebSourcesInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
-          sources: search.references
-            .filter((reference) => reference.mediaType === 'website')
-            .slice(0, 10)
-            .map((reference) => ({
-              title: reference.title,
-              url: reference.sourceUrl,
-              snippet: reference.snippet || `Search result from ${reference.provider}.`,
-              provider: reference.provider,
-            })),
+          sources: webSourceInputs,
         });
         webSourceIds = webRefs.map((reference: { id: string }) => reference.id);
         if (webSourceIds.length === 0) {
@@ -365,16 +367,31 @@ export const proposeEdit = action({
             'The web search returned no usable sources. No proposal was created.',
           );
         }
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
-          deckId: args.deckId,
-          ownerAccessKey: args.ownerAccessKey,
-          runId,
-          status: 'planning',
-          message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
-          role: 'tool',
-          toolName: 'source_snapshot',
-          sourceIds: webSourceIds,
-        });
+        const sourceSnapshotReceipt = await ctx.runMutation(
+          nodeslideInternal.advanceAgentRunInternal,
+          {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
+            role: 'tool',
+            toolName: 'source_snapshot',
+            sourceIds: webSourceIds,
+          },
+        );
+        if (sourceSnapshotReceipt?.spanId) {
+          await captureWebSourcesBestEffort(ctx, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            parentSpanId: sourceSnapshotReceipt.spanId,
+            sources: webRefs.flatMap((reference: { id: string }, index: number) => {
+              const input = webSourceInputs[index];
+              return input ? [{ ...input, sourceId: reference.id }] : [];
+            }),
+          });
+        }
         workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
@@ -1656,6 +1673,91 @@ async function appendNodeSlideWebJournalReceipt(
       },
     },
   });
+}
+
+async function captureWebSourcesBestEffort(
+  ctx: ActionCtx,
+  args: {
+    deckId: string;
+    ownerAccessKey: string;
+    runId: string;
+    parentSpanId: string;
+    sources: Array<{
+      sourceId: string;
+      title: string;
+      url: string;
+      snippet: string;
+      provider: string;
+    }>;
+  },
+): Promise<void> {
+  const apiKey = process.env['FIRECRAWL_API_KEY']?.trim();
+  if (!apiKey) return;
+  const targets = args.sources.slice(0, 3);
+  const captures = await Promise.allSettled(
+    targets.map(async (source) => ({
+      source,
+      capture: await captureNodeSlideWebEvidence({ url: source.url, apiKey }),
+    })),
+  );
+  for (const result of captures) {
+    if (result.status === 'rejected') continue;
+    const { source, capture } = result.value;
+    let screenshotStorageId: string | undefined;
+    try {
+      if (capture.screenshot) {
+        screenshotStorageId = String(
+          await ctx.storage.store(
+            new Blob([new Uint8Array(capture.screenshot.bytes).buffer], {
+              type: capture.screenshot.mimeType,
+            }),
+          ),
+        );
+      }
+      const captureId = nodeslideStableId(
+        'evidence_capture',
+        args.runId,
+        source.sourceId,
+        capture.contentDigest ?? 'failed',
+      );
+      await ctx.runMutation(nodeslideInternal.recordEvidenceCaptureInternal, {
+        id: captureId,
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId: args.runId,
+        parentSpanId: args.parentSpanId,
+        sourceId: source.sourceId,
+        url: source.url,
+        goal: `Preserve visual evidence for ${source.title}`,
+        provider: capture.provider,
+        status: capture.ok ? 'ready' : 'failed',
+        ...(capture.error ? { error: capture.error } : {}),
+        ...(capture.contentDigest ? { contentDigest: capture.contentDigest } : {}),
+        startedAt: capture.startedAt,
+        completedAt: capture.completedAt,
+        steps: [
+          {
+            phase: capture.ok ? 'observe' : 'error',
+            label: capture.ok
+              ? screenshotStorageId
+                ? `Captured ${source.title}`
+                : `Captured source text for ${source.title}; screenshot unavailable`
+              : `Could not capture ${source.title}`,
+            status: capture.ok ? (screenshotStorageId ? 'ok' : 'warning') : 'error',
+            ...(capture.error ? { detail: capture.error } : {}),
+            ...(screenshotStorageId ? { screenshotStorageId } : {}),
+            quote: source.snippet.slice(0, 1000),
+            ...(capture.contentDigest ? { contentDigest: capture.contentDigest } : {}),
+            startedAt: capture.startedAt,
+            completedAt: capture.completedAt,
+          },
+        ],
+      });
+    } catch {
+      // Visual evidence is additive. Search citations remain usable and the proposal path must not
+      // fail because an attachment provider or storage write was unavailable.
+    }
+  }
 }
 
 function extractPlan(

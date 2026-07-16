@@ -40,6 +40,8 @@ import {
   type NodeSlideAgentMessage,
   type NodeSlideAgentRun,
   type NodeSlideAgentTelemetryPage,
+  type NodeSlideEvidenceCaptureDetail,
+  type NodeSlideEvidenceCaptureSummary,
   type SourceRecord,
   type ValidationIssue,
   type ValidationResult,
@@ -73,10 +75,12 @@ interface TraceInspectorProps {
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   sources?: readonly SourceRecord[];
+  evidenceCaptures?: readonly NodeSlideEvidenceCaptureSummary[];
   agentTelemetryLoadingMore?: boolean;
   agentTelemetryLoadError?: string;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
+  onLoadEvidenceCapture?: (captureId: string) => Promise<NodeSlideEvidenceCaptureDetail | null>;
 }
 
 const DENSITY_KEY = 'ns-trace-density';
@@ -114,10 +118,12 @@ export function TraceInspector({
   agentTelemetry,
   agentTelemetryRunId,
   sources = [],
+  evidenceCaptures = [],
   agentTelemetryLoadingMore = false,
   agentTelemetryLoadError,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
+  onLoadEvidenceCapture,
 }: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
   const latestValidation = useMemo(
@@ -328,6 +334,7 @@ export function TraceInspector({
                       telemetry={selectedTelemetry}
                       messages={agentMessages}
                       sources={sources}
+                      evidenceCaptures={evidenceCaptures}
                       loadingMore={agentTelemetryLoadingMore}
                       compact={!expanded}
                       onExpand={openExpanded}
@@ -335,6 +342,7 @@ export function TraceInspector({
                       {...(onLoadMoreAgentTelemetry
                         ? { onLoadMore: onLoadMoreAgentTelemetry }
                         : {})}
+                      {...(onLoadEvidenceCapture ? { onLoadEvidenceCapture } : {})}
                     />
                     <details className="ns-trace-custody-disclosure">
                       <summary>Chain of custody and countersigned receipt</summary>

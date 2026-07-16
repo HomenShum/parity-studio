@@ -25,6 +25,8 @@ import {
 import {
   type KeyboardEvent,
   type Ref,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -77,7 +79,6 @@ import {
   useSessionExternalConsent,
 } from '../externalProviderConsent';
 import { sanitizeNodeSlideUserError } from '../nodeslideUserError';
-import { VisualMaterialWorkbench } from '../openui/VisualMaterialWorkbench';
 import type { AgentSessionApprovalMode } from '../session';
 import {
   NodeSlideThreadMessages,
@@ -106,6 +107,12 @@ import {
   NODESLIDE_WEB_RESEARCH_CONSENT,
 } from './reviewTypes';
 import { nodeSlideScopeLabel } from './scopePresentation';
+
+const VisualMaterialWorkbench = lazy(() =>
+  import('../openui/VisualMaterialWorkbench').then((module) => ({
+    default: module.VisualMaterialWorkbench,
+  })),
+);
 
 export {
   AI_DRAFTING_PHASE_MS,
@@ -391,13 +398,13 @@ export function AiInspector<CommandId extends string = string>({
       if (
         !byId.has(patch.id) &&
         ['draft', 'validating', 'ready', 'stale'].includes(patch.status) &&
-        patch.source === 'agent'
+        (patch.source === 'agent' || patch.id === previewedPatchId)
       ) {
         byId.set(patch.id, patch);
       }
     }
     return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
-  }, [patches]);
+  }, [patches, previewedPatchId]);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     () => proposals[0]?.id ?? null,
   );
@@ -946,6 +953,31 @@ export function AiInspector<CommandId extends string = string>({
         messages={threadMessages}
       >
         <ThreadPrimitive.Root className="ns-agent-thread" data-testid="assistant-ui-thread">
+          {materialWorkbenchOpen && onProposeVisualMaterial ? (
+            <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
+              <header>
+                <span>
+                  <Layers3 size={12} /> Visual material
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMaterialWorkbenchOpen(false)}
+                  aria-label="Close visual material tool"
+                >
+                  <X size={12} />
+                </button>
+              </header>
+              <Suspense fallback={<div className="ns-openui-loading">Loading visual lab…</div>}>
+                <VisualMaterialWorkbench
+                  deck={deck}
+                  slide={slide}
+                  disabled={Boolean(visibleDurableRun) || isSubmitting || hasReviewableProposal}
+                  onPropose={onProposeVisualMaterial}
+                />
+              </Suspense>
+            </section>
+          ) : null}
+
           <ThreadPrimitive.Viewport
             className="ns-ai-v3-review-scroll"
             data-testid="ai-review-scroll"
@@ -954,29 +986,6 @@ export function AiInspector<CommandId extends string = string>({
             role="log"
             autoScroll={!activityAutoScrollPaused && activityHasScrollTarget}
           >
-            {materialWorkbenchOpen && onProposeVisualMaterial ? (
-              <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
-                <header>
-                  <span>
-                    <Layers3 size={12} /> Visual material
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setMaterialWorkbenchOpen(false)}
-                    aria-label="Close visual material tool"
-                  >
-                    <X size={12} />
-                  </button>
-                </header>
-                <VisualMaterialWorkbench
-                  deck={deck}
-                  slide={slide}
-                  disabled={Boolean(visibleDurableRun) || isSubmitting || hasReviewableProposal}
-                  onPropose={onProposeVisualMaterial}
-                />
-              </section>
-            ) : null}
-
             {!visibleAsk &&
             !resolvedActivity &&
             !activeTrace &&

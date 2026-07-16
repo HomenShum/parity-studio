@@ -239,6 +239,32 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.getByTestId('proposal-reject')).toBeEnabled();
   });
 
+  it('surfaces the active human-origin preview in the AI review stream without widening the queue', () => {
+    const snapshot = fixture('human-preview-review');
+    const humanPreview = {
+      ...proposal(snapshot),
+      id: 'patch-human-preview',
+      source: 'human' as const,
+      summary: 'Review the OpenUI add-slide candidate.',
+    };
+    const unrelatedHumanPatch = {
+      ...humanPreview,
+      id: 'patch-unrelated-human',
+      summary: 'Do not surface this unrelated human patch.',
+    };
+
+    renderInspector(snapshot, {
+      patches: [unrelatedHumanPatch, humanPreview],
+      previewedPatchId: humanPreview.id,
+    });
+
+    expect(screen.getAllByTestId('proposal-card')).toHaveLength(1);
+    expect(screen.getByText(humanPreview.summary)).toBeVisible();
+    expect(screen.queryByText(unrelatedHumanPatch.summary)).not.toBeInTheDocument();
+    expect(screen.getByTestId('proposal-accept')).toBeEnabled();
+    expect(screen.getByTestId('proposal-reject')).toBeEnabled();
+  });
+
   it('makes the typing target and write authority explicit before a deictic element request', async () => {
     const snapshot = fixture('explicit-write-authority');
     const user = userEvent.setup();
