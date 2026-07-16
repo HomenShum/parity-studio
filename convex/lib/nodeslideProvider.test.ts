@@ -139,6 +139,31 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     });
   });
 
+  it('binds the OpenRouter endpoint price ceiling without losing routing or JSON mode', () => {
+    const maxPrice = { prompt: 1.4, completion: 4.4 };
+    expect(
+      nodeSlideStructuredOutputPayload(
+        { model: NODESLIDE_EDIT_MODEL, provider: { data_collection: 'deny' } },
+        request.jsonSchema,
+        'json_schema',
+        maxPrice,
+      ),
+    ).toMatchObject({
+      provider: { data_collection: 'deny', max_price: maxPrice },
+      response_format: { type: 'json_schema' },
+    });
+    expect(
+      nodeSlideStructuredOutputPayload(
+        { model: NODESLIDE_EDIT_MODEL, provider: { data_collection: 'deny' } },
+        undefined,
+        'prompt',
+        maxPrice,
+      ),
+    ).toMatchObject({
+      provider: { data_collection: 'deny', max_price: maxPrice },
+    });
+  });
+
   it('makes exactly one repair completion after malformed JSON', async () => {
     const complete = vi
       .fn<NodeSlideCompletion>()

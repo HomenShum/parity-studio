@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { ThreadPrimitive, type ToolCallMessagePart } from '@assistant-ui/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import {
+  type AppendMessage,
+  ComposerPrimitive,
+  ThreadPrimitive,
+  type ToolCallMessagePart,
+} from '@assistant-ui/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeSlideAgentMessage, NodeSlideAgentRun } from '../../../../shared/nodeslide';
 import {
   NodeSlideThreadMessages,
   NodeSlideThreadRuntimeProvider,
   buildNodeSlideThreadMessages,
+  computeNodeSlideVirtualRange,
 } from './NodeSlideAgentThread';
 
 const run: NodeSlideAgentRun = {
@@ -48,6 +54,57 @@ function firstToolCall(messages: ReturnType<typeof buildNodeSlideThreadMessages>
 }
 
 describe('NodeSlide assistant-ui thread adapter', () => {
+  it('exposes a real assistant-ui send capability instead of a display-only no-op', async () => {
+    const onNew = vi.fn<(message: AppendMessage) => Promise<void>>(async (_message) => undefined);
+    render(
+      <NodeSlideThreadRuntimeProvider isRunning={false} messages={[]} onNew={onNew}>
+        <ThreadPrimitive.Root>
+          <ComposerPrimitive.Root>
+            <ComposerPrimitive.Input aria-label="Runtime instruction" />
+            <ComposerPrimitive.Send>Send</ComposerPrimitive.Send>
+          </ComposerPrimitive.Root>
+        </ThreadPrimitive.Root>
+      </NodeSlideThreadRuntimeProvider>,
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Runtime instruction' }), {
+      target: { value: 'Tighten the narrative.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(onNew).toHaveBeenCalledTimes(1));
+    expect(onNew.mock.calls[0]?.[0]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'text', text: 'Tighten the narrative.' }],
+    });
+  });
+
+  it('remeasures a dynamic row when calculating a ResizeObserver-aware virtual window', () => {
+    const messageIds = Array.from({ length: 100 }, (_, index) => `message-${index}`);
+    const baseline = computeNodeSlideVirtualRange({
+      messageIds,
+      measuredHeights: new Map(),
+      scrollTop: 5_000,
+      viewportHeight: 600,
+      estimatedHeight: 100,
+      overscan: 0,
+    });
+    const measured = new Map<string, number>([['message-10', 300]]);
+    const remeasured = computeNodeSlideVirtualRange({
+      messageIds,
+      measuredHeights: measured,
+      scrollTop: 5_200,
+      viewportHeight: 600,
+      estimatedHeight: 100,
+      overscan: 0,
+    });
+
+    expect(baseline.end - baseline.start).toBeLessThan(10);
+    expect(remeasured.totalHeight).toBe(baseline.totalHeight + 200);
+    expect(remeasured.start).toBe(baseline.start);
+    expect(remeasured.beforeHeight).toBe(baseline.beforeHeight + 200);
+  });
+
   it('projects a durable run as one tool call with a recursively renderable child conversation', () => {
     const projected = buildNodeSlideThreadMessages(
       [
@@ -147,12 +204,70 @@ describe('NodeSlide assistant-ui thread adapter', () => {
       </NodeSlideThreadRuntimeProvider>,
     );
 
+    expect(screen.getAllByTestId('agent-tool')[0]?.querySelector('button')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    openRunDetails();
     expect(screen.getByText('Run details')).toBeVisible();
     expect(screen.getByText('1 step · read-only')).toBeVisible();
     expect(screen.getByText('Web search')).toBeVisible();
     expect(screen.getByText('A validated profile update is ready for review.')).toBeVisible();
     expect(screen.getAllByTestId('agent-tool')).toHaveLength(2);
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it.each([4, 10])(
+    'renders every row and accessible position for a bounded %i-step run',
+    (stepCount) => {
+      const steps = linearRunSteps(stepCount);
+      const projected = buildNodeSlideThreadMessages(
+        [
+          message({ id: `bounded-user-${stepCount}`, role: 'user', content: run.instruction }),
+          ...steps,
+        ],
+        [{ ...run, status: 'planning' }],
+      );
+
+      renderThread(projected);
+      openRunDetails();
+
+      const journal = screen.getByTestId('agent-nested-messages');
+      const rows = within(journal).getAllByRole('listitem');
+      expect(journal).toHaveAttribute('data-total-steps', String(stepCount));
+      expect(journal).toHaveAttribute('data-visible-steps', String(stepCount));
+      expect(rows).toHaveLength(stepCount);
+      expect(rows[0]).toHaveAttribute('aria-posinset', '1');
+      expect(rows.at(-1)).toHaveAttribute('aria-posinset', String(stepCount));
+      expect(rows.at(-1)).toHaveAttribute('aria-setsize', String(stepCount));
+      expect(screen.queryByTestId('agent-nested-show-more')).not.toBeInTheDocument();
+    },
+  );
+
+  it('mounts only the first page of a 100-step nested run and reveals more on demand', () => {
+    const steps = linearRunSteps(100);
+    const projected = buildNodeSlideThreadMessages(
+      [message({ id: 'long-user', role: 'user', content: run.instruction }), ...steps],
+      [{ ...run, status: 'planning' }],
+    );
+
+    renderThread(projected);
+    openRunDetails();
+
+    const journal = screen.getByTestId('agent-nested-messages');
+    expect(journal).toHaveAttribute('data-total-steps', '100');
+    expect(journal).toHaveAttribute('data-visible-steps', '20');
+    expect(within(journal).getAllByRole('listitem')).toHaveLength(20);
+    expect(within(journal).getAllByRole('listitem').at(-1)).toHaveAttribute('aria-posinset', '20');
+    expect(within(journal).getAllByRole('listitem').at(-1)).toHaveAttribute('aria-setsize', '100');
+
+    const showMore = screen.getByTestId('agent-nested-show-more');
+    expect(showMore).toHaveTextContent('Show 20 more (20 of 100 shown)');
+    fireEvent.click(showMore);
+
+    expect(journal).toHaveAttribute('data-visible-steps', '40');
+    expect(within(journal).getAllByRole('listitem')).toHaveLength(40);
+    expect(showMore).toHaveTextContent('Show 20 more (40 of 100 shown)');
   });
 
   it('keeps the A03 final answer visible while U07 completed tool activity stays collapsed', () => {
@@ -291,6 +406,7 @@ describe('NodeSlide assistant-ui thread adapter', () => {
       </NodeSlideThreadRuntimeProvider>,
     );
 
+    openRunDetails();
     expect(
       screen.getByText(/Researcher.*Executor.*Fact checker.*6 steps.*read-only/),
     ).toBeVisible();
@@ -336,6 +452,7 @@ describe('NodeSlide assistant-ui thread adapter', () => {
       </NodeSlideThreadRuntimeProvider>,
     );
 
+    openRunDetails();
     expect(screen.getByText('Planner → Executor → Validator · 2 steps · read-only')).toBeVisible();
     expect(screen.getByText('Validator')).toBeVisible();
   });
@@ -347,6 +464,17 @@ describe('NodeSlide assistant-ui thread adapter', () => {
           id: 'parallel-user',
           role: 'user',
           content: 'Continue until the deck is presentation-ready.',
+        }),
+        message({
+          id: 'parallel-research',
+          role: 'tool',
+          toolName: 'delegate_researcher',
+          toolCallId: 'delegate-research',
+          agentRole: 'researcher',
+          branchId: 'presentation-research',
+          branchLabel: 'Context research',
+          content: 'Reviewed the scoped deck context.',
+          toolActivity: { state: 'output-available' },
         }),
         message({
           id: 'parallel-plan',
@@ -390,9 +518,10 @@ describe('NodeSlide assistant-ui thread adapter', () => {
 
     const invocation = firstToolCall(projected);
     expect(invocation.args).toMatchObject({
-      __nodeslideStepCount: '3',
-      __nodeslideBranchCount: '2',
+      __nodeslideStepCount: '4',
+      __nodeslideBranchCount: '3',
       __nodeslideParallelGroupCount: '1',
+      __nodeslideParallelBranchCount: '2',
     });
 
     render(
@@ -403,8 +532,45 @@ describe('NodeSlide assistant-ui thread adapter', () => {
       </NodeSlideThreadRuntimeProvider>,
     );
 
-    expect(screen.getByText('Agent activity · 3 steps · 2 parallel branches')).toBeVisible();
+    expect(screen.getByText('Agent activity · 4 steps · 2 parallel branches')).toBeVisible();
+    const parallelCard = screen.getByTestId('parallel-run-card');
+    expect(within(parallelCard).getByText('Narrative')).toBeVisible();
+    expect(within(parallelCard).getByText('Evidence')).toBeVisible();
+    expect(within(parallelCard).getByText('Merge')).toBeVisible();
+    expect(within(parallelCard).getByText('Awaiting review')).toBeVisible();
     expect(screen.getByText('Both branches are ready for review.')).toBeVisible();
     expect(screen.getByText('Executor')).toBeVisible();
   });
 });
+
+function renderThread(messages: ReturnType<typeof buildNodeSlideThreadMessages>) {
+  return render(
+    <NodeSlideThreadRuntimeProvider isRunning={false} messages={messages}>
+      <ThreadPrimitive.Root>
+        <NodeSlideThreadMessages />
+      </ThreadPrimitive.Root>
+    </NodeSlideThreadRuntimeProvider>,
+  );
+}
+
+function openRunDetails() {
+  const runTool = screen.getAllByTestId('agent-tool')[0];
+  const trigger = runTool ? within(runTool).getByRole('button') : null;
+  if (!trigger) throw new Error('Expected an agent run disclosure button.');
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+}
+
+function linearRunSteps(stepCount: number): NodeSlideAgentMessage[] {
+  return Array.from({ length: stepCount }, (_, index) =>
+    message({
+      id: `nested-step-${stepCount}-${index + 1}`,
+      ...(index > 0 ? { parentMessageId: `nested-step-${stepCount}-${index}` } : {}),
+      role: 'tool',
+      content: `Running nested step ${index + 1}.`,
+      toolName: `step_${index + 1}`,
+      toolCallId: `tool-${stepCount}-${index + 1}`,
+      toolActivity: { state: 'input-available', input: { step: index + 1 } },
+      createdAt: 1_001 + index,
+    }),
+  );
+}

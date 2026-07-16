@@ -238,9 +238,11 @@ export interface NodeSlidePricedModelMetadata {
   readonly outputMicroUsdPerMillionTokens: number;
   readonly providerContextWindowTokens: number;
   readonly providerMaxOutputTokens: number;
-  readonly source: 'nebius_token_factory_model_catalog';
-  readonly sourceUrl: 'https://tokenfactory.nebius.com/proxy/inference/private/v1/models_info';
-  readonly verifiedAt: '2026-07-16T01:22:40Z';
+  readonly source: 'nebius_token_factory_model_catalog' | 'openrouter_request_price_ceiling';
+  readonly sourceUrl:
+    | 'https://tokenfactory.nebius.com/proxy/inference/private/v1/models_info'
+    | 'https://openrouter.ai/docs/guides/routing/provider-selection';
+  readonly verifiedAt: '2026-07-16T01:22:40Z' | '2026-07-16T20:30:00Z';
 }
 
 export interface NodeSlideZeroCostModelMetadata {
@@ -293,10 +295,17 @@ export const NODESLIDE_MODEL_PRICING = {
   },
   'z-ai/glm-5.2': {
     version: NODESLIDE_MODEL_PRICING_VERSION,
-    kind: 'unknown',
+    kind: 'priced',
     modelId: 'z-ai/glm-5.2',
-    reason: 'provider_pricing_not_pinned',
-    source: 'openrouter_dynamic_catalog',
+    currency: 'USD',
+    billingUnit: 'million_tokens',
+    inputMicroUsdPerMillionTokens: 1_400_000,
+    outputMicroUsdPerMillionTokens: 4_400_000,
+    providerContextWindowTokens: 1_048_576,
+    providerMaxOutputTokens: 131_072,
+    source: 'openrouter_request_price_ceiling',
+    sourceUrl: 'https://openrouter.ai/docs/guides/routing/provider-selection',
+    verifiedAt: '2026-07-16T20:30:00Z',
   },
   'anthropic/claude-sonnet-5': {
     version: NODESLIDE_MODEL_PRICING_VERSION,

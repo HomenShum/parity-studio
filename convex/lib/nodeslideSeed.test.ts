@@ -14,8 +14,19 @@ import { validateNodeSlideSnapshot } from './nodeslideValidation';
 describe('NodeSlide seed', () => {
   it('builds a clean canonical golden snapshot', () => {
     const snapshot = buildGoldenNodeSlide('theme-and-repair-test', 1_000).snapshot;
+    const browserValidation = validateSnapshot(snapshot);
 
     expect(validateNodeSlideSnapshot(snapshot, 1_000).issues).toEqual([]);
+    expect(
+      browserValidation.publishOk,
+      JSON.stringify(
+        browserValidation.issues.map((issue) => ({
+          ...issue,
+          element: snapshot.elements.find((element) => element.id === issue.elementId),
+        })),
+      ),
+    ).toBe(true);
+    expect(browserValidation.issues.map((issue) => issue.code)).toEqual(['export']);
     expect(snapshot.elements.map((element) => element.kind)).toEqual(
       expect.arrayContaining(['text', 'shape', 'image', 'chart', 'math']),
     );
@@ -107,6 +118,115 @@ describe('NodeSlide seed', () => {
       'Name the owner',
       'Review the evidence',
     ]);
+  });
+
+  it('bounds live-model copy to the text capacity of the editable slide layout', () => {
+    const brief = {
+      prompt: 'Create a six-slide product decision story.',
+      audience: 'Product leadership',
+      purpose: 'Choose a release gate',
+      successCriteria: ['Exactly 6 slides in the requested narrative'],
+    };
+    const rawSpec = {
+      title: 'Bounded copy',
+      narrative: ['Decide'],
+      slides: Array.from({ length: 6 }, (_, index) => ({
+        title: `Slide ${index + 1}`,
+        section: 'Decision',
+        headline: 'H'.repeat(180),
+        body: 'B'.repeat(360),
+        bullets: ['C'.repeat(140)],
+        diagram: index === 3 ? { nodes: ['A'.repeat(52), 'Review'] } : undefined,
+      })),
+    };
+
+    const slide = coerceBriefSpec(rawSpec, 'Bounded copy', brief).slides[0];
+    const diagramSlide = coerceBriefSpec(rawSpec, 'Bounded copy', brief).slides[3];
+    expect(slide?.headline.length).toBeLessThanOrEqual(120);
+    expect(slide?.body.length).toBeLessThanOrEqual(180);
+    expect(slide?.bullets[0]?.length).toBeLessThanOrEqual(90);
+    expect(diagramSlide?.diagram?.nodes[0]?.length).toBeLessThanOrEqual(32);
+  });
+
+  it('gives comparison and evidence-board slides distinct editable card rows', () => {
+    const brief = {
+      prompt: 'Create exactly seven slides with a comparison and an evidence board.',
+      audience: 'Product leadership',
+      purpose: 'Choose a release gate',
+      successCriteria: ['Exactly 7 slides in the requested narrative'],
+    };
+    const rawSpec = {
+      title: 'Layout variety',
+      narrative: ['Decide'],
+      slides: (
+        ['hero', 'comparison', 'contract', 'flow', 'split', 'evidence_board', 'decision'] as const
+      ).map((layout, index) => ({
+        title: `Slide ${index + 1}`,
+        section: index === 1 ? 'Landscape' : index === 5 ? 'Evidence' : 'Story',
+        headline: `Claim ${index + 1}`,
+        body: 'Concise context.',
+        bullets: ['First proof', 'Second proof', 'Third proof'],
+        layout,
+        ...(layout === 'hero' ? { metric: 'Proof first', metricLabel: 'No benchmark claim' } : {}),
+        ...(layout === 'flow' ? { diagram: { nodes: ['Plan', 'Build', 'Review', 'Export'] } } : {}),
+      })),
+    };
+    const snapshot = buildBriefNodeSlide({
+      deckId: 'deck-layout-variety',
+      projectId: 'project-layout-variety',
+      title: 'Layout variety',
+      brief,
+      themeId: 'editorial-signal',
+      rawSpec,
+      now: 1_000,
+    }).snapshot;
+
+    for (const slideIndex of [1, 5]) {
+      const slideId = snapshot.deck.slideOrder[slideIndex];
+      const bullets = snapshot.elements.filter(
+        (element) => element.slideId === slideId && element.role === 'bullet',
+      );
+      expect(bullets.map((element) => Number(element.bbox.x.toFixed(2)))).toEqual([
+        0.07, 0.35, 0.63,
+      ]);
+      expect(bullets.every((element) => element.bbox.height === 0.16)).toBe(true);
+      expect(
+        bullets.every(
+          (element) =>
+            element.style.fill ===
+            (slideIndex === 5
+              ? snapshot.deck.theme.colors.insight
+              : snapshot.deck.theme.colors.accentSoft),
+        ),
+      ).toBe(true);
+    }
+
+    const elementNames = snapshot.elements.map((element) => element.name);
+    expect(elementNames).toContain('Hero tension motif 1');
+    expect(elementNames).toContain('Comparison card 1');
+    expect(elementNames).toContain('Authoring contract panel');
+    expect(elementNames).toContain('Diagram node 1');
+    expect(elementNames).toContain('Split composition divider');
+    expect(elementNames).toContain('Evidence card 1');
+    expect(elementNames).toContain('Decision gate rule');
+    const heroId = snapshot.deck.slideOrder[0];
+    const heroBullets = snapshot.elements.filter(
+      (element) => element.slideId === heroId && element.role === 'bullet',
+    );
+    expect(heroBullets.map((element) => Number(element.bbox.x.toFixed(2)))).toEqual([
+      0.07, 0.35, 0.63,
+    ]);
+    const heroMetric = snapshot.elements.find(
+      (element) => element.slideId === heroId && element.role === 'metric',
+    );
+    expect(heroMetric?.bbox).toEqual(expect.objectContaining({ x: 0.66, y: 0.52 }));
+    expect(snapshot.slides.map((slide) => slide.notes)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Layout intent: hero'),
+        expect.stringContaining('Layout intent: evidence_board'),
+        expect.stringContaining('Layout intent: decision'),
+      ]),
+    );
   });
 
   it('honors a concise explicit deck length in model and deterministic creation', () => {

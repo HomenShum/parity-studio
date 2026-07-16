@@ -134,7 +134,8 @@ export interface NodeSlidePromptComposerProps {
   composerClassName?: string;
 }
 
-const DATA_FILE_ACCEPT = '.csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown';
+const DATA_FILE_ACCEPT =
+  '.csv,.json,.txt,.md,.pdf,text/csv,application/json,text/plain,text/markdown,application/pdf';
 
 const NATIVE_EFFORT_LABELS: Record<NodeSlideReasoningEffort, string> = {
   low: 'Low',
@@ -327,7 +328,9 @@ export function NodeSlidePromptComposer({
           {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
           {...(onAttachmentSyncingChange ? { onSyncingChange: onAttachmentSyncingChange } : {})}
         />
-        {header ? <PromptInputHeader>{header}</PromptInputHeader> : null}
+        {header ? (
+          <PromptInputHeader className="ns-prompt-header">{header}</PromptInputHeader>
+        ) : null}
         <PromptInputAttachmentShelf />
         <PromptInputTextarea
           {...textareaAria}

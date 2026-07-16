@@ -3,14 +3,15 @@ import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const JOURNEY_PROOF_VERSION = 'nodeslide.journey-proof/v1';
+export const JOURNEY_PROOF_VERSION = 'nodeslide.journey-proof/v2';
 export const REQUIRED_JOURNEY_STEPS = [
   'brief_submitted',
   'deck_created',
-  'proposal_ready',
-  'compare_opened',
+  'edit_submitted',
   'validation_received',
-  'proposal_accepted',
+  'edit_applied',
+  'undo_verified',
+  'redo_verified',
   'version_advanced',
   'export_downloaded',
 ];
@@ -33,7 +34,8 @@ export async function finalizeNodeSlideJourneyProof(manifestPath, outputPath) {
     expectedCreationProvenance: manifest.expectedCreationProvenance,
     actualCreationProvenance: manifest.actualCreationProvenance,
     baseVersion: manifest.baseVersion,
-    acceptedVersion: manifest.acceptedVersion,
+    appliedVersion: manifest.appliedVersion,
+    finalVersion: manifest.finalVersion,
     steps: manifest.steps,
     artifacts,
   };
@@ -53,7 +55,8 @@ export async function finalizeNodeSlideJourneyProof(manifestPath, outputPath) {
 
 export async function verifyNodeSlideJourneyProofFiles(proof) {
   const findings = [];
-  if (!proof || proof.schemaVersion !== JOURNEY_PROOF_VERSION)
+  const legacy = proof?.schemaVersion === 'nodeslide.journey-proof/v1';
+  if (!proof || (!legacy && proof.schemaVersion !== JOURNEY_PROOF_VERSION))
     findings.push('Unsupported journey proof schema.');
   if (!proof?.deckId || typeof proof.deckId !== 'string') findings.push('A deckId is required.');
   const { digest, ...partial } = proof ?? {};
@@ -61,11 +64,19 @@ export async function verifyNodeSlideJourneyProofFiles(proof) {
   if (proof?.expectedCreationProvenance !== proof?.actualCreationProvenance) {
     findings.push('The actual creation provenance does not match the requested journey.');
   }
+  if (legacy) {
+    verifyLegacyJourneyStructure(proof, findings);
+    await verifyArtifacts(proof, findings);
+    return { ok: findings.length === 0, findings };
+  }
   if (
     !Number.isSafeInteger(proof?.baseVersion) ||
-    proof?.acceptedVersion !== proof?.baseVersion + 1
+    !Number.isSafeInteger(proof?.appliedVersion) ||
+    !Number.isSafeInteger(proof?.finalVersion) ||
+    proof.appliedVersion !== proof.baseVersion + 1 ||
+    proof.finalVersion !== proof.appliedVersion + 2
   ) {
-    findings.push('Accept must advance the deck exactly once.');
+    findings.push('The edit, Undo, and Redo must each advance exactly once.');
   }
   const steps = Array.isArray(proof?.steps) ? proof.steps : [];
   const positions = REQUIRED_JOURNEY_STEPS.map((kind) =>
@@ -81,10 +92,40 @@ export async function verifyNodeSlideJourneyProofFiles(proof) {
     if (steps[index]?.occurredAt < steps[index - 1]?.occurredAt)
       findings.push('Journey timestamps are not monotonic.');
   }
-  for (const kind of ['validation_received', 'proposal_accepted']) {
-    if (!steps.find((step) => step?.kind === kind)?.receiptDigest)
+  for (const kind of ['validation_received', 'edit_applied', 'undo_verified', 'redo_verified']) {
+    if (!isSha256Digest(steps.find((step) => step?.kind === kind)?.receiptDigest))
       findings.push(`${kind} is not bound to a receipt digest.`);
   }
+  const validation = steps.find((step) => step?.kind === 'validation_received');
+  const applied = steps.find((step) => step?.kind === 'edit_applied');
+  const undone = steps.find((step) => step?.kind === 'undo_verified');
+  const redone = steps.find((step) => step?.kind === 'redo_verified');
+  if (
+    !validation?.runId ||
+    !validation.patchId ||
+    !validation.candidateDigest ||
+    validation.runId !== applied?.runId ||
+    validation.patchId !== applied?.patchId ||
+    validation.candidateDigest !== applied?.candidateDigest ||
+    validation.baseDeckVersion !== proof?.baseVersion ||
+    applied?.baseDeckVersion !== proof?.baseVersion ||
+    applied?.resultingDeckVersion !== proof?.appliedVersion ||
+    applied?.deckVersion !== proof?.appliedVersion ||
+    undone?.patchId !== applied?.patchId ||
+    undone?.deckVersion !== proof?.appliedVersion + 1 ||
+    !isSha256Digest(undone?.contentDigest) ||
+    redone?.patchId !== applied?.patchId ||
+    redone?.deckVersion !== proof?.finalVersion ||
+    !isSha256Digest(redone?.contentDigest) ||
+    redone?.contentDigest !== applied?.contentDigest
+  ) {
+    findings.push('Validation, apply, Undo, and Redo are not bound to one durable edit receipt.');
+  }
+  await verifyArtifacts(proof, findings);
+  return { ok: findings.length === 0, findings };
+}
+
+async function verifyArtifacts(proof, findings) {
   for (const [key, extensions] of Object.entries(REQUIRED_ARTIFACTS)) {
     const artifact = proof?.artifacts?.[key];
     if (!artifact || typeof artifact !== 'string') {
@@ -102,7 +143,43 @@ export async function verifyNodeSlideJourneyProofFiles(proof) {
   if (proof?.artifacts?.rawRecordingPath === proof?.artifacts?.gifPath) {
     findings.push('Raw recording and GIF must be separate artifacts.');
   }
-  return { ok: findings.length === 0, findings };
+}
+
+function verifyLegacyJourneyStructure(proof, findings) {
+  if (
+    !Number.isSafeInteger(proof?.baseVersion) ||
+    !Number.isSafeInteger(proof?.acceptedVersion) ||
+    proof.acceptedVersion !== proof.baseVersion + 1
+  ) {
+    findings.push('The legacy Accept receipt must advance exactly once.');
+  }
+  const required = [
+    'brief_submitted',
+    'deck_created',
+    'proposal_ready',
+    'compare_opened',
+    'validation_received',
+    'proposal_accepted',
+    'version_advanced',
+    'export_downloaded',
+  ];
+  const steps = Array.isArray(proof?.steps) ? proof.steps : [];
+  const positions = required.map((kind) => steps.findIndex((step) => step?.kind === kind));
+  positions.forEach((position, index) => {
+    if (position < 0) findings.push(`Missing legacy journey step: ${required[index]}.`);
+    if (index > 0 && position >= 0 && positions[index - 1] >= position) {
+      findings.push(`Legacy journey step is out of order: ${required[index]}.`);
+    }
+  });
+  for (const kind of ['validation_received', 'proposal_accepted']) {
+    if (!steps.find((step) => step?.kind === kind)?.receiptDigest) {
+      findings.push(`${kind} is not bound to a legacy receipt digest.`);
+    }
+  }
+}
+
+function isSha256Digest(value) {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/u.test(value);
 }
 
 async function hasExpectedMagic(key, filePath) {
@@ -132,7 +209,7 @@ async function hasExpectedMagic(key, filePath) {
   return true;
 }
 
-function durableDigest(value) {
+export function durableDigest(value) {
   return `sha256:${createHash('sha256').update(stableSerialize(value)).digest('hex')}`;
 }
 

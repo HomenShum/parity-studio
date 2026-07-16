@@ -1,0 +1,98 @@
+{
+  "deckId": "deck_job_29104a8024e85adafa0ee36210efef8b",
+  "journeyMode": "deterministic",
+  "creationMode": "deterministic",
+  "modelExpectation": "deterministic",
+  "expectedLayouts": [
+    "hero",
+    "comparison",
+    "contract",
+    "flow",
+    "split",
+    "evidence_board",
+    "decision"
+  ],
+  "liveCreationTrace": null,
+  "liveEditTrace": {
+    "phase": "edit-auto-apply",
+    "traceText": "Completed deck v2 Started 3:43:40 PM Deterministic local planning proposed 1 scoped operation without provider egress. Write scope · 1 slide deterministic · bounded-edit-planner/v1 EDIT CYCLE 1s TOKENS — → — COST not recorded VALIDATION Passed No external provider billing was recorded for this fallback. Execution 18 auditable records Activity 9 spans · 1.11 s Full timeline 18 loaded 0 errors 0 cited ROUTE deterministic · bounded-edit-planner/v1 TOKENS not recorded in · not recorded out COST not recorded CANDIDATE DIGEST sha256:4a405bf…9517f5b Invoke NodeSlide agent invoke_agent 1.11 s Plan bounded slide edit chat 248 ms Plan bounded slide edit chat 72 ms Validate candidate candidate_validation 39 ms Validate candidate candidate_validation 166 ms Accept validated proposal with delegated authority agent.delegated_decision 0 ms 3 earlier loaded steps hidden here; open the full timeline to inspect them. Chain of custody and countersigned receipt"
+  },
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784241810216
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784241814152,
+      "deckVersion": 1
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784241816282,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784241820388,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:11d0af5683b27a62467df7d62d0cc344e884266f3ba1e3cb963f4b814f6ad843",
+      "runId": "agent_run_761ed7b2b5614d9abf9f74c1dd8338cd",
+      "patchId": "patch_agent_c6e6fab4469ad162917878bb4858befc",
+      "candidateDigest": "sha256:4a405bf7256c8dbb672c2b0c47932bc097b2d07982f0029e12ce586ac9517f5b",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784241820552,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:cf98db71e0476844eec05c20f9025379ea5d8194a93e77b0a82872425531384a",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "runId": "agent_run_761ed7b2b5614d9abf9f74c1dd8338cd",
+      "patchId": "patch_agent_c6e6fab4469ad162917878bb4858befc",
+      "candidateDigest": "sha256:4a405bf7256c8dbb672c2b0c47932bc097b2d07982f0029e12ce586ac9517f5b",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784241822214,
+      "deckVersion": 3,
+      "patchId": "patch_agent_c6e6fab4469ad162917878bb4858befc",
+      "contentDigest": "sha256:6eb0b29a55d67ce40d19f06e1c05cd0905989c198b527d6fc9cc150d99d92d79",
+      "receiptDigest": "sha256:b05b4703bae5314aee21e64041f0268ec93b6ba872d4a7aaff98c8129929bd43"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784241824099,
+      "deckVersion": 4,
+      "patchId": "patch_agent_c6e6fab4469ad162917878bb4858befc",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "receiptDigest": "sha256:a079ac2ce81e0a2256c2a4511373b3db57bf74aa83ab7c6968542aacb7c718a0"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784241824099,
+      "deckVersion": 4
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784241825494,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\final-editor.png",
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-deterministic-2026-07-16-final3\\run-manifest.json"
+  }
+}

@@ -16,6 +16,8 @@ const enabled =
   process.env['NODESLIDE_E2E_LIVE_BACKEND'] === '1' &&
   process.env['NODESLIDE_E2E_MUTATIONS'] === '1';
 const journeyMode = process.env['NODESLIDE_JOURNEY_MODE'] === 'live' ? 'live' : 'deterministic';
+const creationMode =
+  process.env['NODESLIDE_JOURNEY_CREATION_MODE'] === 'live' ? 'live' : 'deterministic';
 
 test.describe('NodeSlide self-authored browser journey proof', () => {
   test.skip(
@@ -23,7 +25,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     'Requires NODESLIDE_JOURNEY_PROOF=1, live backend coverage, and an isolated mutation-safe deployment.',
   );
 
-  test('creates its own deck, proposes, compares, validates, accepts once, exports, and records proof', async ({
+  test('creates its own deck, validates and applies once, exposes Undo, exports, and records proof', async ({
     page,
   }) => {
     test.setTimeout(360_000);
@@ -41,7 +43,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     };
 
     await openIsolatedLanding(page);
-    if (journeyMode === 'live') {
+    if (creationMode === 'live') {
       await chooseLandingModel(page, { group: 'More live models', label: 'GLM 5.2' });
       await grantLandingSessionConsent(page);
     } else {
@@ -51,10 +53,11 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       'Create exactly seven visually ambitious, claim-led slides explaining why NodeSlide should dogfood its own authoring system.',
       'Audience: product and design leadership. Decision: approve the governed live-agent authoring roadmap and require recorded browser proof for every release.',
       'Use a refined editorial product-design aesthetic: warm off-white canvas, near-black typography, electric blue and coral accents, generous whitespace, strong hierarchy, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
+      'Use this exact layout contract in order: hero, comparison, contract, flow, split, evidence_board, decision.',
       'Slide 1 is a bold thesis cover: “NodeSlide must beat one-shot generation on governed creativity,” with one supporting line and a visual tension motif.',
       'Slide 2 is a three-column competitive landscape. Canva AI wins brand and asset velocity; Gamma AI wins research-to-story speed; NodeSlide must own editable, governed execution.',
       'Slide 3 is an authoring contract that locks audience, decision, evidence ledger, and claim-led storyboard before layout. Show it as a structured editorial artifact, not bullets.',
-      'Slide 4 is the only diagram: a native editable flow from strategy through a planner, visual-material agents, specialist critics, validation, human review, and PPTX export.',
+      'Slide 4 is the only diagram: use exactly four short native editable nodes labeled Strategy, Agent team, Validate + review, and Editable export.',
       'Slide 5 uses a split composition: bounded repair on the left; HyperAgent-inspired versioned policy evolution, held-out evaluation, and safe promotion on the right.',
       'Slide 6 is an evidence board with labeled proof slots for provider, named model, input and output tokens, nonzero cost, candidate digest, durable validation receipt, version delta, and export artifact. Do not invent values.',
       'Slide 7 is a decisive release-gate checklist ending with “Approve the quality gate and require recorded proof for every release.”',
@@ -74,10 +77,17 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const base = await readVersionState(page);
 
     const creationTrace =
-      journeyMode === 'live' ? await captureLiveTrace(page, 'brief-to-deck') : null;
+      creationMode === 'live' ? await captureTrace(page, 'brief-to-deck', true) : null;
     if (creationTrace) step('live_creation_verified', creationTrace);
 
     await page.getByTestId('inspector-tab-ai').click();
+    const turbo = page.getByRole('switch', { name: 'Turbo for this session' });
+    await expect(turbo).toBeVisible();
+    if ((await turbo.getAttribute('aria-checked')) !== 'true') await turbo.click();
+    await expect(turbo).toHaveAttribute('aria-checked', 'true');
+    if (journeyMode === 'live' && creationMode !== 'live') {
+      await chooseEditorModel(page, { group: 'More live models', label: 'GLM 5.2' });
+    }
     await expect(page.getByTestId('ai-model-select')).toContainText(
       journeyMode === 'live' ? 'GLM 5.2' : 'Deterministic',
     );
@@ -86,47 +96,91 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       await expect(consent).toBeVisible();
       if (!(await consent.isChecked())) await consent.check();
     }
-    const turbo = page.getByRole('switch', { name: 'Turbo for this session' });
-    if (await turbo.isChecked()) await turbo.uncheck();
-    await page
-      .getByRole('button', {
-        name: 'Ends with the adoption checklist',
-        exact: true,
-      })
-      .click();
+    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    const headline = page.getByRole('button', { name: 'Headline, text slide element' });
+    const beforeContentDigest = digest((await headline.innerText()).trim());
     const composer = page.getByLabel('AI instruction');
     await composer.fill(
-      'Set the headline exactly to "Adopt the quality gate and require recorded proof for every release."',
+      'Replace the headline exactly with "A live run is only real when its receipt survives export."',
     );
     await composer.press('Enter');
-    const proposal = page.getByTestId('proposal-card').first();
-    await expect(proposal).toBeVisible({ timeout: 120_000 });
-    step('proposal_ready', { deckVersion: base.version });
+    step('edit_submitted', { deckVersion: base.version });
 
-    const editTrace = journeyMode === 'live' ? await captureLiveTrace(page, 'edit-proposal') : null;
-    if (editTrace) step('live_edit_verified', editTrace);
+    const appliedCard = page.getByTestId('applied-change-card');
+    await expect(appliedCard).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByTestId('proposal-accept')).toHaveCount(0);
+    const applied = await readVersionState(page);
+    expect(applied.version).toBe(base.version + 1);
     await page.getByTestId('inspector-tab-ai').click();
 
-    const preview = proposal.getByTestId('proposal-preview');
-    await expect(preview).toBeEnabled();
-    if ((await preview.getAttribute('aria-pressed')) !== 'true') await preview.click();
-    await expect(page.getByLabel('Baseline and candidate comparison')).toBeVisible({
+    const binding = await appliedCard.evaluate((element) => ({
+      runId: element.getAttribute('data-run-id') ?? '',
+      patchId: element.getAttribute('data-patch-id') ?? '',
+      candidateDigest: element.getAttribute('data-candidate-digest') ?? '',
+      baseDeckVersion: Number(element.getAttribute('data-base-version')),
+      resultingDeckVersion: Number(element.getAttribute('data-resulting-version')),
+    }));
+    expect(binding.runId).not.toBe('');
+    expect(binding.patchId).not.toBe('');
+    expect(binding.candidateDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(binding.baseDeckVersion).toBe(base.version);
+    expect(binding.resultingDeckVersion).toBe(applied.version);
+    const appliedContent = (await headline.innerText()).trim();
+    const appliedContentDigest = digest(appliedContent);
+
+    const editTrace = await captureTrace(page, 'edit-auto-apply', journeyMode === 'live');
+    if (journeyMode === 'live') step('live_edit_verified', editTrace);
+    const validationDigest = digest(JSON.stringify({ binding, traceText: editTrace.traceText }));
+    step('validation_received', {
+      deckVersion: base.version,
+      receiptDigest: validationDigest,
+      ...binding,
+    });
+    await page.getByTestId('inspector-tab-ai').click();
+    await expect(appliedCard).toBeVisible();
+    const appliedReceiptDigest = digest(`${await appliedCard.innerText()}\n${editTrace.traceText}`);
+    step('edit_applied', {
+      deckVersion: applied.version,
+      receiptDigest: appliedReceiptDigest,
+      contentDigest: appliedContentDigest,
+      ...binding,
+    });
+    await expect(page.getByTestId('applied-change-undo')).toBeEnabled();
+    const finalScreenshotPath = path.join(outputDirectory, 'final-editor.png');
+    await page.screenshot({ path: finalScreenshotPath, fullPage: true });
+
+    await page.getByTestId('applied-change-undo').click();
+    await expect(page.locator('.ns-version-label')).toHaveText(`v${applied.version + 1}`, {
       timeout: 60_000,
     });
-    step('compare_opened', { deckVersion: base.version });
-    const receipt = page.getByTestId('candidate-receipt');
-    await expect(receipt).toHaveAttribute('data-candidate-status', 'ready', { timeout: 120_000 });
-    const validationDigest = digest(await receipt.innerText());
-    step('validation_received', { deckVersion: base.version, receiptDigest: validationDigest });
+    const undone = await readVersionState(page);
+    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    const undoneContentDigest = digest((await headline.innerText()).trim());
+    expect(undoneContentDigest).toBe(beforeContentDigest);
+    step('undo_verified', {
+      deckVersion: undone.version,
+      patchId: binding.patchId,
+      contentDigest: undoneContentDigest,
+      receiptDigest: digest(`undo:${binding.patchId}:${undone.version}:${undoneContentDigest}`),
+    });
 
-    await expect(proposal.getByTestId('proposal-accept')).toBeEnabled();
-    await proposal.getByTestId('proposal-accept').dblclick();
-    const acceptedNotice = page.getByText('Validated proposal accepted as a new deck version.');
-    await expect(acceptedNotice).toBeVisible({ timeout: 60_000 });
-    step('proposal_accepted', { receiptDigest: digest(await acceptedNotice.innerText()) });
-    const accepted = await readVersionState(page);
-    expect(accepted.version).toBe(base.version + 1);
-    step('version_advanced', { deckVersion: accepted.version });
+    const redo = page.getByRole('button', { name: 'Redo' });
+    await expect(redo).toBeEnabled();
+    await redo.click();
+    await expect(page.locator('.ns-version-label')).toHaveText(`v${applied.version + 2}`, {
+      timeout: 60_000,
+    });
+    const redone = await readVersionState(page);
+    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    const redoneContentDigest = digest((await headline.innerText()).trim());
+    expect(redoneContentDigest).toBe(appliedContentDigest);
+    step('redo_verified', {
+      deckVersion: redone.version,
+      patchId: binding.patchId,
+      contentDigest: redoneContentDigest,
+      receiptDigest: digest(`redo:${binding.patchId}:${redone.version}:${redoneContentDigest}`),
+    });
+    step('version_advanced', { deckVersion: redone.version });
 
     await page.getByRole('button', { name: 'Export deck' }).click();
     const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
@@ -134,10 +188,8 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const download = await downloadPromise;
     const exportedDeckPath = path.join(outputDirectory, 'nodeslide-self-authored.pptx');
     await download.saveAs(exportedDeckPath);
-    step('export_downloaded', { deckVersion: accepted.version, artifactPath: exportedDeckPath });
+    step('export_downloaded', { deckVersion: redone.version, artifactPath: exportedDeckPath });
 
-    const finalScreenshotPath = path.join(outputDirectory, 'final-editor.png');
-    await page.screenshot({ path: finalScreenshotPath, fullPage: true });
     const video = page.video();
     if (!video) throw new Error('Journey proof mode did not enable Playwright video.');
     await page.close();
@@ -158,13 +210,24 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
         {
           deckId,
           journeyMode,
+          creationMode,
           modelExpectation: journeyMode === 'live' ? 'openrouter / z-ai/glm-5.2' : 'deterministic',
+          expectedLayouts: [
+            'hero',
+            'comparison',
+            'contract',
+            'flow',
+            'split',
+            'evidence_board',
+            'decision',
+          ],
           liveCreationTrace: creationTrace,
           liveEditTrace: editTrace,
           expectedCreationProvenance: 'brief_to_new_deck',
           actualCreationProvenance: 'brief_to_new_deck',
           baseVersion: base.version,
-          acceptedVersion: accepted.version,
+          appliedVersion: applied.version,
+          finalVersion: redone.version,
           steps,
           artifacts: {
             rawRecordingPath,
@@ -183,32 +246,56 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
   });
 });
 
-async function captureLiveTrace(page: import('playwright/test').Page, phase: string) {
+async function captureTrace(
+  page: import('playwright/test').Page,
+  phase: string,
+  requireLiveProvider: boolean,
+) {
   await page.getByTestId('inspector-tab-trace').click();
   const trace = page.locator('.ns-trace-summary').first();
   await expect(trace).toBeVisible({ timeout: 120_000 });
   const traceText = (await trace.innerText()).replace(/\s+/gu, ' ').trim();
+  expect(traceText, `${phase} must expose passing validation`).toMatch(/Validation\s+Passed/iu);
+  if (!requireLiveProvider) return { phase, traceText };
   expect(traceText, `${phase} must identify OpenRouter`).toMatch(/openrouter/iu);
   expect(traceText, `${phase} must identify GLM 5.2`).toMatch(/(?:z-ai\/glm-5\.2|GLM 5\.2)/iu);
   expect(traceText, `${phase} must not be a deterministic fallback`).not.toMatch(
-    /deterministic|fallback/iu,
+    /deterministic fallback|provider attempt before fallback|no external provider billing.*fallback/iu,
   );
-  const tokenMatch = traceText.match(/Tokens\s+([\d,]+)\s*(?:→|->)\s*([\d,]+)/u);
-  expect(tokenMatch, `${phase} must expose input and output token usage`).not.toBeNull();
-  const inputTokens = Number(tokenMatch?.[1]?.replaceAll(',', ''));
-  const outputTokens = Number(tokenMatch?.[2]?.replaceAll(',', ''));
+  const tokenText = await trace
+    .locator('.ns-trace-kpis > span')
+    .filter({ hasText: 'Tokens' })
+    .innerText();
+  const tokenValues = tokenText.match(/[\d,]+/gu) ?? [];
+  expect(tokenValues, `${phase} must expose input and output token usage`).toHaveLength(2);
+  const inputTokens = Number(tokenValues[0]?.replaceAll(',', ''));
+  const outputTokens = Number(tokenValues[1]?.replaceAll(',', ''));
   expect(inputTokens).toBeGreaterThan(0);
   expect(outputTokens).toBeGreaterThan(0);
-  const costMatch = traceText.match(/Cost\s+\$(\d+\.\d+)/u);
+  const costText = await trace
+    .locator('.ns-trace-kpis > span')
+    .filter({ hasText: 'Cost' })
+    .innerText();
+  const costMatch = costText.match(/\$(\d+\.\d+)/u);
   expect(costMatch, `${phase} must expose cost`).not.toBeNull();
   const costUsd = Number(costMatch?.[1]);
   expect(costUsd).toBeGreaterThan(0);
-  expect(traceText, `${phase} must expose passing validation`).toMatch(/Validation\s+Passed/iu);
   return { phase, inputTokens, outputTokens, costUsd, traceText };
 }
 
 function digest(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+async function chooseEditorModel(
+  page: import('playwright/test').Page,
+  model: { group: string; label: string },
+) {
+  await page.getByTestId('ai-model-select').click();
+  const dialog = page.getByRole('dialog', { name: 'Agent model' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel(model.group).getByText(model.label, { exact: true }).click();
+  await expect(dialog).toBeHidden();
 }
 
 function runNodeScript(script: string, args: string[]): void {

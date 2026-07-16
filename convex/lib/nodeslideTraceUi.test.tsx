@@ -93,7 +93,7 @@ describe('NodeSlide trace validation receipts', () => {
       <TraceInspector traces={[trace]} validations={[current]} />,
     );
 
-    expect(markup).toContain('Review cycle');
+    expect(markup).toContain('Edit cycle');
     expect(markup).toContain('41s');
     expect(markup).toContain(NODESLIDE_EDIT_MODEL);
   });

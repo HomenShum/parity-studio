@@ -113,7 +113,6 @@ describe('NodeSlide AI review inspector', () => {
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
     const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
-    expect(markup).toContain('data-testid="ai-turbo-control"');
     expect(markup).toContain('data-testid="ai-turbo-toggle"');
     expect(markup).toMatch(
       /<button(?=[^>]*role="switch")(?=[^>]*aria-checked="false")(?=[^>]*data-testid="ai-turbo-toggle")[^>]*>/,
@@ -226,7 +225,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).not.toContain('No proposal waiting');
   });
 
-  it('shows a bounded CSV, JSON, or TXT attachment control only when uploads are available', () => {
+  it('shows the bounded model-readable attachment formats only when uploads are available', () => {
     expect(renderAi()).not.toContain('data-testid="ai-attach-data"');
     const markup = renderAi({
       onAttachDataFile: async (file) => ({
@@ -236,7 +235,9 @@ describe('NodeSlide AI review inspector', () => {
       }),
     });
     expect(markup).toContain('data-testid="ai-attach-data"');
-    expect(markup).toContain('accept=".csv,.json,.txt,text/csv,application/json,text/plain"');
+    expect(markup).toContain(
+      'accept=".csv,.json,.txt,.md,.pdf,text/csv,application/json,text/plain,text/markdown,application/pdf"',
+    );
     expect(markup).toContain('aria-label="Attach data file"');
   });
 

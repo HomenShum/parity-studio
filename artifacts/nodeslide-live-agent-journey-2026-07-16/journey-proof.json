@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "nodeslide.journey-proof/v1",
+  "deckId": "deck_job_a6faf4026a537316f052d36c38a4071f",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "acceptedVersion": 2,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784236449401
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784236475659,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_creation_verified",
+      "occurredAt": 1784236476479,
+      "phase": "brief-to-deck",
+      "inputTokens": 2242,
+      "outputTokens": 859,
+      "costUsd": 0.0026,
+      "traceText": "Completed deck v1 Started 2:14:12 PM The user consented to send the full brief to OpenRouter. The named GLM 5.2 model supplied the narrative plan through pi-ai under authoring-policy:default-v1 (sha256:db9dda1c8a3da541bb19237cd7446bb5aeb3f5fee0af5676e2c32270a5279227); NodeSlide normalized, persisted, and validated the deck deterministically. openrouter · z-ai/glm-5.2 · Medium effort RUN TIME 25s TOKENS 2,242 → 859 COST $0.0026 VALIDATION Passed Execution 4 auditable records Activity 2 spans · 24.6 s Full timeline 4 loaded 0 errors 1 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 2,242 in · 859 out COST $0.002629 DIGEST not recorded Invoke NodeSlide agent invoke_agent 24.6 s Queue and authorize agent.queue 24.6 s 2 sources Chain of custody and countersigned receipt"
+    },
+    {
+      "kind": "proposal_ready",
+      "occurredAt": 1784236481604,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_edit_verified",
+      "occurredAt": 1784236481924,
+      "phase": "edit-proposal",
+      "inputTokens": 1217,
+      "outputTokens": 95,
+      "costUsd": 0.0013,
+      "traceText": "Awaiting review deck v2 Started 2:14:40 PM OpenRouter GLM 5.2 proposed 1 scoped operation for review. Write scope · 1 slide openrouter · z-ai/glm-5.2 · Medium effort REVIEW CYCLE Awaiting review TOKENS 1,217 → 95 COST $0.0013 VALIDATION Passed Execution 16 auditable records Activity 8 spans · 2.98 s Full timeline 16 loaded 0 errors 0 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 1,217 in · 95 out COST $0.001288 CANDIDATE DIGEST sha256:0542d48…307fb0b Invoke NodeSlide agent invoke_agent open at last checkpoint Plan bounded slide edit chat 35 ms Plan bounded slide edit chat 2.48 s Plan bounded slide edit chat 195 ms Validate candidate candidate_validation 35 ms Validate candidate candidate_validation 164 ms 2 earlier loaded steps hidden here; open the full timeline to inspect them. Chain of custody and countersigned receipt Selected trace validation: passed Deck v2 · publish ready"
+    },
+    {
+      "kind": "compare_opened",
+      "occurredAt": 1784236482072,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784236482115,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:0c8a7e55cce7183e7a023b72cc790a8d432258cf467e5514d84140bce9c250ca"
+    },
+    {
+      "kind": "proposal_accepted",
+      "occurredAt": 1784236483237,
+      "receiptDigest": "sha256:b8579584e6bc99e4653657c0d05da193af08df832b9693aa49f2e42a7255392c"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784236483933,
+      "deckVersion": 2
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784236484534,
+      "deckVersion": 2,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\final-editor.png",
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-live-agent-journey-2026-07-16\\run-manifest.json"
+  },
+  "digest": "sha256:7b31f99308a5a78011138fe0dd979cab3c4c320f1f568b9ae881faa69e5ee028"
+}

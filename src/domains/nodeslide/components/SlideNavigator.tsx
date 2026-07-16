@@ -1,3 +1,4 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   ArrowDown,
   ArrowUp,
@@ -300,104 +301,84 @@ export function SlideNavigator({
                 const sectionCollapsed = collapsedSectionSet.has(section);
                 const sectionContentId = `${tabsId}-section-${sectionIndex}`;
                 return (
-                  <section className="ns-slide-section" key={section} aria-label={section}>
-                    <div className="ns-section-label">
-                      <button
-                        className="ns-section-toggle"
-                        type="button"
-                        aria-controls={sectionContentId}
-                        aria-expanded={!sectionCollapsed}
-                        disabled={!onToggleSection}
-                        onClick={() => onToggleSection?.(section)}
-                      >
-                        {sectionCollapsed ? (
-                          <ChevronRight size={12} aria-hidden="true" />
-                        ) : (
-                          <ChevronDown size={12} aria-hidden="true" />
-                        )}
-                        <span>{section}</span>
-                        <span>{sectionSlides.length}</span>
-                      </button>
-                    </div>
-                    <div id={sectionContentId} hidden={sectionCollapsed}>
-                      {sectionSlides.map((slide) => {
-                        const slideIndex = slides.findIndex(
-                          (candidate) => candidate.id === slide.id,
-                        );
-                        const slideElements = elementsBySlide.get(slide.id) ?? [];
-                        const active = slide.id === activeSlideId;
-                        const selectedForMultiEdit = selectedSlideSet.has(slide.id);
-                        const statusTokens = statusesForSlide(slide, slideElements, statusContext);
-                        return (
-                          <div
-                            className={`ns-slide-row ${active ? 'is-active' : ''} ${
-                              selectedForMultiEdit ? 'is-multi-selected' : ''
-                            } ${draggingId === slide.id ? 'is-dragging' : ''}`}
-                            data-multi-selected={selectedForMultiEdit ? 'true' : 'false'}
-                            key={slide.id}
-                            draggable
-                            onDragStart={(event) => handleDragStart(event, slide.id, setDraggingId)}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              const sourceId = event.dataTransfer.getData('text/nodeslide-slide');
-                              if (sourceId && sourceId !== slide.id)
-                                onReorderSlide(sourceId, slideIndex);
-                              setDraggingId(null);
-                            }}
-                            onDragEnd={() => setDraggingId(null)}
+                  <Collapsible
+                    asChild
+                    disabled={!onToggleSection}
+                    key={section}
+                    onOpenChange={() => onToggleSection?.(section)}
+                    open={!sectionCollapsed}
+                  >
+                    <section className="ns-slide-section" aria-label={section}>
+                      <div className="ns-section-label">
+                        <CollapsibleTrigger asChild>
+                          <button
+                            className="ns-section-toggle"
+                            type="button"
+                            aria-controls={sectionContentId}
                           >
-                            <span className="ns-slide-number">
-                              {String(slideIndex + 1).padStart(2, '0')}
-                              {selectedForMultiEdit ? (
-                                <Check
-                                  className="ns-slide-selection-marker"
-                                  size={10}
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                            </span>
-                            <button
-                              className="ns-thumbnail-button"
-                              type="button"
-                              aria-current={active ? 'page' : undefined}
-                              aria-label={`Slide ${slideIndex + 1}: ${slide.title}${
-                                selectedForMultiEdit ? ', selected for multi-slide editing' : ''
-                              }`}
-                              aria-pressed={selectedForMultiEdit}
-                              data-testid={`slide-thumbnail-${slide.id}`}
-                              onClick={(event) => activateOrToggleSlide(event, slide.id)}
-                              onDoubleClick={() => onRenameSlide?.(slide.id, slide.title)}
-                              onKeyDown={(event) => {
-                                if (
-                                  handleSlideSelectionKeyDown(
-                                    event,
-                                    slide.id,
-                                    onSelectedSlideIdsChange,
-                                    toggleSlideSelection,
-                                  )
-                                )
-                                  return;
-                                handleRenameKeyDown(event, slide, onRenameSlide);
-                              }}
-                              title={
-                                onRenameSlide
-                                  ? `${slide.title} (double-click or press F2 to rename)`
-                                  : slide.title
+                            {sectionCollapsed ? (
+                              <ChevronRight size={12} aria-hidden="true" />
+                            ) : (
+                              <ChevronDown size={12} aria-hidden="true" />
+                            )}
+                            <span>{section}</span>
+                            <span>{sectionSlides.length}</span>
+                          </button>
+                        </CollapsibleTrigger>
+                      </div>
+                      <CollapsibleContent id={sectionContentId}>
+                        {sectionSlides.map((slide) => {
+                          const slideIndex = slides.findIndex(
+                            (candidate) => candidate.id === slide.id,
+                          );
+                          const slideElements = elementsBySlide.get(slide.id) ?? [];
+                          const active = slide.id === activeSlideId;
+                          const selectedForMultiEdit = selectedSlideSet.has(slide.id);
+                          const statusTokens = statusesForSlide(
+                            slide,
+                            slideElements,
+                            statusContext,
+                          );
+                          return (
+                            <div
+                              className={`ns-slide-row ${active ? 'is-active' : ''} ${
+                                selectedForMultiEdit ? 'is-multi-selected' : ''
+                              } ${draggingId === slide.id ? 'is-dragging' : ''}`}
+                              data-multi-selected={selectedForMultiEdit ? 'true' : 'false'}
+                              key={slide.id}
+                              draggable
+                              onDragStart={(event) =>
+                                handleDragStart(event, slide.id, setDraggingId)
                               }
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                const sourceId = event.dataTransfer.getData('text/nodeslide-slide');
+                                if (sourceId && sourceId !== slide.id)
+                                  onReorderSlide(sourceId, slideIndex);
+                                setDraggingId(null);
+                              }}
+                              onDragEnd={() => setDraggingId(null)}
                             >
-                              <SlideRenderer
-                                slide={slide}
-                                elements={slideElements}
-                                theme={theme}
-                                className="ns-thumbnail"
-                              />
-                            </button>
-                            <div className="ns-slide-row-copy">
+                              <span className="ns-slide-number">
+                                {String(slideIndex + 1).padStart(2, '0')}
+                                {selectedForMultiEdit ? (
+                                  <Check
+                                    className="ns-slide-selection-marker"
+                                    size={10}
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+                              </span>
                               <button
-                                className="ns-slide-title-button"
+                                className="ns-thumbnail-button"
                                 type="button"
+                                aria-current={active ? 'page' : undefined}
+                                aria-label={`Slide ${slideIndex + 1}: ${slide.title}${
+                                  selectedForMultiEdit ? ', selected for multi-slide editing' : ''
+                                }`}
                                 aria-pressed={selectedForMultiEdit}
+                                data-testid={`slide-thumbnail-${slide.id}`}
                                 onClick={(event) => activateOrToggleSlide(event, slide.id)}
                                 onDoubleClick={() => onRenameSlide?.(slide.id, slide.title)}
                                 onKeyDown={(event) => {
@@ -418,128 +399,161 @@ export function SlideNavigator({
                                     : slide.title
                                 }
                               >
-                                {slide.title}
+                                <SlideRenderer
+                                  slide={slide}
+                                  elements={slideElements}
+                                  theme={theme}
+                                  className="ns-thumbnail"
+                                />
                               </button>
-                              <span className="ns-slide-status-line">
-                                {propagationSet.has(slide.id) ? (
-                                  <span
-                                    className="ns-propagation-dot"
-                                    data-propagation-slide-id={slide.id}
-                                    aria-label="Affected by propagation preview"
-                                  />
-                                ) : null}
-                                {statusTokens.map((status, index) => (
-                                  <span
-                                    className={`ns-status-token is-${status.tone}`}
-                                    data-status-kind={status.kind}
-                                    key={`${status.kind}-${index}`}
-                                  >
-                                    {status.label}
-                                  </span>
-                                ))}
-                              </span>
-                              <span className="ns-slide-grab">
-                                <GripVertical size={13} /> Drag to reorder
-                              </span>
-                            </div>
-                            <button
-                              className="ns-slide-more"
-                              type="button"
-                              aria-label={`Slide ${slideIndex + 1} actions`}
-                              aria-haspopup="menu"
-                              aria-expanded={menuSlideId === slide.id}
-                              title={`Slide ${slideIndex + 1} actions`}
-                              onClick={() =>
-                                setMenuSlideId((value) => (value === slide.id ? null : slide.id))
-                              }
-                            >
-                              <MoreHorizontal size={15} />
-                            </button>
-                            {menuSlideId === slide.id ? (
-                              <div className="ns-popover ns-slide-menu" role="menu">
-                                {onSelectedSlideIdsChange ? (
+                              <div className="ns-slide-row-copy">
+                                <button
+                                  className="ns-slide-title-button"
+                                  type="button"
+                                  aria-pressed={selectedForMultiEdit}
+                                  onClick={(event) => activateOrToggleSlide(event, slide.id)}
+                                  onDoubleClick={() => onRenameSlide?.(slide.id, slide.title)}
+                                  onKeyDown={(event) => {
+                                    if (
+                                      handleSlideSelectionKeyDown(
+                                        event,
+                                        slide.id,
+                                        onSelectedSlideIdsChange,
+                                        toggleSlideSelection,
+                                      )
+                                    )
+                                      return;
+                                    handleRenameKeyDown(event, slide, onRenameSlide);
+                                  }}
+                                  title={
+                                    onRenameSlide
+                                      ? `${slide.title} (double-click or press F2 to rename)`
+                                      : slide.title
+                                  }
+                                >
+                                  {slide.title}
+                                </button>
+                                <span className="ns-slide-status-line">
+                                  {propagationSet.has(slide.id) ? (
+                                    <span
+                                      className="ns-propagation-dot"
+                                      data-propagation-slide-id={slide.id}
+                                      aria-label="Affected by propagation preview"
+                                    />
+                                  ) : null}
+                                  {statusTokens.map((status, index) => (
+                                    <span
+                                      className={`ns-status-token is-${status.tone}`}
+                                      data-status-kind={status.kind}
+                                      key={`${status.kind}-${index}`}
+                                    >
+                                      {status.label}
+                                    </span>
+                                  ))}
+                                </span>
+                                <span className="ns-slide-grab">
+                                  <GripVertical size={13} /> Drag to reorder
+                                </span>
+                              </div>
+                              <button
+                                className="ns-slide-more"
+                                type="button"
+                                aria-label={`Slide ${slideIndex + 1} actions`}
+                                aria-haspopup="menu"
+                                aria-expanded={menuSlideId === slide.id}
+                                title={`Slide ${slideIndex + 1} actions`}
+                                onClick={() =>
+                                  setMenuSlideId((value) => (value === slide.id ? null : slide.id))
+                                }
+                              >
+                                <MoreHorizontal size={15} />
+                              </button>
+                              {menuSlideId === slide.id ? (
+                                <div className="ns-popover ns-slide-menu" role="menu">
+                                  {onSelectedSlideIdsChange ? (
+                                    <button
+                                      type="button"
+                                      role="menuitemcheckbox"
+                                      aria-checked={selectedForMultiEdit}
+                                      disabled={
+                                        !selectedForMultiEdit &&
+                                        selectedSlideIds.length >= NODESLIDE_SCOPE_SLIDE_LIMIT
+                                      }
+                                      onClick={() => {
+                                        setMenuSlideId(null);
+                                        toggleSlideSelection(slide.id);
+                                      }}
+                                    >
+                                      <Check size={14} />
+                                      {selectedForMultiEdit
+                                        ? 'Remove from multi-slide edit'
+                                        : 'Select for multi-slide edit'}
+                                    </button>
+                                  ) : null}
+                                  {onRenameSlide ? (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setMenuSlideId(null);
+                                        onRenameSlide(slide.id, slide.title);
+                                      }}
+                                    >
+                                      <Pencil size={14} /> Rename slide
+                                    </button>
+                                  ) : null}
                                   <button
                                     type="button"
-                                    role="menuitemcheckbox"
-                                    aria-checked={selectedForMultiEdit}
-                                    disabled={
-                                      !selectedForMultiEdit &&
-                                      selectedSlideIds.length >= NODESLIDE_SCOPE_SLIDE_LIMIT
-                                    }
+                                    role="menuitem"
+                                    disabled={slideIndex <= 0}
                                     onClick={() => {
                                       setMenuSlideId(null);
-                                      toggleSlideSelection(slide.id);
+                                      onReorderSlide(slide.id, slideIndex - 1);
                                     }}
                                   >
-                                    <Check size={14} />
-                                    {selectedForMultiEdit
-                                      ? 'Remove from multi-slide edit'
-                                      : 'Select for multi-slide edit'}
+                                    <ArrowUp size={14} /> Move slide up
                                   </button>
-                                ) : null}
-                                {onRenameSlide ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={slideIndex >= slides.length - 1}
+                                    onClick={() => {
+                                      setMenuSlideId(null);
+                                      onReorderSlide(slide.id, slideIndex + 1);
+                                    }}
+                                  >
+                                    <ArrowDown size={14} /> Move slide down
+                                  </button>
                                   <button
                                     type="button"
                                     role="menuitem"
                                     onClick={() => {
                                       setMenuSlideId(null);
-                                      onRenameSlide(slide.id, slide.title);
+                                      onDuplicateSlide(slide.id);
                                     }}
                                   >
-                                    <Pencil size={14} /> Rename slide
+                                    <Copy size={14} /> Duplicate slide
                                   </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  disabled={slideIndex <= 0}
-                                  onClick={() => {
-                                    setMenuSlideId(null);
-                                    onReorderSlide(slide.id, slideIndex - 1);
-                                  }}
-                                >
-                                  <ArrowUp size={14} /> Move slide up
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  disabled={slideIndex >= slides.length - 1}
-                                  onClick={() => {
-                                    setMenuSlideId(null);
-                                    onReorderSlide(slide.id, slideIndex + 1);
-                                  }}
-                                >
-                                  <ArrowDown size={14} /> Move slide down
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setMenuSlideId(null);
-                                    onDuplicateSlide(slide.id);
-                                  }}
-                                >
-                                  <Copy size={14} /> Duplicate slide
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="is-danger"
-                                  disabled={!canDeleteSlide || slides.length <= 1}
-                                  onClick={() => {
-                                    setMenuSlideId(null);
-                                    onDeleteSlide(slide.id);
-                                  }}
-                                >
-                                  <Trash2 size={14} /> Delete slide
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="is-danger"
+                                    disabled={!canDeleteSlide || slides.length <= 1}
+                                    onClick={() => {
+                                      setMenuSlideId(null);
+                                      onDeleteSlide(slide.id);
+                                    }}
+                                  >
+                                    <Trash2 size={14} /> Delete slide
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </CollapsibleContent>
+                    </section>
+                  </Collapsible>
                 );
               })}
             </div>

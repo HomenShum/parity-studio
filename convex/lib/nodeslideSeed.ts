@@ -60,12 +60,25 @@ export interface NodeSlidePlannedDiagram {
   nodes: string[];
 }
 
+export const NODESLIDE_LAYOUT_INTENTS = [
+  'hero',
+  'comparison',
+  'contract',
+  'flow',
+  'split',
+  'evidence_board',
+  'decision',
+] as const;
+
+export type NodeSlideLayoutIntent = (typeof NODESLIDE_LAYOUT_INTENTS)[number];
+
 export interface NodeSlidePlannedSlide {
   title: string;
   section: string;
   headline: string;
   body: string;
   bullets: string[];
+  layout?: NodeSlideLayoutIntent;
   metric?: string;
   metricLabel?: string;
   chart?: NodeSlidePlannedChart;
@@ -161,7 +174,7 @@ const THEME_EDITORIAL_SIGNAL: ThemeSpec = {
   colors: {
     canvas: '#F7F4ED',
     ink: '#26221D',
-    muted: '#756B61',
+    muted: '#6B6158',
     accent: '#B44A2D',
     accentSoft: '#F2DED3',
     insight: '#E5E9D6',
@@ -1381,6 +1394,9 @@ function buildSlide(input: {
   linkedSourceIds: string[];
 }): { slide: Slide; elements: SlideElement[] } {
   const { planned, theme } = input;
+  const layout = planned.layout ?? inferNodeSlideLayout(planned, input.index, input.total);
+  const isOpening = layout === 'hero';
+  const isClosing = layout === 'decision';
   const elements: SlideElement[] = [];
   const add = (element: SlideElement) => {
     elements.push(element);
@@ -1434,13 +1450,13 @@ function buildSlide(input: {
       name: 'Headline',
       kind: 'text',
       role: input.index === 0 ? 'title' : 'headline',
-      bbox: box(0.07, 0.15, input.index === 0 ? 0.79 : 0.76, input.index === 0 ? 0.27 : 0.2),
+      bbox: box(0.07, 0.15, isOpening ? 0.62 : isClosing ? 0.8 : 0.76, isOpening ? 0.27 : 0.2),
       rotation: 0,
       content: planned.headline,
       style: {
         color: theme.colors.ink,
         fontFamily: theme.typography.display,
-        fontSize: input.index === 0 ? 48 : 38,
+        fontSize: isOpening ? 48 : isClosing ? 42 : 38,
         fontWeight: 620,
         lineHeight: 1.04,
         letterSpacing: -0.8,
@@ -1451,8 +1467,6 @@ function buildSlide(input: {
     }),
   );
 
-  const isOpening = input.index === 0;
-  const isClosing = input.index === input.total - 1;
   const hasPrimaryMedia =
     planned.formula !== undefined ||
     planned.image !== undefined ||
@@ -1464,15 +1478,115 @@ function buildSlide(input: {
   const evidenceSourceIds =
     input.linkedSourceIds.length > 0 ? input.linkedSourceIds : [input.sourceEvidenceId];
   const primaryEvidenceSourceId = evidenceSourceIds[0] ?? input.sourceEvidenceId;
-  const mirrorSplit = !hasVisual && !isOpening && !isClosing && input.index % 2 === 0;
-  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : 0.41;
+  const mirrorSplit = !hasVisual && (layout === 'contract' || layout === 'split');
+  const cardRowLayout = !hasVisual && (layout === 'comparison' || layout === 'evidence_board');
+  if (layout === 'hero') {
+    [box(0.77, 0.18, 0.12, 0.1), box(0.72, 0.31, 0.17, 0.06), box(0.81, 0.39, 0.08, 0.1)].forEach(
+      (bbox, index) =>
+        add(
+          element(`hero-motif-${index + 1}`, {
+            name: `Hero tension motif ${index + 1}`,
+            kind: 'shape',
+            role: 'decoration',
+            bbox,
+            rotation: index === 1 ? -8 : index === 2 ? 7 : 0,
+            style: {
+              fill: index === 1 ? theme.colors.trace : theme.colors.accentSoft,
+              ...(index === 0 ? { stroke: theme.colors.accent, strokeWidth: 2 } : {}),
+              radius: index === 2 ? 999 : theme.defaultRadius,
+            },
+            sourceIds: [],
+            locked: false,
+            exportCapabilities: [...EDITABLE_CAPABILITIES],
+          }),
+        ),
+    );
+  }
+  if (layout === 'contract') {
+    add(
+      element('contract-panel', {
+        name: 'Authoring contract panel',
+        kind: 'shape',
+        role: 'decoration',
+        bbox: box(0.49, 0.37, 0.43, 0.34),
+        rotation: 0,
+        style: {
+          fill: theme.colors.insight,
+          stroke: theme.colors.border,
+          strokeWidth: 1,
+          radius: theme.defaultRadius,
+        },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+  if (layout === 'split') {
+    add(
+      element('split-divider', {
+        name: 'Split composition divider',
+        kind: 'shape',
+        role: 'decoration',
+        bbox: box(0.485, 0.39, 0.003, 0.36),
+        rotation: 0,
+        style: { fill: theme.colors.trace, radius: 999 },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+  if (layout === 'decision') {
+    add(
+      element('decision-rule', {
+        name: 'Decision gate rule',
+        kind: 'shape',
+        role: 'decoration',
+        bbox: box(0.07, 0.67, 0.82, 0.012),
+        rotation: 0,
+        style: { fill: theme.colors.accent, radius: 999 },
+        sourceIds: [],
+        locked: false,
+        exportCapabilities: [...EDITABLE_CAPABILITIES],
+      }),
+    );
+  }
+  if (cardRowLayout) {
+    for (let cardIndex = 0; cardIndex < 3; cardIndex += 1) {
+      add(
+        element(`layout-card-${cardIndex + 1}`, {
+          name: `${layout === 'comparison' ? 'Comparison' : 'Evidence'} card ${cardIndex + 1}`,
+          kind: 'shape',
+          role: 'decoration',
+          bbox: box(0.065 + cardIndex * 0.28, 0.59, 0.26, 0.2),
+          rotation: 0,
+          style: {
+            fill: layout === 'evidence_board' ? theme.colors.insight : theme.colors.accentSoft,
+            stroke: theme.colors.border,
+            strokeWidth: 1,
+            radius: theme.defaultRadius,
+          },
+          sourceIds: [],
+          locked: false,
+          exportCapabilities: [...EDITABLE_CAPABILITIES],
+        }),
+      );
+    }
+  }
+  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : cardRowLayout ? 0.82 : 0.41;
   const bodyX = mirrorSplit ? 0.52 : 0.07;
   add(
     element('body', {
       name: 'Body copy',
       kind: 'text',
       role: 'body',
-      bbox: box(bodyX, isOpening ? 0.48 : 0.4, bodyWidth, isOpening ? 0.17 : 0.2),
+      bbox: box(
+        bodyX,
+        isOpening ? 0.48 : 0.4,
+        bodyWidth,
+        isOpening ? 0.17 : cardRowLayout ? 0.13 : 0.2,
+      ),
       rotation: 0,
       content: planned.body,
       style: {
@@ -1488,9 +1602,18 @@ function buildSlide(input: {
     }),
   );
 
-  const horizontalBullets = (isOpening || isClosing) && !hasVisual;
+  const horizontalBullets =
+    (isOpening && !hasPrimaryMedia) || ((isClosing || cardRowLayout) && !hasVisual);
   const bulletX = horizontalBullets ? 0.07 : hasVisual || mirrorSplit ? 0.07 : 0.57;
-  const bulletY = horizontalBullets ? 0.72 : hasVisual ? (isOpening ? 0.67 : 0.62) : 0.42;
+  const bulletY = horizontalBullets
+    ? cardRowLayout
+      ? 0.62
+      : 0.72
+    : hasVisual
+      ? isOpening
+        ? 0.67
+        : 0.62
+      : 0.42;
   const bulletWidth = horizontalBullets ? 0.8 : hasVisual ? 0.39 : mirrorSplit ? 0.36 : 0.35;
   const stackedBulletStep = isOpening && hasVisual ? 0.1 : 0.12;
   planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
@@ -1503,7 +1626,7 @@ function buildSlide(input: {
           horizontalBullets ? bulletX + bulletIndex * 0.28 : bulletX,
           horizontalBullets ? bulletY : bulletY + bulletIndex * stackedBulletStep,
           horizontalBullets ? 0.25 : bulletWidth,
-          horizontalBullets ? 0.08 : 0.09,
+          horizontalBullets ? (cardRowLayout ? 0.16 : 0.08) : 0.09,
         ),
         rotation: 0,
         content: `${horizontalBullets ? '•' : `0${bulletIndex + 1}`}  ${bullet}`,
@@ -1513,6 +1636,15 @@ function buildSlide(input: {
           fontSize: horizontalBullets ? 16 : 17,
           fontWeight: 560,
           lineHeight: 1.2,
+          ...(cardRowLayout
+            ? {
+                fill: layout === 'evidence_board' ? theme.colors.insight : theme.colors.accentSoft,
+                stroke: layout === 'evidence_board' ? theme.colors.border : theme.colors.accentSoft,
+                strokeWidth: 1,
+                padding: 12,
+                radius: theme.defaultRadius,
+              }
+            : {}),
         },
         sourceIds: claimSourceIds,
         locked: false,
@@ -1527,17 +1659,17 @@ function buildSlide(input: {
         name: 'Primary metric',
         kind: 'text',
         role: 'metric',
-        bbox: box(0.56, 0.41, 0.34, 0.15),
+        bbox: isOpening ? box(0.66, 0.52, 0.24, 0.1) : box(0.56, 0.41, 0.34, 0.15),
         rotation: 0,
         content: planned.metric,
         style: {
           color: theme.colors.insightInk,
           fill: theme.colors.insight,
           fontFamily: theme.typography.data,
-          fontSize: 43,
+          fontSize: isOpening ? 27 : 43,
           fontWeight: 720,
           lineHeight: 1,
-          padding: 20,
+          padding: isOpening ? 10 : 20,
           radius: theme.defaultRadius,
         },
         sourceIds: evidenceSourceIds,
@@ -1550,13 +1682,13 @@ function buildSlide(input: {
         name: 'Metric label',
         kind: 'text',
         role: 'caption',
-        bbox: box(0.59, 0.58, 0.29, 0.09),
+        bbox: isOpening ? box(0.66, 0.63, 0.24, 0.05) : box(0.59, 0.58, 0.29, 0.09),
         rotation: 0,
         content: planned.metricLabel ?? 'Success signal from the working brief',
         style: {
           color: theme.colors.muted,
           fontFamily: theme.typography.body,
-          fontSize: 15,
+          fontSize: isOpening ? 12 : 15,
           fontWeight: 500,
           lineHeight: 1.25,
           textAlign: 'center',
@@ -1848,7 +1980,7 @@ function buildSlide(input: {
       deckId: input.deckId,
       title: planned.title,
       section: planned.section,
-      notes: `Narrative role: ${planned.section}. Keep the spoken transition focused on “${planned.headline}”\n\nEvidence note: Content is based on the supplied creation brief. Illustrative examples are not independently verified; replace them with measured evidence before external publication.`,
+      notes: `Narrative role: ${planned.section}. Layout intent: ${layout}. Keep the spoken transition focused on “${planned.headline}”\n\nEvidence note: Content is based on the supplied creation brief. Illustrative examples are not independently verified; replace them with measured evidence before external publication.`,
       background: theme.colors.canvas,
       elementOrder: elements.map((candidate) => candidate.id),
       version: 1,
@@ -1864,9 +1996,10 @@ function coercePlannedSlide(
 ): NodeSlidePlannedSlide | null {
   if (!isRecord(value)) return fallback ?? null;
   const title = cleanField(value.title, fallback?.title ?? `Slide ${index + 1}`, 80);
-  const headline = cleanField(value.headline, fallback?.headline ?? title, 180);
-  const body = cleanField(value.body, fallback?.body ?? headline, 360);
+  const headline = cleanField(value.headline, fallback?.headline ?? title, 120);
+  const body = cleanField(value.body, fallback?.body ?? headline, 180);
   const section = cleanField(value.section, fallback?.section ?? `Story / ${index + 1}`, 60);
+  const layout = isNodeSlideLayoutIntent(value['layout']) ? value['layout'] : fallback?.layout;
   const bullets = Array.isArray(value.bullets)
     ? value.bullets
         .filter((bullet): bullet is string => typeof bullet === 'string')
@@ -1925,6 +2058,7 @@ function coercePlannedSlide(
     headline,
     body,
     bullets: bullets.length > 0 ? bullets : ['Context', 'Action', 'Outcome'],
+    ...(layout ? { layout } : {}),
     ...(metric ? { metric } : {}),
     ...(metricLabel ? { metricLabel } : {}),
     ...(chart ? { chart } : {}),
@@ -1935,11 +2069,30 @@ function coercePlannedSlide(
   };
 }
 
+function isNodeSlideLayoutIntent(value: unknown): value is NodeSlideLayoutIntent {
+  return (
+    typeof value === 'string' && (NODESLIDE_LAYOUT_INTENTS as readonly string[]).includes(value)
+  );
+}
+
+function inferNodeSlideLayout(
+  planned: NodeSlidePlannedSlide,
+  index: number,
+  total: number,
+): NodeSlideLayoutIntent {
+  if (index === 0) return 'hero';
+  if (index === total - 1) return 'decision';
+  if (planned.diagram) return 'flow';
+  if (index === 1) return 'comparison';
+  if (index === total - 2) return 'evidence_board';
+  return index % 2 === 0 ? 'contract' : 'split';
+}
+
 function coerceDiagram(value: unknown): NodeSlidePlannedDiagram | undefined {
   if (!isRecord(value) || !Array.isArray(value.nodes)) return undefined;
   const nodes = value.nodes
     .filter((node): node is string => typeof node === 'string')
-    .map((node) => nodeslideCleanText(node, 52))
+    .map((node) => nodeslideCleanText(node, 32))
     .filter(Boolean)
     .slice(0, 4);
   return nodes.length >= 2 ? { nodes } : undefined;
@@ -2087,7 +2240,7 @@ function cleanField(value: unknown, fallback: string, maxLength: number): string
 }
 
 function cleanPlannedBullet(value: string): string {
-  return nodeslideCleanText(value, 100)
+  return nodeslideCleanText(value, 90)
     .replace(/^(?:(?:0?\d{1,2})\s*[.):\-·]\s*|[•–—-]\s*)+/u, '')
     .trim();
 }

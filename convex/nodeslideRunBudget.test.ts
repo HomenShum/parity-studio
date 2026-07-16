@@ -105,11 +105,19 @@ describe('NodeSlide model pricing metadata', () => {
       providerContextWindowTokens: 1_048_576,
       providerMaxOutputTokens: 131_072,
     });
+    expect(nodeSlideModelPricing('z-ai/glm-5.2')).toMatchObject({
+      kind: 'priced',
+      inputMicroUsdPerMillionTokens: 1_400_000,
+      outputMicroUsdPerMillionTokens: 4_400_000,
+      providerContextWindowTokens: 1_048_576,
+      providerMaxOutputTokens: 131_072,
+      source: 'openrouter_request_price_ceiling',
+    });
   });
 
   it('returns typed unscored data, never a fabricated estimate, for unknown pricing', () => {
     const named = scoreNodeSlideWorstCaseCost({
-      model: 'z-ai/glm-5.2',
+      model: 'anthropic/claude-sonnet-5',
       inputTokens: 10_000,
       outputTokens: 2_000,
     });

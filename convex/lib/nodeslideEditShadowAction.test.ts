@@ -273,7 +273,9 @@ describe('NodeSlide same-turn edit shadow comparison isolation', () => {
       inputTokens: 180,
       outputTokens: 44,
     });
-    expect(proposalArgs?.traceSummary).toContain('OpenRouter Claude Sonnet 5 proposed');
+    expect(proposalArgs?.traceSummary).toContain(
+      'OpenRouter Claude Sonnet 5 prepared 1 validated scoped operation',
+    );
     expect(proposalArgs?.toolCalls).toContain(
       'Called Claude Sonnet 5 through the maintained pi-ai OpenRouter provider after exact edit consent',
     );

@@ -202,10 +202,14 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toContain('grid-template-columns: 28px minmax(0, 1fr);');
     expect(css).toContain('.nodeslide-studio .ns-ai-v3-tool');
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 76px;[\s\S]*?padding: 15px 14px 10px;/,
+      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-textarea[\s\S]*?min-height: 72px;[\s\S]*?padding: 12px 14px 7px;/,
     );
     expect(css).toMatch(
-      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: wrap;/,
+      /\.nodeslide-studio \.ns-ai-v3-prompt \.ns-prompt-tools[\s\S]*?flex-wrap: nowrap;/,
+    );
+    expect(css).toContain('.nodeslide-studio .ns-ai-composer-preflight');
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-ai-v3-prompt \[data-testid="ai-submit"\][\s\S]*?border-radius: 50%;/,
     );
     expect(css).toMatch(
       /@container nodeslide-inspector \(max-width: 430px\)[\s\S]*?\.ns-prompt-footer-status[\s\S]*?display: none;[\s\S]*?\.ns-ai-tool-label[\s\S]*?display: none;/,

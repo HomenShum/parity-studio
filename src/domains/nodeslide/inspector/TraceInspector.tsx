@@ -531,7 +531,7 @@ function TraceBanner({
       </div>
       <div className="ns-trace-kpis" aria-label="Run metrics">
         <span>
-          <small>{trace.patchId ? 'Review cycle' : 'Run time'}</small>
+          <small>{trace.patchId ? 'Edit cycle' : 'Run time'}</small>
           <strong>
             <Clock3 size={11} /> {duration(trace, run)}
           </strong>
@@ -1316,7 +1316,7 @@ export function buildSealModel(
   } else if (fallback) {
     human = { value: 'Not yet signable', sub: 'no candidate to countersign' };
   } else if (!patch) {
-    human = { value: 'No review cycle — full generation', sub: 'no human sign-off on record' };
+    human = { value: 'Full generation', sub: 'no deck-local edit receipt' };
   } else if (patch.status === 'accepted') {
     human = { value: 'Applied' };
   } else if (patch.status === 'rejected') {
@@ -1525,10 +1525,11 @@ export function isFallbackTrace(trace: AgentTrace): boolean {
   //    complete live receipt. Missing cost, token flow, or candidate binding is
   //    ambiguous and therefore degrades closed rather than wearing a live badge.
   const external = /openrouter/i.test(`${trace.provider ?? ''} ${trace.model ?? ''}`);
+  const requiresCandidateReceipt = trace.status === 'awaiting_review' || Boolean(trace.patchId);
   if (
     external &&
     (trace.status === 'completed' || trace.status === 'awaiting_review') &&
-    (!hasProviderAttemptTelemetry(trace) || !trace.candidateDigest)
+    (!hasProviderAttemptTelemetry(trace) || (requiresCandidateReceipt && !trace.candidateDigest))
   ) {
     return true;
   }

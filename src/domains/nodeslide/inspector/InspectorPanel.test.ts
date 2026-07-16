@@ -10,6 +10,7 @@ import {
 import type { InspectorTab } from './types';
 
 const source = readFileSync(new URL('./InspectorPanel.tsx', import.meta.url), 'utf8');
+const aiSource = readFileSync(new URL('./AiInspector.tsx', import.meta.url), 'utf8');
 
 describe('NodeSlide inspector shell state', () => {
   it('keeps five high-frequency views visible and moves Versions and JSON into More', () => {
@@ -62,5 +63,18 @@ describe('NodeSlide inspector shell state', () => {
     expect(source).toContain('initialFocusRef: closeButtonRef');
     expect(source).toContain('onKeyDown={drawerOpen ? handleDrawerKeyDown : undefined}');
     expect(source).toContain('<OverlayBackdrop');
+  });
+
+  it('removes the duplicate validation footer while preserving Deck CI and Trace access', () => {
+    expect(source).not.toContain('data-testid="validation-status"');
+    expect(source).not.toContain('className="ns-inspector-footer"');
+    expect(source).toContain("onOpenDeckCiTrace={() => onTabChange('trace')}");
+    expect(aiSource).toContain('<DeckCiStatus');
+    expect(aiSource).toContain('onOpenTrace: onOpenDeckCiTrace');
+  });
+
+  it('keeps session Turbo authority reachable in the primary AI composer', () => {
+    expect(source).not.toContain('showApprovalModeControl={false}');
+    expect(source).toContain('onApprovalModeChange');
   });
 });

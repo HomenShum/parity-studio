@@ -492,7 +492,7 @@ function executeCommand(
     };
     return {
       ok: true,
-      summary: `Validated ${patch.operations.length} operation${patch.operations.length === 1 ? '' : 's'} for human review.`,
+      summary: `Validated ${patch.operations.length} reversible operation${patch.operations.length === 1 ? '' : 's'} for the active client policy.`,
       output: {
         operationCount: patch.operations.length,
         operationDigest: proposal.operationDigest,

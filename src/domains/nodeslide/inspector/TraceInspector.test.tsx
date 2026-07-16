@@ -177,12 +177,15 @@ const traceFailed: AgentTrace = {
 };
 
 // A live full-generation run with no review patch attached.
-const { patchId: _patchId, ...traceLiveWithoutPatch } = traceLive;
+const {
+  patchId: _patchId,
+  candidateDigest: _candidateDigest,
+  ...traceLiveWithoutPatch
+} = traceLive;
 const traceFullGen: AgentTrace = {
   ...traceLiveWithoutPatch,
   id: 'trace_full',
   status: 'completed',
-  candidateDigest: 'candidate_full_9c1d20ea44b7f0331188aa5cdf20e4b7',
   costMicroUsd: 1500,
 };
 
@@ -236,6 +239,10 @@ describe('isFallbackTrace — fails closed', () => {
     expect(isFallbackTrace(live)).toBe(false);
   });
 
+  it('treats paid full-deck generation as live without inventing an edit candidate receipt', () => {
+    expect(isFallbackTrace(traceFullGen)).toBe(false);
+  });
+
   it('fails closed when an awaiting external run has a digest but no positive cost', () => {
     expect(
       isFallbackTrace({
@@ -283,8 +290,8 @@ describe('CountersignSeal — state-honest matrix (spec §4a)', () => {
   it('Row: full-generation — no patch means no sign-off is asserted', () => {
     const model = buildSealModel(traceFullGen, undefined, validationLive, 'pro');
     expect(model.variant).toBe('live');
-    expect(model.human.value).toBe('No review cycle — full generation');
-    expect(model.human.sub).toBe('no human sign-off on record');
+    expect(model.human.value).toBe('Full generation');
+    expect(model.human.sub).toBe('no deck-local edit receipt');
   });
 
   it('Row: fallback — provisional stamp, NO invented hash, honestly green validator', () => {

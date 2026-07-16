@@ -484,4 +484,16 @@ describe('NodeSlide stored text materialization', () => {
       materializeNodeSlideStoredText(new TextEncoder().encode('{"unsafe":'), 'json'),
     ).toThrow('Stored JSON is malformed.');
   });
+
+  it('materializes Markdown as bounded note text', () => {
+    const result = materializeNodeSlideStoredText(
+      new TextEncoder().encode('# Launch plan\n\n- Ship the evidence rail'),
+      'md',
+    );
+    expect(result).toMatchObject({
+      preview: '# Launch plan\n\n- Ship the evidence rail',
+      truncated: false,
+      rowCount: 2,
+    });
+  });
 });

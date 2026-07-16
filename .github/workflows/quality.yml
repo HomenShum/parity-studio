@@ -79,22 +79,34 @@ jobs:
           fi
       - name: Pull preview project settings
         run: >-
-          pnpm dlx vercel@56.1.0 pull --yes --environment=preview
+          pnpm dlx vercel@56.3.0 pull --yes --environment=preview
           --git-branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --token="$VERCEL_TOKEN"
       - id: deploy
         name: Deploy frontend plus isolated Convex preview
         shell: bash
         run: |
-          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force \
-            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
-            --build-env PARITY_CONVEX_DEPLOY_MODE=preview \
-            --build-env PARITY_INCLUDE_QA_FIXTURES=1 \
-            --build-env PARITY_CONVEX_PREVIEW_NAME="$PARITY_CONVEX_PREVIEW_NAME" \
-            --build-env CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY" \
-            --token="$VERCEL_TOKEN")"
+          deployment_url=""
+          for attempt in 1 2 3; do
+            echo "Starting isolated Vercel preview deployment (attempt ${attempt}/3)."
+            if candidate_url="$(pnpm dlx vercel@56.3.0 deploy --yes --force \
+              --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+              --build-env PARITY_CONVEX_DEPLOY_MODE=preview \
+              --build-env PARITY_INCLUDE_QA_FIXTURES=1 \
+              --build-env PARITY_CONVEX_PREVIEW_NAME="$PARITY_CONVEX_PREVIEW_NAME" \
+              --build-env CONVEX_DEPLOY_KEY="$CONVEX_DEPLOY_KEY" \
+              --token="$VERCEL_TOKEN")" && [[ "$candidate_url" == https://* ]]; then
+              deployment_url="$candidate_url"
+              break
+            fi
+            if (( attempt < 3 )); then
+              delay=$((attempt * 20))
+              echo "Vercel preview deployment did not complete; retrying in ${delay}s." >&2
+              sleep "$delay"
+            fi
+          done
           case "$deployment_url" in
             https://*) ;;
-            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+            *) echo "Vercel did not return an HTTPS deployment URL after 3 attempts." >&2; exit 1 ;;
           esac
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
@@ -181,19 +193,31 @@ jobs:
           test -n "$VERCEL_PROJECT_ID"
       - name: Pull production project settings
         run: >-
-          pnpm dlx vercel@56.1.0 pull --yes --environment=production
+          pnpm dlx vercel@56.3.0 pull --yes --environment=production
           --token="$VERCEL_TOKEN"
       - id: deploy
         name: Build staged frontend without deploying Convex
         shell: bash
         run: |
-          deployment_url="$(pnpm dlx vercel@56.1.0 deploy --yes --force --prod --skip-domain \
-            --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
-            --build-env PARITY_CONVEX_DEPLOY_MODE=frontend-only \
-            --token="$VERCEL_TOKEN")"
+          deployment_url=""
+          for attempt in 1 2 3; do
+            echo "Starting staged production frontend deployment (attempt ${attempt}/3)."
+            if candidate_url="$(pnpm dlx vercel@56.3.0 deploy --yes --force --prod --skip-domain \
+              --build-env PARITY_SOURCE_SHA="$GITHUB_SHA" \
+              --build-env PARITY_CONVEX_DEPLOY_MODE=frontend-only \
+              --token="$VERCEL_TOKEN")" && [[ "$candidate_url" == https://* ]]; then
+              deployment_url="$candidate_url"
+              break
+            fi
+            if (( attempt < 3 )); then
+              delay=$((attempt * 20))
+              echo "Staged production frontend deployment did not complete; retrying in ${delay}s." >&2
+              sleep "$delay"
+            fi
+          done
           case "$deployment_url" in
             https://*) ;;
-            *) echo "Vercel did not return an HTTPS deployment URL." >&2; exit 1 ;;
+            *) echo "Vercel did not return an HTTPS deployment URL after 3 attempts." >&2; exit 1 ;;
           esac
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 

@@ -259,7 +259,7 @@ function assertSourceType(value: unknown): asserts value is SourceRecord['source
 }
 
 function assertFormat(value: unknown): asserts value is SourceRecord['format'] | undefined {
-  if (value !== undefined && !['csv', 'json', 'txt', 'web'].includes(String(value))) {
+  if (value !== undefined && !['csv', 'json', 'txt', 'md', 'pdf', 'web'].includes(String(value))) {
     invalid('format is invalid');
   }
 }
