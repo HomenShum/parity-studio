@@ -561,18 +561,12 @@ async function recoverPriorCall(
       'A prior dispatch may have started; its full reservation remains unreconciled.',
     );
   }
-  if (prior.call?.status === 'unreconciled') {
-    return {
-      ok: false,
-      reason: 'The prior provider call remains unreconciled and will not be dispatched again.',
-      code: 'ambiguous_provider_call',
-      accounting: { ...accounting, disposition: 'unreconciled', ledger: prior },
-    };
-  }
   return replayedFailure(
     accounting,
     prior,
-    'The provider call was already accounted for; replay its durable job result.',
+    prior.call?.status === 'unreconciled'
+      ? 'The prior provider call remains unreconciled; replay its durable ambiguous result without dispatching again.'
+      : 'The provider call was already accounted for; replay its durable job result.',
   );
 }
 

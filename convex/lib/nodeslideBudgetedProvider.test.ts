@@ -347,7 +347,7 @@ describe('NodeSlide budgeted provider adapter', () => {
     expect(fixture.release).not.toHaveBeenCalled();
   });
 
-  it('never redispatches a settled replay and captures a stranded reservation', async () => {
+  it('never redispatches settled or unreconciled calls and captures a stranded reservation', async () => {
     const settledFixture = ledgerFixture({ priorStatus: 'settled' });
     const settledProvider = vi.fn<NodeSlideBudgetedProviderCall>();
     const settledResult = await callNodeSlideBudgetedJson(
@@ -362,6 +362,24 @@ describe('NodeSlide budgeted provider adapter', () => {
     });
     expect(settledProvider).not.toHaveBeenCalled();
     expect(settledFixture.reserve).not.toHaveBeenCalled();
+
+    const unreconciledFixture = ledgerFixture({ priorStatus: 'unreconciled' });
+    const unreconciledProvider = vi.fn<NodeSlideBudgetedProviderCall>();
+    const unreconciledResult = await callNodeSlideBudgetedJson(
+      { runId: 'run-replay-unreconciled', callKey: 'edit-planner', providerRequest },
+      { ledger: unreconciledFixture.ledger, provider: unreconciledProvider },
+    );
+
+    expect(unreconciledResult).toMatchObject({
+      ok: false,
+      code: 'idempotent_replay',
+      accounting: {
+        disposition: 'replayed',
+        ledger: { call: { status: 'unreconciled' } },
+      },
+    });
+    expect(unreconciledProvider).not.toHaveBeenCalled();
+    expect(unreconciledFixture.reserve).not.toHaveBeenCalled();
 
     const reservedFixture = ledgerFixture({ priorStatus: 'reserved' });
     const reservedProvider = vi.fn<NodeSlideBudgetedProviderCall>();
