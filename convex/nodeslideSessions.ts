@@ -38,6 +38,27 @@ import {
 } from './lib/nodeslideJobJournal';
 
 export const NODESLIDE_DURABLE_SESSION_MAX_TRANSITIONS = NODESLIDE_DURABLE_SESSION_MAX_EVENTS;
+export const NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES = 200_000 as const;
+
+const NODESLIDE_MODEL_RESULT_REPLAY_VERSION = 'nodeslide.model-result-replay/v1' as const;
+const NODESLIDE_MODEL_OUTPUT_DIGEST_VERSION = 'nodeslide.model-output/v1' as const;
+const NODESLIDE_MODEL_RESULT_MAX_JSON_DEPTH = 64;
+const MODEL_RESULT_DISPOSITIONS = new Set([
+  'settled',
+  'unreconciled',
+  'released',
+  'denied',
+  'replayed',
+  'accounting_error',
+]);
+const MODEL_RESULT_FAILURE_CODES = new Set([
+  'pricing_unknown',
+  'budget_denied',
+  'ambiguous_provider_call',
+  'idempotent_replay',
+  'accounting_failed',
+]);
+const MODEL_RESULT_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 const requestBindingValidator = v.object({
   schemaVersion: v.literal(NODESLIDE_REQUEST_BINDING_VERSION),
@@ -145,6 +166,7 @@ const journalEntryValidator = v.union(
       outputTokens: v.optional(v.number()),
       createdAt: v.number(),
     }),
+    result: v.optional(v.any()),
   }),
   v.object({
     kind: v.literal('web'),
@@ -165,7 +187,16 @@ const journalEntryValidator = v.union(
 type SessionRow = Doc<'nodeslide_durable_sessions'>;
 type TransitionRow = Doc<'nodeslide_durable_session_events'>;
 type JournalRow = Doc<'nodeslide_durable_job_journal_entries'>;
+type ModelResultReplayRow = Doc<'nodeslide_durable_model_result_replays'>;
 type ReadCtx = Pick<QueryCtx, 'db'> | Pick<MutationCtx, 'db'>;
+
+interface PreparedModelResultReplay {
+  readonly callIdDigest: string;
+  readonly outputDigest: string;
+  readonly payloadJson: string;
+  readonly payloadBytes: number;
+  readonly computedOutputDigest: string;
+}
 
 type PersistedCommand =
   | Omit<Extract<NodeSlideDurableSessionCommand, { type: 'enqueue' }>, 'now'>
@@ -184,6 +215,7 @@ export type NodeSlideSessionPersistenceErrorCode =
   | 'session_not_found'
   | 'idempotency_conflict'
   | 'integrity_failure'
+  | 'model_result_too_large'
   | 'transition_capacity_exceeded';
 
 export class NodeSlideSessionPersistenceError extends Error {
@@ -382,6 +414,16 @@ export const appendJournal = internalMutation({
       );
     }
     const canonicalEntry = canonicalJournalInput(sessionId, journalCommand.entry);
+    const modelResultReplay =
+      journalCommand.kind === 'model' && journalCommand.result !== undefined
+        ? prepareModelResultReplay({
+            sessionId,
+            callId: journalCommand.entry.id,
+            callIdDigest: canonicalEntry.id,
+            outputDigest: journalCommand.entry.outputDigest,
+            result: journalCommand.result,
+          })
+        : null;
     const entryInputDigest = nodeSlideDurableDigest({
       version: NODESLIDE_JOB_JOURNAL_VERSION,
       kind: journalCommand.kind,
@@ -396,8 +438,31 @@ export const appendJournal = internalMutation({
           'journal entry id is already bound to different safe metadata',
         );
       }
+      if (modelResultReplay) {
+        const existingReplay = await findModelResultReplay(
+          ctx,
+          binding,
+          modelResultReplay.callIdDigest,
+        );
+        if (
+          !existingReplay ||
+          existingReplay.payloadJson !== modelResultReplay.payloadJson ||
+          existingReplay.payloadBytes !== modelResultReplay.payloadBytes ||
+          existingReplay.outputDigest !== modelResultReplay.outputDigest
+        ) {
+          throw new NodeSlideSessionPersistenceError(
+            'idempotency_conflict',
+            'model call is already bound to a different replay payload',
+          );
+        }
+        assertModelResultOutputDigest(modelResultReplay, modelResultReplay.outputDigest);
+      }
       const restored = await loadJournal(ctx, binding);
       return { replayed: true, journal: presentJournal(restored) };
+    }
+
+    if (modelResultReplay) {
+      assertModelResultOutputDigest(modelResultReplay, modelResultReplay.outputDigest);
     }
 
     const row = await requireSession(ctx, sessionId);
@@ -457,6 +522,23 @@ export const appendJournal = internalMutation({
       journalDigest: next.journalDigest,
       createdAt: appended.createdAt,
     });
+    if (modelResultReplay) {
+      await ctx.db.insert('nodeslide_durable_model_result_replays', {
+        schemaVersion: NODESLIDE_MODEL_RESULT_REPLAY_VERSION,
+        sessionId: binding.sessionId,
+        jobId: binding.jobId,
+        callIdDigest: modelResultReplay.callIdDigest,
+        requestDigest: binding.requestDigest,
+        capabilityDigest: binding.capabilityDigest,
+        egressEpoch: binding.egressEpoch,
+        attempt: binding.attempt,
+        binding,
+        outputDigest: modelResultReplay.outputDigest,
+        payloadJson: modelResultReplay.payloadJson,
+        payloadBytes: modelResultReplay.payloadBytes,
+        createdAt: appended.createdAt,
+      });
+    }
     return { replayed: false, journal: presentJournal(next) };
   },
 });
@@ -487,6 +569,26 @@ export const getJournal = internalQuery({
     if (!row) return null;
     assertBinding(row.requestBinding, args.binding);
     return presentJournal(await loadJournal(ctx, args.binding as NodeSlideJobJournalBinding));
+  },
+});
+
+/** Returns a provider result envelope only for the complete historical binding. */
+export const getModelResultReplay = internalQuery({
+  args: { binding: journalBindingValidator, callId: v.string() },
+  handler: async (ctx, args) => {
+    const binding = args.binding as NodeSlideJobJournalBinding;
+    const callId = requiredKey(args.callId, 'model call id');
+    const callIdDigest = canonicalJournalEntryId(binding.sessionId, callId);
+    const replay = await findModelResultReplay(ctx, binding, callIdDigest);
+    if (!replay) return null;
+
+    assertModelResultReplayBinding(replay, binding, callIdDigest);
+    const journal = await loadJournal(ctx, binding);
+    const receipt = journal.modelEntries.find((entry) => entry.id === callIdDigest);
+    if (!receipt || receipt.outputDigest !== replay.outputDigest) {
+      integrityFailure('model result replay is not bound to its journal receipt');
+    }
+    return readModelResultReplay(replay, receipt.outputDigest, callId);
   },
 });
 
@@ -837,11 +939,342 @@ function jobIdFromCommand(command: PersistedCommand): string | undefined {
   return 'jobId' in command ? command.jobId : undefined;
 }
 
+function prepareModelResultReplay(args: {
+  sessionId: string;
+  callId: string;
+  callIdDigest: string;
+  outputDigest: string;
+  result: unknown;
+}): PreparedModelResultReplay {
+  const callId = requiredKey(args.callId, 'model call id');
+  if (args.callIdDigest !== canonicalJournalEntryId(args.sessionId, callId)) {
+    integrityFailure('model result call id does not match its journal receipt');
+  }
+  const canonical = canonicalModelResultEnvelope(args.result, callId);
+  return {
+    callIdDigest: args.callIdDigest,
+    outputDigest: args.outputDigest,
+    payloadJson: canonical.payloadJson,
+    payloadBytes: canonical.payloadBytes,
+    computedOutputDigest: canonical.computedOutputDigest,
+  };
+}
+
+function canonicalModelResultEnvelope(result: unknown, callId: string) {
+  assertModelResultEnvelope(result, callId);
+  const payload = canonicalJsonValue(result, new Set<object>(), 0);
+  const payloadJson = JSON.stringify(payload);
+  const payloadBytes = new TextEncoder().encode(payloadJson).byteLength;
+  if (payloadBytes > NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES) {
+    throw new NodeSlideSessionPersistenceError(
+      'model_result_too_large',
+      `model result replay payload exceeds ${NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES} bytes`,
+    );
+  }
+  return {
+    payload,
+    payloadJson,
+    payloadBytes,
+    computedOutputDigest: nodeSlideDurableDigest({
+      schemaVersion: NODESLIDE_MODEL_OUTPUT_DIGEST_VERSION,
+      result: payload,
+    }),
+  };
+}
+
+function assertModelResultOutputDigest(
+  replay: PreparedModelResultReplay,
+  outputDigest: string,
+): void {
+  if (replay.computedOutputDigest !== outputDigest) {
+    integrityFailure('model journal output digest does not bind the replay payload');
+  }
+}
+
+function readModelResultReplay(
+  row: ModelResultReplayRow,
+  outputDigest: string,
+  callId: string,
+): unknown {
+  const storedBytes = new TextEncoder().encode(row.payloadJson).byteLength;
+  if (
+    !Number.isSafeInteger(row.payloadBytes) ||
+    row.payloadBytes < 0 ||
+    row.payloadBytes !== storedBytes ||
+    storedBytes > NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES
+  ) {
+    integrityFailure('model result replay payload size does not verify');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.payloadJson) as unknown;
+  } catch {
+    integrityFailure('model result replay payload is not valid JSON');
+  }
+  const canonical = canonicalModelResultEnvelope(parsed, callId);
+  if (
+    canonical.payloadJson !== row.payloadJson ||
+    canonical.payloadBytes !== row.payloadBytes ||
+    canonical.computedOutputDigest !== row.outputDigest ||
+    row.outputDigest !== outputDigest
+  ) {
+    integrityFailure('model result replay payload digest does not verify');
+  }
+  return canonical.payload;
+}
+
+function assertModelResultReplayBinding(
+  row: ModelResultReplayRow,
+  binding: NodeSlideJobJournalBinding,
+  callIdDigest: string,
+): void {
+  if (
+    row.schemaVersion !== NODESLIDE_MODEL_RESULT_REPLAY_VERSION ||
+    row.sessionId !== binding.sessionId ||
+    row.jobId !== binding.jobId ||
+    row.callIdDigest !== callIdDigest ||
+    row.requestDigest !== binding.requestDigest ||
+    row.capabilityDigest !== binding.capabilityDigest ||
+    row.egressEpoch !== binding.egressEpoch ||
+    row.attempt !== binding.attempt ||
+    !sameJournalBinding(row.binding, binding)
+  ) {
+    integrityFailure('model result replay binding does not verify');
+  }
+}
+
+function sameJournalBinding(
+  left: NodeSlideJobJournalBinding,
+  right: NodeSlideJobJournalBinding,
+): boolean {
+  return (
+    left.schemaVersion === right.schemaVersion &&
+    left.sessionId === right.sessionId &&
+    left.jobId === right.jobId &&
+    left.requestDigest === right.requestDigest &&
+    left.capabilityDigest === right.capabilityDigest &&
+    left.egressEpoch === right.egressEpoch &&
+    left.attempt === right.attempt
+  );
+}
+
+function assertModelResultEnvelope(value: unknown, callId: string): void {
+  const envelope = jsonRecord(value, 'model result envelope');
+  const accounting = jsonRecord(envelope.accounting, 'model result accounting');
+  assertOnlyKeys(accounting, ['budgetId', 'callId', 'disposition', 'ledger'], 'accounting');
+  assertBoundedString(accounting.budgetId, 'accounting budget id', 512);
+  assertBoundedString(accounting.callId, 'accounting call id', 256);
+  if (accounting.callId !== callId) {
+    integrityFailure('provider result accounting call id does not match the journal call');
+  }
+  if (
+    typeof accounting.disposition !== 'string' ||
+    !MODEL_RESULT_DISPOSITIONS.has(accounting.disposition)
+  ) {
+    integrityFailure('model result accounting disposition is invalid');
+  }
+  if (accounting.ledger !== undefined) assertModelResultLedger(accounting.ledger);
+
+  if (envelope.ok === true) {
+    assertOnlyKeys(envelope, ['ok', 'value', 'telemetry', 'accounting'], 'successful result');
+    if (!Object.hasOwn(envelope, 'value') || !Object.hasOwn(envelope, 'telemetry')) {
+      integrityFailure('successful model result envelope is incomplete');
+    }
+    assertModelResultTelemetry(envelope.telemetry);
+    return;
+  }
+  if (envelope.ok !== false) integrityFailure('model result envelope status is invalid');
+  assertOnlyKeys(envelope, ['ok', 'reason', 'code', 'telemetry', 'accounting'], 'failed result');
+  assertBoundedString(envelope.reason, 'model result reason', 4_000);
+  if (
+    envelope.code !== undefined &&
+    (typeof envelope.code !== 'string' || !MODEL_RESULT_FAILURE_CODES.has(envelope.code))
+  ) {
+    integrityFailure('model result failure code is invalid');
+  }
+  if (envelope.telemetry !== undefined) assertModelResultTelemetry(envelope.telemetry);
+}
+
+function assertModelResultTelemetry(value: unknown): void {
+  const telemetry = jsonRecord(value, 'model result telemetry');
+  assertOnlyKeys(
+    telemetry,
+    [
+      'provider',
+      'model',
+      'reasoningEffort',
+      'costMicroUsd',
+      'inputTokens',
+      'outputTokens',
+      'attempts',
+    ],
+    'telemetry',
+  );
+  assertBoundedString(telemetry.provider, 'telemetry provider', 256);
+  assertBoundedString(telemetry.model, 'telemetry model', 256);
+  assertNonnegativeInteger(telemetry.costMicroUsd, 'telemetry cost');
+  assertNonnegativeInteger(telemetry.inputTokens, 'telemetry input tokens');
+  assertNonnegativeInteger(telemetry.outputTokens, 'telemetry output tokens');
+  if (
+    telemetry.reasoningEffort !== undefined &&
+    (typeof telemetry.reasoningEffort !== 'string' ||
+      !MODEL_RESULT_REASONING_EFFORTS.has(telemetry.reasoningEffort))
+  ) {
+    integrityFailure('telemetry reasoning effort is invalid');
+  }
+  if (telemetry.attempts === undefined) return;
+  if (!Array.isArray(telemetry.attempts) || telemetry.attempts.length > 2) {
+    integrityFailure('telemetry attempts are invalid');
+  }
+  for (const value of telemetry.attempts) {
+    const attempt = jsonRecord(value, 'model result telemetry attempt');
+    assertOnlyKeys(
+      attempt,
+      ['attempt', 'attempted', 'settled', 'ambiguous', 'unreconciled', 'elapsedMs'],
+      'telemetry attempt',
+    );
+    if (attempt.attempt !== 'initial' && attempt.attempt !== 'repair') {
+      integrityFailure('telemetry attempt kind is invalid');
+    }
+    for (const field of ['attempted', 'settled', 'ambiguous', 'unreconciled'] as const) {
+      if (typeof attempt[field] !== 'boolean') {
+        integrityFailure(`telemetry attempt ${field} is invalid`);
+      }
+    }
+    assertNonnegativeInteger(attempt.elapsedMs, 'telemetry attempt elapsed time');
+  }
+}
+
+function assertModelResultLedger(value: unknown): void {
+  const ledger = jsonRecord(value, 'model result ledger');
+  assertOnlyKeys(ledger, ['budget', 'call'], 'ledger');
+  const budget = jsonRecord(ledger.budget, 'model result budget');
+  assertOnlyKeys(
+    budget,
+    [
+      'id',
+      'status',
+      'revision',
+      'stateDigest',
+      'actualMicroUsd',
+      'reservedMicroUsd',
+      'unreconciledMicroUsd',
+    ],
+    'ledger budget',
+  );
+  assertBoundedString(budget.id, 'ledger budget id', 512);
+  if (budget.status !== 'open' && budget.status !== 'finalized') {
+    integrityFailure('ledger budget status is invalid');
+  }
+  assertNonnegativeInteger(budget.revision, 'ledger budget revision');
+  assertBoundedString(budget.stateDigest, 'ledger budget state digest', 256);
+  assertNonnegativeInteger(budget.actualMicroUsd, 'ledger actual cost');
+  assertNonnegativeInteger(budget.reservedMicroUsd, 'ledger reserved cost');
+  assertNonnegativeInteger(budget.unreconciledMicroUsd, 'ledger unreconciled cost');
+
+  if (ledger.call === undefined) return;
+  const call = jsonRecord(ledger.call, 'model result ledger call');
+  assertOnlyKeys(
+    call,
+    ['callId', 'status', 'quoteMicroUsd', 'providerSafeOutputTokenCeiling', 'providerTimeoutMs'],
+    'ledger call',
+  );
+  assertBoundedString(call.callId, 'ledger call id', 256);
+  if (!['reserved', 'unreconciled', 'settled', 'released'].includes(String(call.status))) {
+    integrityFailure('ledger call status is invalid');
+  }
+  assertNonnegativeInteger(call.quoteMicroUsd, 'ledger call quote');
+  assertNonnegativeInteger(call.providerSafeOutputTokenCeiling, 'ledger output ceiling');
+  assertNonnegativeInteger(call.providerTimeoutMs, 'ledger timeout');
+}
+
+function canonicalJsonValue(value: unknown, active: Set<object>, depth: number): unknown {
+  if (depth > NODESLIDE_MODEL_RESULT_MAX_JSON_DEPTH) {
+    integrityFailure('model result JSON is nested too deeply');
+  }
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) integrityFailure('model result JSON number is not finite');
+    return value;
+  }
+  if (typeof value !== 'object') {
+    integrityFailure('model result payload must contain only JSON values');
+  }
+  if (active.has(value)) integrityFailure('model result JSON must not be cyclic');
+  active.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (Object.keys(value).length !== value.length) {
+        integrityFailure('model result JSON arrays must be dense');
+      }
+      return value.map((child) => canonicalJsonValue(child, active, depth + 1));
+    }
+    const prototype = Object.getPrototypeOf(value) as unknown;
+    if (prototype !== Object.prototype && prototype !== null) {
+      integrityFailure('model result JSON objects must be plain');
+    }
+    if (
+      Object.getOwnPropertySymbols(value).length > 0 ||
+      Object.getOwnPropertyNames(value).length !== Object.keys(value).length
+    ) {
+      integrityFailure('model result JSON object properties are invalid');
+    }
+    const canonical: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    for (const key of Object.keys(value).sort()) {
+      canonical[key] = canonicalJsonValue(
+        (value as Record<string, unknown>)[key],
+        active,
+        depth + 1,
+      );
+    }
+    return canonical;
+  } finally {
+    active.delete(value);
+  }
+}
+
+function jsonRecord(value: unknown, field: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    integrityFailure(`${field} must be an object`);
+  }
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Object.prototype && prototype !== null) {
+    integrityFailure(`${field} must be a plain object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  field: string,
+): void {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    integrityFailure(`${field} contains non-result material`);
+  }
+}
+
+function assertBoundedString(value: unknown, field: string, max: number): asserts value is string {
+  if (typeof value !== 'string' || !value.trim() || value.length > max) {
+    integrityFailure(`${field} is invalid`);
+  }
+}
+
+function assertNonnegativeInteger(value: unknown, field: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    integrityFailure(`${field} is invalid`);
+  }
+}
+
 function canonicalJournalInput<T extends { id: string }>(sessionId: string, entry: T): T {
   return {
     ...entry,
-    id: opaqueKey('journal-entry', sessionId, requiredKey(entry.id, 'journal entry id')),
+    id: canonicalJournalEntryId(sessionId, entry.id),
   };
+}
+
+function canonicalJournalEntryId(sessionId: string, entryId: string): string {
+  return opaqueKey('journal-entry', sessionId, requiredKey(entryId, 'journal entry id'));
 }
 
 function safeReason(reason: string): string {
@@ -974,6 +1407,26 @@ async function findJournalEntry(
         .eq('egressEpoch', binding.egressEpoch)
         .eq('attempt', binding.attempt)
         .eq('entryId', entryId),
+    )
+    .unique();
+}
+
+async function findModelResultReplay(
+  ctx: ReadCtx,
+  binding: NodeSlideJobJournalBinding,
+  callIdDigest: string,
+): Promise<ModelResultReplayRow | null> {
+  return await ctx.db
+    .query('nodeslide_durable_model_result_replays')
+    .withIndex('by_exact_binding', (index) =>
+      index
+        .eq('sessionId', binding.sessionId)
+        .eq('jobId', binding.jobId)
+        .eq('callIdDigest', callIdDigest)
+        .eq('requestDigest', binding.requestDigest)
+        .eq('capabilityDigest', binding.capabilityDigest)
+        .eq('egressEpoch', binding.egressEpoch)
+        .eq('attempt', binding.attempt),
     )
     .unique();
 }

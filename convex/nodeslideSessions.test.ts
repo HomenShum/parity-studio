@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createNodeSlideCapabilityDigestMetadata } from '../shared/nodeslideDurableSession';
+import {
+  createNodeSlideCapabilityDigestMetadata,
+  nodeSlideDurableDigest,
+} from '../shared/nodeslideDurableSession';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import {
+  NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES,
   NODESLIDE_DURABLE_SESSION_MAX_TRANSITIONS,
   NodeSlideSessionPersistenceError,
   appendJournal,
@@ -10,6 +14,7 @@ import {
   get,
   getEvents,
   getJournal,
+  getModelResultReplay,
 } from './nodeslideSessions';
 
 const RAW_SECRET = 'secret-provider-capability-that-must-never-be-returned';
@@ -141,6 +146,11 @@ const getEventsHandler = (
 const getJournalHandler = (
   getJournal as unknown as {
     _handler: QueryHandler<{ binding: JournalBinding }, Record<string, unknown> | null>;
+  }
+)._handler;
+const getModelResultReplayHandler = (
+  getModelResultReplay as unknown as {
+    _handler: QueryHandler<{ binding: JournalBinding; callId: string }, unknown | null>;
   }
 )._handler;
 
@@ -446,6 +456,146 @@ describe('NodeSlide durable session v2 persistence', () => {
   });
 });
 
+describe('NodeSlide durable model-result replay cache', () => {
+  it('atomically writes the bounded provider envelope with the first model receipt', async () => {
+    const database = new MemoryDatabase();
+    const binding = await createRunningJournal(database);
+    const result = providerResult('model-cache-1', { plan: ['Opening', 'Evidence'] });
+
+    expect(
+      await appendJournalHandler(
+        mutationContext(database),
+        journalArgs(binding, 'lease-1', modelEntry('model-cache-1', result)),
+      ),
+    ).toMatchObject({ replayed: false });
+
+    const receipts = database.rows('nodeslide_durable_job_journal_entries');
+    const replays = database.rows('nodeslide_durable_model_result_replays');
+    expect(receipts).toHaveLength(1);
+    expect(replays).toHaveLength(1);
+    expect(database.writes.slice(-2).map((write) => write.tableName)).toEqual([
+      'nodeslide_durable_job_journal_entries',
+      'nodeslide_durable_model_result_replays',
+    ]);
+    const replay = replays[0];
+    expect(replay).toMatchObject({
+      schemaVersion: 'nodeslide.model-result-replay/v1',
+      sessionId: binding.sessionId,
+      jobId: binding.jobId,
+      requestDigest: binding.requestDigest,
+      capabilityDigest: binding.capabilityDigest,
+      egressEpoch: binding.egressEpoch,
+      attempt: binding.attempt,
+      outputDigest: modelOutputDigest(result),
+    });
+    const payloadJson = String(replay?.payloadJson);
+    expect(JSON.parse(payloadJson)).toEqual(result);
+    expect(new TextEncoder().encode(payloadJson).byteLength).toBeLessThanOrEqual(
+      NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES,
+    );
+    expect(replay).not.toHaveProperty('inputDigest');
+    expect(JSON.stringify(replays)).not.toContain(RAW_SECRET);
+    expect(JSON.stringify(replays)).not.toContain(RAW_CONSENT);
+
+    const presentedJournal = await getJournalHandler(queryContext(database), { binding });
+    expect(JSON.stringify(presentedJournal)).not.toContain('payloadJson');
+    await appendJournalHandler(
+      mutationContext(database),
+      journalArgs(binding, 'lease-1', webEntry('web-cache-control')),
+    );
+    expect(database.rows('nodeslide_durable_model_result_replays')).toHaveLength(1);
+  });
+
+  it('returns the payload for the exact binding and allows an identical append replay', async () => {
+    const database = new MemoryDatabase();
+    const binding = await createRunningJournal(database);
+    const result = providerResult('model-cache-2', { title: 'Exact replay' });
+    const args = journalArgs(binding, 'lease-1', modelEntry('model-cache-2', result));
+
+    await appendJournalHandler(mutationContext(database), args);
+    expect(await appendJournalHandler(mutationContext(database), args)).toMatchObject({
+      replayed: true,
+    });
+    expect(
+      await getModelResultReplayHandler(queryContext(database), {
+        binding,
+        callId: 'model-cache-2',
+      }),
+    ).toEqual(result);
+    expect(database.rows('nodeslide_durable_model_result_replays')).toHaveLength(1);
+  });
+
+  it('rejects a conflicting payload for an existing model call', async () => {
+    const database = new MemoryDatabase();
+    const binding = await createRunningJournal(database);
+    const first = providerResult('model-cache-3', { title: 'First' });
+    const conflict = providerResult('model-cache-3', { title: 'Substituted' });
+    await appendJournalHandler(
+      mutationContext(database),
+      journalArgs(binding, 'lease-1', modelEntry('model-cache-3', first)),
+    );
+
+    await expect(
+      appendJournalHandler(
+        mutationContext(database),
+        journalArgs(
+          binding,
+          'lease-1',
+          modelEntry('model-cache-3', conflict, modelOutputDigest(first)),
+        ),
+      ),
+    ).rejects.toThrowError(expect.objectContaining({ code: 'idempotency_conflict' }));
+    expect(database.rows('nodeslide_durable_job_journal_entries')).toHaveLength(1);
+    expect(database.rows('nodeslide_durable_model_result_replays')).toHaveLength(1);
+  });
+
+  it('returns null when any session, job, call, request, capability, epoch, or attempt differs', async () => {
+    const database = new MemoryDatabase();
+    const binding = await createRunningJournal(database);
+    const result = providerResult('model-cache-4', { title: 'Bound result' });
+    await appendJournalHandler(
+      mutationContext(database),
+      journalArgs(binding, 'lease-1', modelEntry('model-cache-4', result)),
+    );
+
+    const mismatches: Array<{ binding: JournalBinding; callId: string }> = [
+      { binding: { ...binding, sessionId: 'session-other' }, callId: 'model-cache-4' },
+      { binding: { ...binding, jobId: 'job-other' }, callId: 'model-cache-4' },
+      { binding, callId: 'model-call-other' },
+      {
+        binding: { ...binding, requestDigest: `sha256:${'a'.repeat(64)}` },
+        callId: 'model-cache-4',
+      },
+      {
+        binding: { ...binding, capabilityDigest: `sha256:${'b'.repeat(64)}` },
+        callId: 'model-cache-4',
+      },
+      { binding: { ...binding, egressEpoch: binding.egressEpoch + 1 }, callId: 'model-cache-4' },
+      { binding: { ...binding, attempt: binding.attempt + 1 }, callId: 'model-cache-4' },
+    ];
+    for (const mismatch of mismatches) {
+      expect(await getModelResultReplayHandler(queryContext(database), mismatch)).toBeNull();
+    }
+  });
+
+  it('rejects an oversized envelope before either journal or cache row is written', async () => {
+    const database = new MemoryDatabase();
+    const binding = await createRunningJournal(database);
+    const result = providerResult('model-cache-5', {
+      text: 'x'.repeat(NODESLIDE_DURABLE_MODEL_RESULT_MAX_BYTES),
+    });
+
+    await expect(
+      appendJournalHandler(
+        mutationContext(database),
+        journalArgs(binding, 'lease-1', modelEntry('model-cache-5', result)),
+      ),
+    ).rejects.toThrowError(expect.objectContaining({ code: 'model_result_too_large' }));
+    expect(database.rows('nodeslide_durable_job_journal_entries')).toHaveLength(0);
+    expect(database.rows('nodeslide_durable_model_result_replays')).toHaveLength(0);
+  });
+});
+
 function sortValue(row: StoredRow): number {
   const value = row.transitionSequence ?? row.sequence ?? row._creationTime;
   return typeof value === 'number' ? value : row._creationTime;
@@ -477,6 +627,24 @@ function createArgs(): Record<string, unknown> {
 async function createSession(database: MemoryDatabase): Promise<RequestBinding> {
   const created = await createHandler(mutationContext(database), createArgs());
   return created.session.requestBinding;
+}
+
+async function createRunningJournal(database: MemoryDatabase): Promise<JournalBinding> {
+  vi.spyOn(Date, 'now').mockReturnValue(1_000);
+  const binding = await createSession(database);
+  await commandHandler(
+    mutationContext(database),
+    command('cache-enqueue', 0, binding, { jobId: 'job-1' }),
+  );
+  await commandHandler(
+    mutationContext(database),
+    command('cache-claim', 1, binding, {
+      type: 'claim',
+      jobId: 'job-1',
+      lease: lease('lease-1', 'cache-worker', 1_000, 2_000),
+    }),
+  );
+  return bindJournal(binding, 0, 1);
 }
 
 function command(
@@ -518,12 +686,13 @@ function bindJournal(
 function journalArgs(
   binding: JournalBinding,
   leaseId: string,
-  journal: { kind: 'model' | 'web'; entry: Record<string, unknown> },
+  journal: { kind: 'model' | 'web'; entry: Record<string, unknown>; result?: unknown },
 ): Record<string, unknown> & {
   journal: {
     kind: 'model' | 'web';
     binding: JournalBinding;
     entry: Record<string, unknown>;
+    result?: unknown;
   };
 } {
   return {
@@ -534,7 +703,7 @@ function journalArgs(
   };
 }
 
-function modelEntry(id: string) {
+function modelEntry(id: string, result?: unknown, outputDigest?: string) {
   return {
     kind: 'model' as const,
     entry: {
@@ -543,12 +712,42 @@ function modelEntry(id: string) {
       model: 'zai-org/GLM-5.2',
       operation: 'plan',
       inputDigest: `sha256:${'1'.repeat(64)}`,
-      outputDigest: `sha256:${'2'.repeat(64)}`,
+      outputDigest:
+        outputDigest ??
+        (result === undefined ? `sha256:${'2'.repeat(64)}` : modelOutputDigest(result)),
       inputTokens: 100,
       outputTokens: 40,
       createdAt: 1_020,
     },
+    ...(result === undefined ? {} : { result }),
   };
+}
+
+function providerResult(callId: string, value: unknown) {
+  return {
+    ok: true as const,
+    value,
+    telemetry: {
+      provider: 'nebius',
+      model: 'zai-org/GLM-5.2',
+      reasoningEffort: 'medium',
+      costMicroUsd: 12,
+      inputTokens: 100,
+      outputTokens: 40,
+    },
+    accounting: {
+      budgetId: 'budget-1',
+      callId,
+      disposition: 'settled',
+    },
+  };
+}
+
+function modelOutputDigest(result: unknown): string {
+  return nodeSlideDurableDigest({
+    schemaVersion: 'nodeslide.model-output/v1',
+    result,
+  });
 }
 
 function webEntry(id: string) {

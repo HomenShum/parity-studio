@@ -1081,6 +1081,36 @@ export default defineSchema({
     .index('by_binding_sequence', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'sequence'])
     .index('by_binding_entry', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'entryId']),
 
+  /**
+   * Internal model-result replay payloads written in the same transaction as
+   * their model journal receipt. `payloadJson` is canonical JSON for the
+   * provider result envelope only; model inputs, prompts, and secrets are not
+   * accepted by the writer and have no column in this table.
+   */
+  nodeslide_durable_model_result_replays: defineTable({
+    schemaVersion: v.literal('nodeslide.model-result-replay/v1'),
+    sessionId: v.string(),
+    jobId: v.string(),
+    callIdDigest: v.string(),
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    egressEpoch: v.number(),
+    attempt: v.number(),
+    binding: nodeslideDurableJournalBindingValidator,
+    outputDigest: v.string(),
+    payloadJson: v.string(),
+    payloadBytes: v.number(),
+    createdAt: v.number(),
+  }).index('by_exact_binding', [
+    'sessionId',
+    'jobId',
+    'callIdDigest',
+    'requestDigest',
+    'capabilityDigest',
+    'egressEpoch',
+    'attempt',
+  ]),
+
   nodeslide_agent_runs: defineTable({
     id: v.string(),
     deckId: v.string(),
