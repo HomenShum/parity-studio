@@ -38,14 +38,16 @@ function successfulProviderResult(
     costMicroUsd: number;
     inputTokens: number;
     outputTokens: number;
+    provider: 'nebius' | 'openrouter';
+    model: string;
   }> = {},
 ): NodeSlideProviderResult {
   return {
     ok: true,
     value: { operations: [{ op: 'replace_text' }] },
     telemetry: {
-      provider: 'nebius',
-      model: 'zai-org/GLM-5.2',
+      provider: overrides.provider ?? 'nebius',
+      model: overrides.model ?? 'zai-org/GLM-5.2',
       reasoningEffort: 'medium',
       costMicroUsd: overrides.costMicroUsd ?? 250,
       inputTokens: overrides.inputTokens ?? 120,
@@ -206,6 +208,34 @@ describe('NodeSlide budgeted provider adapter', () => {
     );
   });
 
+  it('passes the pinned OpenRouter pricing ceiling into provider routing', async () => {
+    const fixture = ledgerFixture();
+    const provider = vi.fn<NodeSlideBudgetedProviderCall>(async (_request, dependencies) => {
+      expect(dependencies.dispatchPolicy).toEqual({
+        maxOutputTokens: 500,
+        timeoutMs: 12_000,
+        maxInputMicroUsdPerMillionTokens: 1_400_000,
+        maxOutputMicroUsdPerMillionTokens: 4_400_000,
+      });
+      return successfulProviderResult({
+        provider: 'openrouter',
+        model: 'z-ai/glm-5.2',
+      });
+    });
+
+    const result = await callNodeSlideBudgetedJson(
+      {
+        runId: 'run-openrouter-price-cap',
+        callKey: 'edit-planner',
+        providerRequest: { ...providerRequest, model: 'z-ai/glm-5.2' },
+      },
+      { ledger: fixture.ledger, provider },
+    );
+
+    expect(result).toMatchObject({ ok: true, accounting: { disposition: 'settled' } });
+    expect(provider).toHaveBeenCalledOnce();
+  });
+
   it('settles completed provider attempts even when their JSON result is invalid', async () => {
     const fixture = ledgerFixture();
     const provider = vi.fn<NodeSlideBudgetedProviderCall>(async () => ({
@@ -312,7 +342,7 @@ describe('NodeSlide budgeted provider adapter', () => {
     expect(fixture.captureTimeout).not.toHaveBeenCalled();
   });
 
-  it('fails closed before ledger creation when model pricing is not pinned', async () => {
+  it('fails closed after creating a finalizable zero-usage ledger when pricing is not pinned', async () => {
     const fixture = ledgerFixture();
     const provider = vi.fn<NodeSlideBudgetedProviderCall>();
 
@@ -326,7 +356,7 @@ describe('NodeSlide budgeted provider adapter', () => {
     );
 
     expect(result).toMatchObject({ ok: false, code: 'pricing_unknown' });
-    expect(fixture.create).not.toHaveBeenCalled();
+    expect(fixture.create).toHaveBeenCalledOnce();
     expect(fixture.reserve).not.toHaveBeenCalled();
     expect(provider).not.toHaveBeenCalled();
   });

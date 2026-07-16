@@ -101,6 +101,10 @@ export interface NodeSlideProviderAttemptTelemetry {
 export interface NodeSlideDispatchPolicy {
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /** Provider-routing ceiling in integer micro-USD per million input tokens. */
+  maxInputMicroUsdPerMillionTokens?: number;
+  /** Provider-routing ceiling in integer micro-USD per million output tokens. */
+  maxOutputMicroUsdPerMillionTokens?: number;
 }
 
 export interface NodeSlideJsonSchema {
@@ -128,6 +132,8 @@ export interface NodeSlideCompletionRequest {
   maxTokens: number;
   jsonSchema?: NodeSlideJsonSchema;
   structuredOutputMode: NodeSlideStructuredOutputMode;
+  /** OpenRouter price ceiling in USD per million tokens. */
+  providerMaxPrice?: { prompt: number; completion: number };
   repairAttempt: boolean;
   signal: AbortSignal;
 }
@@ -216,6 +222,16 @@ export async function callNodeSlideFreeJson(
               ? { jsonSchema: args.jsonSchema }
               : {}),
             structuredOutputMode,
+            ...(selectedRoute.provider === 'openrouter' &&
+            dispatchPolicy.maxInputMicroUsdPerMillionTokens !== undefined &&
+            dispatchPolicy.maxOutputMicroUsdPerMillionTokens !== undefined
+              ? {
+                  providerMaxPrice: {
+                    prompt: dispatchPolicy.maxInputMicroUsdPerMillionTokens / 1_000_000,
+                    completion: dispatchPolicy.maxOutputMicroUsdPerMillionTokens / 1_000_000,
+                  },
+                }
+              : {}),
             repairAttempt,
             signal: controller.signal,
           }),
@@ -308,7 +324,12 @@ async function completeNodeSlideWithPiAi(
     ...(request.supportsTemperature ? { temperature: 0 } : {}),
     ...(request.provider === 'openrouter' ? { headers: OPENROUTER_ATTRIBUTION_HEADERS } : {}),
     onPayload: (payload) =>
-      nodeSlideStructuredOutputPayload(payload, request.jsonSchema, request.structuredOutputMode),
+      nodeSlideStructuredOutputPayload(
+        payload,
+        request.jsonSchema,
+        request.structuredOutputMode,
+        request.providerMaxPrice,
+      ),
   });
   const text = result.content
     .filter((block): block is TextContent => block.type === 'text')
@@ -328,17 +349,28 @@ export function nodeSlideStructuredOutputPayload(
   payload: unknown,
   jsonSchema: NodeSlideJsonSchema | undefined,
   mode: NodeSlideStructuredOutputMode = jsonSchema ? 'json_schema' : 'prompt',
+  providerMaxPrice?: { prompt: number; completion: number },
 ): unknown {
-  if (!isPlainObject(payload) || mode === 'prompt') return payload;
+  if (!isPlainObject(payload)) return payload;
+  const pricedPayload = providerMaxPrice
+    ? {
+        ...payload,
+        provider: {
+          ...(isPlainObject(payload['provider']) ? payload['provider'] : {}),
+          max_price: providerMaxPrice,
+        },
+      }
+    : payload;
+  if (mode === 'prompt') return pricedPayload;
   if (mode === 'json_object') {
     return {
-      ...payload,
+      ...pricedPayload,
       response_format: { type: 'json_object' },
     };
   }
-  if (!jsonSchema) return payload;
+  if (!jsonSchema) return pricedPayload;
   return {
-    ...payload,
+    ...pricedPayload,
     response_format: {
       type: 'json_schema',
       json_schema: {
@@ -441,7 +473,11 @@ function emptyTelemetry(
 function resolveDispatchPolicy(
   requestedMaxTokens: number,
   dependencies: NodeSlideProviderDependencies,
-): Required<NodeSlideDispatchPolicy> {
+): Required<Pick<NodeSlideDispatchPolicy, 'maxOutputTokens' | 'timeoutMs'>> &
+  Pick<
+    NodeSlideDispatchPolicy,
+    'maxInputMicroUsdPerMillionTokens' | 'maxOutputMicroUsdPerMillionTokens'
+  > {
   return {
     maxOutputTokens: cappedPositiveInteger(
       requestedMaxTokens,
@@ -453,7 +489,29 @@ function resolveDispatchPolicy(
       dependencies.dispatchPolicy?.timeoutMs,
       MODEL_TIMEOUT_MS,
     ),
+    ...pairedPriceCeiling(dependencies.dispatchPolicy),
   };
+}
+
+function pairedPriceCeiling(
+  policy: NodeSlideDispatchPolicy | undefined,
+): Pick<
+  NodeSlideDispatchPolicy,
+  'maxInputMicroUsdPerMillionTokens' | 'maxOutputMicroUsdPerMillionTokens'
+> {
+  const input = positiveSafeInteger(policy?.maxInputMicroUsdPerMillionTokens);
+  const output = positiveSafeInteger(policy?.maxOutputMicroUsdPerMillionTokens);
+  return input !== undefined && output !== undefined
+    ? {
+        maxInputMicroUsdPerMillionTokens: input,
+        maxOutputMicroUsdPerMillionTokens: output,
+      }
+    : {};
+}
+
+function positiveSafeInteger(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) return undefined;
+  return value;
 }
 
 function cappedPositiveInteger(

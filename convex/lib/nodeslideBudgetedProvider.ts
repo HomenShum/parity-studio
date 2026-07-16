@@ -11,7 +11,11 @@ import {
   scoreNodeSlideWorstCaseCost,
 } from '../../shared/nodeslideRunBudget';
 import { nodeslideStableId } from './nodeslideIds';
-import { type NodeSlideProviderResult, callNodeSlideFreeJson } from './nodeslideProvider';
+import {
+  type NodeSlideDispatchPolicy,
+  type NodeSlideProviderResult,
+  callNodeSlideFreeJson,
+} from './nodeslideProvider';
 
 const MAX_PROVIDER_ATTEMPTS = 2;
 const PROVIDER_HARD_MAX_OUTPUT_TOKENS = 2_200;
@@ -92,7 +96,11 @@ export interface NodeSlideBudgetLedgerClient {
 export type NodeSlideBudgetedProviderCall = (
   request: NodeSlideBudgetedJsonRequest,
   dependencies: {
-    dispatchPolicy: { maxOutputTokens: number; timeoutMs: number };
+    dispatchPolicy: Required<Pick<NodeSlideDispatchPolicy, 'maxOutputTokens' | 'timeoutMs'>> &
+      Pick<
+        NodeSlideDispatchPolicy,
+        'maxInputMicroUsdPerMillionTokens' | 'maxOutputMicroUsdPerMillionTokens'
+      >;
   },
 ) => Promise<NodeSlideProviderResult>;
 
@@ -204,16 +212,6 @@ export async function callNodeSlideBudgetedJson(
   const budgetId = nodeSlideProviderBudgetId(args.runId);
   const callId = nodeSlideProviderCallId(args);
   const baseAccounting = { budgetId, callId };
-  const pricing = nodeSlideModelPricing(selectedModel);
-  if (pricing.kind === 'unknown') {
-    return {
-      ok: false,
-      reason:
-        'The selected model has no pinned server pricing, so hard-budget dispatch was denied.',
-      code: 'pricing_unknown',
-      accounting: { ...baseAccounting, disposition: 'denied' },
-    };
-  }
 
   let canonicalBudget: NodeSlideRunBudget;
   try {
@@ -236,6 +234,20 @@ export async function callNodeSlideBudgetedJson(
       baseAccounting,
       'The durable run budget could not be created or replayed, so provider dispatch was denied.',
     );
+  }
+
+  // Even a denied provider route owns a durable zero-usage budget. Job
+  // completion can then finalize the accounting record instead of failing
+  // after the deterministic fallback has already been persisted.
+  const pricing = nodeSlideModelPricing(selectedModel);
+  if (pricing.kind === 'unknown') {
+    return {
+      ok: false,
+      reason:
+        'The selected model has no pinned server pricing, so hard-budget dispatch was denied.',
+      code: 'pricing_unknown',
+      accounting: { ...baseAccounting, disposition: 'denied' },
+    };
   }
 
   let prior: NodeSlideBudgetLedgerView | null;
@@ -300,6 +312,12 @@ export async function callNodeSlideBudgetedJson(
         dispatchPolicy: {
           maxOutputTokens: perAttemptOutputCeiling,
           timeoutMs: Math.min(reservedCall.providerTimeoutMs, PROVIDER_HARD_TIMEOUT_MS),
+          ...(nodeSlideAgentModel(selectedModel).provider === 'openrouter'
+            ? {
+                maxInputMicroUsdPerMillionTokens: pricing.inputMicroUsdPerMillionTokens,
+                maxOutputMicroUsdPerMillionTokens: pricing.outputMicroUsdPerMillionTokens,
+              }
+            : {}),
         },
       },
     );
@@ -400,7 +418,7 @@ export async function callNodeSlideBudgetedJson(
 
 function defaultProviderCall(
   request: NodeSlideBudgetedJsonRequest,
-  dependencies: { dispatchPolicy: { maxOutputTokens: number; timeoutMs: number } },
+  dependencies: Parameters<NodeSlideBudgetedProviderCall>[1],
 ): Promise<NodeSlideProviderResult> {
   return callNodeSlideFreeJson(request, { dispatchPolicy: dependencies.dispatchPolicy });
 }

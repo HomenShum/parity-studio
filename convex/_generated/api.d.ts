@@ -57,6 +57,7 @@ import type * as lib_nodeslideManagedKernel from "../lib/nodeslideManagedKernel.
 import type * as lib_nodeslideMemoryPolicy from "../lib/nodeslideMemoryPolicy.js";
 import type * as lib_nodeslideOtlp from "../lib/nodeslideOtlp.js";
 import type * as lib_nodeslidePatches from "../lib/nodeslidePatches.js";
+import type * as lib_nodeslidePdfExtraction from "../lib/nodeslidePdfExtraction.js";
 import type * as lib_nodeslidePreferenceEtl from "../lib/nodeslidePreferenceEtl.js";
 import type * as lib_nodeslidePreferenceRetention from "../lib/nodeslidePreferenceRetention.js";
 import type * as lib_nodeslidePropagation from "../lib/nodeslidePropagation.js";
@@ -107,6 +108,7 @@ import type * as nodeslideSessions from "../nodeslideSessions.js";
 import type * as nodeslideSignatures from "../nodeslideSignatures.js";
 import type * as nodeslideSync from "../nodeslideSync.js";
 import type * as nodeslideTelemetry from "../nodeslideTelemetry.js";
+import type * as nodeslideUploadExtraction from "../nodeslideUploadExtraction.js";
 import type * as nodeslideUploads from "../nodeslideUploads.js";
 import type * as nodeslideVariationProof from "../nodeslideVariationProof.js";
 import type * as nodeslideVariationProvider from "../nodeslideVariationProvider.js";
@@ -173,6 +175,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideMemoryPolicy": typeof lib_nodeslideMemoryPolicy;
   "lib/nodeslideOtlp": typeof lib_nodeslideOtlp;
   "lib/nodeslidePatches": typeof lib_nodeslidePatches;
+  "lib/nodeslidePdfExtraction": typeof lib_nodeslidePdfExtraction;
   "lib/nodeslidePreferenceEtl": typeof lib_nodeslidePreferenceEtl;
   "lib/nodeslidePreferenceRetention": typeof lib_nodeslidePreferenceRetention;
   "lib/nodeslidePropagation": typeof lib_nodeslidePropagation;
@@ -223,6 +226,7 @@ declare const fullApi: ApiFromModules<{
   nodeslideSignatures: typeof nodeslideSignatures;
   nodeslideSync: typeof nodeslideSync;
   nodeslideTelemetry: typeof nodeslideTelemetry;
+  nodeslideUploadExtraction: typeof nodeslideUploadExtraction;
   nodeslideUploads: typeof nodeslideUploads;
   nodeslideVariationProof: typeof nodeslideVariationProof;
   nodeslideVariationProvider: typeof nodeslideVariationProvider;

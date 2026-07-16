@@ -856,7 +856,14 @@ export const nodeslideSourceValidator = v.object({
   citation: v.string(),
   license: v.optional(v.string()),
   format: v.optional(
-    v.union(v.literal('csv'), v.literal('json'), v.literal('txt'), v.literal('web')),
+    v.union(
+      v.literal('csv'),
+      v.literal('json'),
+      v.literal('txt'),
+      v.literal('md'),
+      v.literal('pdf'),
+      v.literal('web'),
+    ),
   ),
   contentDigest: v.optional(v.string()),
   byteSize: v.optional(v.number()),

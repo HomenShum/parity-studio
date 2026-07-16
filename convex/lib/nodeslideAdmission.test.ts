@@ -253,7 +253,7 @@ describe('NodeSlide create action admission boundary', () => {
         },
       },
     });
-    expect(providerRequest?.systemPrompt).toContain('emit one diagram object');
+    expect(providerRequest?.systemPrompt).toContain('emit exactly one diagram object');
     expect(providerRequest?.userText).toContain('world-cup.csv');
     expect(providerRequest?.userText).toContain('goals,172');
     const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;

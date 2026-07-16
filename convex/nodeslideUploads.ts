@@ -351,13 +351,13 @@ const MODEL_PREVIEW_BYTES = 7_200;
 
 function isNodeSlideStoredTextFormat(
   value: NodeSlideStoredAttachmentMetadata['format'],
-): value is 'csv' | 'json' | 'txt' {
-  return value === 'csv' || value === 'json' || value === 'txt';
+): value is 'csv' | 'json' | 'txt' | 'md' {
+  return value === 'csv' || value === 'json' || value === 'txt' || value === 'md';
 }
 
 export function materializeNodeSlideStoredText(
   bytes: Uint8Array,
-  format: 'csv' | 'json' | 'txt',
+  format: 'csv' | 'json' | 'txt' | 'md',
 ): {
   preview: string;
   truncated: boolean;
@@ -383,7 +383,7 @@ export function materializeNodeSlideStoredText(
       throw new Error('Stored JSON is malformed.');
     }
   }
-  const shape = nodeSlideDataAttachmentShape(content, format);
+  const shape = nodeSlideDataAttachmentShape(content, format === 'md' ? 'txt' : format);
   const preview = boundedUtf8Prefix(content, MODEL_PREVIEW_BYTES);
   return {
     preview,

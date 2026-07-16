@@ -7216,51 +7216,113 @@
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-input {
   background: var(--ns-surface);
-  border: 1px solid color-mix(in srgb, var(--ns-accent) 38%, var(--ns-line-c));
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 7%);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 6%);
   overflow: hidden;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-input:focus-within {
-  border-color: color-mix(in srgb, var(--ns-accent) 74%, var(--ns-line-c));
-  box-shadow: 0 10px 26px rgb(15 23 42 / 9%), 0 0 0 3px
-    color-mix(in srgb, var(--ns-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ns-accent) 62%, var(--ns-line-c));
+  box-shadow: 0 12px 32px rgb(15 23 42 / 8%), 0 0 0 2px
+    color-mix(in srgb, var(--ns-accent) 10%, transparent);
 }
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-textarea {
   color: var(--ns-ink);
   font-size: 14px;
   line-height: 1.55;
-  min-height: 76px;
-  padding: 15px 14px 10px;
+  min-height: 72px;
+  padding: 12px 14px 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt .ns-prompt-header {
+  display: block;
+  padding: 0;
+}
+
+.nodeslide-studio .ns-ai-composer-preflight {
+  align-items: center;
+  border-bottom: 1px solid var(--ns-line-b);
+  color: var(--ns-faint);
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  min-height: 31px;
+  padding: 4px 7px 4px 11px;
+}
+
+.nodeslide-studio .ns-ai-preflight-route {
+  align-items: center;
+  display: inline-flex;
+  font-size: 9.5px;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-ai-composer-preflight .ns-session-consent-pill {
+  background: transparent;
+  border-color: transparent;
+  font-size: 9.5px;
+  min-height: 23px;
+  padding: 2px 5px;
+}
+
+.nodeslide-studio .ns-ai-composer-preflight .ns-session-consent-pill:hover,
+.nodeslide-studio .ns-ai-composer-preflight .ns-session-consent-pill:focus-within {
+  background: var(--ns-chip);
+  border-color: var(--ns-line-c);
+}
+
+.nodeslide-studio .ns-ai-composer-preflight .ns-session-consent-pill input {
+  height: 12px;
+  width: 12px;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-footer {
-  align-items: end;
-  border-top: 1px solid var(--ns-line-b);
-  display: grid;
-  gap: 7px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 8px 10px 10px;
+  align-items: center;
+  border-top: 0;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 7px 7px;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-tools {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  grid-column: 1 / -1;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 3px;
   min-width: 0;
-  width: 100%;
+  overflow: visible;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger {
-  flex: 1 1 118px;
+  background: transparent;
+  border-color: transparent;
+  flex: 0 0 auto;
   justify-content: flex-start;
-  max-width: 168px;
-  min-width: 112px;
+  max-width: 138px;
+  min-width: 0;
+  padding-inline: 7px;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger > span {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger:hover,
+.nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger[aria-expanded="true"] {
+  background: var(--ns-chip);
+  border-color: var(--ns-line-b);
 }
 
 .nodeslide-studio .ns-model-trigger-chevron {
@@ -7281,7 +7343,7 @@
   display: grid;
   gap: 0;
   max-height: min(720px, calc(100dvh - 32px));
-  max-width: 640px;
+  max-width: 468px;
   overflow: hidden;
   padding: 0;
   width: calc(100% - 32px);
@@ -7315,7 +7377,7 @@
 
 .ns-model-selector-header {
   border-bottom: 1px solid var(--ns-line-b, #e7e4e0);
-  padding: 22px 64px 18px 22px;
+  padding: 18px 58px 14px 18px;
 }
 
 .ns-model-selector-eyebrow {
@@ -7331,7 +7393,7 @@
 
 .ns-model-selector-header h2 {
   color: var(--ns-ink, #111827);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 680;
   letter-spacing: -0.025em;
   line-height: 1.2;
@@ -7352,7 +7414,7 @@
   flex-wrap: wrap;
   font-size: 11px;
   gap: 6px;
-  margin-top: 13px;
+  margin-top: 10px;
 }
 
 .ns-model-current-route > span {
@@ -7405,7 +7467,7 @@
 }
 
 .ns-model-selector-list {
-  max-height: min(440px, 52dvh);
+  max-height: min(390px, 52dvh);
   padding: 8px;
   scroll-padding-block: 42px 8px;
 }
@@ -7442,8 +7504,8 @@
   display: grid;
   gap: 11px;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  min-height: 64px;
-  padding: 9px 10px;
+  min-height: 56px;
+  padding: 7px 9px;
 }
 
 .ns-model-option[data-selected="true"] {
@@ -7635,10 +7697,36 @@
 .nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer,
 .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-submit"] {
   gap: 4px;
-  height: 32px;
-  min-height: 32px;
-  padding-inline: 8px;
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 7px;
   width: auto;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"],
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-tool-button,
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ns-faint);
+}
+
+.nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"]:hover,
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-tool-button:hover,
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer:hover {
+  background: var(--ns-chip);
+  border-color: var(--ns-line-b);
+  color: var(--ns-ink2);
+}
+
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer {
+  justify-content: center;
+  padding-inline: 0;
+  width: 30px;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt .ns-ai-v3-expand-composer .ns-ai-tool-label {
+  display: none;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"]::after {
@@ -7664,24 +7752,85 @@
 .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-submit-tools {
   align-items: center;
   display: flex;
-  gap: 5px;
-  grid-column: 1 / -1;
+  flex: 0 0 auto;
+  gap: 3px;
   justify-content: flex-end;
+  margin-left: auto;
 }
 
 .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-submit"] {
-  background: linear-gradient(180deg, #ad5f45, #9f503a);
-  border-radius: 999px;
+  background: var(--ns-ink);
+  border: 0;
+  border-radius: 50%;
   color: #fff;
-  padding-inline: 13px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  width: 32px;
+}
+
+.nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-submit"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ns-ink) 84%, var(--ns-accent));
+}
+
+.nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-submit"]:disabled {
+  background: var(--ns-chip);
+  color: var(--ns-faint);
+  opacity: 1;
+}
+
+.nodeslide-studio .ns-ai-submit-icon {
+  height: 15px;
+  width: 15px;
 }
 
 /* The standard desktop inspector is intentionally narrow. Keep the model,
  * effort, and consent readable, then collapse already-labeled secondary tools
  * to their icons so the prompt footer never turns into a four-row control wall. */
 @container nodeslide-inspector (max-width: 430px) {
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-footer,
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-tools {
+    gap: 2px;
+  }
+
   .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-footer-status {
     display: none;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"] {
+    flex: 0 0 32px;
+    justify-content: center;
+    padding-inline: 0;
+    width: 32px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt [data-testid="ai-attach-data"]::after,
+  .nodeslide-studio .ns-ai-v3-prompt .ns-ai-tools-menu > summary span {
+    display: none;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger {
+    max-width: 94px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger > span {
+    max-width: 52px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-effort-wrap,
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-effort {
+    flex: 0 0 62px;
+    max-width: 62px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-effort {
+    padding-inline: 6px 17px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-prompt .ns-ai-tools-menu > summary {
+    justify-content: center;
+    padding-inline: 0;
+    width: 30px;
   }
 
   .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-tools .ns-ai-tool-button {
@@ -8083,10 +8232,10 @@
 /* Prompt-first composer. Scope and controls explain the next request without
  * competing with the typing surface. */
 .nodeslide-studio .ns-ai-v3-composer-heading {
-  align-items: start;
-  display: flex;
+  align-items: center;
+  display: grid;
   gap: 8px;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   order: 0;
 }
 
@@ -8106,12 +8255,57 @@
   line-height: 1.35;
 }
 
+.nodeslide-studio .ns-ai-turbo-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--ns-faint);
+  cursor: pointer;
+  display: inline-flex;
+  font: 650 10px / 1 var(--ns-font-sans);
+  gap: 4px;
+  min-height: 26px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-ai-turbo-toggle:hover,
+.nodeslide-studio .ns-ai-turbo-toggle:focus-visible {
+  background: var(--ns-chip);
+  border-color: var(--ns-line-c);
+  color: var(--ns-ink2);
+}
+
+.nodeslide-studio .ns-ai-turbo-toggle.is-active {
+  background: color-mix(in srgb, var(--ns-accent) 10%, var(--ns-chip));
+  border-color: color-mix(in srgb, var(--ns-accent) 35%, var(--ns-line-c));
+  color: var(--ns-accent);
+}
+
+.nodeslide-studio .ns-ai-turbo-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.nodeslide-studio .ns-ai-turbo-description {
+  color: var(--ns-faint);
+  font-size: 9px;
+  line-height: 1.35;
+  margin-top: -4px;
+  order: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nodeslide-studio .ns-ai-v3-scope-advisory {
   color: var(--ns-warning);
   font-size: 9.5px;
   line-height: 1.35;
-  max-width: 52%;
-  text-align: right;
+  grid-column: 1 / -1;
+  max-width: none;
+  text-align: left;
 }
 
 .nodeslide-studio .ns-ai-v3-composer > .ns-ai-v3-prompt,
@@ -8125,6 +8319,33 @@
 
 .nodeslide-studio .ns-ai-v3-suggested-actions {
   order: 3;
+}
+
+.nodeslide-studio .ns-ai-v3-suggested-actions > span,
+.nodeslide-studio .ns-ai-v3-suggested-actions > small {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-v3-suggested-actions > div {
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-inline: -2px;
+  overflow-x: auto;
+  padding: 1px 2px 3px;
+  scrollbar-width: none;
+}
+
+.nodeslide-studio .ns-ai-v3-suggested-actions > div::-webkit-scrollbar {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-v3-suggested-actions button {
+  background: transparent;
+  border-color: var(--ns-line-b);
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  min-height: 26px;
+  padding: 4px 7px;
 }
 
 .nodeslide-studio .ns-ai-v3-policy-summary {
@@ -8149,7 +8370,7 @@
 .nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-footer {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-tools {
@@ -8192,7 +8413,7 @@
   font-size: 10.5px;
   font-weight: 600;
   gap: 4px;
-  height: 32px;
+  height: 30px;
   list-style: none;
   padding: 0 8px;
 }
@@ -8202,7 +8423,7 @@
 }
 
 .nodeslide-studio .ns-ai-tools-menu[open] {
-  flex-basis: 100%;
+  flex-basis: auto;
 }
 
 .nodeslide-studio .ns-ai-tools-menu[open] > summary {
@@ -8210,14 +8431,28 @@
 }
 
 .nodeslide-studio .ns-ai-tools-menu > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding-top: 5px;
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 12px;
+  bottom: calc(100% + 7px);
+  box-shadow: 0 16px 40px rgb(15 23 42 / 18%);
+  display: grid;
+  gap: 3px;
+  left: auto;
+  min-width: 154px;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  z-index: 30;
 }
 
 .nodeslide-studio .ns-ai-tools-menu .ns-ai-tool-button .ns-ai-tool-label {
   display: inline;
+}
+
+.nodeslide-studio .ns-ai-tools-menu > div .ns-ai-tool-button {
+  justify-content: flex-start;
+  width: 100%;
 }
 
 /* A pending proposal makes review the primary task. The composer remains an
@@ -8296,56 +8531,6 @@
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-ai-v3-expand-composer {
   display: inline-flex;
-}
-
-/* Turbo is one compact, session-scoped authority control beside the composer.
- * Detailed limits and exclusions stay in the existing Advanced disclosure. */
-.nodeslide-studio .ns-ai-turbo {
-  align-items: center;
-  display: grid;
-  gap: 3px 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-  order: 4;
-  padding: 1px 0;
-}
-
-.nodeslide-studio .ns-ai-turbo > button {
-  align-items: center;
-  background: var(--ns-chip);
-  border: 1px solid var(--ns-line-c);
-  border-radius: 999px;
-  color: var(--ns-ink2);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 10.5px;
-  font-weight: 650;
-  gap: 4px;
-  min-height: 27px;
-  padding: 4px 9px;
-  white-space: nowrap;
-}
-
-.nodeslide-studio .ns-ai-turbo > button[aria-checked="true"] {
-  background: color-mix(in srgb, var(--ns-accent) 12%, var(--ns-chip));
-  border-color: color-mix(in srgb, var(--ns-accent) 55%, var(--ns-line-c));
-  color: var(--ns-accent);
-}
-
-.nodeslide-studio .ns-ai-turbo > button:focus-visible {
-  outline: 2px solid var(--ns-accent);
-  outline-offset: 2px;
-}
-
-.nodeslide-studio .ns-ai-turbo > button:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-}
-
-.nodeslide-studio .ns-ai-turbo > small {
-  color: var(--ns-faint);
-  font-size: 9.5px;
-  line-height: 1.3;
-  min-width: 0;
 }
 
 .nodeslide-studio .ns-ai-turbo-details {

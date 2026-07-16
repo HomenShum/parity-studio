@@ -733,7 +733,13 @@ export const attachStoredDataSourceInternal = internalMutation({
     deckId: v.string(),
     ownerAccessKey: v.string(),
     title: v.string(),
-    format: v.union(v.literal('csv'), v.literal('json'), v.literal('txt')),
+    format: v.union(
+      v.literal('csv'),
+      v.literal('json'),
+      v.literal('txt'),
+      v.literal('md'),
+      v.literal('pdf'),
+    ),
     preview: v.string(),
     previewTruncated: v.boolean(),
     contentDigest: v.string(),
@@ -762,7 +768,11 @@ export const attachStoredDataSourceInternal = internalMutation({
     }
     const columns = args.columns?.map((column) => requiredText(column, 'column', 240)).slice(0, 64);
     const sourceType =
-      args.format === 'csv' ? 'spreadsheet' : args.format === 'json' ? 'document' : 'note';
+      args.format === 'csv'
+        ? 'spreadsheet'
+        : args.format === 'txt' || args.format === 'md'
+          ? 'note'
+          : 'document';
     const id = nodeslideStableId('source', args.deckId, sourceType, title, args.contentDigest);
     const existing = await ctx.db
       .query('nodeslide_sources')

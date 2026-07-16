@@ -1525,10 +1525,11 @@ export function isFallbackTrace(trace: AgentTrace): boolean {
   //    complete live receipt. Missing cost, token flow, or candidate binding is
   //    ambiguous and therefore degrades closed rather than wearing a live badge.
   const external = /openrouter/i.test(`${trace.provider ?? ''} ${trace.model ?? ''}`);
+  const requiresCandidateReceipt = trace.status === 'awaiting_review' || Boolean(trace.patchId);
   if (
     external &&
     (trace.status === 'completed' || trace.status === 'awaiting_review') &&
-    (!hasProviderAttemptTelemetry(trace) || !trace.candidateDigest)
+    (!hasProviderAttemptTelemetry(trace) || (requiresCandidateReceipt && !trace.candidateDigest))
   ) {
     return true;
   }

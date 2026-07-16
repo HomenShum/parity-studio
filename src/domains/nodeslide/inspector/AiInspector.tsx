@@ -2,6 +2,7 @@ import { PromptInputButton } from '@/components/ai-elements/prompt-input';
 import { ThreadPrimitive } from '@assistant-ui/react';
 import {
   ArrowDown,
+  ArrowUp,
   AtSign,
   Brain,
   Check,
@@ -1365,20 +1366,16 @@ export function AiInspector<CommandId extends string = string>({
                     <strong>{hasReviewableProposal ? 'Ask for a revision' : 'New request'}</strong>
                     <small>{scopeSummary}</small>
                   </span>
-                  {referencesUnselectedElement ? (
-                    <output className="ns-ai-v3-scope-advisory">
-                      No element is selected; this request can change the whole slide.
-                    </output>
-                  ) : null}
-                </header>
-                {onApprovalModeChange ? (
-                  <div className="ns-ai-turbo" data-testid="ai-turbo-control">
+                  {onApprovalModeChange ? (
                     <button
                       type="button"
                       role="switch"
+                      aria-label="Turbo for this session"
                       aria-checked={approvalMode === 'auto_apply'}
                       aria-describedby={turboDescriptionId}
-                      className={approvalMode === 'auto_apply' ? 'is-active' : ''}
+                      className={`ns-ai-turbo-toggle ${
+                        approvalMode === 'auto_apply' ? 'is-active' : ''
+                      }`}
                       data-testid="ai-turbo-toggle"
                       disabled={approvalControlLocked}
                       onClick={() =>
@@ -1392,12 +1389,19 @@ export function AiInspector<CommandId extends string = string>({
                       ) : (
                         <Sparkles size={12} aria-hidden="true" />
                       )}
-                      <span>Turbo for this session</span>
+                      <span>{approvalMode === 'auto_apply' ? 'Turbo on' : 'Turbo'}</span>
                     </button>
-                    <small id={turboDescriptionId}>
-                      Validated edits that pass Deck CI auto-apply; Undo remains available.
-                    </small>
-                  </div>
+                  ) : null}
+                  {referencesUnselectedElement ? (
+                    <output className="ns-ai-v3-scope-advisory">
+                      No element is selected; this request can change the whole slide.
+                    </output>
+                  ) : null}
+                </header>
+                {onApprovalModeChange ? (
+                  <small className="ns-ai-turbo-description" id={turboDescriptionId}>
+                    Validated edits that pass Deck CI auto-apply; Undo remains available.
+                  </small>
                 ) : null}
                 {showSuggested ? (
                   <section
@@ -1711,7 +1715,7 @@ export function AiInspector<CommandId extends string = string>({
             data-testid="ai-model-select" and data-testid="ai-data-file-input". */}
                 <NodeSlidePromptComposer
                   allowAttachments={Boolean(onAttachDataFile)}
-                  attachmentAccept=".csv,.json,.txt,text/csv,application/json,text/plain"
+                  attachmentAccept=".csv,.json,.txt,.md,.pdf,text/csv,application/json,text/plain,text/markdown,application/pdf"
                   attachmentInputTestId="ai-data-file-input"
                   attachmentMaxFiles={1}
                   submissionRevision={submissionRevisionRef.current}
@@ -1732,6 +1736,57 @@ export function AiInspector<CommandId extends string = string>({
                     nodeSlideModelSupportsReasoningEffort(providerModel, effort.id),
                   )}
                   effortTestId="ai-effort-select"
+                  header={
+                    requiresExternalConsent || externalConsent.granted || webResearch ? (
+                      <div className="ns-ai-composer-preflight" aria-label="Request preflight">
+                        <span className="ns-ai-preflight-route">
+                          {providerMode === 'deterministic' ? (
+                            <ShieldCheck size={12} aria-hidden="true" />
+                          ) : (
+                            <Sparkles size={12} aria-hidden="true" />
+                          )}
+                          {providerMode === 'deterministic'
+                            ? webResearch
+                              ? 'Private model · Web'
+                              : 'Private model'
+                            : `${providerNameForMode(providerMode)} · external`}
+                        </span>
+                        {requiresExternalConsent || externalConsent.granted ? (
+                          <label
+                            className={`ns-session-consent-pill ns-ai-session-consent ${
+                              externalConsent.granted ? 'is-ready' : ''
+                            }`}
+                            title={
+                              deterministicWebResearch
+                                ? 'Allow web research for this browser tab'
+                                : 'Allow selected external models and optional web research for this browser tab'
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={externalConsent.granted}
+                              onChange={(event) => {
+                                externalConsent.setGranted(event.target.checked);
+                                setAttachmentError(null);
+                              }}
+                              data-agent-web-consent="session"
+                              data-testid="ai-provider-consent"
+                            />
+                            <ShieldCheck size={12} aria-hidden="true" />
+                            <span>
+                              {deterministicWebResearch
+                                ? externalConsent.granted
+                                  ? 'Web allowed'
+                                  : 'Allow Web'
+                                : externalConsent.granted
+                                  ? 'Session allowed'
+                                  : 'Allow this session'}
+                            </span>
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : undefined
+                  }
                   footerStatus={
                     requestedReadContext.length > 0
                       ? `${requestedReadContext.length} explicit reference${
@@ -1770,7 +1825,7 @@ export function AiInspector<CommandId extends string = string>({
                     isSubmitting || attachmentBusy || submissionPreparing ? 'submitted' : 'ready'
                   }
                   submitLabel="Propose edit"
-                  submitContent={<span className="ns-ai-submit-label">Propose</span>}
+                  submitContent={<ArrowUp className="ns-ai-submit-icon" size={16} />}
                   submitTestId="ai-submit"
                   submitTools={
                     <PromptInputButton
@@ -1814,39 +1869,6 @@ export function AiInspector<CommandId extends string = string>({
                         <Globe2 size={14} />
                         <span className="ns-ai-tool-label">Web</span>
                       </PromptInputButton>
-                      {requiresExternalConsent || externalConsent.granted ? (
-                        <label
-                          className={`ns-session-consent-pill ns-ai-session-consent ${
-                            externalConsent.granted ? 'is-ready' : ''
-                          }`}
-                          title={
-                            deterministicWebResearch
-                              ? 'Allow web research for this browser tab'
-                              : 'Allow selected external models and optional web research for this browser tab'
-                          }
-                        >
-                          <input
-                            type="checkbox"
-                            checked={externalConsent.granted}
-                            onChange={(event) => {
-                              externalConsent.setGranted(event.target.checked);
-                              setAttachmentError(null);
-                            }}
-                            data-agent-web-consent="session"
-                            data-testid="ai-provider-consent"
-                          />
-                          <ShieldCheck size={13} aria-hidden="true" />
-                          <span>
-                            {deterministicWebResearch
-                              ? externalConsent.granted
-                                ? 'Web allowed'
-                                : 'Allow Web'
-                              : externalConsent.granted
-                                ? 'Session allowed'
-                                : 'Allow this session'}
-                          </span>
-                        </label>
-                      ) : null}
                       <details
                         className="ns-ai-tools-menu"
                         {...(composerExpanded ? { open: true } : {})}

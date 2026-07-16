@@ -581,7 +581,7 @@ export interface SourceRecord {
   citation: string;
   license?: string;
   /** Typed ingestion metadata. Optional for rows created before source-metadata v1. */
-  format?: 'csv' | 'json' | 'txt' | 'web';
+  format?: 'csv' | 'json' | 'txt' | 'md' | 'pdf' | 'web';
   contentDigest?: string;
   byteSize?: number;
   rowCount?: number;

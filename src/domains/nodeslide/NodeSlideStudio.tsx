@@ -285,6 +285,12 @@ interface NodeSlideGeneratedApi {
       AiReadReference
     >;
   };
+  nodeslideUploadExtraction: {
+    materializeApprovedPdfUpload: PublicAction<
+      { deckId: string; ownerAccessKey: string; clientSessionId: string; uploadId: string },
+      AiReadReference
+    >;
+  };
   nodeslide: {
     getWorkspace: PublicQuery<
       { deckId: string; ownerAccessKey: string },
@@ -781,6 +787,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const deleteDataUpload = useMutation(nodeslideApi.nodeslideUploads.deleteUpload);
   const materializeDataUpload = useAction(
     nodeslideApi.nodeslideUploads.materializeApprovedTextUpload,
+  );
+  const materializePdfUpload = useAction(
+    nodeslideApi.nodeslideUploadExtraction.materializeApprovedPdfUpload,
   );
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
   const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
@@ -3154,8 +3163,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const attachAiDataFile = async (file: File): Promise<AiReadReference> => {
     if (!ownerAccessKey) throw new Error('Open an owned deck before attaching data.');
     const extension = file.name.split('.').pop()?.toLocaleLowerCase() ?? '';
-    if (!['csv', 'json', 'txt'].includes(extension)) {
-      throw new Error('Attach a CSV, JSON, or TXT data file.');
+    if (!['csv', 'json', 'txt', 'md', 'pdf'].includes(extension)) {
+      throw new Error('Attach a CSV, JSON, TXT, Markdown, or PDF file.');
     }
     if (file.size <= 0) throw new Error('The attached data file is empty.');
     const contentType = nodeSlideDataUploadContentType(extension);
@@ -3219,12 +3228,16 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         contentDigest,
       });
       ensureCurrent();
-      reference = await materializeDataUpload({
+      const materializeArgs = {
         deckId: requestedDeckId,
         ownerAccessKey: requestedOwnerAccessKey,
         clientSessionId,
         uploadId,
-      });
+      };
+      reference =
+        extension === 'pdf'
+          ? await materializePdfUpload(materializeArgs)
+          : await materializeDataUpload(materializeArgs);
       ensureCurrent();
       setToast({
         kind: 'success',
@@ -5090,6 +5103,8 @@ function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlide
 function nodeSlideDataUploadContentType(extension: string): string {
   if (extension === 'csv') return 'text/csv';
   if (extension === 'json') return 'application/json';
+  if (extension === 'md') return 'text/markdown';
+  if (extension === 'pdf') return 'application/pdf';
   return 'text/plain';
 }
 
