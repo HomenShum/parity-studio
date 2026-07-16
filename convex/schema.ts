@@ -1292,6 +1292,17 @@ export default defineSchema({
     toolName: v.optional(v.string()),
     toolCallId: v.optional(v.string()),
     parentMessageId: v.optional(v.string()),
+    agentRole: v.optional(
+      v.union(
+        v.literal('planner'),
+        v.literal('executor'),
+        v.literal('researcher'),
+        v.literal('validator'),
+      ),
+    ),
+    branchId: v.optional(v.string()),
+    branchLabel: v.optional(v.string()),
+    parallelGroupId: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })

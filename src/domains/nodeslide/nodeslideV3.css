@@ -17,6 +17,225 @@
   grid-template-rows: 52px minmax(0, 1fr);
 }
 
+/* OpenUI Phase 0: bounded visual-material proposal surface inside the AI rail. */
+.nodeslide-studio .ns-openui-workbench {
+  background: transparent;
+  border-block: 1px solid var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-openui-workbench > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  list-style: none;
+  min-height: 36px;
+  padding: 5px 12px;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeslide-studio .ns-openui-summary-icon {
+  align-items: center;
+  background: var(--ns-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 28%, transparent);
+  border-radius: 8px;
+  color: var(--ns-accent-dark);
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary > span:nth-child(2) {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary strong {
+  color: var(--ns-ink);
+  font-size: 11.5px;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary small {
+  color: var(--ns-faint);
+  font-family: var(--ns-font-mono);
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary > span:last-child {
+  align-items: center;
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  color: var(--ns-faint);
+  display: inline-flex;
+  font: 650 9px / 1 var(--ns-font-sans);
+  gap: 3px;
+  padding: 4px 7px;
+}
+
+.nodeslide-studio .ns-openui-workbench > summary > span:last-child.is-valid {
+  border-color: color-mix(in srgb, var(--ns-positive) 28%, transparent);
+  color: var(--ns-positive);
+}
+
+.nodeslide-studio .ns-openui-workbench-body {
+  padding: 0 12px 12px;
+}
+
+.nodeslide-studio .ns-openui-material {
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 12px;
+  box-shadow: var(--ns-shadow-sm);
+  overflow: hidden;
+}
+
+.nodeslide-studio .ns-openui-material-heading {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.nodeslide-studio .ns-openui-material-heading > span {
+  color: var(--ns-accent-dark);
+  font: 700 9px / 1.2 var(--ns-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nodeslide-studio .ns-openui-material-heading h3 {
+  color: var(--ns-ink);
+  font: 650 14px / 1.18 var(--ns-font-sans);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.nodeslide-studio .ns-openui-material-heading p {
+  color: var(--ns-ink2);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.nodeslide-studio .ns-openui-ladder {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.nodeslide-studio .ns-openui-ladder li {
+  align-items: center;
+  border-top: 1px solid var(--ns-line-b);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  min-height: 52px;
+  padding: 7px 0;
+}
+
+.nodeslide-studio .ns-openui-step-number {
+  color: var(--ns-accent-dark);
+  font: 700 9px / 1 var(--ns-font-mono);
+}
+
+.nodeslide-studio .ns-openui-ladder li > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-openui-ladder small,
+.nodeslide-studio .ns-openui-ladder li > div > span {
+  color: var(--ns-faint);
+  font-size: 9px;
+}
+
+.nodeslide-studio .ns-openui-ladder strong {
+  color: var(--ns-ink);
+  font: 700 12px / 1.2 var(--ns-font-mono);
+}
+
+.nodeslide-studio .ns-openui-ladder svg {
+  color: var(--ns-line-f);
+  transform: rotate(90deg);
+}
+
+.nodeslide-studio .ns-openui-material-footer {
+  align-items: center;
+  background: var(--ns-raised);
+  border-top: 1px solid var(--ns-line-b);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 12px;
+}
+
+.nodeslide-studio .ns-openui-material-footer > span {
+  align-items: center;
+  color: var(--ns-faint);
+  display: inline-flex;
+  font-size: 9px;
+  gap: 4px;
+  line-height: 1.3;
+}
+
+.nodeslide-studio .ns-openui-material-footer .ns-button {
+  font-size: 9.5px;
+  min-height: 28px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-openui-host-action {
+  align-items: center;
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-c);
+  border-top: 0;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 12px;
+}
+
+.nodeslide-studio .ns-openui-host-action > span {
+  color: var(--ns-faint);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.nodeslide-studio .ns-openui-host-action .ns-button {
+  font-size: 9.5px;
+  min-height: 28px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-openui-status {
+  border-radius: 8px;
+  display: block;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.nodeslide-studio .ns-openui-status.is-proposed {
+  background: color-mix(in srgb, var(--ns-positive) 9%, transparent);
+  color: var(--ns-positive);
+}
+
+.nodeslide-studio .ns-openui-status.is-error {
+  background: color-mix(in srgb, var(--ns-danger) 9%, transparent);
+  color: var(--ns-danger);
+}
+
 /* Agentic authoring v4: readable durable conversation, tools, and data lifecycle. */
 .ns-ai-v3-shell,
 .ns-data-inspector,
@@ -6333,6 +6552,78 @@
   padding: 8px 0 4px;
 }
 
+.nodeslide-studio .ns-ai-material-tool {
+  border-bottom: 1px solid var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-ai-material-tool > header {
+  align-items: center;
+  background: var(--ns-raised);
+  border-bottom: 1px solid var(--ns-line-b);
+  color: var(--ns-ink2);
+  display: flex;
+  font-size: 9.5px;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 5px 10px 5px 13px;
+}
+
+.nodeslide-studio .ns-ai-material-tool > header span {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.nodeslide-studio .ns-ai-material-tool > header button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ns-faint);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.nodeslide-studio .ns-ai-material-tool > header button:hover {
+  background: var(--ns-chip);
+  color: var(--ns-ink);
+}
+
+.nodeslide-studio .ns-ai-material-tool .ns-openui-material {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+
+.nodeslide-studio .ns-agent-load-earlier {
+  align-items: center;
+  align-self: center;
+  background: var(--ns-chip);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  color: var(--ns-ink2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 9.5px;
+  gap: 7px;
+  margin: 10px auto 2px;
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.nodeslide-studio .ns-agent-load-earlier:hover {
+  border-color: var(--ns-line-d);
+  color: var(--ns-ink);
+}
+
+.nodeslide-studio .ns-agent-load-earlier small {
+  color: var(--ns-faint);
+  font: 8.5px / 1.2 var(--ns-font-mono);
+}
+
 .nodeslide-studio .ns-agent-thread-footer {
   background: linear-gradient(
     180deg,
@@ -6417,7 +6708,29 @@
   font-size: 11.5px;
   line-height: 1.5;
   margin: 0;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.nodeslide-studio .ns-agent-message-content .ns-eyebrow {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.nodeslide-studio .ns-agent-branch-label {
+  background: color-mix(in srgb, var(--ns-collaboration) 9%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-collaboration) 24%, var(--ns-line-c));
+  border-radius: 999px;
+  color: var(--ns-collaboration);
+  font-size: 8px;
+  font-weight: 600;
+  max-width: 128px;
+  overflow: hidden;
+  padding: 2px 6px;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .nodeslide-studio .ns-agent-message-content > p + p {
@@ -6698,7 +7011,17 @@
   }
 
   .nodeslide-studio .ns-ai-v3-prompt .ns-prompt-textarea {
-    min-height: 112px;
+    min-height: 72px;
+  }
+
+  .nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-ai-v3-policy-summary,
+  .nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-ai-v3-controls-disclosure,
+  .nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-effort-wrap {
+    display: none;
+  }
+
+  .nodeslide-studio .ns-ai-v3-composer.is-expanded .ns-ai-v3-prompt .ns-prompt-textarea {
+    min-height: 180px;
   }
 
   .nodeslide-studio .ns-ai-v3-prompt .ns-model-trigger,
@@ -7047,6 +7370,43 @@
 
 .nodeslide-studio .ns-ai-v3-controls-disclosure {
   order: 5;
+}
+
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-ai-v3-policy-summary,
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-ai-v3-controls-disclosure,
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-effort-wrap,
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-footer-status {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-tools {
+  display: contents;
+}
+
+.nodeslide-studio .ns-ai-v3-composer:not(.is-expanded) .ns-prompt-submit-tools {
+  margin-left: auto;
+}
+
+.nodeslide-studio
+  .ns-ai-v3-composer:not(.is-expanded)
+  .ns-ai-v3-prompt
+  [data-testid="ai-attach-data"] {
+  justify-content: center;
+  padding-inline: 0;
+  width: 32px;
+}
+
+.nodeslide-studio
+  .ns-ai-v3-composer:not(.is-expanded)
+  .ns-ai-v3-prompt
+  [data-testid="ai-attach-data"]::after {
+  display: none;
 }
 
 .nodeslide-studio .ns-ai-tools-menu {

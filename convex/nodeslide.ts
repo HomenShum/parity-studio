@@ -1898,6 +1898,17 @@ export const advanceAgentRunInternal = internalMutation({
     toolName: v.optional(v.string()),
     toolCallId: v.optional(v.string()),
     parentMessageId: v.optional(v.string()),
+    agentRole: v.optional(
+      v.union(
+        v.literal('planner'),
+        v.literal('executor'),
+        v.literal('researcher'),
+        v.literal('validator'),
+      ),
+    ),
+    branchId: v.optional(v.string()),
+    branchLabel: v.optional(v.string()),
+    parallelGroupId: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
     memoryIds: v.optional(v.array(v.string())),
     memoryDigests: v.optional(v.array(v.string())),
@@ -2038,6 +2049,14 @@ export const advanceAgentRunInternal = internalMutation({
           : {}),
         ...(args.parentMessageId
           ? { parentMessageId: requiredText(args.parentMessageId, 'parent message id', 180) }
+          : {}),
+        ...(args.agentRole ? { agentRole: args.agentRole } : {}),
+        ...(args.branchId ? { branchId: requiredText(args.branchId, 'branch id', 120) } : {}),
+        ...(args.branchLabel
+          ? { branchLabel: requiredText(args.branchLabel, 'branch label', 120) }
+          : {}),
+        ...(args.parallelGroupId
+          ? { parallelGroupId: requiredText(args.parallelGroupId, 'parallel group id', 120) }
           : {}),
         ...(args.sourceIds ? { sourceIds: args.sourceIds.slice(0, 32) } : {}),
         createdAt: now,

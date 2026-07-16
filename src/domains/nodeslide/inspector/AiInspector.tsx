@@ -77,6 +77,7 @@ import {
   useSessionExternalConsent,
 } from '../externalProviderConsent';
 import { sanitizeNodeSlideUserError } from '../nodeslideUserError';
+import { VisualMaterialWorkbench } from '../openui/VisualMaterialWorkbench';
 import type { AgentSessionApprovalMode } from '../session';
 import {
   NodeSlideThreadMessages,
@@ -190,6 +191,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     writeScope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onProposeVisualMaterial?: (operations: PatchOperation[], summary: string) => Promise<void>;
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   onCreateMemory?: (category: NodeSlideAgentMemoryCategory, content: string) => Promise<void>;
   onUpdateMemory?: (
@@ -243,6 +245,7 @@ export function AiInspector<CommandId extends string = string>({
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
+  onProposeVisualMaterial,
   onAttachDataFile,
   onCreateMemory,
   onUpdateMemory,
@@ -302,8 +305,10 @@ export function AiInspector<CommandId extends string = string>({
     approvalBusy || attachmentBusy || submissionPreparing || isSubmitting;
   const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [materialWorkbenchOpen, setMaterialWorkbenchOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
+  const [messageWindowSize, setMessageWindowSize] = useState(50);
   const activeMemoryCount = memories.filter((memory) => memory.status === 'active').length;
   const useMemoryForRun = memoryEnabled && activeMemoryCount > 0;
   const composerId = useId();
@@ -339,6 +344,7 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
+    setMessageWindowSize(50);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -564,11 +570,28 @@ export function AiInspector<CommandId extends string = string>({
   // been cancelled just because a persisted run row has not hydrated its final status yet.
   const hasTerminalActivity = Boolean(resolvedActivity && isTerminalActivity(resolvedActivity));
   const visibleDurableRun = hasTerminalActivity ? undefined : activeDurableRun;
+  const latestDurableRun = [...agentRuns].sort(
+    (left, right) => right.createdAt - left.createdAt,
+  )[0];
+  const hasPersistedTerminalMessage = Boolean(
+    resolvedActivity &&
+      isTerminalActivity(resolvedActivity) &&
+      latestDurableRun &&
+      ['completed', 'failed', 'cancelled'].includes(latestDurableRun.status) &&
+      (!resolvedActivity.ask.trim() ||
+        resolvedActivity.ask.trim() === latestDurableRun.instruction.trim()) &&
+      agentMessages.some(
+        (message) =>
+          message.runId === latestDurableRun.id &&
+          (message.role === 'assistant' || message.role === 'system'),
+      ),
+  );
   const visibleAsk = resolvedActivity?.ask.trim() || optimisticAsk?.trim() || '';
   const contextSuggestions =
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
   const showSuggested =
     !instruction.trim() &&
+    agentMessages.length === 0 &&
     proposals.length === 0 &&
     !resolvedActivity &&
     !activeTrace &&
@@ -592,7 +615,11 @@ export function AiInspector<CommandId extends string = string>({
     /\b(this|the)\s+(headline|title|text|chart|graph|image|photo|shape|element)\b/i.test(
       instruction,
     );
-  const recentMessages = agentMessages.slice(-24);
+  const recentMessages = useMemo(
+    () => agentMessages.slice(-messageWindowSize),
+    [agentMessages, messageWindowSize],
+  );
+  const hiddenMessageCount = Math.max(0, agentMessages.length - recentMessages.length);
   const threadMessages = useMemo(
     () =>
       buildNodeSlideThreadMessages(recentMessages, agentRuns, {
@@ -927,6 +954,29 @@ export function AiInspector<CommandId extends string = string>({
             role="log"
             autoScroll={!activityAutoScrollPaused && activityHasScrollTarget}
           >
+            {materialWorkbenchOpen && onProposeVisualMaterial ? (
+              <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
+                <header>
+                  <span>
+                    <Layers3 size={12} /> Visual material
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMaterialWorkbenchOpen(false)}
+                    aria-label="Close visual material tool"
+                  >
+                    <X size={12} />
+                  </button>
+                </header>
+                <VisualMaterialWorkbench
+                  deck={deck}
+                  slide={slide}
+                  disabled={Boolean(visibleDurableRun) || isSubmitting || hasReviewableProposal}
+                  onPropose={onProposeVisualMaterial}
+                />
+              </section>
+            ) : null}
+
             {!visibleAsk &&
             !resolvedActivity &&
             !activeTrace &&
@@ -948,11 +998,23 @@ export function AiInspector<CommandId extends string = string>({
               </section>
             ) : null}
 
+            {hiddenMessageCount > 0 ? (
+              <button
+                className="ns-agent-load-earlier"
+                type="button"
+                onClick={() => setMessageWindowSize((current) => current + 50)}
+                data-testid="agent-load-earlier"
+              >
+                <span>Show {Math.min(50, hiddenMessageCount)} earlier messages</span>
+                <small>{hiddenMessageCount} hidden</small>
+              </button>
+            ) : null}
+
             <div className="ns-ai-v3-conversation" data-testid="assistant-ui-messages">
               <NodeSlideThreadMessages />
             </div>
 
-            {resolvedActivity || activeTrace ? (
+            {(resolvedActivity || activeTrace) && !hasPersistedTerminalMessage ? (
               <section
                 className={`ns-agent-progress ns-ai-v3-progress ${
                   resolvedActivity?.status === 'cancelled'
@@ -1779,6 +1841,21 @@ export function AiInspector<CommandId extends string = string>({
                             <Command size={14} />
                             <span className="ns-ai-tool-label">Command</span>
                           </PromptInputButton>
+                          {onProposeVisualMaterial ? (
+                            <PromptInputButton
+                              aria-label="Open visual material tool"
+                              className="ns-ai-tool-button"
+                              aria-pressed={materialWorkbenchOpen}
+                              data-testid="ai-open-material-workbench"
+                              disabled={approvalControlLocked}
+                              onClick={() => setMaterialWorkbenchOpen((open) => !open)}
+                              title="Open the visual material tool"
+                              variant={materialWorkbenchOpen ? 'default' : 'ghost'}
+                            >
+                              <Layers3 size={14} />
+                              <span className="ns-ai-tool-label">Visual</span>
+                            </PromptInputButton>
+                          ) : null}
                         </div>
                       </details>
                     </>

@@ -729,6 +729,14 @@ export interface NodeSlideAgentMessage {
   parentMessageId?: string;
   /** Query-projected read-only child conversation for a delegated tool call. */
   messages?: NodeSlideAgentMessage[];
+  /** Persisted orchestration identity. Omitted for the default single-agent path. */
+  agentRole?: 'planner' | 'executor' | 'researcher' | 'validator';
+  /** Stable identity for a real orchestrator branch. */
+  branchId?: string;
+  /** Human-readable purpose for that branch. */
+  branchLabel?: string;
+  /** Shared identity for branches dispatched in the same parallel wave. */
+  parallelGroupId?: string;
   sourceIds?: string[];
   toolActivity?: NodeSlideAgentToolActivity;
   resolvedSources?: NodeSlideAgentResolvedSource[];

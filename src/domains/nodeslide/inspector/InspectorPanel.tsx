@@ -531,6 +531,22 @@ export function InspectorPanel<CommandId extends string = string>({
                     ? { onClearCommentContext: onClearAiCommentContext }
                     : {})}
                   onPropose={onProposeEdit}
+                  {...(onProposeJsonPatch
+                    ? {
+                        onProposeVisualMaterial: async (
+                          operations: PatchOperation[],
+                          summary: string,
+                        ) => {
+                          const proposed = await onProposeJsonPatch({
+                            operations,
+                            summary,
+                            elementId: '__openui_visual_material__',
+                            baseElementVersion: 0,
+                          });
+                          if (!proposed) throw new Error('The visual proposal was not created.');
+                        },
+                      }
+                    : {})}
                   {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
                   {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
                   {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}

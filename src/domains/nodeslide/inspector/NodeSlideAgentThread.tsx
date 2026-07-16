@@ -146,6 +146,8 @@ function toolArgs(message: NodeSlideAgentMessage): Record<string, string> {
     __nodeslideToolState: activity.state,
   };
   if (activity.errorText) args['__nodeslideErrorText'] = activity.errorText;
+  if (message.agentRole) args['__nodeslideAgentRole'] = message.agentRole;
+  if (message.branchLabel) args['__nodeslideBranchLabel'] = message.branchLabel;
   if (activity.input === undefined) return args;
   try {
     args['input'] = JSON.stringify(activity.input);
@@ -173,6 +175,8 @@ function messageToThreadMessage(message: NodeSlideAgentMessage): ThreadMessage {
     runId: message.runId,
     sourceIds: message.sourceIds ?? [],
     toolState: message.toolActivity?.state,
+    agentRole: message.agentRole,
+    branchLabel: message.branchLabel,
   };
   if (message.role === 'user') {
     return {
@@ -248,6 +252,12 @@ function runInvocationMessage(group: RunMessageGroup): ThreadMessage | null {
   const firstNested = nestedMessages[0];
   const isRunning = ACTIVE_RUN_STATUSES.has(group.run.status);
   const isError = group.run.status === 'failed';
+  const branchCount = new Set(
+    nestedMessages.flatMap((message) => (message.branchId ? [message.branchId] : [])),
+  ).size;
+  const parallelGroupCount = new Set(
+    nestedMessages.flatMap((message) => (message.parallelGroupId ? [message.parallelGroupId] : [])),
+  ).size;
   const toolResult = isRunning
     ? undefined
     : {
@@ -263,7 +273,12 @@ function runInvocationMessage(group: RunMessageGroup): ThreadMessage | null {
         type: 'tool-call',
         toolCallId: `invoke:${group.run.id}`,
         toolName: 'invoke_nodeslide_agent',
-        args: { instruction: group.run.instruction },
+        args: {
+          instruction: group.run.instruction,
+          __nodeslideStepCount: String(nestedMessages.length),
+          __nodeslideBranchCount: String(branchCount),
+          __nodeslideParallelGroupCount: String(parallelGroupCount),
+        },
         argsText: JSON.stringify({ instruction: group.run.instruction }),
         ...(toolResult ? { result: toolResult } : {}),
         ...(isError ? { isError: true } : {}),
@@ -318,9 +333,16 @@ export function buildNodeSlideThreadMessages(
     handledRuns.add(run.id);
     const groupMessages = byRun.get(run.id) ?? [];
     const userMessages = groupMessages.filter((candidate) => candidate.role === 'user');
+    const finalAssistant = [...groupMessages]
+      .reverse()
+      .find((candidate) => candidate.role === 'assistant');
+    const invocationMessages = finalAssistant
+      ? groupMessages.filter((candidate) => candidate.id !== finalAssistant.id)
+      : groupMessages;
     output.push(...userMessages.map(messageToThreadMessage));
-    const invocation = runInvocationMessage({ run, messages: groupMessages });
+    const invocation = runInvocationMessage({ run, messages: invocationMessages });
     if (invocation) output.push(invocation);
+    if (finalAssistant) output.push(messageToThreadMessage(finalAssistant));
   }
 
   const optimisticAsk = options.optimisticAsk?.trim();
@@ -405,7 +427,22 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
   );
   const encodedErrorText = toolArgs['__nodeslideErrorText'];
   const hasNestedMessages = Boolean(part.messages?.length);
-  const toolOpen = state !== 'output-available' || hasNestedMessages;
+  const nestedMessageCount = Number(toolArgs['__nodeslideStepCount'] ?? part.messages?.length ?? 0);
+  const branchCount = Number(toolArgs['__nodeslideBranchCount'] ?? 0);
+  const parallelGroupCount = Number(toolArgs['__nodeslideParallelGroupCount'] ?? 0);
+  const branchLabel = String(toolArgs['__nodeslideBranchLabel'] ?? '').trim();
+  const agentRole = String(toolArgs['__nodeslideAgentRole'] ?? '').trim();
+  const isRunInvocation = part.toolName === 'invoke_nodeslide_agent';
+  const toolOpen = state !== 'output-available';
+  const title = toolActivityTitle({
+    toolName: part.toolName,
+    isRunInvocation,
+    nestedMessageCount,
+    branchCount,
+    parallelGroupCount,
+    branchLabel,
+    agentRole,
+  });
   return (
     <Tool
       className={`ns-ai-v3-tool ${hasNestedMessages ? 'is-agent-handoff' : ''}`}
@@ -413,12 +450,7 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
       data-tool-state={state}
       defaultOpen={toolOpen}
     >
-      <ToolHeader
-        state={state}
-        title={humanizeToolName(part.toolName)}
-        toolName={part.toolName}
-        type="dynamic-tool"
-      />
+      <ToolHeader state={state} title={title} toolName={part.toolName} type="dynamic-tool" />
       <ToolContent>
         {hasNestedMessages ? (
           <section
@@ -427,9 +459,14 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
           >
             <header>
               <span>
-                <Bot size={12} /> Agent handoff
+                <Bot size={12} />
+                {isRunInvocation
+                  ? 'Run details'
+                  : `${agentRoleLabel(agentRole, part.toolName)} handoff`}
               </span>
-              <small>Read-only</small>
+              <small>
+                {nestedMessageCount} {nestedMessageCount === 1 ? 'step' : 'steps'} · read-only
+              </small>
             </header>
             <MessagePartPrimitive.Messages components={THREAD_MESSAGE_COMPONENTS} />
           </section>
@@ -460,6 +497,12 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
 function NodeSlideThreadMessage() {
   const role = useAuiState((state) => state.message.role);
   const optimistic = useAuiState((state) => state.message.metadata.custom['optimistic'] === true);
+  const agentRole = useAuiState(
+    (state) => state.message.metadata.custom['agentRole'] as string | undefined,
+  );
+  const branchLabel = useAuiState(
+    (state) => state.message.metadata.custom['branchLabel'] as string | undefined,
+  );
   return (
     <MessagePrimitive.Root
       className={`ns-ai-v3-chat-turn is-${role === 'user' ? 'user' : 'agent'} ns-agent-message`}
@@ -473,7 +516,10 @@ function NodeSlideThreadMessage() {
       ) : null}
       <div className="ns-agent-message-content">
         <span className="ns-eyebrow">
-          {role === 'user' ? 'You asked' : role === 'system' ? 'System' : 'NodeSlide'}
+          {role === 'user' ? 'You asked' : role === 'system' ? 'System' : agentRoleLabel(agentRole)}
+          {role !== 'user' && branchLabel ? (
+            <small className="ns-agent-branch-label">{branchLabel}</small>
+          ) : null}
         </span>
         <MessagePrimitive.Parts
           components={{
@@ -509,4 +555,48 @@ export function NodeSlideThreadRuntimeProvider({
 
 export function NodeSlideThreadMessages() {
   return <ThreadPrimitive.Messages components={THREAD_MESSAGE_COMPONENTS} />;
+}
+
+function agentRoleLabel(role?: string, toolName?: string) {
+  const normalized = role?.trim().toLowerCase();
+  if (normalized) return normalized.replace(/^./, (character) => character.toUpperCase());
+  const delegatedRole = toolName?.match(/^delegate[_-](.+)$/)?.[1];
+  if (delegatedRole) return humanizeToolName(delegatedRole);
+  return 'NodeSlide';
+}
+
+function toolActivityTitle({
+  toolName,
+  isRunInvocation,
+  nestedMessageCount,
+  branchCount,
+  parallelGroupCount,
+  branchLabel,
+  agentRole,
+}: {
+  toolName: string;
+  isRunInvocation: boolean;
+  nestedMessageCount: number;
+  branchCount: number;
+  parallelGroupCount: number;
+  branchLabel: string;
+  agentRole: string;
+}) {
+  if (isRunInvocation) {
+    const parts = [
+      'Agent activity',
+      `${nestedMessageCount} ${nestedMessageCount === 1 ? 'step' : 'steps'}`,
+    ];
+    if (branchCount > 1) {
+      parts.push(
+        `${branchCount} ${parallelGroupCount > 0 ? 'parallel ' : ''}${
+          branchCount === 1 ? 'branch' : 'branches'
+        }`,
+      );
+    }
+    return parts.join(' · ');
+  }
+  return [agentRole ? agentRoleLabel(agentRole) : humanizeToolName(toolName), branchLabel]
+    .filter(Boolean)
+    .join(' · ');
 }

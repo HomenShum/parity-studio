@@ -84,6 +84,7 @@ import {
   appendDistinctHistoryVersion,
   applyExpectedElementVersions,
   authoritativePredecessorVersion,
+  candidateSlideIdForPatch,
   classifyEditorVersionAdvance,
   createEditorRequestGate,
   createSerializedEditorWriteQueue,
@@ -2148,8 +2149,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             setPreviewedPatchId(receipt.patch.id);
             const firstAffectedSlideId =
               'slideIds' in receipt.patch.scope ? receipt.patch.scope.slideIds[0] : undefined;
-            if (firstAffectedSlideId && candidateDeck.slideOrder.includes(firstAffectedSlideId)) {
-              selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+            const candidateSlideId = candidateSlideIdForPatch(
+              receipt.patch,
+              firstAffectedSlideId ?? '',
+            );
+            if (candidateSlideId && candidateDeck.slideOrder.includes(candidateSlideId)) {
+              selectSlide(candidateSlideId, setActiveSlideId, setSelectedElementIds);
             }
             setCanvasMode('compare');
             setActiveInspectorTab('ai');

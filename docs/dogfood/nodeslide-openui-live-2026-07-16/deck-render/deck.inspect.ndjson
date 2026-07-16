@@ -1,0 +1,95 @@
+{"kind":"slide","id":"sl/h8vvsa","slide":1,"title":"NODESLIDE / OPENUI PHASE 0","textShapes":6}
+{"kind":"textbox","id":"sh/qhwveh8b","slide":1,"name":"cover-eyebrow","text":"NODESLIDE / OPENUI PHASE 0","textPreview":"NODESLIDE / OPENUI PHASE 0","textChars":26,"textLines":1,"bbox":[42,40,620,34]}
+{"kind":"textbox","id":"sh/dk7epwrm","slide":1,"name":"cover-title","text":"OpenUI makes the visual\ndecision visible before\nthe slide changes","textPreview":"OpenUI makes the visual | decision visible before | the slide changes","textChars":65,"textLines":3,"bbox":[42,165,1010,305]}
+{"kind":"textbox","id":"sh/cjedgrq1","slide":1,"name":"cover-subtitle","text":"A bounded adoption proof: structured visual materials → validated SlideLang proposal → human acceptance.","textPreview":"A bounded adoption proof: structured visual materials → validated SlideLang proposal → human acceptance.","textChars":104,"textLines":1,"bbox":[42,520,840,92]}
+{"kind":"shape","id":"sh/3e5wjm9k","slide":1,"bbox":[1075,40,163,20]}
+{"kind":"textbox","id":"sh/idwvah8z","slide":1,"text":"LIVE LOCAL RUN","textPreview":"LIVE LOCAL RUN","textChars":14,"textLines":1,"bbox":[1062,72,176,24]}
+{"kind":"textbox","id":"sh/pgnelwrq","slide":1,"name":"footer-label-1","text":"LOCAL PROOF · 2026-07-16","textPreview":"LOCAL PROOF · 2026-07-16","textChars":24,"textLines":1,"bbox":[42,670,520,22]}
+{"kind":"textbox","id":"sh/4fedcrq5","slide":1,"name":"footer-page-1","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1184,670,54,22]}
+{"kind":"slide","id":"sl/eye12a","slide":2,"title":"Four incompatible units need a transformation ladder—not one axis","textShapes":25}
+{"kind":"textbox","id":"sh/don6t4je","slide":2,"name":"slide-title-2","text":"Four incompatible units need a transformation ladder—not one axis","textPreview":"Four incompatible units need a transformation ladder—not one axis","textChars":65,"textLines":1,"bbox":[42,36,1196,92]}
+{"kind":"textbox","id":"sh/qlcnipkn","slide":2,"name":"footer-label-2","text":"LOCAL PROOF · 2026-07-16","textPreview":"LOCAL PROOF · 2026-07-16","textChars":24,"textLines":1,"bbox":[42,670,520,22]}
+{"kind":"textbox","id":"sh/rmloru18","slide":2,"name":"footer-page-2","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1184,670,54,22]}
+{"kind":"textbox","id":"sh/4ju5gf2x","slide":2,"text":"The OpenUI component keeps every scenario claim in its own unit and makes the non-chart decision explicit.","textPreview":"The OpenUI component keeps every scenario claim in its own unit and makes the non-chart decision explicit.","textChars":106,"textLines":1,"bbox":[42,125,1000,60]}
+{"kind":"shape","id":"sh/pk3mpkj2","slide":2,"bbox":[42,247,262,285]}
+{"kind":"textbox","id":"sh/2hcne5kr","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[62,268,40,24]}
+{"kind":"textbox","id":"sh/3il4na1c","slide":2,"text":"REPLICATION","textPreview":"REPLICATION","textChars":11,"textLines":1,"bbox":[100,268,182,38]}
+{"kind":"textbox","id":"sh/ofy5sj21","slide":2,"text":"200K copies","textPreview":"200K copies","textChars":11,"textLines":1,"bbox":[62,343,218,88]}
+{"kind":"shape","id":"sh/9g761ojm","slide":2,"bbox":[62,451,218,0]}
+{"kind":"textbox","id":"sh/lkn2d0bq","slide":2,"text":"copies","textPreview":"copies","textChars":6,"textLines":1,"bbox":[62,469,218,42]}
+{"kind":"textbox","id":"sh/kjelkfa5","slide":2,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[304,365,24,40]}
+{"kind":"shape","id":"sh/zi5kbatk","slide":2,"bbox":[328,247,262,285]}
+{"kind":"textbox","id":"sh/yhw3i5sz","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[348,268,40,24]}
+{"kind":"textbox","id":"sh/xg3290be","slide":2,"text":"EQUIVALENT CAPACITY","textPreview":"EQUIVALENT CAPACITY","textChars":19,"textLines":1,"bbox":[386,268,182,38]}
+{"kind":"textbox","id":"sh/cfulgvat","slide":2,"text":"50K coder\nequivalents","textPreview":"50K coder | equivalents","textChars":21,"textLines":2,"bbox":[348,343,218,88]}
+{"kind":"shape","id":"sh/belk7qt8","slide":2,"bbox":[348,451,218,0]}
+{"kind":"textbox","id":"sh/adc3els3","slide":2,"text":"coder equivalents","textPreview":"coder equivalents","textChars":17,"textLines":1,"bbox":[348,469,218,42]}
+{"kind":"textbox","id":"sh/hc7mlkry","slide":2,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[590,365,24,40]}
+{"kind":"shape","id":"sh/wbylszad","slide":2,"bbox":[614,247,262,285]}
+{"kind":"textbox","id":"sh/gf65o3i9","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[634,268,40,24]}
+{"kind":"textbox","id":"sh/1gf6h8zu","slide":2,"text":"INDIVIDUAL ACCELERATION","textPreview":"INDIVIDUAL ACCELERATION","textChars":23,"textLines":1,"bbox":[672,268,182,38]}
+{"kind":"textbox","id":"sh/etonmt0j","slide":2,"text":"30× speed","textPreview":"30× speed","textChars":9,"textLines":1,"bbox":[634,343,218,88]}
+{"kind":"shape","id":"sh/fux4fyho","slide":2,"bbox":[634,451,218,0]}
+{"kind":"textbox","id":"sh/srm5kjid","slide":2,"text":"individual speed multiplier","textPreview":"individual speed multiplier","textChars":27,"textLines":1,"bbox":[634,469,218,42]}
+{"kind":"textbox","id":"sh/tsfmdozy","slide":2,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[876,365,24,40]}
+{"kind":"shape","id":"sh/6p4nit07","slide":2,"bbox":[900,247,262,285]}
+{"kind":"textbox","id":"sh/rqd4behs","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[920,268,40,24]}
+{"kind":"textbox","id":"sh/knm5gji1","slide":2,"text":"SYSTEM OUTCOME","textPreview":"SYSTEM OUTCOME","textChars":14,"textLines":1,"bbox":[958,268,182,38]}
+{"kind":"textbox","id":"sh/5ovm9ozm","slide":2,"text":"4× research\nprogress","textPreview":"4× research | progress","textChars":20,"textLines":2,"bbox":[920,343,218,88]}
+{"kind":"shape","id":"sh/nitozelo","slide":2,"bbox":[920,451,218,0]}
+{"kind":"textbox","id":"sh/mhknq9k3","slide":2,"text":"overall progress multiplier","textPreview":"overall progress multiplier","textChars":27,"textLines":1,"bbox":[920,469,218,42]}
+{"kind":"textbox","id":"sh/9kb61o3u","slide":2,"text":"USER-PROVIDED SCENARIO FIXTURE · UNVERIFIED","textPreview":"USER-PROVIDED SCENARIO FIXTURE · UNVERIFIED","textChars":43,"textLines":1,"bbox":[42,574,560,30]}
+{"kind":"textbox","id":"sh/8j25sj29","slide":2,"text":"NO SHARED AXIS · MIXED UNITS","textPreview":"NO SHARED AXIS · MIXED UNITS","textChars":28,"textLines":1,"bbox":[830,574,408,30]}
+{"kind":"slide","id":"sl/251tu4","slide":3,"title":"Selection crosses one governed boundary at a time","textShapes":17}
+{"kind":"textbox","id":"sh/dwz29036","slide":3,"name":"slide-title-3","text":"Selection crosses one governed boundary at a time","textPreview":"Selection crosses one governed boundary at a time","textChars":49,"textLines":1,"bbox":[42,36,1196,92]}
+{"kind":"textbox","id":"sh/qto3y5kf","slide":3,"name":"footer-label-3","text":"LOCAL PROOF · 2026-07-16","textPreview":"LOCAL PROOF · 2026-07-16","textChars":24,"textLines":1,"bbox":[42,670,520,22]}
+{"kind":"textbox","id":"sh/ruxk7ql0","slide":3,"name":"footer-page-3","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1184,670,54,22]}
+{"kind":"textbox","id":"sh/0zql4f2h","slide":3,"text":"OpenUI is the decision surface. SlideLang and Convex remain the document and authority layers.","textPreview":"OpenUI is the decision surface. SlideLang and Convex remain the document and authority layers.","textChars":94,"textLines":1,"bbox":[42,126,1020,55]}
+{"kind":"shape","id":"sh/10zmdk32","slide":3,"bbox":[78,355,1092,0]}
+{"kind":"shape","id":"sh/ex8325kr","slide":3,"bbox":[78,346,18,18]}
+{"kind":"textbox","id":"sh/zyh4balc","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[78,294,44,28]}
+{"kind":"textbox","id":"sh/onal8f2t","slide":3,"text":"OPENUI LANG","textPreview":"OPENUI LANG","textChars":11,"textLines":1,"bbox":[78,390,245,34]}
+{"kind":"textbox","id":"sh/9ojmhkje","slide":3,"text":"Render an allowlisted\nvisual decision","textPreview":"Render an allowlisted | visual decision","textChars":37,"textLines":2,"bbox":[78,436,250,84]}
+{"kind":"shape","id":"sh/5g3etgne","slide":3,"bbox":[370,346,18,18]}
+{"kind":"textbox","id":"sh/4fux0b6t","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[370,294,44,28]}
+{"kind":"textbox","id":"sh/3elwr658","slide":3,"text":"VISUAL MATERIAL SPEC","textPreview":"VISUAL MATERIAL SPEC","textChars":20,"textLines":1,"bbox":[370,390,245,34]}
+{"kind":"textbox","id":"sh/itcfy1on","slide":3,"text":"Validate units, labels,\nand provenance","textPreview":"Validate units, labels, | and provenance","textChars":38,"textLines":2,"bbox":[370,436,250,84]}
+{"kind":"shape","id":"sh/dknexgna","slide":3,"bbox":[662,346,18,18]}
+{"kind":"textbox","id":"sh/sjex4b6p","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[662,294,44,28]}
+{"kind":"textbox","id":"sh/rilwvq5k","slide":3,"text":"SLIDELANG PROPOSAL","textPreview":"SLIDELANG PROPOSAL","textChars":18,"textLines":1,"bbox":[662,390,245,34]}
+{"kind":"textbox","id":"sh/qhcf2loz","slide":3,"text":"Compile one editable\nadd-slide operation","textPreview":"Compile one editable | add-slide operation","textChars":40,"textLines":2,"bbox":[662,436,250,84]}
+{"kind":"shape","id":"sh/toje1wn6","slide":3,"bbox":[954,346,18,18]}
+{"kind":"textbox","id":"sh/8nadsr6l","slide":3,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[954,294,44,28]}
+{"kind":"textbox","id":"sh/kjy54vit","slide":3,"text":"HUMAN ACCEPT","textPreview":"HUMAN ACCEPT","textChars":12,"textLines":1,"bbox":[954,390,245,34]}
+{"kind":"textbox","id":"sh/lk76xgze","slide":3,"text":"CAS + candidate receipt\nadvance v1 → v2","textPreview":"CAS + candidate receipt | advance v1 → v2","textChars":39,"textLines":2,"bbox":[954,436,250,84]}
+{"kind":"shape","id":"sh/yhwn2l0n","slide":3,"bbox":[42,575,1196,55]}
+{"kind":"textbox","id":"sh/ji5ovqh8","slide":3,"text":"Fail closed: mixed-unit chart · fabricated source · stale deck version · duplicate slide id","textPreview":"Fail closed: mixed-unit chart · fabricated source · stale deck version · duplicate slide id","textChars":91,"textLines":1,"bbox":[65,592,1150,28]}
+{"kind":"slide","id":"sl/rbc51e","slide":4,"title":"The live interaction proved the boundary—not just the render","textShapes":10}
+{"kind":"textbox","id":"sh/8z6p87al","slide":4,"name":"slide-title-4","text":"The live interaction proved the boundary—not just the render","textPreview":"The live interaction proved the boundary—not just the render","textChars":60,"textLines":1,"bbox":[42,36,1196,92]}
+{"kind":"textbox","id":"sh/nyxozm90","slide":4,"name":"footer-label-4","text":"LOCAL PROOF · 2026-07-16","textPreview":"LOCAL PROOF · 2026-07-16","textChars":24,"textLines":1,"bbox":[42,670,520,22]}
+{"kind":"textbox","id":"sh/mxo76hsf","slide":4,"name":"footer-page-4","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1184,670,54,22]}
+{"kind":"textbox","id":"sh/lwv6xcru","slide":4,"text":"Disposable local workspace · exact candidate preview corrected during dogfood","textPreview":"Disposable local workspace · exact candidate preview corrected during dogfood","textChars":77,"textLines":1,"bbox":[42,126,790,45]}
+{"kind":"shape","id":"sh/zadov29o","slide":4,"bbox":[858,194,380,128]}
+{"kind":"textbox","id":"sh/e94n2xs3","slide":4,"text":"15 / 15","textPreview":"15 / 15","textChars":7,"textLines":1,"bbox":[884,216,330,52]}
+{"kind":"textbox","id":"sh/5sz69wry","slide":4,"text":"OpenUI + agent contract tests passed","textPreview":"OpenUI + agent contract tests passed","textChars":36,"textLines":1,"bbox":[884,274,330,36]}
+{"kind":"shape","id":"sh/krqpgbat","slide":4,"bbox":[858,342,380,128]}
+{"kind":"textbox","id":"sh/ahgr2dg7","slide":4,"text":"v1 → v2","textPreview":"v1 → v2","textChars":7,"textLines":1,"bbox":[884,364,330,52]}
+{"kind":"textbox","id":"sh/bip8bixs","slide":4,"text":"Pending proposal stayed unapplied until Accept","textPreview":"Pending proposal stayed unapplied until Accept","textChars":46,"textLines":1,"bbox":[884,422,330,40]}
+{"kind":"shape","id":"sh/wjy94nyd","slide":4,"bbox":[858,490,380,142]}
+{"kind":"textbox","id":"sh/xk7qdsfy","slide":4,"text":"1 operation","textPreview":"1 operation","textChars":11,"textLines":1,"bbox":[884,512,330,46]}
+{"kind":"textbox","id":"sh/mdwrydgb","slide":4,"text":"Editable add-slide patch\nwith a candidate validation receipt","textPreview":"Editable add-slide patch | with a candidate validation receipt","textChars":60,"textLines":2,"bbox":[884,566,330,58]}
+{"kind":"image","id":"im/1kneh43i","slide":4,"name":"","alt":"NodeSlide Compare showing the baseline and the new OpenUI visual material proposal.","bbox":[42,194,780,438]}
+{"kind":"slide","id":"sl/050391","slide":5,"title":"RELEASE BAR","textShapes":10}
+{"kind":"textbox","id":"sh/yl0rylg3","slide":5,"text":"RELEASE BAR","textPreview":"RELEASE BAR","textChars":11,"textLines":1,"bbox":[42,40,260,30]}
+{"kind":"textbox","id":"sh/l8rq90fu","slide":5,"text":"Adopt Phase 0 now.\nKeep the boundary.","textPreview":"Adopt Phase 0 now. | Keep the boundary.","textChars":37,"textLines":2,"bbox":[42,178,950,245]}
+{"kind":"shape","id":"sh/kni90vy9","slide":5,"bbox":[42,492,350,0]}
+{"kind":"textbox","id":"sh/7a98bax0","slide":5,"text":"01  OPENUI","textPreview":"01  OPENUI","textChars":10,"textLines":1,"bbox":[42,516,350,32]}
+{"kind":"textbox","id":"sh/m90r25gf","slide":5,"text":"Bounded component library + visible provenance","textPreview":"Bounded component library + visible provenance","textChars":46,"textLines":1,"bbox":[42,558,350,70]}
+{"kind":"shape","id":"sh/9crad0fq","slide":5,"bbox":[437,492,350,0]}
+{"kind":"textbox","id":"sh/8bi94fyl","slide":5,"text":"02  SLIDELANG","textPreview":"02  SLIDELANG","textChars":13,"textLines":1,"bbox":[437,516,350,32]}
+{"kind":"textbox","id":"sh/nep8z6xg","slide":5,"text":"Editable output + exact candidate validation","textPreview":"Editable output + exact candidate validation","textChars":44,"textLines":1,"bbox":[437,558,350,70]}
+{"kind":"shape","id":"sh/2dwrq1gv","slide":5,"bbox":[832,492,350,0]}
+{"kind":"textbox","id":"sh/wrypgv6l","slide":5,"text":"03  HUMAN REVIEW","textPreview":"03  HUMAN REVIEW","textChars":16,"textLines":1,"bbox":[832,516,350,32]}
+{"kind":"textbox","id":"sh/xs7qp0nq","slide":5,"text":"No mutation before explicit Accept","textPreview":"No mutation before explicit Accept","textChars":34,"textLines":1,"bbox":[832,558,350,70]}
+{"kind":"textbox","id":"sh/apg7elof","slide":5,"name":"footer-label-5","text":"NEXT · SOURCE BINDING + SERVER-GENERATED OPENUI","textPreview":"NEXT · SOURCE BINDING + SERVER-GENERATED OPENUI","textChars":47,"textLines":1,"bbox":[42,670,520,22]}
+{"kind":"textbox","id":"sh/vqp8nq50","slide":5,"name":"footer-page-5","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1184,670,54,22]}

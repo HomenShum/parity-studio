@@ -910,6 +910,79 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
     expect(screen.getByTestId('ai-composer')).not.toHaveAttribute('data-running', 'true');
   });
+
+  it('shows persisted terminal truth once instead of repeating the failure panel', () => {
+    const snapshot = fixture('persisted-terminal-once');
+    const failureText = 'The provider ended before a validated proposal was returned.';
+    const failedRun: NodeSlideAgentRun = {
+      ...agentRun(snapshot, 'patch-failed', 'Rewrite the headline.', 'nebius', 'zai-org/GLM-5.2'),
+      status: 'failed',
+      error: failureText,
+      completedAt: 1_200,
+    };
+
+    renderInspector(snapshot, {
+      agentRuns: [failedRun],
+      agentMessages: [
+        message({
+          id: 'failed-final',
+          deckId: snapshot.deck.id,
+          runId: failedRun.id,
+          role: 'assistant',
+          content: failureText,
+        }),
+      ],
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 1_200,
+        ask: failedRun.instruction,
+        message: failureText,
+      },
+    });
+
+    expect(screen.getAllByText(failureText)).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('keeps the U04 50-message working set anchored and loads older turns on demand', async () => {
+    const snapshot = fixture('u04-long-conversation');
+    const user = userEvent.setup();
+    const run: NodeSlideAgentRun = {
+      id: 'run-u04',
+      deckId: snapshot.deck.id,
+      idempotencyKey: 'fixed-u04',
+      instruction: 'Make this slide more persuasive without changing any numbers.',
+      status: 'completed',
+      provider: 'nebius',
+      model: 'zai-org/GLM-5.2',
+      webResearch: false,
+      attempt: 1,
+      createdAt: 1_000,
+      updatedAt: 56_000,
+      completedAt: 56_000,
+    };
+    const messages: NodeSlideAgentMessage[] = Array.from({ length: 55 }, (_, index) =>
+      message({
+        id: `u04-${index}`,
+        deckId: snapshot.deck.id,
+        runId: run.id,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content:
+          index % 2 === 0
+            ? 'Make this slide more persuasive without changing any numbers.'
+            : 'The scoped candidate preserves every number and is ready for review.',
+        createdAt: 1_000 + index * 1_000,
+      }),
+    );
+
+    renderInspector(snapshot, { agentRuns: [run], agentMessages: messages });
+
+    const loadEarlier = screen.getByRole('button', { name: /Show 5 earlier messages/ });
+    expect(loadEarlier).toBeVisible();
+    expect(screen.getByTestId('ai-composer')).toBeVisible();
+    await user.click(loadEarlier);
+    expect(screen.queryByTestId('agent-load-earlier')).toBeNull();
+  });
 });
 
 function renderInspector(
