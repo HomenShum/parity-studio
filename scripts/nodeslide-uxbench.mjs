@@ -19,6 +19,10 @@ export const DEFAULT_CORPUS_DIRECTORY = path.resolve(
 );
 export const DEFAULT_REGISTRY_PATH = path.join(DEFAULT_CORPUS_DIRECTORY, 'registry.json');
 export const DEFAULT_FIXTURES_DIRECTORY = path.join(DEFAULT_CORPUS_DIRECTORY, 'fixtures');
+export const DEFAULT_SUPPLEMENTAL_FIXTURES_DIRECTORY = path.join(
+  DEFAULT_CORPUS_DIRECTORY,
+  'live-fixtures',
+);
 
 const FIXTURE_OPERATORS = new Set([
   'equals',
@@ -180,7 +184,50 @@ export async function loadFixtures({
   );
 }
 
-export function validateFixture(fixture, registryCase) {
+/**
+ * Load non-P0 fixtures used by scheduled/live evidence lanes without changing
+ * the fixed 20-case minimum-release comparability contract.
+ */
+export async function loadSupplementalFixtures({
+  fixturesDirectory = DEFAULT_SUPPLEMENTAL_FIXTURES_DIRECTORY,
+  registry,
+} = {}) {
+  const activeRegistry = registry ?? (await loadRegistry());
+  const names = (await readdir(fixturesDirectory)).filter((name) => name.endsWith('.json')).sort();
+  const fixtures = [];
+  const errors = [];
+  const registryById = new Map(activeRegistry.cases.map((entry) => [entry.id, entry]));
+  const minimumReleaseIds = new Set(activeRegistry.minimumReleaseCaseIds);
+
+  for (const name of names) {
+    try {
+      const fixture = JSON.parse(await readFile(path.join(fixturesDirectory, name), 'utf8'));
+      const fixtureErrors = validateFixture(fixture, registryById.get(fixture.id) ?? null, {
+        minimumRelease: false,
+      });
+      if (minimumReleaseIds.has(fixture.id)) {
+        fixtureErrors.push('supplemental fixture duplicates a minimum-release case');
+      }
+      if (fixtureErrors.length > 0) {
+        errors.push(`${name}: ${fixtureErrors.join('; ')}`);
+      } else {
+        fixtures.push(fixture);
+      }
+    } catch (error) {
+      errors.push(`${name}: ${errorMessage(error)}`);
+    }
+  }
+
+  const duplicateIds = duplicates(fixtures.map(({ id }) => id));
+  if (duplicateIds.length > 0)
+    errors.push(`duplicate supplemental fixture IDs: ${duplicateIds.join(', ')}`);
+  if (errors.length > 0) {
+    throw new Error(`Invalid supplemental NodeSlide fixtures:\n- ${errors.join('\n- ')}`);
+  }
+  return fixtures.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function validateFixture(fixture, registryCase, { minimumRelease = true } = {}) {
   const errors = [];
   if (!isRecord(fixture)) return ['fixture must be an object'];
   rejectUnknownKeys(fixture, TOP_LEVEL_FIXTURE_KEYS, 'fixture', errors);
@@ -190,7 +237,9 @@ export function validateFixture(fixture, registryCase) {
   if (!CASE_ID_PATTERN.test(fixture.id ?? '')) errors.push('id must match ^[A-Z][0-9]{2}$');
   if (!nonemptyString(fixture.title)) errors.push('title must be nonempty');
   if (!nonemptyString(fixture.category)) errors.push('category must be nonempty');
-  if (fixture.minimumRelease !== true) errors.push('minimumRelease must be true');
+  if (fixture.minimumRelease !== minimumRelease) {
+    errors.push(`minimumRelease must be ${minimumRelease}`);
+  }
   if (registryCase) {
     if (fixture.request?.text !== registryCase.request) {
       errors.push('request.text must exactly match the registry request');

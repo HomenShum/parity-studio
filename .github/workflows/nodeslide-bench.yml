@@ -61,8 +61,10 @@ jobs:
           path: benchmark-results/pr/
 
   evidence:
-    name: Evidence lane
-    if: github.event_name != 'pull_request'
+    name: Supplied evidence lane
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.evidence_path != '')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: ${{ github.event_name != 'workflow_dispatch' || inputs.enforce != true }}
@@ -97,3 +99,81 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: benchmark-results/evidence/
+
+  live_evidence:
+    name: Fixed live UXBench and TasteBench
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.evidence_path == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    continue-on-error: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce != true }}
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.NODESLIDE_PRODUCTION_URL }}
+      NODESLIDE_BENCH_CONVEX_URL: ${{ vars.NODESLIDE_PRODUCTION_CONVEX_URL }}
+      VITE_CONVEX_URL: ${{ vars.NODESLIDE_PRODUCTION_CONVEX_URL }}
+      NODESLIDE_BENCH_ALLOW_LIVE_WRITE: '1'
+      NODESLIDE_E2E_LIVE_BACKEND: '1'
+      NODESLIDE_E2E_MUTATIONS: '1'
+      NODESLIDE_BENCH_SOURCE_SHA: ${{ github.sha }}
+      NODESLIDE_BENCH_OUTPUT_DIRECTORY: benchmark-results/live/${{ github.sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Require production evidence configuration
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.NODESLIDE_TASTE_JUDGE_OPENROUTER_KEY }}
+        run: |
+          test -n "$PLAYWRIGHT_BASE_URL"
+          test -n "$NODESLIDE_BENCH_CONVEX_URL"
+          test -n "$OPENROUTER_API_KEY"
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Produce exact C01, E01, and A05 browser evidence
+        id: producer
+        continue-on-error: true
+        run: pnpm nodeslide:bench:produce-live
+      - name: Judge the bound E01 before/after pixels
+        id: taste_judge
+        continue-on-error: true
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.NODESLIDE_TASTE_JUDGE_OPENROUTER_KEY }}
+        run: |
+          evidence_dir="$NODESLIDE_BENCH_OUTPUT_DIRECTORY"
+          pnpm nodeslide:bench:taste-judge -- +            --before "$evidence_dir/e01-before.manifest.json" +            --after "$evidence_dir/e01-after.manifest.json" +            --out "$evidence_dir/e01-judge.json"
+      - name: Enforce truthful fixed-case evidence
+        if: always()
+        shell: bash
+        run: |
+          args=(
+            --out benchmark-results/evidence-live
+            --case C01
+            --case E01
+            --case A05
+            --enforce
+          )
+          evidence_dir="$NODESLIDE_BENCH_OUTPUT_DIRECTORY"
+          if [[ -d "$evidence_dir" ]]; then
+            while IFS= read -r manifest; do
+              args+=(--evidence "$manifest")
+            done < <(find "$evidence_dir" -maxdepth 1 -type f \( -name '*.manifest.json' -o -name 'e01-judge.json' \) | sort)
+          fi
+          pnpm nodeslide:bench:evidence -- "${args[@]}"
+      - name: Upload sanitized live evidence and reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nodeslide-bench-live-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            benchmark-results/live/
+            benchmark-results/evidence-live/

@@ -967,6 +967,7 @@ export default defineSchema({
     executionDigest: v.string(),
     idempotencyKey: v.string(),
     requestDigest: v.string(),
+    userRequestDigest: v.optional(v.string()),
     status: v.union(...NODESLIDE_JOB_STATUSES.map((status) => v.literal(status))),
     phase: v.union(...NODESLIDE_JOB_PHASES.map((phase) => v.literal(phase))),
     progress: v.number(),

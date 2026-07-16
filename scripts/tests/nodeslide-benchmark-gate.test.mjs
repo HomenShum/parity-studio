@@ -54,6 +54,22 @@ describe('NodeSlide benchmark automation gate', () => {
     expect(await checkRunnerIsolation()).toEqual([]);
   });
 
+  it('keeps the scheduled producer fixed to C01, E01, A05 and fail-closed visual judging', async () => {
+    const workflow = await readFile(
+      new URL('../../.github/workflows/nodeslide-bench.yml', import.meta.url),
+      'utf8',
+    );
+
+    expect(workflow).toContain('pnpm nodeslide:bench:produce-live');
+    expect(workflow).toContain('pnpm nodeslide:bench:taste-judge');
+    expect(workflow).toContain('--case C01');
+    expect(workflow).toContain('--case E01');
+    expect(workflow).toContain('--case A05');
+    expect(workflow).toContain('--enforce');
+    expect(workflow).toContain('NODESLIDE_BENCH_ALLOW_LIVE_WRITE');
+    expect(workflow).not.toMatch(/OPENROUTER_API_KEY:\s*['"][a-z0-9_-]{20,}/iu);
+  });
+
   it('emits honest UNSCORED output without evidence and enforces it only on request', async () => {
     const directory = await temporaryDirectory();
     const result = await runGate({ mode: 'evidence', outDir: directory });
@@ -65,6 +81,21 @@ describe('NodeSlide benchmark automation gate', () => {
     expect(exitCodeForStatus(STATUS.UNSCORED, true)).toBe(1);
     expect(result.summary.taste.reportCount).toBe(1);
     expect(result.summary.taste.reportId).toMatch(/^sha256:/);
+  });
+
+  it('can select a supplemental live case without changing the P0 fixture contract', async () => {
+    const directory = await temporaryDirectory();
+    const result = await runGate({
+      mode: 'evidence',
+      outDir: directory,
+      selectedCaseIds: ['A05'],
+    });
+
+    expect(result.summary.status).toBe(STATUS.UNSCORED);
+    expect(result.summary.comparability.fixtureCount).toBe(20);
+    expect(result.summary.checks.find(({ id }) => id === 'uxbench')?.message).toContain(
+      'across 1 selected fixtures',
+    );
   });
 
   it('never aggregates missing TasteBench evidence into a fabricated PASS', () => {

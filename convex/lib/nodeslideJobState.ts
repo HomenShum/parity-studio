@@ -40,6 +40,8 @@ export interface NodeSlideJobRecord {
   executionDigest: string;
   idempotencyKey: string;
   requestDigest: string;
+  /** Digest of only the exact visible user request, for secret-free evidence binding. */
+  userRequestDigest?: string;
   status: NodeSlideJobStatus;
   phase: NodeSlideJobPhase;
   progress: number;

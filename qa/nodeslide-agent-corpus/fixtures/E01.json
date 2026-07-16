@@ -7,25 +7,25 @@
   "minimumRelease": true,
   "setup": {
     "deckFixture": "founder-roadshow-v1",
-    "activeSlideId": "slide-problem",
-    "selectedSlideIds": ["slide-problem"],
-    "selectedElementIds": ["headline-problem"],
+    "activeSlideId": "slide_cb8dedf0734c6331aeef8b058d3f3a2b",
+    "selectedSlideIds": ["slide_cb8dedf0734c6331aeef8b058d3f3a2b"],
+    "selectedElementIds": ["element_9b907246c1622d23e90d3dce6eb31b61"],
     "approvalMode": "review_required",
     "autonomyGrant": null,
     "context": {
-      "description": "One unlocked headline is selected on the problem slide; all other elements are out of scope.",
+      "description": "One unlocked headline is selected in the reproducible founder-roadshow-v1 golden workspace; all other elements are out of scope.",
       "attachments": [],
       "web": {
         "allowed": false,
         "authorizedOrigins": []
       },
       "canonicalBefore": {
-        "deckVersion": 7,
+        "deckVersion": 1,
         "element": {
-          "id": "headline-problem",
-          "version": 3,
-          "text": "The problem",
-          "sourceIds": [],
+          "id": "element_9b907246c1622d23e90d3dce6eb31b61",
+          "version": 1,
+          "text": "Build the story. Keep every decision editable.",
+          "sourceIds": ["source_2233487bdba7a101ed0579ad0669f694"],
           "locked": false
         }
       }
@@ -107,7 +107,7 @@
         "itemPointer": "/targets/0"
       },
       "operator": "set_equals",
-      "expected": ["headline-problem"]
+      "expected": ["element_9b907246c1622d23e90d3dce6eb31b61"]
     },
     {
       "id": "headline-changed",
@@ -127,7 +127,7 @@
         "pointer": "/result/changedElementIds"
       },
       "operator": "set_equals",
-      "expected": ["headline-problem"]
+      "expected": ["element_9b907246c1622d23e90d3dce6eb31b61"]
     }
   ]
 }

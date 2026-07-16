@@ -8,6 +8,7 @@ import {
   fixtureDigest,
   loadFixtures,
   loadRegistry,
+  loadSupplementalFixtures,
   loadUxArtifact,
   runUxBench,
   sha256,
@@ -80,6 +81,21 @@ describe('NodeSlide Agent Request Corpus fixtures', () => {
       'Comment: “This feels too technical for the audience.” → Send to AI',
     );
     expect(registryById.get('F08').request).toBe('Proposal based on stale element version');
+  });
+
+  it('loads live-only cases without changing the fixed P0 comparability set', async () => {
+    const supplemental = await loadSupplementalFixtures({ registry });
+    expect(supplemental.map(({ id }) => id)).toEqual(['A05']);
+    expect(supplemental[0].minimumRelease).toBe(false);
+    expect(supplemental[0].request.text).toBe('Spend no more than $1 on this run.');
+    expect(
+      validateFixture(
+        supplemental[0],
+        registry.cases.find(({ id }) => id === 'A05'),
+        { minimumRelease: false },
+      ),
+    ).toEqual([]);
+    expect(fixtures).toHaveLength(20);
   });
 });
 

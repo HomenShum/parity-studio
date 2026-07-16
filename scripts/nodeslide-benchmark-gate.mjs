@@ -16,6 +16,7 @@ import {
   fixtureDigest,
   loadFixtures,
   loadRegistry,
+  loadSupplementalFixtures,
   loadUxArtifact,
   runUxBench,
   sha256,
@@ -489,13 +490,30 @@ function makeTasteAggregate(reports) {
   return { ...withoutId, reportId: digestValue(withoutId) };
 }
 
-async function runEvidenceLane({ registry, fixtures, tasteRules, comparability, options }) {
+async function runEvidenceLane({
+  registry,
+  fixtures,
+  supplementalFixtures,
+  tasteRules,
+  comparability,
+  options,
+}) {
   const classified = await classifyEvidenceInputs(options.evidenceInputs);
   const uxPaths = [
     ...new Set([...(await expandInputPaths(options.uxArtifactInputs)), ...classified.ux]),
   ].sort();
   const artifacts = await Promise.all(uxPaths.map((manifestPath) => loadUxArtifact(manifestPath)));
-  const uxReport = runUxBench({ registry, fixtures, artifacts });
+  const evaluationFixtures = [...fixtures, ...supplementalFixtures];
+  const knownCaseIds = new Set(evaluationFixtures.map(({ id }) => id));
+  for (const caseId of options.selectedCaseIds) {
+    if (!knownCaseIds.has(caseId)) classified.issues.push(`unknown selected case ${caseId}`);
+  }
+  const uxReport = runUxBench({
+    registry,
+    fixtures: evaluationFixtures,
+    artifacts,
+    selectedCaseIds: options.selectedCaseIds,
+  });
 
   const beforePaths = [...new Set([...options.tasteBeforeInputs, ...classified.before])].sort();
   const afterPaths = [...new Set([...options.tasteAfterInputs, ...classified.after])].sort();
@@ -527,7 +545,9 @@ async function runEvidenceLane({ registry, fixtures, tasteRules, comparability, 
     makeCheck(
       'uxbench',
       uxReport.status,
-      `UXBench status is ${uxReport.status} across all ${fixtures.length} fixtures.`,
+      `UXBench status is ${uxReport.status} across ${
+        options.selectedCaseIds.length || evaluationFixtures.length
+      } selected fixtures.`,
     ),
     makeCheck(
       'tastebench',
@@ -656,12 +676,14 @@ export async function runGate({
   tasteAfterInputs = [],
   tasteJudgeInputs = [],
   tasteCaseId = null,
+  selectedCaseIds = [],
   baselinePath = null,
 } = {}) {
   if (!['pr', 'evidence'].includes(mode)) throw new Error(`Unknown benchmark gate mode: ${mode}`);
-  const [registry, fixtures, tasteRules, schemaCheck] = await Promise.all([
+  const [registry, fixtures, supplementalFixtures, tasteRules, schemaCheck] = await Promise.all([
     loadRegistry(),
     loadFixtures(),
+    loadSupplementalFixtures(),
     loadTasteRules(),
     validateSchemaDocuments(),
   ]);
@@ -675,6 +697,7 @@ export async function runGate({
     const result = await runEvidenceLane({
       registry,
       fixtures,
+      supplementalFixtures,
       tasteRules,
       comparability,
       options: {
@@ -684,6 +707,7 @@ export async function runGate({
         tasteAfterInputs,
         tasteJudgeInputs,
         tasteCaseId,
+        selectedCaseIds,
         baselinePath,
       },
     });
@@ -704,6 +728,7 @@ function parseCliArguments(argv) {
     tasteAfterInputs: [],
     tasteJudgeInputs: [],
     tasteCaseId: null,
+    selectedCaseIds: [],
     baselinePath: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -745,6 +770,10 @@ function parseCliArguments(argv) {
     } else if (argument === '--taste-case') {
       if (!value) throw new Error('--taste-case requires a case ID');
       options.tasteCaseId = value;
+      index += 1;
+    } else if (argument === '--case') {
+      if (!value) throw new Error('--case requires an ID');
+      options.selectedCaseIds.push(value);
       index += 1;
     } else if (argument === '--baseline') {
       if (!value) throw new Error('--baseline requires a summary path');

@@ -14,6 +14,8 @@ quotes and the arrow in R01, is preserved.
 - `registry.json`: every case ID, category, exact request/input, and compact corpus expectation.
 - `fixtures/*.json`: the 20 P0 setups, scopes, operations, authority rules, traces, forbidden
   behavior, and deterministic assertions.
+- `live-fixtures/*.json`: explicitly selected non-P0 live probes. These never alter the fixed
+  20-case minimum-release comparability set; A05 currently verifies the hard per-run cost ceiling.
 - `fixture.schema.json`: canonical fixture shape.
 - `run-artifact.schema.json` and `run-record.schema.json`: supplied UXBench evidence contracts.
 - `taste-artifact.schema.json` and `taste-judge.schema.json`: supplied TasteBench evidence
@@ -49,6 +51,12 @@ replace a nonidentical report.
 The fixture digest is `sha256(stableStringify(fixture))`; the exported `fixtureDigest` helper in
 `scripts/nodeslide-uxbench.mjs` is the canonical implementation.
 
+The opt-in browser producer runs only exact C01, E01, and A05 requests. It keeps anonymous owner
+capabilities in memory, queries an owner-authorized secret-free durable receipt, binds that receipt
+to a server-stored digest of the exact visible request, writes only under `benchmark-results/`,
+and deletes its synthetic C01 deck in a `finally` block. Playwright traces, videos, storage state,
+provider responses, source bodies, and capabilities are never evidence artifacts.
+
 ## TasteBench
 
 TasteBench consumes separate before and after pixel manifests plus an independent visual-judge
@@ -80,10 +88,15 @@ The automation gate has two lanes. The PR lane validates the full 167-request re
 fixtures, the evidence schemas, deterministic runner behavior, and the runner's no-network and
 no-model-invocation rule. The evidence lane accepts only explicitly supplied manifests. It writes
 deterministic reports plus append-only hash-chained run and reward logs under its output directory.
+The scheduled live lane produces C01/E01/A05 browser receipts against production, judges E01 pixels
+with the independently pinned vision route, and enforces both UXBench and TasteBench. Missing
+credentials, pixels, receipts, or model output remain `UNSCORED`; observed mismatches remain
+`FAIL`.
 
 ```text
 pnpm nodeslide:bench:pr
 pnpm nodeslide:bench:evidence -- --evidence path/to/manifests --out benchmark-results
+pnpm nodeslide:bench:produce-live
 ```
 
 Evidence is never inferred from the repository. With no manifests, the evidence lane reports

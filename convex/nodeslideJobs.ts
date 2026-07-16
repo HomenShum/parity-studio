@@ -11,8 +11,15 @@ import { components, internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
-import { createOwnerAccessKey, isOwnerAccessKey } from './lib/nodeslideAccess';
+import { createOwnerAccessKey, isOwnerAccessKey, requireOwnerAccess } from './lib/nodeslideAccess';
 import { nodeSlideActorQuotaKey } from './lib/nodeslideAuthority';
+import {
+  findCurrentValidationRow,
+  findPatchRow,
+  findVersionRow,
+  patchFromRow,
+} from './lib/nodeslideData';
+import { nodeSlideSnapshotDigest } from './lib/nodeslideDeckRepl';
 import { nodeslideContentDigest, nodeslideStableId } from './lib/nodeslideIds';
 import {
   NODESLIDE_JOB_MAX_ATTEMPTS,
@@ -186,6 +193,7 @@ export const startCreateDeck = mutation({
       executionDigest: nodeSlideJobExecutionDigest(executionAccessKey),
       idempotencyKey,
       requestDigest,
+      userRequestDigest: nodeslideContentDigest(request.brief.prompt),
       status: 'queued',
       phase: 'queued',
       progress: 0,
@@ -302,6 +310,7 @@ export const startEditProposal = mutation({
       executionDigest: nodeSlideJobExecutionDigest(executionAccessKey),
       idempotencyKey,
       requestDigest,
+      userRequestDigest: nodeslideContentDigest(request.instruction),
       status: 'queued',
       phase: 'queued',
       progress: 0,
@@ -344,65 +353,145 @@ export const getBudgetReceipt = query({
   args: { jobId: v.string(), ownerAccessKey: v.string() },
   handler: async (ctx, args) => {
     const job = await findAuthorizedJob(ctx, args.jobId, args.ownerAccessKey);
-    if (!job?.budgetId) return null;
-    const budget = await ctx.db
-      .query('nodeslide_run_budgets')
-      .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', job.budgetId as string))
+    return job ? await loadPublicBudgetReceipt(ctx, job) : null;
+  },
+});
+
+/**
+ * Owner-authorized machine receipt for reproducible UXBench capture.
+ *
+ * The projection intentionally excludes request text, owner/execution keys,
+ * leases, provider replay payloads, source bodies, cookies, and consent tokens.
+ * It exposes only persisted state transitions, safe digests, bounded patch
+ * operations, telemetry metadata, and the hard-budget accounting receipt.
+ */
+export const getRunReceipt = query({
+  args: { jobId: v.string(), ownerAccessKey: v.string() },
+  handler: async (ctx, args) => {
+    const job = await findAuthorizedJob(ctx, args.jobId, args.ownerAccessKey);
+    if (!job) return null;
+
+    const sessionId = nodeSlideDurableSessionId(job.id);
+    const session = await ctx.db
+      .query('nodeslide_durable_sessions')
+      .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', sessionId))
       .unique();
-    if (!budget) return null;
-    const [calls, events] = await Promise.all([
-      ctx.db
-        .query('nodeslide_billable_calls')
-        .withIndex('by_budget_status', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
-        .take(64),
-      ctx.db
-        .query('nodeslide_budget_events')
-        .withIndex('by_budget_sequence', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
-        .order('asc')
-        .take(128),
+    if (session && session.requestDigest !== job.requestDigest) {
+      throw new Error('Durable session request binding does not match its job.');
+    }
+    const sessionJob = session?.jobs[job.id];
+    const [sessionEvents, journalEntries, budget, patch, snapshot, telemetry] = await Promise.all([
+      session
+        ? ctx.db
+            .query('nodeslide_durable_session_events')
+            .withIndex('by_session_job', (queryBuilder) =>
+              queryBuilder.eq('sessionId', session.id).eq('jobId', job.id),
+            )
+            .order('asc')
+            .take(256)
+        : Promise.resolve([]),
+      session && sessionJob
+        ? ctx.db
+            .query('nodeslide_durable_job_journal_entries')
+            .withIndex('by_binding_sequence', (queryBuilder) =>
+              queryBuilder.eq('sessionId', session.id).eq('jobId', job.id),
+            )
+            .order('asc')
+            .take(256)
+        : Promise.resolve([]),
+      loadPublicBudgetReceipt(ctx, job),
+      loadBoundPatchReceipt(ctx, job),
+      loadBoundSnapshotReceipt(ctx, job, args.ownerAccessKey),
+      loadBoundTelemetryReceipt(ctx, job),
     ]);
+
     return {
-      budgetId: budget.id,
-      status: budget.status,
-      enforcement: budget.budget.enforcement,
-      cap: {
-        maxCostMicroUsd: budget.budget.maxCostMicroUsd,
-        maxInputTokens: budget.budget.maxInputTokens,
-        maxOutputTokens: budget.budget.maxOutputTokens,
-        maxDurationMs: budget.budget.maxDurationMs,
-        maxIterations: budget.budget.maxIterations,
-        maxToolCalls: budget.budget.maxToolCalls,
-      },
-      spend: {
-        actualMicroUsd: budget.actualMicroUsd,
-        reservedMicroUsd: budget.reservedMicroUsd,
-        unreconciledMicroUsd: budget.unreconciledMicroUsd,
-      },
-      accumulated: budget.accumulated,
-      revision: budget.revision,
-      stateDigest: budget.stateDigest,
-      calls: calls.map((call) => ({
-        callId: call.callId,
-        status: call.status,
-        model: call.model,
-        quoteMicroUsd: call.quoteMicroUsd,
-        ...(call.actualMicroUsd !== undefined ? { actualMicroUsd: call.actualMicroUsd } : {}),
-        ...(call.inputTokens !== undefined ? { inputTokens: call.inputTokens } : {}),
-        ...(call.outputTokens !== undefined ? { outputTokens: call.outputTokens } : {}),
-        providerSafeOutputTokenCeiling: call.providerSafeOutputTokenCeiling,
-        providerTimeoutMs: call.providerTimeoutMs,
+      schemaVersion: 'nodeslide.run-receipt/v1' as const,
+      job: publicBenchmarkJob(job),
+      requestBinding: session
+        ? {
+            schemaVersion: session.requestBinding.schemaVersion,
+            requestDigest: session.requestDigest,
+            capabilityDigest: session.capabilityDigest,
+            userRequestDigest: job.userRequestDigest ?? null,
+          }
+        : null,
+      capability: session
+        ? {
+            provider: session.capability.provider,
+            model: session.capability.model,
+            scopes: session.capability.scopes,
+            egress: session.capability.egress,
+            hasConsent: session.capability.hasConsent,
+            attachmentCount: session.capability.attachmentCount,
+          }
+        : null,
+      session: session
+        ? {
+            sessionId: session.id,
+            stateVersion: session.stateVersion,
+            egressEpoch: session.egressEpoch,
+            stateDigest: session.stateDigest,
+            job: sessionJob
+              ? {
+                  status: sessionJob.status,
+                  attempt: sessionJob.attempt,
+                  retryCount: sessionJob.retryCount,
+                  resumeCount: sessionJob.resumeCount,
+                  maxAttempts: sessionJob.maxAttempts,
+                  createdAt: sessionJob.createdAt,
+                  updatedAt: sessionJob.updatedAt,
+                  ...(sessionJob.completedAt ? { completedAt: sessionJob.completedAt } : {}),
+                  ...(sessionJob.reason
+                    ? { reasonCode: `nodeslide_session_${sessionJob.status}` }
+                    : {}),
+                }
+              : null,
+          }
+        : null,
+      transitions: sessionEvents.map((row) => ({
+        sequence: row.transitionSequence,
+        commandKind: row.commandKind,
+        stateVersion: row.stateVersion,
+        egressEpoch: row.egressEpoch,
+        occurredAt: row.occurredAt,
+        transitionDigest: row.transitionDigest,
+        ...(row.event
+          ? {
+              event: {
+                sequence: row.event.sequence,
+                kind: row.event.kind,
+                fromStatus: row.event.fromStatus,
+                toStatus: row.event.toStatus,
+                attempt: row.event.attempt,
+                occurredAt: row.event.occurredAt,
+                eventDigest: row.event.eventDigest,
+              },
+            }
+          : {}),
       })),
-      events: events.map((event) => ({
-        sequence: event.sequence,
-        kind: event.kind,
-        status: event.status,
-        actualMicroUsd: event.actualMicroUsd,
-        reservedMicroUsd: event.reservedMicroUsd,
-        unreconciledMicroUsd: event.unreconciledMicroUsd,
-        capMicroUsd: event.capMicroUsd,
-        eventDigest: event.eventDigest,
-        createdAt: event.createdAt,
+      journal: journalEntries.map((row) => ({
+        sequence: row.sequence,
+        kind: row.kind,
+        provider: row.provider,
+        ...(row.model ? { model: row.model } : {}),
+        operation: row.operation,
+        ...(row.inputDigest ? { inputDigest: row.inputDigest } : {}),
+        ...(row.outputDigest ? { outputDigest: row.outputDigest } : {}),
+        ...(row.inputTokens !== undefined ? { inputTokens: row.inputTokens } : {}),
+        ...(row.outputTokens !== undefined ? { outputTokens: row.outputTokens } : {}),
+        ...(row.queryDigest ? { queryDigest: row.queryDigest } : {}),
+        ...(row.urlDigest ? { urlDigest: row.urlDigest } : {}),
+        ...(row.resultDigest ? { resultDigest: row.resultDigest } : {}),
+        ...(row.resultCount !== undefined ? { resultCount: row.resultCount } : {}),
+        entryDigest: row.entryDigest,
+        journalDigest: row.journalDigest,
+        createdAt: row.createdAt,
       })),
+      budget,
+      patch,
+      snapshot,
+      telemetry,
     };
   },
 });
@@ -708,6 +797,34 @@ function jobFromRow(row: Doc<'nodeslide_agent_jobs'>): NodeSlideJobRecord {
   return job;
 }
 
+function publicBenchmarkJob(job: Doc<'nodeslide_agent_jobs'>) {
+  return {
+    jobId: job.id,
+    kind: job.kind,
+    status: job.status,
+    phase: job.phase,
+    progress: job.progress,
+    attempt: job.attempt,
+    maxAttempts: job.maxAttempts,
+    ...(job.resultDeckId ? { resultDeckId: job.resultDeckId } : {}),
+    ...(job.resultPatchId ? { resultPatchId: job.resultPatchId } : {}),
+    ...(job.resultCandidateDigest ? { resultCandidateDigest: job.resultCandidateDigest } : {}),
+    ...(job.conversationRunId ? { conversationRunId: job.conversationRunId } : {}),
+    ...(job.budgetId ? { budgetId: job.budgetId } : {}),
+    ...(job.error ? { errorCode: benchmarkErrorCode(job.status, job.phase) } : {}),
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    ...(job.completedAt ? { completedAt: job.completedAt } : {}),
+  };
+}
+
+function benchmarkErrorCode(
+  status: Doc<'nodeslide_agent_jobs'>['status'],
+  phase: Doc<'nodeslide_agent_jobs'>['phase'],
+): string {
+  return `nodeslide_job_${status}_${phase}`;
+}
+
 async function finalizeNodeSlideJobBudget(
   ctx: Pick<MutationCtx, 'runMutation'>,
   budgetId?: string,
@@ -727,6 +844,273 @@ async function finalizeNodeSlideJobBudgetBestEffort(
     // Cancellation still fences the worker/session. The unresolved ledger remains
     // explicitly open for reconciliation instead of claiming a fabricated close.
   }
+}
+
+async function loadPublicBudgetReceipt(ctx: ReadCtx, job: Doc<'nodeslide_agent_jobs'>) {
+  if (!job.budgetId) return null;
+  const budget = await ctx.db
+    .query('nodeslide_run_budgets')
+    .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', job.budgetId as string))
+    .unique();
+  if (!budget) return null;
+  const [calls, events] = await Promise.all([
+    ctx.db
+      .query('nodeslide_billable_calls')
+      .withIndex('by_budget_status', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
+      .take(64),
+    ctx.db
+      .query('nodeslide_budget_events')
+      .withIndex('by_budget_sequence', (queryBuilder) => queryBuilder.eq('budgetId', budget.id))
+      .order('asc')
+      .take(128),
+  ]);
+  return {
+    budgetId: budget.id,
+    status: budget.status,
+    enforcement: budget.budget.enforcement,
+    cap: {
+      maxCostMicroUsd: budget.budget.maxCostMicroUsd,
+      maxInputTokens: budget.budget.maxInputTokens,
+      maxOutputTokens: budget.budget.maxOutputTokens,
+      maxDurationMs: budget.budget.maxDurationMs,
+      maxIterations: budget.budget.maxIterations,
+      maxToolCalls: budget.budget.maxToolCalls,
+    },
+    spend: {
+      actualMicroUsd: budget.actualMicroUsd,
+      reservedMicroUsd: budget.reservedMicroUsd,
+      unreconciledMicroUsd: budget.unreconciledMicroUsd,
+    },
+    accumulated: budget.accumulated,
+    revision: budget.revision,
+    stateDigest: budget.stateDigest,
+    calls: calls.map((call) => ({
+      callId: call.callId,
+      status: call.status,
+      model: call.model,
+      quoteMicroUsd: call.quoteMicroUsd,
+      ...(call.actualMicroUsd !== undefined ? { actualMicroUsd: call.actualMicroUsd } : {}),
+      ...(call.inputTokens !== undefined ? { inputTokens: call.inputTokens } : {}),
+      ...(call.outputTokens !== undefined ? { outputTokens: call.outputTokens } : {}),
+      providerSafeOutputTokenCeiling: call.providerSafeOutputTokenCeiling,
+      providerTimeoutMs: call.providerTimeoutMs,
+    })),
+    events: events.map((event) => ({
+      sequence: event.sequence,
+      kind: event.kind,
+      status: event.status,
+      actualMicroUsd: event.actualMicroUsd,
+      reservedMicroUsd: event.reservedMicroUsd,
+      unreconciledMicroUsd: event.unreconciledMicroUsd,
+      capMicroUsd: event.capMicroUsd,
+      eventDigest: event.eventDigest,
+      createdAt: event.createdAt,
+    })),
+  };
+}
+
+async function loadBoundPatchReceipt(ctx: ReadCtx, job: Doc<'nodeslide_agent_jobs'>) {
+  if (!job.resultPatchId) return null;
+  const row = await findPatchRow(ctx, job.resultPatchId);
+  if (!row) return null;
+  if (row.jobId !== job.id || row.deckId !== job.resultDeckId) {
+    throw new Error('Durable patch receipt does not match its job binding.');
+  }
+  const patch = patchFromRow(row);
+  return {
+    id: patch.id,
+    deckId: patch.deckId,
+    baseDeckVersion: patch.baseDeckVersion,
+    baseSlideVersions: patch.baseSlideVersions,
+    baseElementVersions: patch.baseElementVersions,
+    ...(patch.resultingDeckVersion !== undefined
+      ? { resultingDeckVersion: patch.resultingDeckVersion }
+      : {}),
+    scope: patch.scope,
+    operations: patch.operations,
+    status: patch.status,
+    source: patch.source,
+    ...(patch.candidateDigest ? { candidateDigest: patch.candidateDigest } : {}),
+    candidateValidation: patch.candidateValidation
+      ? {
+          id: patch.candidateValidation.id,
+          patchId: patch.candidateValidation.patchId,
+          candidateDigest: patch.candidateValidation.candidateDigest,
+          deckId: patch.candidateValidation.deckId,
+          deckVersion: patch.candidateValidation.deckVersion,
+          ok: patch.candidateValidation.ok,
+          publishOk: patch.candidateValidation.publishOk,
+          cleanOk: patch.candidateValidation.cleanOk,
+          issueCount: patch.candidateValidation.issues.length,
+          issues: patch.candidateValidation.issues.map((issue) => ({
+            severity: issue.severity,
+            code: issue.code,
+            ...(issue.slideId ? { slideId: issue.slideId } : {}),
+            ...(issue.elementId ? { elementId: issue.elementId } : {}),
+          })),
+          checkedAt: patch.candidateValidation.checkedAt,
+          toolchainVersion: patch.candidateValidation.toolchainVersion,
+        }
+      : null,
+    createdAt: patch.createdAt,
+    updatedAt: patch.updatedAt,
+  };
+}
+
+async function loadBoundSnapshotReceipt(
+  ctx: ReadCtx,
+  job: Doc<'nodeslide_agent_jobs'>,
+  ownerAccessKey: string,
+) {
+  if (!job.resultDeckId) return null;
+  await requireOwnerAccess(ctx, job.resultDeckId, ownerAccessKey);
+  const patch = job.resultPatchId ? await findPatchRow(ctx, job.resultPatchId) : null;
+  if (patch && (patch.deckId !== job.resultDeckId || patch.jobId !== job.id)) {
+    throw new Error('Durable snapshot version does not match its patch binding.');
+  }
+  const expectedVersion = job.kind === 'create_deck' ? 1 : patch?.baseDeckVersion;
+  if (expectedVersion === undefined) return null;
+  const version = await findVersionRow(ctx, {
+    deckId: job.resultDeckId,
+    version: expectedVersion,
+  });
+  if (!version || version.snapshot.deck.version !== expectedVersion) {
+    throw new Error('Immutable durable snapshot version is unavailable.');
+  }
+  const snapshot = version.snapshot;
+  const validation = await findCurrentValidationRow(ctx, job.resultDeckId, expectedVersion);
+  return {
+    snapshotVersionId: version.id,
+    snapshotDigest: nodeSlideSnapshotDigest(snapshot),
+    deck: {
+      id: snapshot.deck.id,
+      title: snapshot.deck.title,
+      version: snapshot.deck.version,
+      status: snapshot.deck.status,
+      slideOrder: snapshot.deck.slideOrder,
+      createdAt: snapshot.deck.createdAt,
+      updatedAt: snapshot.deck.updatedAt,
+    },
+    slides: snapshot.slides.map((slide) => ({
+      id: slide.id,
+      deckId: slide.deckId,
+      title: slide.title,
+      section: slide.section,
+      elementOrder: slide.elementOrder,
+      version: slide.version,
+    })),
+    elements: snapshot.elements.map((element) => ({
+      id: element.id,
+      slideId: element.slideId,
+      name: element.name,
+      kind: element.kind,
+      role: element.role,
+      bbox: element.bbox,
+      rotation: element.rotation,
+      ...(element.content !== undefined ? { content: element.content } : {}),
+      style: element.style,
+      sourceIds: element.sourceIds,
+      locked: element.locked,
+      version: element.version,
+    })),
+    sources: snapshot.sources.map((source) => ({
+      id: source.id,
+      deckId: source.deckId,
+      sourceType: source.sourceType,
+      retrievedAt: source.retrievedAt,
+      ...(source.contentDigest ? { contentDigest: source.contentDigest } : {}),
+      ...(source.format ? { format: source.format } : {}),
+      ...(source.license ? { license: source.license } : {}),
+    })),
+    validation: validation
+      ? {
+          id: validation.id,
+          deckVersion: validation.deckVersion,
+          ok: validation.ok,
+          publishOk: validation.publishOk,
+          cleanOk: validation.cleanOk,
+          issueCount: validation.issues.length,
+          checkedAt: validation.checkedAt,
+          toolchainVersion: validation.toolchainVersion,
+        }
+      : null,
+  };
+}
+
+async function loadBoundTelemetryReceipt(ctx: ReadCtx, job: Doc<'nodeslide_agent_jobs'>) {
+  if (!job.conversationRunId || !job.resultDeckId) return null;
+  const run = await ctx.db
+    .query('nodeslide_agent_runs')
+    .withIndex('by_stable_id', (queryBuilder) =>
+      queryBuilder.eq('id', job.conversationRunId as string),
+    )
+    .unique();
+  if (!run) return null;
+  if (run.deckId !== job.resultDeckId || run.ownerDigest !== job.ownerDigest) {
+    throw new Error('Agent telemetry receipt does not match its durable job binding.');
+  }
+  const [spans, events] = await Promise.all([
+    ctx.db
+      .query('nodeslide_agent_spans')
+      .withIndex('by_run_sequence', (queryBuilder) => queryBuilder.eq('runId', run.id))
+      .order('asc')
+      .take(512),
+    ctx.db
+      .query('nodeslide_agent_events')
+      .withIndex('by_run_sequence', (queryBuilder) => queryBuilder.eq('runId', run.id))
+      .order('asc')
+      .take(512),
+  ]);
+  return {
+    run: {
+      id: run.id,
+      deckId: run.deckId,
+      status: run.status,
+      provider: run.provider,
+      model: run.model,
+      webResearch: run.webResearch,
+      attempt: run.attempt,
+      ...(run.budgetId ? { budgetId: run.budgetId } : {}),
+      ...(run.otelTraceId ? { otelTraceId: run.otelTraceId } : {}),
+      ...(run.rootSpanId ? { rootSpanId: run.rootSpanId } : {}),
+      ...(run.patchId ? { patchId: run.patchId } : {}),
+      ...(run.traceId ? { traceId: run.traceId } : {}),
+      ...(run.error ? { errorCode: `nodeslide_run_${run.status}` } : {}),
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+      ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    },
+    spans: spans.map((span) => ({
+      id: span.id,
+      traceId: span.traceId,
+      spanId: span.spanId,
+      ...(span.parentSpanId ? { parentSpanId: span.parentSpanId } : {}),
+      name: span.name,
+      operationName: span.operationName,
+      kind: span.kind,
+      status: span.status,
+      startTime: span.startTime,
+      ...(span.endTime !== undefined ? { endTime: span.endTime } : {}),
+      ...(span.durationMs !== undefined ? { durationMs: span.durationMs } : {}),
+      ...(span.provider ? { provider: span.provider } : {}),
+      ...(span.model ? { model: span.model } : {}),
+      ...(span.toolName ? { toolName: span.toolName } : {}),
+      ...(span.inputTokens !== undefined ? { inputTokens: span.inputTokens } : {}),
+      ...(span.outputTokens !== undefined ? { outputTokens: span.outputTokens } : {}),
+      ...(span.costMicroUsd !== undefined ? { costMicroUsd: span.costMicroUsd } : {}),
+      sourceIds: span.sourceIds ?? [],
+      sequence: span.sequence,
+    })),
+    events: events.map((event) => ({
+      id: event.id,
+      traceId: event.traceId,
+      spanId: event.spanId,
+      name: event.name,
+      severity: event.severity,
+      timestamp: event.timestamp,
+      sequence: event.sequence,
+    })),
+  };
 }
 
 async function findJob(ctx: ReadCtx, jobId: string) {
