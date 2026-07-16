@@ -16,12 +16,15 @@ export type AgentSessionJobStatus =
   | 'preparing'
   | 'queued'
   | 'running'
+  | 'retrying'
+  | 'paused'
   | 'awaiting_review'
   | 'succeeded'
   | 'failed'
   | 'cancelled'
   | 'rejected'
   | 'stale';
+export type AgentSessionJobFreshness = 'fresh' | 'stalled' | 'paused' | 'settled';
 
 export interface AgentSessionAttachment {
   id: string;

@@ -9,7 +9,7 @@ import {
 } from '../../shared/nodeslideDataExport';
 import type { Doc } from '../_generated/dataModel';
 import type { QueryCtx } from '../_generated/server';
-import { nodeslideContentDigest } from './nodeslideIds';
+import { nodeslideContentDigest, nodeslideStableId } from './nodeslideIds';
 import { nodeSlideJobOwnerDigest } from './nodeslideJobState';
 
 export const NODESLIDE_DATA_EXPORT_MAX_ROWS_PER_COLLECTION = 1_000;
@@ -17,10 +17,56 @@ export const NODESLIDE_DATA_EXPORT_MAX_RECORDS = 8_000;
 export const NODESLIDE_DATA_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 const REDACTED = '[REDACTED]';
+const OMITTED_BINARY_DATA = '[OMITTED_BINARY_DATA]';
 const EXCLUDED_COLLECTIONS = [
-  { name: 'nodeslide_oauth_sessions', reason: 'authentication_material' as const },
-  { name: 'nodeslide_oauth_credentials', reason: 'authentication_material' as const },
-  { name: 'nodeslide_presence', reason: 'ephemeral_runtime_state' as const },
+  {
+    name: 'nodeslide_oauth_sessions',
+    reason: 'authentication_material' as const,
+    detail: 'OAuth state and PKCE material are never included.',
+  },
+  {
+    name: 'nodeslide_oauth_credentials',
+    reason: 'authentication_material' as const,
+    detail: 'Provider access and refresh credentials are never included.',
+  },
+  {
+    name: 'nodeslide_presence',
+    reason: 'ephemeral_runtime_state' as const,
+    detail: 'Live cursor and presence rows are transient collaboration state.',
+  },
+  {
+    name: 'nodeslide_rate_limits',
+    reason: 'infrastructure_state' as const,
+    detail: 'Shared anti-abuse counters are infrastructure state, not deck content.',
+  },
+  {
+    name: 'nodeslide_durable_model_result_replays.payloadJson',
+    reason: 'provider_replay_payload' as const,
+    detail: 'Provider replay bodies are omitted; journal digests and accounting metadata remain.',
+  },
+  {
+    name: '_storage and evidence attachment storage ids',
+    reason: 'binary_blob_contents' as const,
+    detail:
+      'Screenshot, PDF, image, and export blob bytes or storage capabilities are not included.',
+  },
+  {
+    name: 'nodeslide_signature_profiles',
+    reason: 'cross_deck_profile' as const,
+    detail:
+      'Tenant-level signature profiles can span decks and are not owner-scoped by this deck capability.',
+  },
+  {
+    name: 'nodeslide_taste_profiles',
+    reason: 'cross_deck_profile' as const,
+    detail: 'Actor taste profiles can span decks and are not owner-scoped by this deck capability.',
+  },
+  {
+    name: 'nodeslide_deck_ci',
+    reason: 'computed_not_persisted' as const,
+    detail:
+      'Deck CI is evaluated from exported state; no standalone Deck CI collection currently exists.',
+  },
 ];
 
 type ExportCtx = Pick<QueryCtx, 'db'>;
@@ -57,6 +103,7 @@ export async function collectNodeSlideOwnerDataExport(
     comments,
     versions,
     sources,
+    sourceRevisions,
     jobs,
     runs,
     messages,
@@ -66,6 +113,16 @@ export async function collectNodeSlideOwnerDataExport(
     validations,
     traces,
     executionTraces,
+    syncConnections,
+    delegationGrants,
+    delegationUses,
+    evidenceCaptures,
+    evidenceSteps,
+    claimEvidenceReceipts,
+    shadowComparisons,
+    exports,
+    publications,
+    preferenceEvents,
   ] = await Promise.all([
     ctx.db
       .query('nodeslide_slides')
@@ -104,6 +161,10 @@ export async function collectNodeSlideOwnerDataExport(
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
       .take(limit),
     ctx.db
+      .query('nodeslide_source_revisions')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
       .query('nodeslide_agent_jobs')
       .withIndex('by_result_deck', (query) => query.eq('resultDeckId', deck.id))
       .take(limit),
@@ -139,7 +200,126 @@ export async function collectNodeSlideOwnerDataExport(
       .query('nodeslide_execution_traces')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
       .take(limit),
+    ctx.db
+      .query('nodeslide_sync_connections')
+      .withIndex('by_deck_provider', (query) =>
+        query.eq('deckId', deck.id).eq('provider', 'google_slides'),
+      )
+      .take(limit),
+    ctx.db
+      .query('nodeslide_delegation_grants')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_delegation_uses')
+      .withIndex('by_deck_used', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_evidence_captures')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_evidence_steps')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_claim_evidence_receipts')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_shadow_comparisons')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_exports')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_publications')
+      .withIndex('by_deck_revision', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_preference_events')
+      .withIndex('by_deck_recorded', (query) => query.eq('deckId', deck.id))
+      .take(limit),
   ]);
+
+  const durableSessionBindings = jobs.map((job) => ({
+    job,
+    sessionId: nodeslideStableId('nsession', job.id),
+  }));
+  const durableSessions = (
+    await Promise.all(
+      durableSessionBindings.map(({ sessionId }) =>
+        ctx.db
+          .query('nodeslide_durable_sessions')
+          .withIndex('by_stable_id', (query) => query.eq('id', sessionId))
+          .take(2),
+      ),
+    )
+  ).flat();
+  const durableSessionEvents = (
+    await Promise.all(
+      durableSessionBindings.map(({ job, sessionId }) =>
+        ctx.db
+          .query('nodeslide_durable_session_events')
+          .withIndex('by_session_job', (query) =>
+            query.eq('sessionId', sessionId).eq('jobId', job.id),
+          )
+          .take(limit),
+      ),
+    )
+  ).flat();
+  const durableJournalEntries = (
+    await Promise.all(
+      durableSessionBindings.map(({ job, sessionId }) =>
+        ctx.db
+          .query('nodeslide_durable_job_journal_entries')
+          .withIndex('by_binding_sequence', (query) =>
+            query.eq('sessionId', sessionId).eq('jobId', job.id),
+          )
+          .take(limit),
+      ),
+    )
+  ).flat();
+
+  const budgetIds = [
+    ...new Set(
+      [...jobs.map((job) => job.budgetId), ...runs.map((run) => run.budgetId)].filter(
+        (budgetId): budgetId is string => Boolean(budgetId),
+      ),
+    ),
+  ].sort();
+  const budgetLedgers = (
+    await Promise.all(
+      budgetIds.map((budgetId) =>
+        ctx.db
+          .query('nodeslide_run_budgets')
+          .withIndex('by_stable_id', (query) => query.eq('id', budgetId))
+          .take(2),
+      ),
+    )
+  ).flat();
+  const billableCalls = (
+    await Promise.all(
+      budgetIds.map((budgetId) =>
+        ctx.db
+          .query('nodeslide_billable_calls')
+          .withIndex('by_budget_status', (query) => query.eq('budgetId', budgetId))
+          .take(limit),
+      ),
+    )
+  ).flat();
+  const budgetEvents = (
+    await Promise.all(
+      budgetIds.map((budgetId) =>
+        ctx.db
+          .query('nodeslide_budget_events')
+          .withIndex('by_budget_sequence', (query) => query.eq('budgetId', budgetId))
+          .take(limit),
+      ),
+    )
+  ).flat();
 
   const collections = [
     ['slides', slides],
@@ -151,6 +331,7 @@ export async function collectNodeSlideOwnerDataExport(
     ['comments', comments],
     ['versions', versions],
     ['sources', sources],
+    ['source revisions', sourceRevisions],
     ['jobs', jobs],
     ['runs', runs],
     ['messages', messages],
@@ -160,6 +341,22 @@ export async function collectNodeSlideOwnerDataExport(
     ['validations', validations],
     ['traces', traces],
     ['execution traces', executionTraces],
+    ['sync connections', syncConnections],
+    ['delegation grants', delegationGrants],
+    ['delegation uses', delegationUses],
+    ['evidence captures', evidenceCaptures],
+    ['evidence steps', evidenceSteps],
+    ['claim evidence receipts', claimEvidenceReceipts],
+    ['shadow comparisons', shadowComparisons],
+    ['exports', exports],
+    ['publications', publications],
+    ['preference events', preferenceEvents],
+    ['durable sessions', durableSessions],
+    ['durable session events', durableSessionEvents],
+    ['durable journal entries', durableJournalEntries],
+    ['budget ledgers', budgetLedgers],
+    ['billable calls', billableCalls],
+    ['budget events', budgetEvents],
   ] as const;
   for (const [name, rows] of collections) assertCompleteCollection(name, rows.length);
 
@@ -173,6 +370,7 @@ export async function collectNodeSlideOwnerDataExport(
     comments,
     versions,
     sources,
+    sourceRevisions,
     runs,
     messages,
     memories,
@@ -181,6 +379,16 @@ export async function collectNodeSlideOwnerDataExport(
     validations,
     traces,
     executionTraces,
+    syncConnections,
+    delegationGrants,
+    delegationUses,
+    evidenceCaptures,
+    evidenceSteps,
+    claimEvidenceReceipts,
+    shadowComparisons,
+    exports,
+    publications,
+    preferenceEvents,
   ]) {
     assertDeckScopedRows(deck.id, rows);
   }
@@ -197,14 +405,35 @@ export async function collectNodeSlideOwnerDataExport(
       throw exportInvariantError('durable run ownership is inconsistent');
     }
   }
-  for (const version of versions) assertVersionSnapshotScope(version, deck.id);
-
-  const recordCount = 1 + collections.reduce((total, [, rows]) => total + rows.length, 0);
-  if (recordCount > NODESLIDE_DATA_EXPORT_MAX_RECORDS) {
-    throw new Error(
-      `NodeSlide data export exceeds the complete-export limit of ${NODESLIDE_DATA_EXPORT_MAX_RECORDS} records. No partial bundle was returned.`,
-    );
+  for (const revision of sourceRevisions) {
+    if (revision.ownerDigest !== expectedRunOwnerDigest) {
+      throw exportInvariantError('source revision ownership is inconsistent');
+    }
   }
+  for (const receipt of claimEvidenceReceipts) {
+    if (receipt.ownerDigest !== expectedRunOwnerDigest) {
+      throw exportInvariantError('claim evidence receipt ownership is inconsistent');
+    }
+  }
+  for (const version of versions) assertVersionSnapshotScope(version, deck.id);
+  for (const publication of publications) assertPublishedSnapshotScope(publication, deck.id);
+  assertLinkedExportRows({
+    patches,
+    jobs,
+    durableSessions,
+    durableSessionEvents,
+    durableJournalEntries,
+    budgetIds,
+    budgetLedgers,
+    billableCalls,
+    budgetEvents,
+    delegationGrants,
+    delegationUses,
+    evidenceCaptures,
+    evidenceSteps,
+    sourceRevisions,
+    claimEvidenceReceipts,
+  });
 
   const redaction: RedactionState = {
     removedFieldCount: 0,
@@ -230,20 +459,51 @@ export async function collectNodeSlideOwnerDataExport(
       variationDecisions: redactRows(variationDecisions, redaction),
     },
     sources: redactRows(sources, redaction),
+    sourceRevisions: redactRows(sourceRevisions, redaction, ['ownerDigest']),
+    evidence: {
+      captures: redactRows(evidenceCaptures, redaction),
+      steps: redactRows(evidenceSteps, redaction, ['screenshotStorageId', 'pdfStorageId']),
+      claimReceipts: redactRows(claimEvidenceReceipts, redaction, ['ownerDigest']),
+    },
     memories: redactRows(memories, redaction),
     activity: {
       jobs: redactRows(jobs, redaction),
+      durableSessions: redactRows(durableSessions, redaction),
+      durableSessionEvents: redactRows(durableSessionEvents, redaction),
+      durableJournalEntries: redactRows(durableJournalEntries, redaction),
       runs: redactRows(runs, redaction),
       messages: redactRows(messages, redaction),
       spans: redactRows(spans, redaction),
       events: redactRows(events, redaction),
       traces: redactRows(traces, redaction),
       executionTraces: redactRows(executionTraces, redaction),
+      shadowComparisons: redactRows(shadowComparisons, redaction),
       validations: redactRows(validations, redaction),
     },
+    budgets: {
+      ledgers: redactRows(budgetLedgers, redaction),
+      billableCalls: redactRows(billableCalls, redaction),
+      events: redactRows(budgetEvents, redaction),
+    },
+    sync: { connections: redactRows(syncConnections, redaction) },
+    delegation: {
+      grants: redactRows(delegationGrants, redaction, ['tokenDigest']),
+      uses: redactRows(delegationUses, redaction),
+    },
+    outputs: {
+      exports: redactRows(exports, redaction, ['url']),
+      publications: redactRows(publications, redaction),
+    },
+    preferenceEvents: redactRows(preferenceEvents, redaction),
     comments: redactRows(comments, redaction),
   };
   const collectionManifest = dataCollectionManifest(data);
+  const recordCount = collectionManifest.reduce((total, entry) => total + entry.recordCount, 0);
+  if (recordCount > NODESLIDE_DATA_EXPORT_MAX_RECORDS) {
+    throw new Error(
+      `NodeSlide data export exceeds the complete-export limit of ${NODESLIDE_DATA_EXPORT_MAX_RECORDS} records. No partial bundle was returned.`,
+    );
+  }
   const bundle: NodeSlideOwnerDataExport = {
     manifest: {
       schemaVersion: NODESLIDE_OWNER_DATA_EXPORT_SCHEMA_VERSION,
@@ -261,6 +521,12 @@ export async function collectNodeSlideOwnerDataExport(
         removedFieldCount: redaction.removedFieldCount,
         redactedValueCount: redaction.redactedValueCount,
         excludedCollections: EXCLUDED_COLLECTIONS,
+      },
+      determinism: {
+        collectionOrder: 'schema_defined',
+        recordOrder: 'creation_time_then_stable_id',
+        objectKeyOrder: 'lexicographic',
+        generatedAt: 'request_time_only_nondeterministic_field',
       },
       retention: {
         serverCopyCreated: false,
@@ -307,6 +573,126 @@ function assertVersionSnapshotScope(version: Doc<'nodeslide_versions'>, deckId: 
   }
 }
 
+function assertPublishedSnapshotScope(
+  publication: Doc<'nodeslide_publications'>,
+  deckId: string,
+): void {
+  const snapshot = publication.snapshot;
+  const slideIds = new Set(snapshot.slides.map((slide) => slide.id));
+  if (
+    snapshot.deck.id !== deckId ||
+    snapshot.slides.some((slide) => slide.deckId !== deckId) ||
+    snapshot.sources.some((source) => source.deckId !== deckId) ||
+    snapshot.elements.some((element) => !slideIds.has(element.slideId))
+  ) {
+    throw exportInvariantError('a publication snapshot crossed the authorized deck boundary');
+  }
+}
+
+function assertLinkedExportRows(args: {
+  patches: readonly Doc<'nodeslide_patches'>[];
+  jobs: readonly Doc<'nodeslide_agent_jobs'>[];
+  durableSessions: readonly Doc<'nodeslide_durable_sessions'>[];
+  durableSessionEvents: readonly Doc<'nodeslide_durable_session_events'>[];
+  durableJournalEntries: readonly Doc<'nodeslide_durable_job_journal_entries'>[];
+  budgetIds: readonly string[];
+  budgetLedgers: readonly Doc<'nodeslide_run_budgets'>[];
+  billableCalls: readonly Doc<'nodeslide_billable_calls'>[];
+  budgetEvents: readonly Doc<'nodeslide_budget_events'>[];
+  delegationGrants: readonly Doc<'nodeslide_delegation_grants'>[];
+  delegationUses: readonly Doc<'nodeslide_delegation_uses'>[];
+  evidenceCaptures: readonly Doc<'nodeslide_evidence_captures'>[];
+  evidenceSteps: readonly Doc<'nodeslide_evidence_steps'>[];
+  sourceRevisions: readonly Doc<'nodeslide_source_revisions'>[];
+  claimEvidenceReceipts: readonly Doc<'nodeslide_claim_evidence_receipts'>[];
+}): void {
+  const jobsById = new Map(args.jobs.map((job) => [job.id, job]));
+  const sessionToJob = new Map(
+    args.jobs.map((job) => [nodeslideStableId('nsession', job.id), job] as const),
+  );
+  if (
+    new Set(args.durableSessions.map((session) => session.id)).size !== args.durableSessions.length
+  ) {
+    throw exportInvariantError('duplicate durable sessions were resolved');
+  }
+  for (const session of args.durableSessions) {
+    const job = sessionToJob.get(session.id);
+    if (
+      !job ||
+      session.requestDigest !== job.requestDigest ||
+      session.jobs[job.id]?.requestBinding.requestDigest !== job.requestDigest
+    ) {
+      throw exportInvariantError('durable session binding is inconsistent');
+    }
+  }
+  for (const row of [...args.durableSessionEvents, ...args.durableJournalEntries]) {
+    const job = sessionToJob.get(row.sessionId);
+    if (!job || row.jobId !== job.id || !jobsById.has(row.jobId)) {
+      throw exportInvariantError('durable session child ownership is inconsistent');
+    }
+  }
+
+  const allowedBudgetIds = new Set(args.budgetIds);
+  if (
+    args.budgetLedgers.length !== allowedBudgetIds.size ||
+    args.budgetLedgers.some((budget) => !allowedBudgetIds.has(budget.id))
+  ) {
+    throw exportInvariantError('budget ledger binding is inconsistent');
+  }
+  for (const row of [...args.billableCalls, ...args.budgetEvents]) {
+    if (!allowedBudgetIds.has(row.budgetId)) {
+      throw exportInvariantError('budget child ownership is inconsistent');
+    }
+  }
+
+  const grantIds = new Set(args.delegationGrants.map((grant) => grant.id));
+  if (args.delegationUses.some((use) => !grantIds.has(use.grantId))) {
+    throw exportInvariantError('delegation receipt ownership is inconsistent');
+  }
+  const captureIds = new Set(args.evidenceCaptures.map((capture) => capture.id));
+  if (args.evidenceSteps.some((step) => !captureIds.has(step.captureId))) {
+    throw exportInvariantError('evidence step ownership is inconsistent');
+  }
+  const revisionsById = new Map(args.sourceRevisions.map((revision) => [revision.id, revision]));
+  for (const revision of args.sourceRevisions) {
+    if (
+      revision.predecessorRevisionId !== undefined &&
+      (revisionsById.get(revision.predecessorRevisionId)?.revisionDigest !==
+        revision.predecessorRevisionDigest ||
+        revision.predecessorRevisionId === revision.id)
+    ) {
+      throw exportInvariantError('source revision predecessor binding is inconsistent');
+    }
+  }
+  for (const capture of args.evidenceCaptures) {
+    if (
+      capture.sourceRevisionId !== undefined &&
+      revisionsById.get(capture.sourceRevisionId)?.revisionDigest !== capture.sourceRevisionDigest
+    ) {
+      throw exportInvariantError('evidence capture source revision binding is inconsistent');
+    }
+  }
+  const patchesById = new Set(args.patches.map((patch) => patch.id));
+  const stepsById = new Map(args.evidenceSteps.map((step) => [step.id, step]));
+  const capturesById = new Map(args.evidenceCaptures.map((capture) => [capture.id, capture]));
+  for (const receipt of args.claimEvidenceReceipts) {
+    const revision = revisionsById.get(receipt.sourceRevisionId);
+    const capture = capturesById.get(receipt.captureId);
+    const step = stepsById.get(receipt.evidenceStepId);
+    if (
+      !patchesById.has(receipt.patchId) ||
+      revision?.revisionDigest !== receipt.sourceRevisionDigest ||
+      capture?.captureDigest !== receipt.captureDigest ||
+      capture?.sourceRevisionId !== receipt.sourceRevisionId ||
+      step?.captureId !== receipt.captureId ||
+      step?.evidenceStepDigest !== receipt.evidenceStepDigest ||
+      step?.attachmentDigest !== receipt.attachmentDigest
+    ) {
+      throw exportInvariantError('claim evidence receipt custody binding is inconsistent');
+    }
+  }
+}
+
 function exportInvariantError(detail: string): Error {
   return new Error(`NodeSlide data export failed closed: ${detail}.`);
 }
@@ -314,44 +700,56 @@ function exportInvariantError(detail: string): Error {
 function redactRows<T extends StoredRow>(
   rows: readonly T[],
   state: RedactionState,
+  omittedFields: readonly string[] = [],
 ): NodeSlideDataExportRecord[] {
+  const omissions = new Set(omittedFields);
   return [...rows]
     .sort(
       (left, right) =>
         left._creationTime - right._creationTime ||
         String(left.id ?? left._id).localeCompare(String(right.id ?? right._id)),
     )
-    .map((row) => redactRecord(row, state));
+    .map((row) => redactRecord(row, state, omissions));
 }
 
-function redactRecord(value: object, state: RedactionState): NodeSlideDataExportRecord {
-  const redacted = redactValue(value, state);
+function redactRecord(
+  value: object,
+  state: RedactionState,
+  omittedFields: ReadonlySet<string> = new Set(),
+): NodeSlideDataExportRecord {
+  const redacted = redactValue(value, state, omittedFields);
   if (!redacted || Array.isArray(redacted) || typeof redacted !== 'object') {
     throw exportInvariantError('a persisted record could not be serialized');
   }
   return redacted;
 }
 
-function redactValue(value: unknown, state: RedactionState): NodeSlideDataExportValue | undefined {
+function redactValue(
+  value: unknown,
+  state: RedactionState,
+  omittedFields: ReadonlySet<string>,
+): NodeSlideDataExportValue | undefined {
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string') return redactString(value, state);
   if (typeof value === 'bigint') return value.toString();
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
-      const redacted = redactValue(item, state);
+      const redacted = redactValue(item, state, omittedFields);
       return redacted === undefined ? [] : [redacted];
     });
   }
   if (typeof value !== 'object' || value === undefined) return undefined;
   const record: NodeSlideDataExportRecord = {};
-  for (const [key, item] of Object.entries(value)) {
+  for (const [key, item] of Object.entries(value).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
     if (key === '_id' || key === '_creationTime' || item === undefined) continue;
-    if (isSensitiveField(key)) {
+    if (omittedFields.has(key) || isSensitiveField(key)) {
       state.removedFieldCount += 1;
       continue;
     }
-    const redacted = redactValue(item, state);
+    const redacted = redactValue(item, state, omittedFields);
     if (redacted !== undefined) record[key] = redacted;
   }
   return record;
@@ -375,6 +773,8 @@ function isSensitiveField(key: string): boolean {
       'cookie',
       'setcookie',
       'providerconsent',
+      'clientsessionid',
+      'lastmutationkey',
     ].includes(normalized)
   ) {
     return true;
@@ -391,6 +791,7 @@ function isSensitiveField(key: string): boolean {
   ) {
     return true;
   }
+  if (normalized.endsWith('storageid')) return true;
   if (
     /^(?:owner|share|read|write|admin|session)?capability(?:key|token|value)?$/.test(normalized)
   ) {
@@ -402,6 +803,10 @@ function isSensitiveField(key: string): boolean {
 }
 
 function redactString(value: string, state: RedactionState): string {
+  if (/^data:(?:image\/[^;,]+|application\/pdf);base64,/i.test(value)) {
+    state.redactedValueCount += 1;
+    return OMITTED_BINARY_DATA;
+  }
   let redacted = value;
   for (const sensitiveValue of state.sensitiveValues) {
     redacted = redacted.split(sensitiveValue).join(REDACTED);
@@ -442,8 +847,27 @@ function dataCollectionManifest(
       recordCount: data.proposals.variationDecisions.length,
     },
     { path: 'data.sources', recordCount: data.sources.length },
+    { path: 'data.sourceRevisions', recordCount: data.sourceRevisions?.length ?? 0 },
+    { path: 'data.evidence.captures', recordCount: data.evidence.captures.length },
+    { path: 'data.evidence.steps', recordCount: data.evidence.steps.length },
+    {
+      path: 'data.evidence.claimReceipts',
+      recordCount: data.evidence.claimReceipts?.length ?? 0,
+    },
     { path: 'data.memories', recordCount: data.memories.length },
     { path: 'data.activity.jobs', recordCount: data.activity.jobs.length },
+    {
+      path: 'data.activity.durableSessions',
+      recordCount: data.activity.durableSessions.length,
+    },
+    {
+      path: 'data.activity.durableSessionEvents',
+      recordCount: data.activity.durableSessionEvents.length,
+    },
+    {
+      path: 'data.activity.durableJournalEntries',
+      recordCount: data.activity.durableJournalEntries.length,
+    },
     { path: 'data.activity.runs', recordCount: data.activity.runs.length },
     { path: 'data.activity.messages', recordCount: data.activity.messages.length },
     { path: 'data.activity.spans', recordCount: data.activity.spans.length },
@@ -453,7 +877,20 @@ function dataCollectionManifest(
       path: 'data.activity.executionTraces',
       recordCount: data.activity.executionTraces.length,
     },
+    {
+      path: 'data.activity.shadowComparisons',
+      recordCount: data.activity.shadowComparisons.length,
+    },
     { path: 'data.activity.validations', recordCount: data.activity.validations.length },
+    { path: 'data.budgets.ledgers', recordCount: data.budgets.ledgers.length },
+    { path: 'data.budgets.billableCalls', recordCount: data.budgets.billableCalls.length },
+    { path: 'data.budgets.events', recordCount: data.budgets.events.length },
+    { path: 'data.sync.connections', recordCount: data.sync.connections.length },
+    { path: 'data.delegation.grants', recordCount: data.delegation.grants.length },
+    { path: 'data.delegation.uses', recordCount: data.delegation.uses.length },
+    { path: 'data.outputs.exports', recordCount: data.outputs.exports.length },
+    { path: 'data.outputs.publications', recordCount: data.outputs.publications.length },
+    { path: 'data.preferenceEvents', recordCount: data.preferenceEvents.length },
     { path: 'data.comments', recordCount: data.comments.length },
   ];
 }

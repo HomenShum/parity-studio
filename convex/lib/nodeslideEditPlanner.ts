@@ -15,6 +15,10 @@ import {
   type PatchScope,
   nodeSlideAgentModel,
 } from '../../shared/nodeslide';
+import {
+  type NodeSlideSemanticCoverageReceipt,
+  evaluateNodeSlideSemanticCoverage,
+} from './nodeslideCandidate';
 import { nodeSlideMemoryUse } from './nodeslideMemoryPolicy';
 import {
   deterministicAgentOperations,
@@ -30,7 +34,7 @@ import type { ResolvedNodeSlideReadContext } from './nodeslideReadContext';
 import { buildNodeSlideSourceLineage } from './nodeslideSourceLineage';
 
 export const NODESLIDE_BASELINE_EDIT_ADAPTER_ID = 'nodeslide/single-shot-edit-planner' as const;
-export const NODESLIDE_BASELINE_EDIT_ADAPTER_VERSION = '1.5.0' as const;
+export const NODESLIDE_BASELINE_EDIT_ADAPTER_VERSION = '1.7.0' as const;
 
 const NODESLIDE_EDIT_RESPONSE_SCHEMA = {
   type: 'object',
@@ -214,6 +218,7 @@ export interface NodeSlideEditPlannerReceipt {
   terminalOutcome: 'completed' | 'fallback_unavailable' | 'proposal_invalid';
   fallbackReason?: string;
   providerTelemetry?: NodeSlideProviderTelemetry;
+  semanticCoverage?: NodeSlideSemanticCoverageReceipt;
 }
 
 export type NodeSlideEditPlanningOutcome =
@@ -286,6 +291,7 @@ export async function planNodeSlideEdit(
   let operations: PatchOperation[] | null = null;
   let providerInvalidReason = `the ${providerLabel} response was invalid`;
   let providerIntentViolation: string | null = null;
+  let providerSemanticCoverage: NodeSlideSemanticCoverageReceipt | undefined;
   let providerOutcome: NodeSlideEditPlannerReceipt['providerOutcome'] =
     request.providerMode === 'deterministic' ? 'not_requested' : provider.ok ? 'invalid' : 'failed';
   if (provider.ok) {
@@ -325,7 +331,20 @@ export async function planNodeSlideEdit(
       if (errors.length > 0) {
         operations = null;
         providerInvalidReason = `candidate validation rejected the ${providerLabel} response: ${errors[0]}`;
-      } else providerOutcome = 'accepted';
+      } else {
+        const semanticCoverage = evaluateNodeSlideSemanticCoverage({
+          snapshot,
+          instruction: request.instruction,
+          scope: request.scope,
+          operations,
+          ...(request.focusSlideId ? { focusSlideId: request.focusSlideId } : {}),
+        });
+        providerSemanticCoverage = semanticCoverage;
+        if (semanticCoverage.status === 'blocked') {
+          operations = null;
+          providerInvalidReason = `${providerLabel} semantic coverage was incomplete (${semanticCoverage.coveredObligationIds.length}/${semanticCoverage.obligations.length} explicit targets covered)`;
+        } else providerOutcome = 'accepted';
+      }
     }
   }
 
@@ -343,6 +362,7 @@ export async function planNodeSlideEdit(
     ...('telemetry' in provider && provider.telemetry
       ? { providerTelemetry: provider.telemetry }
       : {}),
+    ...(providerSemanticCoverage ? { semanticCoverage: providerSemanticCoverage } : {}),
   };
 
   let finalOperations: PatchOperation[];
@@ -361,16 +381,21 @@ export async function planNodeSlideEdit(
         receipt: { ...receiptBase, terminalOutcome: 'proposal_invalid' },
       };
     }
-    const message =
-      error instanceof Error && error.message.startsWith(`The ${providerLabel} route returned`)
-        ? error.message
-        : `The ${providerLabel} route could not produce a safe scoped proposal, and the deterministic fallback could not safely infer a valid edit. Retry with a smaller request or exact replacement copy in quotation marks.`;
-    return {
-      ok: false,
-      code: 'fallback_unavailable',
-      message,
-      receipt: { ...receiptBase, terminalOutcome: 'fallback_unavailable' },
-    };
+    const evidenceBindingOperations = deterministicEvidenceBindingOperations(request, readContext);
+    if (evidenceBindingOperations) {
+      finalOperations = evidenceBindingOperations;
+    } else {
+      const message =
+        error instanceof Error && error.message.startsWith(`The ${providerLabel} route returned`)
+          ? error.message
+          : `The ${providerLabel} route could not produce a safe scoped proposal, and the deterministic fallback could not safely infer a valid edit. Retry with a smaller request or exact replacement copy in quotation marks.`;
+      return {
+        ok: false,
+        code: 'fallback_unavailable',
+        message,
+        receipt: { ...receiptBase, terminalOutcome: 'fallback_unavailable' },
+      };
+    }
   }
 
   const finalIntentViolation = explicitStructuralIntentViolation(
@@ -400,12 +425,83 @@ export async function planNodeSlideEdit(
     };
   }
 
+  const semanticCoverage = evaluateNodeSlideSemanticCoverage({
+    snapshot,
+    instruction: request.instruction,
+    scope: request.scope,
+    operations: finalOperations,
+    ...(request.focusSlideId ? { focusSlideId: request.focusSlideId } : {}),
+  });
+  if (semanticCoverage.status === 'blocked') {
+    return {
+      ok: false,
+      code: 'proposal_invalid',
+      message: `No deck change was made because the proposal covered ${semanticCoverage.coveredObligationIds.length} of ${semanticCoverage.obligations.length} explicitly requested targets. Retry with fewer fields or exact replacement copy.`,
+      receipt: { ...receiptBase, semanticCoverage, terminalOutcome: 'proposal_invalid' },
+    };
+  }
+
   return {
     ok: true,
     operations: finalOperations,
     summary: summarizePatchOperations(finalOperations, snapshot),
-    receipt: { ...receiptBase, terminalOutcome: 'completed' },
+    receipt: { ...receiptBase, semanticCoverage, terminalOutcome: 'completed' },
   };
+}
+
+const RESEARCH_BINDING_INTENT = /\b(?:cite|evidence|find|research|search|source|support)\b/i;
+const RESEARCH_BINDING_MARKER = ' [evidence]';
+
+/**
+ * A research-only turn can successfully retain evidence without asking for
+ * replacement copy. The patch model has no provenance-only operation, so
+ * create one honest, visible citation marker on an authorized text element
+ * and bind the retained source IDs atomically. This is still only a proposal;
+ * review remains mandatory before the deck changes.
+ */
+function deterministicEvidenceBindingOperations(
+  request: NodeSlideEditPlanningRequest,
+  readContext: ResolvedNodeSlideReadContext,
+): PatchOperation[] | null {
+  if (
+    !request.requireFactualSourceBindings ||
+    !RESEARCH_BINDING_INTENT.test(request.instruction) ||
+    readContext.sources.length === 0
+  ) {
+    return null;
+  }
+
+  const candidates = readContext.elements.filter(
+    (element) =>
+      element.kind === 'text' &&
+      !element.locked &&
+      typeof element.content === 'string' &&
+      element.content.trim().length > 0 &&
+      !element.content.endsWith(RESEARCH_BINDING_MARKER),
+  );
+  const target =
+    candidates.find(
+      (element) =>
+        element.slideId === request.focusSlideId &&
+        (element.role === 'body' || element.role === 'headline' || element.role === 'title'),
+    ) ??
+    candidates.find(
+      (element) =>
+        element.role === 'body' || element.role === 'headline' || element.role === 'title',
+    ) ??
+    candidates[0];
+  const targetContent = target?.content;
+  if (!target || typeof targetContent !== 'string') return null;
+
+  return [
+    {
+      op: 'replace_text',
+      slideId: target.slideId,
+      elementId: target.id,
+      text: `${targetContent.trimEnd()}${RESEARCH_BINDING_MARKER}`,
+      sourceIds: readContext.sources.map((source) => source.id),
+    },
+  ];
 }
 
 export function buildNodeSlideEditProviderInput(

@@ -21,6 +21,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { NodeSlideDeckCiResult } from '../../../../convex/lib/nodeslideDeckCi';
 import type {
   CommentAnchor,
   DeckComment,
@@ -31,6 +32,8 @@ import type {
   NodeSlideAgentMessage,
   NodeSlideAgentRun,
   NodeSlideAgentTelemetryPage,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
   NodeSlideWorkspace,
   PatchOperation,
   PatchScope,
@@ -103,8 +106,11 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   approvalMode?: AgentSessionApprovalMode;
   approvalBusy?: boolean;
   approvalExpiresAt?: number;
+  deckCiResult?: NodeSlideDeckCiResult | null;
+  deckCiLoading?: boolean;
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
+  evidenceCaptures?: readonly NodeSlideEvidenceCaptureSummary[];
   agentTelemetryLoadingMore?: boolean;
   agentTelemetryLoadError?: string;
   aiCommentContext?: AiCommentContext | null;
@@ -137,6 +143,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onRetryAiRun?: () => void;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
+  onLoadEvidenceCapture?: (captureId: string) => Promise<NodeSlideEvidenceCaptureDetail | null>;
   onAcceptPatch: (patch: DeckPatch) => void;
   onRejectPatch: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -215,8 +222,11 @@ export function InspectorPanel<CommandId extends string = string>({
   approvalMode = 'review',
   approvalBusy = false,
   approvalExpiresAt,
+  deckCiResult,
+  deckCiLoading = false,
   agentTelemetry,
   agentTelemetryRunId,
+  evidenceCaptures = [],
   agentTelemetryLoadingMore = false,
   agentTelemetryLoadError,
   aiCommentContext = null,
@@ -242,6 +252,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onRetryAiRun,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
+  onLoadEvidenceCapture,
   onAcceptPatch,
   onRejectPatch,
   onPreviewPatch,
@@ -513,6 +524,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   approvalMode={approvalMode}
                   approvalBusy={approvalBusy}
                   {...(approvalExpiresAt !== undefined ? { approvalExpiresAt } : {})}
+                  {...(deckCiResult !== undefined ? { deckCiResult } : {})}
+                  deckCiLoading={deckCiLoading}
+                  onOpenDeckCiTrace={() => onTabChange('trace')}
                   variations={variations}
                   variationsLoading={variationsLoading}
                   isSubmitting={agentBusy}
@@ -531,6 +545,22 @@ export function InspectorPanel<CommandId extends string = string>({
                     ? { onClearCommentContext: onClearAiCommentContext }
                     : {})}
                   onPropose={onProposeEdit}
+                  {...(onProposeJsonPatch
+                    ? {
+                        onProposeVisualMaterial: async (
+                          operations: PatchOperation[],
+                          summary: string,
+                        ) => {
+                          const proposed = await onProposeJsonPatch({
+                            operations,
+                            summary,
+                            elementId: '__openui_visual_material__',
+                            baseElementVersion: 0,
+                          });
+                          if (!proposed) throw new Error('The visual proposal was not created.');
+                        },
+                      }
+                    : {})}
                   {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
                   {...(onCreateAiMemory ? { onCreateMemory: onCreateAiMemory } : {})}
                   {...(onUpdateAiMemory ? { onUpdateMemory: onUpdateAiMemory } : {})}
@@ -645,11 +675,13 @@ export function InspectorPanel<CommandId extends string = string>({
                   agentRuns={agentRuns}
                   agentMessages={agentMessages}
                   sources={workspace.sources}
+                  evidenceCaptures={evidenceCaptures}
                   {...(agentTelemetryRunId ? { agentTelemetryRunId } : {})}
                   agentTelemetryLoadingMore={agentTelemetryLoadingMore}
                   {...(agentTelemetryLoadError ? { agentTelemetryLoadError } : {})}
                   {...(onSelectAgentRun ? { onSelectAgentRun } : {})}
                   {...(onLoadMoreAgentTelemetry ? { onLoadMoreAgentTelemetry } : {})}
+                  {...(onLoadEvidenceCapture ? { onLoadEvidenceCapture } : {})}
                   {...(agentTelemetry ? { agentTelemetry } : {})}
                 />
               </InspectorTabPanel>

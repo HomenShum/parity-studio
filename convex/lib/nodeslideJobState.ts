@@ -5,6 +5,8 @@ export const NODESLIDE_JOB_MAX_ATTEMPTS = 3;
 export const NODESLIDE_JOB_STATUSES = [
   'queued',
   'running',
+  'retrying',
+  'paused',
   'awaiting_review',
   'succeeded',
   'failed',
@@ -19,6 +21,8 @@ export const NODESLIDE_JOB_PHASES = [
   'generating',
   'persisting',
   'validating',
+  'retrying',
+  'paused',
   'awaiting_review',
   'complete',
   'failed',
@@ -30,6 +34,14 @@ export const NODESLIDE_JOB_PHASES = [
 export type NodeSlideJobStatus = (typeof NODESLIDE_JOB_STATUSES)[number];
 export type NodeSlideJobPhase = (typeof NODESLIDE_JOB_PHASES)[number];
 export type NodeSlideJobKind = 'create_deck' | 'edit_proposal';
+export type NodeSlideJobFreshness = 'fresh' | 'stalled' | 'paused' | 'settled';
+
+/**
+ * A heartbeat older than this is surfaced as stalled. It is deliberately a
+ * classification, not a terminal transition: an owner can still resume,
+ * retry, or cancel the durable workflow without fabricating completion.
+ */
+export const NODESLIDE_JOB_STALL_AFTER_MS = 120_000;
 
 export interface NodeSlideJobRecord {
   id: string;
@@ -92,6 +104,9 @@ export interface PublicNodeSlideJob {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+  heartbeatAt: number;
+  freshness: NodeSlideJobFreshness;
+  stalledSince?: number;
 }
 
 const TERMINAL = new Set<NodeSlideJobStatus>([
@@ -132,7 +147,9 @@ export function assertNodeSlideJobIdempotency(
 }
 
 export function claimNodeSlideJobAttempt(job: NodeSlideJobRecord, now: number): NodeSlideJobRecord {
-  if (TERMINAL.has(job.status) || job.status === 'awaiting_review') return job;
+  if (TERMINAL.has(job.status) || job.status === 'awaiting_review' || job.status === 'paused') {
+    return job;
+  }
   // @convex-dev/workflow may retry the same action invocation after a transient
   // error. Re-entering an already-running durable job must reuse its fenced
   // attempt/lease; only an explicit failed -> retry -> queued cycle may advance it.
@@ -218,7 +235,12 @@ export function advanceNodeSlideJob(
   now: number,
 ): NodeSlideJobRecord {
   if (TERMINAL.has(job.status)) return job;
-  if (TERMINAL.has(job.status) && update.status !== job.status) return job;
+  // Pausing is cooperative. A provider/tool call already in flight may return,
+  // but its late checkpoints and completion are fenced until an explicit
+  // owner-authorized resume restarts the durable workflow.
+  if (job.status === 'paused' && update.status !== 'paused' && update.status !== 'cancelled') {
+    return job;
+  }
   const progress = boundedProgress(update.progress);
   if (progress < job.progress) throw new Error('NodeSlide job progress cannot move backwards.');
   const status = update.status ?? job.status;
@@ -261,12 +283,74 @@ export function cancelNodeSlideJob(job: NodeSlideJobRecord, now: number): NodeSl
   );
 }
 
+export function pauseNodeSlideJob(job: NodeSlideJobRecord, now: number): NodeSlideJobRecord {
+  if (job.status === 'paused' || TERMINAL.has(job.status) || job.status === 'awaiting_review') {
+    return job;
+  }
+  return advanceNodeSlideJob(
+    job,
+    {
+      status: 'paused',
+      phase: 'paused',
+      progress: job.progress,
+    },
+    now,
+  );
+}
+
+export function resumeNodeSlideJob(
+  job: NodeSlideJobRecord,
+  now: number,
+  resumeTo: 'queued' | 'running' | 'retrying' = job.attempt === 0 ? 'queued' : 'running',
+): NodeSlideJobRecord {
+  if (job.status !== 'paused') {
+    throw new Error('Only a paused NodeSlide job can be resumed.');
+  }
+  const { error: _error, completedAt: _completedAt, ...resumable } = job;
+  return {
+    ...resumable,
+    status: resumeTo,
+    phase: resumeTo === 'running' ? 'planning' : resumeTo,
+    updatedAt: now,
+  };
+}
+
+export function heartbeatNodeSlideJob(job: NodeSlideJobRecord, now: number): NodeSlideJobRecord {
+  if (
+    TERMINAL.has(job.status) ||
+    job.status === 'awaiting_review' ||
+    job.status === 'paused' ||
+    now <= job.updatedAt
+  ) {
+    return job;
+  }
+  return { ...job, updatedAt: now };
+}
+
+export function classifyNodeSlideJobFreshness(
+  job: Pick<NodeSlideJobRecord, 'status' | 'updatedAt'>,
+  now = Date.now(),
+  stallAfterMs = NODESLIDE_JOB_STALL_AFTER_MS,
+): { freshness: NodeSlideJobFreshness; heartbeatAt: number; stalledSince?: number } {
+  if (job.status === 'paused') {
+    return { freshness: 'paused', heartbeatAt: job.updatedAt };
+  }
+  if (TERMINAL.has(job.status) || job.status === 'awaiting_review') {
+    return { freshness: 'settled', heartbeatAt: job.updatedAt };
+  }
+  const boundedStallAfterMs = Math.max(1, Math.floor(stallAfterMs));
+  const stalledSince = job.updatedAt + boundedStallAfterMs;
+  return now >= stalledSince
+    ? { freshness: 'stalled', heartbeatAt: job.updatedAt, stalledSince }
+    : { freshness: 'fresh', heartbeatAt: job.updatedAt };
+}
+
 export function failNodeSlideJob(
   job: NodeSlideJobRecord,
   error: string,
   now: number,
 ): NodeSlideJobRecord {
-  if (TERMINAL.has(job.status)) return job;
+  if (TERMINAL.has(job.status) || job.status === 'paused') return job;
   return advanceNodeSlideJob(
     job,
     {
@@ -287,8 +371,8 @@ export function retryNodeSlideJob(job: NodeSlideJobRecord, now: number): NodeSli
   const { error: _error, completedAt: _completedAt, ...resumable } = job;
   return {
     ...resumable,
-    status: 'queued',
-    phase: 'queued',
+    status: 'retrying',
+    phase: 'retrying',
     updatedAt: now,
   };
 }
@@ -330,6 +414,7 @@ export function resolveNodeSlideReviewJob(
 }
 
 export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob {
+  const freshness = classifyNodeSlideJobFreshness(job);
   return {
     jobId: job.id,
     kind: job.kind,
@@ -351,6 +436,7 @@ export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob 
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     ...(job.completedAt ? { completedAt: job.completedAt } : {}),
+    ...freshness,
     ...publicResult(job),
   };
 }
@@ -404,6 +490,12 @@ function validatePhaseStatus(
   }
   if (status === 'failed' && phase !== 'failed') {
     throw new Error('A failed NodeSlide job must use the failed phase.');
+  }
+  if (status === 'retrying' && phase !== 'retrying') {
+    throw new Error('A retrying NodeSlide job must use the retrying phase.');
+  }
+  if (status === 'paused' && phase !== 'paused') {
+    throw new Error('A paused NodeSlide job must use the paused phase.');
   }
   if (status === 'cancelled' && phase !== 'cancelled') {
     throw new Error('A cancelled NodeSlide job must use the cancelled phase.');

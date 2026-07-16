@@ -633,26 +633,21 @@ function validateCollisions(
   slideId: string,
   addIssue: (issue: Omit<ValidationIssue, 'id'>, discriminator?: string) => void,
 ) {
-  const contentElements = elements.filter(
-    (element) =>
-      element.kind !== 'shape' &&
-      element.kind !== 'connector' &&
-      element.role !== 'footer' &&
-      element.role !== 'page_number',
-  );
+  const contentElements = elements.filter(isCollisionCandidate);
   for (let leftIndex = 0; leftIndex < contentElements.length; leftIndex += 1) {
     const left = contentElements[leftIndex];
     if (!left) continue;
     for (let rightIndex = leftIndex + 1; rightIndex < contentElements.length; rightIndex += 1) {
       const right = contentElements[rightIndex];
       if (!right) continue;
+      if (shouldIgnoreContainedShape(left, right)) continue;
       const overlap = overlapRatio(left.bbox, right.bbox);
-      if (overlap >= 0.35) {
+      if (overlap >= 0.2) {
         addIssue(
           {
-            severity: 'warning',
+            severity: 'error',
             code: 'collision',
-            message: `Elements ${left.id} and ${right.id} overlap by ${Math.round(overlap * 100)}% of the smaller region.`,
+            message: `Important elements "${left.id}" and "${right.id}" overlap by ${Math.round(overlap * 100)}% of the smaller element.`,
             slideId,
             elementId: right.id,
           },
@@ -661,6 +656,28 @@ function validateCollisions(
       }
     }
   }
+}
+
+function isCollisionCandidate(element: SlideElement): boolean {
+  if (element.kind === 'connector') return false;
+  if (element.role === 'footer' || element.role === 'page_number') return false;
+  if (/(?:background|decorative|decoration|watermark)/iu.test(element.role ?? '')) return false;
+  return element.kind !== 'shape' || Boolean(element.content?.trim());
+}
+
+function shouldIgnoreContainedShape(first: SlideElement, second: SlideElement): boolean {
+  if (first.kind === 'shape' && boxContains(first.bbox, second.bbox)) return true;
+  if (second.kind === 'shape' && boxContains(second.bbox, first.bbox)) return true;
+  return false;
+}
+
+function boxContains(outer: BoundingBox, inner: BoundingBox): boolean {
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  );
 }
 
 function overlapRatio(left: BoundingBox, right: BoundingBox): number {

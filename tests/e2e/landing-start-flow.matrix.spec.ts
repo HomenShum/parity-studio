@@ -117,7 +117,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
 
     await page.getByTestId('landing-model-select').click();
     const modelDialog = page.getByRole('dialog', { name: 'Generation model' });
-    const search = modelDialog.getByPlaceholder('Search models and providers…');
+    const search = modelDialog.getByPlaceholder('Search models or providers');
     await search.fill('definitely-not-a-real-model');
     await expect(modelDialog.getByText('No models found.')).toBeVisible();
     await search.fill('');

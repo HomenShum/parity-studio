@@ -72,12 +72,13 @@ test.describe('NodeSlide editor visual-system boundary', () => {
         'Manage deck memory',
         'Add read context reference',
         'Add command',
-        'Expand composer',
         'Propose edit',
       ]) {
         await expect(composer.getByRole('button', { name: label })).toBeVisible();
       }
       await expect(page.getByTestId('ai-model-select')).toBeVisible();
+      await composer.getByRole('button', { name: 'Expand composer' }).click();
+      await expect(composer.getByRole('button', { name: 'Collapse composer' })).toBeVisible();
       await expect(page.getByTestId('ai-effort-select')).toBeVisible();
       await expect(page.getByTestId('ai-attach-data')).toBeVisible();
 
@@ -135,11 +136,13 @@ async function openVisualWorkspace(page: Page) {
   await expect(page).toHaveURL(/[?&]deck=/);
 
   const composer = page.getByTestId('ai-composer');
-  if (!(await composer.isVisible())) {
-    const openInspector = page
-      .locator('button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible')
-      .first();
-    await expect(openInspector).toBeVisible();
+  const openInspector = page
+    .locator('button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible')
+    .first();
+  await expect
+    .poll(async () => (await composer.isVisible()) || (await openInspector.isVisible()))
+    .toBe(true);
+  if (await openInspector.isVisible()) {
     await openInspector.click();
   }
   await expect(composer).toBeVisible();

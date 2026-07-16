@@ -1,0 +1,43 @@
+{
+  "repo": "D:/VSCode Projects/parity-studio",
+  "url": "http://127.0.0.1:5174/",
+  "outDir": "D:/VSCode Projects/parity-studio/artifacts/nodeslide-depth-2026-07-16",
+  "assert": ["NodeSlide", "Run spend ceiling", "Optional hard USD cap"],
+  "shots": [
+    {
+      "name": "advanced-budget-desktop-light",
+      "viewport": { "width": 1512, "height": 982 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "button[aria-label='Expand composer']",
+        "[data-testid=ai-provider-summary]"
+      ],
+      "waitMs": 900,
+      "fullPage": false
+    },
+    {
+      "name": "advanced-budget-desktop-dark",
+      "viewport": { "width": 1512, "height": 982 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "button[aria-label='Switch to dark theme']",
+        "button[aria-label='Expand composer']",
+        "[data-testid=ai-provider-summary]"
+      ],
+      "waitMs": 900,
+      "fullPage": false
+    },
+    {
+      "name": "advanced-budget-mobile-light",
+      "viewport": { "width": 390, "height": 844 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "button[aria-label='Ask AI']",
+        "button[aria-label='Expand composer']",
+        "[data-testid=ai-provider-summary]"
+      ],
+      "waitMs": 900,
+      "fullPage": false
+    }
+  ]
+}

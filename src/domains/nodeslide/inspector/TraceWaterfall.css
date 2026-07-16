@@ -1,6 +1,22 @@
 /* Trace-only refinements for the react-o11y waterfall. The base NodeSlide trace
    tokens remain in nodeslideV3.css; this file owns no generic studio chrome. */
 
+.nodeslide-studio .ns-trace-activity-compact {
+  max-block-size: min(56vh, 440px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.nodeslide-studio .ns-trace-activity-compact > header {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  border-bottom: 1px solid var(--ns-line-b);
+  background: color-mix(in srgb, var(--ns-panel) 94%, var(--ns-surface));
+}
+
 .nodeslide-studio .ns-trace-o11y-compact-row {
   display: contents;
 }
@@ -442,6 +458,71 @@
   cursor: pointer;
   font: 650 8.5px / 1.3 var(--ns-mono);
   padding: 0;
+}
+
+.nodeslide-studio .ns-waterfall-shot-link {
+  text-align: center;
+}
+
+.nodeslide-studio .ns-waterfall-shot-frame {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.nodeslide-studio .ns-waterfall-shot-frame img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+}
+
+.nodeslide-studio .ns-waterfall-capture-step .ns-waterfall-pdf-frame {
+  min-height: 0;
+}
+
+.nodeslide-studio .ns-waterfall-pdf-scroll {
+  overflow: auto;
+  max-height: min(58vh, 620px);
+  padding: 10px;
+  overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--ns-ink) 4%, var(--ns-panel));
+}
+
+.nodeslide-studio .ns-waterfall-pdf-page {
+  position: relative;
+  margin: 0 auto;
+  max-width: none;
+  background: white;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--ns-ink) 16%, transparent);
+}
+
+.nodeslide-studio .ns-waterfall-pdf-page canvas {
+  display: block;
+}
+
+.nodeslide-studio .ns-waterfall-pdf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  color: var(--ns-data);
+  font: 600 8.5px / 1.3 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-geometry-state {
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--ns-line-b);
+  border-radius: 7px;
+  color: var(--ns-ink-3);
+  background: var(--ns-chip);
+  font: 500 8.5px / 1.45 var(--ns-mono);
+}
+
+.nodeslide-studio .ns-waterfall-geometry-state.is-degraded {
+  border-color: color-mix(in srgb, var(--ns-warning) 38%, var(--ns-line-b));
+  color: color-mix(in srgb, var(--ns-warning) 70%, var(--ns-ink));
+  background: color-mix(in srgb, var(--ns-warning) 8%, var(--ns-surface));
 }
 
 @media (max-width: 900px) {

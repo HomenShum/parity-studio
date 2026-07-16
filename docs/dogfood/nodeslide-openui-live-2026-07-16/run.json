@@ -1,0 +1,49 @@
+{
+  "ts": "2026-07-16T02:56:50-07:00",
+  "executor": "Codex",
+  "app": "nodeslide",
+  "scope": "OpenUI Phase 0 visual-material proposal and live agent interaction proof",
+  "environment": {
+    "target": "http://127.0.0.1:5192/",
+    "workspace": "disposable local sample",
+    "productionMutation": false,
+    "deployment": false
+  },
+  "journeys": {
+    "openui-render": "PASS",
+    "allowlisted-proposal": "PASS",
+    "pending-deck-unchanged": "PASS-v1",
+    "candidate-receipt": "PASS-durable-and-accept-enabled",
+    "candidate-compare": "PASS-new-add-slide-previewed",
+    "explicit-accept": "PASS-v1-to-v2-exactly-once",
+    "review-stream-close": "PASS-after-accept",
+    "accepted-slide-visible": "PASS",
+    "browser-console": "PASS-0-errors-0-warnings",
+    "light-theme": "PASS",
+    "dark-theme": "PASS",
+    "mobile-viewport": "NOT-CLAIMED-in-app-browser-override-remained-1280x720"
+  },
+  "agentInteractionContract": {
+    "openuiAction": "nodeslide.visual-material.propose",
+    "operations": 1,
+    "operationKind": "add_slide",
+    "silentMutation": false,
+    "humanAcceptRequired": true,
+    "acceptRequiresDurableReceipt": true,
+    "mixedUnitSharedAxis": false,
+    "sourceLabel": "User-provided scenario brief · unverified"
+  },
+  "gates": {
+    "focusedOpenuiAgentTests": "17/17 passed",
+    "fullRepositoryTests": "1113/1113 passed",
+    "typecheck": "passed",
+    "biomeFocused": "passed",
+    "viteProductionBundle": "passed",
+    "pptxOverflow": "passed",
+    "slideElementBounds": "5 slides, 0 out-of-bounds elements",
+    "visualMontageReview": "passed"
+  },
+  "evidenceDir": "docs/dogfood/nodeslide-openui-live-2026-07-16",
+  "deck": "artifacts/nodeslide-openui-live-agent-proof-2026-07-16.pptx",
+  "notes": "The final live run also fixed two integration defects: the visual workbench was moved outside the assistant-ui viewport so its controls are stable, and the active human-origin JSON proposal is now surfaced in the AI review stream when its preview id matches. The disposable deck advanced exactly once from v1 to v2."
+}

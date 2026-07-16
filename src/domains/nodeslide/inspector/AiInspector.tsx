@@ -25,6 +25,8 @@ import {
 import {
   type KeyboardEvent,
   type Ref,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -32,6 +34,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { NodeSlideDeckCiResult } from '../../../../convex/lib/nodeslideDeckCi';
 import {
   type AgentTrace,
   type Deck,
@@ -78,6 +81,7 @@ import {
 } from '../externalProviderConsent';
 import { sanitizeNodeSlideUserError } from '../nodeslideUserError';
 import type { AgentSessionApprovalMode } from '../session';
+import { DeckCiStatus } from './DeckCiStatus';
 import {
   NodeSlideThreadMessages,
   NodeSlideThreadRuntimeProvider,
@@ -105,6 +109,12 @@ import {
   NODESLIDE_WEB_RESEARCH_CONSENT,
 } from './reviewTypes';
 import { nodeSlideScopeLabel } from './scopePresentation';
+
+const VisualMaterialWorkbench = lazy(() =>
+  import('../openui/VisualMaterialWorkbench').then((module) => ({
+    default: module.VisualMaterialWorkbench,
+  })),
+);
 
 export {
   AI_DRAFTING_PHASE_MS,
@@ -168,6 +178,8 @@ export interface AiInspectorProps<CommandId extends string = string> {
   approvalMode?: AgentSessionApprovalMode;
   approvalBusy?: boolean;
   approvalExpiresAt?: number;
+  deckCiResult?: NodeSlideDeckCiResult | null;
+  deckCiLoading?: boolean;
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -190,6 +202,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     writeScope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onProposeVisualMaterial?: (operations: PatchOperation[], summary: string) => Promise<void>;
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   onCreateMemory?: (category: NodeSlideAgentMemoryCategory, content: string) => Promise<void>;
   onUpdateMemory?: (
@@ -198,6 +211,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
   onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
+  onOpenDeckCiTrace?: () => void;
   onCancelRun?: (runId: string) => void;
   onRetryRun?: () => void;
   onAccept: (patch: DeckPatch) => void;
@@ -225,6 +239,8 @@ export function AiInspector<CommandId extends string = string>({
   approvalMode = 'review',
   approvalBusy = false,
   approvalExpiresAt,
+  deckCiResult,
+  deckCiLoading = false,
   variations,
   variationsLoading,
   isSubmitting,
@@ -243,11 +259,13 @@ export function AiInspector<CommandId extends string = string>({
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
+  onProposeVisualMaterial,
   onAttachDataFile,
   onCreateMemory,
   onUpdateMemory,
   onDeleteMemory,
   onApprovalModeChange,
+  onOpenDeckCiTrace,
   onCancelRun,
   onRetryRun,
   onAccept,
@@ -276,6 +294,7 @@ export function AiInspector<CommandId extends string = string>({
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   const [webResearch, setWebResearch] = useState(false);
+  const [runSpendLimit, setRunSpendLimit] = useState('');
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -302,12 +321,14 @@ export function AiInspector<CommandId extends string = string>({
     approvalBusy || attachmentBusy || submissionPreparing || isSubmitting;
   const [scopeError, setScopeError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [materialWorkbenchOpen, setMaterialWorkbenchOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
+  const [messageWindowSize, setMessageWindowSize] = useState(50);
   const activeMemoryCount = memories.filter((memory) => memory.status === 'active').length;
   const useMemoryForRun = memoryEnabled && activeMemoryCount > 0;
   const composerId = useId();
-  const providerName = `${composerId}-provider`;
+  const turboDescriptionId = `${composerId}-turbo-description`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const reviewScrollRef = useRef<HTMLDivElement | null>(null);
@@ -339,6 +360,7 @@ export function AiInspector<CommandId extends string = string>({
   useEffect(() => {
     const enabled = window.localStorage.getItem(`nodeslide.memory-enabled:${deck.id}`) === 'true';
     setMemoryEnabled(enabled);
+    setMessageWindowSize(50);
   }, [deck.id]);
 
   const setPersistentMemoryEnabled = (enabled: boolean) => {
@@ -348,10 +370,7 @@ export function AiInspector<CommandId extends string = string>({
 
   useEffect(() => {
     const previousSelectionCount = previousSelectedElementCountRef.current;
-    if (scopeChoice === 'elements' && selectedElements.length === 0) {
-      setScopeChoice('slide');
-      scopeWasManuallyChosenRef.current = false;
-    } else if (
+    if (
       selectedElements.length > 0 &&
       previousSelectionCount === 0 &&
       !scopeWasManuallyChosenRef.current
@@ -385,13 +404,13 @@ export function AiInspector<CommandId extends string = string>({
       if (
         !byId.has(patch.id) &&
         ['draft', 'validating', 'ready', 'stale'].includes(patch.status) &&
-        patch.source === 'agent'
+        (patch.source === 'agent' || patch.id === previewedPatchId)
       ) {
         byId.set(patch.id, patch);
       }
     }
     return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
-  }, [patches]);
+  }, [patches, previewedPatchId]);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     () => proposals[0]?.id ?? null,
   );
@@ -564,11 +583,28 @@ export function AiInspector<CommandId extends string = string>({
   // been cancelled just because a persisted run row has not hydrated its final status yet.
   const hasTerminalActivity = Boolean(resolvedActivity && isTerminalActivity(resolvedActivity));
   const visibleDurableRun = hasTerminalActivity ? undefined : activeDurableRun;
+  const latestDurableRun = [...agentRuns].sort(
+    (left, right) => right.createdAt - left.createdAt,
+  )[0];
+  const hasPersistedTerminalMessage = Boolean(
+    resolvedActivity &&
+      isTerminalActivity(resolvedActivity) &&
+      latestDurableRun &&
+      ['completed', 'failed', 'cancelled'].includes(latestDurableRun.status) &&
+      (!resolvedActivity.ask.trim() ||
+        resolvedActivity.ask.trim() === latestDurableRun.instruction.trim()) &&
+      agentMessages.some(
+        (message) =>
+          message.runId === latestDurableRun.id &&
+          (message.role === 'assistant' || message.role === 'system'),
+      ),
+  );
   const visibleAsk = resolvedActivity?.ask.trim() || optimisticAsk?.trim() || '';
   const contextSuggestions =
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
   const showSuggested =
     !instruction.trim() &&
+    agentMessages.length === 0 &&
     proposals.length === 0 &&
     !resolvedActivity &&
     !activeTrace &&
@@ -584,7 +620,9 @@ export function AiInspector<CommandId extends string = string>({
       : scopeChoice === 'selected_slides'
         ? `Writes to ${selectedSlideIds.length} selected slides`
         : scopeChoice === 'elements'
-          ? `Writes to ${selectedElements.length} selected ${selectedElements.length === 1 ? 'element' : 'elements'}`
+          ? selectedElements.length > 0
+            ? `Writes to ${selectedElements.length} selected ${selectedElements.length === 1 ? 'element' : 'elements'}`
+            : 'Writes to selected elements · reselect required'
           : 'Writes to this slide';
   const referencesUnselectedElement =
     scopeChoice === 'slide' &&
@@ -592,7 +630,16 @@ export function AiInspector<CommandId extends string = string>({
     /\b(this|the)\s+(headline|title|text|chart|graph|image|photo|shape|element)\b/i.test(
       instruction,
     );
-  const recentMessages = agentMessages.slice(-24);
+  const recentMessages = useMemo(
+    () => agentMessages.slice(-messageWindowSize),
+    [agentMessages, messageWindowSize],
+  );
+  const hiddenMessageCount = Math.max(0, agentMessages.length - recentMessages.length);
+  const contentSizedThread =
+    hiddenMessageCount === 0 &&
+    recentMessages.length <= 2 &&
+    proposals.length <= 1 &&
+    directions.length <= 1;
   const threadMessages = useMemo(
     () =>
       buildNodeSlideThreadMessages(recentMessages, agentRuns, {
@@ -781,7 +828,9 @@ export function AiInspector<CommandId extends string = string>({
         );
     if (!writeScope) {
       setScopeError(
-        `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
+        scopeChoice === 'elements'
+          ? 'The selected element scope is no longer available. Reselect the element or explicitly choose a wider write scope.'
+          : `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
       );
       return;
     }
@@ -803,6 +852,12 @@ export function AiInspector<CommandId extends string = string>({
     ) {
       return;
     }
+    const submittedMaxCostUsd = parseOptionalRunSpendLimit(runSpendLimit);
+    if (webResearch && submittedMaxCostUsd !== undefined) {
+      throw new Error(
+        'A spend ceiling cannot include web search yet. Turn Web off or clear the ceiling.',
+      );
+    }
     const options: AiProposalOptions<CommandId> = {
       ...submittedProvider,
       readContext: submittedReadContext,
@@ -819,6 +874,7 @@ export function AiInspector<CommandId extends string = string>({
             webResearchConsent: submittedWebResearchConsent,
           }
         : {}),
+      ...(submittedMaxCostUsd !== undefined ? { maxCostUsd: submittedMaxCostUsd } : {}),
       ...(commentContext ? { commentContext } : {}),
       ...(command && !isVariationsCommand(command.id)
         ? {
@@ -918,7 +974,36 @@ export function AiInspector<CommandId extends string = string>({
         isRunning={Boolean(visibleDurableRun)}
         messages={threadMessages}
       >
-        <ThreadPrimitive.Root className="ns-agent-thread" data-testid="assistant-ui-thread">
+        <ThreadPrimitive.Root
+          className="ns-agent-thread"
+          data-testid="assistant-ui-thread"
+          data-thread-layout={contentSizedThread ? 'content' : 'anchored'}
+        >
+          {materialWorkbenchOpen && onProposeVisualMaterial ? (
+            <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
+              <header>
+                <span>
+                  <Layers3 size={12} /> Visual material
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMaterialWorkbenchOpen(false)}
+                  aria-label="Close visual material tool"
+                >
+                  <X size={12} />
+                </button>
+              </header>
+              <Suspense fallback={<div className="ns-openui-loading">Loading visual lab…</div>}>
+                <VisualMaterialWorkbench
+                  deck={deck}
+                  slide={slide}
+                  disabled={Boolean(visibleDurableRun) || isSubmitting || hasReviewableProposal}
+                  onPropose={onProposeVisualMaterial}
+                />
+              </Suspense>
+            </section>
+          ) : null}
+
           <ThreadPrimitive.Viewport
             className="ns-ai-v3-review-scroll"
             data-testid="ai-review-scroll"
@@ -948,11 +1033,23 @@ export function AiInspector<CommandId extends string = string>({
               </section>
             ) : null}
 
+            {hiddenMessageCount > 0 ? (
+              <button
+                className="ns-agent-load-earlier"
+                type="button"
+                onClick={() => setMessageWindowSize((current) => current + 50)}
+                data-testid="agent-load-earlier"
+              >
+                <span>Show {Math.min(50, hiddenMessageCount)} earlier messages</span>
+                <small>{hiddenMessageCount} hidden</small>
+              </button>
+            ) : null}
+
             <div className="ns-ai-v3-conversation" data-testid="assistant-ui-messages">
               <NodeSlideThreadMessages />
             </div>
 
-            {resolvedActivity || activeTrace ? (
+            {(resolvedActivity || activeTrace) && !hasPersistedTerminalMessage ? (
               <section
                 className={`ns-agent-progress ns-ai-v3-progress ${
                   resolvedActivity?.status === 'cancelled'
@@ -1016,15 +1113,30 @@ export function AiInspector<CommandId extends string = string>({
                             : 'The agent failed before a reviewable proposal was returned.')}
                     </strong>
                     <p>No proposal was created or applied. Your deck remains unchanged.</p>
-                    {resolvedActivity.status !== 'cancelled' && onRetryRun ? (
-                      <button
-                        type="button"
-                        className="ns-agent-retry"
-                        onClick={onRetryRun}
-                        data-testid="ai-retry-run"
-                      >
-                        <RotateCcw size={12} /> Retry the same request
-                      </button>
+                    {resolvedActivity.status !== 'cancelled' &&
+                    (onRetryRun || onOpenDeckCiTrace) ? (
+                      <div className="ns-agent-failure-actions">
+                        {onRetryRun ? (
+                          <button
+                            type="button"
+                            className="ns-agent-retry"
+                            onClick={onRetryRun}
+                            data-testid="ai-retry-run"
+                          >
+                            <RotateCcw size={12} /> Retry the same request
+                          </button>
+                        ) : null}
+                        {onOpenDeckCiTrace ? (
+                          <button
+                            type="button"
+                            className="ns-agent-retry"
+                            onClick={onOpenDeckCiTrace}
+                            data-testid="ai-open-failure-trace"
+                          >
+                            <Eye size={12} /> Open Trace
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 ) : resolvedActivity?.status === 'delayed' ? (
@@ -1231,6 +1343,13 @@ export function AiInspector<CommandId extends string = string>({
               <ArrowDown size={14} />
             </ThreadPrimitive.ScrollToBottom>
             <ThreadPrimitive.ViewportFooter className="ns-agent-thread-footer">
+              {deckCiResult !== undefined || deckCiLoading ? (
+                <DeckCiStatus
+                  result={deckCiResult ?? null}
+                  loading={deckCiLoading}
+                  {...(onOpenDeckCiTrace ? { onOpenTrace: onOpenDeckCiTrace } : {})}
+                />
+              ) : null}
               <div
                 className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''} ${
                   compactReviewComposer ? 'is-review-compact' : ''
@@ -1252,6 +1371,34 @@ export function AiInspector<CommandId extends string = string>({
                     </output>
                   ) : null}
                 </header>
+                {onApprovalModeChange ? (
+                  <div className="ns-ai-turbo" data-testid="ai-turbo-control">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={approvalMode === 'auto_apply'}
+                      aria-describedby={turboDescriptionId}
+                      className={approvalMode === 'auto_apply' ? 'is-active' : ''}
+                      data-testid="ai-turbo-toggle"
+                      disabled={approvalControlLocked}
+                      onClick={() =>
+                        onApprovalModeChange(
+                          approvalMode === 'auto_apply' ? 'review' : 'auto_apply',
+                        )
+                      }
+                    >
+                      {approvalBusy ? (
+                        <LoaderCircle className="ns-spin" size={12} aria-hidden="true" />
+                      ) : (
+                        <Sparkles size={12} aria-hidden="true" />
+                      )}
+                      <span>Turbo for this session</span>
+                    </button>
+                    <small id={turboDescriptionId}>
+                      Validated edits that pass Deck CI auto-apply; Undo remains available.
+                    </small>
+                  </div>
+                ) : null}
                 {showSuggested ? (
                   <section
                     className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
@@ -1294,24 +1441,6 @@ export function AiInspector<CommandId extends string = string>({
                   <span>{operationModeLabel(operationMode)}</span>
                   <span>{designBehaviorLabel(designBehavior)}</span>
                   <span>{referenceUseLabel(referenceUse)}</span>
-                  <button
-                    type="button"
-                    className={approvalMode === 'auto_apply' ? 'is-delegated' : ''}
-                    data-testid="ai-approval-summary"
-                    onClick={() => setProviderControlsOpen((current) => !current)}
-                    aria-expanded={providerControlsOpen}
-                    aria-controls="nodeslide-ai-advanced-controls"
-                    aria-label={
-                      approvalMode === 'auto_apply'
-                        ? 'Auto-apply safe edits'
-                        : 'Review before applying'
-                    }
-                  >
-                    {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
-                    {approvalMode === 'auto_apply'
-                      ? 'Auto-apply safe edits'
-                      : 'Review before applying'}
-                  </button>
                 </fieldset>
 
                 <details
@@ -1353,6 +1482,7 @@ export function AiInspector<CommandId extends string = string>({
                           <Sparkles size={13} /> External model: on ·{' '}
                           {providerNameForMode(providerMode)} · {selectedAgentModel.label} ·{' '}
                           {nodeSlideNativeEffortLabel(providerEffort)} effort
+                          {runSpendLimit ? ` · Hard cap $${runSpendLimit}` : ''}
                           <span
                             className={externalConsent.granted ? 'has-consent' : 'needs-consent'}
                           >
@@ -1362,69 +1492,40 @@ export function AiInspector<CommandId extends string = string>({
                       )}
                     </div>
                     {onApprovalModeChange ? (
-                      <fieldset
-                        className="ns-ai-approval-controls"
-                        data-testid="ai-approval-controls"
-                      >
-                        <legend>Change handling</legend>
-                        <label className={approvalMode === 'review' ? 'is-active' : ''}>
-                          <input
-                            type="radio"
-                            name={`${providerName}-approval`}
-                            value="review"
-                            checked={approvalMode === 'review'}
-                            disabled={approvalControlLocked}
-                            onChange={() => {
-                              if (!approvalControlLocked) onApprovalModeChange('review');
-                            }}
-                          />
-                          <Eye size={15} />
+                      <section className="ns-ai-turbo-details" data-testid="ai-turbo-details">
+                        <div className="ns-ai-turbo-details__status">
+                          <strong>Session change authority</strong>
                           <span>
-                            <strong>Review before applying</strong>
-                            <small>Compare every proposal and choose Accept or Reject.</small>
+                            {approvalMode === 'auto_apply'
+                              ? approvalExpiresAt
+                                ? `Turbo until ${new Date(approvalExpiresAt).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                    },
+                                  )}`
+                                : 'Turbo active'
+                              : 'Review each change'}
                           </span>
-                        </label>
-                        <label className={approvalMode === 'auto_apply' ? 'is-active' : ''}>
-                          <input
-                            type="radio"
-                            name={`${providerName}-approval`}
-                            value="auto_apply"
-                            checked={approvalMode === 'auto_apply'}
-                            disabled={approvalControlLocked}
-                            onChange={() => {
-                              if (!approvalControlLocked) onApprovalModeChange('auto_apply');
-                            }}
-                          />
-                          {approvalBusy ? (
-                            <LoaderCircle className="ns-spin" size={15} />
-                          ) : (
-                            <Sparkles size={15} />
-                          )}
-                          <span>
-                            <strong>Apply validated edits automatically</strong>
-                            <small>
-                              {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours · up
-                              to {NODESLIDE_DELEGATION_MAX_USES} proposals ·{' '}
-                              {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations each.
-                              Stale, invalid, remove, hide, and publish actions stop for review.
-                            </small>
-                          </span>
-                        </label>
+                        </div>
+                        <details className="ns-ai-turbo-limits">
+                          <summary>Limits and exclusions</summary>
+                          <small>
+                            Authority expires after{' '}
+                            {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
+                            {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
+                            {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
+                            proposal. Publish, share, export, delete, and sync are excluded and
+                            always require direct confirmation.
+                          </small>
+                        </details>
                         {approvalBusy ? (
                           <output className="ns-ai-approval-status">
-                            Updating change handling…
+                            Updating session authority…
                           </output>
                         ) : null}
-                        {approvalMode === 'auto_apply' && approvalExpiresAt ? (
-                          <output className="ns-ai-approval-status">
-                            Active until{' '}
-                            {new Date(approvalExpiresAt).toLocaleTimeString([], {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </output>
-                        ) : null}
-                      </fieldset>
+                      </section>
                     ) : null}
                     {commentContext ? (
                       <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
@@ -1545,6 +1646,30 @@ export function AiInspector<CommandId extends string = string>({
                           <option value="inspiration">Use as inspiration</option>
                           <option value="style_direction">Follow style direction</option>
                         </select>
+                      </label>
+                      <label>
+                        <span>Run spend ceiling</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={runSpendLimit}
+                          disabled={approvalControlLocked || providerMode === 'deterministic'}
+                          placeholder={
+                            providerMode === 'deterministic' ? '$0 private' : 'Default $1'
+                          }
+                          aria-label="Run spend ceiling in USD"
+                          aria-describedby={`${composerId}-spend-help`}
+                          onChange={(event) => setRunSpendLimit(event.target.value)}
+                          data-testid="ai-run-spend-limit"
+                        />
+                        <small id={`${composerId}-spend-help`}>
+                          {webResearch
+                            ? 'Clear this before using Web; search pricing is not pinned yet.'
+                            : 'Optional hard USD cap. The run stops before exceeding it.'}
+                        </small>
                       </label>
                     </div>
                   </div>
@@ -1779,6 +1904,21 @@ export function AiInspector<CommandId extends string = string>({
                             <Command size={14} />
                             <span className="ns-ai-tool-label">Command</span>
                           </PromptInputButton>
+                          {onProposeVisualMaterial ? (
+                            <PromptInputButton
+                              aria-label="Open visual material tool"
+                              className="ns-ai-tool-button"
+                              aria-pressed={materialWorkbenchOpen}
+                              data-testid="ai-open-material-workbench"
+                              disabled={approvalControlLocked}
+                              onClick={() => setMaterialWorkbenchOpen((open) => !open)}
+                              title="Open the visual material tool"
+                              variant={materialWorkbenchOpen ? 'default' : 'ghost'}
+                            >
+                              <Layers3 size={14} />
+                              <span className="ns-ai-tool-label">Visual</span>
+                            </PromptInputButton>
+                          ) : null}
                         </div>
                       </details>
                     </>
@@ -2284,6 +2424,19 @@ function providerNameForMode(mode: AiProviderMode): string {
   return 'Private';
 }
 
+export function parseOptionalRunSpendLimit(value: string): number | undefined {
+  const clean = value.trim();
+  if (!clean) return undefined;
+  if (!/^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/u.test(clean)) {
+    throw new Error('Run spend ceiling must be a USD amount from $0 through $100.');
+  }
+  const amount = Number(clean);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 100) {
+    throw new Error('Run spend ceiling must be a USD amount from $0 through $100.');
+  }
+  return amount;
+}
+
 export function agentPhaseLabel(activity: AiAgentActivity): string {
   if (activity.status === 'delayed') return 'Still working';
   if (activity.status === 'timed_out') return 'Timed out';
@@ -2361,6 +2514,7 @@ function createScope(
     return { kind: 'slide', deckId, slideIds: exactSlideIds, operationMode };
   }
   if (choice === 'elements') {
+    if (selectedElements.length === 0) return null;
     return {
       kind: 'elements',
       deckId,

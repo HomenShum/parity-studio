@@ -1,5 +1,5 @@
 import { getConvexSize } from 'convex/values';
-import type { Doc } from '../_generated/dataModel';
+import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx } from '../_generated/server';
 
 export const NODESLIDE_DECK_ERASURE_TABLES = [
@@ -14,6 +14,11 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_comments',
   'nodeslide_versions',
   'nodeslide_sources',
+  'nodeslide_claim_evidence_receipts',
+  'nodeslide_source_revisions',
+  'nodeslide_uploads',
+  'nodeslide_evidence_steps',
+  'nodeslide_evidence_captures',
   'nodeslide_sync_connections',
   'nodeslide_oauth_sessions',
   'nodeslide_oauth_credentials',
@@ -40,7 +45,7 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
 export const NODESLIDE_DECK_ERASURE_MAX_RECORDS = 4_000;
 export const NODESLIDE_DECK_ERASURE_MAX_BYTES = 4 * 1024 * 1024;
 
-type DeleteDeckCtx = Pick<MutationCtx, 'db'>;
+type DeleteDeckCtx = Pick<MutationCtx, 'db' | 'storage'>;
 type ErasureTable = (typeof NODESLIDE_DECK_ERASURE_TABLES)[number];
 type ErasureRow = Doc<ErasureTable>;
 
@@ -88,6 +93,7 @@ export async function deleteNodeSlideDeckRows(
   }
 
   const childGroups: ErasureRow[][] = [];
+  const attachmentStorageIds = new Set<Id<'_storage'>>();
   let deletionRecords = 2;
   let deletionBytes = getConvexSize(deck) + getConvexSize(project);
 
@@ -165,6 +171,41 @@ export async function deleteNodeSlideDeckRows(
     await ctx.db
       .query('nodeslide_sources')
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_claim_evidence_receipts')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_source_revisions')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  const uploads = await ctx.db
+    .query('nodeslide_uploads')
+    .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
+    .take(nextLimit());
+  for (const upload of uploads) {
+    if (upload.storageId) attachmentStorageIds.add(upload.storageId);
+  }
+  addGroup(uploads);
+  const evidenceSteps = await ctx.db
+    .query('nodeslide_evidence_steps')
+    .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+    .take(nextLimit());
+  for (const step of evidenceSteps) {
+    if (step.screenshotStorageId) attachmentStorageIds.add(step.screenshotStorageId);
+    if (step.pdfStorageId) attachmentStorageIds.add(step.pdfStorageId);
+  }
+  addGroup(evidenceSteps);
+  addGroup(
+    await ctx.db
+      .query('nodeslide_evidence_captures')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
   );
   addGroup(
@@ -276,6 +317,7 @@ export async function deleteNodeSlideDeckRows(
       .take(nextLimit()),
   );
 
+  for (const storageId of attachmentStorageIds) await ctx.storage.delete(storageId);
   for (const rows of childGroups) {
     for (const row of rows) await ctx.db.delete(row._id);
   }

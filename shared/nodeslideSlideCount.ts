@@ -49,11 +49,15 @@ const SLIDE_COUNT_BY_TOKEN: Record<string, number> = {
 const REQUESTED_SLIDE_COUNT_PATTERN =
   /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s*[-–—]\s*|\s+)slides?\b/iu;
 
+const DESCRIBED_SLIDE_COUNT_PATTERN =
+  /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:[a-z][a-z-]{1,24}(?:,\s*|\s+)){1,4}slides?\b/iu;
+
 export function explicitNodeSlideRequestedSlideCount(
   ...values: readonly (string | null | undefined)[]
 ): number | null {
   const text = values.filter((value): value is string => typeof value === 'string').join(' ');
-  const match = text.match(REQUESTED_SLIDE_COUNT_PATTERN);
+  const match =
+    text.match(REQUESTED_SLIDE_COUNT_PATTERN) ?? text.match(DESCRIBED_SLIDE_COUNT_PATTERN);
   if (!match?.[1]) return null;
   const token = match[1].toLocaleLowerCase();
   const mapped = SLIDE_COUNT_BY_TOKEN[token];

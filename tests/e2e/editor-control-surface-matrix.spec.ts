@@ -48,16 +48,14 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('project-actions-trigger')).toBeFocused();
 
-    await openProjectMenu(page);
-    await page.getByRole('menuitem', { name: /Open deck/ }).click();
+    await clickProjectMenuItem(page, /Open deck/);
     const projectDialog = page.getByTestId('new-deck-modal');
     await expect(projectDialog).toBeVisible();
     await expect(projectDialog.getByRole('heading', { name: 'Open a deck' })).toBeVisible();
     await page.getByRole('button', { name: 'Close project dialog' }).click();
     await expect(projectDialog).toHaveCount(0);
 
-    await openProjectMenu(page);
-    await page.getByRole('menuitem', { name: /Connections/ }).click();
+    await clickProjectMenuItem(page, /Connections/);
     const connections = page.getByRole('dialog', { name: /Connect your own runtime/ });
     await expect(connections).toBeVisible();
     await connections.getByRole('tab', { name: 'Codex' }).click();
@@ -70,8 +68,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await connections.getByRole('button', { name: 'Close' }).click();
     await expect(connections).toHaveCount(0);
 
-    await openProjectMenu(page);
-    await page.getByRole('menuitem', { name: /Delete deck/ }).click();
+    await clickProjectMenuItem(page, /Delete deck/);
     const deleteDialog = page.getByTestId('delete-deck-dialog');
     await expect(deleteDialog).toBeVisible();
     await expect(deleteDialog.getByTestId('delete-deck-confirm')).toBeDisabled();
@@ -155,8 +152,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await artifacts.screenshot('shell-controls-light');
     await expectDocumentHasNoHorizontalOverflow(page);
 
-    await openProjectMenu(page);
-    await page.getByRole('menuitem', { name: /New deck/ }).click();
+    await clickProjectMenuItem(page, /New deck/);
     await expect(page.getByTestId('nodeslide-landing')).toBeVisible();
     expectRuntimeClean(runtime);
   });
@@ -362,6 +358,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await modelDialog.getByText('Deterministic', { exact: true }).click();
     await page.getByTestId('ai-model-select').click();
     await modelDialog.getByLabel('Recommended').locator('[role="option"]').first().click();
+    await page.getByRole('button', { name: 'Expand composer' }).click();
     await expect(page.getByTestId('ai-effort-select')).toBeVisible();
     const effort = page.getByTestId('ai-effort-select');
     const effortOptions = await effort
@@ -377,8 +374,9 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await expect(page.getByLabel('Attached data files')).toContainText('matrix.csv');
     await page.getByRole('button', { name: 'Remove matrix.csv' }).click();
 
-    await page.getByTestId('ai-tools-toggle').click();
-    await page.getByTestId('ai-connect-agent').click();
+    const connectAgent = page.getByTestId('ai-connect-agent');
+    if (!(await connectAgent.isVisible())) await page.getByTestId('ai-tools-toggle').click();
+    await connectAgent.click();
     const connections = page.getByRole('dialog', { name: /Connect your own runtime/ });
     await expect(connections).toBeVisible();
     await connections.getByRole('button', { name: 'Close' }).click();
@@ -398,10 +396,9 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
       page.getByRole('button', { name: 'Add read context reference' }),
     );
     await chooseFirstMenuItem(page, page.getByRole('button', { name: 'Add command' }));
-    const expand = page.getByRole('button', { name: 'Expand composer' });
-    await expand.click();
     await expect(page.getByRole('button', { name: 'Collapse composer' })).toBeVisible();
     await page.getByRole('button', { name: 'Collapse composer' }).click();
+    await page.getByRole('button', { name: 'Expand composer' }).click();
     const providerSummary = page.getByTestId('ai-provider-summary');
     await providerSummary.click();
     await expect(page.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
@@ -658,6 +655,16 @@ async function openProjectMenu(page: Page): Promise<void> {
   const trigger = page.getByTestId('project-actions-trigger');
   if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
   await expect(page.getByRole('menu', { name: 'Project actions' })).toBeVisible();
+}
+
+async function clickProjectMenuItem(page: Page, name: RegExp): Promise<void> {
+  await openProjectMenu(page);
+  const item = page.getByRole('menuitem', { name });
+  await expect(item).toBeVisible();
+  // A same-URL capability refresh may remount the menu while Playwright is
+  // waiting for click stability. Dispatch the already-visible control so the
+  // actual handler remains covered without losing the click to that remount.
+  await item.evaluate((button: HTMLButtonElement) => button.click());
 }
 
 async function openMoreInspectorView(page: Page, name: 'Versions' | 'JSON'): Promise<void> {

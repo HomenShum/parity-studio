@@ -692,6 +692,85 @@ export interface NodeSlideAgentTelemetryPage {
   totalRecorded: number;
 }
 
+export type NodeSlideEvidenceCaptureStatus = 'ready' | 'failed' | 'expired';
+export type NodeSlideEvidenceStepStatus = 'ok' | 'warning' | 'error';
+export type NodeSlideEvidenceAttachmentKind = 'screenshot' | 'pdf';
+export type NodeSlideEvidenceRegionScope = 'source' | 'claim';
+
+/** Normalized evidence region. Coordinates are 0..1 in the rendered screenshot or PDF page. */
+export interface NodeSlideEvidenceBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  page?: number;
+}
+
+export interface NodeSlideEvidenceViewport {
+  width: number;
+  height: number;
+}
+
+/** Lightweight capture row. It never contains storage IDs or signed attachment URLs. */
+export interface NodeSlideEvidenceCaptureSummary {
+  id: string;
+  deckId: string;
+  runId: string;
+  traceId: string;
+  spanId: string;
+  parentSpanId: string;
+  sourceId: string;
+  sourceTitle: string;
+  url: string;
+  goal: string;
+  provider: string;
+  status: NodeSlideEvidenceCaptureStatus;
+  error?: string;
+  contentDigest?: string;
+  stepCount: number;
+  screenshotCount: number;
+  pdfCount: number;
+  createdAt: number;
+  completedAt?: number;
+  expiresAt?: number;
+}
+
+export interface NodeSlideEvidenceStepSummary {
+  id: string;
+  captureId: string;
+  spanId: string;
+  sequence: number;
+  phase: string;
+  label: string;
+  status: NodeSlideEvidenceStepStatus;
+  detail?: string;
+  attachmentKind?: NodeSlideEvidenceAttachmentKind;
+  box?: NodeSlideEvidenceBox;
+  /** Missing on legacy rows and therefore treated as source-level, never claim-level. */
+  regionScope?: NodeSlideEvidenceRegionScope;
+  selector?: string;
+  quote?: string;
+  viewport?: NodeSlideEvidenceViewport;
+  contentDigest?: string;
+  createdAt: number;
+}
+
+export interface NodeSlideEvidenceAttachment {
+  kind: NodeSlideEvidenceAttachmentKind;
+  url: string;
+  box?: NodeSlideEvidenceBox;
+  page?: number;
+}
+
+export interface NodeSlideEvidenceStepDetail extends NodeSlideEvidenceStepSummary {
+  attachment?: NodeSlideEvidenceAttachment;
+}
+
+/** Owner-only detail resolved on demand for the single selected capture. */
+export interface NodeSlideEvidenceCaptureDetail extends NodeSlideEvidenceCaptureSummary {
+  steps: NodeSlideEvidenceStepDetail[];
+}
+
 export type NodeSlideAgentToolState =
   | 'input-streaming'
   | 'input-available'
@@ -716,6 +795,21 @@ export interface NodeSlideAgentResolvedSource {
   url: string;
 }
 
+/**
+ * Durable presentation-workflow identity. Planner/executor/validator are retained so
+ * conversations written before the six-role workflow remain readable and valid.
+ */
+export type NodeSlideAgentRole =
+  | 'researcher'
+  | 'analyst'
+  | 'storyteller'
+  | 'designer'
+  | 'fact_checker'
+  | 'reviewer'
+  | 'planner'
+  | 'executor'
+  | 'validator';
+
 export interface NodeSlideAgentMessage {
   id: string;
   deckId: string;
@@ -729,6 +823,14 @@ export interface NodeSlideAgentMessage {
   parentMessageId?: string;
   /** Query-projected read-only child conversation for a delegated tool call. */
   messages?: NodeSlideAgentMessage[];
+  /** Persisted orchestration identity. Omitted for the default single-agent path. */
+  agentRole?: NodeSlideAgentRole;
+  /** Stable identity for a real orchestrator branch. */
+  branchId?: string;
+  /** Human-readable purpose for that branch. */
+  branchLabel?: string;
+  /** Shared identity for branches dispatched in the same parallel wave. */
+  parallelGroupId?: string;
   sourceIds?: string[];
   toolActivity?: NodeSlideAgentToolActivity;
   resolvedSources?: NodeSlideAgentResolvedSource[];
@@ -969,6 +1071,8 @@ export interface AgentEditRequest {
   providerConsent?:
     | typeof NODESLIDE_OPENROUTER_EDIT_CONSENT
     | typeof NODESLIDE_NEBIUS_REVIEW_CONSENT;
+  /** Optional hard per-run ceiling. The server binds and enforces it in the durable budget. */
+  maxCostUsd?: number;
   /** Stable client-generated key prevents double-submit from creating two proposals. */
   idempotencyKey?: string;
   /** Web retrieval is independent from model egress and requires its own exact consent. */

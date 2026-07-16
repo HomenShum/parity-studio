@@ -12,6 +12,7 @@ import {
   agentSessionStorageKey,
   archiveAgentSessionJob,
   attachAgentSessionJob,
+  classifyAgentSessionJobFreshness,
   failAgentSessionJob,
   failPreparedAgentSessionJob,
   prepareAgentSessionJob,
@@ -24,6 +25,7 @@ import {
 import type {
   AgentSessionControlPatch,
   AgentSessionDelegationGrant,
+  AgentSessionJobFreshness,
   AgentSessionJobHandle,
   AgentSessionJobKind,
   AgentSessionJobReceipt,
@@ -49,6 +51,7 @@ export interface AgentSessionContextValue {
   resetTransientConsent: () => void;
   installApprovalGrant: (grant: AgentSessionDelegationGrant) => void;
   clearApprovalGrant: () => void;
+  getJobFreshness: (at?: number) => AgentSessionJobFreshness;
 }
 
 interface AgentSessionProviderProps {
@@ -186,6 +189,10 @@ export function AgentSessionProvider({
   const clearApprovalGrant = useCallback(() => {
     commit(updateAgentSessionControls(stateRef.current, { approval: { mode: 'review' } }, now()));
   }, [commit, now]);
+  const getJobFreshness = useCallback(
+    (at = now()) => classifyAgentSessionJobFreshness(stateRef.current.activeJob, at),
+    [now],
+  );
 
   const value = useMemo<AgentSessionContextValue>(
     () => ({
@@ -201,6 +208,7 @@ export function AgentSessionProvider({
       resetTransientConsent,
       installApprovalGrant,
       clearApprovalGrant,
+      getJobFreshness,
     }),
     [
       archiveJob,
@@ -212,6 +220,7 @@ export function AgentSessionProvider({
       reconcileJob,
       resetTransientConsent,
       installApprovalGrant,
+      getJobFreshness,
       setSurface,
       state,
       updateControls,
@@ -245,7 +254,11 @@ export function createAgentSessionSecret(): string {
 function browserStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage;
+    // Agent capabilities (owner keys and Turbo delegation tokens) are intentionally
+    // scoped to the current browser session. Keeping them out of localStorage makes
+    // "allow this session" literal: reloads recover durable jobs, while closing the
+    // tab/session drops the bearer capabilities instead of leaving them on disk.
+    return window.sessionStorage;
   } catch {
     return null;
   }

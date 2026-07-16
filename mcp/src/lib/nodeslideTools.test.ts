@@ -440,6 +440,7 @@ describe('NodeSlide MCP governance', () => {
       expect.arrayContaining([
         'nodeslide.get_snapshot',
         'nodeslide.list_elements',
+        'nodeslide.evaluate_quality',
         'nodeslide.export_spec',
         'nodeslide.propose_patch',
       ]),
@@ -572,5 +573,35 @@ describe('NodeSlide MCP governance', () => {
     });
     expect(calls.some((call) => call.kind === 'mutation')).toBe(false);
     expect(JSON.stringify(response)).not.toContain('owner-key');
+  });
+
+  it('exposes a read-only fail-closed presentation-quality preflight', async () => {
+    const calls: Array<{ kind: string; path: string; args: Record<string, unknown> }> = [];
+    const { handlers } = registerToolHarness(async (kind, path, args) => {
+      calls.push({ kind, path, args });
+      if (path === 'nodeslideAuthoringQuality:evaluateLatest') {
+        return {
+          releaseReady: false,
+          receipt: { status: 'fail', blockerCount: 1, issues: [{ code: 'journey_proof_missing' }] },
+        };
+      }
+      throw new Error(`Unexpected path ${path}`);
+    });
+
+    const result = await handlers.get('nodeslide.evaluate_quality')?.({
+      deckId: 'deck_1',
+      ownerAccessKey: 'owner-key',
+    });
+    expect(JSON.parse(result?.content[0]?.text ?? '{}')).toMatchObject({
+      releaseReady: false,
+      receipt: { status: 'fail', blockerCount: 1 },
+    });
+    expect(calls).toEqual([
+      {
+        kind: 'query',
+        path: 'nodeslideAuthoringQuality:evaluateLatest',
+        args: { deckId: 'deck_1', ownerAccessKey: 'owner-key' },
+      },
+    ]);
   });
 });

@@ -1,0 +1,57 @@
+{
+  "deckId": "deck_job_a4bfcd910cfd3eac63e3fd8df6f2596f",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "acceptedVersion": 2,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784231834957
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784231839460,
+      "deckVersion": 1
+    },
+    {
+      "kind": "proposal_ready",
+      "occurredAt": 1784231844146,
+      "deckVersion": 1
+    },
+    {
+      "kind": "compare_opened",
+      "occurredAt": 1784231844222,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784231844267,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:0c8a7e55cce7183e7a023b72cc790a8d432258cf467e5514d84140bce9c250ca"
+    },
+    {
+      "kind": "proposal_accepted",
+      "occurredAt": 1784231845671,
+      "receiptDigest": "sha256:b8579584e6bc99e4653657c0d05da193af08df832b9693aa49f2e42a7255392c"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784231846115,
+      "deckVersion": 2
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784231846749,
+      "deckVersion": 2,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\final-editor.png",
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-authoring-journey-2026-07-16\\run-manifest.json"
+  }
+}

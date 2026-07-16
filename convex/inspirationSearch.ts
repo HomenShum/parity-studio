@@ -36,6 +36,8 @@ interface LinkupResponseSource {
 }
 
 const MAX_SEARCH_RESPONSE_BYTES = 200_000;
+const LINKUP_SEARCH_TIMEOUT_MS = 15_000;
+const LINKUP_SEARCH_ATTEMPTS = 2;
 
 function env(name: string): string {
   return process.env[name]?.trim() ?? '';
@@ -126,36 +128,38 @@ async function readBoundedJson<T>(response: Response): Promise<T | null> {
 async function searchLinkup(query: string): Promise<RawSearchSource[]> {
   const key = env('LINKUP_API_KEY');
   if (!key) return [];
-  const result = await withTimeout(9000, async (signal) => {
-    const response = await fetch('https://api.linkup.so/v1/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        q: query,
-        depth: 'standard',
-        outputType: 'sourcedAnswer',
-        includeInlineCitations: true,
-        includeSources: true,
-        maxResults: 8,
-      }),
-      signal,
-    });
-    if (!response.ok) return [];
-    const data = await readBoundedJson<{
-      answer?: string;
-      results?: LinkupResponseSource[];
-      sources?: LinkupResponseSource[];
-    }>(response);
-    if (!data) return [];
-    return (data.results ?? data.sources ?? []).map((item) => ({
-      title: item.name ?? item.title ?? item.url ?? 'Live web result',
-      url: item.url ?? '',
-      snippet: item.content ?? item.snippet ?? data.answer?.slice(0, 1000) ?? '',
-      provider: 'linkup',
-      mediaType: 'website' as const,
-    }));
-  });
-  return result ?? [];
+  for (let attempt = 0; attempt < LINKUP_SEARCH_ATTEMPTS; attempt += 1) {
+    const result = await withTimeout<RawSearchSource[] | null>(
+      LINKUP_SEARCH_TIMEOUT_MS,
+      async (signal) => {
+        const response = await fetch('https://api.linkup.so/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            q: query,
+            depth: 'standard',
+            // NodeSlide reasons over and cites the sources itself. Asking Linkup for another
+            // synthesized answer adds latency and a second generation step without adding lineage.
+            outputType: 'searchResults',
+            maxResults: 8,
+          }),
+          signal,
+        });
+        if (!response.ok) return response.status === 429 || response.status >= 500 ? null : [];
+        const data = await readBoundedJson<{ results?: LinkupResponseSource[] }>(response);
+        if (!data) return null;
+        return (data.results ?? []).map((item) => ({
+          title: item.name ?? item.title ?? item.url ?? 'Live web result',
+          url: item.url ?? '',
+          snippet: item.content ?? item.snippet ?? '',
+          provider: 'linkup',
+          mediaType: 'website' as const,
+        }));
+      },
+    );
+    if (result !== null) return result;
+  }
+  return [];
 }
 
 async function searchBraveWeb(query: string): Promise<RawSearchSource[]> {

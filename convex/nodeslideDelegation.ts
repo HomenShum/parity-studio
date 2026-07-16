@@ -12,6 +12,8 @@ import {
   type NodeSlideDelegationGrant,
   type NodeSlideDelegationIssueReceipt,
   type NodeSlideDelegationPolicy,
+  evaluateNodeSlideDelegationAutoCommit,
+  nodeSlideDelegationCandidateViolations,
   nodeSlideDelegationGrantStatus,
   nodeSlideDelegationPolicyDigestInput,
   nodeSlideDelegationProposalViolations,
@@ -20,9 +22,23 @@ import type { Doc } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { requireOwnerAccess } from './lib/nodeslideAccess';
-import { validationFromCandidateReceipt } from './lib/nodeslideCandidate';
-import { findDeckRow, findPatchRow, patchFromRow } from './lib/nodeslideData';
+import {
+  materializeNodeSlideCandidate,
+  validationFromCandidateReceipt,
+} from './lib/nodeslideCandidate';
+import {
+  findDeckRow,
+  findPatchRow,
+  loadNodeSlideSnapshot,
+  patchFromRow,
+} from './lib/nodeslideData';
+import {
+  type NodeSlideDeckCiResult,
+  evaluateNodeSlideDeckCi,
+  nodeSlideDeckCiAllowsAutoCommit,
+} from './lib/nodeslideDeckCi';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
+import { evaluateNodeSlideCas } from './lib/nodeslidePatches';
 import { commitDelegatedNodeSlideProposal } from './nodeslide';
 
 const NODESLIDE_DELEGATION_TOKEN_BYTES = 32;
@@ -139,6 +155,10 @@ export const acceptValidatedProposalWithGrant = mutation({
       throw new Error('Delegated proposal is unavailable.');
     }
     assertProposalBinding(grant, proposal, args.expectedCandidateDigest);
+    const candidateValidation = proposal.candidateValidation;
+    if (!candidateValidation) {
+      throw new Error('Validated proposal candidate receipt is unavailable.');
+    }
     if (proposal.createdAt < grant.createdAt) {
       throw new Error('Delegated acceptance rejects proposals created before the grant.');
     }
@@ -164,6 +184,59 @@ export const acceptValidatedProposalWithGrant = mutation({
 
     const deckRow = await findDeckRow(ctx, args.deckId);
     if (!deckRow) throw new Error('Delegated proposal deck is unavailable.');
+    const snapshot = await loadNodeSlideSnapshot(ctx, args.deckId);
+    if (!snapshot) throw new Error('Delegated proposal deck is unavailable.');
+    const cas = evaluateNodeSlideCas(snapshot, proposal);
+    if (!cas.canCommit) {
+      const stale = await commitDelegatedNodeSlideProposal(ctx, proposal, {
+        deckRow,
+        grantId: grant.id,
+        clientKind: grant.clientKind,
+        policyDigest: grant.policyDigest,
+      });
+      return {
+        ...stale,
+        workspace: null,
+        rebased: false,
+        delegation: delegationUseReceipt(grant, false),
+      };
+    }
+    const candidate = materializeNodeSlideCandidate(snapshot, proposal, now);
+    const candidateViolations = nodeSlideDelegationCandidateViolations({
+      baseline: snapshot,
+      candidate,
+      operations: proposal.operations,
+    });
+    if (candidateViolations.length > 0) throw new Error(candidateViolations.join(' '));
+    const deckCi = evaluateNodeSlideDeckCi(candidate, {
+      referenceTime: now,
+      validation: validationFromCandidateReceipt(candidateValidation),
+    });
+    const autoCommitDecision = evaluateNodeSlideDelegationAutoCommit({
+      grant,
+      proposal,
+      evaluatedAt: now,
+      candidateValidationPassed: candidateValidation.ok,
+      deckCiPassed: nodeSlideDeckCiAllowsAutoCommit(deckCi),
+    });
+    if (autoCommitDecision.outcome !== 'commit') {
+      await persistAutoCommitReviewReceipt(ctx, proposal, deckCi, now);
+      return {
+        patch: patchFromRow({ ...proposal, status: 'ready', updatedAt: now }),
+        workspace: null,
+        validation: validationFromCandidateReceipt(candidateValidation),
+        rebased: false,
+        staleReasons: [deckCiReviewMessage(deckCi)],
+        delegation: delegationUseReceipt(grant, false),
+        autoCommit: {
+          outcome: autoCommitDecision.outcome,
+          reason: autoCommitDecision.reason,
+          deckCiStatus: deckCi.status,
+          deckCiDigest: deckCi.digest,
+          deckCiBlockerCount: deckCi.blockerCount,
+        },
+      };
+    }
     const committed = await commitDelegatedNodeSlideProposal(ctx, proposal, {
       deckRow,
       grantId: grant.id,
@@ -358,6 +431,57 @@ async function replayReceipt(
     rebased: use.rebased,
     delegation: delegationUseReceipt(grant, true),
   };
+}
+
+async function persistAutoCommitReviewReceipt(
+  ctx: MutationCtx,
+  proposal: Doc<'nodeslide_patches'>,
+  deckCi: NodeSlideDeckCiResult,
+  now: number,
+): Promise<void> {
+  const message = deckCiReviewMessage(deckCi);
+  await ctx.db.patch(proposal._id, { status: 'ready', updatedAt: now });
+
+  const run = proposal.jobId
+    ? await ctx.db
+        .query('nodeslide_agent_runs')
+        .withIndex('by_stable_id', (index) => index.eq('id', proposal.jobId as string))
+        .first()
+    : ((
+        await ctx.db
+          .query('nodeslide_agent_runs')
+          .withIndex('by_deck_created', (index) => index.eq('deckId', proposal.deckId))
+          .order('desc')
+          .take(NODESLIDE_DELEGATION_LIST_LIMIT)
+      ).find((candidate) => candidate.patchId === proposal.id) ?? null);
+  if (run && run.status !== 'completed' && run.status !== 'cancelled') {
+    await ctx.db.patch(run._id, {
+      status: 'awaiting_review',
+      checkpoint: `deck-ci:${deckCi.digest}`,
+      error: message,
+      updatedAt: now,
+      completedAt: undefined,
+    });
+  }
+
+  const trace = await ctx.db
+    .query('nodeslide_traces')
+    .withIndex('by_patch', (index) => index.eq('patchId', proposal.id))
+    .first();
+  if (trace && trace.status !== 'completed' && trace.status !== 'cancelled') {
+    await ctx.db.patch(trace._id, {
+      status: 'awaiting_review',
+      summary: message,
+      candidateDigest: proposal.candidateDigest,
+      completedAt: undefined,
+    });
+  }
+}
+
+function deckCiReviewMessage(deckCi: NodeSlideDeckCiResult): string {
+  const blocking = deckCi.checks.find((check) => check.blocker) ?? deckCi.checks[0];
+  const detail = blocking ? ` ${blocking.message}` : '';
+  return `Turbo did not mutate the deck because deterministic Deck CI returned ${deckCi.status}.${detail}`;
 }
 
 function delegationUseReceipt(

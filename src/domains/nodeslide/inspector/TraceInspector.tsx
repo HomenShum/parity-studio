@@ -40,6 +40,8 @@ import {
   type NodeSlideAgentMessage,
   type NodeSlideAgentRun,
   type NodeSlideAgentTelemetryPage,
+  type NodeSlideEvidenceCaptureDetail,
+  type NodeSlideEvidenceCaptureSummary,
   type SourceRecord,
   type ValidationIssue,
   type ValidationResult,
@@ -73,10 +75,12 @@ interface TraceInspectorProps {
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   sources?: readonly SourceRecord[];
+  evidenceCaptures?: readonly NodeSlideEvidenceCaptureSummary[];
   agentTelemetryLoadingMore?: boolean;
   agentTelemetryLoadError?: string;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
+  onLoadEvidenceCapture?: (captureId: string) => Promise<NodeSlideEvidenceCaptureDetail | null>;
 }
 
 const DENSITY_KEY = 'ns-trace-density';
@@ -114,10 +118,12 @@ export function TraceInspector({
   agentTelemetry,
   agentTelemetryRunId,
   sources = [],
+  evidenceCaptures = [],
   agentTelemetryLoadingMore = false,
   agentTelemetryLoadError,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
+  onLoadEvidenceCapture,
 }: TraceInspectorProps) {
   const sorted = useMemo(() => [...traces].sort((a, b) => b.createdAt - a.createdAt), [traces]);
   const latestValidation = useMemo(
@@ -160,11 +166,8 @@ export function TraceInspector({
   }, [expanded]);
 
   const selected = sorted.find((trace) => trace.id === selectedTraceId) ?? sorted[0];
-  const selectedRun = selected
-    ? (agentRuns.find((run) => run.traceId === selected.id) ??
-      (selected.id === sorted[0]?.id ? agentRuns[0] : undefined))
-    : undefined;
-  const telemetryRunId = agentTelemetryRunId ?? agentRuns[0]?.id;
+  const selectedRun = selected ? agentRunForTrace(agentRuns, selected.id) : undefined;
+  const telemetryRunId = agentTelemetryRunId ?? selectedRun?.id;
   const selectedTelemetry = selectedRun?.id === telemetryRunId ? agentTelemetry : undefined;
   const patch = selected?.patchId
     ? patches.find((candidate) => candidate.id === selected.patchId)
@@ -270,10 +273,7 @@ export function TraceInspector({
                 const traceId = event.target.value;
                 setSelectedTraceId(traceId);
                 const nextTrace = sorted.find((trace) => trace.id === traceId);
-                const nextRun = nextTrace
-                  ? (agentRuns.find((run) => run.traceId === nextTrace.id) ??
-                    (nextTrace.id === sorted[0]?.id ? agentRuns[0] : undefined))
-                  : undefined;
+                const nextRun = nextTrace ? agentRunForTrace(agentRuns, nextTrace.id) : undefined;
                 if (nextRun) onSelectAgentRun?.(nextRun.id);
               }}
             >
@@ -328,6 +328,7 @@ export function TraceInspector({
                       telemetry={selectedTelemetry}
                       messages={agentMessages}
                       sources={sources}
+                      evidenceCaptures={evidenceCaptures}
                       loadingMore={agentTelemetryLoadingMore}
                       compact={!expanded}
                       onExpand={openExpanded}
@@ -335,6 +336,7 @@ export function TraceInspector({
                       {...(onLoadMoreAgentTelemetry
                         ? { onLoadMore: onLoadMoreAgentTelemetry }
                         : {})}
+                      {...(onLoadEvidenceCapture ? { onLoadEvidenceCapture } : {})}
                     />
                     <details className="ns-trace-custody-disclosure">
                       <summary>Chain of custody and countersigned receipt</summary>
@@ -375,6 +377,17 @@ export function TraceInspector({
       <RunJournal runs={agentRuns} messages={agentMessages} />
     </section>
   );
+}
+
+/**
+ * Durable telemetry may only decorate the legacy trace that the server explicitly bound to it.
+ * Recency is not identity: a failed run can be newer than the latest proposal trace.
+ */
+export function agentRunForTrace(
+  runs: readonly NodeSlideAgentRun[],
+  traceId: string,
+): NodeSlideAgentRun | undefined {
+  return runs.find((run) => run.traceId === traceId);
 }
 
 function RunJournal({

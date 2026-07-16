@@ -85,7 +85,7 @@ function fixture() {
   const args: ProposeArgs = {
     deckId: snapshot.deck.id,
     ownerAccessKey: OWNER_ACCESS_KEY,
-    instruction: 'Replace "Before" with "CANDIDATE_ONLY".',
+    instruction: 'Rewrite the selected text using "CANDIDATE_ONLY" as the shadow direction.',
     baseDeckVersion: snapshot.deck.version,
     baseSlideVersions: { [slide.id]: slide.version },
     baseElementVersions: { [target.id]: target.version },

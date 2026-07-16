@@ -28,7 +28,7 @@ import {
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
 import type { ChatStatus, FileUIPart } from 'ai';
-import { Check, Paperclip, ShieldCheck, Sparkles } from 'lucide-react';
+import { Check, ChevronsUpDown, Paperclip, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   type FormEvent,
   type KeyboardEventHandler,
@@ -203,6 +203,9 @@ export function NodeSlidePromptComposer({
   const agentSession = useOptionalAgentSession();
   const authoritativeModel = agentSession?.state.controls.model ?? model;
   const authoritativeEffort = agentSession?.state.controls.effort ?? effort;
+  const authoritativeEffortLabel = authoritativeEffort
+    ? nodeSlideNativeEffortLabel(authoritativeEffort)
+    : undefined;
   const attachmentControlDisabled =
     interactionDisabled || Boolean(attachmentDisabled) || status === 'submitted';
   const submissionRevisionRef = useRef(submissionRevision);
@@ -370,13 +373,14 @@ export function NodeSlidePromptComposer({
               <label className="ns-prompt-effort-wrap">
                 <span className="sr-only">{effortLabel}</span>
                 <select
-                  aria-label={effortLabel}
+                  aria-label={`${effortLabel}: ${authoritativeEffortLabel}`}
                   className="ns-prompt-effort"
                   data-testid={effortTestId}
                   disabled={interactionDisabled}
                   onChange={(event) =>
                     chooseEffort(event.currentTarget.value as NodeSlideReasoningEffort)
                   }
+                  title={`${effortLabel}: ${authoritativeEffortLabel}`}
                   value={authoritativeEffort}
                 >
                   {effortOptions.map((option) => (
@@ -428,7 +432,13 @@ function NodeSlideModelSelector({
   testId,
 }: NodeSlideModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const descriptionId = useId();
   const selected = model === 'deterministic' ? null : nodeSlideAgentModel(model);
+  const currentProvider =
+    model === 'deterministic'
+      ? 'Private fallback'
+      : providerName(nodeSlideProviderModeForModel(model));
+  const currentLabel = model === 'deterministic' ? 'Deterministic' : selected?.label;
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
@@ -454,15 +464,34 @@ function NodeSlideModelSelector({
           <ModelSelectorName>
             {model === 'deterministic' ? 'Deterministic' : selected?.label}
           </ModelSelectorName>
+          <ChevronsUpDown aria-hidden="true" className="ns-model-trigger-chevron" />
         </PromptInputButton>
       </ModelSelectorTrigger>
       <ModelSelectorContent
+        aria-describedby={descriptionId}
         className="ns-ai-elements-portal ns-model-selector-content"
+        overlayClassName="ns-model-selector-overlay"
         portalContainer={portalContainer}
         title={label}
       >
-        <ModelSelectorInput placeholder="Search models and providers…" />
-        <ModelSelectorList>
+        <header className="ns-model-selector-header">
+          <span className="ns-model-selector-eyebrow">Model routing</span>
+          <h2>Choose the agent model</h2>
+          <p id={descriptionId}>Applies to this session. Nothing runs until you propose.</p>
+          <div
+            aria-label={`Current route: ${currentLabel} via ${currentProvider}`}
+            className="ns-model-current-route"
+          >
+            <span>Current</span>
+            <strong>{currentLabel}</strong>
+            <small>via {currentProvider}</small>
+          </div>
+        </header>
+        <ModelSelectorInput
+          className="ns-model-selector-search"
+          placeholder="Search models or providers"
+        />
+        <ModelSelectorList className="ns-model-selector-list">
           <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
           <ModelSelectorGroup heading="Recommended">
             <ModelOption
@@ -485,15 +514,27 @@ function NodeSlideModelSelector({
           </ModelSelectorGroup>
           <ModelSelectorGroup heading="Private fallback">
             <ModelSelectorItem
+              aria-current={model === 'deterministic' ? 'true' : undefined}
+              className={`ns-model-option ${model === 'deterministic' ? 'is-current' : ''}`.trim()}
               onSelect={() => choose('deterministic')}
               value="deterministic private fallback no external model"
             >
-              <ShieldCheck aria-hidden="true" className="size-4" />
-              <span className="min-w-0 flex-1">
-                <strong className="block">Deterministic</strong>
-                <small className="block text-muted-foreground">No external model egress</small>
+              <span className="ns-model-option-icon is-private">
+                <ShieldCheck aria-hidden="true" />
               </span>
-              {model === 'deterministic' ? <Check aria-hidden="true" className="size-4" /> : null}
+              <span className="ns-model-option-copy">
+                <span className="ns-model-option-title">
+                  <strong>Deterministic</strong>
+                  <small>Private</small>
+                </span>
+                <span className="ns-model-option-meta">No external model egress</span>
+              </span>
+              {model === 'deterministic' ? (
+                <span className="ns-model-current-badge">
+                  <Check aria-hidden="true" />
+                  Current
+                </span>
+              ) : null}
             </ModelSelectorItem>
           </ModelSelectorGroup>
         </ModelSelectorList>
@@ -515,17 +556,29 @@ function ModelOption({
   const provider = providerName(nodeSlideProviderModeForModel(model));
   return (
     <ModelSelectorItem
+      aria-current={selected ? 'true' : undefined}
+      className={`ns-model-option ${selected ? 'is-current' : ''}`.trim()}
       onSelect={() => onSelect(model)}
       value={`${option.label} ${option.vendor} ${provider} ${model}`}
     >
-      <Sparkles aria-hidden="true" className="size-4" />
-      <span className="min-w-0 flex-1">
-        <strong className="block">{option.label}</strong>
-        <small className="block text-muted-foreground">
-          {option.vendor} · {provider} · {option.bestFor}
-        </small>
+      <span className="ns-model-option-icon">
+        <Sparkles aria-hidden="true" />
       </span>
-      {selected ? <Check aria-hidden="true" className="size-4" /> : null}
+      <span className="ns-model-option-copy">
+        <span className="ns-model-option-title">
+          <strong>{option.label}</strong>
+          <small>{provider}</small>
+        </span>
+        <span className="ns-model-option-meta">
+          {option.vendor} · {option.bestFor}
+        </span>
+      </span>
+      {selected ? (
+        <span className="ns-model-current-badge">
+          <Check aria-hidden="true" />
+          Current
+        </span>
+      ) : null}
     </ModelSelectorItem>
   );
 }

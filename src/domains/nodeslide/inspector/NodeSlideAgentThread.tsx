@@ -8,12 +8,12 @@ import {
 } from '@/components/ai-elements/tool';
 import {
   AssistantRuntimeProvider,
-  MessagePartPrimitive,
   MessagePrimitive,
   type SourceMessagePartProps,
   type TextMessagePartProps,
   type ThreadMessage,
   ThreadPrimitive,
+  type ToolCallMessagePart,
   type ToolCallMessagePartProps,
   useAuiState,
   useExternalStoreRuntime,
@@ -41,6 +41,11 @@ interface BuildThreadOptions {
 interface RunMessageGroup {
   run: NodeSlideAgentRun;
   messages: NodeSlideAgentMessage[];
+  progressionMessages?: NodeSlideAgentMessage[];
+}
+
+function flattenMessages(messages: readonly NodeSlideAgentMessage[]): NodeSlideAgentMessage[] {
+  return messages.flatMap((message) => [message, ...flattenMessages(message.messages ?? [])]);
 }
 
 function projectMessageHierarchy(
@@ -146,6 +151,8 @@ function toolArgs(message: NodeSlideAgentMessage): Record<string, string> {
     __nodeslideToolState: activity.state,
   };
   if (activity.errorText) args['__nodeslideErrorText'] = activity.errorText;
+  if (message.agentRole) args['__nodeslideAgentRole'] = message.agentRole;
+  if (message.branchLabel) args['__nodeslideBranchLabel'] = message.branchLabel;
   if (activity.input === undefined) return args;
   try {
     args['input'] = JSON.stringify(activity.input);
@@ -173,6 +180,10 @@ function messageToThreadMessage(message: NodeSlideAgentMessage): ThreadMessage {
     runId: message.runId,
     sourceIds: message.sourceIds ?? [],
     toolState: message.toolActivity?.state,
+    agentRole: message.agentRole,
+    branchId: message.branchId,
+    branchLabel: message.branchLabel,
+    parallelGroupId: message.parallelGroupId,
   };
   if (message.role === 'user') {
     return {
@@ -245,9 +256,23 @@ function messageToThreadMessage(message: NodeSlideAgentMessage): ThreadMessage {
 function runInvocationMessage(group: RunMessageGroup): ThreadMessage | null {
   const nestedMessages = group.messages.filter((message) => message.role !== 'user');
   if (nestedMessages.length === 0) return null;
+  const flattenedNestedMessages = flattenMessages(nestedMessages);
+  const progressionMessages = flattenMessages(group.progressionMessages ?? group.messages);
   const firstNested = nestedMessages[0];
   const isRunning = ACTIVE_RUN_STATUSES.has(group.run.status);
   const isError = group.run.status === 'failed';
+  const branchCount = new Set(
+    flattenedNestedMessages.flatMap((message) => (message.branchId ? [message.branchId] : [])),
+  ).size;
+  const parallelGroupCount = new Set(
+    flattenedNestedMessages.flatMap((message) =>
+      message.parallelGroupId ? [message.parallelGroupId] : [],
+    ),
+  ).size;
+  const roleProgression = progressionMessages.reduce<string[]>((roles, message) => {
+    if (message.agentRole && roles.at(-1) !== message.agentRole) roles.push(message.agentRole);
+    return roles;
+  }, []);
   const toolResult = isRunning
     ? undefined
     : {
@@ -263,7 +288,13 @@ function runInvocationMessage(group: RunMessageGroup): ThreadMessage | null {
         type: 'tool-call',
         toolCallId: `invoke:${group.run.id}`,
         toolName: 'invoke_nodeslide_agent',
-        args: { instruction: group.run.instruction },
+        args: {
+          instruction: group.run.instruction,
+          __nodeslideStepCount: String(flattenedNestedMessages.length),
+          __nodeslideBranchCount: String(branchCount),
+          __nodeslideParallelGroupCount: String(parallelGroupCount),
+          __nodeslideRoleProgression: roleProgression.join('|'),
+        },
         argsText: JSON.stringify({ instruction: group.run.instruction }),
         ...(toolResult ? { result: toolResult } : {}),
         ...(isError ? { isError: true } : {}),
@@ -318,9 +349,20 @@ export function buildNodeSlideThreadMessages(
     handledRuns.add(run.id);
     const groupMessages = byRun.get(run.id) ?? [];
     const userMessages = groupMessages.filter((candidate) => candidate.role === 'user');
+    const finalAssistant = [...groupMessages]
+      .reverse()
+      .find((candidate) => candidate.role === 'assistant');
+    const invocationMessages = finalAssistant
+      ? groupMessages.filter((candidate) => candidate.id !== finalAssistant.id)
+      : groupMessages;
     output.push(...userMessages.map(messageToThreadMessage));
-    const invocation = runInvocationMessage({ run, messages: groupMessages });
+    const invocation = runInvocationMessage({
+      run,
+      messages: invocationMessages,
+      progressionMessages: groupMessages,
+    });
     if (invocation) output.push(invocation);
+    if (finalAssistant) output.push(messageToThreadMessage(finalAssistant));
   }
 
   const optimisticAsk = options.optimisticAsk?.trim();
@@ -355,6 +397,7 @@ function humanizeToolName(toolName?: string) {
   if (!toolName) return 'Tool';
   const knownLabels: Record<string, string> = {
     candidate_validation: 'Validation',
+    deck_repl: 'Deck inspection',
     invoke_nodeslide_agent: 'NodeSlide agent',
     memory_retrieval: 'Memory retrieval',
     source_snapshot: 'Source capture',
@@ -405,7 +448,26 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
   );
   const encodedErrorText = toolArgs['__nodeslideErrorText'];
   const hasNestedMessages = Boolean(part.messages?.length);
-  const toolOpen = state !== 'output-available' || hasNestedMessages;
+  const nestedMessageCount = Number(toolArgs['__nodeslideStepCount'] ?? part.messages?.length ?? 0);
+  const branchCount = Number(toolArgs['__nodeslideBranchCount'] ?? 0);
+  const parallelGroupCount = Number(toolArgs['__nodeslideParallelGroupCount'] ?? 0);
+  const branchLabel = String(toolArgs['__nodeslideBranchLabel'] ?? '').trim();
+  const agentRole = String(toolArgs['__nodeslideAgentRole'] ?? '').trim();
+  const roleProgression = String(toolArgs['__nodeslideRoleProgression'] ?? '')
+    .split('|')
+    .map((role) => role.trim())
+    .filter(Boolean);
+  const isRunInvocation = part.toolName === 'invoke_nodeslide_agent';
+  const toolOpen = state !== 'output-available';
+  const title = toolActivityTitle({
+    toolName: part.toolName,
+    isRunInvocation,
+    nestedMessageCount,
+    branchCount,
+    parallelGroupCount,
+    branchLabel,
+    agentRole,
+  });
   return (
     <Tool
       className={`ns-ai-v3-tool ${hasNestedMessages ? 'is-agent-handoff' : ''}`}
@@ -413,12 +475,7 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
       data-tool-state={state}
       defaultOpen={toolOpen}
     >
-      <ToolHeader
-        state={state}
-        title={humanizeToolName(part.toolName)}
-        toolName={part.toolName}
-        type="dynamic-tool"
-      />
+      <ToolHeader state={state} title={title} toolName={part.toolName} type="dynamic-tool" />
       <ToolContent>
         {hasNestedMessages ? (
           <section
@@ -427,11 +484,19 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
           >
             <header>
               <span>
-                <Bot size={12} /> Agent handoff
+                <Bot size={12} />
+                {isRunInvocation
+                  ? 'Run details'
+                  : `${agentRoleLabel(agentRole, part.toolName)} handoff`}
               </span>
-              <small>Read-only</small>
+              <small>
+                {isRunInvocation && roleProgression.length
+                  ? `${roleProgression.map((role) => agentRoleLabel(role)).join(' → ')} · `
+                  : ''}
+                {nestedMessageCount} {nestedMessageCount === 1 ? 'step' : 'steps'} · read-only
+              </small>
             </header>
-            <MessagePartPrimitive.Messages components={THREAD_MESSAGE_COMPONENTS} />
+            <NodeSlideNestedMessages messages={part.messages ?? []} />
           </section>
         ) : (
           <>
@@ -457,9 +522,128 @@ function NodeSlideToolCallPart(part: ToolCallMessagePartProps) {
   );
 }
 
+/**
+ * Nested assistant-ui message-part providers use positional lookups that can become stale while a
+ * live tool appends steps or the responsive layout remounts. Render the read-only child journal
+ * from its immutable message payload instead; the top-level thread still uses assistant-ui.
+ */
+function NodeSlideNestedMessages({ messages }: { messages: readonly ThreadMessage[] }) {
+  return (
+    <div className="ns-agent-nested-messages" data-testid="agent-nested-messages">
+      {messages.map((message) => {
+        const custom = (message.metadata as { custom?: Record<string, unknown> }).custom ?? {};
+        const roleLabel =
+          message.role === 'user'
+            ? 'You asked'
+            : message.role === 'system'
+              ? 'System'
+              : agentRoleLabel(String(custom['agentRole'] ?? ''));
+        return (
+          <article
+            className={`ns-agent-nested-message is-${message.role}`}
+            key={message.id}
+            data-message-role={message.role}
+          >
+            <span className="ns-eyebrow">{roleLabel}</span>
+            {message.content.map((part, index) => {
+              if (part.type === 'text')
+                return <p key={`${message.id}:text:${index}`}>{part.text}</p>;
+              if (part.type === 'source' && part.sourceType === 'url') {
+                return (
+                  <a
+                    href={part.url}
+                    key={`${message.id}:source:${part.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {part.title ?? part.url}
+                  </a>
+                );
+              }
+              if (part.type === 'tool-call') {
+                return (
+                  <NodeSlideNestedToolCall
+                    key={`${message.id}:tool:${part.toolCallId}`}
+                    part={part}
+                  />
+                );
+              }
+              return null;
+            })}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function NodeSlideNestedToolCall({ part }: { part: ToolCallMessagePart }) {
+  const rawArgs = (part.args as Record<string, unknown> | undefined) ?? {};
+  const encodedState = rawArgs['__nodeslideToolState'];
+  const state =
+    typeof encodedState === 'string' &&
+    ['input-streaming', 'input-available', 'output-available', 'output-error'].includes(
+      encodedState,
+    )
+      ? (encodedState as NodeSlideAgentToolState)
+      : part.isError
+        ? 'output-error'
+        : part.result !== undefined
+          ? 'output-available'
+          : 'input-available';
+  const displayArgs = Object.fromEntries(
+    Object.entries(rawArgs).filter(([key]) => !key.startsWith('__nodeslide')),
+  );
+  const nestedMessages = part.messages ?? [];
+  return (
+    <Tool
+      className={`ns-ai-v3-tool ${nestedMessages.length ? 'is-agent-handoff' : ''}`}
+      data-testid="agent-tool"
+      data-tool-state={state}
+      defaultOpen={state !== 'output-available'}
+    >
+      <ToolHeader
+        state={state}
+        title={humanizeToolName(part.toolName)}
+        toolName={part.toolName}
+        type="dynamic-tool"
+      />
+      <ToolContent>
+        {nestedMessages.length ? (
+          <NodeSlideNestedMessages messages={nestedMessages} />
+        ) : (
+          <>
+            {Object.keys(displayArgs).length ? <ToolInput input={displayArgs} /> : null}
+            {part.result !== undefined || part.isError || state === 'output-error' ? (
+              <ToolOutput
+                errorText={
+                  part.isError || state === 'output-error'
+                    ? String(
+                        (part.result as { error?: unknown })?.error ??
+                          rawArgs['__nodeslideErrorText'] ??
+                          'Tool failed',
+                      )
+                    : undefined
+                }
+                output={part.isError || state === 'output-error' ? undefined : part.result}
+              />
+            ) : null}
+          </>
+        )}
+      </ToolContent>
+    </Tool>
+  );
+}
+
 function NodeSlideThreadMessage() {
   const role = useAuiState((state) => state.message.role);
   const optimistic = useAuiState((state) => state.message.metadata.custom['optimistic'] === true);
+  const agentRole = useAuiState(
+    (state) => state.message.metadata.custom['agentRole'] as string | undefined,
+  );
+  const branchLabel = useAuiState(
+    (state) => state.message.metadata.custom['branchLabel'] as string | undefined,
+  );
   return (
     <MessagePrimitive.Root
       className={`ns-ai-v3-chat-turn is-${role === 'user' ? 'user' : 'agent'} ns-agent-message`}
@@ -473,7 +657,10 @@ function NodeSlideThreadMessage() {
       ) : null}
       <div className="ns-agent-message-content">
         <span className="ns-eyebrow">
-          {role === 'user' ? 'You asked' : role === 'system' ? 'System' : 'NodeSlide'}
+          {role === 'user' ? 'You asked' : role === 'system' ? 'System' : agentRoleLabel(agentRole)}
+          {role !== 'user' && branchLabel ? (
+            <small className="ns-agent-branch-label">{branchLabel}</small>
+          ) : null}
         </span>
         <MessagePrimitive.Parts
           components={{
@@ -509,4 +696,51 @@ export function NodeSlideThreadRuntimeProvider({
 
 export function NodeSlideThreadMessages() {
   return <ThreadPrimitive.Messages components={THREAD_MESSAGE_COMPONENTS} />;
+}
+
+function agentRoleLabel(role?: string, toolName?: string) {
+  const normalized = role?.trim().toLowerCase();
+  if (normalized) {
+    const humanized = normalized.replaceAll('_', ' ').replaceAll('-', ' ').replace(/\s+/g, ' ');
+    return humanized.replace(/^./, (character) => character.toUpperCase());
+  }
+  const delegatedRole = toolName?.match(/^delegate[_-](.+)$/)?.[1];
+  if (delegatedRole) return humanizeToolName(delegatedRole);
+  return 'NodeSlide';
+}
+
+function toolActivityTitle({
+  toolName,
+  isRunInvocation,
+  nestedMessageCount,
+  branchCount,
+  parallelGroupCount,
+  branchLabel,
+  agentRole,
+}: {
+  toolName: string;
+  isRunInvocation: boolean;
+  nestedMessageCount: number;
+  branchCount: number;
+  parallelGroupCount: number;
+  branchLabel: string;
+  agentRole: string;
+}) {
+  if (isRunInvocation) {
+    const parts = [
+      'Agent activity',
+      `${nestedMessageCount} ${nestedMessageCount === 1 ? 'step' : 'steps'}`,
+    ];
+    if (branchCount > 1) {
+      parts.push(
+        `${branchCount} ${parallelGroupCount > 0 ? 'parallel ' : ''}${
+          branchCount === 1 ? 'branch' : 'branches'
+        }`,
+      );
+    }
+    return parts.join(' · ');
+  }
+  return [agentRole ? agentRoleLabel(agentRole) : humanizeToolName(toolName), branchLabel]
+    .filter(Boolean)
+    .join(' · ');
 }

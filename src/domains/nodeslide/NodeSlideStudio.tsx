@@ -3,6 +3,8 @@ import type { DefaultFunctionArgs, FunctionReference } from 'convex/server';
 import { LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
+import type { NodeSlideDeckCiResult } from '../../../convex/lib/nodeslideDeckCi';
+import type { PreparedNodeSlideUpload } from '../../../convex/nodeslideUploads';
 import type {
   AgentEditRequest,
   CommentAnchor,
@@ -18,6 +20,8 @@ import type {
   NodeSlideAgentTelemetryPage,
   NodeSlideEditorCapabilityRegistry,
   NodeSlideEditorCommandId,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
   NodeSlidePublication,
   NodeSlideWorkspace,
   PatchOperation,
@@ -27,6 +31,7 @@ import type {
   SlideElement,
 } from '../../../shared/nodeslide';
 import { operationElementIds } from '../../../shared/nodeslide';
+import type { NodeSlideStoredAttachmentMetadata } from '../../../shared/nodeslideAttachments';
 import {
   NODESLIDE_BROWSER_DELEGATION_TTL_MS,
   NODESLIDE_DELEGATION_MAX_OPERATIONS,
@@ -76,7 +81,11 @@ import { shouldRevealCandidateCanvas } from './components/editorShellResponsive'
 import { LoadingScreen, RecoveryScreen, Toast } from './components/shell/EditorFeedback';
 import { EditorNavigator } from './components/shell/EditorNavigator';
 import { EditorProjectDialogs } from './components/shell/EditorProjectDialogs';
-import { elementScope } from './components/shell/editorActions';
+import {
+  type EditorMutationFocus,
+  elementScope,
+  runFocusedEditorMutation,
+} from './components/shell/editorActions';
 import { withNodeSlideDelegationDeadline } from './delegationClient';
 import {
   type EditorRequestToken,
@@ -84,6 +93,7 @@ import {
   appendDistinctHistoryVersion,
   applyExpectedElementVersions,
   authoritativePredecessorVersion,
+  candidateSlideIdForPatch,
   classifyEditorVersionAdvance,
   createEditorRequestGate,
   createSerializedEditorWriteQueue,
@@ -187,6 +197,12 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideDeckCi: {
+    evaluateLatest: PublicQuery<
+      { deckId: string; ownerAccessKey: string; changedSourceIds?: string[] },
+      NodeSlideDeckCiResult
+    >;
+  };
   nodeslideDelegation: {
     issueGrant: PublicMutation<
       {
@@ -234,6 +250,50 @@ interface NodeSlideGeneratedApi {
     >;
     retry: PublicMutation<{ jobId: string; ownerAccessKey: string }, AgentSessionJobReceipt | null>;
   };
+  nodeslideUploads: {
+    prepareUpload: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        clientSessionId: string;
+        fileName: string;
+        contentType: string;
+        byteSize: number;
+        contentDigest: string;
+        idempotencyKey: string;
+      },
+      PreparedNodeSlideUpload
+    >;
+    registerUpload: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        clientSessionId: string;
+        uploadId: string;
+        storageId: string;
+        idempotencyKey: string;
+      },
+      NodeSlideStoredAttachmentMetadata
+    >;
+    approveUpload: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        clientSessionId: string;
+        uploadId: string;
+        contentDigest: string;
+      },
+      NodeSlideStoredAttachmentMetadata
+    >;
+    deleteUpload: PublicMutation<
+      { deckId: string; ownerAccessKey: string; clientSessionId: string; uploadId: string },
+      { deleted: true; uploadId: string }
+    >;
+    materializeApprovedTextUpload: PublicAction<
+      { deckId: string; ownerAccessKey: string; clientSessionId: string; uploadId: string },
+      AiReadReference
+    >;
+  };
   nodeslide: {
     getWorkspace: PublicQuery<
       { deckId: string; ownerAccessKey: string },
@@ -276,6 +336,14 @@ interface NodeSlideGeneratedApi {
         limit?: number;
       },
       NodeSlideAgentTelemetryPage
+    >;
+    listEvidenceCaptureSummaries: PublicQuery<
+      { deckId: string; ownerAccessKey: string; runId: string; limit?: number },
+      NodeSlideEvidenceCaptureSummary[]
+    >;
+    getEvidenceCaptureDetail: PublicQuery<
+      { deckId: string; ownerAccessKey: string; captureId: string },
+      NodeSlideEvidenceCaptureDetail | null
     >;
     cancelAgentRun: PublicMutation<
       { deckId: string; ownerAccessKey: string; runId: string },
@@ -716,7 +784,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   }, []);
 
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
-  const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
+  const prepareDataUpload = useMutation(nodeslideApi.nodeslideUploads.prepareUpload);
+  const registerDataUpload = useMutation(nodeslideApi.nodeslideUploads.registerUpload);
+  const approveDataUpload = useMutation(nodeslideApi.nodeslideUploads.approveUpload);
+  const deleteDataUpload = useMutation(nodeslideApi.nodeslideUploads.deleteUpload);
+  const materializeDataUpload = useAction(
+    nodeslideApi.nodeslideUploads.materializeApprovedTextUpload,
+  );
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
   const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
@@ -882,6 +956,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     nodeslideApi.nodeslide.getWorkspace,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
+  const deckCiResult = useQuery(
+    nodeslideApi.nodeslideDeckCi.evaluateLatest,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
   const editorCapabilities = useQuery(
     nodeslideApi.nodeslide.getEditorCapabilities,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
@@ -977,6 +1055,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         }
       : 'skip',
   );
+  const evidenceCaptures = useQuery(
+    nodeslideApi.nodeslide.listEvidenceCaptureSummaries,
+    activeDeckId && ownerAccessKey && selectedTelemetryRunId
+      ? {
+          deckId: activeDeckId,
+          ownerAccessKey,
+          runId: selectedTelemetryRunId,
+          limit: 20,
+        }
+      : 'skip',
+  );
   const agentTelemetry = useMemo(
     () =>
       selectedTelemetryRunId
@@ -1008,6 +1097,17 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       }
     },
     [activeDeckId, convex, ownerAccessKey, telemetryLoadingRunId],
+  );
+  const loadEvidenceCapture = useCallback(
+    async (captureId: string) => {
+      if (!activeDeckId || !ownerAccessKey) return null;
+      return await convex.query(nodeslideApi.nodeslide.getEvidenceCaptureDetail, {
+        deckId: activeDeckId,
+        ownerAccessKey,
+        captureId,
+      });
+    },
+    [activeDeckId, convex, ownerAccessKey],
   );
   const localWorkspaceForDeck = localWorkspace?.deck.id === activeDeckId ? localWorkspace : null;
   const localReceiptMarker =
@@ -2088,6 +2188,33 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     ],
   );
 
+  const applyFocusedOperations = useCallback(
+    (
+      focus: EditorMutationFocus,
+      operations: PatchOperation[],
+      scope: PatchScope,
+      summary: string,
+      expectedElementVersions?: Readonly<Record<string, number>>,
+    ) =>
+      runFocusedEditorMutation({
+        focus,
+        readWorkspace: () => workspaceRef.current,
+        restoreFocus: (resolved) => {
+          setActiveSlideId(resolved.slideId);
+          setSelectedElementIds(resolved.elementIds);
+        },
+        mutate: () =>
+          applyOperations(operations, scope, summary, undefined, expectedElementVersions),
+        onUnexpectedFailure: (error) => {
+          setToast({
+            kind: 'error',
+            message: errorMessage(error, 'The text edit could not be applied.'),
+          });
+        },
+      }),
+    [applyOperations],
+  );
+
   const proposeJsonOperations = useCallback(
     async ({ operations, summary, elementId, baseElementVersion }: JsonPatchProposalRequest) => {
       if (!workspace || !ownerAccessKey || operations.length === 0) return false;
@@ -2148,8 +2275,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             setPreviewedPatchId(receipt.patch.id);
             const firstAffectedSlideId =
               'slideIds' in receipt.patch.scope ? receipt.patch.scope.slideIds[0] : undefined;
-            if (firstAffectedSlideId && candidateDeck.slideOrder.includes(firstAffectedSlideId)) {
-              selectSlide(firstAffectedSlideId, setActiveSlideId, setSelectedElementIds);
+            const candidateSlideId = candidateSlideIdForPatch(
+              receipt.patch,
+              firstAffectedSlideId ?? '',
+            );
+            if (candidateSlideId && candidateDeck.slideOrder.includes(candidateSlideId)) {
+              selectSlide(candidateSlideId, setActiveSlideId, setSelectedElementIds);
             }
             setCanvasMode('compare');
             setActiveInspectorTab('ai');
@@ -3017,27 +3148,102 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
   const attachAiDataFile = async (file: File): Promise<AiReadReference> => {
     if (!ownerAccessKey) throw new Error('Open an owned deck before attaching data.');
-    if (file.size > 24_000) throw new Error('Data attachments must be 24 KB or smaller.');
     const extension = file.name.split('.').pop()?.toLocaleLowerCase() ?? '';
     if (!['csv', 'json', 'txt'].includes(extension)) {
       throw new Error('Attach a CSV, JSON, or TXT data file.');
     }
+    if (file.size <= 0) throw new Error('The attached data file is empty.');
+    const contentType = nodeSlideDataUploadContentType(extension);
     const requestedDeckId = workspace.deck.id;
     const requestedOwnerAccessKey = ownerAccessKey;
     const requestGate = editorRequestGateRef.current;
     const requestToken = requestGate.begin('data-upload', requestedDeckId);
-    const content = await file.text();
-    if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
-    const reference = await attachDataSource({
-      deckId: requestedDeckId,
-      ownerAccessKey: requestedOwnerAccessKey,
-      title: file.name,
-      format: extension as 'csv' | 'json' | 'txt',
-      content,
-    });
-    if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
-    setToast({ kind: 'success', message: `${file.name} is attached as agent read context.` });
-    return reference;
+    const bytes = await file.arrayBuffer();
+    const contentDigest = await nodeSlideBrowserSha256Hex(bytes);
+    const idempotencyDigest = await nodeSlideBrowserSha256Hex(
+      new TextEncoder().encode(`${file.name}\u0000${contentDigest}`).buffer,
+    );
+    const idempotencyKey = `data:${contentDigest}:${idempotencyDigest.slice(0, 16)}`;
+    let uploadId: string | null = null;
+    let reference: AiReadReference | null = null;
+    const ensureCurrent = () => {
+      if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
+    };
+    try {
+      ensureCurrent();
+      const prepared = await prepareDataUpload({
+        deckId: requestedDeckId,
+        ownerAccessKey: requestedOwnerAccessKey,
+        clientSessionId,
+        fileName: file.name,
+        contentType,
+        byteSize: bytes.byteLength,
+        contentDigest,
+        idempotencyKey,
+      });
+      uploadId = prepared.upload.id;
+      ensureCurrent();
+      if (prepared.upload.lifecycleStatus !== 'registered') {
+        if (!prepared.uploadUrl) throw new Error('The upload URL was not created.');
+        const response = await fetch(prepared.uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': contentType },
+          body: new Blob([bytes], { type: contentType }),
+        });
+        if (!response.ok) throw new Error('The data file could not be stored.');
+        const payload = (await response.json()) as { storageId?: unknown };
+        if (typeof payload.storageId !== 'string' || !payload.storageId) {
+          throw new Error('The stored upload receipt is invalid.');
+        }
+        ensureCurrent();
+        await registerDataUpload({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          clientSessionId,
+          uploadId,
+          storageId: payload.storageId,
+          idempotencyKey,
+        });
+      }
+      ensureCurrent();
+      await approveDataUpload({
+        deckId: requestedDeckId,
+        ownerAccessKey: requestedOwnerAccessKey,
+        clientSessionId,
+        uploadId,
+        contentDigest,
+      });
+      ensureCurrent();
+      reference = await materializeDataUpload({
+        deckId: requestedDeckId,
+        ownerAccessKey: requestedOwnerAccessKey,
+        clientSessionId,
+        uploadId,
+      });
+      ensureCurrent();
+      setToast({
+        kind: 'success',
+        message: `${file.name} is stored, verified, and attached as agent read context.`,
+      });
+      return reference;
+    } catch (error) {
+      if (reference) {
+        await deleteDataSource({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          sourceId: reference.id,
+        }).catch(() => undefined);
+      }
+      if (uploadId) {
+        await deleteDataUpload({
+          deckId: requestedDeckId,
+          ownerAccessKey: requestedOwnerAccessKey,
+          clientSessionId,
+          uploadId,
+        }).catch(() => undefined);
+      }
+      throw error;
+    }
   };
 
   const deleteAiDataSource = async (sourceId: string) => {
@@ -4099,13 +4305,19 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
                 )
               }
               onReplaceText={(elementId, text, baseElementVersion) => {
-                const element = workspace.elements.find((candidate) => candidate.id === elementId);
+                const currentWorkspace = workspaceRef.current ?? workspace;
+                const element = currentWorkspace.elements.find(
+                  (candidate) => candidate.id === elementId,
+                );
                 if (!element || element.locked) return;
-                void applyOperations(
+                const focusElementIds = selectedElementIds.includes(elementId)
+                  ? selectedElementIds
+                  : [elementId];
+                void applyFocusedOperations(
+                  { slideId: element.slideId, elementIds: focusElementIds },
                   [{ op: 'replace_text', slideId: element.slideId, elementId, text }],
-                  elementScope(workspace.deck.id, [element]),
+                  elementScope(currentWorkspace.deck.id, [element]),
                   `Updated ${element.name}`,
-                  undefined,
                   { [elementId]: baseElementVersion },
                 );
               }}
@@ -4148,10 +4360,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           aiAgentActivity={aiAgentActivity}
           agentRuns={agentRuns ?? []}
           agentMessages={agentMessages ?? []}
+          evidenceCaptures={evidenceCaptures ?? []}
           memories={agentMemories ?? []}
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           approvalMode={activeApproval.mode}
           approvalBusy={authorityChangeBusy}
+          deckCiResult={deckCiResult ?? null}
+          deckCiLoading={Boolean(activeDeckId && ownerAccessKey) && deckCiResult === undefined}
           {...(activeApproval.mode === 'auto_apply'
             ? { approvalExpiresAt: activeApproval.expiresAt }
             : {})}
@@ -4164,6 +4379,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             setTelemetryLoadError(null);
           }}
           onLoadMoreAgentTelemetry={loadOlderAgentTelemetry}
+          onLoadEvidenceCapture={loadEvidenceCapture}
           {...(agentTelemetry ? { agentTelemetry } : {})}
           aiCommentContext={aiCommentContext}
           previewedPatchId={previewedPatchId}
@@ -4271,13 +4487,15 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           onOpenPreferenceEvidence={() => {
             setActiveInspectorTab('trace');
           }}
-          onApplyDesignPatch={(operations, summary) =>
-            void applyOperations(
+          onApplyDesignPatch={(operations, summary) => {
+            const currentWorkspace = workspaceRef.current ?? workspace;
+            return applyFocusedOperations(
+              { slideId: activeSlide.id, elementIds: selectedElementIds },
               operations,
-              scopeForOperations(workspace, operations, 'unrestricted'),
+              scopeForOperations(currentWorkspace, operations, 'unrestricted'),
               summary,
-            )
-          }
+            );
+          }}
           onProposeJsonPatch={proposeJsonOperations}
           onImportSourceFile={proposeSourceImport}
           onAddComment={(text, anchor) =>
@@ -4843,6 +5061,17 @@ function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlide
   ).$extensions;
   const id = extensions?.['com.nodeslide.tastePack']?.id;
   return id === 'finance-ibcs' || id === 'startup-narrative' ? id : null;
+}
+
+function nodeSlideDataUploadContentType(extension: string): string {
+  if (extension === 'csv') return 'text/csv';
+  if (extension === 'json') return 'application/json';
+  return 'text/plain';
+}
+
+async function nodeSlideBrowserSha256Hex(bytes: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
 function errorMessage(error: unknown, fallback: string) {

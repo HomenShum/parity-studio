@@ -105,6 +105,15 @@ export function editorCandidateCanAccept(
   );
 }
 
+/** Focuses Compare on a newly added slide while preserving the current slide as the baseline. */
+export function candidateSlideIdForPatch(
+  patch: Pick<DeckPatch, 'operations'>,
+  fallbackSlideId: string,
+): string {
+  const addedSlide = patch.operations.find((operation) => operation.op === 'add_slide');
+  return addedSlide?.op === 'add_slide' ? addedSlide.slide.id : fallbackSlideId;
+}
+
 function candidateBindingMatches(binding: EditorCandidateBinding): boolean {
   return Boolean(
     binding.patchId &&

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentTrace,
   NodeSlideAgentEvent,
@@ -10,6 +10,8 @@ import type {
   NodeSlideAgentRun,
   NodeSlideAgentSpan,
   NodeSlideAgentTelemetryPage,
+  NodeSlideEvidenceCaptureDetail,
+  NodeSlideEvidenceCaptureSummary,
   SourceRecord,
 } from '../../../../shared/nodeslide';
 import {
@@ -20,10 +22,48 @@ import {
   buildWaterfallRows,
   collapsibleSpanIds,
   defaultCollapsedSpanIds,
+  isNormalizedEvidenceBox,
   traceTreeKeyboardAction,
 } from './TraceWaterfall';
 import { TRACE_FIXTURE_ROOT_SPAN_ID, createTraceWaterfallFixture } from './TraceWaterfall.fixture';
 import { spanTimingState, toO11ySpans, traceWindowMetrics } from './traceTelemetry';
+
+vi.mock('./PdfEvidencePage', () => ({
+  PdfEvidencePage: ({
+    page,
+    box,
+    label,
+  }: {
+    page: number;
+    box?: { x: number; y: number; w: number; h: number };
+    label: string;
+  }) => (
+    <div className="ns-waterfall-pdf-frame" data-region-precision="normalized-pdf-page">
+      <div
+        className="ns-waterfall-pdf-scroll"
+        data-testid="trace-pdf-scroll-surface"
+        data-pdf-page={page}
+      >
+        <div className="ns-waterfall-pdf-page" aria-label={`${label}, page ${page}`}>
+          {box ? (
+            <span
+              data-testid="trace-pdf-evidence-box"
+              data-region-precision="normalized-pdf-page"
+              style={{
+                left: `${box.x * 100}%`,
+                top: `${box.y * 100}%`,
+                width: `${box.w * 100}%`,
+                height: `${box.h * 100}%`,
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  ),
+}));
+
+afterEach(cleanup);
 
 const startedAt = 1_720_000_000_000;
 const traceId = '0123456789abcdef0123456789abcdef';
@@ -125,6 +165,16 @@ const source: SourceRecord = {
   contentDigest: 'sha256:1234567890abcdef1234567890abcdef',
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('TraceWaterfall deterministic fixture matrix', () => {
   it('survives a live trace growing from 4 to 10 to 100 spans', () => {
     const four = createTraceWaterfallFixture(4);
@@ -202,6 +252,9 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
       );
       const compactRows = compactHtml.match(/data-testid="trace-activity-row"/g)?.length ?? 0;
       expect(compactRows).toBe(count <= 6 ? count : 6);
+      expect(compactHtml).toContain('data-bounded="true"');
+      expect(compactHtml).toContain(`data-rendered-spans="${Math.min(count, 6)}"`);
+      expect(compactHtml).toContain(`data-total-spans="${count}"`);
       expect(compactHtml).toContain('Full timeline');
       expect(compactHtml).toContain('data-observability-primitives="assistant-ui-react-o11y"');
       expect(compactHtml).toContain('openrouter · z-ai/glm-5.2');
@@ -402,6 +455,364 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
     );
     expect(legacyHtml).toContain('Run-level evidence; not span-bound');
     expect(legacyHtml).not.toContain('Bound directly to OTel span');
+  });
+
+  it('loads only the selected visual capture and overlays its exact evidence region', async () => {
+    const summary: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_fifa_home',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_1',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: source.title,
+      url: source.url as string,
+      goal: 'Preserve the cited tournament evidence',
+      provider: 'firecrawl',
+      status: 'ready',
+      contentDigest: 'sha256:capture0123456789abcdef',
+      stepCount: 1,
+      screenshotCount: 1,
+      pdfCount: 0,
+      createdAt: startedAt + 500,
+      completedAt: startedAt + 900,
+    };
+    const attachmentUrl = 'data:image/png;base64,iVBORw0KGgo=';
+    const detail: NodeSlideEvidenceCaptureDetail = {
+      ...summary,
+      steps: [
+        {
+          id: 'capture_step_1',
+          captureId: summary.id,
+          spanId: summary.spanId,
+          sequence: 1,
+          phase: 'observe',
+          label: 'Captured FIFA evidence',
+          status: 'ok',
+          attachmentKind: 'screenshot',
+          box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25 },
+          regionScope: 'source',
+          quote: 'Official tournament source snapshot.',
+          contentDigest: 'sha256:capture0123456789abcdef',
+          createdAt: summary.createdAt,
+          attachment: {
+            kind: 'screenshot',
+            url: attachmentUrl,
+            box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25 },
+          },
+        },
+      ],
+    };
+    const loadEvidence = vi.fn().mockResolvedValue(detail);
+    const claimBoundTrace: AgentTrace = {
+      ...trace,
+      claimSourceBindings: [
+        {
+          operationIndex: 0,
+          operation: 'replace_text',
+          slideId: 'slide_1',
+          elementId: 'headline_1',
+          sourceIds: [source.id],
+          claimDigest: 'sha256:claim0123456789abcdef',
+        },
+      ],
+    };
+
+    render(
+      <TraceWaterfall
+        run={run}
+        trace={claimBoundTrace}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[summary]}
+        onLoadEvidenceCapture={loadEvidence}
+      />,
+    );
+
+    expect(loadEvidence).not.toHaveBeenCalled();
+    expect(screen.getByText('1 claim/output binding')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /FIFA World Cup data/i }));
+
+    await waitFor(() => expect(loadEvidence).toHaveBeenCalledWith(summary.id));
+    expect(screen.getByTestId('trace-evidence-detail')).toBeTruthy();
+    expect(
+      screen.getByAltText('Captured evidence: Captured FIFA evidence').getAttribute('src'),
+    ).toBe(attachmentUrl);
+    const overlay = document.querySelector<HTMLElement>('.ns-waterfall-evidence-box');
+    expect(overlay?.style.left).toBe('10%');
+    expect(overlay?.style.top).toBe('20%');
+    expect(overlay?.style.width).toBe('30%');
+    expect(overlay?.style.height).toBe('25%');
+    expect(overlay?.dataset['regionPrecision']).toBe('normalized-image');
+    expect(screen.getByTestId('trace-screenshot-geometry-state').textContent).toContain(
+      'Exact source-level screenshot region',
+    );
+    expect(screen.getByTestId('trace-screenshot-geometry-state').textContent).toContain(
+      'claim-level precision requires a separate claim receipt',
+    );
+  });
+
+  it('keeps the newest visual capture selected when an older request resolves last', async () => {
+    const captureA: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_a',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_a',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: 'Capture A',
+      url: 'https://example.com/a',
+      goal: 'Capture A',
+      provider: 'firecrawl',
+      status: 'ready',
+      contentDigest: 'sha256:capture-a',
+      stepCount: 0,
+      screenshotCount: 0,
+      pdfCount: 0,
+      createdAt: startedAt + 500,
+      completedAt: startedAt + 600,
+    };
+    const captureB: NodeSlideEvidenceCaptureSummary = {
+      ...captureA,
+      id: 'capture_b',
+      spanId: 'capture_span_b',
+      sourceTitle: 'Capture B',
+      url: 'https://example.com/b',
+      goal: 'Capture B',
+      contentDigest: 'sha256:capture-b',
+      createdAt: startedAt + 700,
+      completedAt: startedAt + 800,
+    };
+    const detailA: NodeSlideEvidenceCaptureDetail = { ...captureA, steps: [] };
+    const detailB: NodeSlideEvidenceCaptureDetail = { ...captureB, steps: [] };
+    const pendingA = deferred<NodeSlideEvidenceCaptureDetail | null>();
+    const pendingB = deferred<NodeSlideEvidenceCaptureDetail | null>();
+    const loadEvidence = vi.fn((captureId: string) =>
+      captureId === captureA.id ? pendingA.promise : pendingB.promise,
+    );
+
+    render(
+      <TraceWaterfall
+        run={run}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[captureA, captureB]}
+        onLoadEvidenceCapture={loadEvidence}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Capture A/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Capture B/i }));
+    await act(async () => pendingB.resolve(detailB));
+    await waitFor(() =>
+      expect(screen.getByTestId('trace-evidence-detail').textContent).toContain('Capture B'),
+    );
+
+    await act(async () => pendingA.resolve(detailA));
+    expect(screen.getByTestId('trace-evidence-detail').textContent).toContain('Capture B');
+    expect(screen.getByRole('button', { name: /Capture B/i }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('shows failed and empty visual evidence without inventing captured steps', async () => {
+    const failedSummary: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_failed',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_failed',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: 'Failed capture',
+      url: 'https://example.com/failed',
+      goal: 'Capture evidence',
+      provider: 'firecrawl',
+      status: 'failed',
+      error: 'Upstream capture timed out.',
+      stepCount: 0,
+      screenshotCount: 0,
+      pdfCount: 0,
+      createdAt: startedAt + 500,
+      completedAt: startedAt + 600,
+    };
+    const failedDetail: NodeSlideEvidenceCaptureDetail = { ...failedSummary, steps: [] };
+
+    const view = render(
+      <TraceWaterfall
+        run={run}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[failedSummary]}
+        onLoadEvidenceCapture={vi.fn().mockResolvedValue(failedDetail)}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Failed capture/i }));
+
+    await waitFor(() => expect(screen.getByText('Upstream capture timed out.')).toBeTruthy());
+    expect(screen.getByTestId('trace-evidence-empty').textContent).toContain(
+      'No visual steps were stored',
+    );
+    expect(screen.queryByTestId('trace-screenshot-evidence-box')).toBeNull();
+
+    view.rerender(
+      <TraceWaterfall
+        run={run}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[]}
+      />,
+    );
+    expect(screen.getByText('No screenshot or PDF capture is bound to this span.')).toBeTruthy();
+  });
+
+  it('renders an exact persisted PDF region on the selected geometry-controlled page', async () => {
+    const pdfSummary: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_pdf',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_pdf',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: 'Tournament report PDF',
+      url: 'https://example.com/report.pdf',
+      goal: 'Capture report evidence',
+      provider: 'nodeslide-source-snapshot/v1',
+      status: 'ready',
+      contentDigest: 'sha256:capture-pdf',
+      stepCount: 1,
+      screenshotCount: 0,
+      pdfCount: 1,
+      createdAt: startedAt + 500,
+      completedAt: startedAt + 600,
+    };
+    const pdfDetail: NodeSlideEvidenceCaptureDetail = {
+      ...pdfSummary,
+      steps: [
+        {
+          id: 'capture_pdf_step',
+          captureId: pdfSummary.id,
+          spanId: pdfSummary.spanId,
+          sequence: 1,
+          phase: 'observe',
+          label: 'PDF evidence page',
+          status: 'ok',
+          attachmentKind: 'pdf',
+          box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25, page: 4 },
+          regionScope: 'source',
+          contentDigest: 'sha256:capture-pdf',
+          createdAt: pdfSummary.createdAt,
+          attachment: {
+            kind: 'pdf',
+            url: pdfSummary.url,
+            page: 4,
+            box: { x: 0.1, y: 0.2, w: 0.3, h: 0.25, page: 4 },
+          },
+        },
+      ],
+    };
+
+    render(
+      <TraceWaterfall
+        run={run}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[pdfSummary]}
+        onLoadEvidenceCapture={vi.fn().mockResolvedValue(pdfDetail)}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Tournament report PDF/i }));
+
+    const overlay = await screen.findByTestId('trace-pdf-evidence-box');
+    expect(overlay.style.left).toBe('10%');
+    expect(overlay.style.top).toBe('20%');
+    expect(overlay.style.width).toBe('30%');
+    expect(overlay.style.height).toBe('25%');
+    expect(screen.getByTestId('trace-pdf-scroll-surface').dataset['pdfPage']).toBe('4');
+    expect(screen.getByTestId('trace-pdf-geometry-state').textContent).toContain(
+      'Exact source-snapshot excerpt region on rendered page 4',
+    );
+    expect(screen.getByTestId('trace-pdf-geometry-state').textContent).toContain(
+      'source-level evidence, not a claim-level box',
+    );
+    expect(
+      document.querySelector('.ns-waterfall-pdf-frame')?.getAttribute('data-region-precision'),
+    ).toBe('normalized-pdf-page');
+  });
+
+  it('shows no PDF overlay when persisted geometry is invalid or missing', async () => {
+    const summary: NodeSlideEvidenceCaptureSummary = {
+      id: 'capture_pdf_invalid',
+      deckId: run.deckId,
+      runId: run.id,
+      traceId,
+      spanId: 'capture_span_pdf_invalid',
+      parentSpanId: rootSpanId,
+      sourceId: source.id,
+      sourceTitle: 'Invalid geometry PDF',
+      url: 'https://example.com/report.pdf',
+      goal: 'Preserve report evidence',
+      provider: 'uploaded_pdf',
+      status: 'ready',
+      stepCount: 1,
+      screenshotCount: 0,
+      pdfCount: 1,
+      createdAt: startedAt + 500,
+    };
+    const detail: NodeSlideEvidenceCaptureDetail = {
+      ...summary,
+      steps: [
+        {
+          id: 'capture_pdf_invalid_step',
+          captureId: summary.id,
+          spanId: summary.spanId,
+          sequence: 1,
+          phase: 'observe',
+          label: 'Invalid PDF region',
+          status: 'warning',
+          box: { x: 0.9, y: 0.9, w: 0.2, h: 0.2, page: 2 },
+          createdAt: summary.createdAt,
+          attachment: {
+            kind: 'pdf',
+            url: summary.url,
+            page: 2,
+            box: { x: 0.9, y: 0.9, w: 0.2, h: 0.2, page: 2 },
+          },
+        },
+      ],
+    };
+    render(
+      <TraceWaterfall
+        run={run}
+        telemetry={telemetryFor(4)}
+        messages={[]}
+        sources={[source]}
+        evidenceCaptures={[summary]}
+        onLoadEvidenceCapture={vi.fn().mockResolvedValue(detail)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Invalid geometry PDF/i }));
+    await waitFor(() => expect(screen.getByTestId('trace-pdf-geometry-state')).toBeTruthy());
+    expect(screen.queryByTestId('trace-pdf-evidence-box')).toBeNull();
+    expect(screen.getByTestId('trace-pdf-geometry-state').textContent).toContain(
+      'coordinates or page metadata are invalid',
+    );
+  });
+
+  it('renders screenshot overlays only for finite boxes inside normalized image bounds', () => {
+    expect(isNormalizedEvidenceBox({ x: 0, y: 0, w: 1, h: 1 })).toBe(true);
+    expect(isNormalizedEvidenceBox({ x: -0.1, y: 0, w: 0.5, h: 0.5 })).toBe(false);
+    expect(isNormalizedEvidenceBox({ x: 0.8, y: 0.8, w: 0.3, h: 0.3 })).toBe(false);
+    expect(isNormalizedEvidenceBox({ x: 0, y: 0, w: Number.NaN, h: 0.5 })).toBe(false);
   });
 
   it('shows missing bound source records instead of silently dropping citations', () => {

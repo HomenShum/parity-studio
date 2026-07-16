@@ -15,6 +15,67 @@ export function elementScope(deckId: string, elements: readonly SlideElement[]):
   };
 }
 
+export interface EditorMutationFocus {
+  slideId: string;
+  elementIds: readonly string[];
+}
+
+export interface ResolvedEditorMutationFocus {
+  slideId: string;
+  elementIds: string[];
+}
+
+/**
+ * Reconciles a captured editor focus against the latest authoritative workspace.
+ * Direct edits never guess a fallback slide: if the edited slide no longer exists,
+ * callers leave navigation reconciliation to the normal workspace installer.
+ */
+export function resolveEditorMutationFocus(
+  workspace: NodeSlideWorkspace,
+  focus: EditorMutationFocus,
+): ResolvedEditorMutationFocus | null {
+  if (!workspace.deck.slideOrder.includes(focus.slideId)) return null;
+  const elementIds = focus.elementIds.filter((elementId) =>
+    workspace.elements.some(
+      (element) => element.id === elementId && element.slideId === focus.slideId,
+    ),
+  );
+  return { slideId: focus.slideId, elementIds };
+}
+
+export async function runFocusedEditorMutation({
+  focus,
+  mutate,
+  readWorkspace,
+  restoreFocus,
+  onUnexpectedFailure,
+}: {
+  focus: EditorMutationFocus;
+  mutate: () => Promise<boolean>;
+  readWorkspace: () => NodeSlideWorkspace | null;
+  restoreFocus: (focus: ResolvedEditorMutationFocus) => void;
+  onUnexpectedFailure?: (error: unknown) => void;
+}): Promise<boolean> {
+  const restore = () => {
+    const workspace = readWorkspace();
+    if (!workspace) return;
+    const resolved = resolveEditorMutationFocus(workspace, focus);
+    if (resolved) restoreFocus(resolved);
+  };
+
+  // Hold the user's editing context before the asynchronous receipt can cause a
+  // subscription render, then reconcile it once more against the final workspace.
+  restore();
+  try {
+    return await mutate();
+  } catch (error) {
+    onUnexpectedFailure?.(error);
+    return false;
+  } finally {
+    restore();
+  }
+}
+
 export function createBlankSlide(
   workspace: NodeSlideWorkspace,
   requestedIndex: number,

@@ -11,6 +11,9 @@ describe('NodeSlide requested slide count', () => {
     ['Prepare exactly four slides', 4],
     ['Create five slides', 5],
     ['Create a six-slide founder roadshow', 6],
+    ['Create exactly six concise slides', 6],
+    ['Build six highly visual editable slides', 6],
+    ['Create exactly seven concise, claim-led slides', 7],
     ['Build exactly 7 slides', 7],
     ['An eight — slide narrative', 8],
   ])('recognizes an explicit supported count in %s', (prompt, expected) => {

@@ -15,6 +15,13 @@ import {
 } from '../syncContracts';
 import { createGoogleSlidesAdapter } from './adapter';
 import { GOOGLE_SLIDES_SYNC_CAPABILITIES } from './capabilities';
+import {
+  assertGoogleSlidesExternalPlanCurrent,
+  createGoogleSlidesInboundExternalPlan,
+  createGoogleSlidesOutboundExternalPlan,
+  createGoogleSlidesPostAcceptanceReceipt,
+  googleSlidesExternalSnapshotDigest,
+} from './googleSlides';
 import { normalizeGoogleSlidesPresentation } from './normalization';
 import { planGoogleSlidesThreeWaySync } from './planning';
 import type {
@@ -383,6 +390,209 @@ describe('three-way sync planning', () => {
         commitAfter: 'outbound_batch_update',
       }),
     );
+  });
+});
+
+describe('canonical ExternalChangeSetV1 adapters', () => {
+  it('binds an inbound PatchOperation proposal to exact local and remote planning witnesses', () => {
+    const baseline = baselineFixture();
+    const planningInput = {
+      baseline,
+      local: clone(baseline.local),
+      remote: remoteFixture('Edited in Google'),
+    };
+
+    const first = createGoogleSlidesInboundExternalPlan(planningInput);
+    const second = createGoogleSlidesInboundExternalPlan(clone(planningInput));
+
+    expect(first.changeSet).toMatchObject({
+      sourceSystem: 'google_slides',
+      direction: 'inbound',
+      remote: {
+        objectId: 'presentation-1',
+        versionId: 'revision-current',
+        baselineId: first.binding.baselineDigest,
+      },
+      localBase: {
+        deckId: 'deck-1',
+        deckVersion: 7,
+        slideVersions: { 'slide-1': 4 },
+        elementVersions: { 'element-1': 3 },
+      },
+      operations: [
+        {
+          op: 'replace_text',
+          slideId: 'slide-1',
+          elementId: 'element-1',
+          text: 'Edited in Google',
+        },
+      ],
+    });
+    expect(first.proposal).toMatchObject({
+      kind: 'candidate_patch',
+      commit: {
+        authority: 'nodeslide.proposePatch',
+        usesCompareAndSwap: true,
+        requiresHumanAcceptance: true,
+      },
+      externalChangeSetDigest: first.changeSet.digest,
+      remoteBaselineId: first.binding.baselineDigest,
+      remoteVersionId: 'revision-current',
+    });
+    expect(first).not.toHaveProperty('advancedBaseline');
+    expect(() => assertGoogleSlidesExternalPlanCurrent(first, planningInput)).not.toThrow();
+    expect(second.binding).toEqual(first.binding);
+    expect(second.changeSet.digest).toBe(first.changeSet.digest);
+    expect(second.digest).toBe(first.digest);
+  });
+
+  it('fails a previously planned inbound handoff when either exact snapshot is stale', () => {
+    const baseline = baselineFixture();
+    const planningInput = {
+      baseline,
+      local: clone(baseline.local),
+      remote: remoteFixture('Edited in Google'),
+    };
+    const plan = createGoogleSlidesInboundExternalPlan(planningInput);
+    const staleRemote = clone(planningInput);
+    staleRemote.remote.revisionId = 'revision-newer';
+    const staleLocal = clone(planningInput);
+    const staleElement = staleLocal.local.elements[0];
+    if (!staleElement) throw new Error('fixture element missing');
+    staleElement.content = 'Changed without re-planning';
+
+    expect(() => assertGoogleSlidesExternalPlanCurrent(plan, staleRemote)).toThrow(
+      'external plan is stale',
+    );
+    expect(() => assertGoogleSlidesExternalPlanCurrent(plan, staleLocal)).toThrow(
+      'external plan is stale',
+    );
+  });
+
+  it('creates only conflict-free, verification-bound outbound execution plans', () => {
+    const baseline = baselineFixture();
+    const local = clone(baseline.local);
+    const element = local.elements[0];
+    if (!element) throw new Error('fixture element missing');
+    element.content = 'Edited in NodeSlide';
+    const planningInput = { baseline, local, remote: remoteFixture('Base') };
+    const verification = {
+      strategy: 'read_after_write' as const,
+      remoteObjectId: 'presentation-1',
+      compareAgainstVersionId: 'revision-current',
+    };
+
+    expect(() => createGoogleSlidesOutboundExternalPlan(planningInput)).toThrow(
+      'requires post-write verification intent',
+    );
+    const first = createGoogleSlidesOutboundExternalPlan(planningInput, verification);
+    const second = createGoogleSlidesOutboundExternalPlan(clone(planningInput), verification);
+
+    expect(first.changeSet).toMatchObject({
+      direction: 'outbound',
+      conflicts: [],
+      postWriteVerification: verification,
+    });
+    expect(first.batchUpdate.requests).toHaveLength(2);
+    expect(first.batchUpdate.body?.writeControl.requiredRevisionId).toBe('revision-current');
+    expect(first).not.toHaveProperty('advancedBaseline');
+    expect(second.changeSet.digest).toBe(first.changeSet.digest);
+    expect(second.batchUpdateDigest).toBe(first.batchUpdateDigest);
+    expect(second.digest).toBe(first.digest);
+
+    const verifiedRemote = {
+      ...remoteFixture('Edited in NodeSlide'),
+      revisionId: 'revision-after-write',
+    };
+    const receipt = createGoogleSlidesPostAcceptanceReceipt({
+      plan: first,
+      planningInput,
+      acceptedLocal: local,
+      verifiedRemote,
+      acceptance: {
+        kind: 'google_slides_write_verified',
+        strategy: 'read_after_write',
+        externalChangeSetDigest: first.changeSet.digest,
+        acceptedLocalSnapshotDigest: googleSlidesExternalSnapshotDigest('local', local),
+        preWriteVersionId: 'revision-current',
+        verifiedRemoteVersionId: 'revision-after-write',
+        verifiedRemoteSnapshotDigest: googleSlidesExternalSnapshotDigest('remote', verifiedRemote),
+      },
+    });
+    expect(receipt).toMatchObject({
+      kind: 'google_slides_post_acceptance_receipt',
+      direction: 'outbound',
+      externalChangeSetDigest: first.changeSet.digest,
+      advancedBaseline: {
+        local,
+        remote: verifiedRemote,
+      },
+    });
+    expect(receipt.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+  });
+
+  it('fails outbound conversion closed when the planner reports a conflict', () => {
+    const baseline = baselineFixture();
+    const local = clone(baseline.local);
+    const element = local.elements[0];
+    if (!element) throw new Error('fixture element missing');
+    element.content = 'Local edit';
+    const planningInput = { baseline, local, remote: remoteFixture('Remote edit') };
+
+    expect(() =>
+      createGoogleSlidesOutboundExternalPlan(planningInput, {
+        strategy: 'read_after_write',
+        remoteObjectId: 'presentation-1',
+        compareAgainstVersionId: 'revision-current',
+      }),
+    ).toThrow('forbidden with 1 conflict');
+  });
+
+  it('advances recovered mappings only inside a digest-bound post-acceptance receipt', () => {
+    const baseline = baselineFixture();
+    const planningInput = {
+      baseline,
+      local: clone(baseline.local),
+      remote: remoteFixture('Base', 'google-element-rewritten'),
+    };
+    const plan = createGoogleSlidesInboundExternalPlan(planningInput);
+    const acceptance = {
+      kind: 'nodeslide_patch_accepted' as const,
+      externalChangeSetDigest: plan.changeSet.digest,
+      acceptedLocalSnapshotDigest: googleSlidesExternalSnapshotDigest('local', planningInput.local),
+    };
+
+    const first = createGoogleSlidesPostAcceptanceReceipt({
+      plan,
+      planningInput,
+      acceptedLocal: planningInput.local,
+      verifiedRemote: planningInput.remote,
+      acceptance,
+    });
+    const second = createGoogleSlidesPostAcceptanceReceipt({
+      plan: clone(plan),
+      planningInput: clone(planningInput),
+      acceptedLocal: clone(planningInput.local),
+      verifiedRemote: clone(planningInput.remote),
+      acceptance: clone(acceptance),
+    });
+
+    expect(plan.stagedMappingLinks).toContainEqual(
+      expect.objectContaining({
+        localId: 'element-1',
+        remoteId: 'google-element-rewritten',
+        commitAfter: 'verified_read',
+      }),
+    );
+    expect(plan).not.toHaveProperty('advancedBaseline');
+    expect(first.advancedBaseline.mapping.links).toContainEqual(
+      expect.objectContaining({
+        localId: 'element-1',
+        remoteId: 'google-element-rewritten',
+      }),
+    );
+    expect(first.advancedBaselineDigest).toBe(second.advancedBaselineDigest);
+    expect(first.digest).toBe(second.digest);
   });
 });
 

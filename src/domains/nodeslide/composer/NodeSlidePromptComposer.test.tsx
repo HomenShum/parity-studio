@@ -106,6 +106,8 @@ describe('NodeSlide AI Elements composer interactions', () => {
     render(<ComposerPanel insideDialog sessionKey={sessionKey} />);
 
     const effort = screen.getByTestId('test-effort-select');
+    expect(effort).toHaveAccessibleName('Reasoning effort: High');
+    expect(effort).toHaveAttribute('title', 'Reasoning effort: High');
     expect(optionLabels(effort)).toEqual(['Low', 'Medium', 'High']);
     expect(optionLabels(effort)).not.toEqual(
       expect.arrayContaining(['Light', 'Extra High', 'Ultra']),
@@ -115,6 +117,12 @@ describe('NodeSlide AI Elements composer interactions', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Model and provider' });
     expect(dialog.closest('.nodeslide-studio')).not.toBeNull();
     expect(dialog.closest('dialog')).toBe(screen.getByTestId('native-dialog-host'));
+    expect(within(dialog).getByRole('heading', { name: 'Choose the agent model' })).toBeVisible();
+    expect(
+      within(dialog).getByText('Applies to this session. Nothing runs until you propose.'),
+    ).toBeVisible();
+    expect(within(dialog).getByLabelText('Current route: GLM 5.2 via Nebius')).toBeVisible();
+    expect(within(dialog).getAllByText('Current')).toHaveLength(2);
     await user.click(within(dialog).getByText('Claude Sonnet 5'));
 
     expect(screen.getByTestId('test-model-select')).toHaveTextContent('Claude Sonnet 5');
@@ -127,6 +135,11 @@ describe('NodeSlide AI Elements composer interactions', () => {
     ]);
     await user.selectOptions(screen.getByTestId('test-effort-select'), 'max');
     expect(screen.getByTestId('test-effort-select')).toHaveValue('max');
+    expect(screen.getByTestId('test-effort-select')).toHaveAccessibleName('Reasoning effort: Max');
+    expect(screen.getByTestId('test-effort-select')).toHaveAttribute(
+      'title',
+      'Reasoning effort: Max',
+    );
   });
 
   it('keeps Shift+Enter as a newline and submits with Enter', async () => {

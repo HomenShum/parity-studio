@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { defineConfig } from 'playwright/test';
 
 const remoteBaseUrl = process.env['PLAYWRIGHT_BASE_URL'];
+const journeyProofEnabled = process.env['NODESLIDE_JOURNEY_PROOF'] === '1';
 const baseURL = remoteBaseUrl ?? 'http://127.0.0.1:4173';
 const vercelBypassSecret = process.env['VERCEL_AUTOMATION_BYPASS_SECRET']?.trim();
 const bypassStorageState = join(
@@ -36,8 +37,8 @@ export default defineConfig({
     // Protected-preview traces can serialize the bypass cookie. Keep that
     // credential out of uploaded artifacts while retaining screenshots/video.
     trace: remoteBaseUrl && vercelBypassSecret ? 'off' : 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    screenshot: journeyProofEnabled ? 'on' : 'only-on-failure',
+    video: journeyProofEnabled ? 'on' : 'retain-on-failure',
   },
   webServer: remoteBaseUrl
     ? undefined

@@ -2,10 +2,56 @@ import type {
   CandidateValidationReceipt,
   DeckPatch,
   DeckSnapshot,
+  PatchOperation,
+  PatchScope,
+  SlideElement,
   ValidationResult,
 } from '../../shared/nodeslide';
 import { applyDeckPatch } from '../../shared/nodeslidePatch';
 import { nodeslideContentDigest, nodeslideStableId } from './nodeslideIds';
+
+export const NODESLIDE_SEMANTIC_COVERAGE_SCHEMA_VERSION = 'nodeslide.semantic-coverage/v1' as const;
+
+export type NodeSlideSemanticCoverageStatus = 'not_applicable' | 'pass' | 'blocked';
+export type NodeSlideSemanticOperationClass =
+  | 'copy'
+  | 'style'
+  | 'layout'
+  | 'chart'
+  | 'remove'
+  | 'visibility';
+
+export interface NodeSlideSemanticCoverageObligation {
+  id: string;
+  field: string;
+  slideId: string;
+  elementId: string | null;
+  operationClass: NodeSlideSemanticOperationClass;
+  expectedText?: string;
+  expectedVisibility?: boolean;
+}
+
+export interface NodeSlideSemanticCoverageReceipt {
+  schemaVersion: typeof NODESLIDE_SEMANTIC_COVERAGE_SCHEMA_VERSION;
+  id: string;
+  status: NodeSlideSemanticCoverageStatus;
+  instructionDigest: string;
+  baseSnapshotDigest: string;
+  candidateDigest: string;
+  operationsDigest: string;
+  obligations: NodeSlideSemanticCoverageObligation[];
+  coveredObligationIds: string[];
+  missingObligationIds: string[];
+  digest: string;
+}
+
+interface NodeSlideSemanticCoverageInput {
+  snapshot: DeckSnapshot;
+  instruction: string;
+  scope: PatchScope;
+  operations: readonly PatchOperation[];
+  focusSlideId?: string;
+}
 
 export function materializeNodeSlideCandidate(
   snapshot: DeckSnapshot,
@@ -90,6 +136,444 @@ export function candidateValidationBindingMatches(args: {
     return false;
   }
   return validationSemanticDigest(args.validation) === validationSemanticDigest(receipt);
+}
+
+/**
+ * Proves that a bounded candidate covers every field/role/slide target the user explicitly
+ * enumerated. Structural validation answers "is this operation legal?"; this receipt answers
+ * the separate question "does this operation address the requested work?".
+ */
+export function evaluateNodeSlideSemanticCoverage(
+  input: NodeSlideSemanticCoverageInput,
+): NodeSlideSemanticCoverageReceipt {
+  const obligations = semanticCoverageObligations(input);
+  const coveredObligationIds = obligations
+    .filter((obligation) => operationCoversObligation(input.operations, obligation))
+    .map((obligation) => obligation.id);
+  const covered = new Set(coveredObligationIds);
+  const missingObligationIds = obligations
+    .filter((obligation) => !covered.has(obligation.id))
+    .map((obligation) => obligation.id);
+  const status: NodeSlideSemanticCoverageStatus =
+    obligations.length === 0
+      ? 'not_applicable'
+      : missingObligationIds.length === 0
+        ? 'pass'
+        : 'blocked';
+  const candidate = materializeNodeSlideCandidate(
+    input.snapshot,
+    { scope: input.scope, operations: [...input.operations] },
+    0,
+  );
+  const partial = {
+    schemaVersion: NODESLIDE_SEMANTIC_COVERAGE_SCHEMA_VERSION,
+    id: nodeslideStableId(
+      'semantic_coverage',
+      nodeslideContentDigest(input.instruction),
+      nodeslideContentDigest(stableJson(input.operations)),
+    ),
+    status,
+    instructionDigest: nodeslideContentDigest(input.instruction),
+    baseSnapshotDigest: nodeSlideCandidateDigest(input.snapshot),
+    candidateDigest: nodeSlideCandidateDigest(candidate),
+    operationsDigest: nodeslideContentDigest(stableJson(input.operations)),
+    obligations,
+    coveredObligationIds,
+    missingObligationIds,
+  };
+  return { ...partial, digest: nodeslideContentDigest(stableJson(partial)) };
+}
+
+export function nodeSlideSemanticCoverageReceiptMatches(
+  receipt: NodeSlideSemanticCoverageReceipt,
+  candidate: DeckSnapshot,
+): boolean {
+  const { digest, ...partial } = receipt;
+  const obligationIds = receipt.obligations.map((obligation) => obligation.id);
+  const uniqueObligationIds = new Set(obligationIds);
+  const coveredIds = new Set(receipt.coveredObligationIds);
+  const missingIds = new Set(receipt.missingObligationIds);
+  const expectedMissingIds = obligationIds.filter((id) => !coveredIds.has(id));
+  return (
+    receipt.schemaVersion === NODESLIDE_SEMANTIC_COVERAGE_SCHEMA_VERSION &&
+    receipt.candidateDigest === nodeSlideCandidateDigest(candidate) &&
+    digest === nodeslideContentDigest(stableJson(partial)) &&
+    uniqueObligationIds.size === obligationIds.length &&
+    coveredIds.size === receipt.coveredObligationIds.length &&
+    missingIds.size === receipt.missingObligationIds.length &&
+    receipt.coveredObligationIds.every((id) => uniqueObligationIds.has(id)) &&
+    receipt.missingObligationIds.every((id) => uniqueObligationIds.has(id)) &&
+    expectedMissingIds.length === missingIds.size &&
+    expectedMissingIds.every((id) => missingIds.has(id)) &&
+    (receipt.status === 'not_applicable'
+      ? receipt.obligations.length === 0 && receipt.missingObligationIds.length === 0
+      : receipt.status === 'pass'
+        ? receipt.obligations.length > 0 && receipt.missingObligationIds.length === 0
+        : receipt.obligations.length > 0 && receipt.missingObligationIds.length > 0)
+  );
+}
+
+interface SemanticFieldDescriptor {
+  field: string;
+  matches: (element: SlideElement) => boolean;
+}
+
+function semanticCoverageObligations(
+  input: NodeSlideSemanticCoverageInput,
+): NodeSlideSemanticCoverageObligation[] {
+  const instruction = normalizedInstruction(input.instruction);
+  const descriptors = requestedSemanticFields(instruction);
+  const exactReplacement = exactReplacementIntent(input.instruction);
+  const scoped = semanticScopedElements(input.snapshot, input.scope);
+  const requestedSlideIds = semanticRequestedSlideIds(input, instruction);
+  const operationClass = requestedSemanticOperationClass(instruction, descriptors);
+  const expectedVisibility = requestedVisibility(instruction, operationClass);
+  const obligations: NodeSlideSemanticCoverageObligation[] = [];
+  const singleScopedElementId =
+    input.scope.kind !== 'deck' &&
+    'elementIds' in input.scope &&
+    input.scope.elementIds.length === 1
+      ? input.scope.elementIds[0]
+      : undefined;
+
+  for (const descriptor of descriptors) {
+    let targets = scoped.filter(
+      (element) => requestedSlideIds.has(element.slideId) && descriptor.matches(element),
+    );
+    if (targets.length === 0 && descriptors.length === 1 && singleScopedElementId) {
+      targets = scoped.filter((element) => element.id === singleScopedElementId);
+    }
+    if (targets.length === 0) {
+      for (const slideId of requestedSlideIds) {
+        obligations.push(
+          semanticObligation({
+            field: descriptor.field,
+            slideId,
+            elementId: null,
+            operationClass,
+            ...(exactReplacement?.expected && descriptors.length === 1
+              ? { expectedText: exactReplacement.expected }
+              : {}),
+            ...(expectedVisibility === undefined ? {} : { expectedVisibility }),
+          }),
+        );
+      }
+      continue;
+    }
+    for (const target of targets) {
+      obligations.push(
+        semanticObligation({
+          field: descriptor.field,
+          slideId: target.slideId,
+          elementId: target.id,
+          operationClass,
+          ...(exactReplacement?.expected && descriptors.length === 1
+            ? { expectedText: exactReplacement.expected }
+            : {}),
+          ...(expectedVisibility === undefined ? {} : { expectedVisibility }),
+        }),
+      );
+    }
+  }
+
+  // Exact element-scoped replacements are explicit even when the user names the old text
+  // instead of a semantic role (for example: Replace "Before" with "After").
+  if (descriptors.length === 0 && exactReplacement) {
+    const exactTargets = scoped.filter(
+      (element) =>
+        requestedSlideIds.has(element.slideId) &&
+        element.kind === 'text' &&
+        (element.content === exactReplacement.current ||
+          (input.scope.kind !== 'deck' &&
+            'elementIds' in input.scope &&
+            input.scope.elementIds.length === 1)),
+    );
+    for (const target of exactTargets) {
+      obligations.push(
+        semanticObligation({
+          field: target.name || target.role || 'selected text',
+          slideId: target.slideId,
+          elementId: target.id,
+          operationClass: 'copy',
+          expectedText: exactReplacement.expected,
+        }),
+      );
+    }
+  }
+
+  return dedupeObligations(obligations);
+}
+
+function semanticObligation(
+  input: Omit<NodeSlideSemanticCoverageObligation, 'id'>,
+): NodeSlideSemanticCoverageObligation {
+  return {
+    id: nodeslideStableId(
+      'semantic_obligation',
+      input.field,
+      input.slideId,
+      input.elementId ?? 'missing',
+      input.operationClass,
+      input.expectedText ?? '',
+      input.expectedVisibility === undefined ? '' : String(input.expectedVisibility),
+    ),
+    ...input,
+  };
+}
+
+function requestedSemanticFields(instruction: string): SemanticFieldDescriptor[] {
+  const descriptors: SemanticFieldDescriptor[] = [];
+  const add = (descriptor: SemanticFieldDescriptor) => {
+    if (!descriptors.some((candidate) => candidate.field === descriptor.field)) {
+      descriptors.push(descriptor);
+    }
+  };
+  if (/\bsection\s+(?:label|title|name)\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('section label', (element) =>
+        /\bsection\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\b(?:headline|heading|slide\s+title)\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('headline', (element) =>
+        /\b(?:headline|heading|title)\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\b(?:body(?:\s+copy)?|paragraph|description)\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('body copy', (element) =>
+        /\b(?:body|paragraph|description)\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  const numberedPoints = [...instruction.matchAll(/\b(?:key\s+point|bullet)\s*(\d+)\b/gu)];
+  for (const match of numberedPoints) {
+    const index = match[1];
+    if (!index) continue;
+    add(
+      fieldDescriptor(`key point ${index}`, (element) =>
+        new RegExp(`\\b(?:key\\s+point|bullet)\\s*${index}\\b`, 'u').test(
+          normalizedElementIdentity(element),
+        ),
+      ),
+    );
+  }
+  if (numberedPoints.length === 0 && /\b(?:key\s+points|bullets)\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('key points', (element) =>
+        /\b(?:bullet|key\s+point)\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\bfooter\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('footer', (element) =>
+        /\bfooter\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\b(?:page|slide)\s+number\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('page number', (element) =>
+        /\b(?:page|slide)[ _-]*number\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\bcaption\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('caption', (element) =>
+        /\bcaption\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\b(?:metric|kpi)\b/u.test(instruction)) {
+    add(
+      fieldDescriptor('metric', (element) =>
+        /\b(?:metric|kpi)\b/u.test(normalizedElementIdentity(element)),
+      ),
+    );
+  }
+  if (/\b(?:chart|graph)\b/u.test(instruction)) {
+    add(fieldDescriptor('chart', (element) => element.kind === 'chart'));
+  }
+  if (/\b(?:formula|equation|math)\b/u.test(instruction)) {
+    add(fieldDescriptor('formula', (element) => element.kind === 'math'));
+  }
+  if (/\bimage\b/u.test(instruction)) {
+    add(fieldDescriptor('image', (element) => element.kind === 'image'));
+  }
+  return descriptors;
+}
+
+function fieldDescriptor(
+  field: string,
+  matches: (element: SlideElement) => boolean,
+): SemanticFieldDescriptor {
+  return { field, matches };
+}
+
+function requestedSemanticOperationClass(
+  instruction: string,
+  descriptors: readonly SemanticFieldDescriptor[],
+): NodeSlideSemanticOperationClass {
+  if (/\b(?:delete|remove|erase)\b/u.test(instruction)) return 'remove';
+  if (/\b(?:hide|unhide|reveal|visible|invisible|visibility)\b/u.test(instruction)) {
+    return 'visibility';
+  }
+  if (descriptors.some((descriptor) => descriptor.field === 'chart')) {
+    return 'chart';
+  }
+  if (/\b(?:move|position|align|layout|resize|spacing|place)\b/u.test(instruction)) return 'layout';
+  const explicitlyRequestsCopy =
+    /\b(?:replace|rewrite|copy|text|wording|say|read|shorten|summarize)\b/u.test(instruction);
+  if (
+    /\b(?:style|color|font|weight|bold|appearance|theme|contrast|decisive|assertive|stronger|emphasis|accent)\b/u.test(
+      instruction,
+    ) &&
+    !explicitlyRequestsCopy
+  ) {
+    return 'style';
+  }
+  return descriptors.length > 0 ? 'copy' : 'copy';
+}
+
+function requestedVisibility(
+  instruction: string,
+  operationClass: NodeSlideSemanticOperationClass,
+): boolean | undefined {
+  if (operationClass !== 'visibility') return undefined;
+  if (
+    /\b(?:hide|conceal|invisible)\b/u.test(instruction) ||
+    /\bvisibility\s+to\s+false\b/u.test(instruction)
+  ) {
+    return false;
+  }
+  if (
+    /\b(?:unhide|reveal)\b/u.test(instruction) ||
+    /\bvisibility\s+to\s+true\b/u.test(instruction)
+  ) {
+    return true;
+  }
+  return undefined;
+}
+
+function semanticRequestedSlideIds(
+  input: NodeSlideSemanticCoverageInput,
+  instruction: string,
+): Set<string> {
+  const scopedSlideIds =
+    input.scope.kind === 'deck' ? input.snapshot.deck.slideOrder : input.scope.slideIds;
+  const explicitNumbers = explicitRequestedSlideNumbers(instruction)
+    .filter((value) => Number.isSafeInteger(value) && value >= 1)
+    .map((value) => input.snapshot.deck.slideOrder[value - 1])
+    .filter(
+      (value): value is string => typeof value === 'string' && scopedSlideIds.includes(value),
+    );
+  if (explicitNumbers.length > 0) return new Set(explicitNumbers);
+  if (/\b(?:selected|these|both|all|every|each|multiple)\s+slides?\b/u.test(instruction)) {
+    return new Set(scopedSlideIds);
+  }
+  if (input.focusSlideId && scopedSlideIds.includes(input.focusSlideId)) {
+    return new Set([input.focusSlideId]);
+  }
+  return new Set(scopedSlideIds.length === 1 ? scopedSlideIds : scopedSlideIds.slice(0, 1));
+}
+
+function explicitRequestedSlideNumbers(instruction: string): number[] {
+  const values = [...instruction.matchAll(/\bslide\s+(\d+)\b/gu)].flatMap((match) =>
+    match[1] ? [Number(match[1])] : [],
+  );
+  for (const match of instruction.matchAll(/\bslides\s+((?:\d+\s*(?:(?:,|and|&|to|-)\s*)?)+)/gu)) {
+    const segment = match[1] ?? '';
+    const numbers = [...segment.matchAll(/\d+/gu)].map((item) => Number(item[0]));
+    if (/\bto\b|-/u.test(segment) && numbers.length === 2) {
+      const start = numbers[0] ?? 0;
+      const end = numbers[1] ?? 0;
+      if (start >= 1 && end >= start && end - start <= 8) {
+        for (let value = start; value <= end; value += 1) values.push(value);
+        continue;
+      }
+    }
+    values.push(...numbers);
+  }
+  return [...new Set(values)];
+}
+
+function semanticScopedElements(snapshot: DeckSnapshot, scope: PatchScope): SlideElement[] {
+  const slideIds = new Set(scope.kind === 'deck' ? snapshot.deck.slideOrder : scope.slideIds);
+  const elementIds =
+    scope.kind !== 'deck' && 'elementIds' in scope ? new Set(scope.elementIds) : null;
+  return snapshot.elements.filter(
+    (element) =>
+      slideIds.has(element.slideId) &&
+      (!elementIds || elementIds.has(element.id)) &&
+      !element.locked &&
+      element.visible !== false,
+  );
+}
+
+function normalizedElementIdentity(element: SlideElement): string {
+  return normalizedInstruction(`${element.role ?? ''} ${element.name}`);
+}
+
+function normalizedInstruction(value: string): string {
+  return value.toLowerCase().replace(/[_-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+function exactReplacementIntent(
+  instruction: string,
+): { current?: string; expected: string } | null {
+  const replacement = instruction.match(/\breplace\s+["“]([^"”]+)["”]\s+with\s+["“]([^"”]+)["”]/iu);
+  if (replacement?.[1] && replacement[2]) {
+    return { current: replacement[1], expected: replacement[2] };
+  }
+  if (!/\bexact(?:ly)?\b/iu.test(instruction)) return null;
+  const quoted = [...instruction.matchAll(/["“]([^"”]+)["”]/gu)];
+  const expected = quoted.at(-1)?.[1];
+  return expected ? { expected } : null;
+}
+
+function operationCoversObligation(
+  operations: readonly PatchOperation[],
+  obligation: NodeSlideSemanticCoverageObligation,
+): boolean {
+  if (!obligation.elementId) return false;
+  return operations.some((operation) => {
+    if (!('elementId' in operation)) return false;
+    if (operation.slideId !== obligation.slideId || operation.elementId !== obligation.elementId) {
+      return false;
+    }
+    if (obligation.operationClass === 'copy') {
+      return (
+        operation.op === 'replace_text' &&
+        (obligation.expectedText === undefined || operation.text === obligation.expectedText)
+      );
+    }
+    if (obligation.operationClass === 'style') return operation.op === 'update_style';
+    if (obligation.operationClass === 'layout') {
+      return (
+        operation.op === 'move' ||
+        operation.op === 'resize' ||
+        operation.op === 'reorder_element_v1'
+      );
+    }
+    if (obligation.operationClass === 'chart') return operation.op === 'update_chart';
+    if (obligation.operationClass === 'remove') return operation.op === 'remove_element';
+    return (
+      operation.op === 'set_visibility_v1' &&
+      (obligation.expectedVisibility === undefined ||
+        operation.visible === obligation.expectedVisibility)
+    );
+  });
+}
+
+function dedupeObligations(
+  obligations: readonly NodeSlideSemanticCoverageObligation[],
+): NodeSlideSemanticCoverageObligation[] {
+  return [...new Map(obligations.map((obligation) => [obligation.id, obligation])).values()];
 }
 
 function validationSemanticDigest(

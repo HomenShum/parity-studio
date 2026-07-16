@@ -65,6 +65,7 @@ class MemoryDatabase {
   readonly collectCalls: string[] = [];
   readonly takeCalls: Array<{ tableName: string; count: number }> = [];
   readonly writes: Array<{ kind: 'delete'; tableName: string; rowId: string }> = [];
+  readonly storageDeletes: string[] = [];
 
   query(tableName: string): MemoryQuery {
     return new MemoryQuery(this, tableName);
@@ -142,7 +143,14 @@ function seedDeck(
 }
 
 function mutationContext(database: MemoryDatabase): MutationCtx {
-  return { db: database } as unknown as MutationCtx;
+  return {
+    db: database,
+    storage: {
+      delete: async (storageId: string) => {
+        database.storageDeletes.push(storageId);
+      },
+    },
+  } as unknown as MutationCtx;
 }
 
 describe('deleteDeck', () => {
@@ -167,6 +175,12 @@ describe('deleteDeck', () => {
     ].sort();
 
     expect([...NODESLIDE_DECK_ERASURE_TABLES].sort()).toEqual(expected);
+    expect(NODESLIDE_DECK_ERASURE_TABLES).toEqual(
+      expect.arrayContaining(['nodeslide_claim_evidence_receipts', 'nodeslide_source_revisions']),
+    );
+    expect(NODESLIDE_DECK_ERASURE_TABLES.indexOf('nodeslide_claim_evidence_receipts')).toBeLessThan(
+      NODESLIDE_DECK_ERASURE_TABLES.indexOf('nodeslide_source_revisions'),
+    );
   });
 
   it('denies a wrong owner capability before reading or deleting child data', async () => {
@@ -278,10 +292,20 @@ describe('deleteDeck', () => {
       database.seed(tableName, {
         id: `${tableName}:target`,
         [key]: key === 'tenantId' ? 'deck:target:tenant' : 'deck:target',
+        ...(tableName === 'nodeslide_evidence_steps'
+          ? { screenshotStorageId: 'storage:target' }
+          : tableName === 'nodeslide_uploads'
+            ? { storageId: 'storage:upload-target' }
+            : {}),
       });
       database.seed(tableName, {
         id: `${tableName}:other`,
         [key]: key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+        ...(tableName === 'nodeslide_evidence_steps'
+          ? { screenshotStorageId: 'storage:other' }
+          : tableName === 'nodeslide_uploads'
+            ? { storageId: 'storage:upload-other' }
+            : {}),
       });
     }
 
@@ -311,6 +335,7 @@ describe('deleteDeck', () => {
     expect(database.rows('projects')).toEqual([other.project]);
     expect(database.rows('nodeslide_decks')).not.toContain(target.deck);
     expect(database.rows('projects')).not.toContain(target.project);
+    expect(database.storageDeletes).toEqual(['storage:upload-target', 'storage:target']);
   });
 
   it('rejects an oversized record set before the first write', async () => {

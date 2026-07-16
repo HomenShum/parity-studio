@@ -597,6 +597,32 @@ export function registerNodeSlideTools(server: McpServer, convexCall: ConvexCall
   );
 
   server.registerTool(
+    'nodeslide.evaluate_quality',
+    {
+      title: 'Evaluate NodeSlide presentation quality',
+      description:
+        'Owner-gated, read-only release preflight across communication job, narrative, evidence, visual craft, editability, reference comparison, and recorded journey proof. It fails closed when mandatory proof is missing and never accepts a proposal.',
+      inputSchema: {
+        ...ownerArgs,
+        journeyProofJson: z.string().max(200_000).optional(),
+        referenceReceiptJson: z.string().max(200_000).optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const key = resolveOwnerKey(args.deckId, args.ownerAccessKey);
+      return textResult(
+        await convexCall('query', 'nodeslideAuthoringQuality:evaluateLatest', {
+          deckId: args.deckId,
+          ownerAccessKey: key,
+          ...(args.journeyProofJson ? { journeyProofJson: args.journeyProofJson } : {}),
+          ...(args.referenceReceiptJson ? { referenceReceiptJson: args.referenceReceiptJson } : {}),
+        }),
+      );
+    },
+  );
+
+  server.registerTool(
     'nodeslide.export_spec',
     {
       title: 'Export the full canonical NodeSlide spec',

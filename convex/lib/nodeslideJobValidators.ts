@@ -47,6 +47,7 @@ export const nodeslideEditProposalJobRequestFields = {
   providerModel: v.optional(nodeslideAgentModelValidator),
   providerEffort: v.optional(nodeslideReasoningEffortValidator),
   providerConsent: v.optional(v.string()),
+  maxCostUsd: v.optional(v.number()),
   webResearch: v.optional(v.boolean()),
   webResearchConsent: v.optional(v.string()),
   memoryMode: v.optional(v.union(v.literal('off'), v.literal('relevant'))),
@@ -98,6 +99,7 @@ export function nodeSlideEditProposalJobRequestFromArgs(
     ...(args.providerModel ? { providerModel: args.providerModel } : {}),
     ...(args.providerEffort ? { providerEffort: args.providerEffort } : {}),
     ...(typeof args.providerConsent === 'string' ? { providerConsent: args.providerConsent } : {}),
+    ...(args.maxCostUsd !== undefined ? { maxCostUsd: args.maxCostUsd } : {}),
     ...(args.webResearch !== undefined ? { webResearch: args.webResearch } : {}),
     ...(typeof args.webResearchConsent === 'string'
       ? { webResearchConsent: args.webResearchConsent }

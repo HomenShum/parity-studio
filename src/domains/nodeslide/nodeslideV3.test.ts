@@ -145,6 +145,8 @@ describe('NodeSlide v3 visual contract', () => {
     expect(css).toMatch(
       /\.nodeslide-studio \.ns-toast[\s\S]*?bottom: auto;[\s\S]*?right: calc\(var\(--ns-inspector-width\) \+ 14px\);[\s\S]*?top: 64px;/,
     );
+    expect(baseCss).toMatch(/\.ns-toast \{[\s\S]*?pointer-events: none;/);
+    expect(baseCss).toMatch(/\.ns-toast button \{[\s\S]*?pointer-events: auto;/);
   });
 
   it('keeps selected-element actions labeled and scrollbar-free in narrow canvases', () => {
@@ -252,7 +254,7 @@ describe('NodeSlide v3 visual contract', () => {
       /\.ns-ai-v3-controls-disclosure \{[\s\S]*?overflow: visible;[\s\S]*?position: relative;/,
     );
     expect(stateContract).toMatch(
-      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?bottom: calc\(100% \+ 7px\);[\s\S]*?max-height: min\(32vh, 230px\);[\s\S]*?overflow-y: auto;[\s\S]*?position: absolute;/,
+      /\.ns-ai-v3-controls-disclosure\[open\] > \.ns-ai-v3-controls-body \{[\s\S]*?bottom: calc\(100% \+ 7px\);[\s\S]*?max-height: min\(62vh, 440px\);[\s\S]*?overflow-y: auto;[\s\S]*?position: absolute;/,
     );
     expect(stateContract).toMatch(
       /\.ns-ai-v3-composer > \.ns-ai-v3-prompt,[\s\S]*?\.ns-ai-v3-composer-field \{[\s\S]*?order: 5;/,

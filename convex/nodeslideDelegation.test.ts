@@ -652,6 +652,8 @@ describe('NodeSlide delegated acceptance', () => {
       replayed: false,
     });
     expect(accepted.workspace).toBeNull();
+    const acceptedVersionCount = harness.database.rows('nodeslide_versions').length;
+    const acceptedSnapshot = await requiredSnapshot(harness.context, harness.snapshot.deck.id);
     harness.database.resetQueryCalls();
     const replay = await delegatedAcceptHandler(harness.context, args);
     expect(replay.patch).toEqual(accepted.patch);
@@ -664,6 +666,10 @@ describe('NodeSlide delegated acceptance', () => {
     ]);
     expect(harness.database.rows('nodeslide_delegation_uses')).toHaveLength(1);
     expect(grantRow(harness.database, issued.grant.id)['useCount']).toBe(1);
+    expect(harness.database.rows('nodeslide_versions')).toHaveLength(acceptedVersionCount);
+    expect(await requiredSnapshot(harness.context, harness.snapshot.deck.id)).toEqual(
+      acceptedSnapshot,
+    );
 
     setNow(START_TIME + 2);
     const secondProposal = await proposeTextEdit(harness, 'exhausted-use', 'Second delegated use');
@@ -686,6 +692,67 @@ describe('NodeSlide delegated acceptance', () => {
     harness.database.resetQueryCalls();
     await expect(delegatedAcceptHandler(harness.context, args)).rejects.toThrow(/revoked/i);
     expect(harness.database.queryCalls).toEqual(['nodeslide_delegation_grants']);
+  });
+
+  it('persists a Deck CI failure for review without mutation or grant consumption', async () => {
+    const harness = workspaceHarness('deck-ci-review');
+    const issued = await issueGrantHandler(harness.context, grantArgs(harness.snapshot.deck.id));
+    setNow(START_TIME + 1);
+    const proposal = await proposeTextEdit(
+      harness,
+      'deck-ci-review-proposal',
+      'A bounded edit while evidence refresh is still in progress.',
+    );
+    const storedProposal = patchRow(harness.database, proposal.patch.id);
+    const candidateValidation = storedProposal['candidateValidation'];
+    if (!candidateValidation || typeof candidateValidation !== 'object') {
+      throw new Error('Deck CI candidate receipt fixture is missing.');
+    }
+    storedProposal['candidateValidation'] = {
+      ...(candidateValidation as NonNullable<DeckPatch['candidateValidation']>),
+      publishOk: false,
+      cleanOk: false,
+      issues: [
+        {
+          id: 'deck-ci-review-warning',
+          severity: 'warning',
+          code: 'overflow',
+          message: 'Rendered copy requires review before publication.',
+        },
+      ],
+    };
+    const before = await requiredSnapshot(harness.context, harness.snapshot.deck.id);
+    seedAgentRun(harness.database, harness.snapshot.deck.id, proposal.patch);
+
+    const receipt = await delegatedAcceptHandler(
+      harness.context,
+      acceptArgs(issued, proposal.patch),
+    );
+
+    expect(receipt.patch.status).toBe('ready');
+    expect(receipt.autoCommit).toMatchObject({
+      outcome: 'awaiting_review',
+      reason: 'deck_ci_pass_required',
+    });
+    expect(receipt.autoCommit?.deckCiStatus).not.toBe('pass');
+    expect(receipt.autoCommit?.deckCiDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(receipt.staleReasons?.[0]).toMatch(/did not mutate.*deck ci/i);
+    expect(await requiredSnapshot(harness.context, harness.snapshot.deck.id)).toEqual(before);
+    expect(grantRow(harness.database, issued.grant.id)['useCount']).toBe(0);
+    expect(harness.database.rows('nodeslide_delegation_uses')).toEqual([]);
+    expect(
+      harness.database.only('nodeslide_agent_runs', 'id', `${proposal.patch.id}-run`),
+    ).toMatchObject({
+      status: 'awaiting_review',
+      checkpoint: `deck-ci:${receipt.autoCommit?.deckCiDigest}`,
+      error: expect.stringMatching(/deck ci returned/i),
+    });
+    expect(harness.database.only('nodeslide_traces', 'patchId', proposal.patch.id)).toMatchObject({
+      status: 'awaiting_review',
+      summary: expect.stringMatching(/deck ci returned/i),
+    });
+
+    expect(patchRow(harness.database, proposal.patch.id)['status']).toBe('ready');
   });
 
   it('accounts 24 sequential uses exactly and denies use 25 before proposal lookup', async () => {

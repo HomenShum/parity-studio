@@ -429,8 +429,11 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
 
 export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSlideDeckSpec {
   const cleanTitle = nodeslideCleanText(title, 80) || 'Untitled story';
-  const audience = nodeslideCleanText(brief.audience, 120) || 'the audience';
-  const purpose = nodeslideCleanText(brief.purpose, 180) || nodeslideCleanText(brief.prompt, 180);
+  const explicitTopic = nodeslideCleanText(brief.prompt, 260);
+  const explicitAudience = nodeslideCleanText(brief.audience, 120);
+  const explicitOutcome = nodeslideCleanText(brief.purpose, 180);
+  const audience = explicitAudience || 'the audience';
+  const purpose = explicitOutcome || nodeslideCleanText(brief.prompt, 180);
   const outcome = sentenceCase(purpose || nodeslideCleanText(brief.prompt, 180));
   const criteria = brief.successCriteria
     .map((criterion) => nodeslideCleanText(criterion, 96))
@@ -442,9 +445,11 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   const spec: NodeSlideDeckSpec = {
     title: cleanTitle,
     narrative: [
-      `Orient ${audience} around the central promise.`,
-      'Move from current tension to a concrete, credible approach.',
-      'Close with proof, ownership, and a specific next move.',
+      explicitTopic ? `Topic: ${explicitTopic}` : `Topic: ${cleanTitle}`,
+      explicitAudience ? `Audience: ${explicitAudience}` : 'Audience: not specified in the brief.',
+      explicitOutcome
+        ? `Desired outcome: ${explicitOutcome}`
+        : 'Desired outcome: not specified in the brief.',
     ],
     slides: [
       {
@@ -530,9 +535,15 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   const requestedSlideCount =
     inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7;
   applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
-  applyRequestedNarrativeJobs(spec.slides, brief.prompt, requestedSlideCount);
+  applyRequestedNarrativeJobs(spec.slides, brief, requestedSlideCount);
   applyExplicitSlideDirectives(spec.slides, brief.prompt, requestedSlideCount);
   preserveRequestedPrimitives(spec.slides, brief.prompt, requestedSlideCount);
+  removeUnsupportedFallbackPrimitives(spec.slides, brief.prompt);
+  // An explicit diagram can target a slide that originally carried a generic
+  // fallback formula/image. Retry after unsupported fallback primitives are
+  // removed so the user's requested visual wins without inventing a second
+  // primary primitive on the same slide.
+  applyRequestedDiagramPrimitive(spec.slides, brief.prompt);
   spec.slides = spec.slides.slice(0, requestedSlideCount);
   return spec;
 }
@@ -551,20 +562,168 @@ type BriefPrimaryPrimitive = 'formula' | 'chart' | 'image';
  */
 function applyRequestedNarrativeJobs(
   slides: NodeSlidePlannedSlide[],
-  prompt: string,
+  brief: DeckBrief,
   slideCount: number,
 ): void {
-  const jobs = requestedNarrativeJobs(prompt, slideCount);
+  const jobs = requestedNarrativeJobs(brief.prompt, slideCount);
   if (jobs.length !== slideCount) return;
+
+  const topic = nodeslideCleanText(brief.prompt, 220);
+  const audience = nodeslideCleanText(brief.audience, 96);
+  const outcome = nodeslideCleanText(brief.purpose, 120);
 
   for (const [index, job] of jobs.entries()) {
     const slide = slides[index];
     if (!slide) continue;
     const label = narrativeJobLabel(job);
     slide.title = label;
-    slide.section = `${label.replace(/^The\s+/iu, '')} / ${String(index + 1).padStart(2, '0')}`;
+    slide.section = `${nodeslideCleanText(label.replace(/^The\s+/iu, ''), 50)} / ${String(
+      index + 1,
+    ).padStart(2, '0')}`;
     slide.headline = label;
-    slide.body = `Explain ${job} for the intended audience using only evidence supplied in the brief or attached sources.`;
+    slide.body = nodeslideCleanText(
+      `${narrativeJobClaim(job)}${audience ? ` For ${audience}.` : ''}${outcome ? ` This supports the requested outcome: ${outcome}.` : ''} Brief context: ${topic || job}.`,
+      360,
+    );
+    slide.bullets = [
+      audience ? `Audience: ${audience}` : 'Audience: not specified in the brief',
+      outcome ? `Desired outcome: ${outcome}` : 'Desired outcome: not specified in the brief',
+      'Evidence: use only the brief or attached sources',
+    ];
+  }
+}
+
+function narrativeJobClaim(job: string): string {
+  const normalized = job.toLowerCase();
+  if (/governed|release gate|one-shot/iu.test(normalized)) {
+    return 'NodeSlide should compete on governed creativity: a strong story, editable native objects, durable validation, and proof from the real browser path.';
+  }
+  if (/canva|gamma|hyperagent|benchmark/iu.test(normalized)) {
+    return 'Use the market as a design brief: Canva compresses branded asset work, Gamma compresses research-to-story, and NodeSlide must add governed editable execution plus policy learning.';
+  }
+  if (
+    /communication/iu.test(normalized) &&
+    /evidence/iu.test(normalized) &&
+    /story|storyboard/iu.test(normalized)
+  ) {
+    return 'Lock the audience and decision first, attach evidence to each material claim, then assign one claim-led job to every slide.';
+  }
+  if (/communication|strategy|audience|purpose/iu.test(normalized)) {
+    return 'Start with the communication job: name the audience, decision, central takeaway, and success signal.';
+  }
+  if (/evidence|research|source|claim/iu.test(normalized)) {
+    return 'Treat evidence as a ledger rather than decoration: every material claim keeps its source, revision, and status.';
+  }
+  if (/narrative|story|storyboard|slide job/iu.test(normalized)) {
+    return 'Turn the story spine into one distinct narrative job per slide before visual composition begins.';
+  }
+  if (/visual|layout|composition|design|material/iu.test(normalized)) {
+    return 'Let meaning choose the editable visual primitive and composition, with variety driven by the argument.';
+  }
+  if (/critic|repair|quality|validation/iu.test(normalized)) {
+    return 'Convert independent critic findings into bounded repair instructions and stop at a strict iteration limit.';
+  }
+  if (/journey|record|gif|proof|export/iu.test(normalized)) {
+    return 'A release is incomplete until the browser journey, export, screenshot, GIF, versions, and receipts agree.';
+  }
+  if (/decision|next|adopt|commit|approve/iu.test(normalized)) {
+    return 'Ship only when evidence, a durable acceptance receipt, the recorded journey, and the editable export all agree.';
+  }
+  return `Make ${nodeslideCleanText(job, 140)} concrete without inventing unsupported facts.`;
+}
+
+function narrativeJobBullets(job: string): string[] {
+  const normalized = job.toLowerCase();
+  if (
+    /communication/iu.test(normalized) &&
+    /evidence/iu.test(normalized) &&
+    /story|storyboard/iu.test(normalized)
+  ) {
+    return ['Audience and decision', 'Claim and evidence ledger', 'One claim-led job per slide'];
+  }
+  if (/governed|release gate|one-shot/iu.test(normalized)) {
+    return ['Evidence-backed acceptance', 'Editable native output', 'Recorded end-to-end proof'];
+  }
+  if (/canva|gamma|hyperagent|benchmark/iu.test(normalized)) {
+    return [
+      'Canva: brand and asset velocity',
+      'Gamma: research and story velocity',
+      'NodeSlide: governed execution; HyperAgent: policy evolution',
+    ];
+  }
+  if (/communication|strategy|audience|purpose/iu.test(normalized)) {
+    return [
+      'Name the audience and decision',
+      'State the central takeaway',
+      'Define the release bar',
+    ];
+  }
+  if (/evidence|research|source|claim/iu.test(normalized)) {
+    return [
+      'Claim and source stay linked',
+      'Assumptions stay explicit',
+      'Revisions keep provenance',
+    ];
+  }
+  if (/narrative|story|storyboard|slide job/iu.test(normalized)) {
+    return ['One claim per slide', 'Evidence earns its place', 'Sequence creates the decision'];
+  }
+  if (/visual|layout|composition|design|workflow|material/iu.test(normalized)) {
+    return ['Strategy + evidence', 'Story + composition', 'Critique + accept'];
+  }
+  if (/critic|repair|quality|validation|policy/iu.test(normalized)) {
+    return [
+      'Independent specialist critics',
+      'Bounded repair with stop rules',
+      'Versioned policy, held-out promotion',
+    ];
+  }
+  if (/journey|record|gif|proof|export|receipt|version/iu.test(normalized)) {
+    return [
+      'Record the real browser path',
+      'Bind receipt to deck and version',
+      'Verify editable export and proof digest',
+    ];
+  }
+  if (/checklist|decision|next|adopt|commit|approve/iu.test(normalized)) {
+    return [
+      'Require evidence-backed acceptance',
+      'Require recorded end-to-end proof',
+      'Benchmark and promote policy safely',
+    ];
+  }
+  return [
+    'One distinct narrative job',
+    'Editable presentation primitives',
+    'No unsupported factual claims',
+  ];
+}
+
+function removeUnsupportedFallbackPrimitives(
+  slides: NodeSlidePlannedSlide[],
+  prompt: string,
+): void {
+  const requestsFormula = requestsBriefPrimitive(prompt, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.formula);
+  const requestsImage = requestsBriefPrimitive(prompt, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.image);
+  for (const [index, slide] of slides.entries()) {
+    let next = slide;
+    if (slide.chart && new Set(slide.chart.values).size <= 1) {
+      const { chart: _chart, ...withoutChart } = next;
+      next = withoutChart;
+    }
+    if (
+      next.formula &&
+      !requestsFormula &&
+      /accepted change|authorized change|proposal/iu.test(next.formula.expression)
+    ) {
+      const { formula: _formula, ...withoutFormula } = next;
+      next = withoutFormula;
+    }
+    if (next.image && !requestsImage && !next.image.url) {
+      const { image: _image, ...withoutImage } = next;
+      next = withoutImage;
+    }
+    slides[index] = next;
   }
 }
 
@@ -637,6 +796,12 @@ function applyExplicitSlideDirectives(
     if (!subject) continue;
     slide.title = nodeslideCleanText(sentenceCase(subject), 80);
     slide.headline = sentenceCase(subject);
+    slide.body = nodeslideCleanText(narrativeJobClaim(subject), 360);
+    slide.bullets = narrativeJobBullets(subject);
+    if (slide.metric && /critic|repair|quality|validation|policy/iu.test(subject)) {
+      slide.metric = '3 gates';
+      slide.metricLabel = 'content, visual, and release proof must agree';
+    }
   }
 }
 
@@ -943,21 +1108,49 @@ function requestsDiagramPrimitive(prompt: string): boolean {
 
 function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt: string): boolean {
   if (!requestsDiagramPrimitive(prompt)) return true;
-  if (slides.some((slide) => slide.diagram)) return true;
+  const directive = explicitSlideDirectives(prompt, slides.length).find((candidate) =>
+    /\b(?:diagram|flowchart|connector)(?:s|\s+primitives?)?\b/iu.test(candidate.instruction),
+  );
+  const existingIndex = slides.findIndex((slide) => slide.diagram);
+  if (existingIndex >= 0) {
+    if (!directive || directive.index === existingIndex) return true;
+    const source = slides[existingIndex];
+    const target = slides[directive.index];
+    if (
+      !source?.diagram ||
+      !target ||
+      target.chart ||
+      target.formula ||
+      target.image ||
+      target.video
+    ) {
+      return false;
+    }
+    const { diagram, ...sourceWithoutDiagram } = source;
+    target.diagram = diagram;
+    slides[existingIndex] = sourceWithoutDiagram;
+    return true;
+  }
 
   const candidate =
-    slides.find(
-      (slide) =>
-        /\b(?:workflow|approach|process|how|system)\b/iu.test(`${slide.title} ${slide.headline}`) &&
-        !slide.chart &&
-        !slide.formula &&
-        !slide.image &&
-        !slide.video,
-    ) ??
+    (directive
+      ? slides[directive.index]
+      : slides.find(
+          (slide) =>
+            /\b(?:workflow|approach|process|how|system)\b/iu.test(
+              `${slide.title} ${slide.headline}`,
+            ) &&
+            !slide.chart &&
+            !slide.formula &&
+            !slide.image &&
+            !slide.video,
+        )) ??
     slides.find(
       (slide, index) => index > 0 && !slide.chart && !slide.formula && !slide.image && !slide.video,
     );
-  if (!candidate) return false;
+  if (!candidate || candidate.chart || candidate.formula || candidate.image || candidate.video) {
+    return false;
+  }
 
   const nodes = candidate.bullets
     .map((label) => nodeslideCleanText(label, 52))
@@ -1271,13 +1464,15 @@ function buildSlide(input: {
   const evidenceSourceIds =
     input.linkedSourceIds.length > 0 ? input.linkedSourceIds : [input.sourceEvidenceId];
   const primaryEvidenceSourceId = evidenceSourceIds[0] ?? input.sourceEvidenceId;
-  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : 0.48;
+  const mirrorSplit = !hasVisual && !isOpening && !isClosing && input.index % 2 === 0;
+  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : 0.41;
+  const bodyX = mirrorSplit ? 0.52 : 0.07;
   add(
     element('body', {
       name: 'Body copy',
       kind: 'text',
       role: 'body',
-      bbox: box(0.07, isOpening ? 0.48 : 0.4, bodyWidth, isOpening ? 0.17 : 0.2),
+      bbox: box(bodyX, isOpening ? 0.48 : 0.4, bodyWidth, isOpening ? 0.17 : 0.2),
       rotation: 0,
       content: planned.body,
       style: {
@@ -1294,9 +1489,10 @@ function buildSlide(input: {
   );
 
   const horizontalBullets = (isOpening || isClosing) && !hasVisual;
-  const bulletX = horizontalBullets ? 0.07 : hasVisual ? 0.07 : 0.59;
-  const bulletY = horizontalBullets ? 0.72 : hasVisual ? 0.62 : 0.42;
-  const bulletWidth = horizontalBullets ? 0.8 : hasVisual ? 0.39 : 0.33;
+  const bulletX = horizontalBullets ? 0.07 : hasVisual || mirrorSplit ? 0.07 : 0.57;
+  const bulletY = horizontalBullets ? 0.72 : hasVisual ? (isOpening ? 0.67 : 0.62) : 0.42;
+  const bulletWidth = horizontalBullets ? 0.8 : hasVisual ? 0.39 : mirrorSplit ? 0.36 : 0.35;
+  const stackedBulletStep = isOpening && hasVisual ? 0.1 : 0.12;
   planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
     add(
       element(`bullet-${bulletIndex + 1}`, {
@@ -1305,7 +1501,7 @@ function buildSlide(input: {
         role: 'bullet',
         bbox: box(
           horizontalBullets ? bulletX + bulletIndex * 0.28 : bulletX,
-          horizontalBullets ? bulletY : bulletY + bulletIndex * 0.12,
+          horizontalBullets ? bulletY : bulletY + bulletIndex * stackedBulletStep,
           horizontalBullets ? 0.25 : bulletWidth,
           horizontalBullets ? 0.08 : 0.09,
         ),
@@ -1375,13 +1571,13 @@ function buildSlide(input: {
   if (planned.diagram) {
     const nodes = planned.diagram.nodes.slice(0, 4);
     const groupId = nodeslideStableId('group', input.slideId, 'diagram');
-    const gap = 0.025;
-    const diagramWidth = 0.39;
-    const connectorWidth = 0.032;
+    const gap = 0.01;
+    const diagramWidth = 0.41;
+    const connectorWidth = 0.018;
     const nodeWidth =
       (diagramWidth - connectorWidth * (nodes.length - 1) - gap * (nodes.length - 1)) /
       nodes.length;
-    let x = 0.53;
+    let x = 0.52;
     nodes.forEach((label, index) => {
       add(
         element(`diagram-node-${index + 1}`, {
@@ -1397,10 +1593,10 @@ function buildSlide(input: {
             strokeWidth: 1.5,
             color: theme.colors.insightInk,
             fontFamily: theme.typography.body,
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 650,
             lineHeight: 1.15,
-            padding: 10,
+            padding: 6,
             radius: theme.defaultRadius,
             textAlign: 'center',
             verticalAlign: 'middle',

@@ -18,7 +18,10 @@ export function sanitizeNodeSlideUserError(message: string | undefined, fallback
   if (structuredMessage) {
     try {
       const decoded = JSON.parse(`"${structuredMessage}"`) as unknown;
-      if (typeof decoded === 'string' && decoded.trim()) return bound(decoded.trim(), fallback);
+      if (typeof decoded === 'string' && decoded.trim()) {
+        const publicMessage = decoded.trim();
+        return isTechnicalTransportError(publicMessage) ? fallback : bound(publicMessage, fallback);
+      }
     } catch {
       // Fall through to the bounded plain-text path.
     }
@@ -42,8 +45,22 @@ export function sanitizeNodeSlideUserError(message: string | undefined, fallback
     .replace(/\s+at\s+(?:async\s+)?[\w./<(].*$/u, '')
     .trim();
 
-  if (!withoutWrapper || /^(?:\{|\[).*"kind"\s*:/u.test(withoutWrapper)) return fallback;
+  if (
+    !withoutWrapper ||
+    isTechnicalTransportError(withoutWrapper) ||
+    /^(?:\{|\[).*"kind"\s*:/u.test(withoutWrapper)
+  ) {
+    return fallback;
+  }
   return bound(withoutWrapper, fallback);
+}
+
+function isTechnicalTransportError(message: string): boolean {
+  return (
+    /\b(?:convex\s+server\s+error|internal\s+server\s+error|server\s+error)\b/iu.test(message) ||
+    /^\[CONVEX\s+[QMA]\(/u.test(message) ||
+    /^\[Request ID:/iu.test(message)
+  );
 }
 
 function bound(message: string, fallback: string): string {

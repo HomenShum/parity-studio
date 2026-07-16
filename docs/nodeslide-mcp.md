@@ -98,6 +98,7 @@ starts unconsented. Deterministic calls do not need or carry consent.
 | `nodeslide.get_deck` | Read-only structured deck summary + receipt |
 | `nodeslide.get_snapshot` | Read-only canonical snapshot with version clocks |
 | `nodeslide.list_elements` | Bounded, paginated structured element listing |
+| `nodeslide.evaluate_quality` | Read-only release preflight for story, evidence, visual craft, editability, reference quality, and recorded journey proof |
 | `nodeslide.export_spec` | Versioned `nodeslide.deck-snapshot` JSON envelope |
 | `nodeslide.list_slides` | Read-only slides and version clocks |
 | `nodeslide.get_trace` | Read-only model/cost/token/digest/validation trace |
@@ -120,6 +121,7 @@ starts unconsented. Deterministic calls do not need or carry consent.
    slideId="slide_1", consent=true, and an explicit instruction.
 5. Inspect candidateReceipt and nodeslide.get_trace.
 6. Stop for human review. Do not call accept_proposal unless the user explicitly approves.
+7. After acceptance and export, call nodeslide.evaluate_quality with the verified journey-proof JSON. Missing browser video, GIF, screenshot, editable PPTX, manifest, reference receipt, or an exact +1 version transition remains a release blocker.
 ```
 
 The proposal response includes `applied: false` and identical before/after deck versions. A mismatch fails closed as a governance violation.

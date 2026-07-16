@@ -13,6 +13,7 @@ import type {
   AgentSessionAttachment,
   AgentSessionControlPatch,
   AgentSessionControls,
+  AgentSessionJobFreshness,
   AgentSessionJobHandle,
   AgentSessionJobKind,
   AgentSessionJobReceipt,
@@ -25,7 +26,13 @@ import type {
 import { NODESLIDE_AGENT_SESSION_VERSION } from './types';
 
 const STORAGE_PREFIX = 'nodeslide.agent-session:v1:';
-const ACTIVE_JOB_STATUSES = new Set<AgentSessionJobStatus>(['preparing', 'queued', 'running']);
+const ACTIVE_JOB_STATUSES = new Set<AgentSessionJobStatus>([
+  'preparing',
+  'queued',
+  'running',
+  'retrying',
+  'paused',
+]);
 const AUTHORITY_LOCK_JOB_STATUSES = new Set<AgentSessionJobStatus>([
   ...ACTIVE_JOB_STATUSES,
   'awaiting_review',
@@ -38,6 +45,7 @@ const TERMINAL_JOB_STATUSES = new Set<AgentSessionJobStatus>([
   'stale',
 ]);
 const JOB_MAX_ATTEMPTS = 3;
+export const AGENT_SESSION_JOB_STALL_AFTER_MS = 120_000;
 
 export function createInitialAgentSessionState(
   clientSessionId: string,
@@ -173,7 +181,9 @@ export function failAgentSessionJob(
   now = Date.now(),
 ): AgentSessionState {
   const current = state.activeJob;
-  if (!current || TERMINAL_JOB_STATUSES.has(current.status)) return state;
+  if (!current || TERMINAL_JOB_STATUSES.has(current.status) || current.status === 'paused') {
+    return state;
+  }
   return freezeState({
     ...state,
     activeJob: Object.freeze({
@@ -297,6 +307,18 @@ export function agentSessionRequestFingerprint(value: unknown): string {
 
 export function isAgentSessionJobActive(status: AgentSessionJobStatus): boolean {
   return ACTIVE_JOB_STATUSES.has(status);
+}
+
+export function classifyAgentSessionJobFreshness(
+  job: Pick<AgentSessionJobHandle, 'status' | 'updatedAt'> | null,
+  now = Date.now(),
+  stallAfterMs = AGENT_SESSION_JOB_STALL_AFTER_MS,
+): AgentSessionJobFreshness {
+  if (!job || TERMINAL_JOB_STATUSES.has(job.status) || job.status === 'awaiting_review') {
+    return 'settled';
+  }
+  if (job.status === 'paused') return 'paused';
+  return now >= job.updatedAt + Math.max(1, Math.floor(stallAfterMs)) ? 'stalled' : 'fresh';
 }
 
 export function isAgentSessionEditAuthorityLocked(job: AgentSessionJobHandle | null): boolean {
@@ -629,6 +651,8 @@ function isJobStatus(value: unknown): value is AgentSessionJobStatus {
     value === 'preparing' ||
     value === 'queued' ||
     value === 'running' ||
+    value === 'retrying' ||
+    value === 'paused' ||
     value === 'awaiting_review' ||
     value === 'succeeded' ||
     value === 'failed' ||

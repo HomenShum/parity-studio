@@ -9,7 +9,7 @@ import { ExportMyDataButton } from './ExportMyDataAction';
 
 const bundle: NodeSlideOwnerDataExport = {
   manifest: {
-    schemaVersion: 'nodeslide.owner-data-export/v1',
+    schemaVersion: 'nodeslide.owner-data-export/v2',
     generatedAt: Date.UTC(2026, 6, 14, 12),
     mediaType: 'application/json',
     scope: { kind: 'deck_owner_capability', deckId: 'deck:owner', deckVersion: 4 },
@@ -23,8 +23,18 @@ const bundle: NodeSlideOwnerDataExport = {
       removedFieldCount: 1,
       redactedValueCount: 0,
       excludedCollections: [
-        { name: 'nodeslide_oauth_credentials', reason: 'authentication_material' },
+        {
+          name: 'nodeslide_oauth_credentials',
+          reason: 'authentication_material',
+          detail: 'Provider credentials are omitted.',
+        },
       ],
+    },
+    determinism: {
+      collectionOrder: 'schema_defined',
+      recordOrder: 'creation_time_then_stable_id',
+      objectKeyOrder: 'lexicographic',
+      generatedAt: 'request_time_only_nondeterministic_field',
     },
     retention: {
       serverCopyCreated: false,
@@ -39,17 +49,27 @@ const bundle: NodeSlideOwnerDataExport = {
     versions: [],
     proposals: { patches: [], variationBatches: [], variations: [], variationDecisions: [] },
     sources: [{ id: 'source:one', citation: 'Owner evidence' }],
+    evidence: { captures: [], steps: [] },
     memories: [],
     activity: {
       jobs: [],
+      durableSessions: [],
+      durableSessionEvents: [],
+      durableJournalEntries: [],
       runs: [],
       messages: [],
       spans: [],
       events: [],
       traces: [],
       executionTraces: [],
+      shadowComparisons: [],
       validations: [],
     },
+    budgets: { ledgers: [], billableCalls: [], events: [] },
+    sync: { connections: [] },
+    delegation: { grants: [], uses: [] },
+    outputs: { exports: [], publications: [] },
+    preferenceEvents: [],
     comments: [],
   },
 };
@@ -86,7 +106,7 @@ describe('ExportMyDataAction', () => {
       deckId: 'deck:owner',
       ownerAccessKey: 'owner-capability',
     });
-    expect(screen.getByText('Your complete redacted JSON bundle was downloaded.')).toBeTruthy();
+    expect(screen.getByText('Your complete redacted JSON archive was downloaded.')).toBeTruthy();
   });
 
   it('does not create a download when authorization fails', async () => {
@@ -105,6 +125,33 @@ describe('ExportMyDataAction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export my data' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('NodeSlide owner access denied.');
+    expect(saveExport).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the server returns a complete bundle for another deck', async () => {
+    const requestExport = vi.fn().mockResolvedValue({
+      ...bundle,
+      manifest: {
+        ...bundle.manifest,
+        scope: { ...bundle.manifest.scope, deckId: 'deck:other' },
+      },
+    });
+    const saveExport = vi.fn();
+
+    render(
+      <ExportMyDataButton
+        deckId="deck:owner"
+        deckTitle="Owner deck"
+        ownerAccessKey="owner-capability"
+        requestExport={requestExport}
+        saveExport={saveExport}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Export my data' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'NodeSlide data export failed closed: the returned bundle scope is invalid.',
+    );
     expect(saveExport).not.toHaveBeenCalled();
   });
 });

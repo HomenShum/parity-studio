@@ -12,6 +12,7 @@ import {
   type PatchOperation,
   nodeSlideAgentModel,
 } from '../shared/nodeslide';
+import { createNodeSlideAuthoringWorkflow } from '../shared/nodeslideAuthoringWorkflow';
 import { nodeSlideDurableDigest } from '../shared/nodeslideDurableSession';
 import {
   type NodeSlideRunBudgetInput,
@@ -53,6 +54,10 @@ import {
   NODESLIDE_EDIT_SHADOW_ADAPTER_VERSION,
   planNodeSlideEditShadow,
 } from './lib/nodeslideEditShadowPlanner';
+import {
+  captureNodeSlideWebEvidence,
+  createNodeSlideSourceSnapshotPdf,
+} from './lib/nodeslideEvidenceCapture';
 import { executionTraceFromDeckRepl } from './lib/nodeslideExecutionTrace';
 import { nodeslideContentDigest, nodeslideEventId, nodeslideStableId } from './lib/nodeslideIds';
 import { nodeSlideJobRequestDigest } from './lib/nodeslideJobState';
@@ -60,6 +65,7 @@ import {
   nodeSlideCreateJobRequestFromArgs,
   nodeSlideEditProposalJobRequestFromArgs,
 } from './lib/nodeslideJobValidators';
+import { validateNodeSlideLiveEditWithDeckRepl } from './lib/nodeslideLiveDeckRepl';
 import { nodeSlideMemoryUse } from './lib/nodeslideMemoryPolicy';
 import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
@@ -134,6 +140,7 @@ export const proposeEdit = action({
     providerModel: v.optional(nodeslideAgentModelValidator),
     providerEffort: v.optional(nodeslideReasoningEffortValidator),
     providerConsent: v.optional(v.string()),
+    maxCostUsd: v.optional(v.number()),
     idempotencyKey: v.optional(v.string()),
     webResearch: v.optional(v.boolean()),
     webResearchConsent: v.optional(v.string()),
@@ -191,7 +198,7 @@ export const proposeEdit = action({
     if (instruction.length > 4000)
       throw new Error('NodeSlide edit instruction exceeds 4000 characters.');
     const spendConstraint = parseNodeSlideSpendConstraint(instruction);
-    const runBudget = nodeSlideRunBudgetForConstraint(spendConstraint);
+    const runBudget = nodeSlideRunBudgetForConstraint(spendConstraint, args.maxCostUsd);
     if ((args.commandId ?? 'edit') !== 'edit') {
       throw publicAgentError(
         'invalid_request',
@@ -216,7 +223,7 @@ export const proposeEdit = action({
       throw error;
     }
     if (args.webResearch) {
-      if (spendConstraint) {
+      if (spendConstraint || args.maxCostUsd !== undefined) {
         throw publicAgentError(
           'invalid_request',
           'A hard dollar ceiling cannot include unpriced web-search egress yet. Turn Web off or remove the run spend ceiling.',
@@ -317,8 +324,9 @@ export const proposeEdit = action({
     try {
       let webSourceIds: string[] = [];
       let webProvidersUsed: string[] = [];
+      let handoffParentMessageId: string | undefined;
       if (args.webResearch) {
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const researchReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
@@ -326,7 +334,11 @@ export const proposeEdit = action({
           message: `Searching the web for: ${instruction}`,
           role: 'tool',
           toolName: 'web_search',
+          agentRole: 'researcher',
+          branchId: 'presentation-research',
+          branchLabel: 'Evidence research',
         });
+        handoffParentMessageId = researchReceipt?.messageId;
         const configured = configuredSearchProviders();
         if (configured.length === 0) {
           throw publicAgentError(
@@ -345,18 +357,19 @@ export const proposeEdit = action({
             references: search.references,
           });
         }
+        const webSourceInputs = search.references
+          .filter((reference) => reference.mediaType === 'website')
+          .slice(0, 10)
+          .map((reference) => ({
+            title: reference.title,
+            url: reference.sourceUrl,
+            snippet: reference.snippet || `Search result from ${reference.provider}.`,
+            provider: reference.provider,
+          }));
         const webRefs = await ctx.runMutation(nodeslideInternal.attachWebSourcesInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
-          sources: search.references
-            .filter((reference) => reference.mediaType === 'website')
-            .slice(0, 10)
-            .map((reference) => ({
-              title: reference.title,
-              url: reference.sourceUrl,
-              snippet: reference.snippet || `Search result from ${reference.provider}.`,
-              provider: reference.provider,
-            })),
+          sources: webSourceInputs,
         });
         webSourceIds = webRefs.map((reference: { id: string }) => reference.id);
         if (webSourceIds.length === 0) {
@@ -365,27 +378,55 @@ export const proposeEdit = action({
             'The web search returned no usable sources. No proposal was created.',
           );
         }
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
-          deckId: args.deckId,
-          ownerAccessKey: args.ownerAccessKey,
-          runId,
-          status: 'planning',
-          message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
-          role: 'tool',
-          toolName: 'source_snapshot',
-          sourceIds: webSourceIds,
-        });
+        const sourceSnapshotReceipt = await ctx.runMutation(
+          nodeslideInternal.advanceAgentRunInternal,
+          {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
+            role: 'tool',
+            toolName: 'source_snapshot',
+            agentRole: 'researcher',
+            branchId: 'presentation-research',
+            branchLabel: 'Evidence research',
+            ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+            sourceIds: webSourceIds,
+          },
+        );
+        handoffParentMessageId = sourceSnapshotReceipt?.messageId ?? handoffParentMessageId;
+        if (sourceSnapshotReceipt?.spanId) {
+          await captureWebSourcesBestEffort(ctx, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            parentSpanId: sourceSnapshotReceipt.spanId,
+            sources: pairNodeSlideStoredWebSources({
+              deckId: args.deckId,
+              inputs: webSourceInputs,
+              references: webRefs,
+            }),
+          });
+        }
         workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
         })) as NodeSlideWorkspace;
       } else {
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const researchReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
           status: 'planning',
+          message: 'Reviewed the scoped deck context and available source records.',
+          role: 'tool',
+          toolName: 'delegate_researcher',
+          agentRole: 'researcher',
+          branchId: 'presentation-research',
+          branchLabel: 'Context research',
         });
+        handoffParentMessageId = researchReceipt?.messageId;
       }
       const memories: NodeSlideAgentMemory[] =
         args.memoryMode === 'relevant'
@@ -400,7 +441,7 @@ export const proposeEdit = action({
           (memory) => nodeSlideMemoryUse(memory) === 'standing_instruction',
         ).length;
         const retrievedMemoryCount = memories.length - standingInstructionCount;
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const memoryReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
@@ -409,9 +450,14 @@ export const proposeEdit = action({
           message: `Loaded ${standingInstructionCount} explicit standing instruction${standingInstructionCount === 1 ? '' : 's'} and ${retrievedMemoryCount} relevant retrieved memor${retrievedMemoryCount === 1 ? 'y' : 'ies'} for this run.`,
           role: 'tool',
           toolName: 'memory_retrieval',
+          agentRole: 'analyst',
+          branchId: 'presentation-analysis',
+          branchLabel: 'Audience and evidence analysis',
+          ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
           memoryIds: memories.map((memory) => memory.id),
           memoryDigests: memories.map((memory) => memory.contentDigest),
         });
+        handoffParentMessageId = memoryReceipt?.messageId ?? handoffParentMessageId;
         await ctx.runMutation(nodeslideMemoryInternal.markUsedInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
@@ -429,11 +475,24 @@ export const proposeEdit = action({
         writeScope: args.scope,
         ...(requestedReadContext.length ? { requested: requestedReadContext } : {}),
       });
+      const analysisReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: `Analyzed ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, and ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'} within the authorized scope.`,
+        role: 'tool',
+        toolName: 'delegate_analyst',
+        agentRole: 'analyst',
+        branchId: 'presentation-analysis',
+        branchLabel: 'Audience and evidence analysis',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = analysisReceipt?.messageId ?? handoffParentMessageId;
       const explicitlySuppliedEvidence =
         webSourceIds.length > 0 ||
         (args.readContext ?? []).some((reference) => reference.kind === 'source');
-      const requireFactualSourceBindings =
-        providerChoice.providerMode !== 'deterministic' && explicitlySuppliedEvidence;
+      const requireFactualSourceBindings = explicitlySuppliedEvidence;
       const traceContext = [
         `Read context: ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'}, ${readContext.comments.length} comment${readContext.comments.length === 1 ? '' : 's'}`,
         ...readContext.sources.map(
@@ -443,6 +502,7 @@ export const proposeEdit = action({
         requireFactualSourceBindings
           ? 'Evidence policy: factual text and chart output requires exact claim-level source bindings'
           : 'Evidence policy: no external evidence-grounded factual output requested',
+        `Run budget: hard ceiling $${runBudget.maxCostUsd ?? 1} USD`,
       ];
 
       const request: NodeSlideEditPlanningRequest = {
@@ -465,6 +525,20 @@ export const proposeEdit = action({
             }
           : {}),
       };
+      const storyReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: 'Shaping the requested change into a coherent presentation narrative.',
+        role: 'tool',
+        toolName: 'delegate_storyteller',
+        agentRole: 'storyteller',
+        branchId: 'presentation-story',
+        branchLabel: 'Narrative structure',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = storyReceipt?.messageId ?? handoffParentMessageId;
       const planningStartedAt = Date.now();
       const scopedComment =
         scopedCommentId === undefined
@@ -520,8 +594,42 @@ export const proposeEdit = action({
 
       const baselineElapsedMs = boundedLaneElapsed(Date.now() - planningStartedAt);
       if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
-      const finalOperations = baseline.operations;
+      let finalOperations = baseline.operations;
+      let liveDeckReplValidation: ReturnType<typeof validateNodeSlideLiveEditWithDeckRepl> | null =
+        null;
+      try {
+        liveDeckReplValidation = validateNodeSlideLiveEditWithDeckRepl({
+          runId,
+          traceId: nodeslideStableId('trace_live_edit_repl', args.deckId, runId),
+          snapshot,
+          baseDeckVersion: args.baseDeckVersion,
+          baseSlideVersions: args.baseSlideVersions,
+          baseElementVersions: args.baseElementVersions,
+          scope: args.scope,
+          operations: baseline.operations,
+        });
+        finalOperations = liveDeckReplValidation.operations;
+      } catch (error) {
+        throw publicAgentError(
+          'invalid_request',
+          `The bounded executor rejected this candidate before review. ${agentRunErrorMessage(error)}`,
+        );
+      }
       const boundSourceIds = nodeSlideOperationSourceIds(finalOperations);
+      const designReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: `Translated the narrative into ${finalOperations.length} bounded slide operation${finalOperations.length === 1 ? '' : 's'}.`,
+        role: 'tool',
+        toolName: 'delegate_designer',
+        agentRole: 'designer',
+        branchId: 'presentation-design',
+        branchLabel: 'Slide design',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = designReceipt?.messageId ?? handoffParentMessageId;
       const runBeforeValidation = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
         deckId: args.deckId,
         ownerAccessKey: args.ownerAccessKey,
@@ -530,14 +638,35 @@ export const proposeEdit = action({
       if (runBeforeValidation?.status === 'cancelled') {
         throw publicAgentError('invalid_request', 'The agent run was cancelled before validation.');
       }
+      if (liveDeckReplValidation.status === 'validated') {
+        const executorReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'validating',
+          message: `Bounded executor inspected the deck, measured ${liveDeckReplValidation.inspectedSlideIds.length} touched slide${liveDeckReplValidation.inspectedSlideIds.length === 1 ? '' : 's'}, and validated the exact ${finalOperations.length}-operation review candidate.`,
+          role: 'tool',
+          toolName: 'deck_repl',
+          agentRole: 'executor',
+          branchId: 'presentation-execution',
+          branchLabel: 'Bounded deck execution',
+          ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+          ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
+        });
+        handoffParentMessageId = executorReceipt?.messageId ?? handoffParentMessageId;
+      }
       await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
         deckId: args.deckId,
         ownerAccessKey: args.ownerAccessKey,
         runId,
         status: 'validating',
-        message: `Validating ${baseline.operations.length} proposed operation${baseline.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
+        message: `Validated ${finalOperations.length} proposed operation${finalOperations.length === 1 ? '' : 's'} against scope, versions, evidence bindings, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
+        agentRole: 'fact_checker',
+        branchId: 'presentation-fact-check',
+        branchLabel: 'Evidence and quality check',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
       const summary = baseline.summary;
@@ -667,12 +796,16 @@ export const proposeEdit = action({
               ? 'Used deterministic bounded edit fallback'
               : `Parsed and validated ${requestedProviderLabel} JSON`
             : 'Produced deterministic bounded edit operations',
+          liveDeckReplValidation.status === 'validated'
+            ? `Ran bounded Deck REPL inspection and measurement across ${liveDeckReplValidation.inspectedSlideIds.length} touched slide${liveDeckReplValidation.inspectedSlideIds.length === 1 ? '' : 's'} before validating the exact review proposal`
+            : liveDeckReplValidation.status === 'skipped_high_cardinality'
+              ? `Used the established validator for a high-cardinality candidate above the ${liveDeckReplValidation.operationLimit}-operation Deck REPL ceiling`
+              : 'Used the established linked-comment validator because comment anchors live outside the immutable Deck REPL snapshot',
           'Persisted proposal and human-readable trace atomically',
         ],
-        sourceBindingPolicy:
-          requireFactualSourceBindings && baseline.receipt.origin === 'free_route'
-            ? 'required_external_evidence'
-            : 'not_applicable',
+        sourceBindingPolicy: requireFactualSourceBindings
+          ? 'required_external_evidence'
+          : 'not_applicable',
         authorizedSourceIds: readContext.sources.map((source) => source.id),
         ...traceAttribution,
       });
@@ -685,6 +818,9 @@ export const proposeEdit = action({
         traceId,
         message: `${summary} Review the validated proposal before it can change the deck.`,
         role: 'assistant',
+        agentRole: 'reviewer',
+        branchId: 'presentation-review',
+        branchLabel: 'Human review',
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
       if (!durableJob) return proposal;
@@ -847,6 +983,9 @@ export const proposeExternalAgentEdit = action({
         message: `Validating ${args.operations.length} ${submissionKind === 'external_agent' ? 'external-agent' : 'local-agent'} operation${args.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
+        agentRole: 'fact_checker',
+        branchId: 'presentation-fact-check',
+        branchLabel: 'Evidence and quality check',
       });
       const now = Date.now();
       const patchId = nodeslideEventId('patch_external_agent', now, args.deckId, instruction);
@@ -911,6 +1050,9 @@ export const proposeExternalAgentEdit = action({
         traceId,
         message: `${summary} Review the validated proposal before it can change the deck.`,
         role: 'assistant',
+        agentRole: 'reviewer',
+        branchId: 'presentation-review',
+        branchLabel: 'Human review',
       });
       return proposal;
     } catch (error) {
@@ -1290,6 +1432,7 @@ export const createDeckFromBrief = action({
     const slideCountInstruction = requestedSlideCount
       ? `Produce exactly ${requestedSlideCount} concise slides`
       : 'Produce 6–8 concise slides';
+    const authoringWorkflow = createNodeSlideAuthoringWorkflow(brief);
     const fallbackSpec = deterministicBriefSpec(title, generationBrief);
     const runBudget = nodeSlideRunBudgetForConstraint(
       parseNodeSlideSpendConstraint([brief.prompt, ...brief.successCriteria].join('\n')),
@@ -1304,6 +1447,7 @@ export const createDeckFromBrief = action({
           attachments,
           requestedRoute: args.route,
           providerMode: providerChoice.providerMode,
+          authoringWorkflow,
         }),
         maxTokens: 5000,
         ...(providerChoice.providerMode !== 'deterministic'
@@ -1445,10 +1589,10 @@ export const createDeckFromBrief = action({
       selectedModelRoute?.provider === 'nebius' ? 'Nebius' : 'OpenRouter';
     const traceSummary =
       providerChoice.providerMode === 'deterministic'
-        ? 'NodeSlide created the deck with its deterministic brief generator. The brief was not sent to an external model provider.'
+        ? `NodeSlide created the deck with its deterministic brief generator under ${authoringWorkflow.policyId} (${authoringWorkflow.digest}). The brief was not sent to an external model provider.`
         : providerSucceeded
-          ? `The user consented to send the full brief${attachments.length > 0 ? ` and ${attachments.length} uploaded data source${attachments.length === 1 ? '' : 's'}` : ''} to ${selectedProviderName}. The named ${selectedModelLabel} model supplied the narrative plan through pi-ai; NodeSlide normalized, persisted, and validated the deck deterministically.`
-          : `The user consented to send the full brief${attachments.length > 0 ? ' and uploaded data sources' : ''} to ${selectedProviderName}. NodeSlide used its deterministic fallback because ${provider?.ok === false ? provider.reason : `the ${selectedModelLabel} route was unavailable.`}`;
+          ? `The user consented to send the full brief${attachments.length > 0 ? ` and ${attachments.length} uploaded data source${attachments.length === 1 ? '' : 's'}` : ''} to ${selectedProviderName}. The named ${selectedModelLabel} model supplied the narrative plan through pi-ai under ${authoringWorkflow.policyId} (${authoringWorkflow.digest}); NodeSlide normalized, persisted, and validated the deck deterministically.`
+          : `The user consented to send the full brief${attachments.length > 0 ? ' and uploaded data sources' : ''} to ${selectedProviderName}. NodeSlide used its deterministic fallback under ${authoringWorkflow.policyId} (${authoringWorkflow.digest}) because ${provider?.ok === false ? provider.reason : `the ${selectedModelLabel} route was unavailable.`}`;
     return await ctx.runMutation(nodeslideInternal.createFromBriefInternal, {
       deckId,
       projectId,
@@ -1499,8 +1643,29 @@ export const createDeckFromBrief = action({
 
 function nodeSlideRunBudgetForConstraint(
   constraint: ReturnType<typeof parseNodeSlideSpendConstraint>,
+  explicitMaxCostUsd?: number,
 ): NodeSlideRunBudgetInput {
-  return constraint ? { maxCostUsd: constraint.maxCostMicroUsd / 1_000_000 } : {};
+  if (
+    explicitMaxCostUsd !== undefined &&
+    (!Number.isFinite(explicitMaxCostUsd) || explicitMaxCostUsd < 0 || explicitMaxCostUsd > 100)
+  ) {
+    throw publicAgentError(
+      'invalid_request',
+      'Run spend ceiling must be a finite USD amount from $0 through $100.',
+    );
+  }
+  const instructionMaxCostUsd = constraint?.maxCostMicroUsd
+    ? constraint.maxCostMicroUsd / 1_000_000
+    : constraint
+      ? 0
+      : undefined;
+  if (explicitMaxCostUsd === undefined && instructionMaxCostUsd === undefined) return {};
+  return {
+    maxCostUsd: Math.min(
+      explicitMaxCostUsd ?? Number.POSITIVE_INFINITY,
+      instructionMaxCostUsd ?? Number.POSITIVE_INFINITY,
+    ),
+  };
 }
 
 function nodeSlideBudgetLedgerClient(
@@ -1656,6 +1821,210 @@ async function appendNodeSlideWebJournalReceipt(
       },
     },
   });
+}
+
+interface NodeSlideWebSourceInput {
+  title: string;
+  url: string;
+  snippet: string;
+  provider: string;
+}
+
+export interface NodeSlideStoredWebSource extends NodeSlideWebSourceInput {
+  sourceId: string;
+}
+
+/**
+ * Rejoins mutation results to inputs by the same stable URL identity used by attachWebSourcesInternal.
+ * Invalid inputs can therefore be skipped without shifting every later source binding.
+ */
+export function pairNodeSlideStoredWebSources(args: {
+  deckId: string;
+  inputs: readonly NodeSlideWebSourceInput[];
+  references: readonly { id: string }[];
+}): NodeSlideStoredWebSource[] {
+  const inputsBySourceId = new Map<string, NodeSlideStoredWebSource>();
+  for (const input of args.inputs) {
+    const url = normalizedStoredNodeSlideWebSourceUrl(input.url);
+    if (!url) continue;
+    const sourceId = nodeslideStableId('source_web', args.deckId, url);
+    inputsBySourceId.set(sourceId, { ...input, sourceId, url });
+  }
+  return args.references.flatMap((reference) => {
+    const source = inputsBySourceId.get(reference.id);
+    return source ? [source] : [];
+  });
+}
+
+export function nodeSlideEvidenceAttachmentDigest(bytes: Uint8Array): string {
+  return nodeslideContentDigest(bytes);
+}
+
+/** Deletes a just-stored attachment if its custody record cannot be committed, then rethrows. */
+export async function finalizeNodeSlideEvidenceRecord<TStorageId, TResult>(args: {
+  storageId: TStorageId;
+  deleteStorage: (storageId: TStorageId) => Promise<void>;
+  record: () => Promise<TResult>;
+}): Promise<TResult> {
+  try {
+    return await args.record();
+  } catch (recordError) {
+    try {
+      await args.deleteStorage(args.storageId);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [recordError, cleanupError],
+        'Evidence custody recording failed and the orphaned attachment could not be deleted.',
+      );
+    }
+    throw recordError;
+  }
+}
+
+export async function captureWebSourcesBestEffort(
+  ctx: ActionCtx,
+  args: {
+    deckId: string;
+    ownerAccessKey: string;
+    runId: string;
+    parentSpanId: string;
+    sources: NodeSlideStoredWebSource[];
+  },
+): Promise<void> {
+  const apiKey = process.env['FIRECRAWL_API_KEY']?.trim();
+  const targets = args.sources.slice(0, 3);
+  const captures = await Promise.allSettled(
+    targets.map(async (source) => ({
+      source,
+      capture: apiKey ? await captureNodeSlideWebEvidence({ url: source.url, apiKey }) : null,
+    })),
+  );
+  for (const result of captures) {
+    if (result.status === 'rejected') continue;
+    const { source, capture } = result.value;
+    const retrievedAt = Date.now();
+    const snapshotPdf = createNodeSlideSourceSnapshotPdf({
+      title: source.title,
+      url: source.url,
+      excerpt: source.snippet,
+      provider: source.provider,
+      retrievedAt,
+    });
+    let storedAttachment:
+      | {
+          storageId: Awaited<ReturnType<ActionCtx['storage']['store']>>;
+          kind: 'screenshot' | 'pdf';
+          digest: string;
+        }
+      | undefined;
+    if (capture?.screenshot) {
+      const bytes = Uint8Array.from(capture.screenshot.bytes);
+      try {
+        storedAttachment = {
+          storageId: await ctx.storage.store(
+            new Blob([bytes.buffer], { type: capture.screenshot.mimeType }),
+          ),
+          kind: 'screenshot',
+          digest: nodeSlideEvidenceAttachmentDigest(bytes),
+        };
+      } catch {
+        storedAttachment = undefined;
+      }
+    }
+    if (!storedAttachment) {
+      const bytes = Uint8Array.from(snapshotPdf.bytes);
+      try {
+        storedAttachment = {
+          storageId: await ctx.storage.store(new Blob([bytes.buffer], { type: 'application/pdf' })),
+          kind: 'pdf',
+          digest: nodeSlideEvidenceAttachmentDigest(bytes),
+        };
+      } catch {
+        // Evidence remains additive when no attachment was stored; retained citations still work.
+        continue;
+      }
+    }
+    const contentDigest = storedAttachment.digest;
+    const captureId = nodeslideStableId(
+      'evidence_capture',
+      args.runId,
+      source.sourceId,
+      contentDigest,
+    );
+    const screenshotStorageId =
+      storedAttachment.kind === 'screenshot' ? storedAttachment.storageId : undefined;
+    const pdfStorageId = storedAttachment.kind === 'pdf' ? storedAttachment.storageId : undefined;
+    const screenshotViewport = screenshotStorageId ? capture?.screenshot?.viewport : undefined;
+    const screenshotBox = screenshotViewport ? { x: 0, y: 0, w: 1, h: 1 } : undefined;
+    await finalizeNodeSlideEvidenceRecord({
+      storageId: storedAttachment.storageId,
+      deleteStorage: (storageId) => ctx.storage.delete(storageId),
+      record: () =>
+        ctx.runMutation(nodeslideInternal.recordEvidenceCaptureInternal, {
+          id: captureId,
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId: args.runId,
+          parentSpanId: args.parentSpanId,
+          sourceId: source.sourceId,
+          url: source.url,
+          goal: `Preserve evidence for ${source.title}`,
+          provider: screenshotStorageId
+            ? (capture?.provider ?? 'firecrawl')
+            : 'nodeslide-source-snapshot/v1',
+          status: 'ready',
+          contentDigest,
+          startedAt: capture?.startedAt ?? retrievedAt,
+          completedAt: capture?.completedAt ?? retrievedAt,
+          steps: [
+            {
+              phase: 'observe',
+              label: screenshotStorageId
+                ? `Captured webpage evidence for ${source.title}`
+                : `Preserved search-provider snapshot for ${source.title}`,
+              status: screenshotStorageId && screenshotViewport ? 'ok' : 'warning',
+              ...(screenshotStorageId && !screenshotViewport
+                ? {
+                    detail:
+                      'Stored the exact screenshot bytes, but the encoded image dimensions could not be verified. No region geometry was recorded.',
+                  }
+                : !screenshotStorageId
+                  ? {
+                      detail: capture?.error
+                        ? `${capture.error} Stored an exact title, URL, and excerpt snapshot instead; it is not a webpage screenshot.`
+                        : 'Stored the exact search-provider title, URL, and excerpt as a PDF; it is not a webpage screenshot.',
+                    }
+                  : {}),
+              ...(screenshotStorageId
+                ? {
+                    screenshotStorageId,
+                    ...(screenshotBox ? { box: screenshotBox } : {}),
+                    ...(screenshotViewport ? { viewport: screenshotViewport } : {}),
+                  }
+                : {}),
+              ...(pdfStorageId
+                ? { pdfStorageId, box: snapshotPdf.box, viewport: snapshotPdf.viewport }
+                : {}),
+              regionScope: 'source',
+              quote: source.snippet.slice(0, 1000),
+              contentDigest,
+              startedAt: capture?.startedAt ?? retrievedAt,
+              completedAt: capture?.completedAt ?? retrievedAt,
+            },
+          ],
+        }),
+    });
+  }
+}
+
+function normalizedStoredNodeSlideWebSourceUrl(value: string): string | undefined {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
+    return parsed.toString().slice(0, 900);
+  } catch {
+    return undefined;
+  }
 }
 
 function extractPlan(

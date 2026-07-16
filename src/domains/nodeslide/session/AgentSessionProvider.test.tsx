@@ -5,8 +5,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useNodeSlideComposerSession } from '../composer/nodeSlideComposerSession';
 import { AgentSessionProvider, useAgentSession } from './AgentSessionProvider';
+import { agentSessionStorageKey } from './agentSessionState';
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
 afterEach(cleanup);
 
 describe('AgentSessionProvider', () => {
@@ -65,6 +69,27 @@ describe('AgentSessionProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revoke auto-apply grant' }));
     expect(screen.getByTestId('approval-mode')).toHaveTextContent('review');
     expect(screen.getByTestId('approval-grant')).toHaveTextContent('none');
+  });
+
+  it('keeps bearer capabilities in session storage instead of persistent local storage', () => {
+    renderSession();
+    fireEvent.click(screen.getByRole('button', { name: 'Install auto-apply grant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare edit job' }));
+
+    const storedSession = window.sessionStorage.getItem(agentSessionStorageKey('shared-session'));
+    expect(window.sessionStorage.length).toBeGreaterThan(0);
+    expect(storedSession).toContain('delegation-token-a');
+    expect(storedSession).toContain('deck-owner-key');
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('surfaces heartbeat freshness without turning a stalled job into a terminal result', () => {
+    renderSession();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare edit job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Attach running receipt' }));
+
+    expect(screen.getByTestId('job-status')).toHaveTextContent('running');
+    expect(screen.getByTestId('job-freshness')).toHaveTextContent('stalled');
   });
 });
 
@@ -136,6 +161,24 @@ function SessionHarness() {
       <button
         type="button"
         onClick={() =>
+          session.attachJob({
+            jobId: 'job-edit',
+            kind: 'edit_proposal',
+            idempotencyKey: job?.idempotencyKey ?? '',
+            status: 'running',
+            phase: 'generating',
+            progress: 40,
+            attempt: 1,
+            maxAttempts: 3,
+            updatedAt: 10,
+          })
+        }
+      >
+        Attach running receipt
+      </button>
+      <button
+        type="button"
+        onClick={() =>
           session.installApprovalGrant({
             mode: 'auto_apply',
             deckId: 'deck-a',
@@ -163,6 +206,7 @@ function SessionHarness() {
         {job ? `${job.ownerAccessKey}|${job.idempotencyKey}` : 'none'}
       </output>
       <output data-testid="job-target">{job?.targetDeckId ?? 'none'}</output>
+      <output data-testid="job-freshness">{session.getJobFreshness(200_011)}</output>
       <output data-testid="approval-mode">{session.state.controls.approval.mode}</output>
       <output data-testid="approval-deck">
         {session.state.controls.approval.mode === 'auto_apply'

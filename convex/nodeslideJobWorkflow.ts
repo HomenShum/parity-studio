@@ -12,6 +12,8 @@ import { workflow } from './workflows';
 const jobsInternal: any = (internal as any).nodeslideJobs;
 // biome-ignore lint/suspicious/noExplicitAny: generated Convex self-reference boundary
 const jobRunnerInternal: any = (internal as any).nodeslideJobRunner;
+// biome-ignore lint/suspicious/noExplicitAny: generated Convex self-reference boundary
+const jobControlInternal: any = (internal as any).nodeslideJobControl;
 
 export const createDeckJobWorkflow = workflow.define({
   args: {
@@ -25,17 +27,30 @@ export const createDeckJobWorkflow = workflow.define({
       jobsInternal.checkpointInternal,
       {
         jobId: args.jobId,
-        status: 'running',
         phase: 'planning',
         progress: 5,
       },
       { inline: true, name: 'checkpoint-planning' },
     );
 
+    const beforeCreate = (await step.runMutation(
+      jobControlInternal.heartbeatInternal,
+      { jobId: args.jobId },
+      { inline: true, name: 'gate-create-deck' },
+    )) as { shouldRun: boolean };
+    if (!beforeCreate.shouldRun) return;
+
     const result = (await step.runAction(jobRunnerInternal.executeCreateDeckInternal, args, {
       name: 'execute-create-deck',
       retry: { maxAttempts: 3, initialBackoffMs: 1_000, base: 2 },
     })) as { deckId: string; conversationRunId: string; memoryIds: string[] };
+
+    const afterCreate = (await step.runMutation(
+      jobControlInternal.heartbeatInternal,
+      { jobId: args.jobId },
+      { inline: true, name: 'heartbeat-create-deck-result' },
+    )) as { shouldRun: boolean };
+    if (!afterCreate.shouldRun) return;
 
     await step.runMutation(
       jobsInternal.completeCreateDeckInternal,
@@ -62,12 +77,18 @@ export const editProposalJobWorkflow = workflow.define({
       jobsInternal.checkpointInternal,
       {
         jobId: args.jobId,
-        status: 'running',
         phase: 'planning',
         progress: 5,
       },
       { inline: true, name: 'checkpoint-edit-planning' },
     );
+
+    const beforeEdit = (await step.runMutation(
+      jobControlInternal.heartbeatInternal,
+      { jobId: args.jobId },
+      { inline: true, name: 'gate-edit-proposal' },
+    )) as { shouldRun: boolean };
+    if (!beforeEdit.shouldRun) return;
 
     const result = (await step.runAction(jobRunnerInternal.executeEditProposalInternal, args, {
       name: 'execute-edit-proposal',
@@ -79,6 +100,13 @@ export const editProposalJobWorkflow = workflow.define({
       conversationRunId: string;
       memoryIds: string[];
     };
+
+    const afterEdit = (await step.runMutation(
+      jobControlInternal.heartbeatInternal,
+      { jobId: args.jobId },
+      { inline: true, name: 'heartbeat-edit-proposal-result' },
+    )) as { shouldRun: boolean };
+    if (!afterEdit.shouldRun) return;
 
     await step.runMutation(
       jobsInternal.completeEditProposalInternal,

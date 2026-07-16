@@ -2,12 +2,67 @@ import { describe, expect, it } from 'vitest';
 import { buildGoldenNodeSlide } from '../convex/lib/nodeslideSeed';
 import type { PatchOperation } from './nodeslide';
 import {
+  evaluateNodeSlideDelegationAutoCommit,
   nodeSlideDelegationCandidateViolations,
   nodeSlideDelegationCompositionRequiresReview,
   nodeSlideDelegationOperationRequiresReview,
 } from './nodeslideDelegation';
 
 describe('NodeSlide delegated semantic review policy', () => {
+  it('permits Turbo only for an active authority, validation-clean candidate, and Deck CI pass', () => {
+    const snapshot = buildGoldenNodeSlide('delegation-turbo-policy', 1_000).snapshot;
+    const operation = textOperation('A bounded, validated edit');
+    const proposal = {
+      deckId: snapshot.deck.id,
+      scope: {
+        kind: 'elements' as const,
+        deckId: snapshot.deck.id,
+        slideIds: ['slide-a'],
+        elementIds: ['element-a'],
+        operationMode: 'copy' as const,
+      },
+      operations: [operation],
+      source: 'agent' as const,
+      proposalKind: 'edit' as const,
+      traceId: 'trace-turbo',
+    };
+    const grant = {
+      deckId: snapshot.deck.id,
+      expiresAt: 2_000,
+      useCount: 0,
+      maxUses: 4,
+      maxOperations: 8,
+    };
+
+    expect(
+      evaluateNodeSlideDelegationAutoCommit({
+        grant,
+        proposal,
+        evaluatedAt: 1_500,
+        candidateValidationPassed: true,
+        deckCiPassed: true,
+      }),
+    ).toEqual({ outcome: 'commit', reason: 'allowed' });
+    expect(
+      evaluateNodeSlideDelegationAutoCommit({
+        grant,
+        proposal,
+        evaluatedAt: 1_500,
+        candidateValidationPassed: true,
+        deckCiPassed: false,
+      }),
+    ).toEqual({ outcome: 'awaiting_review', reason: 'deck_ci_pass_required' });
+    expect(
+      evaluateNodeSlideDelegationAutoCommit({
+        grant: { ...grant, useCount: grant.maxUses },
+        proposal,
+        evaluatedAt: 1_500,
+        candidateValidationPassed: true,
+        deckCiPassed: true,
+      }),
+    ).toEqual({ outcome: 'failed', reason: 'grant_inactive' });
+  });
+
   it.each([
     ['zero-width text', textOperation('\u200B\u200D')],
     ['short transparent hex', styleOperation({ fill: '#0000' })],
