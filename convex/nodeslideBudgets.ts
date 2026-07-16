@@ -402,22 +402,34 @@ export const finalize = internalMutation({
     }
     const state = stateFromRow(row);
     assertOpenAndExpected(state, args.expectedRevision, args.expectedStateDigest);
-    if (state.reservedMicroUsd !== 0 || state.unreconciledMicroUsd !== 0) {
-      throw new NodeSlideBudgetLedgerError(
-        'invalid_call_transition',
-        'cannot finalize while billable cost exposure is unresolved',
-      );
+    await assertReconciledForFinalization(ctx, state);
+    return await persistFinalization(ctx, row, state, operationDigest);
+  },
+});
+
+/**
+ * Trusted durable-job finalizer. The current canonical row is read and
+ * finalized atomically, so job callers do not need to carry a stale-prone CAS
+ * snapshot across their terminal transition.
+ */
+export const finalizeForJob = internalMutation({
+  args: { budgetId: v.string() },
+  handler: async (ctx, args) => {
+    assertNodeSlideLedgerKey('budgetId', args.budgetId);
+    const row = await requireBudget(ctx, args.budgetId);
+    const state = stateFromRow(row);
+    await assertReconciledForFinalization(ctx, state);
+    const operationDigest = nodeSlideBudgetFinalizeDigest(args.budgetId);
+    if (state.status === 'finalized') {
+      if (state.finalizeDigest !== operationDigest) {
+        throw new NodeSlideBudgetLedgerError(
+          'budget_idempotency_conflict',
+          'finalization digest differs',
+        );
+      }
+      return present(row);
     }
-    const transition = advanceBudget(state, {
-      kind: 'finalized',
-      operationDigest,
-      deltas: zeroCostDeltas,
-      status: 'finalized',
-      finalizeDigest: operationDigest,
-    });
-    const now = Date.now();
-    await persistTransition(ctx, row, transition, now);
-    return present(await requireBudget(ctx, args.budgetId));
+    return await persistFinalization(ctx, row, state, operationDigest);
   },
 });
 
@@ -539,6 +551,54 @@ function assertOpenAndExpected(
     throw new NodeSlideBudgetLedgerError('budget_finalized', 'budget is finalized');
   }
   assertNodeSlideExpectedBudgetState(state, revision, digest);
+}
+
+async function assertReconciledForFinalization(
+  ctx: MutationCtx,
+  state: NodeSlideBudgetLedgerState,
+): Promise<void> {
+  if (state.reservedMicroUsd !== 0 || state.unreconciledMicroUsd !== 0) {
+    unresolvedFinalization();
+  }
+  const reservedCall = await ctx.db
+    .query('nodeslide_billable_calls')
+    .withIndex('by_budget_status', (index) =>
+      index.eq('budgetId', state.id).eq('status', 'reserved'),
+    )
+    .first();
+  if (reservedCall) unresolvedFinalization();
+  const unreconciledCall = await ctx.db
+    .query('nodeslide_billable_calls')
+    .withIndex('by_budget_status', (index) =>
+      index.eq('budgetId', state.id).eq('status', 'unreconciled'),
+    )
+    .first();
+  if (unreconciledCall) unresolvedFinalization();
+}
+
+function unresolvedFinalization(): never {
+  throw new NodeSlideBudgetLedgerError(
+    'invalid_call_transition',
+    'cannot finalize while billable cost exposure is unresolved',
+  );
+}
+
+async function persistFinalization(
+  ctx: MutationCtx,
+  row: BudgetRow,
+  state: NodeSlideBudgetLedgerState,
+  operationDigest: string,
+) {
+  const transition = advanceBudget(state, {
+    kind: 'finalized',
+    operationDigest,
+    deltas: zeroCostDeltas,
+    status: 'finalized',
+    finalizeDigest: operationDigest,
+  });
+  const now = Date.now();
+  await persistTransition(ctx, row, transition, now);
+  return present(await requireBudget(ctx, row.id));
 }
 
 function assertUsageWithinBudget(
