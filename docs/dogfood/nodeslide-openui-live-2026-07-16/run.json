@@ -35,8 +35,8 @@
   },
   "gates": {
     "focusedOpenuiAgentTests": "17/17 passed",
-    "fullRepositoryTests": "1112/1112 passed",
-    "typecheck": "OpenUI slice passed earlier; current workspace blocked by concurrent nodeslideAgent.ts work outside this slice",
+    "fullRepositoryTests": "1113/1113 passed",
+    "typecheck": "passed",
     "biomeFocused": "passed",
     "viteProductionBundle": "passed",
     "pptxOverflow": "passed",

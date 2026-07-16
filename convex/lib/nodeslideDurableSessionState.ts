@@ -395,15 +395,21 @@ function rotateEgress(
   if (!job || job.status === 'awaiting_review' || isTerminal(job.status)) {
     return { ...state, egressEpoch: nextEpoch, stateVersion: state.stateVersion + 1 };
   }
+  const reason =
+    boundedNodeSlideReason(command.reason) ??
+    'Egress epoch rotated; the previous execution was fenced.';
   const nextJob: NodeSlideDurableJobState = {
-    ...job,
+    jobId: job.jobId,
+    requestBinding: job.requestBinding,
     status: 'stale',
+    attempt: job.attempt,
+    retryCount: job.retryCount,
+    resumeCount: job.resumeCount,
+    maxAttempts: job.maxAttempts,
+    createdAt: job.createdAt,
     updatedAt: command.now,
     completedAt: command.now,
-    ...(boundedNodeSlideReason(command.reason) !== undefined
-      ? { reason: boundedNodeSlideReason(command.reason) }
-      : { reason: 'Egress epoch rotated; the previous execution was fenced.' }),
-    lease: undefined,
+    reason,
   };
   const next = appendEvent(
     { ...state, egressEpoch: nextEpoch },

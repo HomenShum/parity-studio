@@ -192,6 +192,144 @@ describe('NodeSlide assistant-ui thread adapter', () => {
     expect(screen.queryByText('Read the current deck context.')).toBeNull();
   });
 
+  it('renders the durable six-role progression across nested sequential handoffs', () => {
+    const roleMessages: NodeSlideAgentMessage[] = [
+      message({ id: 'roles-user', role: 'user', content: 'Make the deck presentation-ready.' }),
+      message({
+        id: 'roles-research',
+        role: 'tool',
+        content: 'Reviewed the authorized evidence.',
+        toolName: 'delegate_researcher',
+        agentRole: 'researcher',
+        branchId: 'presentation-research',
+        branchLabel: 'Evidence research',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-analysis',
+        parentMessageId: 'roles-research',
+        role: 'tool',
+        content: 'Analyzed the audience and evidence.',
+        toolName: 'delegate_analyst',
+        agentRole: 'analyst',
+        branchId: 'presentation-analysis',
+        branchLabel: 'Audience analysis',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-story',
+        parentMessageId: 'roles-analysis',
+        role: 'tool',
+        content: 'Shaped the narrative.',
+        toolName: 'delegate_storyteller',
+        agentRole: 'storyteller',
+        branchId: 'presentation-story',
+        branchLabel: 'Narrative structure',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-design',
+        parentMessageId: 'roles-story',
+        role: 'tool',
+        content: 'Prepared bounded slide operations.',
+        toolName: 'delegate_designer',
+        agentRole: 'designer',
+        branchId: 'presentation-design',
+        branchLabel: 'Slide design',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-fact-check',
+        parentMessageId: 'roles-design',
+        role: 'tool',
+        content: 'Checked evidence bindings and layout rules.',
+        toolName: 'candidate_validation',
+        agentRole: 'fact_checker',
+        branchId: 'presentation-fact-check',
+        branchLabel: 'Evidence check',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-review',
+        role: 'assistant',
+        content: 'The proposal is ready for human review.',
+        agentRole: 'reviewer',
+        branchId: 'presentation-review',
+        branchLabel: 'Human review',
+      }),
+    ];
+    const projected = buildNodeSlideThreadMessages(roleMessages, [
+      { ...run, status: 'planning', instruction: 'Make the deck presentation-ready.' },
+    ]);
+    const invocation = firstToolCall(projected);
+
+    expect(invocation.args).toMatchObject({
+      __nodeslideStepCount: '5',
+      __nodeslideBranchCount: '5',
+      __nodeslideParallelGroupCount: '0',
+      __nodeslideRoleProgression: 'researcher|analyst|storyteller|designer|fact_checker|reviewer',
+    });
+    expect(invocation.messages).toHaveLength(1);
+
+    render(
+      <NodeSlideThreadRuntimeProvider isRunning={false} messages={projected}>
+        <ThreadPrimitive.Root>
+          <NodeSlideThreadMessages />
+        </ThreadPrimitive.Root>
+      </NodeSlideThreadRuntimeProvider>,
+    );
+
+    expect(
+      screen.getByText(
+        'Researcher → Analyst → Storyteller → Designer → Fact checker → Reviewer · 5 steps · read-only',
+      ),
+    ).toBeVisible();
+    expect(screen.getByText('The proposal is ready for human review.')).toBeVisible();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('keeps legacy planner, executor, and validator roles readable', () => {
+    const projected = buildNodeSlideThreadMessages(
+      [
+        message({ id: 'legacy-user', role: 'user', content: 'Refresh the legacy deck.' }),
+        message({
+          id: 'legacy-plan',
+          role: 'assistant',
+          content: 'Planned the edit.',
+          agentRole: 'planner',
+        }),
+        message({
+          id: 'legacy-execute',
+          role: 'assistant',
+          content: 'Executed the edit.',
+          agentRole: 'executor',
+        }),
+        message({
+          id: 'legacy-validate',
+          role: 'assistant',
+          content: 'Validated the edit.',
+          agentRole: 'validator',
+        }),
+      ],
+      [{ ...run, status: 'planning', instruction: 'Refresh the legacy deck.' }],
+    );
+
+    expect(firstToolCall(projected).args).toMatchObject({
+      __nodeslideRoleProgression: 'planner|executor|validator',
+    });
+
+    render(
+      <NodeSlideThreadRuntimeProvider isRunning={false} messages={projected}>
+        <ThreadPrimitive.Root>
+          <NodeSlideThreadMessages />
+        </ThreadPrimitive.Root>
+      </NodeSlideThreadRuntimeProvider>,
+    );
+
+    expect(screen.getByText('Planner → Executor → Validator · 2 steps · read-only')).toBeVisible();
+    expect(screen.getByText('Validator')).toBeVisible();
+  });
+
   it('labels only persisted parallel planner-to-executor branches for F17/F18 review', () => {
     const projected = buildNodeSlideThreadMessages(
       [

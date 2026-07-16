@@ -792,6 +792,21 @@ export interface NodeSlideAgentResolvedSource {
   url: string;
 }
 
+/**
+ * Durable presentation-workflow identity. Planner/executor/validator are retained so
+ * conversations written before the six-role workflow remain readable and valid.
+ */
+export type NodeSlideAgentRole =
+  | 'researcher'
+  | 'analyst'
+  | 'storyteller'
+  | 'designer'
+  | 'fact_checker'
+  | 'reviewer'
+  | 'planner'
+  | 'executor'
+  | 'validator';
+
 export interface NodeSlideAgentMessage {
   id: string;
   deckId: string;
@@ -806,7 +821,7 @@ export interface NodeSlideAgentMessage {
   /** Query-projected read-only child conversation for a delegated tool call. */
   messages?: NodeSlideAgentMessage[];
   /** Persisted orchestration identity. Omitted for the default single-agent path. */
-  agentRole?: 'planner' | 'executor' | 'researcher' | 'validator';
+  agentRole?: NodeSlideAgentRole;
   /** Stable identity for a real orchestrator branch. */
   branchId?: string;
   /** Human-readable purpose for that branch. */

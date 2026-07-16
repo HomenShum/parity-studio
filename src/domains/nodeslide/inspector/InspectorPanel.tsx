@@ -21,6 +21,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { NodeSlideDeckCiResult } from '../../../../convex/lib/nodeslideDeckCi';
 import type {
   CommentAnchor,
   DeckComment,
@@ -105,6 +106,8 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   approvalMode?: AgentSessionApprovalMode;
   approvalBusy?: boolean;
   approvalExpiresAt?: number;
+  deckCiResult?: NodeSlideDeckCiResult | null;
+  deckCiLoading?: boolean;
   agentTelemetry?: NodeSlideAgentTelemetryPage;
   agentTelemetryRunId?: string;
   evidenceCaptures?: readonly NodeSlideEvidenceCaptureSummary[];
@@ -219,6 +222,8 @@ export function InspectorPanel<CommandId extends string = string>({
   approvalMode = 'review',
   approvalBusy = false,
   approvalExpiresAt,
+  deckCiResult,
+  deckCiLoading = false,
   agentTelemetry,
   agentTelemetryRunId,
   evidenceCaptures = [],
@@ -519,6 +524,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   approvalMode={approvalMode}
                   approvalBusy={approvalBusy}
                   {...(approvalExpiresAt !== undefined ? { approvalExpiresAt } : {})}
+                  {...(deckCiResult !== undefined ? { deckCiResult } : {})}
+                  deckCiLoading={deckCiLoading}
+                  onOpenDeckCiTrace={() => onTabChange('trace')}
                   variations={variations}
                   variationsLoading={variationsLoading}
                   isSubmitting={agentBusy}

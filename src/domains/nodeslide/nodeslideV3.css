@@ -4462,9 +4462,17 @@
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-progress-heading {
+  border-color: var(--ns-line);
+  background: color-mix(in srgb, var(--ns-collaboration) 8%, var(--ns-surface));
+  color: var(--ns-ink);
   gap: 10px;
   min-height: 46px;
   padding: 9px 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-progress.has-failed .ns-progress-heading {
+  border-color: color-mix(in srgb, var(--ns-negative) 42%, var(--ns-line));
+  background: color-mix(in srgb, var(--ns-negative) 10%, var(--ns-surface));
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-progress-heading strong {
@@ -4484,6 +4492,9 @@
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state {
+  border-color: color-mix(in srgb, var(--ns-negative) 30%, var(--ns-line));
+  background: color-mix(in srgb, var(--ns-negative) 7%, var(--ns-surface));
+  color: var(--ns-ink-2);
   padding: 10px;
 }
 
@@ -4496,9 +4507,39 @@
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state p {
+  color: var(--ns-ink-3);
   font-size: 10.5px;
   line-height: 1.5;
   margin-top: 5px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-delay-state {
+  border-color: color-mix(in srgb, var(--ns-warning) 34%, var(--ns-line));
+  background: color-mix(in srgb, var(--ns-warning) 8%, var(--ns-surface));
+  color: var(--ns-ink-2);
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--ns-negative) 34%, var(--ns-line));
+  border-radius: 7px;
+  background: var(--ns-surface);
+  color: var(--ns-ink-2);
+  font-size: 10px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-retry:hover {
+  background: color-mix(in srgb, var(--ns-negative) 8%, var(--ns-surface));
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-agent-retry:focus-visible {
+  outline: 2px solid var(--ns-negative);
+  outline-offset: 2px;
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-plan-list {
@@ -7101,6 +7142,38 @@
   padding-inline: 0;
 }
 
+.nodeslide-studio .ns-agent-nested-messages {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.nodeslide-studio .ns-agent-nested-message {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ns-line-b);
+}
+
+.nodeslide-studio .ns-agent-nested-message:first-child {
+  border-top: 0;
+}
+
+.nodeslide-studio .ns-agent-nested-message > p {
+  margin: 0;
+  color: var(--ns-ink-2);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.nodeslide-studio .ns-agent-nested-message > a {
+  color: var(--ns-waterfall-retrieval);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
 .nodeslide-studio .ns-ai-v3-context {
   padding: 10px 12px 9px;
 }
@@ -7818,6 +7891,79 @@
 
 .nodeslide-studio .ns-ai-v3-composer.is-review-compact .ns-ai-v3-expand-composer {
   display: inline-flex;
+}
+
+/* Turbo is one compact, session-scoped authority control beside the composer.
+ * Detailed limits and exclusions stay in the existing Advanced disclosure. */
+.nodeslide-studio .ns-ai-turbo {
+  align-items: center;
+  display: grid;
+  gap: 3px 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  order: 4;
+  padding: 1px 0;
+}
+
+.nodeslide-studio .ns-ai-turbo > button {
+  align-items: center;
+  background: var(--ns-chip);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  color: var(--ns-ink2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10.5px;
+  font-weight: 650;
+  gap: 4px;
+  min-height: 27px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-ai-turbo > button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--ns-accent) 12%, var(--ns-chip));
+  border-color: color-mix(in srgb, var(--ns-accent) 55%, var(--ns-line-c));
+  color: var(--ns-accent);
+}
+
+.nodeslide-studio .ns-ai-turbo > button:focus-visible {
+  outline: 2px solid var(--ns-accent);
+  outline-offset: 2px;
+}
+
+.nodeslide-studio .ns-ai-turbo > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.nodeslide-studio .ns-ai-turbo > small {
+  color: var(--ns-faint);
+  font-size: 9.5px;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-ai-turbo-details {
+  border-top: 1px solid var(--ns-line-b);
+  display: grid;
+  gap: 3px;
+  padding-top: 7px;
+}
+
+.nodeslide-studio .ns-ai-turbo-details > strong {
+  color: var(--ns-ink);
+  font-size: 10.5px;
+}
+
+.nodeslide-studio .ns-ai-turbo-details > span,
+.nodeslide-studio .ns-ai-turbo-details > small {
+  color: var(--ns-faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.nodeslide-studio .ns-ai-turbo-details > span {
+  color: var(--ns-ink2);
 }
 
 /* Inspector primitives -----------------------------------------------------

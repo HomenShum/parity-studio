@@ -103,7 +103,7 @@ export const create = internalMutation({
       deltas: zeroCostDeltas,
       previousEventDigest: undefined,
     });
-    const budgetId = await ctx.db.insert('nodeslide_run_budgets', {
+    await ctx.db.insert('nodeslide_run_budgets', {
       id: args.budgetId,
       version: NODESLIDE_BUDGET_LEDGER_VERSION,
       status: transition.state.status,
@@ -183,7 +183,7 @@ export const reserve = internalMutation({
       cost: nextCost,
     });
     const now = Date.now();
-    const callId = await ctx.db.insert('nodeslide_billable_calls', {
+    await ctx.db.insert('nodeslide_billable_calls', {
       budgetId: args.budgetId,
       callId: args.callId,
       version: NODESLIDE_BILLABLE_CALL_VERSION,

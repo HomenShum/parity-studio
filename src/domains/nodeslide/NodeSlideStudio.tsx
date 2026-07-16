@@ -3,6 +3,7 @@ import type { DefaultFunctionArgs, FunctionReference } from 'convex/server';
 import { LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../convex/_generated/api';
+import type { NodeSlideDeckCiResult } from '../../../convex/lib/nodeslideDeckCi';
 import type {
   AgentEditRequest,
   CommentAnchor,
@@ -190,6 +191,12 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideDeckCi: {
+    evaluateLatest: PublicQuery<
+      { deckId: string; ownerAccessKey: string; changedSourceIds?: string[] },
+      NodeSlideDeckCiResult
+    >;
+  };
   nodeslideDelegation: {
     issueGrant: PublicMutation<
       {
@@ -891,6 +898,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const evictTasteSignal = useMutation(nodeslideApi.nodeslidePreferences.evictSignal);
   const queriedWorkspace = useQuery(
     nodeslideApi.nodeslide.getWorkspace,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  const deckCiResult = useQuery(
+    nodeslideApi.nodeslideDeckCi.evaluateLatest,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const editorCapabilities = useQuery(
@@ -4190,6 +4201,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           memoriesLoading={Boolean(activeDeckId && ownerAccessKey) && agentMemories === undefined}
           approvalMode={activeApproval.mode}
           approvalBusy={authorityChangeBusy}
+          deckCiResult={deckCiResult ?? null}
+          deckCiLoading={Boolean(activeDeckId && ownerAccessKey) && deckCiResult === undefined}
           {...(activeApproval.mode === 'auto_apply'
             ? { approvalExpiresAt: activeApproval.expiresAt }
             : {})}

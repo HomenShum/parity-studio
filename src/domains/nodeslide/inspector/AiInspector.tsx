@@ -34,6 +34,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { NodeSlideDeckCiResult } from '../../../../convex/lib/nodeslideDeckCi';
 import {
   type AgentTrace,
   type Deck,
@@ -80,6 +81,7 @@ import {
 } from '../externalProviderConsent';
 import { sanitizeNodeSlideUserError } from '../nodeslideUserError';
 import type { AgentSessionApprovalMode } from '../session';
+import { DeckCiStatus } from './DeckCiStatus';
 import {
   NodeSlideThreadMessages,
   NodeSlideThreadRuntimeProvider,
@@ -176,6 +178,8 @@ export interface AiInspectorProps<CommandId extends string = string> {
   approvalMode?: AgentSessionApprovalMode;
   approvalBusy?: boolean;
   approvalExpiresAt?: number;
+  deckCiResult?: NodeSlideDeckCiResult | null;
+  deckCiLoading?: boolean;
   variations: readonly SlideVariation[];
   variationsLoading: boolean;
   isSubmitting: boolean;
@@ -207,6 +211,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
   onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
+  onOpenDeckCiTrace?: () => void;
   onCancelRun?: (runId: string) => void;
   onRetryRun?: () => void;
   onAccept: (patch: DeckPatch) => void;
@@ -234,6 +239,8 @@ export function AiInspector<CommandId extends string = string>({
   approvalMode = 'review',
   approvalBusy = false,
   approvalExpiresAt,
+  deckCiResult,
+  deckCiLoading = false,
   variations,
   variationsLoading,
   isSubmitting,
@@ -258,6 +265,7 @@ export function AiInspector<CommandId extends string = string>({
   onUpdateMemory,
   onDeleteMemory,
   onApprovalModeChange,
+  onOpenDeckCiTrace,
   onCancelRun,
   onRetryRun,
   onAccept,
@@ -319,7 +327,7 @@ export function AiInspector<CommandId extends string = string>({
   const activeMemoryCount = memories.filter((memory) => memory.status === 'active').length;
   const useMemoryForRun = memoryEnabled && activeMemoryCount > 0;
   const composerId = useId();
-  const providerName = `${composerId}-provider`;
+  const turboDescriptionId = `${composerId}-turbo-description`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const reviewScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1302,6 +1310,13 @@ export function AiInspector<CommandId extends string = string>({
               <ArrowDown size={14} />
             </ThreadPrimitive.ScrollToBottom>
             <ThreadPrimitive.ViewportFooter className="ns-agent-thread-footer">
+              {deckCiResult !== undefined || deckCiLoading ? (
+                <DeckCiStatus
+                  result={deckCiResult ?? null}
+                  loading={deckCiLoading}
+                  {...(onOpenDeckCiTrace ? { onOpenTrace: onOpenDeckCiTrace } : {})}
+                />
+              ) : null}
               <div
                 className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''} ${
                   compactReviewComposer ? 'is-review-compact' : ''
@@ -1323,6 +1338,34 @@ export function AiInspector<CommandId extends string = string>({
                     </output>
                   ) : null}
                 </header>
+                {onApprovalModeChange ? (
+                  <div className="ns-ai-turbo" data-testid="ai-turbo-control">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={approvalMode === 'auto_apply'}
+                      aria-describedby={turboDescriptionId}
+                      className={approvalMode === 'auto_apply' ? 'is-active' : ''}
+                      data-testid="ai-turbo-toggle"
+                      disabled={approvalControlLocked}
+                      onClick={() =>
+                        onApprovalModeChange(
+                          approvalMode === 'auto_apply' ? 'review' : 'auto_apply',
+                        )
+                      }
+                    >
+                      {approvalBusy ? (
+                        <LoaderCircle className="ns-spin" size={12} aria-hidden="true" />
+                      ) : (
+                        <Sparkles size={12} aria-hidden="true" />
+                      )}
+                      <span>Turbo for this session</span>
+                    </button>
+                    <small id={turboDescriptionId}>
+                      Validated edits that pass Deck CI auto-apply; Undo remains available.
+                    </small>
+                  </div>
+                ) : null}
                 {showSuggested ? (
                   <section
                     className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
@@ -1365,24 +1408,6 @@ export function AiInspector<CommandId extends string = string>({
                   <span>{operationModeLabel(operationMode)}</span>
                   <span>{designBehaviorLabel(designBehavior)}</span>
                   <span>{referenceUseLabel(referenceUse)}</span>
-                  <button
-                    type="button"
-                    className={approvalMode === 'auto_apply' ? 'is-delegated' : ''}
-                    data-testid="ai-approval-summary"
-                    onClick={() => setProviderControlsOpen((current) => !current)}
-                    aria-expanded={providerControlsOpen}
-                    aria-controls="nodeslide-ai-advanced-controls"
-                    aria-label={
-                      approvalMode === 'auto_apply'
-                        ? 'Auto-apply safe edits'
-                        : 'Review before applying'
-                    }
-                  >
-                    {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
-                    {approvalMode === 'auto_apply'
-                      ? 'Auto-apply safe edits'
-                      : 'Review before applying'}
-                  </button>
                 </fieldset>
 
                 <details
@@ -1433,69 +1458,34 @@ export function AiInspector<CommandId extends string = string>({
                       )}
                     </div>
                     {onApprovalModeChange ? (
-                      <fieldset
-                        className="ns-ai-approval-controls"
-                        data-testid="ai-approval-controls"
-                      >
-                        <legend>Change handling</legend>
-                        <label className={approvalMode === 'review' ? 'is-active' : ''}>
-                          <input
-                            type="radio"
-                            name={`${providerName}-approval`}
-                            value="review"
-                            checked={approvalMode === 'review'}
-                            disabled={approvalControlLocked}
-                            onChange={() => {
-                              if (!approvalControlLocked) onApprovalModeChange('review');
-                            }}
-                          />
-                          <Eye size={15} />
-                          <span>
-                            <strong>Review before applying</strong>
-                            <small>Compare every proposal and choose Accept or Reject.</small>
-                          </span>
-                        </label>
-                        <label className={approvalMode === 'auto_apply' ? 'is-active' : ''}>
-                          <input
-                            type="radio"
-                            name={`${providerName}-approval`}
-                            value="auto_apply"
-                            checked={approvalMode === 'auto_apply'}
-                            disabled={approvalControlLocked}
-                            onChange={() => {
-                              if (!approvalControlLocked) onApprovalModeChange('auto_apply');
-                            }}
-                          />
-                          {approvalBusy ? (
-                            <LoaderCircle className="ns-spin" size={15} />
-                          ) : (
-                            <Sparkles size={15} />
-                          )}
-                          <span>
-                            <strong>Apply validated edits automatically</strong>
-                            <small>
-                              {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours · up
-                              to {NODESLIDE_DELEGATION_MAX_USES} proposals ·{' '}
-                              {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations each.
-                              Stale, invalid, remove, hide, and publish actions stop for review.
-                            </small>
-                          </span>
-                        </label>
+                      <section className="ns-ai-turbo-details" data-testid="ai-turbo-details">
+                        <strong>Session change authority</strong>
+                        <span>
+                          {approvalMode === 'auto_apply'
+                            ? approvalExpiresAt
+                              ? `Turbo is active until ${new Date(
+                                  approvalExpiresAt,
+                                ).toLocaleTimeString([], {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}.`
+                              : 'Turbo is active for this browser session.'
+                            : 'Turbo is off. Review mode remains active.'}
+                        </span>
+                        <small>
+                          Authority expires after{' '}
+                          {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
+                          {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
+                          {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
+                          proposal. Publish, share, export, delete, and sync are excluded and always
+                          require direct confirmation.
+                        </small>
                         {approvalBusy ? (
                           <output className="ns-ai-approval-status">
-                            Updating change handling…
+                            Updating session authority…
                           </output>
                         ) : null}
-                        {approvalMode === 'auto_apply' && approvalExpiresAt ? (
-                          <output className="ns-ai-approval-status">
-                            Active until{' '}
-                            {new Date(approvalExpiresAt).toLocaleTimeString([], {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </output>
-                        ) : null}
-                      </fieldset>
+                      </section>
                     ) : null}
                     {commentContext ? (
                       <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">

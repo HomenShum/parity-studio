@@ -5,6 +5,8 @@ import {
   type ExternalChangeSetV1Input,
   type ExternalChangeSourceSystemV1,
   assertExternalChangeSetBaseVersion,
+  assertExternalChangeSetBaselineBinding,
+  assertExternalChangeSetDigest,
   assertExternalChangeSetOutboundExecutable,
   externalChangeSetToPatchProposal,
   normalizeExternalChangeSetV1,
@@ -217,4 +219,38 @@ describe('ExternalChangeSetV1', () => {
       ),
     ).toThrow('localBase.deckVersion must be a non-negative safe integer.');
   });
+
+  it('rejects stale exact baseline witnesses and digest mutation', () => {
+    const changeSet = normalizeExternalChangeSetV1(input('google_slides'));
+    const exact = {
+      remote: changeSet.remote,
+      localBase: changeSet.localBase,
+    };
+
+    expect(() => assertExternalChangeSetBaselineBinding(changeSet, exact)).not.toThrow();
+    expect(() =>
+      assertExternalChangeSetBaselineBinding(changeSet, {
+        ...exact,
+        remote: { ...exact.remote, versionId: 'google_slides:version-18' },
+      }),
+    ).toThrow('baseline is stale');
+    expect(() =>
+      assertExternalChangeSetBaselineBinding(changeSet, {
+        ...exact,
+        localBase: {
+          ...exact.localBase,
+          elementVersions: { 'element-1': 5 },
+        },
+      }),
+    ).toThrow('baseline is stale');
+
+    const mutated = clone(changeSet);
+    mutated.operations[0] = { ...operation, text: 'Mutated after digesting' };
+    expect(() => assertExternalChangeSetDigest(mutated)).toThrow('digest mismatch');
+    expect(() => externalChangeSetToPatchProposal(mutated)).toThrow('digest mismatch');
+  });
 });
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}

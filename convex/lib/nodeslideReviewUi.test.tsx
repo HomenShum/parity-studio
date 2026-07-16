@@ -113,11 +113,12 @@ describe('NodeSlide AI review inspector', () => {
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
     const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
-    expect(markup).toContain('data-testid="ai-approval-summary"');
-    expect(markup).toContain('Review before applying');
+    expect(markup).toContain('data-testid="ai-turbo-control"');
+    expect(markup).toContain('data-testid="ai-turbo-toggle"');
     expect(markup).toMatch(
-      /data-testid="ai-approval-summary"[^>]*aria-expanded="false"[^>]*aria-controls="nodeslide-ai-advanced-controls"/,
+      /<button(?=[^>]*role="switch")(?=[^>]*aria-checked="false")(?=[^>]*data-testid="ai-turbo-toggle")[^>]*>/,
     );
+    expect(markup).toContain('Validated edits that pass Deck CI auto-apply');
     expect(markup).not.toContain('data-testid="ai-provider-external"');
     expect(markup).toContain('Consent required');
     expect(markup).toContain('Allow this session');
@@ -126,7 +127,7 @@ describe('NodeSlide AI review inspector', () => {
     );
     expect(markup).toContain('12 hours');
     expect(markup).toContain('64 proposals');
-    expect(markup).toContain('8 non-destructive operations each');
+    expect(markup).toContain('up to 8 non-destructive operations per proposal');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
     expect(markup).toContain('<option value="low">Low</option>');
@@ -193,9 +194,11 @@ describe('NodeSlide AI review inspector', () => {
       approvalBusy: true,
     });
 
-    expect(markup).toContain('aria-label="Auto-apply safe edits"');
+    expect(markup).toMatch(
+      /<button(?=[^>]*role="switch")(?=[^>]*aria-checked="true")(?=[^>]*data-testid="ai-turbo-toggle")(?=[^>]*disabled="")[^>]*>/,
+    );
     expect(markup).toMatch(/<button(?=[^>]*data-testid="ai-submit")(?=[^>]*disabled="")[^>]*>/);
-    expect(markup).toContain('Updating change handling');
+    expect(markup).toContain('Updating session authority');
   });
 
   it('shows extended effort levels only for models whose provider exposes them', () => {

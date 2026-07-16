@@ -112,6 +112,11 @@ export interface ExternalChangeSetPatchProposalV1 {
   externalChangeSetDigest: string;
 }
 
+export interface ExternalChangeSetBaselineBindingV1 {
+  remote: ExternalRemoteBindingV1;
+  localBase: ExternalLocalBaseV1;
+}
+
 const PATCH_OPERATION_KINDS = new Set<PatchOperation['op']>([
   'move',
   'resize',
@@ -192,6 +197,7 @@ export function normalizeExternalChangeSetV1(input: ExternalChangeSetV1Input): E
 export function externalChangeSetToPatchProposal(
   changeSet: ExternalChangeSetV1,
 ): ExternalChangeSetPatchProposalV1 {
+  assertExternalChangeSetDigest(changeSet);
   return {
     kind: 'candidate_patch',
     authority: 'nodeslide.proposePatch',
@@ -212,12 +218,59 @@ export function assertExternalChangeSetBaseVersion(
   changeSet: ExternalChangeSetV1,
   current: { deckId: string; deckVersion: number },
 ): void {
+  assertExternalChangeSetDigest(changeSet);
   if (
     current.deckId !== changeSet.localBase.deckId ||
     current.deckVersion !== changeSet.localBase.deckVersion
   ) {
     throw new Error(
       `External change set is bound to ${changeSet.localBase.deckId} at deck version ${changeSet.localBase.deckVersion}; current deck is ${current.deckId} at version ${current.deckVersion}.`,
+    );
+  }
+}
+
+/** Verifies the full local clock set and exact remote/baseline witness captured by an adapter. */
+export function assertExternalChangeSetBaselineBinding(
+  changeSet: ExternalChangeSetV1,
+  current: ExternalChangeSetBaselineBindingV1,
+): void {
+  assertExternalChangeSetDigest(changeSet);
+  const normalized = {
+    remote: {
+      objectId: cleanIdentifier(current.remote.objectId, 'current.remote.objectId'),
+      versionId: cleanIdentifier(current.remote.versionId, 'current.remote.versionId'),
+      baselineId: cleanIdentifier(current.remote.baselineId, 'current.remote.baselineId'),
+    },
+    localBase: {
+      deckId: cleanIdentifier(current.localBase.deckId, 'current.localBase.deckId'),
+      deckVersion: exactVersion(current.localBase.deckVersion, 'current.localBase.deckVersion'),
+      slideVersions: normalizeVersionMap(
+        current.localBase.slideVersions,
+        'current.localBase.slideVersions',
+      ),
+      elementVersions: normalizeVersionMap(
+        current.localBase.elementVersions,
+        'current.localBase.elementVersions',
+      ),
+    },
+  };
+  if (
+    nodeSlideDurableDigest(normalized.remote) !== nodeSlideDurableDigest(changeSet.remote) ||
+    nodeSlideDurableDigest(normalized.localBase) !== nodeSlideDurableDigest(changeSet.localBase)
+  ) {
+    throw new Error(
+      'External change set baseline is stale; the exact local clocks, remote version, or planning baseline changed.',
+    );
+  }
+}
+
+/** Rejects mutation or accidental reserialization of a canonical external change set. */
+export function assertExternalChangeSetDigest(changeSet: ExternalChangeSetV1): void {
+  const { digest, ...canonical } = changeSet;
+  const expected = nodeSlideDurableDigest(canonical);
+  if (digest !== expected) {
+    throw new Error(
+      `External change set digest mismatch: expected ${expected}, received ${digest}.`,
     );
   }
 }
@@ -233,6 +286,7 @@ export function assertExternalChangeSetOutboundExecutable(
   direction: 'outbound';
   postWriteVerification: ExternalPostWriteVerificationIntentV1;
 } {
+  assertExternalChangeSetDigest(changeSet);
   if (changeSet.direction !== 'outbound') {
     throw new Error('External change set is not an outbound execution plan.');
   }

@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { NodeSlideDeckCiResult } from '../../../../convex/lib/nodeslideDeckCi';
 import { buildGoldenNodeSlide } from '../../../../convex/lib/nodeslideSeed';
 import {
   type AgentTrace,
@@ -561,25 +562,93 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(onPropose).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps delegated change handling compact, explicit, and keyboard-operable', async () => {
-    const snapshot = fixture('delegated-change-handling');
+  it('toggles session Turbo with Enter while keeping authority details in Advanced', async () => {
+    const snapshot = fixture('session-turbo');
     const onApprovalModeChange = vi.fn<NonNullable<AiInspectorProps['onApprovalModeChange']>>();
     const user = userEvent.setup();
-    renderInspector(snapshot, {
-      approvalMode: 'auto_apply',
-      approvalExpiresAt: Date.now() + 60_000,
+    const approvalExpiresAt = Date.now() + 60_000;
+    const view = renderInspector(snapshot, {
+      approvalMode: 'review',
       onApprovalModeChange,
     });
 
-    const summary = screen.getByTestId('ai-approval-summary');
-    expect(summary).toHaveTextContent('Auto-apply safe edits');
-    summary.focus();
+    const turbo = screen.getByRole('switch', { name: 'Turbo for this session' });
+    expect(screen.getAllByRole('switch', { name: 'Turbo for this session' })).toHaveLength(1);
+    expect(turbo).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Validated edits that pass Deck CI auto-apply/)).toBeVisible();
+    turbo.focus();
     await user.keyboard('{Enter}');
+    expect(onApprovalModeChange).toHaveBeenLastCalledWith('auto_apply');
 
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            approvalMode: 'auto_apply',
+            approvalExpiresAt,
+            onApprovalModeChange,
+          })}
+        />
+      </div>,
+    );
+    const activeTurbo = screen.getByRole('switch', { name: 'Turbo for this session' });
+    expect(activeTurbo).toHaveAttribute('aria-checked', 'true');
+    activeTurbo.focus();
+    await user.keyboard('{Enter}');
+    expect(onApprovalModeChange).toHaveBeenLastCalledWith('review');
+
+    await user.click(screen.getByTestId('ai-provider-summary'));
     expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
-    expect(screen.getByTestId('ai-approval-controls')).toBeVisible();
-    await user.click(screen.getByRole('radio', { name: /review before applying/i }));
-    expect(onApprovalModeChange).toHaveBeenCalledWith('review');
+    const details = screen.getByTestId('ai-turbo-details');
+    expect(details).toHaveTextContent('Session change authority');
+    expect(details).toHaveTextContent(/Authority expires after .* proposals/);
+    expect(details).toHaveTextContent('Publish, share, export, delete, and sync are excluded');
+  });
+
+  it('shows one compact Deck CI line and opens Trace from the composer status', async () => {
+    const snapshot = fixture('deck-ci-status');
+    const onOpenDeckCiTrace = vi.fn();
+    const user = userEvent.setup();
+    const deckCiResult: NodeSlideDeckCiResult = {
+      schemaVersion: 'nodeslide.deck-ci/v1',
+      deckId: snapshot.deck.id,
+      deckVersion: snapshot.deck.version,
+      snapshotDigest: 'sha256:test',
+      referenceTime: 1_000,
+      status: 'warn',
+      checks: [],
+      blockerCount: 0,
+      severityCounts: { critical: 0, error: 0, warning: 2, info: 0 },
+      affectedSlideIds: [],
+      affectedElementIds: [],
+      affectedSourceIds: [],
+      changedSourceImpact: {
+        changedSourceIds: [],
+        boundSourceIds: [],
+        unboundSourceIds: [],
+        missingSourceIds: [],
+        slideIds: [],
+        elementIds: [],
+      },
+      validation: {
+        id: 'validation-ci',
+        supplied: true,
+        inputAccepted: true,
+        ok: true,
+        publishOk: true,
+        cleanOk: false,
+      },
+      semantic: { id: 'semantic-ci', verdict: 'pass' },
+      digest: 'sha256:ci',
+    };
+    renderInspector(snapshot, { deckCiResult, onOpenDeckCiTrace });
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Deck CIWarnings0 blockers · 2 warnings');
+    const openTrace = screen.getByRole('button', { name: /Deck CI Warnings.*Open Trace/ });
+    await user.click(openTrace);
+
+    expect(onOpenDeckCiTrace).toHaveBeenCalledTimes(1);
   });
 
   it('blocks keyboard and form submission while change authority is transitioning', async () => {
@@ -628,7 +697,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Use this data.');
     await user.click(screen.getByTestId('ai-submit'));
     await waitFor(() => expect(onAttachDataFile).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('radio', { name: /review before applying/i })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Turbo for this session' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Deck' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Operation mode' })).toBeDisabled();
     expect(screen.getByTestId('ai-model-select')).toBeDisabled();
@@ -661,7 +730,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('radio', { name: /review before applying/i })).toBeEnabled(),
+      expect(screen.getByRole('switch', { name: 'Turbo for this session' })).toBeEnabled(),
     );
     expect(onPropose).not.toHaveBeenCalled();
     await waitFor(() =>

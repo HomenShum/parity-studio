@@ -3,7 +3,6 @@ import {
   NODESLIDE_CAPABILITY_DIGEST_VERSION,
   NODESLIDE_DURABLE_JOB_STATUSES,
   NODESLIDE_DURABLE_SESSION_MAX_EVENTS,
-  NODESLIDE_DURABLE_SESSION_VERSION,
   NODESLIDE_REQUEST_BINDING_VERSION,
   type NodeSlideCapabilityDigestMetadata,
   type NodeSlideDurableJobEvent,
@@ -328,6 +327,7 @@ export const applyCommand = internalMutation({
     const next = reduceNodeSlideDurableSession(state, reducerCommand(command, now));
     const durableEvent =
       next.eventSequence === state.eventSequence + 1 ? next.events.at(-1) : undefined;
+    const commandJobId = jobIdFromCommand(command);
     if (
       next.stateVersion !== state.stateVersion + 1 ||
       next.eventSequence < state.eventSequence ||
@@ -348,7 +348,7 @@ export const applyCommand = internalMutation({
       eventSequence: next.eventSequence,
       egressEpoch: next.egressEpoch,
       requestBinding: next.requestBinding,
-      ...(jobIdFromCommand(command) ? { jobId: jobIdFromCommand(command) } : {}),
+      ...(commandJobId !== undefined ? { jobId: commandJobId } : {}),
       ...(durableEvent ? { event: durableEvent } : {}),
       ...(row.lastTransitionDigest ? { previousTransitionDigest: row.lastTransitionDigest } : {}),
       occurredAt: now,
@@ -364,7 +364,7 @@ export const applyCommand = internalMutation({
       eventSequence: next.eventSequence,
       egressEpoch: next.egressEpoch,
       requestBinding: next.requestBinding,
-      ...(jobIdFromCommand(command) ? { jobId: jobIdFromCommand(command) } : {}),
+      ...(commandJobId !== undefined ? { jobId: commandJobId } : {}),
       ...(durableEvent ? { event: durableEvent } : {}),
       ...(row.lastTransitionDigest ? { previousTransitionDigest: row.lastTransitionDigest } : {}),
       transitionDigest,
@@ -1060,39 +1060,39 @@ function sameJournalBinding(
 
 function assertModelResultEnvelope(value: unknown, callId: string): void {
   const envelope = jsonRecord(value, 'model result envelope');
-  const accounting = jsonRecord(envelope.accounting, 'model result accounting');
+  const accounting = jsonRecord(envelope['accounting'], 'model result accounting');
   assertOnlyKeys(accounting, ['budgetId', 'callId', 'disposition', 'ledger'], 'accounting');
-  assertBoundedString(accounting.budgetId, 'accounting budget id', 512);
-  assertBoundedString(accounting.callId, 'accounting call id', 256);
-  if (accounting.callId !== callId) {
+  assertBoundedString(accounting['budgetId'], 'accounting budget id', 512);
+  assertBoundedString(accounting['callId'], 'accounting call id', 256);
+  if (accounting['callId'] !== callId) {
     integrityFailure('provider result accounting call id does not match the journal call');
   }
   if (
-    typeof accounting.disposition !== 'string' ||
-    !MODEL_RESULT_DISPOSITIONS.has(accounting.disposition)
+    typeof accounting['disposition'] !== 'string' ||
+    !MODEL_RESULT_DISPOSITIONS.has(accounting['disposition'])
   ) {
     integrityFailure('model result accounting disposition is invalid');
   }
-  if (accounting.ledger !== undefined) assertModelResultLedger(accounting.ledger);
+  if (accounting['ledger'] !== undefined) assertModelResultLedger(accounting['ledger']);
 
-  if (envelope.ok === true) {
+  if (envelope['ok'] === true) {
     assertOnlyKeys(envelope, ['ok', 'value', 'telemetry', 'accounting'], 'successful result');
     if (!Object.hasOwn(envelope, 'value') || !Object.hasOwn(envelope, 'telemetry')) {
       integrityFailure('successful model result envelope is incomplete');
     }
-    assertModelResultTelemetry(envelope.telemetry);
+    assertModelResultTelemetry(envelope['telemetry']);
     return;
   }
-  if (envelope.ok !== false) integrityFailure('model result envelope status is invalid');
+  if (envelope['ok'] !== false) integrityFailure('model result envelope status is invalid');
   assertOnlyKeys(envelope, ['ok', 'reason', 'code', 'telemetry', 'accounting'], 'failed result');
-  assertBoundedString(envelope.reason, 'model result reason', 4_000);
+  assertBoundedString(envelope['reason'], 'model result reason', 4_000);
   if (
-    envelope.code !== undefined &&
-    (typeof envelope.code !== 'string' || !MODEL_RESULT_FAILURE_CODES.has(envelope.code))
+    envelope['code'] !== undefined &&
+    (typeof envelope['code'] !== 'string' || !MODEL_RESULT_FAILURE_CODES.has(envelope['code']))
   ) {
     integrityFailure('model result failure code is invalid');
   }
-  if (envelope.telemetry !== undefined) assertModelResultTelemetry(envelope.telemetry);
+  if (envelope['telemetry'] !== undefined) assertModelResultTelemetry(envelope['telemetry']);
 }
 
 function assertModelResultTelemetry(value: unknown): void {
@@ -1110,30 +1110,30 @@ function assertModelResultTelemetry(value: unknown): void {
     ],
     'telemetry',
   );
-  assertBoundedString(telemetry.provider, 'telemetry provider', 256);
-  assertBoundedString(telemetry.model, 'telemetry model', 256);
-  assertNonnegativeInteger(telemetry.costMicroUsd, 'telemetry cost');
-  assertNonnegativeInteger(telemetry.inputTokens, 'telemetry input tokens');
-  assertNonnegativeInteger(telemetry.outputTokens, 'telemetry output tokens');
+  assertBoundedString(telemetry['provider'], 'telemetry provider', 256);
+  assertBoundedString(telemetry['model'], 'telemetry model', 256);
+  assertNonnegativeInteger(telemetry['costMicroUsd'], 'telemetry cost');
+  assertNonnegativeInteger(telemetry['inputTokens'], 'telemetry input tokens');
+  assertNonnegativeInteger(telemetry['outputTokens'], 'telemetry output tokens');
   if (
-    telemetry.reasoningEffort !== undefined &&
-    (typeof telemetry.reasoningEffort !== 'string' ||
-      !MODEL_RESULT_REASONING_EFFORTS.has(telemetry.reasoningEffort))
+    telemetry['reasoningEffort'] !== undefined &&
+    (typeof telemetry['reasoningEffort'] !== 'string' ||
+      !MODEL_RESULT_REASONING_EFFORTS.has(telemetry['reasoningEffort']))
   ) {
     integrityFailure('telemetry reasoning effort is invalid');
   }
-  if (telemetry.attempts === undefined) return;
-  if (!Array.isArray(telemetry.attempts) || telemetry.attempts.length > 2) {
+  if (telemetry['attempts'] === undefined) return;
+  if (!Array.isArray(telemetry['attempts']) || telemetry['attempts'].length > 2) {
     integrityFailure('telemetry attempts are invalid');
   }
-  for (const value of telemetry.attempts) {
+  for (const value of telemetry['attempts']) {
     const attempt = jsonRecord(value, 'model result telemetry attempt');
     assertOnlyKeys(
       attempt,
       ['attempt', 'attempted', 'settled', 'ambiguous', 'unreconciled', 'elapsedMs'],
       'telemetry attempt',
     );
-    if (attempt.attempt !== 'initial' && attempt.attempt !== 'repair') {
+    if (attempt['attempt'] !== 'initial' && attempt['attempt'] !== 'repair') {
       integrityFailure('telemetry attempt kind is invalid');
     }
     for (const field of ['attempted', 'settled', 'ambiguous', 'unreconciled'] as const) {
@@ -1141,14 +1141,14 @@ function assertModelResultTelemetry(value: unknown): void {
         integrityFailure(`telemetry attempt ${field} is invalid`);
       }
     }
-    assertNonnegativeInteger(attempt.elapsedMs, 'telemetry attempt elapsed time');
+    assertNonnegativeInteger(attempt['elapsedMs'], 'telemetry attempt elapsed time');
   }
 }
 
 function assertModelResultLedger(value: unknown): void {
   const ledger = jsonRecord(value, 'model result ledger');
   assertOnlyKeys(ledger, ['budget', 'call'], 'ledger');
-  const budget = jsonRecord(ledger.budget, 'model result budget');
+  const budget = jsonRecord(ledger['budget'], 'model result budget');
   assertOnlyKeys(
     budget,
     [
@@ -1162,30 +1162,30 @@ function assertModelResultLedger(value: unknown): void {
     ],
     'ledger budget',
   );
-  assertBoundedString(budget.id, 'ledger budget id', 512);
-  if (budget.status !== 'open' && budget.status !== 'finalized') {
+  assertBoundedString(budget['id'], 'ledger budget id', 512);
+  if (budget['status'] !== 'open' && budget['status'] !== 'finalized') {
     integrityFailure('ledger budget status is invalid');
   }
-  assertNonnegativeInteger(budget.revision, 'ledger budget revision');
-  assertBoundedString(budget.stateDigest, 'ledger budget state digest', 256);
-  assertNonnegativeInteger(budget.actualMicroUsd, 'ledger actual cost');
-  assertNonnegativeInteger(budget.reservedMicroUsd, 'ledger reserved cost');
-  assertNonnegativeInteger(budget.unreconciledMicroUsd, 'ledger unreconciled cost');
+  assertNonnegativeInteger(budget['revision'], 'ledger budget revision');
+  assertBoundedString(budget['stateDigest'], 'ledger budget state digest', 256);
+  assertNonnegativeInteger(budget['actualMicroUsd'], 'ledger actual cost');
+  assertNonnegativeInteger(budget['reservedMicroUsd'], 'ledger reserved cost');
+  assertNonnegativeInteger(budget['unreconciledMicroUsd'], 'ledger unreconciled cost');
 
-  if (ledger.call === undefined) return;
-  const call = jsonRecord(ledger.call, 'model result ledger call');
+  if (ledger['call'] === undefined) return;
+  const call = jsonRecord(ledger['call'], 'model result ledger call');
   assertOnlyKeys(
     call,
     ['callId', 'status', 'quoteMicroUsd', 'providerSafeOutputTokenCeiling', 'providerTimeoutMs'],
     'ledger call',
   );
-  assertBoundedString(call.callId, 'ledger call id', 256);
-  if (!['reserved', 'unreconciled', 'settled', 'released'].includes(String(call.status))) {
+  assertBoundedString(call['callId'], 'ledger call id', 256);
+  if (!['reserved', 'unreconciled', 'settled', 'released'].includes(String(call['status']))) {
     integrityFailure('ledger call status is invalid');
   }
-  assertNonnegativeInteger(call.quoteMicroUsd, 'ledger call quote');
-  assertNonnegativeInteger(call.providerSafeOutputTokenCeiling, 'ledger output ceiling');
-  assertNonnegativeInteger(call.providerTimeoutMs, 'ledger timeout');
+  assertNonnegativeInteger(call['quoteMicroUsd'], 'ledger call quote');
+  assertNonnegativeInteger(call['providerSafeOutputTokenCeiling'], 'ledger output ceiling');
+  assertNonnegativeInteger(call['providerTimeoutMs'], 'ledger timeout');
 }
 
 function canonicalJsonValue(value: unknown, active: Set<object>, depth: number): unknown {

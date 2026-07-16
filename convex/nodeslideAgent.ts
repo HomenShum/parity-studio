@@ -318,8 +318,9 @@ export const proposeEdit = action({
     try {
       let webSourceIds: string[] = [];
       let webProvidersUsed: string[] = [];
+      let handoffParentMessageId: string | undefined;
       if (args.webResearch) {
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const researchReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
@@ -327,7 +328,11 @@ export const proposeEdit = action({
           message: `Searching the web for: ${instruction}`,
           role: 'tool',
           toolName: 'web_search',
+          agentRole: 'researcher',
+          branchId: 'presentation-research',
+          branchLabel: 'Evidence research',
         });
+        handoffParentMessageId = researchReceipt?.messageId;
         const configured = configuredSearchProviders();
         if (configured.length === 0) {
           throw publicAgentError(
@@ -377,9 +382,14 @@ export const proposeEdit = action({
             message: `Retained ${webSourceIds.length} web sources from ${webProvidersUsed.join(', ') || configured.join(', ')}.`,
             role: 'tool',
             toolName: 'source_snapshot',
+            agentRole: 'researcher',
+            branchId: 'presentation-research',
+            branchLabel: 'Evidence research',
+            ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
             sourceIds: webSourceIds,
           },
         );
+        handoffParentMessageId = sourceSnapshotReceipt?.messageId ?? handoffParentMessageId;
         if (sourceSnapshotReceipt?.spanId) {
           await captureWebSourcesBestEffort(ctx, {
             deckId: args.deckId,
@@ -397,12 +407,19 @@ export const proposeEdit = action({
           ownerAccessKey: args.ownerAccessKey,
         })) as NodeSlideWorkspace;
       } else {
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const researchReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
           status: 'planning',
+          message: 'Reviewed the scoped deck context and available source records.',
+          role: 'tool',
+          toolName: 'delegate_researcher',
+          agentRole: 'researcher',
+          branchId: 'presentation-research',
+          branchLabel: 'Context research',
         });
+        handoffParentMessageId = researchReceipt?.messageId;
       }
       const memories: NodeSlideAgentMemory[] =
         args.memoryMode === 'relevant'
@@ -417,7 +434,7 @@ export const proposeEdit = action({
           (memory) => nodeSlideMemoryUse(memory) === 'standing_instruction',
         ).length;
         const retrievedMemoryCount = memories.length - standingInstructionCount;
-        await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        const memoryReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
           runId,
@@ -426,9 +443,14 @@ export const proposeEdit = action({
           message: `Loaded ${standingInstructionCount} explicit standing instruction${standingInstructionCount === 1 ? '' : 's'} and ${retrievedMemoryCount} relevant retrieved memor${retrievedMemoryCount === 1 ? 'y' : 'ies'} for this run.`,
           role: 'tool',
           toolName: 'memory_retrieval',
+          agentRole: 'analyst',
+          branchId: 'presentation-analysis',
+          branchLabel: 'Audience and evidence analysis',
+          ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
           memoryIds: memories.map((memory) => memory.id),
           memoryDigests: memories.map((memory) => memory.contentDigest),
         });
+        handoffParentMessageId = memoryReceipt?.messageId ?? handoffParentMessageId;
         await ctx.runMutation(nodeslideMemoryInternal.markUsedInternal, {
           deckId: args.deckId,
           ownerAccessKey: args.ownerAccessKey,
@@ -446,6 +468,20 @@ export const proposeEdit = action({
         writeScope: args.scope,
         ...(requestedReadContext.length ? { requested: requestedReadContext } : {}),
       });
+      const analysisReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: `Analyzed ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, and ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'} within the authorized scope.`,
+        role: 'tool',
+        toolName: 'delegate_analyst',
+        agentRole: 'analyst',
+        branchId: 'presentation-analysis',
+        branchLabel: 'Audience and evidence analysis',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = analysisReceipt?.messageId ?? handoffParentMessageId;
       const explicitlySuppliedEvidence =
         webSourceIds.length > 0 ||
         (args.readContext ?? []).some((reference) => reference.kind === 'source');
@@ -482,6 +518,20 @@ export const proposeEdit = action({
             }
           : {}),
       };
+      const storyReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: 'Shaping the requested change into a coherent presentation narrative.',
+        role: 'tool',
+        toolName: 'delegate_storyteller',
+        agentRole: 'storyteller',
+        branchId: 'presentation-story',
+        branchLabel: 'Narrative structure',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = storyReceipt?.messageId ?? handoffParentMessageId;
       const planningStartedAt = Date.now();
       const scopedComment =
         scopedCommentId === undefined
@@ -539,6 +589,20 @@ export const proposeEdit = action({
       if (!baseline.ok) throw publicAgentError(baseline.code, baseline.message);
       const finalOperations = baseline.operations;
       const boundSourceIds = nodeSlideOperationSourceIds(finalOperations);
+      const designReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+        deckId: args.deckId,
+        ownerAccessKey: args.ownerAccessKey,
+        runId,
+        status: 'planning',
+        message: `Translated the narrative into ${finalOperations.length} bounded slide operation${finalOperations.length === 1 ? '' : 's'}.`,
+        role: 'tool',
+        toolName: 'delegate_designer',
+        agentRole: 'designer',
+        branchId: 'presentation-design',
+        branchLabel: 'Slide design',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+      });
+      handoffParentMessageId = designReceipt?.messageId ?? handoffParentMessageId;
       const runBeforeValidation = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
         deckId: args.deckId,
         ownerAccessKey: args.ownerAccessKey,
@@ -555,6 +619,10 @@ export const proposeEdit = action({
         message: `Validating ${baseline.operations.length} proposed operation${baseline.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
+        agentRole: 'fact_checker',
+        branchId: 'presentation-fact-check',
+        branchLabel: 'Evidence and quality check',
+        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
       const summary = baseline.summary;
@@ -702,6 +770,9 @@ export const proposeEdit = action({
         traceId,
         message: `${summary} Review the validated proposal before it can change the deck.`,
         role: 'assistant',
+        agentRole: 'reviewer',
+        branchId: 'presentation-review',
+        branchLabel: 'Human review',
         ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
       });
       if (!durableJob) return proposal;
@@ -864,6 +935,9 @@ export const proposeExternalAgentEdit = action({
         message: `Validating ${args.operations.length} ${submissionKind === 'external_agent' ? 'external-agent' : 'local-agent'} operation${args.operations.length === 1 ? '' : 's'} against scope, versions, and layout rules.`,
         role: 'tool',
         toolName: 'candidate_validation',
+        agentRole: 'fact_checker',
+        branchId: 'presentation-fact-check',
+        branchLabel: 'Evidence and quality check',
       });
       const now = Date.now();
       const patchId = nodeslideEventId('patch_external_agent', now, args.deckId, instruction);
@@ -928,6 +1002,9 @@ export const proposeExternalAgentEdit = action({
         traceId,
         message: `${summary} Review the validated proposal before it can change the deck.`,
         role: 'assistant',
+        agentRole: 'reviewer',
+        branchId: 'presentation-review',
+        branchLabel: 'Human review',
       });
       return proposal;
     } catch (error) {

@@ -530,7 +530,10 @@ function agentMessageToolSpanKey(runId: string, toolName: string, startTime: num
 }
 
 function projectAgentMessageToolActivity(
-  message: Pick<Doc<'nodeslide_agent_messages'>, 'createdAt' | 'role' | 'runId' | 'toolName'>,
+  message: Pick<
+    Doc<'nodeslide_agent_messages'>,
+    'agentRole' | 'createdAt' | 'role' | 'runId' | 'toolName'
+  >,
   run: Doc<'nodeslide_agent_runs'> | undefined,
   span: Doc<'nodeslide_agent_spans'> | undefined,
 ): NodeSlideAgentToolActivity | undefined {
@@ -552,6 +555,16 @@ function projectAgentMessageToolActivity(
         : null;
   if (run && activeStatus && run.status === activeStatus && run.updatedAt === message.createdAt) {
     return { state: 'input-available' };
+  }
+  // Role handoffs are durable tool rows even when the underlying stage is one sequential model
+  // turn rather than a separately instrumented tool span. Their state follows the durable run
+  // clock; no parallel or independent execution is inferred here.
+  if (message.agentRole) {
+    return run &&
+      run.updatedAt <= message.createdAt &&
+      ['queued', 'researching', 'planning', 'validating'].includes(run.status)
+      ? { state: 'input-available' }
+      : { state: run?.status === 'failed' ? 'output-error' : 'output-available' };
   }
   return undefined;
 }
@@ -2315,6 +2328,11 @@ export const advanceAgentRunInternal = internalMutation({
         v.literal('executor'),
         v.literal('researcher'),
         v.literal('validator'),
+        v.literal('analyst'),
+        v.literal('storyteller'),
+        v.literal('designer'),
+        v.literal('fact_checker'),
+        v.literal('reviewer'),
       ),
     ),
     branchId: v.optional(v.string()),
@@ -2445,11 +2463,13 @@ export const advanceAgentRunInternal = internalMutation({
         runId: args.runId,
       });
     }
+    let messageId: string | undefined;
     if (args.message) {
       const message = requiredText(args.message, 'run message', 4000);
       const role = args.role ?? 'system';
+      messageId = nodeslideStableId('agent_message', args.runId, role, String(now), message);
       await ctx.db.insert('nodeslide_agent_messages', {
-        id: nodeslideStableId('agent_message', args.runId, role, String(now), message),
+        id: messageId,
         deckId: args.deckId,
         runId: args.runId,
         role,
@@ -2473,7 +2493,7 @@ export const advanceAgentRunInternal = internalMutation({
         createdAt: now,
       });
     }
-    return { runId: args.runId, traceId, spanId: phaseSpanId };
+    return { runId: args.runId, traceId, spanId: phaseSpanId, messageId };
   },
 });
 
