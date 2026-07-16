@@ -70,6 +70,104 @@ const nodeslidePreferenceScopeValidator = v.union(
   }),
 );
 
+const nodeslideDurableRequestBindingValidator = v.object({
+  schemaVersion: v.literal('nodeslide.request-binding/v2'),
+  requestDigest: v.string(),
+  capabilityDigest: v.string(),
+});
+
+const nodeslideDurableCapabilityMetadataValidator = v.object({
+  schemaVersion: v.literal('nodeslide.capability-digest/v2'),
+  capabilityDigest: v.string(),
+  provider: v.optional(v.string()),
+  model: v.optional(v.string()),
+  scopes: v.array(v.string()),
+  egress: v.union(
+    v.literal('none'),
+    v.literal('model'),
+    v.literal('web'),
+    v.literal('model_and_web'),
+  ),
+  hasSecret: v.boolean(),
+  hasConsent: v.boolean(),
+  attachmentCount: v.number(),
+  consentDigest: v.optional(v.string()),
+  attachmentsDigest: v.optional(v.string()),
+});
+
+const nodeslideDurableJobStatusValidator = v.union(
+  v.literal('queued'),
+  v.literal('running'),
+  v.literal('retrying'),
+  v.literal('paused'),
+  v.literal('awaiting_review'),
+  v.literal('succeeded'),
+  v.literal('failed'),
+  v.literal('cancelled'),
+  v.literal('rejected'),
+  v.literal('stale'),
+);
+
+const nodeslideDurableLeaseValidator = v.object({
+  leaseId: v.string(),
+  workerId: v.string(),
+  attempt: v.number(),
+  egressEpoch: v.number(),
+  issuedAt: v.number(),
+  expiresAt: v.number(),
+});
+
+const nodeslideDurableJobValidator = v.object({
+  jobId: v.string(),
+  requestBinding: nodeslideDurableRequestBindingValidator,
+  status: nodeslideDurableJobStatusValidator,
+  attempt: v.number(),
+  retryCount: v.number(),
+  resumeCount: v.number(),
+  maxAttempts: v.number(),
+  lease: v.optional(nodeslideDurableLeaseValidator),
+  reason: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  completedAt: v.optional(v.number()),
+});
+
+const nodeslideDurableJobEventValidator = v.object({
+  schemaVersion: v.literal('nodeslide.durable-session/v2'),
+  sequence: v.number(),
+  stateVersion: v.number(),
+  jobId: v.string(),
+  kind: v.union(
+    v.literal('enqueued'),
+    v.literal('claimed'),
+    v.literal('transitioned'),
+    v.literal('retried'),
+    v.literal('resumed'),
+    v.literal('paused'),
+    v.literal('egress_rotated'),
+    v.literal('stale_fenced'),
+  ),
+  fromStatus: v.union(v.null(), nodeslideDurableJobStatusValidator),
+  toStatus: nodeslideDurableJobStatusValidator,
+  requestBinding: nodeslideDurableRequestBindingValidator,
+  egressEpoch: v.number(),
+  attempt: v.number(),
+  occurredAt: v.number(),
+  leaseId: v.optional(v.string()),
+  reason: v.optional(v.string()),
+  eventDigest: v.string(),
+});
+
+const nodeslideDurableJournalBindingValidator = v.object({
+  schemaVersion: v.literal('nodeslide.request-binding/v2'),
+  sessionId: v.string(),
+  jobId: v.string(),
+  requestDigest: v.string(),
+  capabilityDigest: v.string(),
+  egressEpoch: v.number(),
+  attempt: v.number(),
+});
+
 const nodeslidePreferenceProvenanceValidator = v.object({
   deckVersion: v.number(),
   sourceEventId: v.optional(v.string()),
@@ -679,6 +777,7 @@ export default defineSchema({
     summary: v.string(),
     linkedCommentId: v.optional(v.string()),
     traceId: v.optional(v.string()),
+    jobId: v.optional(v.string()),
     proposalKind: v.optional(v.union(v.literal('edit'), v.literal('propagation'))),
     parentPatchId: v.optional(v.string()),
     affectedSlideIds: v.optional(v.array(v.string())),
@@ -693,7 +792,8 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_status', ['deckId', 'status'])
-    .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
+    .index('by_job', ['jobId']),
 
   nodeslide_delegation_grants: defineTable({
     schemaVersion: v.literal('nodeslide.delegation-grant/v1'),
@@ -890,6 +990,96 @@ export default defineSchema({
     .index('by_session_idempotency', ['clientSessionId', 'idempotencyKey'])
     .index('by_status_updated', ['status', 'updatedAt'])
     .index('by_result_deck', ['resultDeckId']),
+
+  /**
+   * Canonical server-owned state for a durable agent session. Request and
+   * capability material is represented only by irreversible digests and safe
+   * descriptors; raw prompts, credentials, and consent grants are never stored.
+   */
+  nodeslide_durable_sessions: defineTable({
+    id: v.string(),
+    schemaVersion: v.literal('nodeslide.durable-session/v2'),
+    requestBinding: nodeslideDurableRequestBindingValidator,
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    capability: nodeslideDurableCapabilityMetadataValidator,
+    stateVersion: v.number(),
+    egressEpoch: v.number(),
+    activeJobId: v.union(v.null(), v.string()),
+    jobs: v.record(v.string(), nodeslideDurableJobValidator),
+    eventSequence: v.number(),
+    transitionSequence: v.number(),
+    lastTransitionDigest: v.optional(v.string()),
+    stateDigest: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_binding', ['requestDigest', 'capabilityDigest'])
+    .index('by_updated', ['updatedAt']),
+
+  /** Immutable, hash-chained command outcomes for durable session recovery. */
+  nodeslide_durable_session_events: defineTable({
+    sessionId: v.string(),
+    transitionSequence: v.number(),
+    commandId: v.string(),
+    commandDigest: v.string(),
+    commandKind: v.union(
+      v.literal('enqueue'),
+      v.literal('claim'),
+      v.literal('resume'),
+      v.literal('retry'),
+      v.literal('transition'),
+      v.literal('rotate_egress'),
+    ),
+    stateVersion: v.number(),
+    eventSequence: v.number(),
+    egressEpoch: v.number(),
+    requestBinding: nodeslideDurableRequestBindingValidator,
+    jobId: v.optional(v.string()),
+    event: v.optional(nodeslideDurableJobEventValidator),
+    previousTransitionDigest: v.optional(v.string()),
+    transitionDigest: v.string(),
+    occurredAt: v.number(),
+  })
+    .index('by_session_sequence', ['sessionId', 'transitionSequence'])
+    .index('by_session_command', ['sessionId', 'commandId'])
+    .index('by_session_job', ['sessionId', 'jobId']),
+
+  /**
+   * Safe model/web receipts for an exact job attempt and egress epoch. Entries
+   * contain digests and accounting metadata only; no prompts, URLs, or results.
+   */
+  nodeslide_durable_job_journal_entries: defineTable({
+    sessionId: v.string(),
+    jobId: v.string(),
+    egressEpoch: v.number(),
+    attempt: v.number(),
+    sequence: v.number(),
+    entryId: v.string(),
+    kind: v.union(v.literal('model'), v.literal('web')),
+    binding: nodeslideDurableJournalBindingValidator,
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    provider: v.string(),
+    model: v.optional(v.string()),
+    operation: v.string(),
+    inputDigest: v.optional(v.string()),
+    outputDigest: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    queryDigest: v.optional(v.string()),
+    urlDigest: v.optional(v.string()),
+    resultDigest: v.optional(v.string()),
+    resultCount: v.optional(v.number()),
+    entryInputDigest: v.string(),
+    previousEntryDigest: v.optional(v.string()),
+    entryDigest: v.string(),
+    journalDigest: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_binding_sequence', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'sequence'])
+    .index('by_binding_entry', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'entryId']),
 
   nodeslide_agent_runs: defineTable({
     id: v.string(),
