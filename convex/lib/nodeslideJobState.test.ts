@@ -9,6 +9,7 @@ import {
   cancelNodeSlideJob,
   claimNodeSlideJobAttempt,
   failNodeSlideJob,
+  isNodeSlideJobTerminal,
   nodeSlideJobExecutionDigest,
   nodeSlideJobOwnerDigest,
   nodeSlideJobRequestDigest,
@@ -121,6 +122,9 @@ describe('NodeSlide durable job state', () => {
     expect(awaitingReview.resultPatchId).toBe('patch_proposal_only');
     expect(awaitingReview.resultCandidateDigest).toBe('candidate_sha256:proposal');
     expect(awaitingReview).not.toHaveProperty('acceptedAt');
+    expect(isNodeSlideJobTerminal(awaitingReview.status)).toBe(false);
+    expect(isNodeSlideJobTerminal('succeeded')).toBe(true);
+    expect(isNodeSlideJobTerminal('rejected')).toBe(true);
   });
 
   it('exposes a review-only edit result bound to the exact preflight candidate', () => {

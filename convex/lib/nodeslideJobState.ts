@@ -102,6 +102,10 @@ const TERMINAL = new Set<NodeSlideJobStatus>([
   'stale',
 ]);
 
+export function isNodeSlideJobTerminal(status: NodeSlideJobStatus): boolean {
+  return TERMINAL.has(status);
+}
+
 export function nodeSlideJobRequestDigest(value: unknown): string {
   return nodeslideContentDigest(stableSerialize(value));
 }

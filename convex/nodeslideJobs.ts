@@ -33,6 +33,7 @@ import {
   cancelNodeSlideJob,
   claimNodeSlideJobAttempt,
   failNodeSlideJob,
+  isNodeSlideJobTerminal,
   nodeSlideJobExecutionDigest,
   nodeSlideJobOwnerDigest,
   nodeSlideJobProgressLine,
@@ -218,7 +219,7 @@ export const startCreateDeck = mutation({
     await ctx.db.patch(rowId, { workflowId: workflowId.toString() });
     const created = await ctx.db.get(rowId);
     if (!created) throw new Error('NodeSlide job was not persisted.');
-    await appendProgress(ctx, jobFromRow(created), false);
+    await appendProgress(ctx, jobFromRow(created));
     return publicNodeSlideJob(jobFromRow(created));
   },
 });
@@ -335,7 +336,7 @@ export const startEditProposal = mutation({
     await ctx.db.patch(rowId, { workflowId: workflowId.toString() });
     const created = await ctx.db.get(rowId);
     if (!created) throw new Error('NodeSlide job was not persisted.');
-    await appendProgress(ctx, jobFromRow(created), false);
+    await appendProgress(ctx, jobFromRow(created));
     return publicNodeSlideJob(jobFromRow(created));
   },
 });
@@ -549,7 +550,7 @@ export const cancel = mutation({
       await workflow.cancel(ctx, row.workflowId as WorkflowId);
     }
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, true);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -564,7 +565,7 @@ export const retry = mutation({
     const next = { ...retryNodeSlideJob(jobFromRow(row), Date.now()), streamId };
     await retryNodeSlideDurableSession(ctx, next.id);
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, false);
+    await appendProgress(ctx, next);
     await workflow.restart(ctx, row.workflowId as WorkflowId, {
       from: row.kind === 'create_deck' ? 'execute-create-deck' : 'execute-edit-proposal',
       startAsync: true,
@@ -583,7 +584,7 @@ export const claimAttemptInternal = internalMutation({
     if (next === current) return publicNodeSlideJob(current);
     await claimNodeSlideDurableSession(ctx, next.id, next.attempt);
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, false);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -631,7 +632,7 @@ export const checkpointInternal = internalMutation({
       });
     }
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, false);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -667,7 +668,7 @@ export const completeCreateDeckInternal = internalMutation({
       toStatus: 'succeeded',
     });
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, true);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -707,7 +708,7 @@ export const completeEditProposalInternal = internalMutation({
       toStatus: 'awaiting_review',
     });
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, true);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -753,7 +754,7 @@ export const resolveReviewInternal = internalMutation({
       ...(next.error ? { reason: next.error } : {}),
     });
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, true);
+    await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
   },
 });
@@ -794,7 +795,7 @@ export const onWorkflowComplete = internalMutation({
       ...(args.result.kind === 'failed' ? { reason: args.result.error } : {}),
     });
     await patchJob(ctx, row, next);
-    await appendProgress(ctx, next, true);
+    await appendProgress(ctx, next);
   },
 });
 
@@ -1366,15 +1367,14 @@ function validateEditProposalRequest(request: NodeSlideEditProposalJobRequest): 
   }
 }
 
-async function appendProgress(
-  ctx: Pick<MutationCtx, 'runMutation'>,
-  job: NodeSlideJobRecord,
-  final: boolean,
-) {
+async function appendProgress(ctx: Pick<MutationCtx, 'runMutation'>, job: NodeSlideJobRecord) {
   await ctx.runMutation(components.persistentTextStreaming.lib.addChunk, {
     streamId: job.streamId,
     text: nodeSlideJobProgressLine(job),
-    final,
+    // `awaiting_review` is intentionally nonterminal: the human decision is
+    // still part of this durable run, so only a real terminal state closes the
+    // stream. This prevents Accept/Reject from attempting a second final write.
+    final: isNodeSlideJobTerminal(job.status),
   });
 }
 
