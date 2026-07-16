@@ -13,6 +13,8 @@ import {
   nodeSlideModelPricing,
   nodeSlideRunBudgetReceiptDigest,
   normalizeNodeSlideRunBudget,
+  parseNodeSlideSpendConstraint,
+  parseUsdDecimalToMicroUsd,
   preflightNodeSlideRunBudget,
   scoreNodeSlideWorstCaseCost,
 } from './lib/nodeslideRunBudget';
@@ -20,6 +22,24 @@ import {
 const PRICED_MODEL = 'nebius/zai-org/GLM-5.2';
 
 describe('NodeSlide run budget normalization', () => {
+  it('A05: parses the exact standalone run ceiling with decimal-safe micro-USD', () => {
+    expect(parseNodeSlideSpendConstraint('Spend no more than $1 on this run')).toEqual({
+      source: 'instruction',
+      matchedText: 'Spend no more than $1 on this run',
+      maxCostMicroUsd: 1_000_000,
+    });
+    expect(parseUsdDecimalToMicroUsd('0.1234569')).toBe(123_456);
+  });
+
+  it('uses the most restrictive repeated ceiling and ignores unrelated dollar copy', () => {
+    expect(
+      parseNodeSlideSpendConstraint(
+        'The market is worth $10B. Spend no more than $2 on this run, then spend not more than $0.75 for the run.',
+      ),
+    ).toMatchObject({ maxCostMicroUsd: 750_000 });
+    expect(parseNodeSlideSpendConstraint('Show a $1 price point on the market slide.')).toBeNull();
+  });
+
   it('applies finite defaults and is canonically idempotent', () => {
     const normalized = normalizeNodeSlideRunBudget({});
 

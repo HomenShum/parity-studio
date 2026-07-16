@@ -30,6 +30,63 @@ export interface NodeSlideRunBudgetInput {
   maxToolCalls?: number;
 }
 
+export interface NodeSlideSpendConstraint {
+  readonly source: 'instruction';
+  readonly matchedText: string;
+  readonly maxCostMicroUsd: number;
+}
+
+const NODESLIDE_SPEND_CONSTRAINT_PATTERN =
+  /\bspend\s+(?:no|not)\s+more\s+than\s+(?:(?:usd)\s*)?\$\s*(\d+(?:\.\d+)?)\s+(?:on|for)\s+(?:this|the)\s+run\b/giu;
+
+/**
+ * Extracts explicit run-level dollar ceilings without floating-point parsing.
+ * When an instruction repeats the constraint, the most restrictive value wins.
+ */
+export function parseNodeSlideSpendConstraint(
+  instruction: string,
+): NodeSlideSpendConstraint | null {
+  if (typeof instruction !== 'string' || instruction.length > 20_000) return null;
+  let selected: NodeSlideSpendConstraint | null = null;
+  for (const match of instruction.matchAll(NODESLIDE_SPEND_CONSTRAINT_PATTERN)) {
+    const amount = match[1];
+    if (!amount) continue;
+    const maxCostMicroUsd = parseUsdDecimalToMicroUsd(amount);
+    if (
+      maxCostMicroUsd >
+      NODESLIDE_RUN_BUDGET_BOUNDS.maxCostUsd.max * NODESLIDE_MICRO_USD_PER_USD
+    ) {
+      throw new NodeSlideRunBudgetValidationError(
+        'maxCostUsd',
+        `instruction ceiling exceeds ${NODESLIDE_RUN_BUDGET_BOUNDS.maxCostUsd.max} USD`,
+      );
+    }
+    const candidate: NodeSlideSpendConstraint = {
+      source: 'instruction',
+      matchedText: match[0],
+      maxCostMicroUsd,
+    };
+    if (!selected || candidate.maxCostMicroUsd < selected.maxCostMicroUsd) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
+/** Converts an unsigned USD decimal to integer micro-USD by rounding down. */
+export function parseUsdDecimalToMicroUsd(value: string): number {
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value)) {
+    throw new NodeSlideRunBudgetValidationError('maxCostUsd', 'expected an unsigned USD decimal');
+  }
+  const [whole = '0', fraction = ''] = value.split('.');
+  const microFraction = `${fraction}000000`.slice(0, 6);
+  const microUsd = BigInt(whole) * BigInt(NODESLIDE_MICRO_USD_PER_USD) + BigInt(microFraction);
+  if (microUsd > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new NodeSlideRunBudgetValidationError('maxCostUsd', 'amount exceeds the safe range');
+  }
+  return Number(microUsd);
+}
+
 export interface NodeSlideRunBudget {
   readonly version: typeof NODESLIDE_RUN_BUDGET_VERSION;
   readonly enforcement: 'hard';
