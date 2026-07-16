@@ -721,6 +721,12 @@ export interface NodeSlideAgentMessage {
   role: 'user' | 'assistant' | 'tool' | 'system';
   content: string;
   toolName?: string;
+  /** Stable tool invocation identity when this row represents a tool call. */
+  toolCallId?: string;
+  /** Optional parent row used by delegated agents and recursive tool conversations. */
+  parentMessageId?: string;
+  /** Query-projected read-only child conversation for a delegated tool call. */
+  messages?: NodeSlideAgentMessage[];
   sourceIds?: string[];
   toolActivity?: NodeSlideAgentToolActivity;
   resolvedSources?: NodeSlideAgentResolvedSource[];

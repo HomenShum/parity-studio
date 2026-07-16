@@ -1839,6 +1839,8 @@ export const advanceAgentRunInternal = internalMutation({
     message: v.optional(v.string()),
     role: v.optional(v.union(v.literal('assistant'), v.literal('tool'), v.literal('system'))),
     toolName: v.optional(v.string()),
+    toolCallId: v.optional(v.string()),
+    parentMessageId: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
     memoryIds: v.optional(v.array(v.string())),
     memoryDigests: v.optional(v.array(v.string())),
@@ -1974,6 +1976,12 @@ export const advanceAgentRunInternal = internalMutation({
         role,
         content: message,
         ...(args.toolName ? { toolName: requiredText(args.toolName, 'tool name', 120) } : {}),
+        ...(args.toolCallId
+          ? { toolCallId: requiredText(args.toolCallId, 'tool call id', 180) }
+          : {}),
+        ...(args.parentMessageId
+          ? { parentMessageId: requiredText(args.parentMessageId, 'parent message id', 180) }
+          : {}),
         ...(args.sourceIds ? { sourceIds: args.sourceIds.slice(0, 32) } : {}),
         createdAt: now,
       });

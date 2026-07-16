@@ -89,7 +89,14 @@ test.describe('NodeSlide editor visual-system boundary', () => {
       expect(metrics.primaryTabs).toHaveLength(5);
       expect(metrics.primaryTabs.every((tab) => tab.insideInspector)).toBe(true);
       expect(metrics.moreInsideInspector).toBe(true);
-      expect(metrics.textarea.height).toBeGreaterThanOrEqual(100);
+      if (visualCase.width <= 699) {
+        expect(metrics.textarea.height).toBeGreaterThanOrEqual(100);
+      } else {
+        expect(metrics.textarea.height).toBeGreaterThanOrEqual(72);
+        expect(metrics.textarea.height).toBeLessThanOrEqual(96);
+      }
+      expect(metrics.secondaryControlsAbovePrompt).toBe(true);
+      expect(metrics.promptBottomGap).toBeLessThanOrEqual(16);
       expect(metrics.dataLabel).toBe('Data');
       expect(metrics.unnamedButtons).toEqual([]);
       expect(metrics.accidentalHorizontalScrollers).toEqual([]);
@@ -171,6 +178,8 @@ interface VisualMetrics {
   primaryTabs: Array<RectMetric & { label: string; insideInspector: boolean }>;
   moreInsideInspector: boolean;
   textarea: RectMetric;
+  secondaryControlsAbovePrompt: boolean;
+  promptBottomGap: number;
   dataLabel: string;
   modeButtons: Array<RectMetric & { label: string }>;
   modeGaps: number[];
@@ -233,6 +242,12 @@ async function collectMetrics(
 
       const inspectorRect = rect(inspector);
       const promptRect = rect(prompt);
+      const composerRect = rect(composer);
+      const secondaryControls = Array.from(
+        composer.querySelectorAll<HTMLElement>(
+          '.ns-ai-v3-suggested-actions, .ns-ai-v3-policy-summary, .ns-ai-v3-controls-disclosure',
+        ),
+      ).filter(visible);
       const primaryTabs = Array.from(inspector.querySelectorAll<HTMLElement>('[role="tab"]')).map(
         (tab) => {
           const bounds = rect(tab);
@@ -305,6 +320,10 @@ async function collectMetrics(
         moreInsideInspector:
           moreRect.left >= inspectorRect.left - 1 && moreRect.right <= inspectorRect.right + 1,
         textarea: rect(textarea),
+        secondaryControlsAbovePrompt: secondaryControls.every(
+          (control) => rect(control).bottom <= promptRect.top + 1,
+        ),
+        promptBottomGap: Math.max(0, composerRect.bottom - promptRect.bottom),
         dataLabel: getComputedStyle(dataButton, '::after').content.replaceAll('"', ''),
         modeButtons,
         modeGaps,

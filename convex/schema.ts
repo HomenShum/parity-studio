@@ -951,6 +951,8 @@ export default defineSchema({
     ),
     content: v.string(),
     toolName: v.optional(v.string()),
+    toolCallId: v.optional(v.string()),
+    parentMessageId: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })

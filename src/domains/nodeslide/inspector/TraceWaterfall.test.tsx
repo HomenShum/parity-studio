@@ -236,7 +236,14 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
       expect(expandedHtml).toContain(`dateTime="${new Date(fixtureRoot.endTime).toISOString()}"`);
       expect(expandedHtml).toContain('data-edge="end"');
       expect(expandedHtml.length).toBeLessThan(200_000);
-      if (count === 100) expect(expandedRows).toBeLessThan(40);
+      if (count <= 10) {
+        expect(expandedHtml).toContain('data-testid="trace-o11y-tree"');
+        expect(expandedHtml).not.toContain('is-virtualized');
+      } else {
+        expect(expandedHtml).not.toContain('data-testid="trace-o11y-tree"');
+        expect(expandedHtml).toContain('is-virtualized');
+        expect(expandedRows).toBeLessThan(40);
+      }
     },
   );
 
