@@ -878,6 +878,8 @@ export default defineSchema({
     resultPatchId: v.optional(v.string()),
     resultCandidateDigest: v.optional(v.string()),
     conversationRunId: v.optional(v.string()),
+    // Budget ownership is intentionally optional until provider/job wiring lands.
+    budgetId: v.optional(v.string()),
     memoryIds: v.array(v.string()),
     error: v.optional(v.string()),
     createdAt: v.number(),
@@ -908,6 +910,8 @@ export default defineSchema({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    // Links this durable run to the server-authoritative cost ledger when enabled.
+    budgetId: v.optional(v.string()),
     memoryIds: v.optional(v.array(v.string())),
     attempt: v.number(),
     otelTraceId: v.optional(v.string()),
@@ -938,6 +942,120 @@ export default defineSchema({
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_idempotency', ['deckId', 'idempotencyKey'])
     .index('by_deck_status_updated', ['deckId', 'status', 'updatedAt']),
+
+  /**
+   * One canonical, server-owned hard budget per durable NodeSlide run. Monetary
+   * amounts are integer micro-USD; `reserved` and `unreconciled` are held in
+   * the exposure total until a provider call is settled or explicitly released.
+   */
+  nodeslide_run_budgets: defineTable({
+    id: v.string(),
+    version: v.literal('nodeslide.budget-ledger/v1'),
+    status: v.union(v.literal('open'), v.literal('finalized')),
+    budget: v.object({
+      version: v.literal('nodeslide.run-budget/v1'),
+      enforcement: v.literal('hard'),
+      maxCostUsd: v.number(),
+      maxCostMicroUsd: v.number(),
+      maxInputTokens: v.number(),
+      maxOutputTokens: v.number(),
+      maxDurationMs: v.number(),
+      maxIterations: v.number(),
+      maxToolCalls: v.number(),
+    }),
+    configDigest: v.string(),
+    actualMicroUsd: v.number(),
+    reservedMicroUsd: v.number(),
+    unreconciledMicroUsd: v.number(),
+    accumulated: v.object({
+      inputTokens: v.number(),
+      outputTokens: v.number(),
+      elapsedMs: v.number(),
+      iterations: v.number(),
+      toolCalls: v.number(),
+    }),
+    receiptDigests: v.record(v.string(), v.string()),
+    accountingStateDigest: v.string(),
+    revision: v.number(),
+    eventSequence: v.number(),
+    lastEventDigest: v.string(),
+    stateDigest: v.string(),
+    finalizeDigest: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    finalizedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_status_updated', ['status', 'updatedAt']),
+
+  /** A deterministic call record, keyed by (budgetId, callId). */
+  nodeslide_billable_calls: defineTable({
+    budgetId: v.string(),
+    callId: v.string(),
+    version: v.literal('nodeslide.billable-call/v1'),
+    status: v.union(
+      v.literal('reserved'),
+      v.literal('unreconciled'),
+      v.literal('settled'),
+      v.literal('released'),
+    ),
+    model: v.string(),
+    pricingDigest: v.string(),
+    quoteMicroUsd: v.number(),
+    estimatedInputTokens: v.number(),
+    requestedMaxOutputTokens: v.number(),
+    providerSafeOutputTokenCeiling: v.number(),
+    providerTimeoutMs: v.number(),
+    reservationDigest: v.string(),
+    terminalOperationDigest: v.optional(v.string()),
+    receiptDigest: v.optional(v.string()),
+    actualMicroUsd: v.optional(v.number()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    elapsedMs: v.optional(v.number()),
+    iterations: v.optional(v.number()),
+    toolCalls: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    settledAt: v.optional(v.number()),
+    releasedAt: v.optional(v.number()),
+    timeoutCapturedAt: v.optional(v.number()),
+  })
+    .index('by_budget_call', ['budgetId', 'callId'])
+    .index('by_budget_status', ['budgetId', 'status']),
+
+  /** Immutable audit chain for every applied budget state transition. */
+  nodeslide_budget_events: defineTable({
+    budgetId: v.string(),
+    callId: v.optional(v.string()),
+    version: v.literal('nodeslide.budget-event/v1'),
+    sequence: v.number(),
+    revision: v.number(),
+    kind: v.union(
+      v.literal('created'),
+      v.literal('reserved'),
+      v.literal('settled'),
+      v.literal('timeout_captured'),
+      v.literal('released'),
+      v.literal('finalized'),
+    ),
+    operationDigest: v.string(),
+    status: v.union(v.literal('open'), v.literal('finalized')),
+    actualDeltaMicroUsd: v.number(),
+    reservedDeltaMicroUsd: v.number(),
+    unreconciledDeltaMicroUsd: v.number(),
+    actualMicroUsd: v.number(),
+    reservedMicroUsd: v.number(),
+    unreconciledMicroUsd: v.number(),
+    capMicroUsd: v.number(),
+    accountingStateDigest: v.string(),
+    budgetStateCoreDigest: v.string(),
+    previousEventDigest: v.optional(v.string()),
+    eventDigest: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_budget_sequence', ['budgetId', 'sequence'])
+    .index('by_budget_call', ['budgetId', 'callId']),
 
   nodeslide_agent_messages: defineTable({
     id: v.string(),
