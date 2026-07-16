@@ -1,5 +1,14 @@
 import type { DeckPatch, DeckVersion, SlideElement } from '../../../shared/nodeslide';
 
+export function candidateSlideIdForPatch(
+  patch: Pick<DeckPatch, 'operations'> | null | undefined,
+  activeSlideId: string | undefined,
+): string | undefined {
+  return (
+    patch?.operations.find((operation) => operation.op === 'add_slide')?.slide.id ?? activeSlideId
+  );
+}
+
 export type EditorCandidateStatus =
   | 'ready'
   | 'validating'

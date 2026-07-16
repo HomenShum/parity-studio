@@ -1,0 +1,473 @@
+{
+  "url": "http://127.0.0.1:4180/?domain=nodeslide",
+  "scheme": "light",
+  "viewport": {
+    "width": 1512,
+    "height": 812
+  },
+  "when": "2026-07-16T06:52:32.215Z",
+  "signals": {
+    "counts": {
+      "visibleElements": 546,
+      "textElements": 118
+    },
+    "fontSizes": {
+      "unique": 16,
+      "scale": [
+        6.6,
+        7,
+        8,
+        8.3,
+        9,
+        9.5,
+        10,
+        10.5,
+        11,
+        11.5,
+        12,
+        12.5,
+        13,
+        14,
+        16,
+        21
+      ],
+      "histogram": {
+        "7": 3,
+        "8": 1,
+        "9": 2,
+        "10": 33,
+        "11": 22,
+        "12": 6,
+        "13": 14,
+        "14": 2,
+        "16": 1,
+        "21": 1,
+        "10.5": 10,
+        "11.5": 8,
+        "12.5": 7,
+        "9.5": 6,
+        "6.6": 1,
+        "8.3": 1
+      }
+    },
+    "fontWeights": {
+      "unique": 10,
+      "values": [
+        400,
+        430,
+        500,
+        560,
+        580,
+        600,
+        620,
+        650,
+        700,
+        750
+      ]
+    },
+    "textColors": {
+      "unique": 11,
+      "offAllowlistCount": 0,
+      "offAllowlist": [],
+      "histogram": {
+        "#4b5563": 47,
+        "#667085": 25,
+        "#111827": 22,
+        "#047857": 11,
+        "#26221d": 4,
+        "#a8583f": 3,
+        "#ffffff": 2,
+        "#5e6ad2": 1,
+        "#b44a2d": 1,
+        "#756b61": 1,
+        "#dc2626": 1
+      }
+    },
+    "spacing": {
+      "uniqueValues": 22,
+      "scale": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        16,
+        18,
+        30,
+        40,
+        54,
+        58,
+        109,
+        126
+      ],
+      "totalDecls": 610,
+      "offGrid4Count": 417,
+      "offGrid4Rate": 0.684,
+      "offGrid8Count": 417
+    },
+    "radii": {
+      "unique": 12,
+      "values": [
+        0,
+        1,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        13,
+        14,
+        50
+      ]
+    },
+    "shadows": {
+      "unique": 9
+    },
+    "icons": {
+      "uniqueSizes": 9,
+      "sizes": [
+        "15x15",
+        "14x14",
+        "12x12",
+        "13x13",
+        "16x16",
+        "11x11",
+        "20x20",
+        "12x13",
+        "11x12"
+      ]
+    },
+    "contrast": {
+      "flagged": 6,
+      "worst": [
+        {
+          "sel": "span.ns-wordmark-mark.ns-wordmark-mark--v3",
+          "ratio": 1.06,
+          "size": 13,
+          "weight": 750,
+          "fg": "#ffffff",
+          "bg": "#faf8f6",
+          "text": "N"
+        },
+        {
+          "sel": "span",
+          "ratio": 1.06,
+          "size": 13,
+          "weight": 600,
+          "fg": "#ffffff",
+          "bg": "#faf8f6",
+          "text": "Export"
+        },
+        {
+          "sel": "span.ns-narrative-label",
+          "ratio": 4.15,
+          "size": 9,
+          "weight": 400,
+          "fg": "#5e6ad2",
+          "bg": "#eff1f3",
+          "text": "Slide job"
+        },
+        {
+          "sel": "button.is-active",
+          "ratio": 4.2,
+          "size": 10.5,
+          "weight": 400,
+          "fg": "#a8583f",
+          "bg": "#f0e8e6",
+          "text": "This slide"
+        },
+        {
+          "sel": "span.ns-editor-slide-number",
+          "ratio": 4.39,
+          "size": 10,
+          "weight": 400,
+          "fg": "#667085",
+          "bg": "#eff1f3",
+          "text": "01"
+        },
+        {
+          "sel": "span.needs-consent",
+          "ratio": 4.39,
+          "size": 11,
+          "weight": 400,
+          "fg": "#dc2626",
+          "bg": "#f3f4f6",
+          "text": "Consent required"
+        }
+      ]
+    },
+    "alignment": {
+      "distinctLeftEdges": 69,
+      "strayRate": 0.5
+    },
+    "motion": {
+      "reducedMotionActive": false,
+      "animatedInfinite": 1,
+      "transitionsWithDuration": 15,
+      "over400ms": 1,
+      "over400msSamples": [
+        {
+          "sel": "svg.lucide.lucide-loader-circle",
+          "durMs": 850
+        }
+      ]
+    },
+    "focus": {
+      "focusVisibleRules": 9,
+      "focusRules": 10
+    }
+  },
+  "rubric": {
+    "V1": {
+      "name": "Type-scale discipline",
+      "score": 0,
+      "why": "16 distinct font-sizes (<=7 disciplined, >10 sprawl)"
+    },
+    "V2": {
+      "name": "Spacing / grid rhythm",
+      "score": 0,
+      "why": "off-4px rate 0.684 (<=0.10 good), 22 distinct spacing values (<=12 good)"
+    },
+    "V3": {
+      "name": "Color restraint & token adherence",
+      "score": 2,
+      "why": "11 distinct text colors (<=12 good)"
+    },
+    "V4": {
+      "name": "Hierarchy (weight + size + value)",
+      "score": 2,
+      "why": "10 distinct font-weights (>=2 needed for weight hierarchy)"
+    },
+    "V5": {
+      "name": "Contrast / legibility (WCAG)",
+      "score": 0,
+      "why": "6 text nodes below WCAG floor (0 = pass)"
+    },
+    "V6": {
+      "name": "Radius / shadow / elevation consistency",
+      "score": 0,
+      "why": "12 radii, 9 shadows, 9 icon sizes (each <=4 = defined levels)"
+    },
+    "V7": {
+      "name": "Alignment / edge discipline",
+      "score": 0,
+      "why": "0.5 of block elements off the 8 dominant left-edges (<=0.25 good)"
+    },
+    "V8": {
+      "name": "State polish (empty / loading / error)",
+      "score": null,
+      "why": "vision-judge only — capture empty+loading+error PNGs; not derivable from one static DOM read"
+    },
+    "V9": {
+      "name": "Motion restraint",
+      "score": 1,
+      "why": "1 transitions >400ms, 1 infinite animations"
+    }
+  },
+  "targets": [
+    {
+      "id": "V1",
+      "name": "Type-scale discipline",
+      "score": 0,
+      "why": "16 distinct font-sizes (<=7 disciplined, >10 sprawl)",
+      "evidence": {
+        "scale": [
+          6.6,
+          7,
+          8,
+          8.3,
+          9,
+          9.5,
+          10,
+          10.5,
+          11,
+          11.5,
+          12,
+          12.5,
+          13,
+          14,
+          16,
+          21
+        ]
+      }
+    },
+    {
+      "id": "V2",
+      "name": "Spacing / grid rhythm",
+      "score": 0,
+      "why": "off-4px rate 0.684 (<=0.10 good), 22 distinct spacing values (<=12 good)",
+      "evidence": {
+        "offGrid4Rate": 0.684,
+        "offGrid4Count": 417,
+        "uniqueValues": 22,
+        "scale": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          14,
+          16,
+          18,
+          30,
+          40,
+          54,
+          58,
+          109,
+          126
+        ]
+      }
+    },
+    {
+      "id": "V5",
+      "name": "Contrast / legibility (WCAG)",
+      "score": 0,
+      "why": "6 text nodes below WCAG floor (0 = pass)",
+      "evidence": {
+        "flagged": 6,
+        "worst": [
+          {
+            "sel": "span.ns-wordmark-mark.ns-wordmark-mark--v3",
+            "ratio": 1.06,
+            "size": 13,
+            "weight": 750,
+            "fg": "#ffffff",
+            "bg": "#faf8f6",
+            "text": "N"
+          },
+          {
+            "sel": "span",
+            "ratio": 1.06,
+            "size": 13,
+            "weight": 600,
+            "fg": "#ffffff",
+            "bg": "#faf8f6",
+            "text": "Export"
+          },
+          {
+            "sel": "span.ns-narrative-label",
+            "ratio": 4.15,
+            "size": 9,
+            "weight": 400,
+            "fg": "#5e6ad2",
+            "bg": "#eff1f3",
+            "text": "Slide job"
+          },
+          {
+            "sel": "button.is-active",
+            "ratio": 4.2,
+            "size": 10.5,
+            "weight": 400,
+            "fg": "#a8583f",
+            "bg": "#f0e8e6",
+            "text": "This slide"
+          },
+          {
+            "sel": "span.ns-editor-slide-number",
+            "ratio": 4.39,
+            "size": 10,
+            "weight": 400,
+            "fg": "#667085",
+            "bg": "#eff1f3",
+            "text": "01"
+          },
+          {
+            "sel": "span.needs-consent",
+            "ratio": 4.39,
+            "size": 11,
+            "weight": 400,
+            "fg": "#dc2626",
+            "bg": "#f3f4f6",
+            "text": "Consent required"
+          }
+        ]
+      }
+    },
+    {
+      "id": "V6",
+      "name": "Radius / shadow / elevation consistency",
+      "score": 0,
+      "why": "12 radii, 9 shadows, 9 icon sizes (each <=4 = defined levels)",
+      "evidence": {
+        "radii": [
+          0,
+          1,
+          3,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          13,
+          14,
+          50
+        ],
+        "shadows": 9,
+        "iconSizes": [
+          "15x15",
+          "14x14",
+          "12x12",
+          "13x13",
+          "16x16",
+          "11x11",
+          "20x20",
+          "12x13",
+          "11x12"
+        ]
+      }
+    },
+    {
+      "id": "V7",
+      "name": "Alignment / edge discipline",
+      "score": 0,
+      "why": "0.5 of block elements off the 8 dominant left-edges (<=0.25 good)",
+      "evidence": {
+        "strayRate": 0.5,
+        "distinctLeftEdges": 69
+      }
+    },
+    {
+      "id": "V9",
+      "name": "Motion restraint",
+      "score": 1,
+      "why": "1 transitions >400ms, 1 infinite animations",
+      "evidence": {
+        "over400ms": 1,
+        "animatedInfinite": 1,
+        "samples": [
+          {
+            "sel": "svg.lucide.lucide-loader-circle",
+            "durMs": 850
+          }
+        ]
+      }
+    }
+  ],
+  "focusOk": true,
+  "aggregate": {
+    "measuredDims": 8,
+    "score": 5,
+    "max": 16,
+    "pct": 31
+  }
+}

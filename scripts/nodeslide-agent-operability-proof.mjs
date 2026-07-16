@@ -8,22 +8,19 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function openSample(page) {
-  await page.addInitScript(() => {
-    localStorage.removeItem('nodeslide.firstRun.v1');
-  });
+async function openSample(page, expectComposer = true) {
   await page.goto(url, { waitUntil: 'networkidle', timeout: 45_000 });
-  const dialog = page.getByTestId('first-run-dialog');
-  await dialog.waitFor({ state: 'visible', timeout: 30_000 });
-  assert(await dialog.isVisible(), 'Fresh sessions must expose the first-run dialog.');
-  assert(
-    await page
-      .getByText('Deterministic by default · OpenRouter opt-in', { exact: true })
-      .isVisible(),
-    'The concise privacy cue must remain visible.',
-  );
-  await page.getByTestId('first-run-explore').click();
-  await page.getByTestId('nodeslide-studio').waitFor({ state: 'visible' });
+  const sample = page.getByRole('button', { name: 'Explore the editable sample workspace' });
+  await sample.waitFor({ state: 'visible', timeout: 30_000 });
+  await sample.click();
+  if (expectComposer) {
+    await page.getByTestId('ai-composer').waitFor({ state: 'visible', timeout: 90_000 });
+  } else {
+    await page.getByRole('button', { name: 'Slide 1 actions' }).waitFor({
+      state: 'visible',
+      timeout: 90_000,
+    });
+  }
 }
 
 const browser = await chromium.launch();
@@ -31,25 +28,39 @@ try {
   const desktop = await browser.newPage({ viewport: { width: 1512, height: 812 } });
   await openSample(desktop);
   const controls = desktop.getByTestId('ai-provider-controls');
-  assert((await controls.getAttribute('open')) !== null, 'Provider controls must open by default.');
+  assert((await controls.getAttribute('open')) === null, 'Advanced controls must start collapsed.');
+  assert(await desktop.getByTestId('ai-read-scope').isVisible(), 'Read scope must be visible.');
+  assert(await desktop.getByTestId('ai-write-scope').isVisible(), 'Write scope must be visible.');
+  await desktop.getByTestId('ai-provider-summary').click();
   assert(
     await desktop.getByTestId('ai-provider-route-status').isVisible(),
-    'Provider route status must be visible without a second disclosure.',
+    'Provider route status must be visible inside the single settings disclosure.',
   );
   const openRouter = desktop.getByTestId('ai-provider-openrouter');
   const consent = desktop.getByTestId('ai-provider-consent');
   assert(await openRouter.isVisible(), 'OpenRouter choice must be directly discoverable.');
-  assert(!(await consent.isEnabled()), 'External consent must be disabled before route selection.');
-  await openRouter.check();
   assert(
     await consent.isEnabled(),
-    'External consent must become available after route selection.',
+    'External consent must be available for the selected OpenRouter route.',
   );
   await consent.check();
   assert(await consent.isChecked(), 'External consent must be explicitly checked per request.');
 
+  const split = await browser.newPage({ viewport: { width: 900, height: 900 } });
+  await openSample(split);
+  const geometry = await split.evaluate(() => {
+    const canvas = document.querySelector('.ns-canvas-panel')?.getBoundingClientRect();
+    const inspector = document.querySelector('.ns-inspector')?.getBoundingClientRect();
+    return {
+      noOverlap: Boolean(canvas && inspector && canvas.right <= inspector.left + 1),
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+    };
+  });
+  assert(geometry.noOverlap, 'The 900px assistant must use a split pane, not cover the canvas.');
+  assert(geometry.noOverflow, 'The 900px split pane must not create horizontal overflow.');
+
   const phone = await browser.newPage({ viewport: { width: 375, height: 812 } });
-  await openSample(phone);
+  await openSample(phone, false);
   assert(
     await phone.getByRole('button', { name: 'Slide 1 actions' }).isVisible(),
     'Phone storyboard must retain a visible slide-actions path.',
@@ -65,7 +76,8 @@ try {
     await phone.screenshot({ path: `${outDir}/b8-phone-slide-actions.png` });
   }
   console.log(`PASS NodeSlide agent operability · ${url}`);
-  console.log('PASS desktop provider consent is one disclosure and per-request explicit');
+  console.log('PASS desktop scope is explicit and provider consent is one disclosure');
+  console.log('PASS 900px assistant is a non-overlapping split pane');
   console.log('PASS phone slide actions and add-slide remain visible');
 } finally {
   await browser.close();

@@ -1,4 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  type ConvexCall,
+  type NodeSlideScope,
+  type NodeSlideWorkspace,
+  clocksForScope,
+  resolveScope,
+  unappliedProposalReceipt,
+} from '@parity/nodeslide-agent-client';
 import { z } from 'zod';
 
 import { localByokStatus, requireLocalKeys } from './byok.js';
@@ -10,46 +18,8 @@ const WEB_CONSENT = 'nodeslide_web_research_v1';
 const LOCAL_BYOK_CONSENT = 'nodeslide_local_byok_edit_v1';
 const DEFAULT_BYOK_MODEL = process.env.NODESLIDE_BYOK_MODEL ?? 'z-ai/glm-5.2';
 
-type ConvexCall = (
-  kind: 'query' | 'mutation' | 'action',
-  path: string,
-  args: Record<string, unknown>,
-) => Promise<unknown>;
-
-type NodeSlideScope =
-  | { kind: 'deck'; deckId: string; operationMode: OperationMode }
-  | { kind: 'slide'; deckId: string; slideIds: string[]; operationMode: OperationMode }
-  | {
-      kind: 'elements';
-      deckId: string;
-      slideIds: string[];
-      elementIds: string[];
-      operationMode: OperationMode;
-    };
-type OperationMode = 'copy' | 'style' | 'layout' | 'unrestricted';
-
-export interface NodeSlideWorkspace {
-  deck: { id: string; title: string; version: number; slideOrder: string[] };
-  slides: Array<{ id: string; title: string; section?: string; version: number }>;
-  elements: Array<{
-    id: string;
-    slideId: string;
-    name: string;
-    kind: string;
-    role?: string;
-    content?: string;
-    bbox: unknown;
-    style: unknown;
-    sourceIds: string[];
-    locked: boolean;
-    version: number;
-  }>;
-  sources: Array<{ id: string; title: string; sourceType: string; url?: string }>;
-  patches: Array<Record<string, unknown> & { id: string; status: string }>;
-  traces: Array<Record<string, unknown> & { id: string; createdAt: number; patchId?: string }>;
-  versions: Array<Record<string, unknown> & { id: string; version: number; createdAt: number }>;
-  validations: Array<Record<string, unknown>>;
-}
+export type { NodeSlideWorkspace } from '@parity/nodeslide-agent-client';
+export { resolveScope, unappliedProposalReceipt } from '@parity/nodeslide-agent-client';
 
 interface LocalPlannerResult {
   summary: string;
@@ -499,68 +469,6 @@ async function getWorkspace(
   return workspace;
 }
 
-export function resolveScope(
-  workspace: NodeSlideWorkspace,
-  args: {
-    scope: 'deck' | 'slide' | 'elements';
-    slideId?: string;
-    elementIds?: string[];
-    operationMode: OperationMode;
-  },
-): NodeSlideScope {
-  if (args.scope === 'deck') {
-    return { kind: 'deck', deckId: workspace.deck.id, operationMode: args.operationMode };
-  }
-  const slideId = args.slideId ?? workspace.deck.slideOrder[0];
-  if (!slideId || !workspace.slides.some((slide) => slide.id === slideId)) {
-    throw new Error('A valid slideId is required for slide or element scope.');
-  }
-  if (args.scope === 'slide') {
-    return {
-      kind: 'slide',
-      deckId: workspace.deck.id,
-      slideIds: [slideId],
-      operationMode: args.operationMode,
-    };
-  }
-  const elementIds = args.elementIds ?? [];
-  if (elementIds.length === 0) throw new Error('elementIds are required for element scope.');
-  if (
-    elementIds.some(
-      (id) =>
-        !workspace.elements.some((element) => element.id === id && element.slideId === slideId),
-    )
-  ) {
-    throw new Error('Every elementId must belong to the authorized slide.');
-  }
-  return {
-    kind: 'elements',
-    deckId: workspace.deck.id,
-    slideIds: [slideId],
-    elementIds,
-    operationMode: args.operationMode,
-  };
-}
-
-function clocksForScope(workspace: NodeSlideWorkspace, scope: NodeSlideScope) {
-  const slideIds = new Set(scope.kind === 'deck' ? workspace.deck.slideOrder : scope.slideIds);
-  const elementIds = scope.kind === 'elements' ? new Set(scope.elementIds) : null;
-  return {
-    baseSlideVersions: Object.fromEntries(
-      workspace.slides
-        .filter((slide) => slideIds.has(slide.id))
-        .map((slide) => [slide.id, slide.version]),
-    ),
-    baseElementVersions: Object.fromEntries(
-      workspace.elements
-        .filter(
-          (element) => slideIds.has(element.slideId) && (!elementIds || elementIds.has(element.id)),
-        )
-        .map((element) => [element.id, element.version]),
-    ),
-  };
-}
-
 function readReceipt(tool: string, workspace: NodeSlideWorkspace) {
   return {
     tool,
@@ -568,26 +476,6 @@ function readReceipt(tool: string, workspace: NodeSlideWorkspace) {
     deckVersion: workspace.deck.version,
     readOnly: true,
     recordedAt: new Date().toISOString(),
-  };
-}
-
-export function unappliedProposalReceipt(result: unknown, beforeVersion: number) {
-  const value = result as {
-    patch?: Record<string, unknown> & { status?: string; candidateValidation?: unknown };
-    workspace?: NodeSlideWorkspace;
-  };
-  const afterVersion = value.workspace?.deck.version;
-  if (!value.patch || afterVersion !== beforeVersion || value.patch.status === 'accepted') {
-    throw new Error(
-      'Governance violation: propose_edit did not return a verifiably unapplied proposal.',
-    );
-  }
-  return {
-    proposal: value.patch,
-    candidateReceipt: value.patch.candidateValidation ?? null,
-    applied: false,
-    deckVersionBefore: beforeVersion,
-    deckVersionAfter: afterVersion,
   };
 }
 

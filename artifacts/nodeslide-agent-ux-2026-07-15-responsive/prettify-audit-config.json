@@ -1,0 +1,9 @@
+{
+  "repo": "D:/VSCode Projects/parity-studio",
+  "url": "http://127.0.0.1:4180/?domain=nodeslide",
+  "outDir": "D:/VSCode Projects/parity-studio/artifacts/nodeslide-agent-ux-2026-07-15-responsive",
+  "viewport": { "width": 1512, "height": 812 },
+  "scheme": "light",
+  "clicks": [".ns-landing-sample"],
+  "waitMs": 3000
+}

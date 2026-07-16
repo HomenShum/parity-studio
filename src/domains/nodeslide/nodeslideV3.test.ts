@@ -20,19 +20,28 @@ describe('NodeSlide v3 visual contract', () => {
     expect(desktop).toMatch(/\.ns-inspector:not\(\.is-collapsed\)[\s\S]*width: 340px !important/);
   });
 
-  it('keeps navigation and inspector reachable as tablet overlays', () => {
-    const tablet = mediaBlock(
-      '@media (min-width: 700px) and (max-width: 1099px)',
-      '@media (min-width: 1100px)',
+  it('uses a drawer below 900px and a persistent split inspector from 900px', () => {
+    const drawer = mediaBlock(
+      '@media (min-width: 700px) and (max-width: 899px)',
+      '@media (min-width: 900px)',
     );
 
-    expect(tablet).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 300px/);
-    expect(tablet).toMatch(
+    expect(drawer).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 300px/);
+    expect(drawer).toMatch(
       /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*position: absolute[\s\S]*width: 420px !important/,
     );
-    expect(tablet).toMatch(/\.ns-toolbar \.ns-navigator-toggle[\s\S]*display: inline-flex/);
-    expect(tablet).toMatch(
+    expect(drawer).toMatch(/\.ns-toolbar \.ns-navigator-toggle[\s\S]*display: inline-flex/);
+    expect(drawer).toMatch(
       /\.ns-toolbar-history,[\s\S]*?\.ns-language-menu,[\s\S]*?\.ns-reset-view[\s\S]*?display: none/,
+    );
+
+    const split = mediaBlock(
+      '@media (min-width: 900px) and (max-width: 1099px)',
+      '@media (min-width: 1100px)',
+    );
+    expect(split).toContain('grid-template-columns: minmax(0, 1fr) var(--ns-inspector-width)');
+    expect(split).toMatch(
+      /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*grid-column: 2[\s\S]*position: relative/,
     );
   });
 
@@ -96,12 +105,18 @@ describe('NodeSlide v3 visual contract', () => {
 
   it('keeps the AI chat primary and advanced controls compact', () => {
     expect(css).toMatch(/\.ns-ai-v3-welcome[\s\S]*?grid-template-columns: 28px minmax\(0, 1fr\)/);
-    expect(css).toMatch(/\.ns-ai-v3-policy-summary[\s\S]*?display: flex;[\s\S]*?flex-wrap: wrap;/);
+    expect(css).not.toContain('.ns-ai-v3-policy-summary');
     expect(css).toMatch(
-      /\.ns-ai-v3-controls-disclosure[\s\S]*?border-radius: 9px;[\s\S]*?overflow: hidden;/,
+      /\.ns-ai-v3-controls-body \{[\s\S]*?display: none;[\s\S]*?\.ns-ai-v3-controls-disclosure\[open\] \.ns-ai-v3-controls-body \{[\s\S]*?display: grid;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-tools-menu \{[\s\S]*?display: none;[\s\S]*?\.ns-ai-tools-disclosure\[open\] \.ns-ai-tools-menu \{[\s\S]*?display: grid;/,
     );
     expect(css).toMatch(
       /\.ns-composer-token-toolbar button[\s\S]*?background: transparent;[\s\S]*?width: auto;/,
+    );
+    expect(css).toMatch(
+      /\.ns-ai-v3-review-scroll \{[\s\S]*?height: 100%;[\s\S]*?max-height: 100%;/,
     );
   });
 

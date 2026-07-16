@@ -90,8 +90,9 @@ describe('NodeSlide editor canvas modes', () => {
   it('reveals candidate canvas when the inspector is an overlay drawer', () => {
     expect(shouldRevealCandidateCanvas(390)).toBe(true);
     expect(shouldRevealCandidateCanvas(720)).toBe(true);
-    expect(shouldRevealCandidateCanvas(1100)).toBe(true);
-    expect(shouldRevealCandidateCanvas(1101)).toBe(false);
+    expect(shouldRevealCandidateCanvas(899)).toBe(true);
+    expect(shouldRevealCandidateCanvas(900)).toBe(false);
+    expect(shouldRevealCandidateCanvas(1100)).toBe(false);
     expect(shouldRevealCandidateCanvas(Number.NaN)).toBe(false);
   });
 

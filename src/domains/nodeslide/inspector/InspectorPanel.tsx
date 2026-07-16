@@ -94,6 +94,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
     scope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onProposeVisualMaterial: (operations: PatchOperation[], summary: string) => Promise<void>;
   onAttachAiDataFile?: (file: File) => Promise<AiReadReference>;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
@@ -162,6 +163,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onToggleCollapsed,
   onWidthChange,
   onProposeEdit,
+  onProposeVisualMaterial,
   onAttachAiDataFile,
   onDeleteAiDataSource,
   onCancelAiRun,
@@ -362,6 +364,7 @@ export function InspectorPanel<CommandId extends string = string>({
             {...(onPreviewPatch ? { onPreviewPatch } : {})}
             {...(onClearAiCommentContext ? { onClearCommentContext: onClearAiCommentContext } : {})}
             onPropose={onProposeEdit}
+            onProposeVisualMaterial={onProposeVisualMaterial}
             {...(onAttachAiDataFile ? { onAttachDataFile: onAttachAiDataFile } : {})}
             {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
             onAccept={onAcceptPatch}

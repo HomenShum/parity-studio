@@ -1,0 +1,45 @@
+{
+  "ts": "2026-07-16T01:16:39.0983474-07:00",
+  "executor": "Codex",
+  "app": "nodeslide",
+  "scope": "OpenUI Phase 0 visual-material proposal and live agent interaction proof",
+  "environment": {
+    "target": "http://127.0.0.1:5190/",
+    "workspace": "disposable local sample",
+    "productionMutation": false,
+    "deployment": false
+  },
+  "journeys": {
+    "openui-render": "PASS",
+    "allowlisted-proposal": "PASS",
+    "pending-deck-unchanged": "PASS-v1",
+    "candidate-compare": "PASS-new-add-slide-previewed",
+    "explicit-accept": "PASS-v1-to-v2",
+    "accepted-slide-visible": "PASS",
+    "light-theme": "PASS",
+    "dark-theme": "PASS",
+    "mobile-viewport": "NOT-CLAIMED-in-app-browser-override-remained-1280x720"
+  },
+  "agentInteractionContract": {
+    "openuiAction": "nodeslide.visual-material.propose",
+    "operations": 1,
+    "operationKind": "add_slide",
+    "silentMutation": false,
+    "humanAcceptRequired": true,
+    "mixedUnitSharedAxis": false,
+    "sourceLabel": "User-provided scenario brief · unverified"
+  },
+  "gates": {
+    "focusedOpenuiAgentTests": "16/16 passed",
+    "fullRepositoryTests": "521/521 passed",
+    "typecheck": "passed",
+    "biome": "passed",
+    "productionBuild": "passed",
+    "pptxOverflow": "passed",
+    "slideElementBounds": "5 slides, 0 out-of-bounds elements",
+    "visualMontageReview": "passed"
+  },
+  "evidenceDir": "docs/dogfood/nodeslide-openui-live-2026-07-16",
+  "deck": "artifacts/nodeslide-openui-live-agent-proof-2026-07-16.pptx",
+  "notes": "The live run found and fixed an invalid OpenUI program form and an add_slide candidate-selection defect before final verification. Responsive mobile pixels remain a separate QA-infrastructure follow-up because the requested browser viewport override did not apply."
+}

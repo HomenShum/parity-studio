@@ -29,6 +29,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@assistant-ui/react": "^0.14.26",
     "@convex-dev/persistent-text-streaming": "^0.3.3",
     "@convex-dev/workflow": "^0.3.0",
     "@earendil-works/pi-ai": "0.80.6",
@@ -36,6 +37,7 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
+    "@openuidev/react-lang": "0.2.8",
     "@sinclair/typebox": "^0.34.0",
     "convex": "^1.42.1",
     "jszip": "^3.10.1",
@@ -59,13 +61,5 @@
     "vite": "^6.0.0",
     "vitest": "^2.1.0",
     "zod": "^4.3.6"
-  },
-  "pnpm": {
-    "overrides": {
-      "@protobufjs/utf8": "^1.1.2",
-      "dompurify": "^3.4.11",
-      "protobufjs": "7.6.3",
-      "ws": "^8.21.0"
-    }
   }
 }

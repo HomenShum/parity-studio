@@ -1,0 +1,796 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/rbc51e",
+    "id": "rbc51e",
+    "slide": 4,
+    "layoutId": "4131ffe9-70f1-45b4-aa2b-16d898fa1bd8",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "76b35871-2f82-400d-a95a-504c9bf0a8cd",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "4131ffe9-70f1-45b4-aa2b-16d898fa1bd8",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "76b35871-2f82-400d-a95a-504c9bf0a8cd",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "76b35871-2f82-400d-a95a-504c9bf0a8cd",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8z6p87al",
+      "id": "1",
+      "name": "slide-title-4",
+      "bbox": [
+        42,
+        36,
+        1196,
+        92
+      ],
+      "geometry": "rect",
+      "text": "The live interaction proved the boundary—not just the render",
+      "textPreview": "The live interaction proved the boundary—not just the render",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The live interaction proved the boundary—not just the render"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The live interaction proved the boundary—not just the render",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The live interaction proved the boundary—not just the render",
+              "fontSize": 42,
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nyxozm90",
+      "id": "2",
+      "name": "footer-label-4",
+      "bbox": [
+        42,
+        670,
+        520,
+        22
+      ],
+      "geometry": "rect",
+      "text": "LOCAL PROOF · 2026-07-16",
+      "textPreview": "LOCAL PROOF · 2026-07-16",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "+mn-lt",
+        "color": "#6E747C",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LOCAL PROOF · 2026-07-16"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LOCAL PROOF · 2026-07-16",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "color": "#6E747C",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "LOCAL PROOF · 2026-07-16",
+              "fontSize": 13,
+              "color": "#6E747C",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mxo76hsf",
+      "id": "3",
+      "name": "footer-page-4",
+      "bbox": [
+        1184,
+        670,
+        54,
+        22
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "+mn-lt",
+        "color": "#000000",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "color": "#000000",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 13,
+              "color": "#000000",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lwv6xcru",
+      "id": "4",
+      "bbox": [
+        42,
+        126,
+        790,
+        45
+      ],
+      "geometry": "rect",
+      "text": "Disposable local workspace · exact candidate preview corrected during dogfood",
+      "textPreview": "Disposable local workspace · exact candidate preview corrected during dogfood",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "+mn-lt",
+        "color": "#41464E",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Disposable local workspace · exact candidate preview corrected during dogfood"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Disposable local workspace · exact candidate preview corrected during dogfood",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "color": "#41464E",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Disposable local workspace · exact candidate preview corrected during dogfood",
+              "fontSize": 20,
+              "color": "#41464E",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/1kneh43i",
+      "id": "5",
+      "bbox": [
+        42,
+        194,
+        780,
+        438
+      ],
+      "alt": "NodeSlide Compare showing the baseline and the new OpenUI visual material proposal.",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "asset": {
+        "assetId": "674d0311-bf48-484a-ab87-69aad8c63255",
+        "contentType": "image/jpeg",
+        "byteLength": 96808
+      }
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zadov29o",
+      "id": "6",
+      "bbox": [
+        858,
+        194,
+        380,
+        128
+      ],
+      "geometry": "rect",
+      "fillColor": "#EDEDED",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e94n2xs3",
+      "id": "7",
+      "bbox": [
+        884,
+        216,
+        330,
+        52
+      ],
+      "geometry": "rect",
+      "text": "15 / 15",
+      "textPreview": "15 / 15",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "15 / 15"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "15 / 15",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "15 / 15",
+              "fontSize": 42,
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sz69wry",
+      "id": "8",
+      "bbox": [
+        884,
+        274,
+        330,
+        36
+      ],
+      "geometry": "rect",
+      "text": "OpenUI + agent contract tests passed",
+      "textPreview": "OpenUI + agent contract tests passed",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#41464E",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OpenUI + agent contract tests passed"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OpenUI + agent contract tests passed",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#41464E",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "OpenUI + agent contract tests passed",
+              "fontSize": 18,
+              "color": "#41464E",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/krqpgbat",
+      "id": "9",
+      "bbox": [
+        858,
+        342,
+        380,
+        128
+      ],
+      "geometry": "rect",
+      "fillColor": "#EDEDED",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ahgr2dg7",
+      "id": "10",
+      "bbox": [
+        884,
+        364,
+        330,
+        52
+      ],
+      "geometry": "rect",
+      "text": "v1 → v2",
+      "textPreview": "v1 → v2",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#047857",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "v1 → v2"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "v1 → v2",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#047857",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "v1 → v2",
+              "fontSize": 42,
+              "color": "#047857",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bip8bixs",
+      "id": "11",
+      "bbox": [
+        884,
+        422,
+        330,
+        40
+      ],
+      "geometry": "rect",
+      "text": "Pending proposal stayed unapplied until Accept",
+      "textPreview": "Pending proposal stayed unapplied until Accept",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#41464E",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Pending proposal stayed unapplied until"
+          },
+          {
+            "index": 2,
+            "text": "Accept"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Pending proposal stayed unapplied until Accept",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#41464E",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Pending proposal stayed unapplied until Accept",
+              "fontSize": 18,
+              "color": "#41464E",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wjy94nyd",
+      "id": "12",
+      "bbox": [
+        858,
+        490,
+        380,
+        142
+      ],
+      "geometry": "rect",
+      "fillColor": "#D0EDFA",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xk7qdsfy",
+      "id": "13",
+      "bbox": [
+        884,
+        512,
+        330,
+        46
+      ],
+      "geometry": "rect",
+      "text": "1 operation",
+      "textPreview": "1 operation",
+      "resolvedFontSize": 34,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 34,
+        "typeface": "+mn-lt",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1 operation"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1 operation",
+          "resolvedTextStyle": {
+            "fontSize": 34,
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "1 operation",
+              "fontSize": 34,
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mdwrydgb",
+      "id": "14",
+      "bbox": [
+        884,
+        566,
+        330,
+        58
+      ],
+      "geometry": "rect",
+      "text": "Editable add-slide patch\nwith a candidate validation receipt",
+      "textPreview": "Editable add-slide patch | with a candidate validation receipt",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#41464E",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Editable add-slide patch"
+          },
+          {
+            "index": 2,
+            "text": "with a candidate validation receipt"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Editable add-slide patch",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#41464E",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Editable add-slide patch",
+              "fontSize": 18,
+              "color": "#41464E",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "with a candidate validation receipt",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#41464E",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "with a candidate validation receipt",
+              "fontSize": 18,
+              "color": "#41464E",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

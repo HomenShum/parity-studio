@@ -9,6 +9,8 @@ import {
   NODESLIDE_OPENROUTER_REVIEW_CONSENT,
   NODESLIDE_OPENROUTER_VARIATIONS_CONSENT,
   NODESLIDE_TOOLCHAIN_VERSION,
+  type NodeSlideAgentMessage,
+  type NodeSlideAgentRun,
   type NodeSlideWorkspace,
 } from '../../shared/nodeslide';
 import {
@@ -23,6 +25,7 @@ import {
 } from '../../src/domains/nodeslide/inspector/AiInspector';
 import { CommentsInspector } from '../../src/domains/nodeslide/inspector/CommentsInspector';
 import { InspectorPanel } from '../../src/domains/nodeslide/inspector/InspectorPanel';
+import { projectNodeSlideAgentMessages } from '../../src/domains/nodeslide/inspector/NodeSlideAssistantThread';
 import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 
@@ -116,12 +119,12 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('It does not browse or fetch URLs');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('Claude Sonnet 5 · Anthropic');
-    expect(markup).toContain('Claude Fable 5 · Anthropic');
-    expect(markup).toContain('Gemini 3.5 Flash · Google');
-    expect(markup).toContain('Gemini 3.1 Pro · Google');
-    expect(markup).toContain('GPT-5.6 Sol · OpenAI');
-    expect(markup).toContain('GPT-5.6 Terra · OpenAI');
+    expect(markup).toContain('Claude Sonnet 5');
+    expect(markup).toContain('Claude Fable 5');
+    expect(markup).toContain('Gemini 3.5 Flash');
+    expect(markup).toContain('Gemini 3.1 Pro');
+    expect(markup).toContain('GPT-5.6 Sol');
+    expect(markup).toContain('GPT-5.6 Terra');
     expect(markup).toMatch(/<input type="checkbox"[^>]*ai-provider-consent/);
     expect(markup).not.toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*ai-provider-consent/);
 
@@ -146,10 +149,11 @@ describe('NodeSlide AI review inspector', () => {
     const markup = renderAi();
 
     expect(markup).toContain('What should we change?');
-    expect(markup).toContain('Generate 3 directions');
-    expect(markup).toContain('Current agent scope and policy');
+    expect(markup).toContain('3 directions');
+    expect(markup).not.toContain('Current agent scope and policy');
+    expect(markup).toContain('Active AI context');
     expect(markup).toContain('Whole slide');
-    expect(markup).toContain('Advanced controls');
+    expect(markup).toContain('aria-label="Agent settings"');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('data-testid="ai-provider-route-status"');
     expect(markup).not.toContain('ns-ai-v3-route-disclosure');
@@ -249,7 +253,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(referenceMenu).toContain('role="menu"');
     expect(referenceMenu).toContain('Quarterly source');
     expect(referenceMenu).toContain('@Quarterly source');
-    expect(referenceMenu).toContain('Read context · locked write scope');
+    expect(referenceMenu).toContain('Review before apply');
 
     const commands: readonly AiComposerCommand<string>[] = [
       { id: '/edit', label: 'Edit the current scope' },
@@ -260,7 +264,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(commandMenu).toContain('/edit');
     expect(commandMenu).toContain('/propagate');
     expect(commandMenu.match(/<option value=/g)).toHaveLength(13 + NODESLIDE_AGENT_MODELS.length);
-    expect(commandMenu).toContain('Advanced controls');
+    expect(commandMenu).toContain('aria-label="Agent settings"');
   });
 
   it('keeps comment-to-AI context implicit when no @ reference was selected', () => {
@@ -277,7 +281,7 @@ describe('NodeSlide AI review inspector', () => {
 
     const markup = renderAi({ commentContext });
 
-    expect(markup).toContain('Scoped context by default');
+    expect(markup).toContain('Review before apply');
     expect(markup).toContain(`@${commentContext.label}`);
     expect(markup).not.toContain('1 explicit reference');
   });
@@ -299,6 +303,248 @@ describe('NodeSlide AI review inspector', () => {
 
     const withoutReceipt = renderAi({ patches: [proposal(snapshot, false)] });
     expect(withoutReceipt).not.toContain('Candidate validation');
+  });
+
+  it('renders durable conversation with assistant-ui messages and collapses tool activity', () => {
+    const run: NodeSlideAgentRun = {
+      id: 'run-review',
+      deckId: fixture().deck.id,
+      idempotencyKey: 'fixed-run-review',
+      instruction: 'Make the title decisive.',
+      status: 'completed',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      webResearch: false,
+      attempt: 1,
+      createdAt: 1_000,
+      updatedAt: 1_100,
+      completedAt: 1_100,
+    };
+    const messages: NodeSlideAgentMessage[] = [
+      {
+        id: 'm1',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'user',
+        content: run.instruction,
+        createdAt: 1_000,
+      },
+      {
+        id: 'm2',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'tool',
+        toolName: 'validate_patch',
+        content: 'Candidate passed.',
+        createdAt: 1_050,
+      },
+      {
+        id: 'm3',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'assistant',
+        content: 'The change is ready.',
+        createdAt: 1_100,
+      },
+    ];
+
+    const markup = renderAi({ agentRuns: [run], agentMessages: messages });
+    expect(markup.match(/data-testid="agent-message-user"/g)).toHaveLength(1);
+    expect(markup.match(/data-testid="agent-message-assistant"/g)).toHaveLength(1);
+    expect(markup.match(/data-testid="agent-message-tool"/g)).toHaveLength(1);
+    expect(markup).toContain('1 step');
+    expect(markup).toContain('Validate patch');
+    expect(markup).toContain(NODESLIDE_EDIT_MODEL);
+  });
+
+  it('keeps the U04 50-message conversation usable and offers bounded earlier history', () => {
+    const run: NodeSlideAgentRun = {
+      id: 'run-u04',
+      deckId: fixture().deck.id,
+      idempotencyKey: 'fixed-u04',
+      instruction: 'Make this slide more persuasive without changing any numbers.',
+      status: 'completed',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      webResearch: false,
+      attempt: 1,
+      createdAt: 1_000,
+      updatedAt: 61_000,
+      completedAt: 61_000,
+    };
+    const messages: NodeSlideAgentMessage[] = Array.from({ length: 55 }, (_, index) => ({
+      id: `u04-${index}`,
+      deckId: run.deckId,
+      runId: run.id,
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      content:
+        index % 2 === 0
+          ? 'Make this slide more persuasive without changing any numbers.'
+          : 'The scoped candidate preserves every number and is ready for review.',
+      createdAt: 1_000 + index * 1_000,
+    }));
+
+    const markup = renderAi({ agentRuns: [run], agentMessages: messages });
+    expect(markup).toContain('Show 5 earlier messages');
+    expect(markup).toContain('5 hidden');
+    expect(markup.match(/data-testid="agent-message-(?:user|assistant)"/g)).toHaveLength(50);
+  });
+
+  it('groups U07 tool flooding and exposes only persisted planner/executor branches', () => {
+    const run: NodeSlideAgentRun = {
+      id: 'run-a03',
+      deckId: fixture().deck.id,
+      idempotencyKey: 'fixed-a03-f17-f18',
+      instruction: 'Continue until the deck is presentation-ready.',
+      status: 'completed',
+      provider: NODESLIDE_EDIT_PROVIDER,
+      model: NODESLIDE_EDIT_MODEL,
+      webResearch: true,
+      attempt: 1,
+      createdAt: 1_000,
+      updatedAt: 22_000,
+      completedAt: 22_000,
+    };
+    const messages: NodeSlideAgentMessage[] = [
+      {
+        id: 'a03-user',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'user',
+        content: run.instruction,
+        createdAt: 1_000,
+      },
+      {
+        id: 'a03-plan',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'assistant',
+        agentRole: 'planner',
+        content: 'I split the readiness pass into independent narrative and evidence branches.',
+        createdAt: 2_000,
+      },
+      {
+        id: 'a03-read-narrative',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'tool',
+        toolName: 'read_context',
+        agentRole: 'executor',
+        branchId: 'narrative',
+        branchLabel: 'Narrative',
+        parallelGroupId: 'readiness-wave-1',
+        content: 'Read slides 1–4 at deck version 7.',
+        createdAt: 3_000,
+      },
+      {
+        id: 'a03-read-evidence',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'tool',
+        toolName: 'web_research',
+        agentRole: 'researcher',
+        branchId: 'evidence',
+        branchLabel: 'Evidence',
+        parallelGroupId: 'readiness-wave-1',
+        content: 'Captured two authorized source snapshots.',
+        createdAt: 3_010,
+      },
+      {
+        id: 'a03-patch-narrative',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'tool',
+        toolName: 'patch_proposal',
+        agentRole: 'executor',
+        branchId: 'narrative',
+        branchLabel: 'Narrative',
+        parallelGroupId: 'readiness-wave-1',
+        content: 'Prepared a CAS-bound narrative patch.',
+        createdAt: 6_000,
+      },
+      {
+        id: 'a03-validate-evidence',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'tool',
+        toolName: 'candidate_validation',
+        agentRole: 'validator',
+        branchId: 'evidence',
+        branchLabel: 'Evidence',
+        parallelGroupId: 'readiness-wave-1',
+        content: 'Validated the independent evidence update.',
+        createdAt: 7_000,
+      },
+      {
+        id: 'a03-final',
+        deckId: run.deckId,
+        runId: run.id,
+        role: 'assistant',
+        agentRole: 'executor',
+        content: 'Both independent branches converged and the deck is ready for review.',
+        createdAt: 22_000,
+      },
+    ];
+
+    const projected = projectNodeSlideAgentMessages(messages);
+    expect(projected).toHaveLength(4);
+    expect(projected[2]?.toolActivities).toHaveLength(4);
+
+    const markup = renderAi({ agentRuns: [run], agentMessages: messages });
+    expect(markup.match(/data-testid="agent-message-tool"/g)).toHaveLength(1);
+    expect(markup).toContain('Parallel agent activity');
+    expect(markup).toContain('4 steps · 2 branches');
+    expect(markup).toContain('4 steps');
+    expect(markup).toContain('2 parallel branches');
+    expect(markup).toContain('Planner');
+    expect(markup).toContain('Executor');
+    expect(markup).toContain('Narrative');
+    expect(markup).toContain('Evidence');
+  });
+
+  it('uses one action set for a compact multi-proposal review queue', () => {
+    const snapshot = fixture();
+    const first = proposal(snapshot, true);
+    const second = {
+      ...proposal(snapshot, false),
+      id: 'patch-second',
+      summary: 'Tighten the subtitle',
+      createdAt: 1_100,
+    };
+    const markup = renderAi({ patches: [first, second] });
+
+    expect(markup).toContain('2 changes ready');
+    expect(markup).toContain('Changes ready for review');
+    expect(markup.match(/data-testid="proposal-card"/g)).toHaveLength(1);
+    expect(markup.match(/data-testid="proposal-accept"/g)).toHaveLength(1);
+  });
+
+  it('lets terminal truth override a stale active run label and cancel action', () => {
+    const run: NodeSlideAgentRun = {
+      id: 'run-stale',
+      deckId: fixture().deck.id,
+      idempotencyKey: 'fixed-stale',
+      instruction: 'Try a tighter hierarchy.',
+      status: 'planning',
+      provider: 'test',
+      model: 'test',
+      webResearch: false,
+      attempt: 1,
+      createdAt: 1_000,
+      updatedAt: 1_010,
+    };
+    const markup = renderAi({
+      agentRuns: [run],
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 200,
+        ask: run.instruction,
+        message: 'Validation failed.',
+      },
+    });
+    expect(markup).toContain('Failed');
+    expect(markup).not.toContain('Planning edit');
+    expect(markup).not.toContain('data-testid="ai-cancel-run"');
   });
 });
 
@@ -358,6 +604,8 @@ interface RenderAiOptions {
   commands?: readonly AiComposerCommand<string>[];
   patches?: readonly DeckPatch[];
   traces?: readonly AgentTrace[];
+  agentRuns?: readonly NodeSlideAgentRun[];
+  agentMessages?: readonly NodeSlideAgentMessage[];
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
 }
 
@@ -370,6 +618,8 @@ function renderAi({
   commands = [],
   patches = [],
   traces = [],
+  agentRuns = [],
+  agentMessages = [],
   onAttachDataFile,
 }: RenderAiOptions = {}) {
   const snapshot = fixture();
@@ -381,6 +631,8 @@ function renderAi({
       selectedElements={[]}
       patches={patches}
       traces={traces}
+      agentRuns={agentRuns}
+      agentMessages={agentMessages}
       variations={[]}
       variationsLoading={false}
       isSubmitting={false}
@@ -395,6 +647,7 @@ function renderAi({
       {...(commentContext ? { commentContext } : {})}
       {...(agentActivity ? { agentActivity } : {})}
       onPropose={() => undefined}
+      onProposeVisualMaterial={async () => undefined}
       {...(onAttachDataFile ? { onAttachDataFile } : {})}
       onAccept={() => undefined}
       onReject={() => undefined}

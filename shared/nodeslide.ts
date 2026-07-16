@@ -523,6 +523,14 @@ export interface NodeSlideAgentMessage {
   content: string;
   toolName?: string;
   sourceIds?: string[];
+  /** Optional orchestration identity. Omitted for the default single-agent path. */
+  agentRole?: 'planner' | 'executor' | 'researcher' | 'validator';
+  /** Stable branch identity supplied by the orchestrator when work actually fans out. */
+  branchId?: string;
+  /** Human-readable branch purpose, such as "Narrative" or "Evidence". */
+  branchLabel?: string;
+  /** Shared identity for branches dispatched in the same parallel wave. */
+  parallelGroupId?: string;
   createdAt: number;
 }
 

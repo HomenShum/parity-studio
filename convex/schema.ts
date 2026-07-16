@@ -781,6 +781,17 @@ export default defineSchema({
     content: v.string(),
     toolName: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
+    agentRole: v.optional(
+      v.union(
+        v.literal('planner'),
+        v.literal('executor'),
+        v.literal('researcher'),
+        v.literal('validator'),
+      ),
+    ),
+    branchId: v.optional(v.string()),
+    branchLabel: v.optional(v.string()),
+    parallelGroupId: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index('by_stable_id', ['id'])

@@ -1434,6 +1434,17 @@ export const advanceAgentRunInternal = internalMutation({
     role: v.optional(v.union(v.literal('assistant'), v.literal('tool'), v.literal('system'))),
     toolName: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
+    agentRole: v.optional(
+      v.union(
+        v.literal('planner'),
+        v.literal('executor'),
+        v.literal('researcher'),
+        v.literal('validator'),
+      ),
+    ),
+    branchId: v.optional(v.string()),
+    branchLabel: v.optional(v.string()),
+    parallelGroupId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
@@ -1464,6 +1475,16 @@ export const advanceAgentRunInternal = internalMutation({
         content: message,
         ...(args.toolName ? { toolName: requiredText(args.toolName, 'tool name', 120) } : {}),
         ...(args.sourceIds ? { sourceIds: args.sourceIds.slice(0, 32) } : {}),
+        ...(args.agentRole ? { agentRole: args.agentRole } : {}),
+        ...(args.branchId
+          ? { branchId: requiredText(args.branchId, 'branch id', 120) }
+          : {}),
+        ...(args.branchLabel
+          ? { branchLabel: requiredText(args.branchLabel, 'branch label', 120) }
+          : {}),
+        ...(args.parallelGroupId
+          ? { parallelGroupId: requiredText(args.parallelGroupId, 'parallel group id', 120) }
+          : {}),
         createdAt: now,
       });
     }

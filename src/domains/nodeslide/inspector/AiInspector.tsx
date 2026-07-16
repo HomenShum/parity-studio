@@ -1,3 +1,4 @@
+import { ThreadPrimitive } from '@assistant-ui/react';
 import {
   ArrowUp,
   AtSign,
@@ -16,6 +17,7 @@ import {
   PlugZap,
   RotateCcw,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   TriangleAlert,
   X,
@@ -49,6 +51,12 @@ import {
 } from '../../../../shared/nodeslide';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
+import { VisualMaterialWorkbench } from '../openui/VisualMaterialWorkbench';
+import {
+  NodeSlideAssistantMessages,
+  NodeSlideAssistantRuntime,
+  NodeSlideAssistantScrollButton,
+} from './NodeSlideAssistantThread';
 import {
   AI_DRAFTING_PHASE_MS,
   type AiAgentActivity,
@@ -133,6 +141,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
     writeScope: PatchScope,
     options: AiProposalOptions<CommandId>,
   ) => void;
+  onProposeVisualMaterial: (operations: PatchOperation[], summary: string) => Promise<void>;
   onAttachDataFile?: (file: File) => Promise<AiReadReference>;
   onCancelRun?: (runId: string) => void;
   onAccept: (patch: DeckPatch) => void;
@@ -172,6 +181,7 @@ export function AiInspector<CommandId extends string = string>({
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
   onPropose,
+  onProposeVisualMaterial,
   onAttachDataFile,
   onCancelRun,
   onAccept,
@@ -208,24 +218,38 @@ export function AiInspector<CommandId extends string = string>({
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [materialWorkbenchOpen, setMaterialWorkbenchOpen] = useState(false);
+  const [messageWindowSize, setMessageWindowSize] = useState(50);
   const composerId = useId();
+  const settingsId = useId();
   const providerName = `${composerId}-provider`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const reviewScrollRef = useRef<HTMLDivElement | null>(null);
+  const transcriptPinnedRef = useRef(true);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
   const lastPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastSelectionKey = useRef(selectedElements.map((element) => element.id).join(':'));
 
   useEffect(() => {
     const stored = window.localStorage.getItem('nodeslide.agent-model');
     if (isNodeSlideAgentModelId(stored)) setProviderModel(stored);
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: switching decks must reset the bounded message window.
   useEffect(() => {
-    if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
-  }, [scopeChoice, selectedElements.length]);
+    setMessageWindowSize(50);
+  }, [deck.id]);
+
+  useEffect(() => {
+    const selectionKey = selectedElements.map((element) => element.id).join(':');
+    if (selectionKey === lastSelectionKey.current) return;
+    lastSelectionKey.current = selectionKey;
+    setScopeChoice(selectedElements.length > 0 ? 'elements' : 'slide');
+  }, [selectedElements]);
 
   const activeTrace = useMemo(
     () =>
@@ -256,6 +280,19 @@ export function AiInspector<CommandId extends string = string>({
     }
     return byPatchId;
   }, [traces]);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
+    () => previewedPatchId ?? proposals[0]?.id ?? null,
+  );
+
+  useEffect(() => {
+    if (previewedPatchId && proposals.some((proposal) => proposal.id === previewedPatchId)) {
+      setSelectedProposalId(previewedPatchId);
+      return;
+    }
+    if (!proposals.some((proposal) => proposal.id === selectedProposalId)) {
+      setSelectedProposalId(proposals[0]?.id ?? null);
+    }
+  }, [previewedPatchId, proposals, selectedProposalId]);
   const latestBatchId = variations[0]?.batchId;
   const directions = useMemo(
     () => variations.filter((variation) => variation.batchId === latestBatchId),
@@ -342,6 +379,16 @@ export function AiInspector<CommandId extends string = string>({
   const activeDurableRun = agentRuns.find((run) =>
     ['queued', 'researching', 'planning', 'validating'].includes(run.status),
   );
+  const latestDurableRun = [...agentRuns].sort((a, b) => b.createdAt - a.createdAt)[0];
+  const hasPersistedTerminalMessage = Boolean(
+    latestDurableRun &&
+      ['completed', 'failed', 'cancelled'].includes(latestDurableRun.status) &&
+      agentMessages.some(
+        (message) =>
+          message.runId === latestDurableRun.id &&
+          (message.role === 'assistant' || message.role === 'system'),
+      ),
+  );
   const resolvedActivity = resolveActivity(
     agentActivity,
     isSubmitting,
@@ -349,6 +396,15 @@ export function AiInspector<CommandId extends string = string>({
     activeTrace,
     latestTrace,
   );
+
+  useEffect(() => {
+    const viewport = reviewScrollRef.current;
+    if (!viewport || !transcriptPinnedRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      viewport.scrollTop = viewport.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [agentMessages.length, proposals.length, resolvedActivity?.status]);
   const visibleAsk = resolvedActivity?.ask.trim() || optimisticAsk?.trim() || '';
   const contextSuggestions =
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
@@ -367,10 +423,15 @@ export function AiInspector<CommandId extends string = string>({
     : scopeChoice === 'deck'
       ? 'Whole deck'
       : scopeChoice === 'elements'
-        ? `${selectedElements.length} selected`
+        ? selectedElements.length === 1
+          ? (selectedElements[0]?.name ?? 'Selected element')
+          : `${selectedElements.length} selected elements`
         : 'Whole slide';
-  const recentMessages = agentMessages.slice(-24);
-  const latestPersistedUserAsk = [...recentMessages]
+  const visibleMessages = agentMessages.slice(-messageWindowSize);
+  const hiddenMessageCount = Math.max(0, agentMessages.length - visibleMessages.length);
+  const selectedProposal =
+    proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0];
+  const latestPersistedUserAsk = [...visibleMessages]
     .reverse()
     .find((message) => message.role === 'user')?.content;
 
@@ -453,6 +514,7 @@ export function AiInspector<CommandId extends string = string>({
     event.preventDefault();
     const text = instruction.trim();
     if (!text || isSubmitting || !provider) return;
+    transcriptPinnedRef.current = true;
     const command = selectedCommand ?? commandFromInstruction(instruction, availableCommands);
     if (command && isVariationsCommand(command.id)) {
       requestVariations('command', text);
@@ -565,874 +627,917 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   return (
-    <div className="ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell">
-      <section
-        className="ns-ai-v3-context"
-        aria-labelledby={`${composerId}-context-heading`}
-        data-testid="ai-context-header"
-      >
-        <div className="ns-ai-v3-context-heading">
-          <span className="ns-eyebrow" id={`${composerId}-context-heading`}>
-            Context
-          </span>
-          <span className="ns-ai-v3-context-policy">Read context · locked write scope</span>
-        </div>
-        <div className="ns-ai-v3-context-chips" aria-label="Active AI context">
-          <span className="ns-ai-v3-context-chip is-slide">
-            Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')} ·{' '}
-            {slide.title}
-          </span>
-          {selectedElements.length > 0 ? (
-            <span className="ns-ai-v3-context-chip is-selection">
-              Selection · {selectedElements.length}
-            </span>
-          ) : null}
-          {commentContext ? (
-            <span className="ns-ai-v3-context-chip is-comment">
-              <MessageCircle size={11} /> {commentContext.label}
-            </span>
-          ) : null}
-          {requestedReadContext.map((reference) => (
-            <span
-              className="ns-ai-v3-context-chip is-reference"
-              key={`context-${referenceKey(reference)}`}
-            >
-              @{reference.label}
-            </span>
-          ))}
-        </div>
-        <p className="ns-ai-v3-context-note">
-          {requestedReadContext.length > 0
-            ? `${requestedReadContext.length} explicit read reference${requestedReadContext.length === 1 ? '' : 's'} added to scoped context.`
-            : 'Scoped context by default; explicit @ references are additive.'}
-        </p>
-      </section>
-
-      <div className="ns-ai-v3-review-scroll" data-testid="ai-review-scroll">
-        {!visibleAsk &&
-        !resolvedActivity &&
-        !activeTrace &&
-        proposals.length === 0 &&
-        !showDirectionThread &&
-        recentMessages.length === 0 ? (
-          <section className="ns-ai-v3-chat-turn is-agent ns-ai-v3-welcome">
-            <span className="ns-ai-v3-agent-mark" aria-hidden="true">
-              <Sparkles size={14} />
-            </span>
-            <div>
-              <span className="ns-eyebrow">NodeSlide</span>
-              <strong>What should we change?</strong>
-              <p>
-                Describe the outcome. I’ll return a scoped, validated patch for review before
-                anything changes.
-              </p>
-            </div>
-          </section>
-        ) : null}
-
-        {recentMessages.map((message) => (
-          <section
-            key={message.id}
-            className={`ns-ai-v3-chat-turn is-${message.role === 'user' ? 'user' : 'agent'} ns-agent-message`}
-            data-testid={`agent-message-${message.role}`}
-          >
-            {message.role !== 'user' ? (
-              <span className="ns-ai-v3-agent-mark" aria-hidden="true">
-                {message.role === 'tool' ? <Globe2 size={14} /> : <Sparkles size={14} />}
-              </span>
-            ) : null}
-            <div>
-              <span className="ns-eyebrow">
-                {message.role === 'user'
-                  ? 'You'
-                  : message.role === 'tool'
-                    ? humanizeToolName(message.toolName)
-                    : 'NodeSlide'}
-              </span>
-              <p>{message.content}</p>
-              {message.sourceIds?.length ? (
-                <small>
-                  {message.sourceIds.length} persisted source snapshot
-                  {message.sourceIds.length === 1 ? '' : 's'}
-                </small>
-              ) : null}
-            </div>
-          </section>
-        ))}
-
-        {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
-          <section
-            className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
-            data-testid="optimistic-user-ask"
-          >
-            <span>You asked</span>
-            <p>{visibleAsk}</p>
-          </section>
-        ) : null}
-
-        {resolvedActivity || activeTrace ? (
-          <section
-            className={`ns-agent-progress ns-ai-v3-progress ${
-              resolvedActivity?.status === 'cancelled'
-                ? 'has-cancelled'
-                : resolvedActivity && isFailureActivity(resolvedActivity)
-                  ? 'has-failed'
-                  : ''
-            }`}
-            aria-live="polite"
-            {...(resolvedActivity && isFailureActivity(resolvedActivity)
-              ? { role: 'alert' as const }
-              : {})}
-          >
-            <button
-              type="button"
-              className="ns-progress-heading"
-              onClick={() => setShowPlan((value) => !value)}
-              aria-expanded={showPlan}
-            >
-              <span className="ns-agent-orb">
-                {resolvedActivity?.status === 'cancelled' ? (
-                  <X size={14} />
-                ) : resolvedActivity && isFailureActivity(resolvedActivity) ? (
-                  <TriangleAlert size={14} />
-                ) : (
-                  <LoaderCircle className="ns-spin" size={14} />
-                )}
-              </span>
-              <span>
-                <strong>
-                  {activeDurableRun
-                    ? durableRunLabel(activeDurableRun.status)
-                    : resolvedActivity
-                      ? agentPhaseLabel(resolvedActivity)
-                      : activeTrace?.status === 'working'
-                        ? 'Drafting proposal'
-                        : 'Reading context'}
-                </strong>
-                <small>{activeTrace?.summary ?? 'Preparing a bounded, reviewable patch'}</small>
-              </span>
-              <ChevronRight size={14} className={showPlan ? 'is-open' : ''} />
-            </button>
-            {activeDurableRun && onCancelRun ? (
-              <button
-                type="button"
-                className="ns-agent-cancel"
-                onClick={() => onCancelRun(activeDurableRun.id)}
-                data-testid="ai-cancel-run"
-              >
-                <X size={12} /> Cancel run
-              </button>
-            ) : null}
-            {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
-              <div className="ns-agent-honesty-state">
-                <strong>
-                  {activityMessage(resolvedActivity) ??
-                    (resolvedActivity.status === 'cancelled'
-                      ? 'Run cancelled. No deck changes were applied.'
-                      : resolvedActivity.status === 'timed_out'
-                        ? 'The request timed out before a reviewable proposal was returned.'
-                        : 'The agent failed before a reviewable proposal was returned.')}
-                </strong>
-                <p>No proposal was created or applied. Your deck remains unchanged.</p>
-              </div>
-            ) : resolvedActivity?.status === 'delayed' ? (
-              <output className="ns-agent-delay-state">
-                <strong>{resolvedActivity.message ?? 'The provider is still working.'}</strong>
-                <p>No proposal has been created or applied yet.</p>
-              </output>
-            ) : showPlan && activeTrace?.plan.length ? (
-              <ol className="ns-plan-list">
-                {activeTrace.plan.map((step, index) => (
-                  <li key={step} className={index === 0 ? 'is-current' : ''}>
-                    {index === 0 ? (
-                      <LoaderCircle className="ns-spin" size={13} />
-                    ) : (
-                      <Circle size={10} />
-                    )}
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
-            ) : null}
-          </section>
-        ) : null}
-
-        {proposals.length > 0 ? (
-          <section className="ns-proposals ns-ai-v3-proposals">
-            <div className="ns-section-heading">
-              <span>Proposals</span>
-              <small>{proposals.length} to review</small>
-            </div>
-            {proposals.map((patch) => (
-              <ProposalCard
-                key={patch.id}
-                patch={patch}
-                {...(proposalTraceByPatchId.get(patch.id)
-                  ? { trace: proposalTraceByPatchId.get(patch.id) }
-                  : {})}
-                previewed={patch.id === previewedPatchId}
-                {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
-                onAccept={onAccept}
-                onReject={onReject}
-              />
-            ))}
-          </section>
-        ) : null}
-
-        {showDirectionThread ? (
-          <section
-            className="ns-variation-section ns-ai-v3-directions"
-            aria-labelledby="ns-variation-heading"
-            data-testid="variation-section"
-          >
-            <div className="ns-variation-heading-row">
-              <div>
-                <span className="ns-eyebrow">Slide directions</span>
-                <h2 id="ns-variation-heading">Explore before editing</h2>
-              </div>
-              <button
-                type="button"
-                className="ns-button ns-button--accent ns-variation-generate"
-                disabled={variationBusy || !providerReady}
-                onClick={() => requestVariations('button')}
-                aria-controls="ns-variation-results"
-                data-testid="variation-generate"
-                title={
-                  providerReady
-                    ? 'Generate three bounded directions'
-                    : 'Consent is required before using OpenRouter'
-                }
-              >
-                {variationGenerating ? (
-                  <LoaderCircle className="ns-spin" size={14} />
-                ) : (
-                  <Layers3 size={14} />
-                )}
-                {variationGenerating ? 'Generating...' : 'Generate 3 directions'}
-              </button>
-            </div>
-            <p className="ns-variation-explainer">
-              Each direction is materialized and validated. Your slide stays unchanged until Accept.
-            </p>
-
-            {previewedVariation ? (
-              <div className="ns-variation-preview-banner" aria-live="polite">
-                <Eye size={14} />
-                <span>
-                  Previewing <strong>{axesLabel(previewedVariation)}</strong>
-                </span>
-                <button type="button" onClick={returnToOriginal}>
-                  Return to original
-                </button>
-              </div>
-            ) : null}
-
-            {variationError ? (
-              <div className="ns-variation-error" role="alert">
-                <strong>Directions unavailable</strong>
-                <span>{variationError}</span>
-                <button
-                  type="button"
-                  onClick={() => requestVariations('button')}
-                  disabled={variationBusy || !providerReady}
-                >
-                  Try again
-                </button>
-              </div>
-            ) : null}
-
-            {hasProviderFallback || hasPrivateDeterministicDirections ? (
-              <output className="ns-variation-fallback-note">
-                <Sparkles size={13} />
-                <span>
-                  {hasProviderFallback
-                    ? 'The selected external model could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
-                    : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
-                </span>
-              </output>
-            ) : null}
-
-            <div id="ns-variation-results" aria-busy={variationBusy || variationsLoading}>
-              {variationGenerating ? (
-                <div className="ns-variation-loading" aria-live="polite">
-                  <LoaderCircle className="ns-spin" size={16} />
-                  <span>Generating, materializing, and validating three bounded directions...</span>
-                </div>
-              ) : variationsLoading ? (
-                <div className="ns-variation-loading" aria-live="polite">
-                  <LoaderCircle className="ns-spin" size={16} />
-                  <span>Loading saved directions...</span>
-                </div>
-              ) : directions.length > 0 ? (
-                <ul className="ns-variation-list" aria-label="Generated slide directions">
-                  {directions.map((variation, index) => (
-                    <VariationCard
-                      key={variation.id}
-                      focusRef={index === 0 ? firstVariationRef : null}
-                      variation={variation}
-                      previewed={variation.id === previewedVariationId}
-                      {...(variation.id === previewedVariationId
-                        ? {
-                            previewButtonRef: (node: HTMLButtonElement | null) => {
-                              if (node) lastPreviewButtonRef.current = node;
-                            },
-                          }
-                        : {})}
-                      busy={variationBusy}
-                      onPreview={onPreviewVariation}
-                      onAccept={onAcceptVariation}
-                      onReject={onRejectVariation}
-                    />
-                  ))}
-                </ul>
-              ) : (
-                <div className="ns-variation-empty">
-                  <Layers3 size={17} />
-                  <span>
-                    <strong>No directions yet</strong>
-                    Generate three reviewable options for this slide.
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {allRejected ? (
-              <output className="ns-variation-all-rejected">
-                All three directions were rejected. The original slide remains unchanged.
-              </output>
-            ) : null}
-          </section>
-        ) : null}
-      </div>
-
-      <form
-        className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
-        onSubmit={submit}
-        data-testid="ai-composer"
-      >
-        {showSuggested ? (
-          <section
-            className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
-            aria-label="Suggested prompts"
-          >
-            <span>Suggested actions</span>
-            <div>
-              <button
-                type="button"
-                className="is-primary"
-                onClick={() => requestVariations('button')}
-                disabled={variationBusy || !providerReady}
-                data-testid="ai-generate-directions"
-              >
-                <Layers3 size={12} /> Generate 3 directions
-              </button>
-              {contextSuggestions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => updateInstruction(action.instruction)}
-                  data-testid="ai-suggested-action"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-            <small>Suggestions only prefill the composer; they never send automatically.</small>
-          </section>
-        ) : null}
-
-        <div className="ns-ai-v3-policy-summary" aria-label="Current agent scope and policy">
-          <span className="is-scope">{scopeSummary}</span>
-          <span>{operationModeLabel(operationMode)}</span>
-          <span>{designBehaviorLabel(designBehavior)}</span>
-          <span>{referenceUseLabel(referenceUse)}</span>
-        </div>
-
-        <details
-          className="ns-ai-v3-controls-disclosure"
-          data-testid="ai-provider-controls"
-          open={providerControlsOpen}
-          onToggle={(event) => setProviderControlsOpen(event.currentTarget.open)}
+    <NodeSlideAssistantRuntime
+      messages={visibleMessages}
+      runs={agentRuns}
+      running={Boolean(isSubmitting || activeDurableRun)}
+    >
+      <div className="ns-inspector-scroll ns-ai-inspector ns-ai-v3-shell">
+        <section
+          className="ns-ai-v3-context"
+          aria-labelledby={`${composerId}-context-heading`}
+          data-testid="ai-context-header"
         >
-          <summary
-            data-testid="ai-provider-summary"
-            aria-label="Advanced provider, privacy, scope, and editing controls"
-          >
-            <span>Advanced controls</span>
-            <span
-              className={`ns-route-pill ${
-                providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
-              }`}
-            >
-              {providerMode === 'deterministic' ? (
-                <>
-                  <ShieldCheck size={11} /> Private
-                </>
-              ) : (
-                <>
-                  <Sparkles size={11} /> OpenRouter
-                </>
-              )}
+          <span className="ns-sr-only" id={`${composerId}-context-heading`}>
+            Active AI context
+          </span>
+          <div className="ns-ai-v3-scope-contract" aria-label="Active AI context">
+            <span data-testid="ai-read-scope">
+              <strong>Reads</strong>
+              Slide {String(Math.max(1, deck.slideOrder.indexOf(slide.id) + 1)).padStart(2, '0')}
+              {requestedReadContext.length > 0
+                ? ` + ${requestedReadContext.length} reference${requestedReadContext.length === 1 ? '' : 's'}`
+                : ''}
             </span>
-          </summary>
-          <div className="ns-ai-v3-controls-body">
-            <div className="ns-ai-v3-route-summary" data-testid="ai-provider-route-status">
-              {providerMode === 'deterministic' ? (
-                <>
-                  <ShieldCheck size={13} /> External model: off · Private deterministic
-                </>
-              ) : (
-                <>
-                  <Sparkles size={13} /> External model: on · OpenRouter ·{' '}
-                  {selectedAgentModel.label}
-                  <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
-                    {providerConsent ? 'Consent attached' : 'Consent required'}
-                  </span>
-                </>
-              )}
-            </div>
-            {providerMode === 'openrouter_free' ? (
-              <p className="ns-ai-model-guidance">
-                <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
-                {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
-                Trace.
-              </p>
-            ) : null}
-            <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
-              <legend>Provider and privacy</legend>
-              <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value="deterministic"
-                  checked={providerMode === 'deterministic'}
-                  onChange={() => {
-                    setProviderMode('deterministic');
-                    setProviderConsent(false);
-                  }}
-                  data-testid="ai-provider-deterministic"
-                />
-                <ShieldCheck size={15} />
-                <span>
-                  <strong>Deterministic and private</strong>
-                  <small>No instruction or context is sent to an external model.</small>
-                </span>
-              </label>
-              <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
-                <input
-                  type="radio"
-                  name={providerName}
-                  value="openrouter_free"
-                  checked={providerMode === 'openrouter_free'}
-                  onChange={() => {
-                    setProviderMode('openrouter_free');
-                    setProviderConsent(false);
-                  }}
-                  data-testid="ai-provider-openrouter"
-                />
-                <Sparkles size={15} />
-                <span>
-                  <strong>
-                    OpenRouter · {selectedAgentModel.vendor} · {selectedAgentModel.label} — external
-                  </strong>
-                  <small>
-                    Sends this ask, selected read context, and scoped slide content to the selected
-                    model through OpenRouter. It does not browse or fetch URLs.
-                  </small>
-                </span>
-              </label>
-            </fieldset>
-
+            <span data-testid="ai-write-scope">
+              <strong>Writes</strong>
+              {scopeSummary}
+            </span>
             {commentContext ? (
-              <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
-                <MessageCircle size={14} />
-                <span>
-                  <small>Comment write scope</small>
-                  <strong>{commentContext.label}</strong>
+              <span className="ns-ai-v3-context-chip is-comment">
+                <MessageCircle size={11} /> {commentContext.label}
+              </span>
+            ) : null}
+            <span className="ns-ai-v3-context-policy">
+              <ShieldCheck size={11} /> Review before apply
+            </span>
+          </div>
+        </section>
+
+        <ThreadPrimitive.Root className="ns-ai-v3-thread">
+          <ThreadPrimitive.Viewport
+            ref={reviewScrollRef}
+            className="ns-ai-v3-review-scroll"
+            data-testid="ai-review-scroll"
+            autoScroll
+            turnAnchor="bottom"
+            onScroll={(event) => {
+              const viewport = event.currentTarget;
+              transcriptPinnedRef.current =
+                viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 72;
+            }}
+          >
+            {!visibleAsk &&
+            !resolvedActivity &&
+            !activeTrace &&
+            proposals.length === 0 &&
+            !showDirectionThread &&
+            visibleMessages.length === 0 ? (
+              <section className="ns-ai-v3-chat-turn is-agent ns-ai-v3-welcome">
+                <span className="ns-ai-v3-agent-mark" aria-hidden="true">
+                  <Sparkles size={14} />
                 </span>
-                {onClearCommentContext ? (
+                <div>
+                  <span className="ns-eyebrow">NodeSlide</span>
+                  <strong>What should we change?</strong>
+                  <p>Describe the outcome. You’ll get a scoped, validated patch to approve.</p>
+                  {showSuggested ? (
+                    <div className="ns-ai-v3-welcome-actions" aria-label="Suggested prompts">
+                      <button
+                        type="button"
+                        className="is-primary"
+                        onClick={() => requestVariations('button')}
+                        disabled={variationBusy || !providerReady}
+                        data-testid="ai-generate-directions"
+                      >
+                        <Layers3 size={12} /> 3 directions
+                      </button>
+                      {contextSuggestions.map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          onClick={() => updateInstruction(action.instruction)}
+                          data-testid="ai-suggested-action"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
+            {materialWorkbenchOpen ? (
+              <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
+                <header>
+                  <span>
+                    <Layers3 size={12} /> Visual material
+                  </span>
                   <button
                     type="button"
-                    onClick={onClearCommentContext}
-                    aria-label={`Remove comment scope ${commentContext.label}`}
+                    onClick={() => setMaterialWorkbenchOpen(false)}
+                    aria-label="Close visual material tool"
                   >
-                    <X size={13} />
+                    <X size={12} />
+                  </button>
+                </header>
+                <VisualMaterialWorkbench
+                  deck={deck}
+                  slide={slide}
+                  disabled={isSubmitting}
+                  onPropose={onProposeVisualMaterial}
+                />
+              </section>
+            ) : null}
+
+            {hiddenMessageCount > 0 ? (
+              <button
+                className="ns-aui-load-earlier"
+                type="button"
+                onClick={() => setMessageWindowSize((current) => current + 50)}
+                data-testid="agent-load-earlier"
+              >
+                Show {Math.min(50, hiddenMessageCount)} earlier messages
+                <small>{hiddenMessageCount} hidden</small>
+              </button>
+            ) : null}
+
+            <NodeSlideAssistantMessages />
+
+            {visibleAsk && latestPersistedUserAsk !== visibleAsk ? (
+              <section
+                className="ns-ai-optimistic-ask ns-ai-v3-chat-turn is-user"
+                data-testid="optimistic-user-ask"
+              >
+                <span>You asked</span>
+                <p>{visibleAsk}</p>
+              </section>
+            ) : null}
+
+            {(resolvedActivity || activeTrace) &&
+            !(resolvedActivity && isTerminalActivity(resolvedActivity) && hasPersistedTerminalMessage) ? (
+              <section
+                className={`ns-agent-progress ns-ai-v3-progress ${
+                  resolvedActivity?.status === 'cancelled'
+                    ? 'has-cancelled'
+                    : resolvedActivity && isFailureActivity(resolvedActivity)
+                      ? 'has-failed'
+                      : ''
+                }`}
+                aria-live="polite"
+                {...(resolvedActivity && isFailureActivity(resolvedActivity)
+                  ? { role: 'alert' as const }
+                  : {})}
+              >
+                <button
+                  type="button"
+                  className="ns-progress-heading"
+                  onClick={() => setShowPlan((value) => !value)}
+                  aria-expanded={showPlan}
+                >
+                  <span className="ns-agent-orb">
+                    {resolvedActivity?.status === 'cancelled' ? (
+                      <X size={14} />
+                    ) : resolvedActivity && isFailureActivity(resolvedActivity) ? (
+                      <TriangleAlert size={14} />
+                    ) : (
+                      <LoaderCircle className="ns-spin" size={14} />
+                    )}
+                  </span>
+                  <span>
+                    <strong>
+                      {resolvedActivity && isTerminalActivity(resolvedActivity)
+                        ? agentPhaseLabel(resolvedActivity)
+                        : activeDurableRun
+                          ? durableRunLabel(activeDurableRun.status)
+                          : resolvedActivity
+                            ? agentPhaseLabel(resolvedActivity)
+                            : activeTrace?.status === 'working'
+                              ? 'Drafting proposal'
+                              : 'Reading context'}
+                    </strong>
+                    <small>{activeTrace?.summary ?? 'Preparing a bounded, reviewable patch'}</small>
+                  </span>
+                  <ChevronRight size={14} className={showPlan ? 'is-open' : ''} />
+                </button>
+                {activeDurableRun &&
+                onCancelRun &&
+                !(resolvedActivity && isTerminalActivity(resolvedActivity)) ? (
+                  <button
+                    type="button"
+                    className="ns-agent-cancel"
+                    onClick={() => onCancelRun(activeDurableRun.id)}
+                    data-testid="ai-cancel-run"
+                  >
+                    <X size={12} /> Cancel run
                   </button>
                 ) : null}
-              </div>
-            ) : (
-              <div className="ns-scope-row" aria-label="AI write scope">
-                <span>Write</span>
-                <div className="ns-chip-group">
+                {resolvedActivity && isTerminalActivity(resolvedActivity) ? (
+                  <div className="ns-agent-honesty-state">
+                    <strong>
+                      {activityMessage(resolvedActivity) ??
+                        (resolvedActivity.status === 'cancelled'
+                          ? 'Run cancelled. No deck changes were applied.'
+                          : resolvedActivity.status === 'timed_out'
+                            ? 'The request timed out before a reviewable proposal was returned.'
+                            : 'The agent failed before a reviewable proposal was returned.')}
+                    </strong>
+                    <p>No proposal was created or applied. Your deck remains unchanged.</p>
+                  </div>
+                ) : resolvedActivity?.status === 'delayed' ? (
+                  <output className="ns-agent-delay-state">
+                    <strong>{resolvedActivity.message ?? 'The provider is still working.'}</strong>
+                    <p>No proposal has been created or applied yet.</p>
+                  </output>
+                ) : showPlan && activeTrace?.plan.length ? (
+                  <ol className="ns-plan-list">
+                    {activeTrace.plan.map((step, index) => (
+                      <li key={step} className={index === 0 ? 'is-current' : ''}>
+                        {index === 0 ? (
+                          <LoaderCircle className="ns-spin" size={13} />
+                        ) : (
+                          <Circle size={10} />
+                        )}
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+              </section>
+            ) : null}
+
+            {proposals.length > 0 ? (
+              <section className="ns-proposals ns-ai-v3-proposals">
+                <div className="ns-section-heading">
+                  <span>
+                    {proposals.length} change{proposals.length === 1 ? '' : 's'} ready
+                  </span>
+                  <small>Review before apply</small>
+                </div>
+                {proposals.length > 1 ? (
+                  <ul className="ns-proposal-queue" aria-label="Changes ready for review">
+                    {proposals.map((patch, index) => (
+                      <li key={patch.id}>
+                        <button
+                          type="button"
+                          className={patch.id === selectedProposal?.id ? 'is-active' : ''}
+                          aria-pressed={patch.id === selectedProposal?.id}
+                          onClick={() => setSelectedProposalId(patch.id)}
+                        >
+                          <span>{index + 1}</span>
+                          <strong>{patch.summary}</strong>
+                          <small>{patch.operations.length} ops</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {selectedProposal ? (
+                  <ProposalCard
+                    key={selectedProposal.id}
+                    patch={selectedProposal}
+                    {...(proposalTraceByPatchId.get(selectedProposal.id)
+                      ? { trace: proposalTraceByPatchId.get(selectedProposal.id) }
+                      : {})}
+                    previewed={selectedProposal.id === previewedPatchId}
+                    {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
+                    onAccept={onAccept}
+                    onReject={onReject}
+                  />
+                ) : null}
+              </section>
+            ) : null}
+
+            {showDirectionThread ? (
+              <section
+                className="ns-variation-section ns-ai-v3-directions"
+                aria-labelledby="ns-variation-heading"
+                data-testid="variation-section"
+              >
+                <div className="ns-variation-heading-row">
+                  <div>
+                    <span className="ns-eyebrow">Slide directions</span>
+                    <h2 id="ns-variation-heading">Explore before editing</h2>
+                  </div>
                   <button
                     type="button"
-                    className={scopeChoice === 'deck' ? 'is-active' : ''}
-                    onClick={() => setScopeChoice('deck')}
+                    className="ns-button ns-button--accent ns-variation-generate"
+                    disabled={variationBusy || !providerReady}
+                    onClick={() => requestVariations('button')}
+                    aria-controls="ns-variation-results"
+                    data-testid="variation-generate"
+                    title={
+                      providerReady
+                        ? 'Generate three bounded directions'
+                        : 'Consent is required before using OpenRouter'
+                    }
                   >
-                    Deck
-                  </button>
-                  <button
-                    type="button"
-                    className={scopeChoice === 'slide' ? 'is-active' : ''}
-                    onClick={() => setScopeChoice('slide')}
-                  >
-                    This slide
-                  </button>
-                  <button
-                    type="button"
-                    className={scopeChoice === 'elements' ? 'is-active' : ''}
-                    disabled={selectedElements.length === 0}
-                    onClick={() => setScopeChoice('elements')}
-                  >
-                    Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
+                    {variationGenerating ? (
+                      <LoaderCircle className="ns-spin" size={14} />
+                    ) : (
+                      <Layers3 size={14} />
+                    )}
+                    {variationGenerating ? 'Generating...' : 'Generate 3 directions'}
                   </button>
                 </div>
-              </div>
-            )}
+                <p className="ns-variation-explainer">
+                  Each direction is materialized and validated. Your slide stays unchanged until
+                  Accept.
+                </p>
 
-            <div className="ns-ai-policy-grid">
-              <label>
-                <span>Operation mode</span>
-                <select
-                  value={operationMode}
-                  onChange={(event) => setOperationMode(event.target.value as OperationMode)}
-                  aria-label="Operation mode"
-                >
-                  <option value="unrestricted">Full edit</option>
-                  <option value="copy">Copy only</option>
-                  <option value="style">Style only</option>
-                  <option value="layout">Layout only</option>
-                </select>
-              </label>
-              <label>
-                <span>Design behavior</span>
-                <select
-                  value={designBehavior}
-                  onChange={(event) =>
-                    setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
-                  }
-                  data-testid="ai-design-behavior"
-                >
-                  <option value="preserve">Preserve exactly</option>
-                  <option value="refine">Refine subtly</option>
-                  <option value="rebalance">Rebalance hierarchy</option>
-                  <option value="reinterpret">Explore a new direction</option>
-                  <option value="reimagine">Reimagine boldly</option>
-                </select>
-              </label>
-              <label>
-                <span>Reference use</span>
-                <select
-                  value={referenceUse}
-                  onChange={(event) => setReferenceUse(event.target.value as AiReferenceUsePolicy)}
-                  data-testid="ai-reference-use"
-                >
-                  <option value="context_only">Context only</option>
-                  <option value="inspiration">Use as inspiration</option>
-                  <option value="style_direction">Follow style direction</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        </details>
+                {previewedVariation ? (
+                  <div className="ns-variation-preview-banner" aria-live="polite">
+                    <Eye size={14} />
+                    <span>
+                      Previewing <strong>{axesLabel(previewedVariation)}</strong>
+                    </span>
+                    <button type="button" onClick={returnToOriginal}>
+                      Return to original
+                    </button>
+                  </div>
+                ) : null}
 
-        {commentContext || selectedReadContext.length > 0 || selectedCommand ? (
-          <div className="ns-composer-tokens" aria-label="Composer tokens">
-            {commentContext ? (
-              <span className="is-comment">
-                <MessageCircle size={11} /> @{commentContext.label}
-              </span>
+                {variationError ? (
+                  <div className="ns-variation-error" role="alert">
+                    <strong>Directions unavailable</strong>
+                    <span>{variationError}</span>
+                    <button
+                      type="button"
+                      onClick={() => requestVariations('button')}
+                      disabled={variationBusy || !providerReady}
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : null}
+
+                {hasProviderFallback || hasPrivateDeterministicDirections ? (
+                  <output className="ns-variation-fallback-note">
+                    <Sparkles size={13} />
+                    <span>
+                      {hasProviderFallback
+                        ? 'The selected external model could not safely supply every direction. Clearly labeled deterministic fallbacks are shown instead.'
+                        : 'Three private deterministic directions are ready. No instruction or slide context left NodeSlide.'}
+                    </span>
+                  </output>
+                ) : null}
+
+                <div id="ns-variation-results" aria-busy={variationBusy || variationsLoading}>
+                  {variationGenerating ? (
+                    <div className="ns-variation-loading" aria-live="polite">
+                      <LoaderCircle className="ns-spin" size={16} />
+                      <span>
+                        Generating, materializing, and validating three bounded directions...
+                      </span>
+                    </div>
+                  ) : variationsLoading ? (
+                    <div className="ns-variation-loading" aria-live="polite">
+                      <LoaderCircle className="ns-spin" size={16} />
+                      <span>Loading saved directions...</span>
+                    </div>
+                  ) : directions.length > 0 ? (
+                    <ul className="ns-variation-list" aria-label="Generated slide directions">
+                      {directions.map((variation, index) => (
+                        <VariationCard
+                          key={variation.id}
+                          focusRef={index === 0 ? firstVariationRef : null}
+                          variation={variation}
+                          previewed={variation.id === previewedVariationId}
+                          {...(variation.id === previewedVariationId
+                            ? {
+                                previewButtonRef: (node: HTMLButtonElement | null) => {
+                                  if (node) lastPreviewButtonRef.current = node;
+                                },
+                              }
+                            : {})}
+                          busy={variationBusy}
+                          onPreview={onPreviewVariation}
+                          onAccept={onAcceptVariation}
+                          onReject={onRejectVariation}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="ns-variation-empty">
+                      <Layers3 size={17} />
+                      <span>
+                        <strong>No directions yet</strong>
+                        Generate three reviewable options for this slide.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {allRejected ? (
+                  <output className="ns-variation-all-rejected">
+                    All three directions were rejected. The original slide remains unchanged.
+                  </output>
+                ) : null}
+              </section>
             ) : null}
-            {selectedReadContext.map((reference) => (
-              <button
-                key={referenceKey(reference)}
-                type="button"
-                onClick={() => removeReadReference(reference)}
-                aria-label={`Remove read context ${reference.label}`}
-              >
-                @{reference.label} <X size={10} />
-              </button>
-            ))}
-            {selectedCommand ? (
-              <button
-                type="button"
-                className="is-command"
-                onClick={removeCommand}
-                aria-label={`Remove command ${selectedCommand.label}`}
-              >
-                {commandToken(selectedCommand.id)} <X size={10} />
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+            <NodeSlideAssistantScrollButton />
+          </ThreadPrimitive.Viewport>
+        </ThreadPrimitive.Root>
 
-        <div className="ns-composer-field ns-ai-v3-composer-field">
-          <label className="ns-sr-only" htmlFor={composerId}>
-            AI instruction
-          </label>
-          <textarea
-            ref={textareaRef}
-            id={composerId}
-            rows={composerExpanded ? 9 : 3}
-            value={instruction}
-            onChange={(event) => {
-              updateInstruction(event.target.value, event.target.selectionStart);
-            }}
-            onSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
-            placeholder={
-              commentContext
-                ? 'Address this review comment without resolving it...'
-                : scopeChoice === 'elements'
-                  ? 'Make this feel more decisive...'
-                  : 'Turn this into a crisp executive story...'
-            }
-            onKeyDown={handleComposerKeyDown}
-            aria-autocomplete="list"
-            aria-controls={menuOpen ? menuId : undefined}
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-          />
-          <div className="ns-composer-meta">
-            <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
-              <label className="ns-ai-model-picker">
-                <Sparkles size={12} aria-hidden="true" />
-                <span className="ns-sr-only">Agent model</span>
-                <select
-                  value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
-                  onChange={(event) => chooseProviderModel(event.target.value)}
-                  aria-label="Agent model"
-                  data-testid="ai-model-select"
-                >
-                  <optgroup label="Recommended">
-                    <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
-                      {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label} · Recommended
-                    </option>
-                  </optgroup>
-                  <optgroup label="More live models">
-                    {NODESLIDE_AGENT_MODELS.filter(
-                      (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
-                    ).map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label} · {model.vendor}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Private fallback">
-                    <option value="deterministic">Deterministic · no external model</option>
-                  </optgroup>
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => setConnectionsOpen(true)}
-                aria-label="Connect BYOK model or coding agent"
-                title="Connect BYOK model or coding agent"
-                data-testid="ai-connect-agent"
-              >
-                <PlugZap size={12} /> Connect
-              </button>
-              <button
-                type="button"
-                className={webResearch ? 'is-active' : ''}
-                aria-pressed={webResearch}
-                onClick={() => {
-                  setWebResearch((enabled) => !enabled);
-                  setWebResearchConsent(false);
-                }}
-                data-testid="ai-web-research-toggle"
-                title="Search the web and persist source snapshots before planning"
-              >
-                <Globe2 size={12} /> Web
-              </button>
-              <button
-                type="button"
-                onClick={() => openTokenMenu('@')}
-                disabled={references.length === 0}
-                aria-label="Add read context reference"
-              >
-                <AtSign size={12} /> Context
-              </button>
-              <button type="button" onClick={() => openTokenMenu('/')} aria-label="Add command">
-                <Command size={12} /> Insert
-              </button>
-              {onAttachDataFile ? (
-                <>
-                  <input
-                    ref={attachmentInputRef}
-                    className="ns-sr-only"
-                    type="file"
-                    accept=".csv,.json,.txt,text/csv,application/json,text/plain"
-                    data-testid="ai-data-file-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      event.currentTarget.value = '';
-                      if (file) void attachDataFile(file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={attachmentBusy}
-                    aria-label="Attach data file"
-                    data-testid="ai-attach-data"
-                  >
-                    {attachmentBusy ? (
-                      <LoaderCircle className="ns-spin" size={12} />
-                    ) : (
-                      <Paperclip size={12} />
-                    )}{' '}
-                    Data
-                  </button>
-                </>
-              ) : null}
-              <span>
-                {requestedReadContext.length > 0
-                  ? `${requestedReadContext.length} explicit reference${requestedReadContext.length === 1 ? '' : 's'}`
-                  : 'Scoped context'}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="ns-ai-v3-expand-composer"
-              onClick={() => setComposerExpanded((expanded) => !expanded)}
-              aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
-              aria-pressed={composerExpanded}
-              title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
-            >
-              <Maximize2 size={14} />
-            </button>
-            <button
-              type="submit"
-              disabled={!instruction.trim() || isSubmitting || !providerReady}
-              aria-label="Propose edit"
-              data-testid="ai-submit"
-            >
-              {isSubmitting ? (
-                <LoaderCircle className="ns-spin" size={15} />
-              ) : (
-                <ArrowUp size={15} />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {providerMode === 'openrouter_free' || webResearch ? (
-          <div className="ns-ai-inline-consent" aria-label="External request consent">
-            {providerMode === 'openrouter_free' ? (
-              <label className={providerConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={providerConsent}
-                  onChange={(event) => setProviderConsent(event.target.checked)}
-                  data-testid="ai-provider-consent"
-                />
-                <span>
-                  Allow {selectedAgentModel.label} via OpenRouter for this request
-                  <small>
-                    Ask, scoped slide context, token use, and cost are recorded in Trace.
-                  </small>
-                </span>
-              </label>
-            ) : null}
-            {webResearch ? (
-              <label className={webResearchConsent ? 'is-ready' : ''}>
-                <input
-                  type="checkbox"
-                  checked={webResearchConsent}
-                  onChange={(event) => setWebResearchConsent(event.target.checked)}
-                  data-testid="ai-web-research-consent"
-                />
-                <span>
-                  Allow web research for this request
-                  <small>Source URLs and bounded excerpts are saved in Data and Trace.</small>
-                </span>
-              </label>
-            ) : null}
-          </div>
-        ) : null}
-
-        {attachmentError ? (
-          <output className="ns-ai-attachment-error" role="alert">
-            {attachmentError}
-          </output>
-        ) : null}
-
-        {menuOpen ? (
-          <div
-            id={menuId}
-            className="ns-composer-menu"
-            role="menu"
-            tabIndex={-1}
-            aria-label={activeTrigger?.kind === 'reference' ? 'Read context' : 'Commands'}
+        <form
+          className={`ns-ai-composer ns-ai-v3-composer ${composerExpanded ? 'is-expanded' : ''}`}
+          onSubmit={submit}
+          data-testid="ai-composer"
+        >
+          {isSubmitting || activeDurableRun ? (
+            <output className="ns-ai-followup-draft">
+              <span className="ns-status-dot ns-status-dot--planning" />
+              Current run active · draft your follow-up while it works
+            </output>
+          ) : null}
+          <details
+            id={settingsId}
+            className="ns-ai-v3-controls-disclosure"
+            data-testid="ai-provider-controls"
+            open={providerControlsOpen}
           >
-            {matchingReferences.map((reference, index) => (
-              <button
-                key={referenceKey(reference)}
-                id={`${menuId}-option-${index}`}
-                type="button"
-                role="menuitem"
-                className={menuIndex === index ? 'is-active' : ''}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => chooseReference(reference)}
+            <summary
+              data-testid="ai-provider-summary"
+              aria-label="Model, scope, privacy, and editing settings"
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <span>Settings</span>
+              <span
+                className={`ns-route-pill ${
+                  providerMode === 'openrouter_free' ? 'is-external' : 'is-private'
+                }`}
               >
-                <AtSign size={12} />
-                <span>
-                  <strong>{reference.label}</strong>
-                  <small>{humanizeAxis(reference.kind)}</small>
+                {providerMode === 'deterministic' ? (
+                  <>
+                    <ShieldCheck size={11} /> Private
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={11} /> OpenRouter
+                  </>
+                )}
+              </span>
+            </summary>
+            <div className="ns-ai-v3-controls-body">
+              <div className="ns-ai-v3-route-summary" data-testid="ai-provider-route-status">
+                {providerMode === 'deterministic' ? (
+                  <>
+                    <ShieldCheck size={13} /> External model: off · Private deterministic
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} /> External model: on · OpenRouter ·{' '}
+                    {selectedAgentModel.label}
+                    <span className={providerConsent ? 'has-consent' : 'needs-consent'}>
+                      {providerConsent ? 'Consent attached' : 'Consent required'}
+                    </span>
+                  </>
+                )}
+              </div>
+              {providerMode === 'openrouter_free' ? (
+                <p className="ns-ai-model-guidance">
+                  <strong>{selectedAgentModel.bestFor}</strong> · {selectedAgentModel.description} ·{' '}
+                  {selectedAgentModel.costTier} cost tier. Exact tokens and cost are recorded in
+                  Trace.
+                </p>
+              ) : null}
+              <fieldset className="ns-ai-provider-controls ns-ai-v3-provider-controls">
+                <legend>Provider and privacy</legend>
+                <label className={providerMode === 'deterministic' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={providerName}
+                    value="deterministic"
+                    checked={providerMode === 'deterministic'}
+                    onChange={() => {
+                      setProviderMode('deterministic');
+                      setProviderConsent(false);
+                    }}
+                    data-testid="ai-provider-deterministic"
+                  />
+                  <ShieldCheck size={15} />
+                  <span>
+                    <strong>Deterministic and private</strong>
+                    <small>No instruction or context is sent to an external model.</small>
+                  </span>
+                </label>
+                <label className={providerMode === 'openrouter_free' ? 'is-active' : ''}>
+                  <input
+                    type="radio"
+                    name={providerName}
+                    value="openrouter_free"
+                    checked={providerMode === 'openrouter_free'}
+                    onChange={() => {
+                      setProviderMode('openrouter_free');
+                      setProviderConsent(false);
+                    }}
+                    data-testid="ai-provider-openrouter"
+                  />
+                  <Sparkles size={15} />
+                  <span>
+                    <strong>
+                      OpenRouter · {selectedAgentModel.vendor} · {selectedAgentModel.label} —
+                      external
+                    </strong>
+                    <small>
+                      Sends this ask, selected read context, and scoped slide content to the
+                      selected model through OpenRouter. It does not browse or fetch URLs.
+                    </small>
+                  </span>
+                </label>
+              </fieldset>
+
+              {commentContext ? (
+                <div className="ns-ai-comment-scope-chip" data-testid="ai-comment-scope-chip">
+                  <MessageCircle size={14} />
+                  <span>
+                    <small>Comment write scope</small>
+                    <strong>{commentContext.label}</strong>
+                  </span>
+                  {onClearCommentContext ? (
+                    <button
+                      type="button"
+                      onClick={onClearCommentContext}
+                      aria-label={`Remove comment scope ${commentContext.label}`}
+                    >
+                      <X size={13} />
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="ns-scope-row" aria-label="AI write scope">
+                  <span>Write</span>
+                  <div className="ns-chip-group">
+                    <button
+                      type="button"
+                      className={scopeChoice === 'deck' ? 'is-active' : ''}
+                      onClick={() => setScopeChoice('deck')}
+                    >
+                      Deck
+                    </button>
+                    <button
+                      type="button"
+                      className={scopeChoice === 'slide' ? 'is-active' : ''}
+                      onClick={() => setScopeChoice('slide')}
+                    >
+                      This slide
+                    </button>
+                    <button
+                      type="button"
+                      className={scopeChoice === 'elements' ? 'is-active' : ''}
+                      disabled={selectedElements.length === 0}
+                      onClick={() => setScopeChoice('elements')}
+                    >
+                      Selection{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="ns-ai-policy-grid">
+                <label>
+                  <span>Operation mode</span>
+                  <select
+                    value={operationMode}
+                    onChange={(event) => setOperationMode(event.target.value as OperationMode)}
+                    aria-label="Operation mode"
+                  >
+                    <option value="unrestricted">Full edit</option>
+                    <option value="copy">Copy only</option>
+                    <option value="style">Style only</option>
+                    <option value="layout">Layout only</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Design behavior</span>
+                  <select
+                    value={designBehavior}
+                    onChange={(event) =>
+                      setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
+                    }
+                    data-testid="ai-design-behavior"
+                  >
+                    <option value="preserve">Preserve exactly</option>
+                    <option value="refine">Refine subtly</option>
+                    <option value="rebalance">Rebalance hierarchy</option>
+                    <option value="reinterpret">Explore a new direction</option>
+                    <option value="reimagine">Reimagine boldly</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Reference use</span>
+                  <select
+                    value={referenceUse}
+                    onChange={(event) =>
+                      setReferenceUse(event.target.value as AiReferenceUsePolicy)
+                    }
+                    data-testid="ai-reference-use"
+                  >
+                    <option value="context_only">Context only</option>
+                    <option value="inspiration">Use as inspiration</option>
+                    <option value="style_direction">Follow style direction</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </details>
+
+          {commentContext || selectedReadContext.length > 0 || selectedCommand ? (
+            <div className="ns-composer-tokens" aria-label="Composer tokens">
+              {commentContext ? (
+                <span className="is-comment">
+                  <MessageCircle size={11} /> @{commentContext.label}
                 </span>
-              </button>
-            ))}
-            {matchingCommands.map((command, commandIndex) => {
-              const index = matchingReferences.length + commandIndex;
-              return (
+              ) : null}
+              {selectedReadContext.map((reference) => (
                 <button
-                  key={command.id}
+                  key={referenceKey(reference)}
+                  type="button"
+                  onClick={() => removeReadReference(reference)}
+                  aria-label={`Remove read context ${reference.label}`}
+                >
+                  @{reference.label} <X size={10} />
+                </button>
+              ))}
+              {selectedCommand ? (
+                <button
+                  type="button"
+                  className="is-command"
+                  onClick={removeCommand}
+                  aria-label={`Remove command ${selectedCommand.label}`}
+                >
+                  {commandToken(selectedCommand.id)} <X size={10} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="ns-composer-field ns-ai-v3-composer-field">
+            <label className="ns-sr-only" htmlFor={composerId}>
+              AI instruction
+            </label>
+            <textarea
+              ref={textareaRef}
+              id={composerId}
+              rows={composerExpanded ? 9 : 3}
+              value={instruction}
+              onChange={(event) => {
+                updateInstruction(event.target.value, event.target.selectionStart);
+              }}
+              onSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
+              placeholder={
+                commentContext
+                  ? 'Address this review comment without resolving it...'
+                  : scopeChoice === 'elements'
+                    ? 'Make this feel more decisive...'
+                    : 'Describe the change you want…'
+              }
+              onKeyDown={handleComposerKeyDown}
+              aria-autocomplete="list"
+              aria-controls={menuOpen ? menuId : undefined}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+            />
+            <div className="ns-composer-meta">
+              <div className="ns-composer-token-toolbar ns-ai-v3-composer-toolbar">
+                <label className="ns-ai-model-picker">
+                  <Sparkles size={12} aria-hidden="true" />
+                  <span className="ns-sr-only">Agent model</span>
+                  <select
+                    value={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                    onChange={(event) => chooseProviderModel(event.target.value)}
+                    aria-label="Agent model"
+                    data-testid="ai-model-select"
+                  >
+                    <optgroup label="Recommended">
+                      <option value={NODESLIDE_DEFAULT_AGENT_MODEL}>
+                        {nodeSlideAgentModel(NODESLIDE_DEFAULT_AGENT_MODEL).label}
+                      </option>
+                    </optgroup>
+                    <optgroup label="More live models">
+                      {NODESLIDE_AGENT_MODELS.filter(
+                        (model) => model.id !== NODESLIDE_DEFAULT_AGENT_MODEL,
+                      ).map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Private fallback">
+                      <option value="deterministic">Deterministic · no external model</option>
+                    </optgroup>
+                  </select>
+                </label>
+                <details className="ns-ai-tools-disclosure">
+                  <summary aria-label="Add tools and context">
+                    <Paperclip size={12} /> <span>Tools</span>
+                    {webResearch || requestedReadContext.length > 0 ? (
+                      <span className="ns-ai-tools-active-dot" aria-label="Tools active" />
+                    ) : null}
+                  </summary>
+                  <div className="ns-ai-tools-menu">
+                    <button
+                      type="button"
+                      onClick={() => setConnectionsOpen(true)}
+                      data-testid="ai-connect-agent"
+                    >
+                      <PlugZap size={13} /> Connect model or agent
+                    </button>
+                    <button
+                      type="button"
+                      className={webResearch ? 'is-active' : ''}
+                      aria-pressed={webResearch}
+                      onClick={() => {
+                        setWebResearch((enabled) => !enabled);
+                        setWebResearchConsent(false);
+                      }}
+                      data-testid="ai-web-research-toggle"
+                    >
+                      <Globe2 size={13} /> {webResearch ? 'Web research on' : 'Web research'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openTokenMenu('@')}
+                      disabled={references.length === 0}
+                    >
+                      <AtSign size={13} /> Add read context
+                    </button>
+                    <button type="button" onClick={() => openTokenMenu('/')}>
+                      <Command size={13} /> Insert command
+                    </button>
+                    <button
+                      type="button"
+                      className={materialWorkbenchOpen ? 'is-active' : ''}
+                      aria-pressed={materialWorkbenchOpen}
+                      onClick={() => setMaterialWorkbenchOpen((open) => !open)}
+                      data-testid="ai-open-material-workbench"
+                    >
+                      <Layers3 size={13} /> Visual material
+                    </button>
+                    {onAttachDataFile ? (
+                      <>
+                        <input
+                          ref={attachmentInputRef}
+                          className="ns-sr-only"
+                          type="file"
+                          accept=".csv,.json,.txt,text/csv,application/json,text/plain"
+                          data-testid="ai-data-file-input"
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = '';
+                            if (file) void attachDataFile(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => attachmentInputRef.current?.click()}
+                          disabled={attachmentBusy}
+                          aria-label="Attach data file"
+                          data-testid="ai-attach-data"
+                        >
+                          {attachmentBusy ? (
+                            <LoaderCircle className="ns-spin" size={13} />
+                          ) : (
+                            <Paperclip size={13} />
+                          )}
+                          Attach data
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </details>
+                <button
+                  type="button"
+                  className="ns-ai-settings-trigger"
+                  aria-label="Agent settings"
+                  aria-controls={settingsId}
+                  aria-expanded={providerControlsOpen}
+                  onClick={() => setProviderControlsOpen((open) => !open)}
+                  title="Agent settings"
+                >
+                  <SlidersHorizontal size={12} />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="ns-ai-v3-expand-composer"
+                onClick={() => setComposerExpanded((expanded) => !expanded)}
+                aria-label={composerExpanded ? 'Collapse composer' : 'Expand composer'}
+                aria-pressed={composerExpanded}
+                title={composerExpanded ? 'Collapse composer' : 'Expand composer'}
+              >
+                <Maximize2 size={14} />
+              </button>
+              <button
+                type="submit"
+                disabled={!instruction.trim() || isSubmitting || !providerReady}
+                aria-label="Propose edit"
+                data-testid="ai-submit"
+              >
+                {isSubmitting ? (
+                  <LoaderCircle className="ns-spin" size={15} />
+                ) : (
+                  <ArrowUp size={15} />
+                )}
+                <span>{isSubmitting ? 'Working' : 'Propose'}</span>
+              </button>
+            </div>
+          </div>
+
+          {providerMode === 'openrouter_free' || webResearch ? (
+            <div className="ns-ai-inline-consent" aria-label="External request consent">
+              {providerMode === 'openrouter_free' ? (
+                <label className={providerConsent ? 'is-ready' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={providerConsent}
+                    onChange={(event) => setProviderConsent(event.target.checked)}
+                    data-testid="ai-provider-consent"
+                  />
+                  <span>
+                    Allow {selectedAgentModel.label} via OpenRouter for this request
+                    <small>
+                      Ask, scoped slide context, token use, and cost are recorded in Trace.
+                    </small>
+                  </span>
+                </label>
+              ) : null}
+              {webResearch ? (
+                <label className={webResearchConsent ? 'is-ready' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={webResearchConsent}
+                    onChange={(event) => setWebResearchConsent(event.target.checked)}
+                    data-testid="ai-web-research-consent"
+                  />
+                  <span>
+                    Allow web research for this request
+                    <small>Source URLs and bounded excerpts are saved in Data and Trace.</small>
+                  </span>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+
+          {attachmentError ? (
+            <output className="ns-ai-attachment-error" role="alert">
+              {attachmentError}
+            </output>
+          ) : null}
+
+          {menuOpen ? (
+            <div
+              id={menuId}
+              className="ns-composer-menu"
+              role="menu"
+              tabIndex={-1}
+              aria-label={activeTrigger?.kind === 'reference' ? 'Read context' : 'Commands'}
+            >
+              {matchingReferences.map((reference, index) => (
+                <button
+                  key={referenceKey(reference)}
                   id={`${menuId}-option-${index}`}
                   type="button"
                   role="menuitem"
                   className={menuIndex === index ? 'is-active' : ''}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => chooseCommand(command)}
+                  onClick={() => chooseReference(reference)}
                 >
-                  <Command size={12} />
+                  <AtSign size={12} />
                   <span>
-                    <strong>{commandToken(command.id)}</strong>
-                    <small>{command.description ?? command.label}</small>
+                    <strong>{reference.label}</strong>
+                    <small>{humanizeAxis(reference.kind)}</small>
                   </span>
                 </button>
-              );
-            })}
-          </div>
-        ) : null}
+              ))}
+              {matchingCommands.map((command, commandIndex) => {
+                const index = matchingReferences.length + commandIndex;
+                return (
+                  <button
+                    key={command.id}
+                    id={`${menuId}-option-${index}`}
+                    type="button"
+                    role="menuitem"
+                    className={menuIndex === index ? 'is-active' : ''}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => chooseCommand(command)}
+                  >
+                    <Command size={12} />
+                    <span>
+                      <strong>{commandToken(command.id)}</strong>
+                      <small>{command.description ?? command.label}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
-        <small className="ns-shortcut-hint">
-          <kbd>↵</kbd> to propose · <kbd>⇧</kbd>
-          <kbd>↵</kbd> for a new line ·{' '}
-          {providerMode === 'deterministic'
-            ? 'private deterministic processing'
-            : providerConsent
-              ? `${selectedAgentModel.label} through OpenRouter · consent attached`
-              : `${selectedAgentModel.label} through OpenRouter · consent required`}
-        </small>
-      </form>
-      <NodeSlideConnectionsDialog
-        open={connectionsOpen}
-        onClose={() => setConnectionsOpen(false)}
-        deckId={deck.id}
-      />
-    </div>
+          <small className="ns-shortcut-hint">
+            <kbd>↵</kbd> propose · <kbd>⇧</kbd>
+            <kbd>↵</kbd> new line
+          </small>
+        </form>
+        <NodeSlideConnectionsDialog
+          open={connectionsOpen}
+          onClose={() => setConnectionsOpen(false)}
+          deckId={deck.id}
+        />
+      </div>
+    </NodeSlideAssistantRuntime>
   );
-}
-
-function humanizeToolName(toolName?: string) {
-  if (!toolName) return 'Tool';
-  const knownLabels: Record<string, string> = {
-    candidate_validation: 'Validation',
-    web_research: 'Web research',
-    source_snapshot: 'Source capture',
-  };
-  if (knownLabels[toolName]) return knownLabels[toolName];
-  return toolName.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function VariationCard({
@@ -1984,27 +2089,6 @@ function axesLabel(variation: SlideVariation) {
 
 function humanizeAxis(value: string) {
   return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function operationModeLabel(value: OperationMode) {
-  if (value === 'copy') return 'Copy only';
-  if (value === 'style') return 'Style only';
-  if (value === 'layout') return 'Layout only';
-  return 'Full edit';
-}
-
-function designBehaviorLabel(value: AiDesignBehaviorPolicy) {
-  if (value === 'preserve') return 'Preserve exactly';
-  if (value === 'refine') return 'Refine subtly';
-  if (value === 'rebalance') return 'Rebalance hierarchy';
-  if (value === 'reinterpret') return 'Explore direction';
-  return 'Reimagine boldly';
-}
-
-function referenceUseLabel(value: AiReferenceUsePolicy) {
-  if (value === 'inspiration') return 'Use references as inspiration';
-  if (value === 'style_direction') return 'Follow reference style';
-  return 'Context only';
 }
 
 function variationStatusLabel(status: SlideVariation['status']) {

@@ -36,6 +36,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createConvexCall } from '@parity/nodeslide-agent-client';
 import JSZip from 'jszip';
 import { z } from 'zod';
 
@@ -172,26 +173,7 @@ const CONVEX_SITE_URL =
  *   Body: { path: "module:function", args: {...}, format: "json" }
  *   Response: { status: "success", value: any } | { status: "error", errorMessage: string }
  */
-async function convexCall(
-  kind: 'query' | 'mutation' | 'action',
-  path: string,
-  args: Record<string, unknown>,
-): Promise<unknown> {
-  const url = `${CONVEX_CLOUD_URL}/api/${kind}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path, args, format: 'json' }),
-  });
-  if (!res.ok) {
-    throw new Error(`convex ${kind} ${path} → HTTP ${res.status} ${res.statusText}`);
-  }
-  const json = (await res.json()) as { status?: string; value?: unknown; errorMessage?: string };
-  if (json.status === 'error') {
-    throw new Error(`convex ${kind} ${path} → ${json.errorMessage ?? 'unknown error'}`);
-  }
-  return json.value;
-}
+const convexCall = createConvexCall(CONVEX_CLOUD_URL);
 
 // Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
 // for vision judge). Override via env for any tier you prefer:

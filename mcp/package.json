@@ -31,7 +31,8 @@
     "parity-studio-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "prebuild": "pnpm --filter @parity/nodeslide-agent-client build",
+    "build": "tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --alias:@parity/nodeslide-agent-client=../packages/nodeslide-agent-client/dist/index.js --outfile=dist/index.js",
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -48,19 +49,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@parity/nodeslide-agent-client": "workspace:*",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "@protobufjs/utf8": "^1.1.2",
-      "dompurify": "^3.4.11",
-      "fast-uri": "^3.1.2",
-      "ip-address": "^10.1.1",
-      "protobufjs": "7.6.3",
-      "qs": "^6.15.2",
-      "ws": "^8.21.0"
-    }
   }
 }

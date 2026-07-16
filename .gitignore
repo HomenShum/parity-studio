@@ -11,6 +11,8 @@ dist
 .vite
 .turbo
 .tmp/
+.eve/
+.output/
 
 # Convex
 .convex/

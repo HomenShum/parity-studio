@@ -78,6 +78,7 @@ import {
   appendDistinctHistoryVersion,
   applyExpectedElementVersions,
   authoritativePredecessorVersion,
+  candidateSlideIdForPatch,
   classifyEditorVersionAdvance,
   createEditorRequestGate,
   createSerializedEditorWriteQueue,
@@ -202,6 +203,7 @@ interface NodeSlideGeneratedApi {
       OwnerWorkspace
     >;
     applyPatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
+    proposePatch: PublicMutation<ApplyPatchArgs, PatchReceipt>;
     acceptPatch: PublicMutation<
       { deckId: string; ownerAccessKey: string; patchId: string },
       PatchReceipt
@@ -382,7 +384,7 @@ export function NodeSlideStudio() {
   const [navigatorCollapsed, setNavigatorCollapsed] = useState(
     () => window.innerWidth >= 700 && window.innerWidth < 1100,
   );
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth < 1100);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => window.innerWidth < 900);
   const [inspectorWidth, setInspectorWidth] = useState(340);
   const [zoom, setZoom] = useState(() => {
     if (window.innerWidth < 700) return 40;
@@ -444,6 +446,7 @@ export function NodeSlideStudio() {
   const ensureWorkspace = useMutation(nodeslideApi.nodeslide.ensureWorkspace);
   const attachDataSource = useMutation(nodeslideApi.nodeslide.attachDataSource);
   const applyPatchMutation = useMutation(nodeslideApi.nodeslide.applyPatch);
+  const proposePatchMutation = useMutation(nodeslideApi.nodeslide.proposePatch);
   const acceptPatch = useMutation(nodeslideApi.nodeslide.acceptPatch);
   const rejectPatch = useMutation(nodeslideApi.nodeslide.rejectPatch);
   const proposePropagation = useMutation(nodeslideApi.nodeslide.proposePropagation);
@@ -771,9 +774,12 @@ export function NodeSlideStudio() {
       if (nextBreakpoint === 'phone') {
         setNavigatorCollapsed(false);
         setInspectorCollapsed(true);
-      } else if (nextBreakpoint === 'tablet') {
+      } else if (nextBreakpoint === 'drawer') {
         setNavigatorCollapsed(true);
         setInspectorCollapsed(true);
+      } else if (nextBreakpoint === 'split') {
+        setNavigatorCollapsed(true);
+        setInspectorCollapsed(false);
       } else {
         setNavigatorCollapsed(false);
         setInspectorCollapsed(false);
@@ -854,7 +860,7 @@ export function NodeSlideStudio() {
     }
   }, [previewedPatch, workspace]);
   const patchCandidateSlide = patchCandidateSnapshot?.slides.find(
-    (slide) => slide.id === activeSlide?.id,
+    (slide) => slide.id === candidateSlideIdForPatch(previewedPatch, activeSlide?.id),
   );
   const patchCandidateElements = patchCandidateSlide
     ? (patchCandidateSnapshot?.elements.filter(
@@ -1408,7 +1414,7 @@ export function NodeSlideStudio() {
         setSelectedElementIds([]);
       } else if (event.key === 'Escape') {
         if (selectedElementIds.length) setSelectedElementIds([]);
-        else if (window.innerWidth <= 1100) setInspectorCollapsed(true);
+        else if (window.innerWidth < 900) setInspectorCollapsed(true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -2091,6 +2097,60 @@ export function NodeSlideStudio() {
         }
       },
     );
+  };
+
+  const handleProposeVisualMaterial = async (
+    operations: PatchOperation[],
+    summary: string,
+  ): Promise<void> => {
+    if (!ownerAccessKey || operations.length === 0) {
+      throw new Error('An editable NodeSlide owner workspace is required.');
+    }
+    const requestedDeckId = workspace.deck.id;
+    const requestedOwnerAccessKey = ownerAccessKey;
+    const requestGate = editorRequestGateRef.current;
+    const requestToken = requestGate.begin('proposal', requestedDeckId);
+    const scope = scopeForOperations(workspace, operations, 'unrestricted');
+    const clocks = clocksForScope(workspace, scope, operations);
+    setAgentBusy(true);
+    try {
+      const receipt = await proposePatchMutation({
+        deckId: requestedDeckId,
+        ownerAccessKey: requestedOwnerAccessKey,
+        baseDeckVersion: workspace.deck.version,
+        ...clocks,
+        scope,
+        operations,
+        summary,
+      });
+      if (!requestGate.isCurrent(requestToken)) {
+        throw new Error('The deck changed before the visual proposal completed.');
+      }
+      if (!receipt.workspace) {
+        throw new Error(
+          'The visual proposal completed without an authoritative workspace receipt.',
+        );
+      }
+      installWorkspace(receipt.workspace, requestedOwnerAccessKey);
+      previewPatch(
+        receipt.workspace.patches.find((candidate) => candidate.id === receipt.patch.id) ??
+          receipt.patch,
+      );
+      setToast({
+        kind: 'success',
+        message: 'Visual proposal created. Review it before accepting.',
+      });
+    } catch (error) {
+      if (requestGate.isCurrent(requestToken)) {
+        setToast({
+          kind: 'error',
+          message: errorMessage(error, 'The visual proposal could not be created.'),
+        });
+      }
+      throw error;
+    } finally {
+      if (requestGate.isCurrent(requestToken)) setAgentBusy(false);
+    }
   };
 
   const handleProposeEdit = (
@@ -2956,6 +3016,7 @@ export function NodeSlideStudio() {
           onToggleCollapsed={() => setInspectorCollapsed((value) => !value)}
           onWidthChange={setInspectorWidth}
           onProposeEdit={handleProposeEdit}
+          onProposeVisualMaterial={handleProposeVisualMaterial}
           onAttachAiDataFile={attachAiDataFile}
           onDeleteAiDataSource={deleteAiDataSource}
           onCancelAiRun={(runId) => void cancelAiRun(runId)}
@@ -3650,9 +3711,10 @@ function isEditableTarget(target: EventTarget | null) {
   );
 }
 
-function responsiveBreakpoint(width: number): 'phone' | 'tablet' | 'desktop' {
+function responsiveBreakpoint(width: number): 'phone' | 'drawer' | 'split' | 'desktop' {
   if (width < 700) return 'phone';
-  if (width < 1100) return 'tablet';
+  if (width < 900) return 'drawer';
+  if (width < 1100) return 'split';
   return 'desktop';
 }
 
