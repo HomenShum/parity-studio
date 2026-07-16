@@ -19,7 +19,9 @@ export type AgentSessionJobStatus =
   | 'awaiting_review'
   | 'succeeded'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'rejected'
+  | 'stale';
 
 export interface AgentSessionAttachment {
   id: string;
@@ -111,6 +113,7 @@ export interface AgentSessionJobHandle {
   resultPatchId?: string;
   resultCandidateDigest?: string;
   conversationRunId?: string;
+  budgetId?: string;
   memoryIds: readonly string[];
   error?: string;
 }
@@ -142,6 +145,7 @@ export interface AgentSessionJobReceipt {
   resultPatchId?: string;
   resultCandidateDigest?: string;
   conversationRunId?: string;
+  budgetId?: string;
   memoryIds?: readonly string[];
   error?: string;
   updatedAt: number;

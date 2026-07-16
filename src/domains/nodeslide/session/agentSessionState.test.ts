@@ -65,6 +65,7 @@ describe('NodeSlide authoritative agent session state', () => {
       maxAttempts: 3,
       streamId: 'stream-a',
       conversationRunId: 'run-a',
+      budgetId: 'budget-a',
       memoryIds: ['memory-a'],
       updatedAt: 4,
     });
@@ -98,6 +99,7 @@ describe('NodeSlide authoritative agent session state', () => {
       phase: 'generating',
       progress: 42,
       conversationRunId: 'run-a',
+      budgetId: 'budget-a',
       memoryIds: ['memory-a'],
     });
   });
@@ -189,6 +191,55 @@ describe('NodeSlide authoritative agent session state', () => {
     expect(archived.lastJob).toMatchObject({ jobId: 'job-b', resultDeckId: 'deck-c' });
     expect(archived.lastJob).not.toHaveProperty('ownerAccessKey');
   });
+
+  it.each(['rejected', 'stale'] as const)(
+    'rehydrates and archives a %s durable job without allowing a local failure override',
+    (status) => {
+      const storage = new MemoryStorage();
+      const prepared = prepareAgentSessionJob(
+        createInitialAgentSessionState(`session-${status}`, 1),
+        {
+          kind: 'edit_proposal',
+          requestFingerprint: `intent-${status}`,
+          ownerAccessKey: `owner-${status}`,
+          idempotencyKey: `idempotency-${status}`,
+          targetDeckId: 'deck-terminal',
+        },
+        2,
+      );
+      const terminal = attachAgentSessionJob(prepared.state, {
+        jobId: `job-${status}`,
+        kind: 'edit_proposal',
+        idempotencyKey: `idempotency-${status}`,
+        status,
+        phase: status,
+        progress: 100,
+        attempt: 1,
+        maxAttempts: 3,
+        resultPatchId: 'patch-terminal',
+        resultCandidateDigest: 'sha256:candidate-terminal',
+        budgetId: 'budget-terminal',
+        error: `The proposal became ${status}.`,
+        updatedAt: 3,
+      });
+
+      expect(writeAgentSessionState(storage, terminal)).toBe(true);
+      const reloaded = readAgentSessionState(storage, `session-${status}`, 4);
+      expect(reloaded.activeJob).toMatchObject({
+        status,
+        phase: status,
+        budgetId: 'budget-terminal',
+      });
+      expect(
+        failAgentSessionJob(reloaded, 'Local fallback must not replace terminal state.', 5),
+      ).toBe(reloaded);
+
+      const archived = archiveAgentSessionJob(reloaded, 6);
+      expect(archived.activeJob).toBeNull();
+      expect(archived.lastJob).toMatchObject({ status, budgetId: 'budget-terminal' });
+      expect(archived.lastJob).not.toHaveProperty('ownerAccessKey');
+    },
+  );
 
   it('persists an edit target and exact candidate binding across reload', () => {
     const storage = new MemoryStorage();
