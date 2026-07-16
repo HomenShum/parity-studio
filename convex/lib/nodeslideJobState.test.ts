@@ -13,6 +13,7 @@ import {
   nodeSlideJobOwnerDigest,
   nodeSlideJobRequestDigest,
   publicNodeSlideJob,
+  resolveNodeSlideReviewJob,
   retryNodeSlideJob,
 } from './nodeslideJobState';
 
@@ -114,19 +115,7 @@ describe('NodeSlide durable job state', () => {
   });
 
   it('exposes a review-only edit result bound to the exact preflight candidate', () => {
-    const reviewable = advanceNodeSlideJob(
-      claimNodeSlideJobAttempt(job({ kind: 'edit_proposal', id: 'job_edit_1' }), 2_000),
-      {
-        status: 'awaiting_review',
-        phase: 'awaiting_review',
-        progress: 100,
-        resultDeckId: 'deck_1',
-        resultPatchId: 'patch_1',
-        resultCandidateDigest: 'candidate_sha256:abc123',
-        conversationRunId: 'agent_run_1',
-      },
-      3_000,
-    );
+    const reviewable = reviewJob();
     expect(publicNodeSlideJob(reviewable)).toMatchObject({
       kind: 'edit_proposal',
       status: 'awaiting_review',
@@ -138,6 +127,82 @@ describe('NodeSlide durable job state', () => {
         reviewRequired: true,
       },
     });
+  });
+
+  it.each([
+    {
+      outcome: 'accepted',
+      status: 'succeeded',
+      phase: 'complete',
+      error: undefined,
+    },
+    {
+      outcome: 'rejected',
+      status: 'rejected',
+      phase: 'rejected',
+      error: 'The user rejected the proposed patch. No candidate mutation was applied.',
+    },
+    {
+      outcome: 'stale',
+      status: 'stale',
+      phase: 'stale',
+      error: 'The proposed patch became stale before commit. The newer deck was preserved.',
+    },
+  ] as const)(
+    'resolves an $outcome review into a terminal $status job',
+    ({ outcome, status, phase, error }) => {
+      const awaitingReview = reviewJob();
+      const resolved = resolveNodeSlideReviewJob(awaitingReview, outcome, 4_000);
+
+      expect(resolved).toEqual({
+        ...awaitingReview,
+        status,
+        phase,
+        updatedAt: 4_000,
+        completedAt: 4_000,
+        ...(error ? { error } : {}),
+      });
+    },
+  );
+
+  it.each(['accepted', 'rejected', 'stale'] as const)(
+    'keeps an $outcome resolution terminal across same and conflicting replays',
+    (outcome) => {
+      const resolved = resolveNodeSlideReviewJob(reviewJob(), outcome, 4_000);
+
+      for (const replayOutcome of ['accepted', 'rejected', 'stale'] as const) {
+        expect(resolveNodeSlideReviewJob(resolved, replayOutcome, 5_000)).toBe(resolved);
+      }
+      expect(resolved).toMatchObject({ updatedAt: 4_000, completedAt: 4_000 });
+    },
+  );
+
+  it('only exposes an actionable edit result while review is pending', () => {
+    const awaitingReview = reviewJob();
+    expect(publicNodeSlideJob(awaitingReview).result).toEqual({
+      kind: 'edit_proposal',
+      deckId: 'deck_1',
+      patchId: 'patch_1',
+      candidateDigest: 'candidate_sha256:abc123',
+      reviewRequired: true,
+    });
+
+    for (const { outcome, status } of [
+      { outcome: 'accepted', status: 'succeeded' },
+      { outcome: 'rejected', status: 'rejected' },
+      { outcome: 'stale', status: 'stale' },
+    ] as const) {
+      const terminal = publicNodeSlideJob(
+        resolveNodeSlideReviewJob(awaitingReview, outcome, 4_000),
+      );
+      expect(terminal).toMatchObject({
+        status,
+        resultDeckId: 'deck_1',
+        resultPatchId: 'patch_1',
+        resultCandidateDigest: 'candidate_sha256:abc123',
+      });
+      expect(terminal).not.toHaveProperty('result');
+    }
   });
 
   it('rejects cross-kind completions and checkpoint result substitution before persistence', () => {
@@ -184,4 +249,20 @@ function job(overrides: Partial<NodeSlideJobRecord> = {}): NodeSlideJobRecord {
     updatedAt: 1_000,
     ...overrides,
   };
+}
+
+function reviewJob(): NodeSlideJobRecord {
+  return advanceNodeSlideJob(
+    claimNodeSlideJobAttempt(job({ kind: 'edit_proposal', id: 'job_edit_1' }), 2_000),
+    {
+      status: 'awaiting_review',
+      phase: 'awaiting_review',
+      progress: 100,
+      resultDeckId: 'deck_1',
+      resultPatchId: 'patch_1',
+      resultCandidateDigest: 'candidate_sha256:abc123',
+      conversationRunId: 'agent_run_1',
+    },
+    3_000,
+  );
 }
