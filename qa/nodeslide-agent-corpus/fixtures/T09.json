@@ -1,0 +1,142 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "T09",
+  "title": "Three genuine design directions",
+  "category": "design_and_taste",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-proof",
+    "selectedSlideIds": ["slide-proof"],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "One evidence-rich slide is selected and has no existing unaccepted variants.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "slideId": "slide-proof",
+        "canonicalDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "requiredEvidenceIds": ["metric-retention", "chart-revenue", "source-metrics"]
+      }
+    }
+  },
+  "request": {
+    "text": "Generate three directions: executive evidence, narrative explanation, and technical diligence.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["variant", "layout", "style", "chart", "annotation"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_variant",
+          "minCount": 3,
+          "maxCount": 3,
+          "scope": "selected_slide"
+        }
+      ],
+      "allowed": ["create_variant", "update_layout", "set_style", "replace_text"],
+      "denied": ["commit_variant", "remove_evidence", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "variant_review_required",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Generate three noncanonical alternatives and wait for the user to choose; no direction may auto-commit."
+    },
+    "outcomes": [
+      "Exactly three variants map to the three requested editorial directions.",
+      "The variants have distinct operation signatures, not cosmetic color swaps.",
+      "The canonical slide and its evidence remain unchanged until selection."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "infer_visual_semantics",
+      "resolve_scope",
+      "check_authority",
+      "plan_variants",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "cosmetic_only_variants",
+    "duplicate_direction",
+    "auto_selected_variant",
+    "evidence_loss",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "three-variants",
+      "description": "Exactly three variants were produced.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/variants"
+      },
+      "operator": "length_equals",
+      "expected": 3
+    },
+    {
+      "id": "requested-directions",
+      "description": "The direction IDs exactly match the three requested editorial directions.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/variants",
+        "itemPointer": "/directionId"
+      },
+      "operator": "set_equals",
+      "expected": ["executive_evidence", "narrative_explanation", "technical_diligence"]
+    },
+    {
+      "id": "distinct-operation-signatures",
+      "description": "Each direction has a distinct structural operation signature.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/variants",
+        "itemPointer": "/operationSignature"
+      },
+      "operator": "all_unique"
+    },
+    {
+      "id": "canonical-slide-unchanged",
+      "description": "The canonical slide digest remains unchanged while variants await selection.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/canonicalDigest",
+        "comparePointer": "/result/after/canonicalDigest"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "evidence-preserved",
+      "description": "Every variant retains all required evidence IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/variants",
+        "itemPointer": "/requiredEvidenceIds"
+      },
+      "operator": "all_nonempty"
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "E11",
+  "title": "Three-slide bounded headline edit",
+  "category": "scoped_copy_editing",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-problem",
+    "selectedSlideIds": ["slide-problem", "slide-product", "slide-next"],
+    "selectedElementIds": ["headline-problem", "headline-product", "headline-next"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "Exactly three unlocked headline elements on three nonadjacent selected slides are in write scope.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "selectedHeadlineIds": ["headline-problem", "headline-product", "headline-next"],
+        "unselectedSlidesDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    }
+  },
+  "request": {
+    "text": "Make the headlines on these three selected slides action-oriented.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["text"],
+    "operations": {
+      "required": [
+        {
+          "type": "replace_text",
+          "minCount": 3,
+          "maxCount": 3,
+          "scope": "selected_slides"
+        }
+      ],
+      "allowed": ["replace_text"],
+      "denied": ["update_layout", "delete_slide", "create_slide", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Create one coordinated proposal containing one headline edit per selected slide and wait for acceptance."
+    },
+    "outcomes": [
+      "Exactly one replace_text operation targets each selected headline.",
+      "No slide outside the three-slide selection changes.",
+      "The three edits remain one reviewable proposal."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "unselected_slide_change",
+    "missing_selected_headline",
+    "duplicate_target",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "three-operations",
+      "description": "Exactly three operations were proposed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/operations"
+      },
+      "operator": "length_equals",
+      "expected": 3
+    },
+    {
+      "id": "one-target-each",
+      "description": "The operation targets are exactly the three selected headline IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/operations",
+        "itemPointer": "/targets/0"
+      },
+      "operator": "set_equals",
+      "expected": ["headline-problem", "headline-product", "headline-next"]
+    },
+    {
+      "id": "selected-slides-only",
+      "description": "The changed-slide receipt contains exactly the three selected slides.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/changedSlideIds"
+      },
+      "operator": "set_equals",
+      "expected": ["slide-problem", "slide-product", "slide-next"]
+    },
+    {
+      "id": "unselected-slides-unchanged",
+      "description": "The unselected-slide digest remains exactly unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/unselectedSlidesDigest",
+        "comparePointer": "/result/after/unselectedSlidesDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

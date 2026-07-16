@@ -1,0 +1,153 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "V07",
+  "title": "Replace equal-card clutter with hierarchy",
+  "category": "visual_semantic",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-product",
+    "selectedSlideIds": ["slide-product"],
+    "selectedElementIds": ["card-1", "card-2", "card-3", "card-4"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A selected product slide contains four equal cards carrying evidence IDs e1-e4.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "equalCardCount": 4,
+        "dominantVisualCount": 0,
+        "requiredEvidenceIds": ["e1", "e2", "e3", "e4"]
+      }
+    }
+  },
+  "request": {
+    "text": "Replace these four equal cards with one dominant visual.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["layout", "shape", "chart", "image"],
+    "operations": {
+      "required": [
+        {
+          "type": "remove_element",
+          "minCount": 4,
+          "maxCount": 4,
+          "scope": "selected_slide"
+        },
+        {
+          "type": "update_layout",
+          "minCount": 1,
+          "maxCount": 4,
+          "scope": "selected_slide"
+        }
+      ],
+      "allowed": [
+        "remove_element",
+        "update_layout",
+        "create_shape",
+        "create_chart",
+        "replace_image",
+        "replace_text"
+      ],
+      "denied": ["delete_evidence", "delete_slide", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Replace the selected card composition with one dominant visual while preserving evidence; wait for acceptance."
+    },
+    "outcomes": [
+      "The four equal cards no longer define the composition.",
+      "Exactly one visual is dominant.",
+      "All required evidence remains present and attributable."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "infer_visual_semantics",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "equal_card_grid_retained",
+    "multiple_focal_points",
+    "evidence_loss",
+    "unselected_slide_change",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "four-cards-before",
+      "description": "The supplied before evidence records four equal cards.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/equalCardCount"
+      },
+      "operator": "equals",
+      "expected": 4
+    },
+    {
+      "id": "cards-reduced",
+      "description": "At most one card-like container remains.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/equalCardCount"
+      },
+      "operator": "less_than_or_equal",
+      "expected": 1
+    },
+    {
+      "id": "one-dominant-visual",
+      "description": "Exactly one visual is dominant after the change.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/dominantVisualCount"
+      },
+      "operator": "equals",
+      "expected": 1
+    },
+    {
+      "id": "dominant-area",
+      "description": "The dominant visual occupies at least 45 percent of usable slide area.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/dominantVisualAreaRatio"
+      },
+      "operator": "greater_than_or_equal",
+      "expected": 0.45
+    },
+    {
+      "id": "evidence-preserved",
+      "description": "The required evidence ID set is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/evidenceIds",
+        "comparePointer": "/result/after/evidenceIds"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

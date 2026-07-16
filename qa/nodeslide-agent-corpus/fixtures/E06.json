@@ -1,0 +1,128 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "E06",
+  "title": "Selected-slide persuasive refinement",
+  "category": "scoped_copy_editing",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-proof",
+    "selectedSlideIds": ["slide-proof"],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "One evidence slide is selected; its headline, body, chart, and exact displayed numbers are known.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "slideId": "slide-proof",
+        "numbers": ["43%", "128", "$1.2M"],
+        "slideDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "outsideScopeDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
+  },
+  "request": {
+    "text": "Make this slide more persuasive without changing any numbers.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["text", "layout", "style"],
+    "operations": {
+      "required": [
+        {
+          "type": "replace_text",
+          "minCount": 1,
+          "maxCount": 6,
+          "scope": "selected_slide"
+        }
+      ],
+      "allowed": ["replace_text", "update_layout", "set_style"],
+      "denied": ["update_chart_data", "replace_image", "delete_slide", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Refine only the selected slide, preserve all numeric values, and wait for acceptance."
+    },
+    "outcomes": [
+      "The selected slide has a clearer takeaway and evidence order.",
+      "Every displayed numeric token is exactly preserved.",
+      "No other slide changes before or after acceptance."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "numeric_value_change",
+    "unselected_slide_change",
+    "invented_claim",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "numbers-byte-equivalent",
+      "description": "The ordered numeric token array is exactly unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/numbers",
+        "comparePointer": "/result/after/numbers"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "selected-slide-only",
+      "description": "Only the selected slide appears in the changed-slide receipt.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/changedSlideIds"
+      },
+      "operator": "set_equals",
+      "expected": ["slide-proof"]
+    },
+    {
+      "id": "takeaway-headline-present",
+      "description": "The refined slide has a nonempty takeaway headline.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/takeawayHeadline"
+      },
+      "operator": "truthy"
+    },
+    {
+      "id": "outside-scope-unchanged",
+      "description": "The digest for all slides outside the selection is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/outsideScopeDigest",
+        "comparePointer": "/result/after/outsideScopeDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

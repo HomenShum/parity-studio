@@ -1,0 +1,152 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "F08",
+  "title": "Stale proposal fails closed",
+  "category": "adversarial_and_failure",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "stale-proposal-v1",
+    "activeSlideId": "slide-proof",
+    "selectedSlideIds": ["slide-proof"],
+    "selectedElementIds": ["headline-proof"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A proposal targets element version 4, but a manual edit has advanced the canonical element to version 5.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 13,
+        "element": {
+          "id": "headline-proof",
+          "currentVersion": 5,
+          "currentText": "Retention compounds with every cohort"
+        },
+        "proposal": {
+          "id": "proposal-stale-1",
+          "baseDeckVersion": 12,
+          "baseElementVersion": 4,
+          "operationType": "replace_text",
+          "replacementText": "Retention is improving"
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Proposal based on stale element version",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["proposal_validation", "conflict_receipt"],
+    "operations": {
+      "required": [
+        {
+          "type": "validate_proposal_version",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_element"
+        }
+      ],
+      "allowed": ["validate_proposal_version"],
+      "denied": ["replace_text", "apply_patch", "auto_commit", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": ["scope_checked", "stale_version_detected", "proposal_rejected"],
+      "forbiddenEvents": ["human_review_requested", "auto_commit", "publish", "share"],
+      "boundaryBehavior": "Reject the stale proposal before mutation, surface the version conflict, and require a freshly rebased proposal."
+    },
+    "outcomes": [
+      "The proposal is marked stale with a stable conflict code.",
+      "No operation overwrites element version 5.",
+      "The canonical deck and element remain byte-equivalent."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_candidate",
+      "compare_versions",
+      "check_authority",
+      "candidate_validation",
+      "reject_stale"
+    ]
+  },
+  "forbidden": [
+    "stale_overwrite",
+    "silent_rebase",
+    "auto_commit",
+    "canonical_mutation",
+    "human_review_of_invalid_candidate"
+  ],
+  "assertions": [
+    {
+      "id": "stale-detected",
+      "description": "The result marks the proposal stale.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/stale"
+      },
+      "operator": "equals",
+      "expected": true
+    },
+    {
+      "id": "stable-conflict-code",
+      "description": "The result uses the stale element version conflict code.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/rejection/code"
+      },
+      "operator": "equals",
+      "expected": "STALE_ELEMENT_VERSION"
+    },
+    {
+      "id": "versions-exposed",
+      "description": "The receipt exposes base version 4 and current version 5.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/rejection/baseElementVersion"
+      },
+      "operator": "equals",
+      "expected": 4
+    },
+    {
+      "id": "current-version-exposed",
+      "description": "The receipt exposes current element version 5.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/rejection/currentElementVersion"
+      },
+      "operator": "equals",
+      "expected": 5
+    },
+    {
+      "id": "element-text-unchanged",
+      "description": "The canonical element text remains unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/elementText",
+        "comparePointer": "/result/after/elementText"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "not-committed",
+      "description": "The stale proposal was not committed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/committed"
+      },
+      "operator": "equals",
+      "expected": false
+    }
+  ]
+}

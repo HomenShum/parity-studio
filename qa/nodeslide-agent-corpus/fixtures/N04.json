@@ -1,0 +1,140 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "N04",
+  "title": "Bounded multi-slide narrative tension",
+  "category": "story_and_narrative",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-problem",
+    "selectedSlideIds": ["slide-problem", "slide-stakes", "slide-status-quo"],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A six-slide deck whose solution currently appears on slide 2; the first three slides are the requested write scope.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "slideOrder": [
+          "slide-problem",
+          "slide-stakes",
+          "slide-status-quo",
+          "slide-solution",
+          "slide-proof",
+          "slide-next"
+        ],
+        "solutionFirstAppearsAtSlide": 2,
+        "deckVersion": 7
+      }
+    }
+  },
+  "request": {
+    "text": "Make the first three slides build more tension before introducing the solution.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["story_spec", "slide", "text"],
+    "operations": {
+      "required": [
+        {
+          "type": "update_story_spec",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_slides"
+        },
+        {
+          "type": "replace_text",
+          "minCount": 3,
+          "maxCount": 3,
+          "scope": "selected_slides"
+        }
+      ],
+      "allowed": ["update_story_spec", "replace_text", "set_story_metadata"],
+      "denied": ["delete_slide", "create_slide", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Read the whole story, write only slides 1-3, and wait for acceptance of the coordinated proposal."
+    },
+    "outcomes": [
+      "Only the first three slides and their StorySpec projection change.",
+      "The solution is withheld until slide 4 or later.",
+      "Slides outside the selected write scope remain byte-equivalent."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_story_spec",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "unselected_slide_change",
+    "solution_revealed_before_slide_four",
+    "automatic_slide_deletion",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "bounded-slide-set",
+      "description": "Exactly the first three slide IDs changed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/changedSlideIds"
+      },
+      "operator": "set_equals",
+      "expected": ["slide-problem", "slide-stakes", "slide-status-quo"]
+    },
+    {
+      "id": "outside-slides-unchanged",
+      "description": "All slides outside the write scope are reported unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/unchangedSlideIds"
+      },
+      "operator": "contains_all",
+      "expected": ["slide-solution", "slide-proof", "slide-next"]
+    },
+    {
+      "id": "solution-delayed",
+      "description": "The solution first appears no earlier than slide 4.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/solutionFirstAppearsAtSlide"
+      },
+      "operator": "greater_than_or_equal",
+      "expected": 4
+    },
+    {
+      "id": "story-spec-updated",
+      "description": "The StorySpec projection changed with the proposal.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/storySpecChanged"
+      },
+      "operator": "truthy"
+    }
+  ]
+}

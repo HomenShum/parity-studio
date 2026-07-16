@@ -1,0 +1,149 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "D03",
+  "title": "Preserve chart values while editing labels",
+  "category": "chart_and_data",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-proof",
+    "selectedSlideIds": ["slide-proof"],
+    "selectedElementIds": ["chart-proof"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A selected sourced chart has exact labels and mixed integer/decimal values.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "chart": {
+          "id": "chart-proof",
+          "version": 5,
+          "labels": ["Jan", "Feb", "Mar"],
+          "series": [
+            {
+              "id": "revenue",
+              "values": [120000, 150000.5, 185000]
+            }
+          ],
+          "numericBytes": "[120000,150000.5,185000]",
+          "sourceIds": ["monthly-revenue"]
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Change only the chart labels. Preserve every numeric value exactly.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["chart"],
+    "operations": {
+      "required": [
+        {
+          "type": "update_chart",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_element"
+        }
+      ],
+      "allowed": ["update_chart"],
+      "denied": ["replace_chart_data", "remove_source", "update_layout", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Propose one label-only chart update and wait for acceptance; numeric and source fields are immutable."
+    },
+    "outcomes": [
+      "Chart labels change.",
+      "Every numeric value remains byte-for-byte equivalent.",
+      "The chart source binding and all out-of-scope elements remain unchanged."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "numeric_value_change",
+    "source_binding_change",
+    "unrelated_slide_change",
+    "invented_value",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "numeric-values-unchanged",
+      "description": "The chart series values are deeply unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/chart/series",
+        "comparePointer": "/result/after/chart/series"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "numeric-bytes-unchanged",
+      "description": "The serialized numeric byte sequence is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/chart/numericBytes",
+        "comparePointer": "/result/after/chart/numericBytes"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "labels-changed",
+      "description": "The chart labels changed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/chart/labels",
+        "comparePointer": "/result/after/chart/labels"
+      },
+      "operator": "changed"
+    },
+    {
+      "id": "sources-unchanged",
+      "description": "The chart source ID array is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/chart/sourceIds",
+        "comparePointer": "/result/after/chart/sourceIds"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "selected-chart-only",
+      "description": "Only the selected chart is in the changed-element receipt.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/changedElementIds"
+      },
+      "operator": "set_equals",
+      "expected": ["chart-proof"]
+    }
+  ]
+}

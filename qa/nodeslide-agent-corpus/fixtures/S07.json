@@ -1,0 +1,140 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "S07",
+  "title": "Missing-source coverage audit",
+  "category": "research_and_source",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "source-coverage-v1",
+    "activeSlideId": "slide-market",
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A five-slide deck has four factual claims, two sourced and two intentionally unsourced.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 9,
+        "deckDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "claims": [
+          {
+            "id": "claim-market-size",
+            "sourceIds": ["market-report"]
+          },
+          {
+            "id": "claim-retention",
+            "sourceIds": ["metrics-csv"]
+          },
+          {
+            "id": "claim-adoption-speed",
+            "sourceIds": []
+          },
+          {
+            "id": "claim-margin-future",
+            "sourceIds": [],
+            "classification": "projection"
+          }
+        ]
+      }
+    }
+  },
+  "request": {
+    "text": "Show which claims lack sources.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["source_audit", "validation_receipt"],
+    "operations": {
+      "required": [
+        {
+          "type": "audit_sources",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "deck"
+        }
+      ],
+      "allowed": ["audit_sources"],
+      "denied": ["bind_source", "replace_text", "delete_claim", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": false,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": ["scope_checked", "source_scope_checked", "read_only_completed"],
+      "forbiddenEvents": ["proposal_created", "auto_commit", "publish", "share"],
+      "boundaryBehavior": "Read the full deck and return an audit receipt only; do not mutate claims or invent sources."
+    },
+    "outcomes": [
+      "The receipt names exactly the two claims lacking sources.",
+      "Sourced claims are not falsely flagged.",
+      "The canonical deck remains byte-equivalent."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_claims",
+      "source_audit",
+      "check_authority",
+      "produce_receipt",
+      "read_only_completed"
+    ]
+  },
+  "forbidden": [
+    "invented_source",
+    "automatic_source_binding",
+    "claim_mutation",
+    "false_missing_source_flag",
+    "canonical_mutation"
+  ],
+  "assertions": [
+    {
+      "id": "missing-claims-exact",
+      "description": "Exactly the two unsourced claim IDs are reported.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/missingSourceClaimIds"
+      },
+      "operator": "set_equals",
+      "expected": ["claim-adoption-speed", "claim-margin-future"]
+    },
+    {
+      "id": "sourced-claims-excluded",
+      "description": "The two sourced claims remain in the sourced set.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/sourcedClaimIds"
+      },
+      "operator": "set_equals",
+      "expected": ["claim-market-size", "claim-retention"]
+    },
+    {
+      "id": "no-source-created",
+      "description": "The audit created no source records.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/createdSourceIds"
+      },
+      "operator": "length_equals",
+      "expected": 0
+    },
+    {
+      "id": "deck-unchanged",
+      "description": "The canonical deck digest is unchanged by the audit.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/deckDigest",
+        "comparePointer": "/result/after/deckDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

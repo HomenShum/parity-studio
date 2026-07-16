@@ -1,0 +1,164 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "C06",
+  "title": "Web and file source creation",
+  "category": "deck_creation",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "empty-workspace-v1",
+    "activeSlideId": null,
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "An empty workspace, one authorized URL, and two attached evidence files.",
+      "attachments": [
+        {
+          "id": "attached-brief",
+          "kind": "document",
+          "fixture": "evidence/market-brief.pdf",
+          "authorized": true
+        },
+        {
+          "id": "attached-metrics",
+          "kind": "csv",
+          "fixture": "evidence/market-metrics.csv",
+          "authorized": true
+        }
+      ],
+      "web": {
+        "allowed": true,
+        "authorizedOrigins": ["https://example.test"]
+      },
+      "canonicalBefore": {
+        "workspaceId": "workspace-empty",
+        "deckExists": false,
+        "inputUrl": "https://example.test/research/market-brief",
+        "inputUrlSourceId": "url-source"
+      }
+    }
+  },
+  "request": {
+    "text": "Create a presentation using this URL and the attached files. Cite every external factual claim.",
+    "attachmentIds": ["attached-brief", "attached-metrics"],
+    "webResearch": true
+  },
+  "expected": {
+    "primitives": ["deck", "slide", "text", "source", "source_binding"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_deck",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "deck"
+        },
+        {
+          "type": "capture_source",
+          "minCount": 3,
+          "maxCount": 100,
+          "scope": "authorized_sources"
+        },
+        {
+          "type": "bind_source",
+          "minCount": 1,
+          "maxCount": 100,
+          "scope": "external_claims"
+        }
+      ],
+      "allowed": [
+        "create_deck",
+        "create_slide",
+        "replace_text",
+        "create_chart",
+        "capture_source",
+        "bind_source"
+      ],
+      "denied": ["uncited_external_claim", "unauthorized_web_request", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "web_consent_checked",
+        "source_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Use only the authorized origin and attachments after recording web consent; wait for deck acceptance."
+    },
+    "outcomes": [
+      "The URL and both files remain represented as source records.",
+      "Every external factual claim has a source binding.",
+      "The web-consent receipt is retained with the run."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "check_web_consent",
+      "read_attachments",
+      "web_research",
+      "capture_sources",
+      "plan",
+      "execute",
+      "source_audit",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "unauthorized_origin",
+    "uncited_external_claim",
+    "missing_web_consent",
+    "source_provenance_loss",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "all-source-types-retained",
+      "description": "The result retains the URL and both attachment source IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/sourceIds"
+      },
+      "operator": "set_equals",
+      "expected": ["url-source", "attached-brief", "attached-metrics"]
+    },
+    {
+      "id": "external-claims-cited",
+      "description": "Every external factual claim has source IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/externalClaims",
+        "itemPointer": "/sourceIds"
+      },
+      "operator": "all_nonempty"
+    },
+    {
+      "id": "web-consent-receipt",
+      "description": "A nonempty web-consent receipt ID is recorded.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/webConsentReceiptId"
+      },
+      "operator": "truthy"
+    },
+    {
+      "id": "authorized-origin-only",
+      "description": "Only the authorized origin was contacted.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/contactedOrigins"
+      },
+      "operator": "set_equals",
+      "expected": ["https://example.test"]
+    }
+  ]
+}
