@@ -50,7 +50,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm nodeslide:bench:pr -- --out benchmark-results/pr
+      - run: pnpm nodeslide:bench:pr --out benchmark-results/pr
       - name: Upload PR benchmark report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -90,7 +90,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.enforce }}" == "true" ]]; then
             args+=(--enforce)
           fi
-          pnpm nodeslide:bench:evidence -- "${args[@]}"
+          pnpm nodeslide:bench:evidence "${args[@]}"
       - name: Upload evidence reports and append-only logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -148,7 +148,10 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.NODESLIDE_TASTE_JUDGE_OPENROUTER_KEY }}
         run: |
           evidence_dir="$NODESLIDE_BENCH_OUTPUT_DIRECTORY"
-          pnpm nodeslide:bench:taste-judge -- +            --before "$evidence_dir/e01-before.manifest.json" +            --after "$evidence_dir/e01-after.manifest.json" +            --out "$evidence_dir/e01-judge.json"
+          pnpm nodeslide:bench:taste-judge \
+            --before "$evidence_dir/e01-before.manifest.json" \
+            --after "$evidence_dir/e01-after.manifest.json" \
+            --out "$evidence_dir/e01-judge.json"
       - name: Enforce truthful fixed-case evidence
         if: always()
         shell: bash
@@ -166,7 +169,7 @@ jobs:
               args+=(--evidence "$manifest")
             done < <(find "$evidence_dir" -maxdepth 1 -type f \( -name '*.manifest.json' -o -name 'e01-judge.json' \) | sort)
           fi
-          pnpm nodeslide:bench:evidence -- "${args[@]}"
+          pnpm nodeslide:bench:evidence "${args[@]}"
       - name: Upload sanitized live evidence and reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

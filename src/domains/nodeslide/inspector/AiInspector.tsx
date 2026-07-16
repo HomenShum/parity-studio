@@ -76,6 +76,7 @@ import {
   createExternalProviderRequestKey,
   useSessionExternalConsent,
 } from '../externalProviderConsent';
+import { sanitizeNodeSlideUserError } from '../nodeslideUserError';
 import type { AgentSessionApprovalMode } from '../session';
 import {
   NodeSlideThreadMessages,
@@ -310,6 +311,8 @@ export function AiInspector<CommandId extends string = string>({
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const reviewScrollRef = useRef<HTMLDivElement | null>(null);
+  const scopeWasManuallyChosenRef = useRef(false);
+  const previousSelectedElementCountRef = useRef(selectedElements.length);
   const focusGeneratedBatch = useRef(false);
   const batchBeforeGeneration = useRef<string | undefined>(undefined);
   const firstVariationRef = useRef<HTMLLIElement | null>(null);
@@ -344,10 +347,26 @@ export function AiInspector<CommandId extends string = string>({
   };
 
   useEffect(() => {
-    if (scopeChoice === 'elements' && selectedElements.length === 0) setScopeChoice('slide');
+    const previousSelectionCount = previousSelectedElementCountRef.current;
+    if (scopeChoice === 'elements' && selectedElements.length === 0) {
+      setScopeChoice('slide');
+      scopeWasManuallyChosenRef.current = false;
+    } else if (
+      selectedElements.length > 0 &&
+      previousSelectionCount === 0 &&
+      !scopeWasManuallyChosenRef.current
+    ) {
+      setScopeChoice('elements');
+    }
     if (scopeChoice === 'selected_slides' && selectedSlideIds.length < 2) setScopeChoice('slide');
+    previousSelectedElementCountRef.current = selectedElements.length;
     setScopeError(null);
   }, [scopeChoice, selectedElements.length, selectedSlideIds.length]);
+
+  const chooseScope = (choice: ScopeChoice) => {
+    scopeWasManuallyChosenRef.current = true;
+    setScopeChoice(choice);
+  };
 
   const activeTrace = useMemo(
     () =>
@@ -360,17 +379,31 @@ export function AiInspector<CommandId extends string = string>({
     () => [...traces].sort((a, b) => b.createdAt - a.createdAt)[0],
     [traces],
   );
-  const proposals = useMemo(
-    () =>
-      [...patches]
-        .filter(
-          (patch) =>
-            ['draft', 'validating', 'ready', 'stale'].includes(patch.status) &&
-            patch.source === 'agent',
-        )
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [patches],
+  const proposals = useMemo(() => {
+    const byId = new Map<string, AiReviewablePatch>();
+    for (const patch of [...patches].sort((a, b) => b.updatedAt - a.updatedAt)) {
+      if (
+        !byId.has(patch.id) &&
+        ['draft', 'validating', 'ready', 'stale'].includes(patch.status) &&
+        patch.source === 'agent'
+      ) {
+        byId.set(patch.id, patch);
+      }
+    }
+    return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }, [patches]);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
+    () => proposals[0]?.id ?? null,
   );
+  useEffect(() => {
+    if (proposals.length === 0) {
+      setSelectedProposalId(null);
+      return;
+    }
+    if (!selectedProposalId || !proposals.some((patch) => patch.id === selectedProposalId)) {
+      setSelectedProposalId(proposals[0]?.id ?? null);
+    }
+  }, [proposals, selectedProposalId]);
   const proposalTraceByPatchId = useMemo(() => {
     const byPatchId = new Map<string, AgentTrace>();
     for (const trace of [...traces].sort((a, b) => a.createdAt - b.createdAt)) {
@@ -378,6 +411,13 @@ export function AiInspector<CommandId extends string = string>({
     }
     return byPatchId;
   }, [traces]);
+  const proposalRunByPatchId = useMemo(() => {
+    const byPatchId = new Map<string, NodeSlideAgentRun>();
+    for (const run of [...agentRuns].sort((a, b) => a.createdAt - b.createdAt)) {
+      if (run.patchId) byPatchId.set(run.patchId, run);
+    }
+    return byPatchId;
+  }, [agentRuns]);
   const latestBatchId = variations[0]?.batchId;
   const directions = useMemo(
     () => variations.filter((variation) => variation.batchId === latestBatchId),
@@ -519,6 +559,11 @@ export function AiInspector<CommandId extends string = string>({
     activeTrace,
     latestTrace,
   );
+  // The durable run projection can lag behind the authoritative local terminal result.
+  // Never leave the composer disabled or expose Cancel after the request has failed or
+  // been cancelled just because a persisted run row has not hydrated its final status yet.
+  const hasTerminalActivity = Boolean(resolvedActivity && isTerminalActivity(resolvedActivity));
+  const visibleDurableRun = hasTerminalActivity ? undefined : activeDurableRun;
   const visibleAsk = resolvedActivity?.ask.trim() || optimisticAsk?.trim() || '';
   const contextSuggestions =
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
@@ -533,14 +578,20 @@ export function AiInspector<CommandId extends string = string>({
     variationGenerating || variationsLoading || variationError || directions.length > 0,
   );
   const scopeSummary = commentContext
-    ? commentContext.label
+    ? `Writes to comment: ${commentContext.label}`
     : scopeChoice === 'deck'
-      ? 'Whole deck'
+      ? 'Writes to entire deck'
       : scopeChoice === 'selected_slides'
-        ? `${selectedSlideIds.length} selected slides`
+        ? `Writes to ${selectedSlideIds.length} selected slides`
         : scopeChoice === 'elements'
-          ? `${selectedElements.length} selected`
-          : 'Whole slide';
+          ? `Writes to ${selectedElements.length} selected ${selectedElements.length === 1 ? 'element' : 'elements'}`
+          : 'Writes to this slide';
+  const referencesUnselectedElement =
+    scopeChoice === 'slide' &&
+    selectedElements.length === 0 &&
+    /\b(this|the)\s+(headline|title|text|chart|graph|image|photo|shape|element)\b/i.test(
+      instruction,
+    );
   const recentMessages = agentMessages.slice(-24);
   const threadMessages = useMemo(
     () =>
@@ -563,7 +614,8 @@ export function AiInspector<CommandId extends string = string>({
     !menuOpen;
   const inspectorState = hasReviewableProposal
     ? 'is-awaiting-review'
-    : activeDurableRun || isSubmitting || activeTrace?.status === 'working'
+    : visibleDurableRun ||
+        (!hasTerminalActivity && (isSubmitting || activeTrace?.status === 'working'))
       ? 'is-running'
       : resolvedActivity && isFailureActivity(resolvedActivity)
         ? 'has-failed'
@@ -863,7 +915,7 @@ export function AiInspector<CommandId extends string = string>({
       ) : null}
 
       <NodeSlideThreadRuntimeProvider
-        isRunning={Boolean(activeDurableRun)}
+        isRunning={Boolean(visibleDurableRun)}
         messages={threadMessages}
       >
         <ThreadPrimitive.Root className="ns-agent-thread" data-testid="assistant-ui-thread">
@@ -931,8 +983,8 @@ export function AiInspector<CommandId extends string = string>({
                   </span>
                   <span>
                     <strong>
-                      {activeDurableRun
-                        ? durableRunLabel(activeDurableRun.status)
+                      {visibleDurableRun
+                        ? durableRunLabel(visibleDurableRun.status)
                         : resolvedActivity
                           ? agentPhaseLabel(resolvedActivity)
                           : activeTrace?.status === 'working'
@@ -943,11 +995,11 @@ export function AiInspector<CommandId extends string = string>({
                   </span>
                   <ChevronRight size={14} className={showPlan ? 'is-open' : ''} />
                 </button>
-                {activeDurableRun && onCancelRun ? (
+                {visibleDurableRun && onCancelRun ? (
                   <button
                     type="button"
                     className="ns-agent-cancel"
-                    onClick={() => onCancelRun(activeDurableRun.id)}
+                    onClick={() => onCancelRun(visibleDurableRun.id)}
                     data-testid="ai-cancel-run"
                   >
                     <X size={12} /> Cancel run
@@ -997,23 +1049,50 @@ export function AiInspector<CommandId extends string = string>({
 
             {proposals.length > 0 ? (
               <section className="ns-proposals ns-ai-v3-proposals">
-                <div className="ns-section-heading">
-                  <span>Proposals</span>
-                  <small>{proposals.length} to review</small>
+                <div className="ns-review-queue-heading">
+                  <div>
+                    <span className="ns-eyebrow">Review queue</span>
+                    <strong>
+                      {proposals.length} {proposals.length === 1 ? 'change' : 'changes'} awaiting
+                      review
+                    </strong>
+                  </div>
+                  <small>
+                    {Math.max(
+                      1,
+                      proposals.findIndex((patch) => patch.id === selectedProposalId) + 1,
+                    )}{' '}
+                    of {proposals.length}
+                  </small>
                 </div>
-                {proposals.map((patch) => (
-                  <ProposalCard
-                    key={patch.id}
-                    patch={patch}
-                    {...(proposalTraceByPatchId.get(patch.id)
-                      ? { trace: proposalTraceByPatchId.get(patch.id) }
-                      : {})}
-                    previewed={patch.id === previewedPatchId}
-                    {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
-                    onAccept={onAccept}
-                    onReject={onReject}
-                  />
-                ))}
+                <ul className="ns-review-queue" aria-label="Changes awaiting review">
+                  {proposals.map((patch) => (
+                    <ProposalCard
+                      key={patch.id}
+                      patch={patch}
+                      active={patch.id === selectedProposalId}
+                      onSelect={() => setSelectedProposalId(patch.id)}
+                      {...(proposalTraceByPatchId.get(patch.id)
+                        ? { trace: proposalTraceByPatchId.get(patch.id) }
+                        : {})}
+                      {...(proposalRunByPatchId.get(patch.id)
+                        ? { run: proposalRunByPatchId.get(patch.id) }
+                        : {})}
+                      duplicateCandidate={Boolean(
+                        patch.candidateDigest &&
+                          proposals.some(
+                            (candidate) =>
+                              candidate.id !== patch.id &&
+                              candidate.candidateDigest === patch.candidateDigest,
+                          ),
+                      )}
+                      previewed={patch.id === previewedPatchId}
+                      {...(onPreviewPatch ? { onPreview: onPreviewPatch } : {})}
+                      onAccept={onAccept}
+                      onReject={onReject}
+                    />
+                  ))}
+                </ul>
               </section>
             ) : null}
 
@@ -1161,6 +1240,17 @@ export function AiInspector<CommandId extends string = string>({
                   if (compactReviewComposer) setComposerExpanded(true);
                 }}
               >
+                <header className="ns-ai-v3-composer-heading">
+                  <span>
+                    <strong>{hasReviewableProposal ? 'Ask for a revision' : 'New request'}</strong>
+                    <small>{scopeSummary}</small>
+                  </span>
+                  {referencesUnselectedElement ? (
+                    <output className="ns-ai-v3-scope-advisory">
+                      No element is selected; this request can change the whole slide.
+                    </output>
+                  ) : null}
+                </header>
                 {showSuggested ? (
                   <section
                     className="ns-ai-suggested-actions ns-ai-v3-suggested-actions"
@@ -1195,7 +1285,7 @@ export function AiInspector<CommandId extends string = string>({
                   </section>
                 ) : null}
 
-                <div
+                <fieldset
                   className="ns-ai-v3-policy-summary"
                   aria-label="Current agent scope and policy"
                 >
@@ -1211,13 +1301,17 @@ export function AiInspector<CommandId extends string = string>({
                     aria-expanded={providerControlsOpen}
                     aria-controls="nodeslide-ai-advanced-controls"
                     aria-label={
-                      approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'
+                      approvalMode === 'auto_apply'
+                        ? 'Auto-apply safe edits'
+                        : 'Review before applying'
                     }
                   >
                     {approvalMode === 'auto_apply' ? <Sparkles size={11} /> : <Eye size={11} />}
-                    {approvalMode === 'auto_apply' ? 'Auto-apply safe edits' : 'Review changes'}
+                    {approvalMode === 'auto_apply'
+                      ? 'Auto-apply safe edits'
+                      : 'Review before applying'}
                   </button>
-                </div>
+                </fieldset>
 
                 <details
                   id="nodeslide-ai-advanced-controls"
@@ -1358,7 +1452,7 @@ export function AiInspector<CommandId extends string = string>({
                             className={scopeChoice === 'deck' ? 'is-active' : ''}
                             aria-pressed={scopeChoice === 'deck'}
                             disabled={approvalControlLocked}
-                            onClick={() => setScopeChoice('deck')}
+                            onClick={() => chooseScope('deck')}
                           >
                             Deck
                           </button>
@@ -1367,7 +1461,7 @@ export function AiInspector<CommandId extends string = string>({
                             className={scopeChoice === 'slide' ? 'is-active' : ''}
                             aria-pressed={scopeChoice === 'slide'}
                             disabled={approvalControlLocked}
-                            onClick={() => setScopeChoice('slide')}
+                            onClick={() => chooseScope('slide')}
                           >
                             This slide
                           </button>
@@ -1377,7 +1471,7 @@ export function AiInspector<CommandId extends string = string>({
                               className={scopeChoice === 'selected_slides' ? 'is-active' : ''}
                               aria-pressed={scopeChoice === 'selected_slides'}
                               disabled={approvalControlLocked}
-                              onClick={() => setScopeChoice('selected_slides')}
+                              onClick={() => chooseScope('selected_slides')}
                             >
                               Selected slides ({selectedSlideIds.length})
                             </button>
@@ -1387,7 +1481,7 @@ export function AiInspector<CommandId extends string = string>({
                             className={scopeChoice === 'elements' ? 'is-active' : ''}
                             aria-pressed={scopeChoice === 'elements'}
                             disabled={approvalControlLocked || selectedElements.length === 0}
-                            onClick={() => setScopeChoice('elements')}
+                            onClick={() => chooseScope('elements')}
                           >
                             Selection
                             {selectedElements.length > 0 ? ` · ${selectedElements.length}` : ''}
@@ -1580,33 +1674,20 @@ export function AiInspector<CommandId extends string = string>({
                   tools={
                     <>
                       <PromptInputButton
-                        aria-label="Connect BYOK model or coding agent"
+                        aria-label="Toggle web research"
                         className="ns-ai-tool-button"
-                        data-testid="ai-connect-agent"
+                        aria-pressed={webResearch}
+                        data-testid="ai-web-research-toggle"
                         disabled={approvalControlLocked}
-                        onClick={() => setConnectionsOpen(true)}
-                        title="Connect BYOK model or coding agent"
+                        onClick={() => {
+                          setWebResearch((enabled) => !enabled);
+                        }}
+                        title="Search the web and persist source snapshots before planning"
+                        variant={webResearch ? 'default' : 'ghost'}
                       >
-                        <PlugZap size={14} />
-                        <span className="ns-ai-tool-label">Connect</span>
+                        <Globe2 size={14} />
+                        <span className="ns-ai-tool-label">Web</span>
                       </PromptInputButton>
-                      <span style={{ display: 'contents' }}>
-                        <PromptInputButton
-                          aria-label="Toggle web research"
-                          className="ns-ai-tool-button"
-                          aria-pressed={webResearch}
-                          data-testid="ai-web-research-toggle"
-                          disabled={approvalControlLocked}
-                          onClick={() => {
-                            setWebResearch((enabled) => !enabled);
-                          }}
-                          title="Search the web and persist source snapshots before planning"
-                          variant={webResearch ? 'default' : 'ghost'}
-                        >
-                          <Globe2 size={14} />
-                          <span className="ns-ai-tool-label">Web</span>
-                        </PromptInputButton>
-                      </span>
                       {requiresExternalConsent || externalConsent.granted ? (
                         <label
                           className={`ns-session-consent-pill ns-ai-session-consent ${
@@ -1640,44 +1721,65 @@ export function AiInspector<CommandId extends string = string>({
                           </span>
                         </label>
                       ) : null}
-                      {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
-                        <PromptInputButton
-                          aria-label="Manage deck memory"
-                          className="ns-ai-tool-button"
-                          aria-pressed={useMemoryForRun}
-                          data-testid="ai-memory"
-                          disabled={approvalControlLocked}
-                          onClick={() => setMemoryOpen(true)}
-                          title="Manage durable deck memory"
-                          variant={useMemoryForRun ? 'default' : 'ghost'}
-                        >
-                          <Brain size={14} />
-                          <span className="ns-ai-tool-label">Memory</span>
-                          {memories.length ? (
-                            <span className="ns-prompt-badge">{activeMemoryCount}</span>
+                      <details
+                        className="ns-ai-tools-menu"
+                        {...(composerExpanded ? { open: true } : {})}
+                      >
+                        <summary aria-label="Open composer tools">
+                          <PlugZap size={14} /> <span>Tools</span>
+                        </summary>
+                        <div>
+                          <PromptInputButton
+                            aria-label="Connect BYOK model or coding agent"
+                            className="ns-ai-tool-button"
+                            data-testid="ai-connect-agent"
+                            disabled={approvalControlLocked}
+                            onClick={() => setConnectionsOpen(true)}
+                            title="Connect BYOK model or coding agent"
+                          >
+                            <PlugZap size={14} />
+                            <span className="ns-ai-tool-label">Connect</span>
+                          </PromptInputButton>
+                          {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
+                            <PromptInputButton
+                              aria-label="Manage deck memory"
+                              className="ns-ai-tool-button"
+                              aria-pressed={useMemoryForRun}
+                              data-testid="ai-memory"
+                              disabled={approvalControlLocked}
+                              onClick={() => setMemoryOpen(true)}
+                              title="Manage durable deck memory"
+                              variant={useMemoryForRun ? 'default' : 'ghost'}
+                            >
+                              <Brain size={14} />
+                              <span className="ns-ai-tool-label">Memory</span>
+                              {memories.length ? (
+                                <span className="ns-prompt-badge">{activeMemoryCount}</span>
+                              ) : null}
+                            </PromptInputButton>
                           ) : null}
-                        </PromptInputButton>
-                      ) : null}
-                      <PromptInputButton
-                        aria-label="Add read context reference"
-                        className="ns-ai-tool-button ns-ai-tool-context"
-                        disabled={approvalControlLocked || references.length === 0}
-                        onClick={() => openTokenMenu('@')}
-                        title="Add read context"
-                      >
-                        <AtSign size={14} />
-                        <span className="ns-ai-tool-label">Context</span>
-                      </PromptInputButton>
-                      <PromptInputButton
-                        aria-label="Add command"
-                        className="ns-ai-tool-button ns-ai-tool-command"
-                        disabled={approvalControlLocked}
-                        onClick={() => openTokenMenu('/')}
-                        title="Add command"
-                      >
-                        <Command size={14} />
-                        <span className="ns-ai-tool-label">Command</span>
-                      </PromptInputButton>
+                          <PromptInputButton
+                            aria-label="Add read context reference"
+                            className="ns-ai-tool-button ns-ai-tool-context"
+                            disabled={approvalControlLocked || references.length === 0}
+                            onClick={() => openTokenMenu('@')}
+                            title="Add read context"
+                          >
+                            <AtSign size={14} />
+                            <span className="ns-ai-tool-label">Context</span>
+                          </PromptInputButton>
+                          <PromptInputButton
+                            aria-label="Add command"
+                            className="ns-ai-tool-button ns-ai-tool-command"
+                            disabled={approvalControlLocked}
+                            onClick={() => openTokenMenu('/')}
+                            title="Add command"
+                          >
+                            <Command size={14} />
+                            <span className="ns-ai-tool-label">Command</span>
+                          </PromptInputButton>
+                        </div>
+                      </details>
                     </>
                   }
                 />
@@ -1901,140 +2003,194 @@ function VariationCard({
 function ProposalCard({
   patch,
   trace,
+  run,
+  active,
+  duplicateCandidate,
   previewed,
+  onSelect,
   onPreview,
   onAccept,
   onReject,
 }: {
   patch: AiReviewablePatch;
   trace?: AgentTrace | undefined;
+  run?: NodeSlideAgentRun | undefined;
+  active: boolean;
+  duplicateCandidate: boolean;
   previewed: boolean;
+  onSelect: () => void;
   onPreview?: (patch: AiReviewablePatch | null) => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
 }) {
   const counts = countOperations(patch.operations);
   const stale = patch.status === 'stale';
+  const provider = trace?.provider ?? run?.provider;
+  const model = trace?.model ?? run?.model;
+  const originatingInstruction = run?.instruction?.trim();
   const candidateValidation =
     patch.candidateValidation?.patchId === patch.id ? patch.candidateValidation : undefined;
   const previewAvailable = patch.status === 'ready' && Boolean(onPreview);
   return (
-    <article
-      className={`ns-proposal-card ${stale ? 'is-stale' : ''} ${previewed ? 'is-previewed' : ''}`}
+    <li
+      className={`ns-proposal-card ${active ? 'is-active' : 'is-collapsed'} ${
+        stale ? 'is-stale' : ''
+      } ${previewed ? 'is-previewed' : ''}`}
       data-testid="proposal-card"
       data-proposal-id={patch.id}
     >
-      <div className="ns-proposal-topline">
-        <span className={`ns-status-dot ns-status-dot--${patch.status}`} />
-        <strong>
-          {stale
-            ? 'Stale proposal'
-            : patch.status === 'ready'
-              ? 'Ready to apply'
-              : humanizeStatus(patch.status)}
-        </strong>
-        <small>based on v{patch.baseDeckVersion}</small>
-      </div>
-      <h3>{patch.summary}</h3>
-      <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
-        <div>
-          <dt>Write scope</dt>
-          <dd>{nodeSlideScopeLabel(patch.scope)}</dd>
-        </div>
-        <div>
-          <dt>Base</dt>
-          <dd>{baseEvidence(patch)}</dd>
-        </div>
-        <div>
-          <dt>Operations</dt>
-          <dd>{patch.operations.length} ops</dd>
-        </div>
-        {trace?.provider && trace.model ? (
-          <div>
-            <dt>Provider · model</dt>
-            <dd>
-              {trace.provider} · {trace.model}
-            </dd>
+      <button
+        type="button"
+        className="ns-proposal-summary"
+        onClick={onSelect}
+        aria-expanded={active}
+      >
+        <span className={`ns-status-dot ns-status-dot--${patch.status}`} aria-hidden="true" />
+        <span className="ns-proposal-summary-copy">
+          <strong>{patch.summary}</strong>
+          <small>
+            {stale
+              ? 'Stale proposal'
+              : patch.status === 'ready'
+                ? 'Ready to review'
+                : humanizeStatus(patch.status)}
+            {' · '}
+            <span>{nodeSlideScopeLabel(patch.scope)}</span>
+            {' · '}
+            {patch.operations.length} {patch.operations.length === 1 ? 'change' : 'changes'}
+          </small>
+        </span>
+        <time dateTime={new Date(patch.createdAt).toISOString()}>
+          {formatProposalTime(patch.createdAt)}
+        </time>
+        <ChevronRight size={14} className={active ? 'is-open' : ''} aria-hidden="true" />
+      </button>
+
+      {active ? (
+        <div className="ns-proposal-details">
+          <div className="ns-proposal-origin">
+            <span>Generated by</span>
+            <strong>{provider && model ? `${provider} · ${model}` : 'NodeSlide agent'}</strong>
+            {duplicateCandidate ? <small>Equivalent candidate</small> : null}
           </div>
-        ) : null}
-      </dl>
-      <div className="ns-diff-summary">
-        {counts.map(({ label, count, kind }) => (
-          <span key={kind} className={`is-${kind}`}>
-            {kind === 'remove' ? '−' : kind === 'add' ? '+' : '↗'} {count} {label}
-          </span>
-        ))}
-      </div>
-      {candidateValidation ? (
-        <div
-          className={`ns-candidate-validation ${
-            candidateValidation.ok ? 'is-valid' : 'is-invalid'
-          }`}
-          data-testid="candidate-validation"
-        >
-          <strong>Candidate validation {candidateValidation.ok ? 'passed' : 'needs review'}</strong>
-          <small>Receipt {candidateValidation.id}</small>
-          {candidateValidation.issues.length > 0 ? (
-            <ul>
-              {candidateValidation.issues.map((issue) => (
-                <li key={issue.id}>
-                  {humanizeAxis(issue.severity)} · {issue.message}
-                </li>
+          {originatingInstruction ? (
+            <blockquote title={originatingInstruction}>“{originatingInstruction}”</blockquote>
+          ) : null}
+          <div className="ns-diff-summary" aria-label="Change summary">
+            {counts.map(({ label, count, kind }) => (
+              <span key={kind} className={`is-${kind}`}>
+                {kind === 'remove' ? '−' : kind === 'add' ? '+' : '↗'} {count} {label}
+              </span>
+            ))}
+          </div>
+          {candidateValidation ? (
+            <div
+              className={`ns-candidate-validation ${
+                candidateValidation.ok ? 'is-valid' : 'is-invalid'
+              }`}
+              data-testid="candidate-validation"
+            >
+              <strong>{candidateValidation.ok ? 'Validated' : 'Validation needs review'}</strong>
+              {candidateValidation.issues.length > 0 ? (
+                <span>{candidateValidation.issues.length} candidate-specific issue(s)</span>
+              ) : (
+                <span>No candidate-specific issues.</span>
+              )}
+            </div>
+          ) : null}
+          <details className="ns-proposal-technical">
+            <summary>Technical details</summary>
+            <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
+              <div>
+                <dt>Write scope</dt>
+                <dd>{`Technical scope: ${nodeSlideScopeLabel(patch.scope)}`}</dd>
+              </div>
+              <div>
+                <dt>Base</dt>
+                <dd>{baseEvidence(patch)}</dd>
+              </div>
+              <div>
+                <dt>Operations</dt>
+                <dd>{patch.operations.length}</dd>
+              </div>
+              {provider && model ? (
+                <div>
+                  <dt>Historical route</dt>
+                  <dd>
+                    {provider} · {model}
+                  </dd>
+                </div>
+              ) : null}
+              {candidateValidation ? (
+                <div>
+                  <dt>Validation receipt</dt>
+                  <dd>{candidateValidation.id}</dd>
+                </div>
+              ) : null}
+            </dl>
+            {candidateValidation?.issues.length ? (
+              <ul>
+                {candidateValidation.issues.map((issue) => (
+                  <li key={issue.id}>
+                    {humanizeAxis(issue.severity)} · {issue.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <ul className="ns-proposal-operation-list">
+              {patch.operations.map((operation, index) => (
+                <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
               ))}
             </ul>
-          ) : (
-            <span>No candidate-specific issues.</span>
-          )}
+          </details>
+          <div className="ns-proposal-actions">
+            <button
+              className="ns-button ns-button--quiet"
+              type="button"
+              onClick={() => onPreview?.(previewed ? null : patch)}
+              disabled={!previewAvailable}
+              aria-pressed={previewed}
+              title={
+                onPreview
+                  ? 'Preview candidate beside the current slide'
+                  : 'Compare is not connected'
+              }
+              data-testid="proposal-preview"
+            >
+              <GitCompareArrows size={13} /> {previewed ? 'End compare' : 'Review diff'}
+            </button>
+            {stale ? (
+              <button className="ns-button ns-button--quiet" type="button" disabled>
+                <RotateCcw size={14} /> Rebase required
+              </button>
+            ) : (
+              <button
+                className="ns-button ns-button--accent"
+                type="button"
+                onClick={() => onAccept(patch)}
+                disabled={patch.status !== 'ready'}
+                data-testid="proposal-accept"
+              >
+                <Check size={14} /> Accept
+              </button>
+            )}
+            <button
+              className="ns-button ns-button--quiet"
+              type="button"
+              onClick={() => onReject(patch)}
+              data-testid="proposal-reject"
+            >
+              <X size={14} /> Reject
+            </button>
+          </div>
         </div>
       ) : null}
-      <details>
-        <summary>View structured diff</summary>
-        <ul>
-          {patch.operations.map((operation, index) => (
-            <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
-          ))}
-        </ul>
-      </details>
-      <div className="ns-proposal-actions">
-        <button
-          className="ns-button ns-button--quiet"
-          type="button"
-          onClick={() => onPreview?.(previewed ? null : patch)}
-          disabled={!previewAvailable}
-          aria-pressed={previewed}
-          title={
-            onPreview ? 'Preview candidate beside the current slide' : 'Compare is not connected'
-          }
-          data-testid="proposal-preview"
-        >
-          <GitCompareArrows size={13} /> {previewed ? 'End compare' : 'Preview / Compare'}
-        </button>
-        {stale ? (
-          <button className="ns-button ns-button--quiet" type="button" disabled>
-            <RotateCcw size={14} /> Rebase required
-          </button>
-        ) : (
-          <button
-            className="ns-button ns-button--accent"
-            type="button"
-            onClick={() => onAccept(patch)}
-            disabled={patch.status !== 'ready'}
-            data-testid="proposal-accept"
-          >
-            <Check size={14} /> Accept
-          </button>
-        )}
-        <button
-          className="ns-button ns-button--quiet"
-          type="button"
-          onClick={() => onReject(patch)}
-          data-testid="proposal-reject"
-        >
-          <X size={14} /> Reject
-        </button>
-      </div>
-    </article>
+    </li>
   );
+}
+
+function formatProposalTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 export function createAiProviderRequest(
@@ -2128,7 +2284,12 @@ function isFailureActivity(activity: AiAgentActivity): boolean {
 }
 
 function activityMessage(activity: AiAgentActivity): string | undefined {
-  return 'message' in activity ? activity.message : undefined;
+  return 'message' in activity
+    ? sanitizeNodeSlideUserError(
+        activity.message,
+        'The agent failed before a reviewable proposal was returned.',
+      )
+    : undefined;
 }
 
 function durableRunLabel(status: NodeSlideAgentRun['status']) {

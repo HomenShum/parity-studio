@@ -114,7 +114,7 @@ describe('NodeSlide AI review inspector', () => {
     const markup = renderAi({ onApprovalModeChange: () => undefined });
     expect(markup).toContain('External model: on · Nebius · GLM 5.2');
     expect(markup).toContain('data-testid="ai-approval-summary"');
-    expect(markup).toContain('aria-label="Review changes"');
+    expect(markup).toContain('Review before applying');
     expect(markup).toMatch(
       /data-testid="ai-approval-summary"[^>]*aria-expanded="false"[^>]*aria-controls="nodeslide-ai-advanced-controls"/,
     );
@@ -214,7 +214,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('What should we change?');
     expect(markup).toContain('Generate 3 directions');
     expect(markup).toContain('Current agent scope and policy');
-    expect(markup).toContain('Whole slide');
+    expect(markup).toContain('Writes to this slide');
     expect(markup).toContain('Advanced controls');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
     expect(markup).toContain('data-testid="ai-provider-route-status"');
@@ -355,20 +355,21 @@ describe('NodeSlide AI review inspector', () => {
   it('shows preview, scope/base/ops evidence, and only candidate-specific validation receipts', () => {
     const snapshot = fixture();
     const patch = proposal(snapshot, true);
-    const withReceipt = renderAi({ patches: [patch], traces: [proposalTrace(patch)] });
-    expect(withReceipt).toContain('Preview / Compare');
+    const trace = proposalTrace(patch);
+    const withReceipt = renderAi({ patches: [patch], traces: [trace] });
+    expect(withReceipt).toContain('Review diff');
     expect(withReceipt).toContain('Write scope');
     expect(withReceipt).toContain(`Deck v${snapshot.deck.version}`);
-    expect(withReceipt).toContain('1 ops');
-    expect(withReceipt).toContain('Provider · model');
-    expect(withReceipt).toContain(`${NODESLIDE_EDIT_PROVIDER} · ${NODESLIDE_EDIT_MODEL}`);
-    expect(withReceipt).toContain('Candidate validation passed');
-    expect(withReceipt).toContain('Receipt candidate-validation');
+    expect(withReceipt).toContain('Operations');
+    expect(withReceipt).toContain('Historical route');
+    expect(withReceipt).toContain(`${trace.provider} · ${trace.model}`);
+    expect(withReceipt).toContain('Validated');
+    expect(withReceipt).toContain('Validation receipt');
     expect(withReceipt).toContain('data-testid="proposal-accept"');
     expect(withReceipt).toContain('data-testid="proposal-reject"');
 
     const withoutReceipt = renderAi({ patches: [proposal(snapshot, false)] });
-    expect(withoutReceipt).not.toContain('Candidate validation');
+    expect(withoutReceipt).not.toContain('data-testid="candidate-validation"');
   });
 });
 

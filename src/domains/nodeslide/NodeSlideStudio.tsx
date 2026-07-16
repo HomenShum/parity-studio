@@ -103,6 +103,7 @@ import { InspectorPanel } from './inspector/InspectorPanel';
 import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
+import { nodeSlideUserErrorMessage, sanitizeNodeSlideUserError } from './nodeslideUserError';
 import {
   type AgentSessionApprovalMode,
   type AgentSessionJobReceipt,
@@ -1125,7 +1126,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     if (handledCreateJobIdsRef.current.has(durableSessionJob.jobId)) return;
     if (durableSessionJob.status === 'failed') {
       handledCreateJobIdsRef.current.add(durableSessionJob.jobId);
-      const message = durableSessionJob.error ?? 'The durable deck job failed.';
+      const message = sanitizeNodeSlideUserError(
+        durableSessionJob.error,
+        'The durable deck job failed.',
+      );
       setCreating(false);
       setProjectError(message);
       setToast({ kind: 'error', message });
@@ -1202,7 +1206,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
 
     if (receipt.status === 'failed') {
       handledEditJobIdsRef.current.add(jobId);
-      const message = receipt.error ?? 'The durable edit proposal job failed.';
+      const message = sanitizeNodeSlideUserError(
+        receipt.error,
+        'The durable edit proposal job failed.',
+      );
       setAgentBusy(false);
       setAiAgentActivity({
         status: 'failed',
@@ -1245,8 +1252,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     if (receipt.status === 'stale') {
       handledEditJobIdsRef.current.add(jobId);
       setAgentBusy(false);
-      const message =
-        receipt.error ?? 'The proposal became stale. The newer deck was preserved unchanged.';
+      const message = sanitizeNodeSlideUserError(
+        receipt.error,
+        'The proposal became stale. The newer deck was preserved unchanged.',
+      );
       setAiAgentActivity({
         status: 'failed',
         elapsedMs: 0,
@@ -4837,11 +4846,5 @@ function tastePackIdForProfile(profile: SignatureProfile | undefined): NodeSlide
 }
 
 function errorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === 'object' && 'data' in error) {
-    const data = error.data;
-    if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
-      return data.message;
-    }
-  }
-  return error instanceof Error ? error.message : fallback;
+  return nodeSlideUserErrorMessage(error, fallback);
 }
