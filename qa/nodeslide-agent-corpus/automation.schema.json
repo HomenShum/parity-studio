@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nodeslide.test/schemas/benchmark-automation-v1.json",
+  "title": "NodeSlide benchmark automation summary and hash-chain envelope definitions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "harness",
+    "lane",
+    "status",
+    "checks",
+    "comparability",
+    "ux",
+    "taste",
+    "artifacts",
+    "baseline",
+    "summaryId"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "nodeslide-benchmark-gate-summary/v1" },
+    "harness": { "type": "object" },
+    "lane": { "enum": ["pr", "evidence"] },
+    "status": { "enum": ["PASS", "FAIL", "UNSCORED"] },
+    "checks": { "type": "array", "minItems": 1 },
+    "comparability": { "type": "object" },
+    "ux": { "type": ["object", "null"] },
+    "taste": { "type": ["object", "null"] },
+    "artifacts": { "type": ["object", "null"] },
+    "baseline": { "type": "object" },
+    "summaryId": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "recordId", "previousRecordDigest", "record"],
+      "properties": {
+        "schemaVersion": { "type": "string", "minLength": 1 },
+        "recordId": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "previousRecordDigest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "record": { "type": "object" }
+      }
+    }
+  }
+}

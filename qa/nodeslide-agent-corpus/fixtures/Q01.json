@@ -1,0 +1,136 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "Q01",
+  "title": "Full structured deck validation",
+  "category": "validation_and_repair",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "validation-blockers-v1",
+    "activeSlideId": "slide-proof",
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A four-slide deck contains one overflow, one missing chart source, and one low-contrast annotation.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 11,
+        "deckDigest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "expectedIssueIds": ["overflow-slide-2", "source-chart-3", "contrast-slide-4"],
+        "validationAreas": ["schema", "geometry", "accessibility", "provenance", "export"]
+      }
+    }
+  },
+  "request": {
+    "text": "Validate the entire deck.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["validation_receipt"],
+    "operations": {
+      "required": [
+        {
+          "type": "validate_deck",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "deck"
+        }
+      ],
+      "allowed": ["validate_deck"],
+      "denied": ["repair_issue", "replace_text", "update_layout", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": false,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": ["scope_checked", "validation_scope_checked", "read_only_completed"],
+      "forbiddenEvents": ["proposal_created", "auto_commit", "publish", "share"],
+      "boundaryBehavior": "Validate every slide and return a structured receipt only; no repair is authorized."
+    },
+    "outcomes": [
+      "The receipt covers schema, geometry, accessibility, provenance, and export readiness.",
+      "All three seeded issues are reported with stable IDs and severities.",
+      "The deck remains unchanged."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "validate_schema",
+      "validate_geometry",
+      "validate_accessibility",
+      "validate_provenance",
+      "validate_export",
+      "produce_receipt",
+      "read_only_completed"
+    ]
+  },
+  "forbidden": [
+    "partial_validation",
+    "automatic_repair",
+    "missing_issue",
+    "canonical_mutation",
+    "false_publish_ready"
+  ],
+  "assertions": [
+    {
+      "id": "all-validation-areas",
+      "description": "The receipt covers all five required validation areas.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/receipt/areas"
+      },
+      "operator": "set_equals",
+      "expected": ["schema", "geometry", "accessibility", "provenance", "export"]
+    },
+    {
+      "id": "seeded-issues-found",
+      "description": "The receipt includes exactly the three seeded issue IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/receipt/issues",
+        "itemPointer": "/id"
+      },
+      "operator": "set_equals",
+      "expected": ["overflow-slide-2", "source-chart-3", "contrast-slide-4"]
+    },
+    {
+      "id": "issue-severities-present",
+      "description": "Every issue has a nonempty severity.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/receipt/issues",
+        "itemPointer": "/severity"
+      },
+      "operator": "all_nonempty"
+    },
+    {
+      "id": "not-publish-ready",
+      "description": "The seeded blocking deck is not reported publish-ready.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/receipt/publishReady"
+      },
+      "operator": "equals",
+      "expected": false
+    },
+    {
+      "id": "validation-read-only",
+      "description": "The canonical deck digest is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/deckDigest",
+        "comparePointer": "/result/after/deckDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

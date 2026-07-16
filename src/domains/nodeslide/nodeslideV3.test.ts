@@ -48,10 +48,10 @@ describe('NodeSlide v3 visual contract', () => {
     );
   });
 
-  it('keeps navigation and inspector reachable as tablet overlays', () => {
+  it('keeps navigation and inspector reachable as narrow tablet overlays', () => {
     const tablet = mediaBlock(
-      '@media (min-width: 700px) and (max-width: 1099px)',
-      '@media (max-width: 699px)',
+      '@media (min-width: 700px) and (max-width: 899px)',
+      '@media (min-width: 900px) and (max-width: 1099px)',
     );
 
     expect(tablet).toMatch(/\.ns-navigator[\s\S]*position: absolute[\s\S]*width: 260px/);
@@ -61,6 +61,33 @@ describe('NodeSlide v3 visual contract', () => {
     expect(tablet).toMatch(/\.ns-toolbar \.ns-navigator-toggle[\s\S]*display: inline-flex/);
     expect(tablet).toMatch(
       /\.ns-toolbar-history,[\s\S]*?\.ns-language-menu,[\s\S]*?\.ns-reset-view[\s\S]*?display: none/,
+    );
+  });
+
+  it('keeps the canvas interactive beside a docked inspector and offers the navigator as an overlay on compact desktops', () => {
+    const compactDesktop = mediaBlock(
+      '@media (min-width: 900px) and (max-width: 1099px)',
+      '@media (max-width: 699px)',
+    );
+
+    expect(compactDesktop).toContain(
+      'grid-template-columns: minmax(0, 1fr) var(--ns-inspector-width)',
+    );
+    expect(compactDesktop).toMatch(
+      /\.ns-inspector:not\(\.is-collapsed\)[\s\S]*grid-column: 2[\s\S]*position: relative/,
+    );
+    expect(compactDesktop).toMatch(
+      /\.ns-navigator:not\(\.is-collapsed\)[\s\S]*display: flex[\s\S]*position: absolute/,
+    );
+    expect(compactDesktop).toMatch(/\.ns-navigator\.is-collapsed[\s\S]*display: none/);
+  });
+
+  it('anchors the assistant thread and composer to the full inspector content row', () => {
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-agent-thread \{[\s\S]*?grid-row: 2;[\s\S]*?height: 100%/,
+    );
+    expect(css).toMatch(
+      /\.nodeslide-studio \.ns-agent-thread-footer \{[\s\S]*?bottom: 0;[\s\S]*?margin-top: auto;[\s\S]*?position: sticky/,
     );
   });
 

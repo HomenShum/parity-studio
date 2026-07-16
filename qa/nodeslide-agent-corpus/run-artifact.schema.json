@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nodeslide.test/schemas/ux-run-manifest-v1.json",
+  "title": "NodeSlide UXBench supplied run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactId",
+    "runId",
+    "caseId",
+    "fixtureDigest",
+    "provenance",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "nodeslide-ux-run-manifest/v1" },
+    "artifactId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "caseId": { "type": "string", "pattern": "^[A-Z][0-9]{2}$" },
+    "fixtureDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capturedAt", "recorder", "sourceRevision", "environment"],
+      "properties": {
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "recorder": { "$ref": "#/$defs/producer" },
+        "sourceRevision": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "mode"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "mode": { "enum": ["local", "preview", "production"] }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "path", "sha256", "byteLength", "mediaType"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "const": "run_record" },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "byteLength": { "type": "integer", "minimum": 1 },
+          "mediaType": { "const": "application/json" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -63,6 +63,9 @@ test.describe('NodeSlide editor visual-system boundary', () => {
 
       const textarea = page.getByRole('textbox', { name: 'AI instruction' });
       await expect(textarea).toBeVisible();
+      const toolsToggle = page.getByTestId('ai-tools-toggle');
+      await expect(toolsToggle).toBeVisible();
+      await toolsToggle.click();
       for (const label of [
         'Connect BYOK model or coding agent',
         'Toggle web research',
@@ -95,8 +98,8 @@ test.describe('NodeSlide editor visual-system boundary', () => {
         expect(metrics.textarea.height).toBeGreaterThanOrEqual(72);
         expect(metrics.textarea.height).toBeLessThanOrEqual(96);
       }
-      expect(metrics.secondaryControlsAbovePrompt).toBe(true);
-      expect(metrics.promptBottomGap).toBeLessThanOrEqual(16);
+      expect(metrics.secondaryControlsAfterPrompt).toBe(true);
+      expect(metrics.composerContentBottomGap).toBeLessThanOrEqual(16);
       expect(metrics.dataLabel).toBe('Data');
       expect(metrics.unnamedButtons).toEqual([]);
       expect(metrics.accidentalHorizontalScrollers).toEqual([]);
@@ -178,8 +181,8 @@ interface VisualMetrics {
   primaryTabs: Array<RectMetric & { label: string; insideInspector: boolean }>;
   moreInsideInspector: boolean;
   textarea: RectMetric;
-  secondaryControlsAbovePrompt: boolean;
-  promptBottomGap: number;
+  secondaryControlsAfterPrompt: boolean;
+  composerContentBottomGap: number;
   dataLabel: string;
   modeButtons: Array<RectMetric & { label: string }>;
   modeGaps: number[];
@@ -248,6 +251,10 @@ async function collectMetrics(
           '.ns-ai-v3-suggested-actions, .ns-ai-v3-policy-summary, .ns-ai-v3-controls-disclosure',
         ),
       ).filter(visible);
+      const composerContentBottom = Math.max(
+        promptRect.bottom,
+        ...secondaryControls.map((control) => rect(control).bottom),
+      );
       const primaryTabs = Array.from(inspector.querySelectorAll<HTMLElement>('[role="tab"]')).map(
         (tab) => {
           const bounds = rect(tab);
@@ -320,10 +327,10 @@ async function collectMetrics(
         moreInsideInspector:
           moreRect.left >= inspectorRect.left - 1 && moreRect.right <= inspectorRect.right + 1,
         textarea: rect(textarea),
-        secondaryControlsAbovePrompt: secondaryControls.every(
-          (control) => rect(control).bottom <= promptRect.top + 1,
+        secondaryControlsAfterPrompt: secondaryControls.every(
+          (control) => rect(control).top >= promptRect.bottom - 1,
         ),
-        promptBottomGap: Math.max(0, composerRect.bottom - promptRect.bottom),
+        composerContentBottomGap: Math.max(0, composerRect.bottom - composerContentBottom),
         dataLabel: getComputedStyle(dataButton, '::after').content.replaceAll('"', ''),
         modeButtons,
         modeGaps,

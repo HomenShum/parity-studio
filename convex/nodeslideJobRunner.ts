@@ -202,9 +202,12 @@ export const executeEditProposalInternal = internalAction({
     }
     await ctx.runMutation(jobsInternal.checkpointInternal, {
       jobId: args.jobId,
-      status: 'running',
-      phase: 'validating',
-      progress: 95,
+      // Publish the review receipt at the same durable boundary that binds the
+      // validated patch. Workflow bookkeeping may finish afterward, but it must
+      // never strand an already-persisted proposal behind a `running` receipt.
+      status: 'awaiting_review',
+      phase: 'awaiting_review',
+      progress: 100,
       resultDeckId: result.patch.deckId,
       resultPatchId: result.patch.id,
       resultCandidateDigest: result.patch.candidateDigest,

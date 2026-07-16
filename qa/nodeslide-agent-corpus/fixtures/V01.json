@@ -1,0 +1,153 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "V01",
+  "title": "Editable left-to-right flow diagram",
+  "category": "visual_semantic",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "data-flow-explainer-v1",
+    "activeSlideId": "slide-process",
+    "selectedSlideIds": ["slide-process"],
+    "selectedElementIds": ["process-list"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A selected five-step process is currently represented as plain text on one slide.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 4,
+        "processSteps": ["Collect", "Normalize", "Analyze", "Compose", "Review"],
+        "selectedElementType": "text"
+      }
+    }
+  },
+  "request": {
+    "text": "Turn this process into an editable left-to-right flow diagram.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["shape", "connector", "text"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_shape",
+          "minCount": 5,
+          "maxCount": 10,
+          "scope": "selected_slide"
+        },
+        {
+          "type": "create_connector",
+          "minCount": 4,
+          "maxCount": 9,
+          "scope": "selected_slide"
+        }
+      ],
+      "allowed": [
+        "create_shape",
+        "create_connector",
+        "replace_text",
+        "remove_element",
+        "update_layout"
+      ],
+      "denied": ["create_image", "flatten_to_image", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Build an editable candidate diagram on the selected slide and wait for acceptance."
+    },
+    "outcomes": [
+      "Five process steps are represented by editable shapes.",
+      "Editable connectors encode the left-to-right sequence.",
+      "No flattened or decorative image substitutes for diagram primitives."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "infer_visual_semantics",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "flattened_diagram_image",
+    "missing_connector",
+    "right_to_left_layout",
+    "unselected_slide_change",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "left-to-right",
+      "description": "The resulting diagram direction is explicitly left-to-right.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/diagram/layoutDirection"
+      },
+      "operator": "equals",
+      "expected": "left_to_right"
+    },
+    {
+      "id": "all-elements-editable",
+      "description": "Every diagram element is editable.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/diagram/elements",
+        "itemPointer": "/editable"
+      },
+      "operator": "equals",
+      "expected": [true, true, true, true, true, true, true, true, true]
+    },
+    {
+      "id": "five-step-shapes",
+      "description": "Exactly five process shapes were created.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/diagram/shapes"
+      },
+      "operator": "length_equals",
+      "expected": 5
+    },
+    {
+      "id": "four-connectors",
+      "description": "Exactly four sequence connectors were created.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/diagram/connectors"
+      },
+      "operator": "length_equals",
+      "expected": 4
+    },
+    {
+      "id": "process-labels-preserved",
+      "description": "The five source step labels are preserved in order.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/diagram/shapes",
+        "itemPointer": "/label"
+      },
+      "operator": "equals",
+      "expected": ["Collect", "Normalize", "Analyze", "Compose", "Review"]
+    }
+  ]
+}

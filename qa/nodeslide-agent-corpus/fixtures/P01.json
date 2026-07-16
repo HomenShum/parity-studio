@@ -1,0 +1,156 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "P01",
+  "title": "Sixty-second notes for every slide",
+  "category": "presenter_and_delivery",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-problem",
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A six-slide deck has no speaker notes; slide visuals and content are already approved.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "slideIds": [
+          "slide-problem",
+          "slide-product",
+          "slide-traction",
+          "slide-market",
+          "slide-business-model",
+          "slide-next"
+        ],
+        "visualDigest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "notesBySlide": {}
+      }
+    }
+  },
+  "request": {
+    "text": "Write 60-second speaker notes for each slide.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["speaker_notes"],
+    "operations": {
+      "required": [
+        {
+          "type": "set_speaker_notes",
+          "minCount": 6,
+          "maxCount": 6,
+          "scope": "deck_slides"
+        }
+      ],
+      "allowed": ["set_speaker_notes"],
+      "denied": ["replace_text", "update_layout", "create_slide", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "deck_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Propose notes for all six slides, change notes only, and wait for acceptance."
+    },
+    "outcomes": [
+      "Exactly one 60-second note is produced for every slide.",
+      "No slide visual or on-slide content changes.",
+      "All six notes are reviewed as one proposal."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_story_spec",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "missing_slide_notes",
+    "visual_change",
+    "on_slide_copy_change",
+    "new_slide",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "six-note-operations",
+      "description": "Exactly six note operations were proposed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/operations"
+      },
+      "operator": "length_equals",
+      "expected": 6
+    },
+    {
+      "id": "every-slide-targeted",
+      "description": "The note targets are exactly the six canonical slide IDs.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/operations",
+        "itemPointer": "/targets/0"
+      },
+      "operator": "set_equals",
+      "expected": [
+        "slide-problem",
+        "slide-product",
+        "slide-traction",
+        "slide-market",
+        "slide-business-model",
+        "slide-next"
+      ]
+    },
+    {
+      "id": "sixty-seconds-each",
+      "description": "Every note has a 60-second target duration.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/notes",
+        "itemPointer": "/targetSeconds"
+      },
+      "operator": "equals",
+      "expected": [60, 60, 60, 60, 60, 60]
+    },
+    {
+      "id": "notes-nonempty",
+      "description": "Every slide note is nonempty.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/notes",
+        "itemPointer": "/text"
+      },
+      "operator": "all_nonempty"
+    },
+    {
+      "id": "visuals-unchanged",
+      "description": "The visual digest remains unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/visualDigest",
+        "comparePointer": "/result/after/visualDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

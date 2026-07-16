@@ -1,0 +1,143 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "M01",
+  "title": "Editable native math conversion",
+  "category": "math_and_technical",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "technical-method-v1",
+    "activeSlideId": "slide-method",
+    "selectedSlideIds": ["slide-method"],
+    "selectedElementIds": ["equation-text"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A selected text element contains one exact LaTeX-compatible equation and is unlocked.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 3,
+        "element": {
+          "id": "equation-text",
+          "type": "text",
+          "text": "L(\u03b8) = \u03a3_i (y_i - f_\u03b8(x_i))\u00b2",
+          "latex": "L(\\theta)=\\sum_i(y_i-f_{\\theta}(x_i))^2",
+          "locked": false
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Turn this equation into an editable math element.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["math"],
+    "operations": {
+      "required": [
+        {
+          "type": "replace_element_with_math",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_element"
+        }
+      ],
+      "allowed": ["replace_element_with_math", "update_layout", "set_style"],
+      "denied": ["create_image", "rasterize_element", "replace_text", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Propose replacing only the selected text element with native editable math and wait for acceptance."
+    },
+    "outcomes": [
+      "The candidate element is a native editable math primitive.",
+      "The exact equation semantics and LaTeX representation are preserved.",
+      "No raster image or unrelated slide edit is introduced."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "parse_math",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "equation_semantic_change",
+    "rasterized_equation",
+    "unselected_element_change",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "native-math-type",
+      "description": "The replacement element type is math.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/element/type"
+      },
+      "operator": "equals",
+      "expected": "math"
+    },
+    {
+      "id": "math-editable",
+      "description": "The resulting math element is editable.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/element/editable"
+      },
+      "operator": "equals",
+      "expected": true
+    },
+    {
+      "id": "latex-exact",
+      "description": "The exact canonical LaTeX string is preserved.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/element/latex"
+      },
+      "operator": "equals",
+      "expected": "L(\\theta)=\\sum_i(y_i-f_{\\theta}(x_i))^2"
+    },
+    {
+      "id": "not-rasterized",
+      "description": "The resulting element is not rasterized.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/element/rasterized"
+      },
+      "operator": "equals",
+      "expected": false
+    },
+    {
+      "id": "selected-element-only",
+      "description": "Only the selected equation element changed.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/changedElementIds"
+      },
+      "operator": "set_equals",
+      "expected": ["equation-text"]
+    }
+  ]
+}

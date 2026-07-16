@@ -1,0 +1,128 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "C01",
+  "title": "Exact-count deck creation",
+  "category": "deck_creation",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "empty-workspace-v1",
+    "activeSlideId": null,
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "An empty workspace with no canonical deck and an investor audience.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "workspaceId": "workspace-empty",
+        "deckExists": false
+      }
+    }
+  },
+  "request": {
+    "text": "Create a six-slide investor deck explaining the problem, product, traction, market, business model, and next milestone.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["deck", "slide", "story_spec", "text"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_deck",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "deck"
+        },
+        {
+          "type": "create_slide",
+          "minCount": 6,
+          "maxCount": 6,
+          "scope": "deck"
+        }
+      ],
+      "allowed": ["create_deck", "create_slide", "replace_text", "set_story_metadata"],
+      "denied": ["delete_deck", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": ["scope_checked", "proposal_created", "human_review_requested"],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Create a proposal and wait for explicit acceptance before mutating the canonical deck."
+    },
+    "outcomes": [
+      "A reviewable candidate deck contains exactly six slides.",
+      "Each slide has one explicit and unique narrative job.",
+      "The canonical workspace remains unchanged until acceptance."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "wrong_slide_count",
+    "multiple_jobs_per_slide",
+    "invented_facts",
+    "canonical_mutation_before_review",
+    "unrequested_publish"
+  ],
+  "assertions": [
+    {
+      "id": "exactly-six-slides",
+      "description": "The candidate snapshot contains exactly six slides.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/deck/slides"
+      },
+      "operator": "length_equals",
+      "expected": 6
+    },
+    {
+      "id": "one-job-per-slide",
+      "description": "Every slide records one nonempty narrative job.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/deck/slides",
+        "itemPointer": "/job"
+      },
+      "operator": "all_nonempty"
+    },
+    {
+      "id": "unique-slide-jobs",
+      "description": "The six slide jobs are distinct.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/deck/slides",
+        "itemPointer": "/job"
+      },
+      "operator": "all_unique"
+    },
+    {
+      "id": "unique-slide-ids",
+      "description": "Every generated slide has a distinct canonical ID.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/deck/slides",
+        "itemPointer": "/id"
+      },
+      "operator": "all_unique"
+    }
+  ]
+}

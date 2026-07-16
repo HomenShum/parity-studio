@@ -530,6 +530,7 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   const requestedSlideCount =
     inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7;
   applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
+  applyRequestedNarrativeJobs(spec.slides, brief.prompt, requestedSlideCount);
   applyExplicitSlideDirectives(spec.slides, brief.prompt, requestedSlideCount);
   preserveRequestedPrimitives(spec.slides, brief.prompt, requestedSlideCount);
   spec.slides = spec.slides.slice(0, requestedSlideCount);
@@ -542,6 +543,64 @@ interface ExplicitSlideDirective {
 }
 
 type BriefPrimaryPrimitive = 'formula' | 'chart' | 'image';
+
+/**
+ * Keeps a bounded deterministic fallback faithful to an explicitly enumerated story.
+ * This is intentionally structural rather than generative: when the user names exactly
+ * one topic per requested slide, those topics become the slide jobs in the same order.
+ */
+function applyRequestedNarrativeJobs(
+  slides: NodeSlidePlannedSlide[],
+  prompt: string,
+  slideCount: number,
+): void {
+  const jobs = requestedNarrativeJobs(prompt, slideCount);
+  if (jobs.length !== slideCount) return;
+
+  for (const [index, job] of jobs.entries()) {
+    const slide = slides[index];
+    if (!slide) continue;
+    const label = narrativeJobLabel(job);
+    slide.title = label;
+    slide.section = `${label.replace(/^The\s+/iu, '')} / ${String(index + 1).padStart(2, '0')}`;
+    slide.headline = label;
+    slide.body = `Explain ${job} for the intended audience using only evidence supplied in the brief or attached sources.`;
+  }
+}
+
+function requestedNarrativeJobs(prompt: string, slideCount: number): string[] {
+  if (slideCount < 2 || slideCount > 8) return [];
+  const clean = nodeslideCleanText(prompt, 1_200);
+  const candidates = [
+    ...clean.matchAll(/\b(?:explaining|covering|presenting|showing)\s+(.{12,420}?)(?:[.!?]|$)/giu),
+  ];
+  for (const match of candidates) {
+    const body = nodeslideCleanText(match[1] ?? '', 420)
+      .replace(/^(?:the\s+)?following\s+/iu, '')
+      .replace(/\s+(?:in|across)\s+(?:the\s+)?(?:deck|presentation)$/iu, '');
+    const jobs = body
+      .split(/\s*(?:,|;|\band\b|&)\s*/giu)
+      .map((value) =>
+        nodeslideCleanText(
+          value.replace(/^(?:the|a|an)\s+/iu, '').replace(/\s+(?:slide|section)$/iu, ''),
+          72,
+        ),
+      )
+      .filter((value) => value.length >= 2 && value.split(/\s+/u).length <= 8);
+    if (
+      jobs.length === slideCount &&
+      new Set(jobs.map((job) => job.toLowerCase())).size === jobs.length
+    ) {
+      return jobs;
+    }
+  }
+  return [];
+}
+
+function narrativeJobLabel(job: string): string {
+  const normalized = sentenceCase(job);
+  return /^(?:problem|product|market)$/iu.test(job) ? `The ${job.toLowerCase()}` : normalized;
+}
 
 const BRIEF_PRIMARY_PRIMITIVE_PATTERNS: Record<BriefPrimaryPrimitive, RegExp> = {
   formula: /\b(?:formula|equation|math|mathematical)\b/iu,

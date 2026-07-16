@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "nodeslide-held-out-taste-rules/v1",
+  "rubricId": "nodeslide-held-out-taste/v1",
+  "scoreRange": {
+    "minimum": 0,
+    "maximum": 4
+  },
+  "rules": [
+    {
+      "id": "focal-hierarchy",
+      "description": "The after frame has one dominant focal point and an unambiguous reading order.",
+      "minimumAfter": 3,
+      "minimumDelta": 0.5,
+      "weight": 1.25
+    },
+    {
+      "id": "evidence-legibility",
+      "description": "Required evidence, labels, sources, and annotations remain readable and attributable.",
+      "minimumAfter": 3,
+      "minimumDelta": 0,
+      "weight": 1.25
+    },
+    {
+      "id": "density-clarity",
+      "description": "Density is reduced through hierarchy, omission, or whitespace without hiding meaning.",
+      "minimumAfter": 3,
+      "minimumDelta": 0.5,
+      "weight": 1
+    },
+    {
+      "id": "composition-specificity",
+      "description": "The composition is editorially specific instead of a repetitive equal-card grid.",
+      "minimumAfter": 3,
+      "minimumDelta": 0.5,
+      "weight": 1
+    },
+    {
+      "id": "semantic-fit",
+      "description": "The chosen visual form clarifies the content's actual relationship or argument.",
+      "minimumAfter": 3,
+      "minimumDelta": 0,
+      "weight": 1.25
+    }
+  ],
+  "decision": {
+    "minimumWeightedAfter": 3.2,
+    "minimumWeightedDelta": 0.4,
+    "maximumRegressions": 0,
+    "minimumJudgeConfidence": 0.75
+  }
+}

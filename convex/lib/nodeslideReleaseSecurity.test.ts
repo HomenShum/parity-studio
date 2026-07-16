@@ -27,6 +27,7 @@ import {
   loadNodeSlideSnapshot,
   loadNodeSlideWorkspace,
 } from './nodeslideData';
+import { nodeSlideJobOwnerDigest } from './nodeslideJobState';
 import { clocksForNodeSlideOperations } from './nodeslidePatches';
 import { buildGoldenNodeSlide } from './nodeslideSeed';
 import {
@@ -723,6 +724,47 @@ describe('NodeSlide release security', () => {
     expect(database.rows('nodeslide_versions')).toHaveLength(versionCount);
     expect(database.rows('nodeslide_validations')).toHaveLength(validationCount);
     expect(database.writes).toEqual([]);
+  });
+
+  it('refuses to accept a durable patch after its bound job has failed', async () => {
+    const database = new MemoryDatabase();
+    const fixture = seedWorkspace(database, 'durable-failed-review', OWNER_ACCESS_KEY, 'j');
+    const context = { db: database } as unknown as MutationCtx;
+    const snapshot = await requiredSnapshot(context, fixture.snapshot.deck.id);
+    const edit = textEdit(snapshot, 'A candidate that must stay unapplied');
+    const proposed = await proposePatchHandler(context, {
+      id: 'durable-failed-patch',
+      deckId: snapshot.deck.id,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+      baseDeckVersion: snapshot.deck.version,
+      ...clocksForNodeSlideOperations(snapshot, [edit.operation]),
+      scope: edit.scope,
+      operations: [edit.operation],
+      summary: 'Durable failed review guard',
+    });
+    const patch = onlyStableRow(database, 'nodeslide_patches', proposed.patch.id);
+    patch.jobId = 'job_durable_failed';
+    database.seed('nodeslide_agent_jobs', {
+      id: 'job_durable_failed',
+      kind: 'edit_proposal',
+      ownerDigest: nodeSlideJobOwnerDigest(OWNER_ACCESS_KEY),
+      status: 'failed',
+      resultDeckId: snapshot.deck.id,
+      resultPatchId: proposed.patch.id,
+      resultCandidateDigest: proposed.patch.candidateDigest,
+    });
+    const before = await requiredSnapshot(context, snapshot.deck.id);
+
+    await expect(
+      acceptPatchHandler(context, {
+        deckId: snapshot.deck.id,
+        ownerAccessKey: OWNER_ACCESS_KEY,
+        patchId: proposed.patch.id,
+      }),
+    ).rejects.toThrow(/no longer awaiting review/i);
+
+    expect(await requiredSnapshot(context, snapshot.deck.id)).toEqual(before);
+    expect(onlyStableRow(database, 'nodeslide_patches', proposed.patch.id).status).toBe('ready');
   });
 
   it('keeps a JSON edit candidate out of the canonical deck until Accept', async () => {

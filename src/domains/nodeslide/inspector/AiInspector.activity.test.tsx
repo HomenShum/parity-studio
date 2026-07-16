@@ -14,6 +14,7 @@ import {
   NODESLIDE_TOOLCHAIN_VERSION,
   NODESLIDE_WEB_RESEARCH_CONSENT,
   type NodeSlideAgentMessage,
+  type NodeSlideAgentRun,
 } from '../../../../shared/nodeslide';
 import {
   NODESLIDE_VARIATION_SCHEMA_VERSION,
@@ -172,6 +173,117 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     await waitFor(() => expect(composer).toHaveAttribute('data-composer-mode', 'full'));
     expect(instruction).toHaveAttribute('rows', '9');
     expect(screen.getByTestId('ai-connect-agent')).toBeVisible();
+  });
+
+  it('renders a compact review queue with one active decision and historical run attribution', async () => {
+    const snapshot = fixture('compact-review-queue');
+    const first = {
+      ...proposal(snapshot),
+      id: 'patch-first',
+      summary: 'Clarify the decision headline.',
+      candidateDigest: 'digest-shared',
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    };
+    const second = {
+      ...proposal(snapshot),
+      id: 'patch-second',
+      summary: 'Tighten the supporting evidence.',
+      candidateDigest: 'digest-shared',
+      createdAt: 2_000,
+      updatedAt: 2_000,
+    };
+    const runs: NodeSlideAgentRun[] = [
+      agentRun(snapshot, first.id, 'Rewrite only this headline.', 'openrouter', 'z-ai/glm-5.2'),
+      agentRun(snapshot, second.id, 'Strengthen this evidence.', 'nebius', 'zai-org/GLM-5.2'),
+    ];
+    const user = userEvent.setup();
+    renderInspector(snapshot, { patches: [first, second], agentRuns: runs });
+
+    expect(screen.getAllByTestId('proposal-card')).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByTestId('proposal-accept')).toHaveLength(1));
+    expect(
+      screen.getByText('nebius · zai-org/GLM-5.2', { selector: '.ns-proposal-origin strong' }),
+    ).toBeVisible();
+    expect(screen.getByText('Equivalent candidate')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: /Clarify the decision headline/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('openrouter · z-ai/glm-5.2', {
+          selector: '.ns-proposal-origin strong',
+        }),
+      ).toBeVisible(),
+    );
+    expect(screen.getByText('“Rewrite only this headline.”')).toBeVisible();
+    expect(screen.getAllByTestId('proposal-accept')).toHaveLength(1);
+  });
+
+  it('holds review decisions until the durable candidate receipt is finalized', async () => {
+    const snapshot = fixture('durable-review-finalizing');
+    const readyPatch = proposal(snapshot);
+    const view = renderInspector(snapshot, { patches: [readyPatch], isSubmitting: true });
+
+    expect(screen.getByTestId('proposal-accept')).toBeDisabled();
+    expect(screen.getByTestId('proposal-reject')).toBeDisabled();
+    expect(screen.getByTestId('proposal-accept')).toHaveTextContent('Finalizing');
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector {...inspectorProps(snapshot, { patches: [readyPatch] })} />
+      </div>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('proposal-accept')).toBeEnabled());
+    expect(screen.getByTestId('proposal-reject')).toBeEnabled();
+  });
+
+  it('makes the typing target and write authority explicit before a deictic element request', async () => {
+    const snapshot = fixture('explicit-write-authority');
+    const user = userEvent.setup();
+    renderInspector(snapshot, { initialProviderMode: 'deterministic' });
+
+    const composer = screen.getByTestId('ai-composer');
+    const composerHeading = composer.querySelector('.ns-ai-v3-composer-heading');
+    if (!composerHeading) throw new Error('Expected the prompt-first composer heading.');
+    expect(within(composerHeading as HTMLElement).getByText('Writes to this slide')).toBeVisible();
+    await user.type(
+      screen.getByRole('textbox', { name: 'AI instruction' }),
+      'Change this headline to emphasize the decision.',
+    );
+
+    expect(
+      screen.getByText('No element is selected; this request can change the whole slide.'),
+    ).toBeVisible();
+    expect(screen.getByRole('group', { name: 'Current agent scope and policy' })).toHaveTextContent(
+      'Writes to this slide',
+    );
+    expect(screen.getByText('Tools')).toBeVisible();
+  });
+
+  it('narrows the write scope when the user selects an element after opening the composer', async () => {
+    const snapshot = fixture('selection-scope-transition');
+    const selectedElement = snapshot.elements[0];
+    if (!selectedElement) throw new Error('Fixture requires a selectable element.');
+    const view = renderInspector(snapshot, { initialProviderMode: 'deterministic' });
+
+    expect(screen.getAllByText('Writes to this slide').length).toBeGreaterThan(0);
+
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            selectedElements: [selectedElement],
+          })}
+        />
+      </div>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Writes to 1 selected element').length).toBeGreaterThan(0),
+    );
   });
 
   it('fails closed before session consent and reuses the grant across editor requests', async () => {
@@ -773,6 +885,31 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     );
     expect(screen.queryByRole('button', { name: 'Retry the same request' })).toBeNull();
   });
+
+  it('does not keep a stale durable run cancellable after the request has failed', () => {
+    const snapshot = fixture('terminal-over-stale-run');
+    const staleRun: NodeSlideAgentRun = {
+      ...agentRun(snapshot, 'patch-stale', 'Rewrite the headline.', 'nebius', 'zai-org/GLM-5.2'),
+      status: 'planning',
+    };
+
+    renderInspector(snapshot, {
+      agentRuns: [staleRun],
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 1_200,
+        ask: 'Rewrite the headline.',
+        message: 'The provider ended before a validated proposal was returned.',
+      },
+      onCancelRun: vi.fn(),
+    });
+
+    expect(
+      screen.getByText('The provider ended before a validated proposal was returned.'),
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+    expect(screen.getByTestId('ai-composer')).not.toHaveAttribute('data-running', 'true');
+  });
 });
 
 function renderInspector(
@@ -845,6 +982,29 @@ function message(
     content,
     createdAt,
     ...messageOverrides,
+  };
+}
+
+function agentRun(
+  snapshot: DeckSnapshot,
+  patchId: string,
+  instruction: string,
+  provider: string,
+  model: string,
+): NodeSlideAgentRun {
+  return {
+    id: `run-${patchId}`,
+    deckId: snapshot.deck.id,
+    idempotencyKey: `idempotency-${patchId}`,
+    instruction,
+    status: 'awaiting_review',
+    provider,
+    model,
+    webResearch: false,
+    attempt: 1,
+    patchId,
+    createdAt: 1_000,
+    updatedAt: 1_000,
   };
 }
 

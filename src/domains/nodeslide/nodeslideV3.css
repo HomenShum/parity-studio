@@ -3980,8 +3980,11 @@
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state strong {
+  display: block;
   font-size: 11.5px;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .nodeslide-studio .ns-ai-v3-shell .ns-agent-honesty-state p {
@@ -4347,6 +4350,10 @@
   transform: none;
 }
 
+.nodeslide-studio .ns-toast[aria-hidden='true'] {
+  display: none;
+}
+
 /* Dark theme surfaces that legacy rules hard-coded to white. */
 
 .nodeslide-studio[data-ns-theme="dark"]
@@ -4460,7 +4467,7 @@
   }
 }
 
-@media (min-width: 700px) and (max-width: 1099px) {
+@media (min-width: 700px) and (max-width: 899px) {
   .nodeslide-studio {
     --ns-nav-width: 0px !important;
     --ns-inspector-width: 0px !important;
@@ -4530,7 +4537,7 @@
   .nodeslide-studio .ns-inspector.is-drawer-open {
     bottom: 0;
     box-shadow: var(--ns-overlay-shadow);
-    contain: layout paint;
+    contain: layout;
     max-width: calc(100vw - 48px);
     position: fixed;
     right: 0;
@@ -4549,6 +4556,86 @@
 
   .nodeslide-studio .ns-toolbar .ns-navigator-toggle {
     display: inline-flex;
+  }
+}
+
+/* Compact desktop: keep the canvas interactive and the inspector docked. The
+ * navigator yields its column so a 900px-wide window still has a useful stage. */
+@media (min-width: 900px) and (max-width: 1099px) {
+  .nodeslide-studio {
+    --ns-nav-width: 0px !important;
+    --ns-inspector-width: clamp(340px, 40vw, 380px) !important;
+  }
+
+  .nodeslide-studio .ns-studio-grid {
+    grid-template-columns: minmax(0, 1fr) var(--ns-inspector-width);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .nodeslide-studio .ns-navigator:not(.is-collapsed) {
+    border-bottom: 0;
+    border-right: 1px solid var(--ns-line-b);
+    bottom: 0;
+    box-shadow: var(--ns-shadow-lg);
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    height: auto;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 260px;
+    z-index: 40;
+  }
+
+  .nodeslide-studio .ns-navigator.is-collapsed {
+    display: none;
+  }
+
+  .nodeslide-studio .ns-editor-canvas-modes,
+  .nodeslide-studio .ns-canvas-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .nodeslide-studio .ns-inspector:not(.is-collapsed) {
+    bottom: auto;
+    box-shadow: none;
+    contain: layout;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    max-width: none;
+    position: relative;
+    right: auto;
+    top: auto;
+    width: var(--ns-inspector-width) !important;
+    z-index: 1;
+  }
+
+  .nodeslide-studio .ns-inspector.is-collapsed {
+    display: none;
+  }
+
+  .nodeslide-studio .ns-studio-grid:has(.ns-inspector.is-collapsed) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nodeslide-studio .ns-inspector-resizer {
+    display: block;
+    left: 0;
+    width: 8px;
+  }
+
+  .nodeslide-studio .ns-toolbar .ns-navigator-toggle,
+  .nodeslide-studio .ns-rail-toggle {
+    display: inline-flex;
+  }
+
+  .nodeslide-studio .ns-toolbar-history,
+  .nodeslide-studio .ns-language-menu,
+  .nodeslide-studio .ns-reset-view {
+    display: none;
   }
 }
 
@@ -6223,6 +6310,7 @@
 /* assistant-ui owns the thread, nested-message, and viewport semantics;
  * NodeSlide keeps the visual language and guarded composer behavior. */
 .nodeslide-studio .ns-agent-thread {
+  grid-row: 2;
   height: 100%;
   min-height: 0;
   position: relative;
@@ -6733,6 +6821,276 @@
 .nodeslide-studio .ns-ai-v3-shell .ns-proposal-actions .ns-button {
   font-size: 12px;
   min-height: 36px;
+}
+
+/* Review queue: preserve every candidate while keeping one clear decision in
+ * focus. Historical route and validation proof stay attached to that candidate. */
+.nodeslide-studio .ns-review-queue-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.nodeslide-studio .ns-review-queue-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.nodeslide-studio .ns-review-queue-heading strong {
+  color: var(--ns-ink);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.nodeslide-studio .ns-review-queue-heading > small {
+  color: var(--ns-faint);
+  font-size: 10px;
+}
+
+.nodeslide-studio .ns-review-queue {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nodeslide-studio fieldset.ns-ai-v3-policy-summary {
+  border: 0;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-card {
+  overflow: hidden;
+  padding: 0;
+}
+
+.nodeslide-studio .ns-proposal-summary {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ns-ink);
+  display: grid;
+  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  min-height: 54px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.nodeslide-studio .ns-proposal-summary:hover {
+  background: color-mix(in srgb, var(--ns-chip) 62%, transparent);
+}
+
+.nodeslide-studio .ns-proposal-summary-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nodeslide-studio .ns-proposal-summary-copy strong {
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeslide-studio .ns-proposal-summary-copy small,
+.nodeslide-studio .ns-proposal-summary time {
+  color: var(--ns-faint);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.nodeslide-studio .ns-proposal-summary svg {
+  color: var(--ns-faint);
+  transition: transform 120ms ease;
+}
+
+.nodeslide-studio .ns-proposal-summary svg.is-open {
+  transform: rotate(90deg);
+}
+
+.nodeslide-studio .ns-proposal-card.is-active {
+  border-color: color-mix(in srgb, var(--ns-accent) 36%, var(--ns-line-c));
+}
+
+.nodeslide-studio .ns-proposal-details {
+  border-top: 1px solid var(--ns-line-b);
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px 10px;
+}
+
+.nodeslide-studio .ns-proposal-origin {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.nodeslide-studio .ns-proposal-origin > span {
+  color: var(--ns-faint);
+  font-size: 9.5px;
+}
+
+.nodeslide-studio .ns-proposal-origin > strong {
+  color: var(--ns-ink2);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.nodeslide-studio .ns-proposal-origin > small {
+  background: var(--ns-chip);
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  color: var(--ns-faint);
+  font-size: 9px;
+  padding: 2px 5px;
+}
+
+.nodeslide-studio .ns-proposal-details blockquote {
+  border-left: 2px solid color-mix(in srgb, var(--ns-accent) 42%, var(--ns-line-c));
+  color: var(--ns-ink2);
+  display: -webkit-box;
+  font-size: 10.5px;
+  line-height: 1.45;
+  margin: 0;
+  overflow: hidden;
+  padding-left: 7px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.nodeslide-studio .ns-proposal-technical > summary {
+  color: var(--ns-faint);
+  cursor: pointer;
+  font-size: 10.5px;
+}
+
+.nodeslide-studio .ns-proposal-operation-list {
+  color: var(--ns-ink2);
+  margin: 7px 0 0;
+  padding-left: 17px;
+}
+
+.nodeslide-studio .ns-ai-v3-shell .ns-proposal-actions {
+  background: transparent;
+  border-top: 0;
+  bottom: auto;
+  box-shadow: none;
+  margin: 1px 0 0;
+  padding: 0;
+  position: static;
+  z-index: auto;
+}
+
+/* Prompt-first composer. Scope and controls explain the next request without
+ * competing with the typing surface. */
+.nodeslide-studio .ns-ai-v3-composer-heading {
+  align-items: start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  order: 0;
+}
+
+.nodeslide-studio .ns-ai-v3-composer-heading > span {
+  display: grid;
+  gap: 1px;
+}
+
+.nodeslide-studio .ns-ai-v3-composer-heading strong {
+  color: var(--ns-ink);
+  font-size: 11.5px;
+}
+
+.nodeslide-studio .ns-ai-v3-composer-heading small {
+  color: var(--ns-faint);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.nodeslide-studio .ns-ai-v3-scope-advisory {
+  color: var(--ns-warning);
+  font-size: 9.5px;
+  line-height: 1.35;
+  max-width: 52%;
+  text-align: right;
+}
+
+.nodeslide-studio .ns-ai-v3-composer > .ns-ai-v3-prompt,
+.nodeslide-studio .ns-ai-v3-composer-field {
+  order: 1;
+}
+
+.nodeslide-studio .ns-ai-v3-composer > .ns-composer-tokens {
+  order: 2;
+}
+
+.nodeslide-studio .ns-ai-v3-suggested-actions {
+  order: 3;
+}
+
+.nodeslide-studio .ns-ai-v3-policy-summary {
+  order: 4;
+}
+
+.nodeslide-studio .ns-ai-v3-policy-summary .is-scope {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-v3-controls-disclosure {
+  order: 5;
+}
+
+.nodeslide-studio .ns-ai-tools-menu {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.nodeslide-studio .ns-ai-tools-menu > summary {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ns-ink2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10.5px;
+  font-weight: 600;
+  gap: 4px;
+  height: 32px;
+  list-style: none;
+  padding: 0 8px;
+}
+
+.nodeslide-studio .ns-ai-tools-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeslide-studio .ns-ai-tools-menu[open] {
+  flex-basis: 100%;
+}
+
+.nodeslide-studio .ns-ai-tools-menu[open] > summary {
+  background: var(--ns-chip);
+}
+
+.nodeslide-studio .ns-ai-tools-menu > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 5px;
+}
+
+.nodeslide-studio .ns-ai-tools-menu .ns-ai-tool-button .ns-ai-tool-label {
+  display: inline;
 }
 
 /* A pending proposal makes review the primary task. The composer remains an

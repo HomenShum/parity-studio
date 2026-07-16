@@ -131,6 +131,36 @@ describe('NodeSlide seed', () => {
     expect(coerceBriefSpec(rawSpec, 'Founder roadshow', brief).slides).toHaveLength(3);
   });
 
+  it('preserves an exact enumerated investor story when the external creation route falls back', () => {
+    const brief = {
+      prompt:
+        'Create a six-slide investor deck explaining the problem, product, traction, market, business model, and next milestone.',
+      audience: 'Investors',
+      purpose: 'Support an investment decision',
+      successCriteria: ['Exactly 6 slides in the requested narrative'],
+    };
+
+    const spec = deterministicBriefSpec('Investor story', brief);
+
+    expect(spec.slides).toHaveLength(6);
+    expect(spec.slides.map((slide) => slide.title)).toEqual([
+      'The problem',
+      'The product',
+      'Traction',
+      'The market',
+      'Business model',
+      'Next milestone',
+    ]);
+    expect(spec.slides.map((slide) => slide.section)).toEqual([
+      'problem / 01',
+      'product / 02',
+      'Traction / 03',
+      'market / 04',
+      'Business model / 05',
+      'Next milestone / 06',
+    ]);
+  });
+
   it('keeps explicit slide directions and chart values in a compact deterministic fallback', () => {
     const brief = {
       prompt:

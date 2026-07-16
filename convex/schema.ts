@@ -70,6 +70,104 @@ const nodeslidePreferenceScopeValidator = v.union(
   }),
 );
 
+const nodeslideDurableRequestBindingValidator = v.object({
+  schemaVersion: v.literal('nodeslide.request-binding/v2'),
+  requestDigest: v.string(),
+  capabilityDigest: v.string(),
+});
+
+const nodeslideDurableCapabilityMetadataValidator = v.object({
+  schemaVersion: v.literal('nodeslide.capability-digest/v2'),
+  capabilityDigest: v.string(),
+  provider: v.optional(v.string()),
+  model: v.optional(v.string()),
+  scopes: v.array(v.string()),
+  egress: v.union(
+    v.literal('none'),
+    v.literal('model'),
+    v.literal('web'),
+    v.literal('model_and_web'),
+  ),
+  hasSecret: v.boolean(),
+  hasConsent: v.boolean(),
+  attachmentCount: v.number(),
+  consentDigest: v.optional(v.string()),
+  attachmentsDigest: v.optional(v.string()),
+});
+
+const nodeslideDurableJobStatusValidator = v.union(
+  v.literal('queued'),
+  v.literal('running'),
+  v.literal('retrying'),
+  v.literal('paused'),
+  v.literal('awaiting_review'),
+  v.literal('succeeded'),
+  v.literal('failed'),
+  v.literal('cancelled'),
+  v.literal('rejected'),
+  v.literal('stale'),
+);
+
+const nodeslideDurableLeaseValidator = v.object({
+  leaseId: v.string(),
+  workerId: v.string(),
+  attempt: v.number(),
+  egressEpoch: v.number(),
+  issuedAt: v.number(),
+  expiresAt: v.number(),
+});
+
+const nodeslideDurableJobValidator = v.object({
+  jobId: v.string(),
+  requestBinding: nodeslideDurableRequestBindingValidator,
+  status: nodeslideDurableJobStatusValidator,
+  attempt: v.number(),
+  retryCount: v.number(),
+  resumeCount: v.number(),
+  maxAttempts: v.number(),
+  lease: v.optional(nodeslideDurableLeaseValidator),
+  reason: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  completedAt: v.optional(v.number()),
+});
+
+const nodeslideDurableJobEventValidator = v.object({
+  schemaVersion: v.literal('nodeslide.durable-session/v2'),
+  sequence: v.number(),
+  stateVersion: v.number(),
+  jobId: v.string(),
+  kind: v.union(
+    v.literal('enqueued'),
+    v.literal('claimed'),
+    v.literal('transitioned'),
+    v.literal('retried'),
+    v.literal('resumed'),
+    v.literal('paused'),
+    v.literal('egress_rotated'),
+    v.literal('stale_fenced'),
+  ),
+  fromStatus: v.union(v.null(), nodeslideDurableJobStatusValidator),
+  toStatus: nodeslideDurableJobStatusValidator,
+  requestBinding: nodeslideDurableRequestBindingValidator,
+  egressEpoch: v.number(),
+  attempt: v.number(),
+  occurredAt: v.number(),
+  leaseId: v.optional(v.string()),
+  reason: v.optional(v.string()),
+  eventDigest: v.string(),
+});
+
+const nodeslideDurableJournalBindingValidator = v.object({
+  schemaVersion: v.literal('nodeslide.request-binding/v2'),
+  sessionId: v.string(),
+  jobId: v.string(),
+  requestDigest: v.string(),
+  capabilityDigest: v.string(),
+  egressEpoch: v.number(),
+  attempt: v.number(),
+});
+
 const nodeslidePreferenceProvenanceValidator = v.object({
   deckVersion: v.number(),
   sourceEventId: v.optional(v.string()),
@@ -679,6 +777,7 @@ export default defineSchema({
     summary: v.string(),
     linkedCommentId: v.optional(v.string()),
     traceId: v.optional(v.string()),
+    jobId: v.optional(v.string()),
     proposalKind: v.optional(v.union(v.literal('edit'), v.literal('propagation'))),
     parentPatchId: v.optional(v.string()),
     affectedSlideIds: v.optional(v.array(v.string())),
@@ -693,7 +792,8 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_status', ['deckId', 'status'])
-    .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
+    .index('by_job', ['jobId']),
 
   nodeslide_delegation_grants: defineTable({
     schemaVersion: v.literal('nodeslide.delegation-grant/v1'),
@@ -867,6 +967,7 @@ export default defineSchema({
     executionDigest: v.string(),
     idempotencyKey: v.string(),
     requestDigest: v.string(),
+    userRequestDigest: v.optional(v.string()),
     status: v.union(...NODESLIDE_JOB_STATUSES.map((status) => v.literal(status))),
     phase: v.union(...NODESLIDE_JOB_PHASES.map((phase) => v.literal(phase))),
     progress: v.number(),
@@ -878,6 +979,8 @@ export default defineSchema({
     resultPatchId: v.optional(v.string()),
     resultCandidateDigest: v.optional(v.string()),
     conversationRunId: v.optional(v.string()),
+    // Budget ownership is intentionally optional until provider/job wiring lands.
+    budgetId: v.optional(v.string()),
     memoryIds: v.array(v.string()),
     error: v.optional(v.string()),
     createdAt: v.number(),
@@ -888,6 +991,126 @@ export default defineSchema({
     .index('by_session_idempotency', ['clientSessionId', 'idempotencyKey'])
     .index('by_status_updated', ['status', 'updatedAt'])
     .index('by_result_deck', ['resultDeckId']),
+
+  /**
+   * Canonical server-owned state for a durable agent session. Request and
+   * capability material is represented only by irreversible digests and safe
+   * descriptors; raw prompts, credentials, and consent grants are never stored.
+   */
+  nodeslide_durable_sessions: defineTable({
+    id: v.string(),
+    schemaVersion: v.literal('nodeslide.durable-session/v2'),
+    requestBinding: nodeslideDurableRequestBindingValidator,
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    capability: nodeslideDurableCapabilityMetadataValidator,
+    stateVersion: v.number(),
+    egressEpoch: v.number(),
+    activeJobId: v.union(v.null(), v.string()),
+    jobs: v.record(v.string(), nodeslideDurableJobValidator),
+    eventSequence: v.number(),
+    transitionSequence: v.number(),
+    lastTransitionDigest: v.optional(v.string()),
+    stateDigest: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_binding', ['requestDigest', 'capabilityDigest'])
+    .index('by_updated', ['updatedAt']),
+
+  /** Immutable, hash-chained command outcomes for durable session recovery. */
+  nodeslide_durable_session_events: defineTable({
+    sessionId: v.string(),
+    transitionSequence: v.number(),
+    commandId: v.string(),
+    commandDigest: v.string(),
+    commandKind: v.union(
+      v.literal('enqueue'),
+      v.literal('claim'),
+      v.literal('resume'),
+      v.literal('retry'),
+      v.literal('transition'),
+      v.literal('rotate_egress'),
+    ),
+    stateVersion: v.number(),
+    eventSequence: v.number(),
+    egressEpoch: v.number(),
+    requestBinding: nodeslideDurableRequestBindingValidator,
+    jobId: v.optional(v.string()),
+    event: v.optional(nodeslideDurableJobEventValidator),
+    previousTransitionDigest: v.optional(v.string()),
+    transitionDigest: v.string(),
+    occurredAt: v.number(),
+  })
+    .index('by_session_sequence', ['sessionId', 'transitionSequence'])
+    .index('by_session_command', ['sessionId', 'commandId'])
+    .index('by_session_job', ['sessionId', 'jobId']),
+
+  /**
+   * Safe model/web receipts for an exact job attempt and egress epoch. Entries
+   * contain digests and accounting metadata only; no prompts, URLs, or results.
+   */
+  nodeslide_durable_job_journal_entries: defineTable({
+    sessionId: v.string(),
+    jobId: v.string(),
+    egressEpoch: v.number(),
+    attempt: v.number(),
+    sequence: v.number(),
+    entryId: v.string(),
+    kind: v.union(v.literal('model'), v.literal('web')),
+    binding: nodeslideDurableJournalBindingValidator,
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    provider: v.string(),
+    model: v.optional(v.string()),
+    operation: v.string(),
+    inputDigest: v.optional(v.string()),
+    outputDigest: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    queryDigest: v.optional(v.string()),
+    urlDigest: v.optional(v.string()),
+    resultDigest: v.optional(v.string()),
+    resultCount: v.optional(v.number()),
+    entryInputDigest: v.string(),
+    previousEntryDigest: v.optional(v.string()),
+    entryDigest: v.string(),
+    journalDigest: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_binding_sequence', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'sequence'])
+    .index('by_binding_entry', ['sessionId', 'jobId', 'egressEpoch', 'attempt', 'entryId']),
+
+  /**
+   * Internal model-result replay payloads written in the same transaction as
+   * their model journal receipt. `payloadJson` is canonical JSON for the
+   * provider result envelope only; model inputs, prompts, and secrets are not
+   * accepted by the writer and have no column in this table.
+   */
+  nodeslide_durable_model_result_replays: defineTable({
+    schemaVersion: v.literal('nodeslide.model-result-replay/v1'),
+    sessionId: v.string(),
+    jobId: v.string(),
+    callIdDigest: v.string(),
+    requestDigest: v.string(),
+    capabilityDigest: v.string(),
+    egressEpoch: v.number(),
+    attempt: v.number(),
+    binding: nodeslideDurableJournalBindingValidator,
+    outputDigest: v.string(),
+    payloadJson: v.string(),
+    payloadBytes: v.number(),
+    createdAt: v.number(),
+  }).index('by_exact_binding', [
+    'sessionId',
+    'jobId',
+    'callIdDigest',
+    'requestDigest',
+    'capabilityDigest',
+    'egressEpoch',
+    'attempt',
+  ]),
 
   nodeslide_agent_runs: defineTable({
     id: v.string(),
@@ -908,6 +1131,8 @@ export default defineSchema({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    // Links this durable run to the server-authoritative cost ledger when enabled.
+    budgetId: v.optional(v.string()),
     memoryIds: v.optional(v.array(v.string())),
     attempt: v.number(),
     otelTraceId: v.optional(v.string()),
@@ -938,6 +1163,120 @@ export default defineSchema({
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_idempotency', ['deckId', 'idempotencyKey'])
     .index('by_deck_status_updated', ['deckId', 'status', 'updatedAt']),
+
+  /**
+   * One canonical, server-owned hard budget per durable NodeSlide run. Monetary
+   * amounts are integer micro-USD; `reserved` and `unreconciled` are held in
+   * the exposure total until a provider call is settled or explicitly released.
+   */
+  nodeslide_run_budgets: defineTable({
+    id: v.string(),
+    version: v.literal('nodeslide.budget-ledger/v1'),
+    status: v.union(v.literal('open'), v.literal('finalized')),
+    budget: v.object({
+      version: v.literal('nodeslide.run-budget/v1'),
+      enforcement: v.literal('hard'),
+      maxCostUsd: v.number(),
+      maxCostMicroUsd: v.number(),
+      maxInputTokens: v.number(),
+      maxOutputTokens: v.number(),
+      maxDurationMs: v.number(),
+      maxIterations: v.number(),
+      maxToolCalls: v.number(),
+    }),
+    configDigest: v.string(),
+    actualMicroUsd: v.number(),
+    reservedMicroUsd: v.number(),
+    unreconciledMicroUsd: v.number(),
+    accumulated: v.object({
+      inputTokens: v.number(),
+      outputTokens: v.number(),
+      elapsedMs: v.number(),
+      iterations: v.number(),
+      toolCalls: v.number(),
+    }),
+    receiptDigests: v.record(v.string(), v.string()),
+    accountingStateDigest: v.string(),
+    revision: v.number(),
+    eventSequence: v.number(),
+    lastEventDigest: v.string(),
+    stateDigest: v.string(),
+    finalizeDigest: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    finalizedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_status_updated', ['status', 'updatedAt']),
+
+  /** A deterministic call record, keyed by (budgetId, callId). */
+  nodeslide_billable_calls: defineTable({
+    budgetId: v.string(),
+    callId: v.string(),
+    version: v.literal('nodeslide.billable-call/v1'),
+    status: v.union(
+      v.literal('reserved'),
+      v.literal('unreconciled'),
+      v.literal('settled'),
+      v.literal('released'),
+    ),
+    model: v.string(),
+    pricingDigest: v.string(),
+    quoteMicroUsd: v.number(),
+    estimatedInputTokens: v.number(),
+    requestedMaxOutputTokens: v.number(),
+    providerSafeOutputTokenCeiling: v.number(),
+    providerTimeoutMs: v.number(),
+    reservationDigest: v.string(),
+    terminalOperationDigest: v.optional(v.string()),
+    receiptDigest: v.optional(v.string()),
+    actualMicroUsd: v.optional(v.number()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    elapsedMs: v.optional(v.number()),
+    iterations: v.optional(v.number()),
+    toolCalls: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    settledAt: v.optional(v.number()),
+    releasedAt: v.optional(v.number()),
+    timeoutCapturedAt: v.optional(v.number()),
+  })
+    .index('by_budget_call', ['budgetId', 'callId'])
+    .index('by_budget_status', ['budgetId', 'status']),
+
+  /** Immutable audit chain for every applied budget state transition. */
+  nodeslide_budget_events: defineTable({
+    budgetId: v.string(),
+    callId: v.optional(v.string()),
+    version: v.literal('nodeslide.budget-event/v1'),
+    sequence: v.number(),
+    revision: v.number(),
+    kind: v.union(
+      v.literal('created'),
+      v.literal('reserved'),
+      v.literal('settled'),
+      v.literal('timeout_captured'),
+      v.literal('released'),
+      v.literal('finalized'),
+    ),
+    operationDigest: v.string(),
+    status: v.union(v.literal('open'), v.literal('finalized')),
+    actualDeltaMicroUsd: v.number(),
+    reservedDeltaMicroUsd: v.number(),
+    unreconciledDeltaMicroUsd: v.number(),
+    actualMicroUsd: v.number(),
+    reservedMicroUsd: v.number(),
+    unreconciledMicroUsd: v.number(),
+    capMicroUsd: v.number(),
+    accountingStateDigest: v.string(),
+    budgetStateCoreDigest: v.string(),
+    previousEventDigest: v.optional(v.string()),
+    eventDigest: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_budget_sequence', ['budgetId', 'sequence'])
+    .index('by_budget_call', ['budgetId', 'callId']),
 
   nodeslide_agent_messages: defineTable({
     id: v.string(),

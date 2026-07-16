@@ -1,0 +1,144 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "R01",
+  "title": "Comment-to-AI scoped proposal",
+  "category": "comments_and_collaboration",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "technical-method-v1",
+    "activeSlideId": "slide-method",
+    "selectedSlideIds": ["slide-method"],
+    "selectedElementIds": ["method-explanation"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "An open reviewer comment is anchored to one explanation element and sent to AI.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 3,
+        "deckDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "comment": {
+          "id": "comment-audience-1",
+          "status": "open",
+          "slideId": "slide-method",
+          "elementId": "method-explanation",
+          "text": "This feels too technical for the audience."
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Comment: “This feels too technical for the audience.” → Send to AI",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["comment", "proposal", "text"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_comment_proposal",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "comment_anchor"
+        }
+      ],
+      "allowed": ["create_comment_proposal", "replace_text"],
+      "denied": ["resolve_comment", "delete_comment", "auto_commit", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "comment_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Create a proposal bound to the comment anchor; keep the comment open and canonical deck unchanged until acceptance."
+    },
+    "outcomes": [
+      "The proposal is linked to the original comment ID and anchor.",
+      "Only the anchored slide is in write scope.",
+      "The comment remains open until an accepted patch addresses it."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_comment",
+      "read_context",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "comment_resolved_before_acceptance",
+    "unanchored_deck_wide_change",
+    "comment_deleted",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "comment-bound",
+      "description": "The proposal records the originating comment ID.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/proposal/commentId"
+      },
+      "operator": "equals",
+      "expected": "comment-audience-1"
+    },
+    {
+      "id": "anchor-bound",
+      "description": "The proposal records the anchored element ID.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/proposal/elementId"
+      },
+      "operator": "equals",
+      "expected": "method-explanation"
+    },
+    {
+      "id": "slide-scope-bounded",
+      "description": "Only the anchored slide is in the proposal write scope.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/proposal/slideIds"
+      },
+      "operator": "set_equals",
+      "expected": ["slide-method"]
+    },
+    {
+      "id": "comment-stays-open",
+      "description": "The comment remains open before acceptance.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/commentStatus"
+      },
+      "operator": "equals",
+      "expected": "open"
+    },
+    {
+      "id": "canonical-deck-unchanged",
+      "description": "The canonical deck digest remains unchanged before review.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/deckDigest",
+        "comparePointer": "/result/after/deckDigest"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

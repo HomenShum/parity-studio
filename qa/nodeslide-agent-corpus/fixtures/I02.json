@@ -1,0 +1,149 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "I02",
+  "title": "Image alt text and visible credit",
+  "category": "image_and_media",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-product",
+    "selectedSlideIds": ["slide-product"],
+    "selectedElementIds": ["image-product"],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "A selected image has a source record and pixels but lacks alt text and visible credit.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "image": {
+          "id": "image-product",
+          "assetDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "altText": "",
+          "visibleCredit": null,
+          "sourceIds": ["product-photo-source"]
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Add alt text and a visible source credit.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["image", "text", "source_binding"],
+    "operations": {
+      "required": [
+        {
+          "type": "update_image_accessibility",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_element"
+        },
+        {
+          "type": "add_source_credit",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_slide"
+        }
+      ],
+      "allowed": ["update_image_accessibility", "add_source_credit", "update_layout"],
+      "denied": ["replace_image", "remove_source", "generate_image", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Propose accessibility metadata and a visible credit on the selected slide without replacing the image."
+    },
+    "outcomes": [
+      "The image has meaningful nonempty alt text.",
+      "A visible credit names the bound source.",
+      "The image asset and source binding remain unchanged."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_source_binding",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "decorative_alt_text",
+    "hidden_credit",
+    "image_asset_change",
+    "source_binding_change",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "alt-text-present",
+      "description": "The after image has nonempty alt text.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/image/altText"
+      },
+      "operator": "truthy"
+    },
+    {
+      "id": "credit-visible",
+      "description": "The source credit is explicitly visible.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/image/credit/visible"
+      },
+      "operator": "equals",
+      "expected": true
+    },
+    {
+      "id": "credit-source-bound",
+      "description": "The visible credit references the existing image source.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/after/image/credit/sourceId"
+      },
+      "operator": "equals",
+      "expected": "product-photo-source"
+    },
+    {
+      "id": "asset-unchanged",
+      "description": "The underlying image asset digest is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/image/assetDigest",
+        "comparePointer": "/result/after/image/assetDigest"
+      },
+      "operator": "unchanged"
+    },
+    {
+      "id": "source-binding-unchanged",
+      "description": "The image source ID set is unchanged.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/before/image/sourceIds",
+        "comparePointer": "/result/after/image/sourceIds"
+      },
+      "operator": "unchanged"
+    }
+  ]
+}

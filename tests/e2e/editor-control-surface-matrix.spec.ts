@@ -377,6 +377,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await expect(page.getByLabel('Attached data files')).toContainText('matrix.csv');
     await page.getByRole('button', { name: 'Remove matrix.csv' }).click();
 
+    await page.getByTestId('ai-tools-toggle').click();
     await page.getByTestId('ai-connect-agent').click();
     const connections = page.getByRole('dialog', { name: /Connect your own runtime/ });
     await expect(connections).toBeVisible();

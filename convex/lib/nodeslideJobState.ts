@@ -9,6 +9,8 @@ export const NODESLIDE_JOB_STATUSES = [
   'succeeded',
   'failed',
   'cancelled',
+  'rejected',
+  'stale',
 ] as const;
 
 export const NODESLIDE_JOB_PHASES = [
@@ -21,6 +23,8 @@ export const NODESLIDE_JOB_PHASES = [
   'complete',
   'failed',
   'cancelled',
+  'rejected',
+  'stale',
 ] as const;
 
 export type NodeSlideJobStatus = (typeof NODESLIDE_JOB_STATUSES)[number];
@@ -36,6 +40,8 @@ export interface NodeSlideJobRecord {
   executionDigest: string;
   idempotencyKey: string;
   requestDigest: string;
+  /** Digest of only the exact visible user request, for secret-free evidence binding. */
+  userRequestDigest?: string;
   status: NodeSlideJobStatus;
   phase: NodeSlideJobPhase;
   progress: number;
@@ -48,6 +54,8 @@ export interface NodeSlideJobRecord {
   resultPatchId?: string;
   resultCandidateDigest?: string;
   conversationRunId?: string;
+  /** Stable server-owned ledger binding for every externally billable durable run. */
+  budgetId?: string;
   error?: string;
   createdAt: number;
   updatedAt: number;
@@ -79,13 +87,24 @@ export interface PublicNodeSlideJob {
         reviewRequired: true;
       };
   conversationRunId?: string;
+  budgetId?: string;
   error?: string;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
 }
 
-const TERMINAL = new Set<NodeSlideJobStatus>(['succeeded', 'failed', 'cancelled']);
+const TERMINAL = new Set<NodeSlideJobStatus>([
+  'succeeded',
+  'failed',
+  'cancelled',
+  'rejected',
+  'stale',
+]);
+
+export function isNodeSlideJobTerminal(status: NodeSlideJobStatus): boolean {
+  return TERMINAL.has(status);
+}
 
 export function nodeSlideJobRequestDigest(value: unknown): string {
   return nodeslideContentDigest(stableSerialize(value));
@@ -113,8 +132,11 @@ export function assertNodeSlideJobIdempotency(
 }
 
 export function claimNodeSlideJobAttempt(job: NodeSlideJobRecord, now: number): NodeSlideJobRecord {
-  if (job.status === 'cancelled') return job;
-  if (job.status === 'succeeded' || job.status === 'awaiting_review') return job;
+  if (TERMINAL.has(job.status) || job.status === 'awaiting_review') return job;
+  // @convex-dev/workflow may retry the same action invocation after a transient
+  // error. Re-entering an already-running durable job must reuse its fenced
+  // attempt/lease; only an explicit failed -> retry -> queued cycle may advance it.
+  if (job.status === 'running') return job;
   if (job.attempt >= job.maxAttempts) {
     throw new Error(`NodeSlide job reached its bounded retry limit (${job.maxAttempts}).`);
   }
@@ -162,6 +184,16 @@ export function assertNodeSlideJobCheckpointKind(
     throw new Error('An edit-proposal job must stop at the review gate, not completion.');
   }
   if (
+    (update.status === 'awaiting_review' || update.phase === 'awaiting_review') &&
+    (update.resultDeckId === undefined ||
+      update.resultPatchId === undefined ||
+      update.resultCandidateDigest === undefined)
+  ) {
+    throw new Error(
+      'An edit-proposal review checkpoint requires its deck, patch, and candidate digest bindings.',
+    );
+  }
+  if (
     update.resultCandidateDigest !== undefined &&
     (update.resultDeckId === undefined || update.resultPatchId === undefined)
   ) {
@@ -185,7 +217,7 @@ export function advanceNodeSlideJob(
   },
   now: number,
 ): NodeSlideJobRecord {
-  if (job.status === 'cancelled') return job;
+  if (TERMINAL.has(job.status)) return job;
   if (TERMINAL.has(job.status) && update.status !== job.status) return job;
   const progress = boundedProgress(update.progress);
   if (progress < job.progress) throw new Error('NodeSlide job progress cannot move backwards.');
@@ -234,7 +266,7 @@ export function failNodeSlideJob(
   error: string,
   now: number,
 ): NodeSlideJobRecord {
-  if (job.status === 'cancelled' || job.status === 'succeeded') return job;
+  if (TERMINAL.has(job.status)) return job;
   return advanceNodeSlideJob(
     job,
     {
@@ -261,6 +293,42 @@ export function retryNodeSlideJob(job: NodeSlideJobRecord, now: number): NodeSli
   };
 }
 
+export function resolveNodeSlideReviewJob(
+  job: NodeSlideJobRecord,
+  outcome: 'accepted' | 'rejected' | 'stale',
+  now: number,
+): NodeSlideJobRecord {
+  if (job.kind !== 'edit_proposal') {
+    throw new Error('Only an edit-proposal job can resolve a patch review.');
+  }
+  if (TERMINAL.has(job.status)) return job;
+  if (job.status !== 'awaiting_review') {
+    throw new Error('The durable edit job is not awaiting review.');
+  }
+  if (!job.resultDeckId || !job.resultPatchId || !job.resultCandidateDigest) {
+    throw new Error('The durable edit job is missing its review bindings.');
+  }
+  return advanceNodeSlideJob(
+    job,
+    outcome === 'accepted'
+      ? { status: 'succeeded', phase: 'complete', progress: 100 }
+      : outcome === 'rejected'
+        ? {
+            status: 'rejected',
+            phase: 'rejected',
+            progress: 100,
+            error: 'The user rejected the proposed patch. No candidate mutation was applied.',
+          }
+        : {
+            status: 'stale',
+            phase: 'stale',
+            progress: 100,
+            error: 'The proposed patch became stale before commit. The newer deck was preserved.',
+          },
+    now,
+  );
+}
+
 export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob {
   return {
     jobId: job.id,
@@ -278,6 +346,7 @@ export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob 
     ...(job.resultPatchId ? { resultPatchId: job.resultPatchId } : {}),
     ...(job.resultCandidateDigest ? { resultCandidateDigest: job.resultCandidateDigest } : {}),
     ...(job.conversationRunId ? { conversationRunId: job.conversationRunId } : {}),
+    ...(job.budgetId ? { budgetId: job.budgetId } : {}),
     ...(job.error ? { error: job.error } : {}),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
@@ -300,7 +369,8 @@ function publicResult(job: NodeSlideJobRecord): Pick<PublicNodeSlideJob, 'result
     job.kind === 'edit_proposal' &&
     job.resultDeckId &&
     job.resultPatchId &&
-    job.resultCandidateDigest
+    job.resultCandidateDigest &&
+    job.status === 'awaiting_review'
   ) {
     return {
       result: {
@@ -337,6 +407,12 @@ function validatePhaseStatus(
   }
   if (status === 'cancelled' && phase !== 'cancelled') {
     throw new Error('A cancelled NodeSlide job must use the cancelled phase.');
+  }
+  if (status === 'rejected' && (phase !== 'rejected' || progress !== 100)) {
+    throw new Error('A rejected NodeSlide job must use the rejected phase at 100%.');
+  }
+  if (status === 'stale' && (phase !== 'stale' || progress !== 100)) {
+    throw new Error('A stale NodeSlide job must use the stale phase at 100%.');
   }
 }
 

@@ -1,0 +1,86 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "A05",
+  "title": "Hard per-run cost ceiling",
+  "category": "autonomy_and_approval_mode",
+  "minimumRelease": false,
+  "setup": {
+    "deckFixture": "generated-c01-deck",
+    "activeSlideId": null,
+    "selectedSlideIds": [],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "An owned deck is open and the external model route is session-authorized with web research disabled.",
+      "attachments": [],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckExists": true
+      }
+    }
+  },
+  "request": {
+    "text": "Spend no more than $1 on this run.",
+    "attachmentIds": [],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["run_budget"],
+    "operations": {
+      "required": [
+        {
+          "type": "set_run_budget",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "run"
+        }
+      ],
+      "allowed": ["set_run_budget"],
+      "denied": ["publish", "share", "delete_deck"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": false,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": ["budget_configured", "budget_enforced"],
+      "forbiddenEvents": ["budget_overrun", "publish", "share"],
+      "boundaryBehavior": "Reserve provider exposure before dispatch and deny any call that would exceed the one-dollar hard ceiling."
+    },
+    "outcomes": [
+      "The persisted budget cap is no greater than one dollar.",
+      "Actual, reserved, and unreconciled exposure never exceeds the cap.",
+      "No deck mutation is implied by the budget instruction alone."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": ["check_authority", "budget_reservation", "budget_reconciliation"]
+  },
+  "forbidden": ["budget_overrun", "canonical_mutation_before_review", "unrequested_publish"],
+  "assertions": [
+    {
+      "id": "one-dollar-cap",
+      "description": "The server-owned hard cap is at most one dollar in micro-USD.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/budget/cap/maxCostMicroUsd"
+      },
+      "operator": "less_than_or_equal",
+      "expected": 1000000
+    },
+    {
+      "id": "exposure-within-cap",
+      "description": "Total settled and unsettled provider exposure remains within the hard cap.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/budget/exposureWithinCap"
+      },
+      "operator": "truthy"
+    }
+  ]
+}

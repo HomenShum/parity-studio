@@ -1,0 +1,177 @@
+{
+  "$schema": "../fixture.schema.json",
+  "schemaVersion": "nodeslide-agent-fixture/v1",
+  "id": "D01",
+  "title": "CSV to typed native line chart",
+  "category": "chart_and_data",
+  "minimumRelease": true,
+  "setup": {
+    "deckFixture": "founder-roadshow-v1",
+    "activeSlideId": "slide-traction",
+    "selectedSlideIds": ["slide-traction"],
+    "selectedElementIds": [],
+    "approvalMode": "review_required",
+    "autonomyGrant": null,
+    "context": {
+      "description": "The selected slide is empty and an authorized CSV has month and revenue columns.",
+      "attachments": [
+        {
+          "id": "monthly-revenue",
+          "kind": "csv",
+          "fixture": "evidence/monthly-revenue.csv",
+          "authorized": true
+        }
+      ],
+      "web": {
+        "allowed": false,
+        "authorizedOrigins": []
+      },
+      "canonicalBefore": {
+        "deckVersion": 7,
+        "csv": {
+          "columns": [
+            {
+              "name": "month",
+              "type": "date-month"
+            },
+            {
+              "name": "revenue",
+              "type": "number",
+              "unit": "USD"
+            }
+          ],
+          "rows": [["2026-01", 120000], ["2026-02", 150000], ["2026-03", 185000]]
+        }
+      }
+    }
+  },
+  "request": {
+    "text": "Create a line chart from the attached CSV using month as the x-axis and revenue as the y-axis.",
+    "attachmentIds": ["monthly-revenue"],
+    "webResearch": false
+  },
+  "expected": {
+    "primitives": ["chart", "source_binding"],
+    "operations": {
+      "required": [
+        {
+          "type": "create_chart",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "selected_slide"
+        },
+        {
+          "type": "bind_source",
+          "minCount": 1,
+          "maxCount": 1,
+          "scope": "created_chart"
+        }
+      ],
+      "allowed": ["create_chart", "bind_source", "update_layout", "replace_text"],
+      "denied": ["invent_value", "create_image", "publish", "share"]
+    },
+    "authority": {
+      "mode": "review_required",
+      "proposalRequired": true,
+      "canonicalMutationBeforeReview": false,
+      "requiredEvents": [
+        "scope_checked",
+        "attachment_scope_checked",
+        "selection_scope_checked",
+        "proposal_created",
+        "human_review_requested"
+      ],
+      "forbiddenEvents": ["auto_commit", "publish", "share"],
+      "boundaryBehavior": "Create a typed chart candidate from the authorized CSV on the selected slide and wait for acceptance."
+    },
+    "outcomes": [
+      "A native editable line chart uses month on x and revenue on y.",
+      "The chart records USD units and the CSV source ID.",
+      "The chart values exactly match the three CSV rows."
+    ]
+  },
+  "trace": {
+    "ordered": true,
+    "mustInclude": [
+      "read_context",
+      "read_attachments",
+      "typed_data_parse",
+      "resolve_scope",
+      "check_authority",
+      "plan",
+      "execute",
+      "candidate_validation",
+      "human_review"
+    ]
+  },
+  "forbidden": [
+    "invented_value",
+    "wrong_axis_binding",
+    "missing_unit",
+    "missing_source_binding",
+    "raster_chart",
+    "canonical_mutation_before_review"
+  ],
+  "assertions": [
+    {
+      "id": "line-chart",
+      "description": "The created chart is a native line chart.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/type"
+      },
+      "operator": "equals",
+      "expected": "line"
+    },
+    {
+      "id": "month-x-axis",
+      "description": "The x-axis field is month.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/xField"
+      },
+      "operator": "equals",
+      "expected": "month"
+    },
+    {
+      "id": "revenue-y-axis",
+      "description": "The y-axis field is revenue.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/yField"
+      },
+      "operator": "equals",
+      "expected": "revenue"
+    },
+    {
+      "id": "usd-unit",
+      "description": "The y-axis unit is USD.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/unit"
+      },
+      "operator": "equals",
+      "expected": "USD"
+    },
+    {
+      "id": "values-exact",
+      "description": "The chart series exactly matches the CSV numeric values.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/series/0/values"
+      },
+      "operator": "equals",
+      "expected": [120000, 150000, 185000]
+    },
+    {
+      "id": "csv-source-bound",
+      "description": "The chart is bound to the authorized CSV source.",
+      "actual": {
+        "evidenceKind": "run_record",
+        "pointer": "/result/chart/sourceIds"
+      },
+      "operator": "set_equals",
+      "expected": ["monthly-revenue"]
+    }
+  ]
+}

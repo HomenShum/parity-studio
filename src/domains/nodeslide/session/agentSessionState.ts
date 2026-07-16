@@ -30,6 +30,13 @@ const AUTHORITY_LOCK_JOB_STATUSES = new Set<AgentSessionJobStatus>([
   ...ACTIVE_JOB_STATUSES,
   'awaiting_review',
 ]);
+const TERMINAL_JOB_STATUSES = new Set<AgentSessionJobStatus>([
+  'succeeded',
+  'failed',
+  'cancelled',
+  'rejected',
+  'stale',
+]);
 const JOB_MAX_ATTEMPTS = 3;
 
 export function createInitialAgentSessionState(
@@ -166,13 +173,7 @@ export function failAgentSessionJob(
   now = Date.now(),
 ): AgentSessionState {
   const current = state.activeJob;
-  if (
-    !current ||
-    current.status === 'succeeded' ||
-    current.status === 'failed' ||
-    current.status === 'cancelled'
-  )
-    return state;
+  if (!current || TERMINAL_JOB_STATUSES.has(current.status)) return state;
   return freezeState({
     ...state,
     activeJob: Object.freeze({
@@ -214,6 +215,7 @@ export function reconcileAgentSessionJob(
       ? { resultCandidateDigest: boundedText(receipt.resultCandidateDigest, 256) }
       : {}),
     ...(receipt.conversationRunId ? { conversationRunId: receipt.conversationRunId } : {}),
+    ...(receipt.budgetId ? { budgetId: boundedText(receipt.budgetId, 256) } : {}),
     memoryIds: Object.freeze(uniqueBounded(receipt.memoryIds ?? current.memoryIds, 24)),
     ...(receipt.error ? { error: boundedText(receipt.error, 600) } : {}),
   });
@@ -433,6 +435,7 @@ function normalizeJob(value: unknown): AgentSessionJobHandle | null {
     ...(typeof value.conversationRunId === 'string'
       ? { conversationRunId: value.conversationRunId.slice(0, 256) }
       : {}),
+    ...(typeof value['budgetId'] === 'string' ? { budgetId: value['budgetId'].slice(0, 256) } : {}),
     memoryIds: Object.freeze(uniqueBounded(stringArray(value.memoryIds), 24)),
     ...(typeof value.error === 'string' ? { error: value.error.slice(0, 600) } : {}),
   });
@@ -629,7 +632,9 @@ function isJobStatus(value: unknown): value is AgentSessionJobStatus {
     value === 'awaiting_review' ||
     value === 'succeeded' ||
     value === 'failed' ||
-    value === 'cancelled'
+    value === 'cancelled' ||
+    value === 'rejected' ||
+    value === 'stale'
   );
 }
 
