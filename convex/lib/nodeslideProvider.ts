@@ -82,7 +82,8 @@ export interface NodeSlideProviderTelemetry {
   costMicroUsd: number;
   inputTokens: number;
   outputTokens: number;
-  attempts: NodeSlideProviderAttemptTelemetry[];
+  /** Current calls always emit this; optional keeps persisted v1 telemetry and fixtures readable. */
+  attempts?: NodeSlideProviderAttemptTelemetry[];
 }
 
 export interface NodeSlideProviderAttemptTelemetry {
@@ -197,7 +198,7 @@ export async function callNodeSlideFreeJson(
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const repairAttempt = attempt === 1;
       const attemptTelemetry = startAttemptTelemetry(repairAttempt);
-      telemetry.attempts.push(attemptTelemetry);
+      telemetry.attempts?.push(attemptTelemetry);
       let result: NodeSlideCompletionResult;
       try {
         result = await Promise.race([
