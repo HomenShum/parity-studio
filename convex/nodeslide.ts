@@ -4379,6 +4379,20 @@ async function createWorkspaceRows(
     deck: { ...builtSnapshot.deck, shareSlug: createShareSlug() },
   };
   const now = snapshot.deck.createdAt;
+  const validation = validateNodeSlideSnapshot(
+    snapshot,
+    now,
+    nodeslideStableId('validation', snapshot.deck.id, 'initial'),
+  );
+  const layoutBlockers = validation.issues.filter(
+    (issue) =>
+      issue.severity === 'error' && (issue.code === 'collision' || issue.code === 'overflow'),
+  );
+  if (layoutBlockers.length > 0) {
+    throw new Error(
+      `NodeSlide could not compose a safe first draft (${layoutBlockers.length} layout blocker${layoutBlockers.length === 1 ? '' : 's'}). No deck was persisted; revise or retry the brief.`,
+    );
+  }
   const projectRowId = await ctx.db.insert('projects', {
     clientSessionId: args.clientSessionId,
     title: snapshot.deck.title,
@@ -4397,11 +4411,6 @@ async function createWorkspaceRows(
     plan,
     spec,
   });
-  const validation = validateNodeSlideSnapshot(
-    snapshot,
-    now,
-    nodeslideStableId('validation', snapshot.deck.id, 'initial'),
-  );
   await ctx.db.insert('nodeslide_validations', validation);
   await insertVersion(ctx, snapshot, 'Initial deck', 'system', undefined, now);
   await ctx.db.insert('nodeslide_traces', {
@@ -4638,7 +4647,7 @@ async function finishPatchTrace(
           ? 'Accept validated proposal with delegated authority'
           : 'Delegated proposal decision'
         : status === 'completed'
-          ? 'Accept proposal with owner capability'
+          ? 'Commit validated edit with owner capability'
           : 'Decline proposal with owner capability',
       operationName: delegatedDecision
         ? 'agent.delegated_decision'
@@ -4669,7 +4678,7 @@ async function finishPatchTrace(
           ? 'Validated proposal accepted under delegated authority.'
           : 'Delegated acceptance could not apply the validated proposal; the deck remains unchanged.'
         : status === 'completed'
-          ? 'The owner capability accepted the validated proposal.'
+          ? 'The owner capability committed the validated edit.'
           : 'The owner capability declined or could not apply the proposal; the deck remains unchanged.',
       attributes: decisionAttributes,
       sequence: sequence + 1,
@@ -4705,7 +4714,7 @@ async function finishPatchTrace(
         ? 'Accepted under delegated authority and applied as a new deck version.'
         : 'Delegated acceptance could not apply the proposal. The deck remains unchanged.'
       : status === 'completed'
-        ? 'Accepted and applied as a new deck version.'
+        ? 'Validated edit applied as a new deck version. Undo is available.'
         : status === 'cancelled'
           ? 'Proposal declined. The deck remains unchanged.'
           : 'Proposal could not be applied. The deck remains unchanged.';

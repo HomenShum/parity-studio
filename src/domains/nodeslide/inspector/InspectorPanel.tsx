@@ -4,7 +4,6 @@ import {
   Braces,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   Database,
   History,
   MessageCircle,
@@ -141,6 +140,9 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
   onRetryAiRun?: () => void;
+  canUndo?: boolean;
+  onUndo?: () => void;
+  onReviewAppliedChange?: (patch: DeckPatch) => void;
   onSelectAgentRun?: (runId: string) => void;
   onLoadMoreAgentTelemetry?: (runId: string, beforeSequence: number) => void | Promise<void>;
   onLoadEvidenceCapture?: (captureId: string) => Promise<NodeSlideEvidenceCaptureDetail | null>;
@@ -250,6 +252,9 @@ export function InspectorPanel<CommandId extends string = string>({
   onDeleteAiDataSource,
   onCancelAiRun,
   onRetryAiRun,
+  canUndo = false,
+  onUndo,
+  onReviewAppliedChange,
   onSelectAgentRun,
   onLoadMoreAgentTelemetry,
   onLoadEvidenceCapture,
@@ -331,7 +336,6 @@ export function InspectorPanel<CommandId extends string = string>({
   const openComments = workspace.comments.filter(
     (comment) => !comment.parentId && comment.status === 'open',
   ).length;
-  const validation = workspace.validations[0];
 
   return (
     <>
@@ -568,6 +572,9 @@ export function InspectorPanel<CommandId extends string = string>({
                   {...(onApprovalModeChange ? { onApprovalModeChange } : {})}
                   {...(onCancelAiRun ? { onCancelRun: onCancelAiRun } : {})}
                   {...(onRetryAiRun ? { onRetryRun: onRetryAiRun } : {})}
+                  canUndo={canUndo}
+                  {...(onUndo ? { onUndo } : {})}
+                  {...(onReviewAppliedChange ? { onReviewAppliedChange } : {})}
                   onAccept={onAcceptPatch}
                   onReject={onRejectPatch}
                   onGenerateVariations={onGenerateVariations}
@@ -687,18 +694,6 @@ export function InspectorPanel<CommandId extends string = string>({
               </InspectorTabPanel>
             ) : null}
           </div>
-
-          <button
-            className="ns-inspector-footer"
-            type="button"
-            data-testid="validation-status"
-            onClick={() => onTabChange('trace')}
-            aria-label={`${validationLabel(validation)}. Open validation details.`}
-          >
-            <span className={validation?.cleanOk ? 'is-ok' : validation ? 'has-issues' : ''} />
-            <output aria-live="polite">{validationLabel(validation)}</output>
-            <ChevronRight size={12} />
-          </button>
         </div>
       </aside>
     </>
@@ -763,12 +758,4 @@ export function inspectorTabAfterKey(currentTab: InspectorTab, key: string): Ins
   const currentIndex = INSPECTOR_TABS.findIndex(({ id }) => id === currentTab);
   const nextIndex = getRovingFocusIndex(INSPECTOR_TABS.length, currentIndex, key);
   return nextIndex === null ? null : (INSPECTOR_TABS[nextIndex]?.id ?? null);
-}
-
-function validationLabel(validation: NodeSlideWorkspace['validations'][number] | undefined) {
-  if (!validation) return 'Awaiting validation';
-  if (!validation.ok) return `${validation.issues.length} structure checks need review`;
-  if (!validation.publishOk) return `${validation.issues.length} issues block presenting or export`;
-  if (!validation.cleanOk) return `${validation.issues.length} cleanup warnings`;
-  return 'Structure, presentation, and cleanup checks passed';
 }

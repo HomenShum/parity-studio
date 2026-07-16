@@ -173,6 +173,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
 
     await waitFor(() => expect(composer).toHaveAttribute('data-composer-mode', 'full'));
     expect(instruction).toHaveAttribute('rows', '9');
+    await user.click(screen.getByTestId('ai-tools-toggle'));
     expect(screen.getByTestId('ai-connect-agent')).toBeVisible();
   });
 
@@ -228,7 +229,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
 
     expect(screen.getByTestId('proposal-accept')).toBeDisabled();
     expect(screen.getByTestId('proposal-reject')).toBeDisabled();
-    expect(screen.getByTestId('proposal-accept')).toHaveTextContent('Finalizing');
+    expect(screen.getByTestId('proposal-accept')).toHaveTextContent('Applying');
 
     view.rerender(
       <div className="nodeslide-studio">
@@ -238,6 +239,89 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
 
     await waitFor(() => expect(screen.getByTestId('proposal-accept')).toBeEnabled());
     expect(screen.getByTestId('proposal-reject')).toBeEnabled();
+  });
+
+  it('binds a compact post-apply receipt to the exact current patch, run, and Undo', async () => {
+    const baseSnapshot = fixture('undo-first-applied-change');
+    const snapshot = {
+      ...baseSnapshot,
+      deck: { ...baseSnapshot.deck, version: baseSnapshot.deck.version + 1 },
+    };
+    const user = userEvent.setup();
+    const appliedPatch = {
+      ...proposal(baseSnapshot),
+      status: 'accepted' as const,
+      summary: 'Clarified the decision headline.',
+      candidateDigest: 'sha256:applied-candidate',
+      resultingDeckVersion: snapshot.deck.version,
+      updatedAt: 2_000,
+    };
+    const matchingRun = agentRun(
+      snapshot,
+      appliedPatch.id,
+      'Clarify the decision headline.',
+      'nebius',
+      'zai-org/GLM-5.2',
+    );
+    const onUndo = vi.fn();
+    const onReviewAppliedChange = vi.fn();
+
+    renderInspector(snapshot, {
+      patches: [appliedPatch],
+      agentRuns: [matchingRun],
+      canUndo: true,
+      onUndo,
+      onReviewAppliedChange,
+    });
+
+    const receipt = screen.getByTestId('applied-change-card');
+    expect(receipt).toHaveTextContent('Edited 1 object');
+    expect(receipt).toHaveTextContent('Clarified the decision headline. · deck v2');
+    expect(receipt).toHaveAttribute('data-patch-id', appliedPatch.id);
+    expect(receipt).toHaveAttribute('data-candidate-digest', appliedPatch.candidateDigest);
+    expect(receipt).toHaveAttribute('data-base-version', '1');
+    expect(receipt).toHaveAttribute('data-resulting-version', '2');
+    expect(receipt).toHaveAttribute('data-run-id', matchingRun.id);
+    expect(receipt).toHaveAttribute('data-patch-undo-available', 'true');
+    expect(screen.queryByTestId('proposal-accept')).not.toBeInTheDocument();
+
+    const undo = screen.getByTestId('applied-change-undo');
+    expect(undo).toBeEnabled();
+    expect(undo).toHaveTextContent('Undo this change');
+    await user.click(undo);
+    await user.click(screen.getByTestId('applied-change-version-history'));
+
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(onReviewAppliedChange).toHaveBeenCalledWith(appliedPatch);
+  });
+
+  it('does not present generic history Undo as patch-specific after the deck advances', () => {
+    const baseSnapshot = fixture('stale-applied-change');
+    const snapshot = {
+      ...baseSnapshot,
+      deck: { ...baseSnapshot.deck, version: baseSnapshot.deck.version + 2 },
+    };
+    const appliedPatch = {
+      ...proposal(baseSnapshot),
+      status: 'accepted' as const,
+      resultingDeckVersion: baseSnapshot.deck.version + 1,
+      updatedAt: 2_000,
+    };
+
+    renderInspector(snapshot, {
+      patches: [appliedPatch],
+      canUndo: true,
+      onUndo: vi.fn(),
+      onReviewAppliedChange: vi.fn(),
+    });
+
+    const receipt = screen.getByTestId('applied-change-card');
+    expect(receipt).toHaveAttribute('data-patch-undo-available', 'false');
+    expect(screen.getByTestId('applied-change-undo')).toBeDisabled();
+    expect(screen.getByTestId('applied-change-undo')).toHaveTextContent('Undo unavailable');
+    expect(screen.getByTestId('applied-change-version-history')).toHaveTextContent(
+      'Version history',
+    );
   });
 
   it('surfaces the active human-origin preview in the AI review stream without widening the queue', () => {
@@ -276,7 +360,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     if (!composerHeading) throw new Error('Expected the prompt-first composer heading.');
     expect(screen.getByTestId('assistant-ui-thread')).toHaveAttribute(
       'data-thread-layout',
-      'content',
+      'anchored',
     );
     expect(within(composerHeading as HTMLElement).getByText('Writes to this slide')).toBeVisible();
     await user.type(
@@ -1171,8 +1255,15 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
 
     renderInspector(snapshot, { agentRuns: [run], agentMessages: messages });
 
+    const summaryEvent = screen.getByTestId('conversation-summary-event');
+    expect(within(summaryEvent).getByText('Conversation summarized')).toBeVisible();
+    await user.click(within(summaryEvent).getByText('Conversation summarized'));
     const loadEarlier = screen.getByRole('button', { name: /Show 5 earlier messages/ });
     expect(loadEarlier).toBeVisible();
+    expect(screen.getByTestId('agent-virtualized-messages')).toHaveAttribute(
+      'data-virtualized',
+      'true',
+    );
     expect(screen.getByTestId('assistant-ui-thread')).toHaveAttribute(
       'data-thread-layout',
       'anchored',

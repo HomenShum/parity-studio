@@ -16,6 +16,27 @@ import {
 afterEach(cleanup);
 
 describe('NodeSlide bounded multi-slide selection', () => {
+  it('uses the shared disclosure primitive without losing the controlled section contract', async () => {
+    const snapshot = buildGoldenNodeSlide('navigator-disclosure', 1_000).snapshot;
+    const slides = snapshot.slides.slice(0, 2);
+    const section = slides[0]?.section;
+    if (!section) throw new Error('Fixture requires a named first section.');
+    const onToggleSection = vi.fn();
+    const user = userEvent.setup();
+    renderNavigator(slides, {
+      collapsedSections: [section],
+      onToggleSection,
+    });
+
+    const trigger = screen.getByRole('button', { name: `${section}1` });
+    expect(trigger).toHaveAttribute('data-slot', 'collapsible-trigger');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId(`slide-thumbnail-${slides[0]?.id}`)).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(onToggleSection).toHaveBeenCalledWith(section);
+  });
+
   it('selects noncontiguous slides without moving the active canvas and supports deselection', () => {
     const snapshot = buildGoldenNodeSlide('multi-slide-ui', 1_000).snapshot;
     const slides = snapshot.slides.slice(0, 4);

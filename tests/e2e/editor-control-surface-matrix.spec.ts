@@ -384,18 +384,21 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await web.click();
     await expect(web).toHaveAttribute('aria-pressed', 'true');
     await web.click();
-    await page.getByTestId('ai-memory').click();
+    const memory = page.getByTestId('ai-memory');
+    if (!(await memory.isVisible())) await page.getByTestId('ai-tools-toggle').click();
+    await memory.click();
     const memoryDialog = page.getByTestId('memory-dialog');
     await expect(memoryDialog).toBeVisible();
     await memoryDialog.getByRole('tab', { name: /Archived/ }).click();
     await memoryDialog.getByRole('tab', { name: /Active/ }).click();
     await memoryDialog.getByRole('button', { name: 'Close' }).click();
 
-    await chooseFirstMenuItem(
-      page,
-      page.getByRole('button', { name: 'Add read context reference' }),
-    );
-    await chooseFirstMenuItem(page, page.getByRole('button', { name: 'Add command' }));
+    const contextReference = page.getByRole('button', { name: 'Add read context reference' });
+    if (!(await contextReference.isVisible())) await page.getByTestId('ai-tools-toggle').click();
+    await chooseFirstMenuItem(page, contextReference);
+    const command = page.getByRole('button', { name: 'Add command' });
+    if (!(await command.isVisible())) await page.getByTestId('ai-tools-toggle').click();
+    await chooseFirstMenuItem(page, command);
     await expect(page.getByRole('button', { name: 'Collapse composer' })).toBeVisible();
     await page.getByRole('button', { name: 'Collapse composer' }).click();
     await page.getByRole('button', { name: 'Expand composer' }).click();

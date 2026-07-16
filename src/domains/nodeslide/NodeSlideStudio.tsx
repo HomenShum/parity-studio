@@ -1465,9 +1465,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
                     deckId: targetDeckId,
                     ownerAccessKey: jobOwnerAccessKey,
                   }));
-                if (staleWorkspace) {
-                  installWorkspace(staleWorkspace, jobOwnerAccessKey);
-                }
+                if (staleWorkspace) installWorkspace(staleWorkspace, jobOwnerAccessKey);
                 queueDelegationRevocation(delegatedApproval, jobOwnerAccessKey);
                 setActiveInspectorTab('versions');
                 setInspectorCollapsed(false);
@@ -2438,6 +2436,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     async (direction: 'undo' | 'redo') => {
       if (!workspace || !ownerAccessKey) return;
       const requestedDeckId = workspace.deck.id;
+      const requestedSlideId = activeSlideId;
       await enqueueEditorWrite(
         requestedDeckId,
         false,
@@ -2496,6 +2495,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             setUndoStack(undoStackRef.current);
             setRedoStack(redoStackRef.current);
             installWorkspace(receipt.workspace, currentOwnerAccessKey);
+            if (requestedSlideId && receipt.workspace.deck.slideOrder.includes(requestedSlideId)) {
+              setActiveSlideId(requestedSlideId);
+            }
             setCanvasResetKey((value) => value + 1);
             setToast({
               kind: 'success',
@@ -2513,7 +2515,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         },
       );
     },
-    [enqueueEditorWrite, installWorkspace, ownerAccessKey, restoreVersion, workspace],
+    [
+      activeSlideId,
+      enqueueEditorWrite,
+      installWorkspace,
+      ownerAccessKey,
+      restoreVersion,
+      workspace,
+    ],
   );
 
   useEffect(() => {
@@ -4456,6 +4465,12 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             activeSessionJob.attempt < activeSessionJob.maxAttempts
               ? { onRetryAiRun: () => void retryAiRun() }
               : {})}
+            canUndo={canUndo}
+            onUndo={() => void restoreHistory('undo')}
+            onReviewAppliedChange={() => {
+              setActiveInspectorTab('versions');
+              setInspectorCollapsed(false);
+            }}
             onAcceptPatch={handleAcceptPatch}
             onRejectPatch={handleRejectPatch}
             onPreviewPatch={previewPatch}

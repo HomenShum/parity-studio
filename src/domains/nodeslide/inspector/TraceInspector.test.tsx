@@ -290,8 +290,8 @@ describe('CountersignSeal — state-honest matrix (spec §4a)', () => {
   it('Row: full-generation — no patch means no sign-off is asserted', () => {
     const model = buildSealModel(traceFullGen, undefined, validationLive, 'pro');
     expect(model.variant).toBe('live');
-    expect(model.human.value).toBe('No review cycle — full generation');
-    expect(model.human.sub).toBe('no human sign-off on record');
+    expect(model.human.value).toBe('Full generation');
+    expect(model.human.sub).toBe('no deck-local edit receipt');
   });
 
   it('Row: fallback — provisional stamp, NO invented hash, honestly green validator', () => {

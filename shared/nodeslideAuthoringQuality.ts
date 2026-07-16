@@ -2,7 +2,7 @@ import type { DeckSnapshot, Slide, SlideElement } from './nodeslide';
 import type { NodeSlideAuthoringPolicyBundle } from './nodeslideAuthoringPolicy';
 import { createDefaultNodeSlideAuthoringPolicy } from './nodeslideAuthoringPolicy';
 import { nodeSlideDurableDigest } from './nodeslideDurableSession';
-import type { NodeSlideJourneyProof } from './nodeslideJourneyProof';
+import type { NodeSlideJourneyProofInput } from './nodeslideJourneyProof';
 import { verifyNodeSlideJourneyProof } from './nodeslideJourneyProof';
 
 export const NODESLIDE_PRESENTATION_QUALITY_VERSION = 'nodeslide.presentation-quality/v1' as const;
@@ -54,7 +54,7 @@ export interface NodeSlidePresentationQualityReceipt {
 
 export interface NodeSlidePresentationQualityOptions {
   policy?: NodeSlideAuthoringPolicyBundle;
-  journeyProof?: NodeSlideJourneyProof;
+  journeyProof?: NodeSlideJourneyProofInput;
   requireJourneyProof?: boolean;
   referenceReceipt?: NodeSlidePresentationQualityReceipt;
   maxReferenceGap?: number;

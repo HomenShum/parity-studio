@@ -939,7 +939,7 @@ describe('NodeSlide delegated acceptance', () => {
     expect(ownerHarness.database.rows('nodeslide_agent_events')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          body: 'The owner capability accepted the validated proposal.',
+          body: 'The owner capability committed the validated edit.',
         }),
       ]),
     );

@@ -14,8 +14,19 @@ import { validateNodeSlideSnapshot } from './nodeslideValidation';
 describe('NodeSlide seed', () => {
   it('builds a clean canonical golden snapshot', () => {
     const snapshot = buildGoldenNodeSlide('theme-and-repair-test', 1_000).snapshot;
+    const browserValidation = validateSnapshot(snapshot);
 
     expect(validateNodeSlideSnapshot(snapshot, 1_000).issues).toEqual([]);
+    expect(
+      browserValidation.publishOk,
+      JSON.stringify(
+        browserValidation.issues.map((issue) => ({
+          ...issue,
+          element: snapshot.elements.find((element) => element.id === issue.elementId),
+        })),
+      ),
+    ).toBe(true);
+    expect(browserValidation.issues.map((issue) => issue.code)).toEqual(['export']);
     expect(snapshot.elements.map((element) => element.kind)).toEqual(
       expect.arrayContaining(['text', 'shape', 'image', 'chart', 'math']),
     );

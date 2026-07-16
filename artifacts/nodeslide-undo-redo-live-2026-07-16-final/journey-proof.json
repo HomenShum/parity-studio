@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "nodeslide.journey-proof/v2",
+  "deckId": "deck_job_2e54d70c6b883d2b8181bacc954a26e8",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784241850493
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784241853519,
+      "deckVersion": 1
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784241855999,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_edit_verified",
+      "occurredAt": 1784241862926,
+      "phase": "edit-auto-apply",
+      "inputTokens": 8904,
+      "outputTokens": 154,
+      "costUsd": 0.005,
+      "traceText": "Completed deck v2 Started 3:44:20 PM OpenRouter GLM 5.2 prepared 1 validated scoped operation. Write scope · 1 slide openrouter · z-ai/glm-5.2 · Medium effort EDIT CYCLE 5s TOKENS 8,904 → 154 COST $0.0050 VALIDATION Passed Execution 18 auditable records Activity 9 spans · 4.57 s Full timeline 18 loaded 0 errors 0 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 8,904 in · 154 out COST $0.004995 CANDIDATE DIGEST sha256:1b3c12b…e119bb4 Invoke NodeSlide agent invoke_agent 4.57 s Plan bounded slide edit chat 3.89 s Plan bounded slide edit chat 61 ms Validate candidate candidate_validation 31 ms Validate candidate candidate_validation 148 ms Accept validated proposal with delegated authority agent.delegated_decision 0 ms 3 earlier loaded steps hidden here; open the full timeline to inspect them. Chain of custody and countersigned receipt"
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784241862926,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:fb12e9479de0cc80eba997a7235f98abb5391e7b12fa18f1938f3a86cf425d5f",
+      "runId": "agent_run_ab6b203afaa37cafd7d5660c801147f4",
+      "patchId": "patch_agent_8c4c64c5ca4c66de9840828cde5659fd",
+      "candidateDigest": "sha256:1b3c12b6cd24fac1d4c2383434b773468849f1c2ed953f211e65c070fe119bb4",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784241863012,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:171d2e027d8038b14308c189751246e5b0dc271c20fca17546761393fc5b198a",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "runId": "agent_run_ab6b203afaa37cafd7d5660c801147f4",
+      "patchId": "patch_agent_8c4c64c5ca4c66de9840828cde5659fd",
+      "candidateDigest": "sha256:1b3c12b6cd24fac1d4c2383434b773468849f1c2ed953f211e65c070fe119bb4",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784241864565,
+      "deckVersion": 3,
+      "patchId": "patch_agent_8c4c64c5ca4c66de9840828cde5659fd",
+      "contentDigest": "sha256:6eb0b29a55d67ce40d19f06e1c05cd0905989c198b527d6fc9cc150d99d92d79",
+      "receiptDigest": "sha256:d3f8b347ad6822469a2d3adda26847d5af33ac784b00b5c03624d93f3eb86177"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784241866089,
+      "deckVersion": 4,
+      "patchId": "patch_agent_8c4c64c5ca4c66de9840828cde5659fd",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "receiptDigest": "sha256:31a6b2e99969ae5b2b2331fa9c47f3e58f5cc10ca23d7a43e848e5a094400e05"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784241866089,
+      "deckVersion": 4
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784241866752,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\final-editor.png",
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-undo-redo-live-2026-07-16-final\\run-manifest.json"
+  },
+  "digest": "sha256:fef83f9989021c497a1554950b7f457a7aee1cb91f4631d6e63e59ca7671ed63"
+}

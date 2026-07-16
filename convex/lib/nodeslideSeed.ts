@@ -174,7 +174,7 @@ const THEME_EDITORIAL_SIGNAL: ThemeSpec = {
   colors: {
     canvas: '#F7F4ED',
     ink: '#26221D',
-    muted: '#756B61',
+    muted: '#6B6158',
     accent: '#B44A2D',
     accentSoft: '#F2DED3',
     insight: '#E5E9D6',

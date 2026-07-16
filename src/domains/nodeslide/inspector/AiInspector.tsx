@@ -1,5 +1,5 @@
 import { PromptInputButton } from '@/components/ai-elements/prompt-input';
-import { ThreadPrimitive } from '@assistant-ui/react';
+import { type AppendMessage, ThreadPrimitive } from '@assistant-ui/react';
 import {
   ArrowDown,
   ArrowUp,
@@ -212,9 +212,13 @@ export interface AiInspectorProps<CommandId extends string = string> {
   ) => Promise<void>;
   onDeleteMemory?: (memoryId: string) => Promise<void>;
   onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
+  showApprovalModeControl?: boolean;
   onOpenDeckCiTrace?: () => void;
   onCancelRun?: (runId: string) => void;
   onRetryRun?: () => void;
+  canUndo?: boolean;
+  onUndo?: () => void;
+  onReviewAppliedChange?: (patch: DeckPatch) => void;
   onAccept: (patch: DeckPatch) => void;
   onReject: (patch: DeckPatch) => void;
   onPreviewPatch?: (patch: AiReviewablePatch | null) => void;
@@ -266,9 +270,13 @@ export function AiInspector<CommandId extends string = string>({
   onUpdateMemory,
   onDeleteMemory,
   onApprovalModeChange,
+  showApprovalModeControl = true,
   onOpenDeckCiTrace,
   onCancelRun,
   onRetryRun,
+  canUndo = false,
+  onUndo,
+  onReviewAppliedChange,
   onAccept,
   onReject,
   onPreviewPatch,
@@ -332,6 +340,7 @@ export function AiInspector<CommandId extends string = string>({
   const turboDescriptionId = `${composerId}-turbo-description`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const toolsMenuRef = useRef<HTMLDetailsElement | null>(null);
   const reviewScrollRef = useRef<HTMLDivElement | null>(null);
   const scopeWasManuallyChosenRef = useRef(false);
   const previousSelectedElementCountRef = useRef(selectedElements.length);
@@ -412,6 +421,13 @@ export function AiInspector<CommandId extends string = string>({
     }
     return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
   }, [patches, previewedPatchId]);
+  const latestAppliedPatch = useMemo(
+    () =>
+      [...patches]
+        .filter((patch) => patch.source === 'agent' && patch.status === 'accepted')
+        .sort((left, right) => right.updatedAt - left.updatedAt)[0],
+    [patches],
+  );
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     () => proposals[0]?.id ?? null,
   );
@@ -438,6 +454,15 @@ export function AiInspector<CommandId extends string = string>({
     }
     return byPatchId;
   }, [agentRuns]);
+  const latestAppliedRun = latestAppliedPatch
+    ? proposalRunByPatchId.get(latestAppliedPatch.id)
+    : undefined;
+  const canUndoLatestAppliedPatch = Boolean(
+    onUndo &&
+      canUndo &&
+      latestAppliedPatch?.resultingDeckVersion !== undefined &&
+      latestAppliedPatch.resultingDeckVersion === deck.version,
+  );
   const latestBatchId = variations[0]?.batchId;
   const directions = useMemo(
     () => variations.filter((variation) => variation.batchId === latestBatchId),
@@ -636,11 +661,6 @@ export function AiInspector<CommandId extends string = string>({
     [agentMessages, messageWindowSize],
   );
   const hiddenMessageCount = Math.max(0, agentMessages.length - recentMessages.length);
-  const contentSizedThread =
-    hiddenMessageCount === 0 &&
-    recentMessages.length <= 2 &&
-    proposals.length <= 1 &&
-    directions.length <= 1;
   const threadMessages = useMemo(
     () =>
       buildNodeSlideThreadMessages(recentMessages, agentRuns, {
@@ -891,6 +911,23 @@ export function AiInspector<CommandId extends string = string>({
     setSelectedCommand(null);
   };
 
+  const runtimeSubmitRef = useRef(submit);
+  runtimeSubmitRef.current = submit;
+  const runtimeCancelTargetRef = useRef({ onCancelRun, runId: visibleDurableRun?.id });
+  runtimeCancelTargetRef.current = { onCancelRun, runId: visibleDurableRun?.id };
+  const handleRuntimeNew = useCallback(async (message: AppendMessage) => {
+    const text = message.content
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n')
+      .trim();
+    if (text) await runtimeSubmitRef.current(text, []);
+  }, []);
+  const handleRuntimeCancel = useCallback(async () => {
+    const { onCancelRun: cancel, runId } = runtimeCancelTargetRef.current;
+    if (cancel && runId) cancel(runId);
+  }, []);
+
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
@@ -973,12 +1010,15 @@ export function AiInspector<CommandId extends string = string>({
 
       <NodeSlideThreadRuntimeProvider
         isRunning={Boolean(visibleDurableRun)}
+        isSendDisabled={isSubmitting || Boolean(visibleDurableRun) || hasReviewableProposal}
         messages={threadMessages}
+        onCancel={visibleDurableRun && onCancelRun ? handleRuntimeCancel : undefined}
+        onNew={handleRuntimeNew}
       >
         <ThreadPrimitive.Root
           className="ns-agent-thread"
           data-testid="assistant-ui-thread"
-          data-thread-layout={contentSizedThread ? 'content' : 'anchored'}
+          data-thread-layout="anchored"
         >
           {materialWorkbenchOpen && onProposeVisualMaterial ? (
             <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
@@ -1027,27 +1067,40 @@ export function AiInspector<CommandId extends string = string>({
                   <span className="ns-eyebrow">NodeSlide</span>
                   <strong>What should we change?</strong>
                   <p>
-                    Describe the outcome. I’ll return a scoped, validated patch for review before
-                    anything changes.
+                    Describe the outcome. I’ll validate it and prepare a reversible edit for review.
+                    Turbo can auto-apply validated edits for this session; version history remains
+                    available.
                   </p>
                 </div>
               </section>
             ) : null}
 
             {hiddenMessageCount > 0 ? (
-              <button
-                className="ns-agent-load-earlier"
-                type="button"
-                onClick={() => setMessageWindowSize((current) => current + 50)}
-                data-testid="agent-load-earlier"
-              >
-                <span>Show {Math.min(50, hiddenMessageCount)} earlier messages</span>
-                <small>{hiddenMessageCount} hidden</small>
-              </button>
+              <details className="ns-conversation-summary" data-testid="conversation-summary-event">
+                <summary>
+                  <Brain size={12} aria-hidden="true" />
+                  <span>Conversation summarized</span>
+                  <small>{hiddenMessageCount} earlier</small>
+                  <ChevronRight size={12} aria-hidden="true" />
+                </summary>
+                <div>
+                  <p>
+                    Showing the latest {recentMessages.length} persisted messages. Earlier messages
+                    are unchanged and remain available on demand.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMessageWindowSize((current) => current + 50)}
+                    data-testid="agent-load-earlier"
+                  >
+                    Show {Math.min(50, hiddenMessageCount)} earlier messages
+                  </button>
+                </div>
+              </details>
             ) : null}
 
             <div className="ns-ai-v3-conversation" data-testid="assistant-ui-messages">
-              <NodeSlideThreadMessages />
+              <NodeSlideThreadMessages scrollContainerRef={reviewScrollRef} />
             </div>
 
             {(resolvedActivity || activeTrace) && !hasPersistedTerminalMessage ? (
@@ -1210,6 +1263,64 @@ export function AiInspector<CommandId extends string = string>({
               </section>
             ) : null}
 
+            {latestAppliedPatch ? (
+              <section
+                className="ns-applied-change-card"
+                data-testid="applied-change-card"
+                data-patch-id={latestAppliedPatch.id}
+                data-candidate-digest={latestAppliedPatch.candidateDigest ?? ''}
+                data-base-version={String(latestAppliedPatch.baseDeckVersion)}
+                data-resulting-version={String(latestAppliedPatch.resultingDeckVersion ?? '')}
+                data-run-id={latestAppliedRun?.id ?? ''}
+                data-patch-undo-available={String(canUndoLatestAppliedPatch)}
+              >
+                <div className="ns-applied-change-card__summary">
+                  <span className="ns-applied-change-card__mark" aria-hidden="true">
+                    <Check size={15} />
+                  </span>
+                  <span>
+                    <strong>
+                      Edited {latestAppliedPatch.operations.length}{' '}
+                      {latestAppliedPatch.operations.length === 1 ? 'object' : 'objects'}
+                    </strong>
+                    <small>
+                      {latestAppliedPatch.summary}
+                      {latestAppliedPatch.resultingDeckVersion
+                        ? ` · deck v${latestAppliedPatch.resultingDeckVersion}`
+                        : ''}
+                    </small>
+                  </span>
+                </div>
+                <div className="ns-applied-change-card__actions">
+                  {onUndo ? (
+                    <button
+                      type="button"
+                      onClick={canUndoLatestAppliedPatch ? onUndo : undefined}
+                      disabled={!canUndoLatestAppliedPatch}
+                      data-testid="applied-change-undo"
+                      title={
+                        canUndoLatestAppliedPatch
+                          ? `Undo patch ${latestAppliedPatch.id}`
+                          : 'This change is no longer the latest deck version. Use version history to restore it.'
+                      }
+                    >
+                      <RotateCcw size={13} />
+                      {canUndoLatestAppliedPatch ? 'Undo this change' : 'Undo unavailable'}
+                    </button>
+                  ) : null}
+                  {onReviewAppliedChange ? (
+                    <button
+                      type="button"
+                      onClick={() => onReviewAppliedChange(latestAppliedPatch)}
+                      data-testid="applied-change-version-history"
+                    >
+                      <GitCompareArrows size={13} /> Version history
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
             {showDirectionThread ? (
               <section
                 className="ns-variation-section ns-ai-v3-directions"
@@ -1366,7 +1477,7 @@ export function AiInspector<CommandId extends string = string>({
                     <strong>{hasReviewableProposal ? 'Ask for a revision' : 'New request'}</strong>
                     <small>{scopeSummary}</small>
                   </span>
-                  {onApprovalModeChange ? (
+                  {showApprovalModeControl && onApprovalModeChange ? (
                     <button
                       type="button"
                       role="switch"
@@ -1398,7 +1509,7 @@ export function AiInspector<CommandId extends string = string>({
                     </output>
                   ) : null}
                 </header>
-                {onApprovalModeChange ? (
+                {showApprovalModeControl && onApprovalModeChange ? (
                   <small className="ns-ai-turbo-description" id={turboDescriptionId}>
                     Validated edits that pass Deck CI auto-apply; Undo remains available.
                   </small>
@@ -1495,7 +1606,7 @@ export function AiInspector<CommandId extends string = string>({
                         </>
                       )}
                     </div>
-                    {onApprovalModeChange ? (
+                    {showApprovalModeControl && onApprovalModeChange ? (
                       <section className="ns-ai-turbo-details" data-testid="ai-turbo-details">
                         <div className="ns-ai-turbo-details__status">
                           <strong>Session change authority</strong>
@@ -1869,10 +1980,7 @@ export function AiInspector<CommandId extends string = string>({
                         <Globe2 size={14} />
                         <span className="ns-ai-tool-label">Web</span>
                       </PromptInputButton>
-                      <details
-                        className="ns-ai-tools-menu"
-                        {...(composerExpanded ? { open: true } : {})}
-                      >
+                      <details className="ns-ai-tools-menu" ref={toolsMenuRef}>
                         <summary aria-label="Open composer tools" data-testid="ai-tools-toggle">
                           <PlugZap size={14} /> <span>Tools</span>
                         </summary>
@@ -1882,7 +1990,10 @@ export function AiInspector<CommandId extends string = string>({
                             className="ns-ai-tool-button"
                             data-testid="ai-connect-agent"
                             disabled={approvalControlLocked}
-                            onClick={() => setConnectionsOpen(true)}
+                            onClick={() => {
+                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
+                              setConnectionsOpen(true);
+                            }}
                             title="Connect BYOK model or coding agent"
                           >
                             <PlugZap size={14} />
@@ -1895,7 +2006,10 @@ export function AiInspector<CommandId extends string = string>({
                               aria-pressed={useMemoryForRun}
                               data-testid="ai-memory"
                               disabled={approvalControlLocked}
-                              onClick={() => setMemoryOpen(true)}
+                              onClick={() => {
+                                if (toolsMenuRef.current) toolsMenuRef.current.open = false;
+                                setMemoryOpen(true);
+                              }}
                               title="Manage durable deck memory"
                               variant={useMemoryForRun ? 'default' : 'ghost'}
                             >
@@ -1910,7 +2024,10 @@ export function AiInspector<CommandId extends string = string>({
                             aria-label="Add read context reference"
                             className="ns-ai-tool-button ns-ai-tool-context"
                             disabled={approvalControlLocked || references.length === 0}
-                            onClick={() => openTokenMenu('@')}
+                            onClick={() => {
+                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
+                              openTokenMenu('@');
+                            }}
                             title="Add read context"
                           >
                             <AtSign size={14} />
@@ -1920,7 +2037,10 @@ export function AiInspector<CommandId extends string = string>({
                             aria-label="Add command"
                             className="ns-ai-tool-button ns-ai-tool-command"
                             disabled={approvalControlLocked}
-                            onClick={() => openTokenMenu('/')}
+                            onClick={() => {
+                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
+                              openTokenMenu('/');
+                            }}
                             title="Add command"
                           >
                             <Command size={14} />
@@ -1933,7 +2053,10 @@ export function AiInspector<CommandId extends string = string>({
                               aria-pressed={materialWorkbenchOpen}
                               data-testid="ai-open-material-workbench"
                               disabled={approvalControlLocked}
-                              onClick={() => setMaterialWorkbenchOpen((open) => !open)}
+                              onClick={() => {
+                                if (toolsMenuRef.current) toolsMenuRef.current.open = false;
+                                setMaterialWorkbenchOpen((open) => !open);
+                              }}
                               title="Open the visual material tool"
                               variant={materialWorkbenchOpen ? 'default' : 'ghost'}
                             >
@@ -2341,12 +2464,12 @@ function ProposalCard({
                 title={
                   decisionLocked
                     ? 'Finalizing the durable review receipt'
-                    : 'Accept this validated proposal'
+                    : 'Apply this exact validated patch candidate'
                 }
                 data-testid="proposal-accept"
               >
                 {decisionLocked ? <LoaderCircle size={14} /> : <Check size={14} />}
-                {decisionLocked ? ' Finalizing' : ' Accept'}
+                {decisionLocked ? ' Applying' : ' Apply'}
               </button>
             )}
             <button
