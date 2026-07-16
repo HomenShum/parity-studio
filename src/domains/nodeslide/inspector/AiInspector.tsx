@@ -294,6 +294,7 @@ export function AiInspector<CommandId extends string = string>({
     NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   );
   const [webResearch, setWebResearch] = useState(false);
+  const [runSpendLimit, setRunSpendLimit] = useState('');
   const [providerControlsOpen, setProviderControlsOpen] = useState(false);
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
@@ -369,10 +370,7 @@ export function AiInspector<CommandId extends string = string>({
 
   useEffect(() => {
     const previousSelectionCount = previousSelectedElementCountRef.current;
-    if (scopeChoice === 'elements' && selectedElements.length === 0) {
-      setScopeChoice('slide');
-      scopeWasManuallyChosenRef.current = false;
-    } else if (
+    if (
       selectedElements.length > 0 &&
       previousSelectionCount === 0 &&
       !scopeWasManuallyChosenRef.current
@@ -622,7 +620,9 @@ export function AiInspector<CommandId extends string = string>({
       : scopeChoice === 'selected_slides'
         ? `Writes to ${selectedSlideIds.length} selected slides`
         : scopeChoice === 'elements'
-          ? `Writes to ${selectedElements.length} selected ${selectedElements.length === 1 ? 'element' : 'elements'}`
+          ? selectedElements.length > 0
+            ? `Writes to ${selectedElements.length} selected ${selectedElements.length === 1 ? 'element' : 'elements'}`
+            : 'Writes to selected elements · reselect required'
           : 'Writes to this slide';
   const referencesUnselectedElement =
     scopeChoice === 'slide' &&
@@ -635,6 +635,11 @@ export function AiInspector<CommandId extends string = string>({
     [agentMessages, messageWindowSize],
   );
   const hiddenMessageCount = Math.max(0, agentMessages.length - recentMessages.length);
+  const contentSizedThread =
+    hiddenMessageCount === 0 &&
+    recentMessages.length <= 2 &&
+    proposals.length <= 1 &&
+    directions.length <= 1;
   const threadMessages = useMemo(
     () =>
       buildNodeSlideThreadMessages(recentMessages, agentRuns, {
@@ -823,7 +828,9 @@ export function AiInspector<CommandId extends string = string>({
         );
     if (!writeScope) {
       setScopeError(
-        `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
+        scopeChoice === 'elements'
+          ? 'The selected element scope is no longer available. Reselect the element or explicitly choose a wider write scope.'
+          : `Select between 2 and ${NODESLIDE_SCOPE_SLIDE_LIMIT} slides for a bounded multi-slide edit.`,
       );
       return;
     }
@@ -845,6 +852,12 @@ export function AiInspector<CommandId extends string = string>({
     ) {
       return;
     }
+    const submittedMaxCostUsd = parseOptionalRunSpendLimit(runSpendLimit);
+    if (webResearch && submittedMaxCostUsd !== undefined) {
+      throw new Error(
+        'A spend ceiling cannot include web search yet. Turn Web off or clear the ceiling.',
+      );
+    }
     const options: AiProposalOptions<CommandId> = {
       ...submittedProvider,
       readContext: submittedReadContext,
@@ -861,6 +874,7 @@ export function AiInspector<CommandId extends string = string>({
             webResearchConsent: submittedWebResearchConsent,
           }
         : {}),
+      ...(submittedMaxCostUsd !== undefined ? { maxCostUsd: submittedMaxCostUsd } : {}),
       ...(commentContext ? { commentContext } : {}),
       ...(command && !isVariationsCommand(command.id)
         ? {
@@ -960,7 +974,11 @@ export function AiInspector<CommandId extends string = string>({
         isRunning={Boolean(visibleDurableRun)}
         messages={threadMessages}
       >
-        <ThreadPrimitive.Root className="ns-agent-thread" data-testid="assistant-ui-thread">
+        <ThreadPrimitive.Root
+          className="ns-agent-thread"
+          data-testid="assistant-ui-thread"
+          data-thread-layout={contentSizedThread ? 'content' : 'anchored'}
+        >
           {materialWorkbenchOpen && onProposeVisualMaterial ? (
             <section className="ns-ai-material-tool" data-testid="ai-material-workbench">
               <header>
@@ -1095,15 +1113,30 @@ export function AiInspector<CommandId extends string = string>({
                             : 'The agent failed before a reviewable proposal was returned.')}
                     </strong>
                     <p>No proposal was created or applied. Your deck remains unchanged.</p>
-                    {resolvedActivity.status !== 'cancelled' && onRetryRun ? (
-                      <button
-                        type="button"
-                        className="ns-agent-retry"
-                        onClick={onRetryRun}
-                        data-testid="ai-retry-run"
-                      >
-                        <RotateCcw size={12} /> Retry the same request
-                      </button>
+                    {resolvedActivity.status !== 'cancelled' &&
+                    (onRetryRun || onOpenDeckCiTrace) ? (
+                      <div className="ns-agent-failure-actions">
+                        {onRetryRun ? (
+                          <button
+                            type="button"
+                            className="ns-agent-retry"
+                            onClick={onRetryRun}
+                            data-testid="ai-retry-run"
+                          >
+                            <RotateCcw size={12} /> Retry the same request
+                          </button>
+                        ) : null}
+                        {onOpenDeckCiTrace ? (
+                          <button
+                            type="button"
+                            className="ns-agent-retry"
+                            onClick={onOpenDeckCiTrace}
+                            data-testid="ai-open-failure-trace"
+                          >
+                            <Eye size={12} /> Open Trace
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 ) : resolvedActivity?.status === 'delayed' ? (
@@ -1449,6 +1482,7 @@ export function AiInspector<CommandId extends string = string>({
                           <Sparkles size={13} /> External model: on ·{' '}
                           {providerNameForMode(providerMode)} · {selectedAgentModel.label} ·{' '}
                           {nodeSlideNativeEffortLabel(providerEffort)} effort
+                          {runSpendLimit ? ` · Hard cap $${runSpendLimit}` : ''}
                           <span
                             className={externalConsent.granted ? 'has-consent' : 'needs-consent'}
                           >
@@ -1459,27 +1493,33 @@ export function AiInspector<CommandId extends string = string>({
                     </div>
                     {onApprovalModeChange ? (
                       <section className="ns-ai-turbo-details" data-testid="ai-turbo-details">
-                        <strong>Session change authority</strong>
-                        <span>
-                          {approvalMode === 'auto_apply'
-                            ? approvalExpiresAt
-                              ? `Turbo is active until ${new Date(
-                                  approvalExpiresAt,
-                                ).toLocaleTimeString([], {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}.`
-                              : 'Turbo is active for this browser session.'
-                            : 'Turbo is off. Review mode remains active.'}
-                        </span>
-                        <small>
-                          Authority expires after{' '}
-                          {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
-                          {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
-                          {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
-                          proposal. Publish, share, export, delete, and sync are excluded and always
-                          require direct confirmation.
-                        </small>
+                        <div className="ns-ai-turbo-details__status">
+                          <strong>Session change authority</strong>
+                          <span>
+                            {approvalMode === 'auto_apply'
+                              ? approvalExpiresAt
+                                ? `Turbo until ${new Date(approvalExpiresAt).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                    },
+                                  )}`
+                                : 'Turbo active'
+                              : 'Review each change'}
+                          </span>
+                        </div>
+                        <details className="ns-ai-turbo-limits">
+                          <summary>Limits and exclusions</summary>
+                          <small>
+                            Authority expires after{' '}
+                            {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
+                            {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
+                            {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
+                            proposal. Publish, share, export, delete, and sync are excluded and
+                            always require direct confirmation.
+                          </small>
+                        </details>
                         {approvalBusy ? (
                           <output className="ns-ai-approval-status">
                             Updating session authority…
@@ -1606,6 +1646,30 @@ export function AiInspector<CommandId extends string = string>({
                           <option value="inspiration">Use as inspiration</option>
                           <option value="style_direction">Follow style direction</option>
                         </select>
+                      </label>
+                      <label>
+                        <span>Run spend ceiling</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={runSpendLimit}
+                          disabled={approvalControlLocked || providerMode === 'deterministic'}
+                          placeholder={
+                            providerMode === 'deterministic' ? '$0 private' : 'Default $1'
+                          }
+                          aria-label="Run spend ceiling in USD"
+                          aria-describedby={`${composerId}-spend-help`}
+                          onChange={(event) => setRunSpendLimit(event.target.value)}
+                          data-testid="ai-run-spend-limit"
+                        />
+                        <small id={`${composerId}-spend-help`}>
+                          {webResearch
+                            ? 'Clear this before using Web; search pricing is not pinned yet.'
+                            : 'Optional hard USD cap. The run stops before exceeding it.'}
+                        </small>
                       </label>
                     </div>
                   </div>
@@ -2360,6 +2424,19 @@ function providerNameForMode(mode: AiProviderMode): string {
   return 'Private';
 }
 
+export function parseOptionalRunSpendLimit(value: string): number | undefined {
+  const clean = value.trim();
+  if (!clean) return undefined;
+  if (!/^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/u.test(clean)) {
+    throw new Error('Run spend ceiling must be a USD amount from $0 through $100.');
+  }
+  const amount = Number(clean);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 100) {
+    throw new Error('Run spend ceiling must be a USD amount from $0 through $100.');
+  }
+  return amount;
+}
+
 export function agentPhaseLabel(activity: AiAgentActivity): string {
   if (activity.status === 'delayed') return 'Still working';
   if (activity.status === 'timed_out') return 'Timed out';
@@ -2437,6 +2514,7 @@ function createScope(
     return { kind: 'slide', deckId, slideIds: exactSlideIds, operationMode };
   }
   if (choice === 'elements') {
+    if (selectedElements.length === 0) return null;
     return {
       kind: 'elements',
       deckId,

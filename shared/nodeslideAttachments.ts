@@ -1,5 +1,48 @@
 export type NodeSlideDataAttachmentFormat = 'csv' | 'json' | 'txt';
 
+/**
+ * Binary-backed attachment formats accepted by the two-phase upload service.
+ * This is intentionally separate from the small inline attachment contract
+ * above so existing prompt creation remains backwards compatible.
+ */
+export type NodeSlideStoredAttachmentFormat =
+  | 'csv'
+  | 'json'
+  | 'txt'
+  | 'md'
+  | 'pdf'
+  | 'docx'
+  | 'xlsx'
+  | 'png'
+  | 'jpeg'
+  | 'webp'
+  | 'gif'
+  | 'pptx';
+
+export type NodeSlideUploadLifecycleStatus = 'awaiting_upload' | 'registered';
+export type NodeSlideUploadSecurityStatus = 'pending' | 'approved' | 'rejected';
+export type NodeSlideUploadQuarantineStatus = 'quarantined' | 'released';
+
+/** Safe owner-facing metadata. It deliberately excludes storage IDs and URLs. */
+export interface NodeSlideStoredAttachmentMetadata {
+  id: string;
+  deckId: string;
+  clientSessionId: string;
+  fileName: string;
+  format: NodeSlideStoredAttachmentFormat;
+  contentType: string;
+  byteSize: number;
+  contentDigest: string;
+  lifecycleStatus: NodeSlideUploadLifecycleStatus;
+  securityStatus: NodeSlideUploadSecurityStatus;
+  quarantineStatus: NodeSlideUploadQuarantineStatus;
+  modelAccessAllowed: boolean;
+  createdAt: number;
+  updatedAt: number;
+  registeredAt?: number;
+  approvedAt?: number;
+}
+
 export interface NodeSlideDataAttachment {
   title: string;
   format: NodeSlideDataAttachmentFormat;

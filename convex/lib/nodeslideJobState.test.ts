@@ -8,13 +8,17 @@ import {
   assertNodeSlideJobIdempotency,
   cancelNodeSlideJob,
   claimNodeSlideJobAttempt,
+  classifyNodeSlideJobFreshness,
   failNodeSlideJob,
+  heartbeatNodeSlideJob,
   isNodeSlideJobTerminal,
   nodeSlideJobExecutionDigest,
   nodeSlideJobOwnerDigest,
   nodeSlideJobRequestDigest,
+  pauseNodeSlideJob,
   publicNodeSlideJob,
   resolveNodeSlideReviewJob,
+  resumeNodeSlideJob,
   retryNodeSlideJob,
 } from './nodeslideJobState';
 
@@ -78,10 +82,52 @@ describe('NodeSlide durable job state', () => {
     expect(late.resultDeckId).toBeUndefined();
   });
 
+  it('pauses cooperatively, fences late completion, and resumes the same running attempt', () => {
+    const running = advanceNodeSlideJob(
+      claimNodeSlideJobAttempt(job(), 2_000),
+      { status: 'running', phase: 'generating', progress: 45 },
+      3_000,
+    );
+    const paused = pauseNodeSlideJob(running, 4_000);
+    const late = advanceNodeSlideJob(
+      paused,
+      { status: 'succeeded', phase: 'complete', progress: 100, resultDeckId: 'deck_late' },
+      5_000,
+    );
+
+    expect(paused).toMatchObject({ status: 'paused', phase: 'paused', attempt: 1, progress: 45 });
+    expect(pauseNodeSlideJob(paused, 4_500)).toBe(paused);
+    expect(late).toBe(paused);
+    expect(failNodeSlideJob(paused, 'Late workflow failure.', 5_000)).toBe(paused);
+
+    const resumed = resumeNodeSlideJob(paused, 6_000, 'running');
+    expect(resumed).toMatchObject({
+      id: running.id,
+      status: 'running',
+      phase: 'planning',
+      attempt: 1,
+      progress: 45,
+    });
+  });
+
+  it('keeps cancellation terminal from paused state', () => {
+    const paused = pauseNodeSlideJob(claimNodeSlideJobAttempt(job(), 2_000), 3_000);
+    const cancelled = cancelNodeSlideJob(paused, 4_000);
+    expect(cancelled).toMatchObject({ status: 'cancelled', phase: 'cancelled' });
+    expect(
+      advanceNodeSlideJob(
+        cancelled,
+        { status: 'succeeded', phase: 'complete', progress: 100 },
+        5_000,
+      ),
+    ).toBe(cancelled);
+  });
+
   it('bounds retries and preserves the stable job id across attempts', () => {
     let current = job({ status: 'failed', phase: 'failed' });
     for (let attempt = 1; attempt <= NODESLIDE_JOB_MAX_ATTEMPTS; attempt += 1) {
       current = retryNodeSlideJob(current, attempt * 10);
+      expect(current.status).toBe('retrying');
       current = claimNodeSlideJobAttempt(current, attempt * 10 + 1);
       current = advanceNodeSlideJob(
         current,
@@ -92,6 +138,23 @@ describe('NodeSlide durable job state', () => {
     }
     expect(current.attempt).toBe(NODESLIDE_JOB_MAX_ATTEMPTS);
     expect(() => retryNodeSlideJob(current, 100)).toThrow(/retry limit/i);
+  });
+
+  it('persists heartbeats and classifies an overdue active job as stalled without terminating it', () => {
+    const running = claimNodeSlideJobAttempt(job(), 2_000);
+    const heartbeat = heartbeatNodeSlideJob(running, 3_000);
+    expect(heartbeat.updatedAt).toBe(3_000);
+    expect(classifyNodeSlideJobFreshness(heartbeat, 3_099, 100)).toEqual({
+      freshness: 'fresh',
+      heartbeatAt: 3_000,
+    });
+    expect(classifyNodeSlideJobFreshness(heartbeat, 3_100, 100)).toEqual({
+      freshness: 'stalled',
+      heartbeatAt: 3_000,
+      stalledSince: 3_100,
+    });
+    expect(heartbeat.status).toBe('running');
+    expect(heartbeat.completedAt).toBeUndefined();
   });
 
   it('bounds workflow failures so callback persistence cannot strand a running job', () => {

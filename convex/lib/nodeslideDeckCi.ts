@@ -5,7 +5,15 @@ import type {
   ValidationResult,
 } from '../../shared/nodeslide';
 import { NODESLIDE_TOOLCHAIN_VERSION } from '../../shared/nodeslide';
-import { nodeSlideCandidateDigest } from './nodeslideCandidate';
+import {
+  type NodeSlidePresentationQualityReceipt,
+  verifyNodeSlidePresentationQualityReceipt,
+} from '../../shared/nodeslideAuthoringQuality';
+import {
+  type NodeSlideSemanticCoverageReceipt,
+  nodeSlideCandidateDigest,
+  nodeSlideSemanticCoverageReceiptMatches,
+} from './nodeslideCandidate';
 import { nodeslideContentDigest, nodeslideStableId } from './nodeslideIds';
 import {
   type NodeSlideSemanticEvaluationOptions,
@@ -27,6 +35,7 @@ export type NodeSlideDeckCiCategory =
   | 'export';
 export type NodeSlideDeckCiOrigin =
   | 'semantic'
+  | 'presentation_quality'
   | 'validation'
   | 'layout_structure_hook'
   | 'export_readiness_hook';
@@ -71,6 +80,10 @@ export interface NodeSlideDeckCiOptions {
   exportReadinessChecks?: readonly NodeSlideDeckCiHookCheckInput[];
   /** Source revisions in the triggering change; used only to calculate dependency impact. */
   changedSourceIds?: readonly string[];
+  /** Exact planner-intent coverage for this materialized candidate. */
+  semanticCoverage?: NodeSlideSemanticCoverageReceipt;
+  /** Optional release-quality receipt. When supplied it must bind to this exact deck version. */
+  presentationQuality?: NodeSlidePresentationQualityReceipt;
 }
 
 export interface NodeSlideDeckCiInput extends NodeSlideDeckCiOptions {
@@ -110,7 +123,30 @@ export interface NodeSlideDeckCiResult {
     id: string;
     verdict: 'pass' | 'advisory' | 'blocked';
   };
+  presentationQuality?: {
+    digest: string;
+    status: NodeSlidePresentationQualityReceipt['status'];
+    overall: number;
+    blockerCount: number;
+  };
   digest: string;
+}
+
+/**
+ * Turbo is deliberately stricter than publication readiness alone. A candidate
+ * may auto-commit only when the complete deterministic Deck CI receipt is a
+ * clean pass for the exact materialized snapshot. Warnings remain reviewable.
+ */
+export function nodeSlideDeckCiAllowsAutoCommit(
+  result: Pick<NodeSlideDeckCiResult, 'status' | 'blockerCount' | 'validation'>,
+): boolean {
+  return (
+    result.status === 'pass' &&
+    result.blockerCount === 0 &&
+    result.validation.ok &&
+    result.validation.publishOk &&
+    result.validation.cleanOk
+  );
 }
 
 const SEMANTIC_CODES = new Set([
@@ -179,6 +215,12 @@ export function evaluateNodeSlideDeckCi(
       sourceIds: [],
     });
   }
+  if (resolvedOptions.semanticCoverage) {
+    drafts.push(...checksFromSemanticCoverage(snapshot, resolvedOptions.semanticCoverage));
+  }
+  if (resolvedOptions.presentationQuality) {
+    drafts.push(...checksFromPresentationQuality(snapshot, resolvedOptions.presentationQuality));
+  }
   for (const finding of semantic.findings) {
     if (SEMANTIC_CODES.has(finding.code)) drafts.push(checkFromSemanticFinding(finding));
   }
@@ -235,6 +277,16 @@ export function evaluateNodeSlideDeckCi(
       cleanOk: validation.cleanOk,
     },
     semantic: { id: semantic.id, verdict: semantic.verdict },
+    ...(resolvedOptions.presentationQuality
+      ? {
+          presentationQuality: {
+            digest: resolvedOptions.presentationQuality.digest,
+            status: resolvedOptions.presentationQuality.status,
+            overall: resolvedOptions.presentationQuality.scores.overall,
+            blockerCount: resolvedOptions.presentationQuality.blockerCount,
+          },
+        }
+      : {}),
   };
   return { ...partial, digest: nodeslideContentDigest(stableSerialize(partial)) };
 }
@@ -295,6 +347,88 @@ function checkFromSemanticFinding(finding: NodeSlideSemanticFinding): CheckDraft
     elementIds: finding.bindings.elementIds,
     sourceIds: finding.bindings.sourceIds,
   };
+}
+
+function checksFromSemanticCoverage(
+  snapshot: DeckSnapshot,
+  receipt: NodeSlideSemanticCoverageReceipt,
+): CheckDraft[] {
+  if (!nodeSlideSemanticCoverageReceiptMatches(receipt, snapshot)) {
+    return [
+      {
+        code: 'semantic_coverage_receipt_mismatch',
+        category: 'claims',
+        origin: 'semantic',
+        severity: 'critical',
+        blocker: true,
+        message: 'The semantic-coverage receipt is invalid or belongs to a different candidate.',
+        slideIds: [],
+        elementIds: [],
+        sourceIds: [],
+      },
+    ];
+  }
+  if (receipt.status !== 'blocked') return [];
+  const missing = new Set(receipt.missingObligationIds);
+  const obligations = receipt.obligations.filter((obligation) => missing.has(obligation.id));
+  return [
+    {
+      code: 'semantic_coverage_undercovered',
+      category: 'claims',
+      origin: 'semantic',
+      severity: 'critical',
+      blocker: true,
+      message: `The candidate covers ${receipt.coveredObligationIds.length} of ${receipt.obligations.length} explicitly requested targets.`,
+      slideIds: obligations.map((obligation) => obligation.slideId),
+      elementIds: obligations.flatMap((obligation) =>
+        obligation.elementId ? [obligation.elementId] : [],
+      ),
+      sourceIds: [],
+    },
+  ];
+}
+
+function checksFromPresentationQuality(
+  snapshot: DeckSnapshot,
+  receipt: NodeSlidePresentationQualityReceipt,
+): CheckDraft[] {
+  if (
+    receipt.deckId !== snapshot.deck.id ||
+    receipt.deckVersion !== snapshot.deck.version ||
+    !verifyNodeSlidePresentationQualityReceipt(receipt)
+  ) {
+    return [
+      {
+        code: 'presentation_quality_receipt_mismatch',
+        category: 'claims',
+        origin: 'presentation_quality',
+        severity: 'critical',
+        blocker: true,
+        message: 'The presentation-quality receipt is invalid or belongs to another deck version.',
+        slideIds: [],
+        elementIds: [],
+        sourceIds: [],
+      },
+    ];
+  }
+  return receipt.issues.map((qualityIssue) => ({
+    code: qualityIssue.code,
+    category:
+      qualityIssue.dimension === 'evidence'
+        ? 'evidence'
+        : qualityIssue.dimension === 'visual'
+          ? 'layout'
+          : qualityIssue.dimension === 'editability' || qualityIssue.dimension === 'artifact_proof'
+            ? 'export'
+            : 'claims',
+    origin: 'presentation_quality',
+    severity: qualityIssue.severity,
+    blocker: qualityIssue.blocker,
+    message: qualityIssue.message,
+    slideIds: qualityIssue.slideIds,
+    elementIds: qualityIssue.elementIds,
+    sourceIds: [],
+  }));
 }
 
 function checksFromValidation(snapshot: DeckSnapshot, validation: ValidationResult): CheckDraft[] {
@@ -440,9 +574,10 @@ function materializeChecks(
 function preferredCheck(left: NodeSlideDeckCiCheck, right: NodeSlideDeckCiCheck): number {
   const originRank: Record<NodeSlideDeckCiOrigin, number> = {
     semantic: 0,
-    validation: 1,
-    layout_structure_hook: 2,
-    export_readiness_hook: 3,
+    presentation_quality: 1,
+    validation: 2,
+    layout_structure_hook: 3,
+    export_readiness_hook: 4,
   };
   return originRank[left.origin] - originRank[right.origin];
 }

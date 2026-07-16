@@ -55,6 +55,16 @@ const nodeslideEvidenceBoxValidator = v.object({
   w: v.number(),
   h: v.number(),
   page: v.optional(v.number()),
+  pageCount: v.optional(v.number()),
+});
+
+const nodeslideClaimEvidenceRegionValidator = v.object({
+  x: v.number(),
+  y: v.number(),
+  w: v.number(),
+  h: v.number(),
+  page: v.optional(v.number()),
+  pageCount: v.optional(v.number()),
 });
 
 const nodeslideEvidenceViewportValidator = v.object({
@@ -971,6 +981,84 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck', ['deckId']),
 
+  /** Append-only, content-addressed snapshots of exact source evidence. */
+  nodeslide_source_revisions: defineTable({
+    id: v.string(),
+    schema: v.literal('nodeslide.source-revision/v1'),
+    revisionDigest: v.string(),
+    ownerDigest: v.string(),
+    deckId: v.string(),
+    sourceId: v.string(),
+    title: v.string(),
+    url: v.optional(v.string()),
+    sourceType: v.union(
+      v.literal('internal'),
+      v.literal('url'),
+      v.literal('document'),
+      v.literal('spreadsheet'),
+      v.literal('note'),
+    ),
+    retrievedAt: v.number(),
+    citation: v.string(),
+    license: v.optional(v.string()),
+    format: v.optional(
+      v.union(v.literal('csv'), v.literal('json'), v.literal('txt'), v.literal('web')),
+    ),
+    contentDigest: v.string(),
+    byteSize: v.optional(v.number()),
+    rowCount: v.optional(v.number()),
+    columns: v.optional(v.array(v.string())),
+    provider: v.optional(v.string()),
+    retention: v.optional(v.union(v.literal('until_deleted'), v.literal('public_snapshot'))),
+    predecessorRevisionId: v.optional(v.string()),
+    predecessorRevisionDigest: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_owner_created', ['ownerDigest', 'createdAt'])
+    .index('by_source_created', ['sourceId', 'createdAt'])
+    .index('by_source_content_digest', ['sourceId', 'contentDigest']),
+
+  nodeslide_uploads: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    clientSessionId: v.string(),
+    fileName: v.string(),
+    format: v.union(
+      v.literal('csv'),
+      v.literal('json'),
+      v.literal('txt'),
+      v.literal('md'),
+      v.literal('pdf'),
+      v.literal('docx'),
+      v.literal('xlsx'),
+      v.literal('png'),
+      v.literal('jpeg'),
+      v.literal('webp'),
+      v.literal('gif'),
+      v.literal('pptx'),
+    ),
+    contentType: v.string(),
+    byteSize: v.number(),
+    contentDigest: v.string(),
+    idempotencyKey: v.string(),
+    requestFingerprint: v.string(),
+    storageId: v.optional(v.id('_storage')),
+    lifecycleStatus: v.union(v.literal('awaiting_upload'), v.literal('registered')),
+    securityStatus: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
+    quarantineStatus: v.union(v.literal('quarantined'), v.literal('released')),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    registeredAt: v.optional(v.number()),
+    approvedAt: v.optional(v.number()),
+    rejectedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_updated', ['deckId', 'updatedAt'])
+    .index('by_deck_idempotency', ['deckId', 'idempotencyKey'])
+    .index('by_storage', ['storageId']),
+
   nodeslide_agent_jobs: defineTable({
     id: v.string(),
     kind: v.union(v.literal('create_deck'), v.literal('edit_proposal')),
@@ -1413,6 +1501,10 @@ export default defineSchema({
     spanId: v.string(),
     parentSpanId: v.string(),
     sourceId: v.string(),
+    /** Optional only for rows created before immutable revision binding shipped. */
+    sourceRevisionId: v.optional(v.string()),
+    sourceRevisionDigest: v.optional(v.string()),
+    captureDigest: v.optional(v.string()),
     url: v.string(),
     goal: v.string(),
     provider: v.string(),
@@ -1449,10 +1541,14 @@ export default defineSchema({
     screenshotStorageId: v.optional(v.id('_storage')),
     pdfStorageId: v.optional(v.id('_storage')),
     box: v.optional(nodeslideEvidenceBoxValidator),
+    /** Optional only for legacy rows. Missing scope is treated as source-level, never claim-level. */
+    regionScope: v.optional(v.union(v.literal('source'), v.literal('claim'))),
     selector: v.optional(v.string()),
     quote: v.optional(v.string()),
     viewport: v.optional(nodeslideEvidenceViewportValidator),
     contentDigest: v.optional(v.string()),
+    attachmentDigest: v.optional(v.string()),
+    evidenceStepDigest: v.optional(v.string()),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -1462,6 +1558,37 @@ export default defineSchema({
     .index('by_run_sequence', ['runId', 'sequence'])
     .index('by_trace_span_sequence', ['traceId', 'spanId', 'sequence'])
     .index('by_deck_created', ['deckId', 'createdAt']),
+
+  /** Append-only claim-to-region custody receipts. Ambiguous geometry is never stored here. */
+  nodeslide_claim_evidence_receipts: defineTable({
+    id: v.string(),
+    receiptId: v.string(),
+    schema: v.literal('nodeslide.claim-evidence-receipt/v1'),
+    receiptDigest: v.string(),
+    ownerDigest: v.string(),
+    deckId: v.string(),
+    patchId: v.string(),
+    traceId: v.optional(v.string()),
+    slideId: v.string(),
+    elementId: v.string(),
+    claimDigest: v.string(),
+    sourceRevisionId: v.string(),
+    sourceRevisionDigest: v.string(),
+    captureId: v.string(),
+    captureDigest: v.string(),
+    evidenceStepId: v.string(),
+    evidenceStepDigest: v.string(),
+    attachmentKind: v.union(v.literal('screenshot'), v.literal('pdf')),
+    attachmentDigest: v.string(),
+    region: nodeslideClaimEvidenceRegionValidator,
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_created', ['deckId', 'createdAt'])
+    .index('by_owner_created', ['ownerDigest', 'createdAt'])
+    .index('by_patch_created', ['patchId', 'createdAt'])
+    .index('by_claim_created', ['claimDigest', 'createdAt'])
+    .index('by_source_revision_created', ['sourceRevisionId', 'createdAt']),
 
   nodeslide_validations: defineTable({
     id: v.string(),

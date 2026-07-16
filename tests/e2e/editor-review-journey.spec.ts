@@ -37,6 +37,7 @@ test.describe('deployed editor review boundary', () => {
       .getByRole('dialog', { name: 'Agent model' })
       .getByText('Deterministic', { exact: true })
       .click();
+    await page.getByRole('button', { name: 'Expand composer' }).click();
     await page.getByTestId('ai-provider-summary').click();
     await expect(page.getByTestId('ai-provider-route-status')).toContainText('External model: off');
     await expect(page.getByTestId('ai-provider-route-status')).toContainText(

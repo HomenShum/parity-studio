@@ -695,6 +695,7 @@ export interface NodeSlideAgentTelemetryPage {
 export type NodeSlideEvidenceCaptureStatus = 'ready' | 'failed' | 'expired';
 export type NodeSlideEvidenceStepStatus = 'ok' | 'warning' | 'error';
 export type NodeSlideEvidenceAttachmentKind = 'screenshot' | 'pdf';
+export type NodeSlideEvidenceRegionScope = 'source' | 'claim';
 
 /** Normalized evidence region. Coordinates are 0..1 in the rendered screenshot or PDF page. */
 export interface NodeSlideEvidenceBox {
@@ -745,6 +746,8 @@ export interface NodeSlideEvidenceStepSummary {
   detail?: string;
   attachmentKind?: NodeSlideEvidenceAttachmentKind;
   box?: NodeSlideEvidenceBox;
+  /** Missing on legacy rows and therefore treated as source-level, never claim-level. */
+  regionScope?: NodeSlideEvidenceRegionScope;
   selector?: string;
   quote?: string;
   viewport?: NodeSlideEvidenceViewport;
@@ -1068,6 +1071,8 @@ export interface AgentEditRequest {
   providerConsent?:
     | typeof NODESLIDE_OPENROUTER_EDIT_CONSENT
     | typeof NODESLIDE_NEBIUS_REVIEW_CONSENT;
+  /** Optional hard per-run ceiling. The server binds and enforces it in the durable budget. */
+  maxCostUsd?: number;
   /** Stable client-generated key prevents double-submit from creating two proposals. */
   idempotencyKey?: string;
   /** Web retrieval is independent from model egress and requires its own exact consent. */

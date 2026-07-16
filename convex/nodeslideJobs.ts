@@ -1344,6 +1344,12 @@ function validateEditProposalRequest(request: NodeSlideEditProposalJobRequest): 
     throw new Error('baseDeckVersion must be a non-negative finite number.');
   }
   if (instruction.length === 0) throw new Error('NodeSlide edit instruction is required.');
+  if (
+    request.maxCostUsd !== undefined &&
+    (!Number.isFinite(request.maxCostUsd) || request.maxCostUsd < 0 || request.maxCostUsd > 100)
+  ) {
+    throw new Error('Run spend ceiling must be a finite USD amount from $0 through $100.');
+  }
   try {
     validateNodeSlideProviderChoice(
       'propose_edit',
@@ -1357,6 +1363,11 @@ function validateEditProposalRequest(request: NodeSlideEditProposalJobRequest): 
     throw error;
   }
   if (request.webResearch) {
+    if (request.maxCostUsd !== undefined) {
+      throw new Error(
+        'A hard dollar ceiling cannot include unpriced web-search egress yet. Turn Web off or clear the run spend ceiling.',
+      );
+    }
     if (request.webResearchConsent !== NODESLIDE_WEB_RESEARCH_CONSENT) {
       throw new Error(
         'Explicit web research consent is required before sending this query to search providers.',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   archiveAgentSessionJob,
   attachAgentSessionJob,
+  classifyAgentSessionJobFreshness,
   createInitialAgentSessionState,
   failAgentSessionJob,
   isAgentSessionEditAuthorityLocked,
@@ -102,6 +103,61 @@ describe('NodeSlide authoritative agent session state', () => {
       budgetId: 'budget-a',
       memoryIds: ['memory-a'],
     });
+  });
+
+  it.each(['paused', 'retrying'] as const)(
+    'rehydrates a %s durable job with progress and owner binding intact',
+    (status) => {
+      const storage = new MemoryStorage();
+      const prepared = prepareAgentSessionJob(
+        createInitialAgentSessionState(`session-${status}`, 1),
+        {
+          kind: 'create_deck',
+          requestFingerprint: `intent-${status}`,
+          ownerAccessKey: `owner-${status}`,
+          idempotencyKey: `idempotency-${status}`,
+        },
+        2,
+      );
+      const durable = attachAgentSessionJob(prepared.state, {
+        ...receipt(),
+        idempotencyKey: `idempotency-${status}`,
+        status,
+        phase: status,
+        progress: 55,
+        updatedAt: 20,
+      });
+
+      expect(writeAgentSessionState(storage, durable)).toBe(true);
+      expect(readAgentSessionState(storage, `session-${status}`, 21).activeJob).toMatchObject({
+        status,
+        phase: status,
+        progress: 55,
+        ownerAccessKey: `owner-${status}`,
+      });
+    },
+  );
+
+  it('reports stale heartbeat as stalled without replacing the durable running state', () => {
+    const prepared = prepareAgentSessionJob(
+      createInitialAgentSessionState('session-stalled', 1),
+      {
+        kind: 'create_deck',
+        requestFingerprint: 'intent-stalled',
+        ownerAccessKey: 'owner-stalled',
+        idempotencyKey: 'idempotency-stalled',
+      },
+      2,
+    );
+    const running = attachAgentSessionJob(prepared.state, {
+      ...receipt(),
+      idempotencyKey: 'idempotency-stalled',
+      updatedAt: 10,
+    });
+
+    expect(classifyAgentSessionJobFreshness(running.activeJob, 109, 100)).toBe('fresh');
+    expect(classifyAgentSessionJobFreshness(running.activeJob, 110, 100)).toBe('stalled');
+    expect(running.activeJob).toMatchObject({ status: 'running', updatedAt: 10 });
   });
 
   it('fails closed when a persisted auto-apply grant is incomplete', () => {

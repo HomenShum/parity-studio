@@ -38,4 +38,19 @@ describe('NodeSlide user-facing errors', () => {
       ),
     ).toBe('The proposal could not be accepted.');
   });
+
+  it('maps raw transport failures to interface copy without exposing debug details', () => {
+    expect(
+      sanitizeNodeSlideUserError(
+        'Convex Server Error: [Request ID: debug-secret] upstream request failed',
+        'The agent failed before a reviewable proposal was returned.',
+      ),
+    ).toBe('The agent failed before a reviewable proposal was returned.');
+    expect(
+      sanitizeNodeSlideUserError(
+        'Internal Server Error (request abc123)',
+        'The request could not be completed.',
+      ),
+    ).toBe('The request could not be completed.');
+  });
 });

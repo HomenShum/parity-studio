@@ -397,6 +397,7 @@ function humanizeToolName(toolName?: string) {
   if (!toolName) return 'Tool';
   const knownLabels: Record<string, string> = {
     candidate_validation: 'Validation',
+    deck_repl: 'Deck inspection',
     invoke_nodeslide_agent: 'NodeSlide agent',
     memory_retrieval: 'Memory retrieval',
     source_snapshot: 'Source capture',

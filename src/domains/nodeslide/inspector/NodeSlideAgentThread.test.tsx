@@ -192,7 +192,7 @@ describe('NodeSlide assistant-ui thread adapter', () => {
     expect(screen.queryByText('Read the current deck context.')).toBeNull();
   });
 
-  it('renders the durable six-role progression across nested sequential handoffs', () => {
+  it('renders the durable presentation-role progression across nested sequential handoffs', () => {
     const roleMessages: NodeSlideAgentMessage[] = [
       message({ id: 'roles-user', role: 'user', content: 'Make the deck presentation-ready.' }),
       message({
@@ -239,8 +239,19 @@ describe('NodeSlide assistant-ui thread adapter', () => {
         toolActivity: { state: 'output-available' },
       }),
       message({
-        id: 'roles-fact-check',
+        id: 'roles-executor',
         parentMessageId: 'roles-design',
+        role: 'tool',
+        content: 'Inspected and measured the exact bounded candidate.',
+        toolName: 'deck_repl',
+        agentRole: 'executor',
+        branchId: 'presentation-execution',
+        branchLabel: 'Bounded deck execution',
+        toolActivity: { state: 'output-available' },
+      }),
+      message({
+        id: 'roles-fact-check',
+        parentMessageId: 'roles-executor',
         role: 'tool',
         content: 'Checked evidence bindings and layout rules.',
         toolName: 'candidate_validation',
@@ -264,10 +275,11 @@ describe('NodeSlide assistant-ui thread adapter', () => {
     const invocation = firstToolCall(projected);
 
     expect(invocation.args).toMatchObject({
-      __nodeslideStepCount: '5',
-      __nodeslideBranchCount: '5',
+      __nodeslideStepCount: '6',
+      __nodeslideBranchCount: '6',
       __nodeslideParallelGroupCount: '0',
-      __nodeslideRoleProgression: 'researcher|analyst|storyteller|designer|fact_checker|reviewer',
+      __nodeslideRoleProgression:
+        'researcher|analyst|storyteller|designer|executor|fact_checker|reviewer',
     });
     expect(invocation.messages).toHaveLength(1);
 
@@ -280,9 +292,7 @@ describe('NodeSlide assistant-ui thread adapter', () => {
     );
 
     expect(
-      screen.getByText(
-        'Researcher → Analyst → Storyteller → Designer → Fact checker → Reviewer · 5 steps · read-only',
-      ),
+      screen.getByText(/Researcher.*Executor.*Fact checker.*6 steps.*read-only/),
     ).toBeVisible();
     expect(screen.getByText('The proposal is ready for human review.')).toBeVisible();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

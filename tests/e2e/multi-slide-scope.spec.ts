@@ -24,6 +24,7 @@ test('builds a bounded noncontiguous multi-slide scope without moving canvas foc
     activeBefore,
   );
 
+  await page.getByRole('button', { name: 'Expand composer' }).click();
   const advancedControls = page.getByTestId('ai-provider-summary');
   await advancedControls.click();
 

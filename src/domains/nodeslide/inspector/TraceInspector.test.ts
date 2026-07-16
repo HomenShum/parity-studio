@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTrace, ValidationResult } from '../../../../shared/nodeslide';
-import { buildSealModel, isFallbackTrace, nodeSummary } from './TraceInspector';
+import { agentRunForTrace, buildSealModel, isFallbackTrace, nodeSummary } from './TraceInspector';
 
 const LIVE_TRACE: AgentTrace = {
   id: 'trace-live',
@@ -35,6 +35,22 @@ const VALIDATION: ValidationResult = {
 };
 
 describe('NodeSlide trace truth model', () => {
+  it('never attributes the newest durable run to a different legacy trace', () => {
+    const failedResearchRun = {
+      id: 'run-research-failed',
+      traceId: undefined,
+      createdAt: LIVE_TRACE.createdAt + 10_000,
+    } as unknown as import('../../../../shared/nodeslide').NodeSlideAgentRun;
+    const boundRun = {
+      id: 'run-bound',
+      traceId: LIVE_TRACE.id,
+      createdAt: LIVE_TRACE.createdAt,
+    } as unknown as import('../../../../shared/nodeslide').NodeSlideAgentRun;
+
+    expect(agentRunForTrace([failedResearchRun, boundRun], LIVE_TRACE.id)).toBe(boundRun);
+    expect(agentRunForTrace([failedResearchRun], LIVE_TRACE.id)).toBeUndefined();
+  });
+
   it('reveals a real candidate digest only above human density', () => {
     expect(isFallbackTrace(LIVE_TRACE)).toBe(false);
     expect(

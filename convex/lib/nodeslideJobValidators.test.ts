@@ -31,11 +31,13 @@ describe('NodeSlide durable job request journal', () => {
       webResearchConsent: 'nodeslide_web_research_v1',
     });
     const substitutedClock = canonicalEditRequest({ baseDeckVersion: 8 });
+    const substitutedBudget = canonicalEditRequest({ maxCostUsd: 0.25 });
 
     expect(nodeSlideJobRequestDigest(first)).not.toBe(
       nodeSlideJobRequestDigest(substitutedConsent),
     );
     expect(nodeSlideJobRequestDigest(first)).not.toBe(nodeSlideJobRequestDigest(substitutedClock));
+    expect(nodeSlideJobRequestDigest(first)).not.toBe(nodeSlideJobRequestDigest(substitutedBudget));
   });
 });
 

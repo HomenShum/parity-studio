@@ -1,0 +1,89 @@
+{
+  "repo": "D:/VSCode Projects/parity-studio",
+  "url": "https://parity-studio.vercel.app/?domain=nodeslide",
+  "outDir": "D:/VSCode Projects/parity-studio/artifacts/browser-journey-2026-07-16",
+  "assert": ["NodeSlide"],
+  "shots": [
+    {
+      "name": "01-production-landing-desktop",
+      "viewport": { "width": 1440, "height": 900 },
+      "waitMs": 1200,
+      "fullPage": false,
+      "assert": ["What presentation should we build?", "Explore the editable sample workspace"]
+    },
+    {
+      "name": "02-production-sample-editor-desktop",
+      "viewport": { "width": 1440, "height": 900 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body"
+      ],
+      "waitMs": 1800,
+      "fullPage": false,
+      "assert": ["Build the story. Keep every decision editable.", "verified"]
+    },
+    {
+      "name": "03-production-sample-editor-mobile",
+      "viewport": { "width": 390, "height": 844 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body"
+      ],
+      "waitMs": 1800,
+      "fullPage": false,
+      "assert": ["Build the story. Keep every decision editable.", "verified"]
+    },
+    {
+      "name": "04-production-agent-chat-desktop",
+      "viewport": { "width": 1440, "height": 900 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "[data-testid=inspector-tab-ai]"
+      ],
+      "waitMs": 1800,
+      "fullPage": false,
+      "assert": ["Review before applying", "Propose"]
+    },
+    {
+      "name": "05-production-agent-chat-mobile",
+      "viewport": { "width": 390, "height": 844 },
+      "clicks": [
+        "text=Explore the editable sample workspace",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "body",
+        "button[aria-label=\"Ask AI\"]"
+      ],
+      "waitMs": 1800,
+      "fullPage": false,
+      "assert": ["Review before applying", "Propose"]
+    }
+  ]
+}

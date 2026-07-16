@@ -2,7 +2,10 @@ import { useConvex } from 'convex/react';
 import { makeFunctionReference } from 'convex/server';
 import { Download, LoaderCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import type { NodeSlideOwnerDataExport } from '../../../../shared/nodeslideDataExport';
+import {
+  NODESLIDE_OWNER_DATA_EXPORT_SCHEMA_VERSION,
+  type NodeSlideOwnerDataExport,
+} from '../../../../shared/nodeslideDataExport';
 import { downloadNodeSlideDataExport } from '../export/nodeSlideDataExportDownload';
 
 export type ExportMyDataArgs = {
@@ -59,8 +62,9 @@ export function ExportMyDataButton({
     setError(null);
     try {
       const bundle = await requestExport({ deckId, ownerAccessKey });
+      assertExpectedExportScope(bundle, deckId);
       saveExport(bundle, deckTitle);
-      setStatus('Your complete redacted JSON bundle was downloaded.');
+      setStatus('Your complete redacted JSON archive was downloaded.');
     } catch (caught) {
       setError(exportErrorMessage(caught));
     } finally {
@@ -86,6 +90,18 @@ export function ExportMyDataButton({
       {status ? <output aria-live="polite">{status}</output> : null}
     </div>
   );
+}
+
+function assertExpectedExportScope(bundle: NodeSlideOwnerDataExport, deckId: string): void {
+  if (
+    bundle.manifest.schemaVersion !== NODESLIDE_OWNER_DATA_EXPORT_SCHEMA_VERSION ||
+    bundle.manifest.scope.kind !== 'deck_owner_capability' ||
+    bundle.manifest.scope.deckId !== deckId ||
+    bundle.manifest.completeness.status !== 'complete' ||
+    bundle.manifest.completeness.truncated
+  ) {
+    throw new Error('NodeSlide data export failed closed: the returned bundle scope is invalid.');
+  }
 }
 
 function exportErrorMessage(error: unknown): string {

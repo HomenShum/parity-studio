@@ -2913,6 +2913,7 @@
   left: 50%;
   max-width: min(420px, calc(100vw - 28px));
   padding: 9px 9px 9px 11px;
+  pointer-events: none;
   position: fixed;
   transform: translateX(-50%);
   z-index: 800;
@@ -2930,6 +2931,7 @@
   color: #c8cac4;
   display: flex;
   margin-left: 5px;
+  pointer-events: auto;
 }
 .ns-loading-screen {
   align-content: center;

@@ -69,6 +69,30 @@ export interface NodeSlideDelegationAcceptanceReceipt {
   rebased: boolean;
   staleReasons?: string[];
   delegation: NodeSlideDelegationUseReceipt;
+  /** Present when Turbo evaluated this proposal without committing it. */
+  autoCommit?: NodeSlideDelegationAutoCommitReceipt;
+}
+
+export type NodeSlideDelegationAutoCommitReason =
+  | 'allowed'
+  | 'grant_inactive'
+  | 'proposal_requires_review'
+  | 'candidate_validation_required'
+  | 'deck_ci_pass_required';
+
+export type NodeSlideDelegationAutoCommitDecision =
+  | { outcome: 'commit'; reason: 'allowed' }
+  | {
+      outcome: 'awaiting_review' | 'failed';
+      reason: Exclude<NodeSlideDelegationAutoCommitReason, 'allowed'>;
+    };
+
+export interface NodeSlideDelegationAutoCommitReceipt {
+  outcome: 'awaiting_review' | 'failed';
+  reason: Exclude<NodeSlideDelegationAutoCommitReason, 'allowed'>;
+  deckCiStatus: 'pass' | 'warn' | 'fail';
+  deckCiDigest: string;
+  deckCiBlockerCount: number;
 }
 
 export type NodeSlideDecisionProvenance =
@@ -109,6 +133,39 @@ export function nodeSlideDelegationGrantStatus(
   if (now >= grant.expiresAt) return 'expired';
   if (grant.useCount >= grant.maxUses) return 'exhausted';
   return 'active';
+}
+
+/**
+ * Pure final Turbo policy gate. Callers must evaluate the exact candidate with
+ * deterministic Deck CI immediately before this decision and atomically
+ * persist either the commit or a durable review/failure state.
+ */
+export function evaluateNodeSlideDelegationAutoCommit(args: {
+  grant: Pick<
+    NodeSlideDelegationGrant,
+    'deckId' | 'expiresAt' | 'revokedAt' | 'useCount' | 'maxUses' | 'maxOperations'
+  >;
+  proposal: Pick<
+    DeckPatch,
+    'deckId' | 'scope' | 'operations' | 'source' | 'proposalKind' | 'traceId'
+  >;
+  evaluatedAt: number;
+  candidateValidationPassed: boolean;
+  deckCiPassed: boolean;
+}): NodeSlideDelegationAutoCommitDecision {
+  if (nodeSlideDelegationGrantStatus(args.grant, args.evaluatedAt) !== 'active') {
+    return { outcome: 'failed', reason: 'grant_inactive' };
+  }
+  if (nodeSlideDelegationProposalViolations(args).length > 0) {
+    return { outcome: 'awaiting_review', reason: 'proposal_requires_review' };
+  }
+  if (!args.candidateValidationPassed) {
+    return { outcome: 'failed', reason: 'candidate_validation_required' };
+  }
+  if (!args.deckCiPassed) {
+    return { outcome: 'awaiting_review', reason: 'deck_ci_pass_required' };
+  }
+  return { outcome: 'commit', reason: 'allowed' };
 }
 
 /**

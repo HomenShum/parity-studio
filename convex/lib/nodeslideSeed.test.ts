@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { applyDeckPatch } from '../../shared/nodeslidePatch';
 import { validateSnapshot } from '../../src/domains/nodeslide/slidelang/validation';
 import {
   buildBriefNodeSlide,
@@ -159,6 +160,172 @@ describe('NodeSlide seed', () => {
       'Business model / 05',
       'Next milestone / 06',
     ]);
+  });
+
+  it('preserves a named company, investor, audience, topic, outcome, and count in fallback', () => {
+    const brief = {
+      prompt:
+        'Create a five-slide investor deck for HelioForge to present to Maya Chen at Northstar Capital, covering HelioForge\u2019s grid-storage problem, product approach, customer traction, business model, and Series A use of funds.',
+      audience: 'Maya Chen and Northstar Capital\u2019s investment committee',
+      purpose: 'Earn a diligence meeting for HelioForge\u2019s Series A',
+      successCriteria: ['Exactly 5 slides in the requested narrative'],
+    };
+
+    const spec = coerceBriefSpec(null, 'HelioForge Series A', brief);
+
+    expect(spec.slides).toHaveLength(5);
+    expect(spec.narrative).toEqual([
+      `Topic: ${brief.prompt}`,
+      `Audience: ${brief.audience}`,
+      `Desired outcome: ${brief.purpose}`,
+    ]);
+    expect(spec.slides.map((slide) => slide.title)).toEqual([
+      'HelioForge\u2019s grid-storage problem',
+      'Product approach',
+      'Customer traction',
+      'Business model',
+      'Series A use of funds',
+    ]);
+    for (const slide of spec.slides) {
+      expect(slide.body).toContain('HelioForge');
+      expect(slide.body).toContain('Maya Chen at Northstar Capital');
+      expect(slide.bullets).toEqual([
+        `Audience: ${brief.audience}`,
+        `Desired outcome: ${brief.purpose}`,
+        'Evidence: use only the brief or attached sources',
+      ]);
+    }
+  });
+
+  it('keeps a vague deterministic fallback conservative and free of invented specifics', () => {
+    const spec = deterministicBriefSpec('', {
+      prompt: 'Make a short deck.',
+      audience: '',
+      purpose: '',
+      successCriteria: [],
+    });
+
+    expect(spec.slides).toHaveLength(7);
+    expect(spec.narrative).toEqual([
+      'Topic: Make a short deck.',
+      'Audience: not specified in the brief.',
+      'Desired outcome: not specified in the brief.',
+    ]);
+    expect(spec.slides.map((slide) => slide.title)).toContain('The moment to solve');
+    expect(JSON.stringify(spec)).not.toMatch(/\b(?:revenue|customers|market share|funding)\b/iu);
+    expect(spec.slides.some((slide) => slide.chart)).toBe(false);
+    expect(spec.slides.some((slide) => slide.formula)).toBe(false);
+    expect(spec.slides.some((slide) => slide.image)).toBe(false);
+  });
+
+  it('turns an explicit dogfood storyboard into claim-led fallback copy without decorative data', () => {
+    const spec = deterministicBriefSpec('NodeSlide dogfood', {
+      prompt:
+        'Create exactly six slides. Slide 1 defines the communication strategy. Slide 2 shows the evidence ledger. Slide 3 turns the narrative into a storyboard. Slide 4 explains editable visual composition with a native workflow diagram. Slide 5 shows the critic and bounded repair loop. Slide 6 proves the recorded browser journey and export. Do not invent data.',
+      audience: 'Product and design leadership',
+      purpose: 'Adopt the release gate',
+      successCriteria: ['Every object remains editable'],
+    });
+
+    expect(spec.slides).toHaveLength(6);
+    expect(spec.slides[0]?.body).toContain('communication job');
+    expect(spec.slides[1]?.body).toContain('evidence as a ledger');
+    expect(spec.slides[4]?.body).toContain('bounded repair instructions');
+    expect(spec.slides[5]?.body).toContain('browser journey');
+    expect(spec.slides[3]?.diagram?.nodes).toHaveLength(3);
+    expect(spec.slides[0]?.diagram).toBeUndefined();
+    expect(spec.slides[3]?.bullets).toEqual([
+      'Strategy + evidence',
+      'Story + composition',
+      'Critique + accept',
+    ]);
+    expect(spec.slides.some((slide) => slide.chart)).toBe(false);
+  });
+
+  it('keeps the recorded-proof acceptance headline exportable', () => {
+    const brief = {
+      prompt:
+        'Create exactly six concise slides. Slide 1 defines the communication strategy. Slide 2 shows the evidence ledger. Slide 3 turns the narrative into a storyboard. Slide 4 explains editable visual composition with a native workflow diagram. Slide 5 shows the critic and bounded repair loop. Slide 6 proves the recorded browser journey and export.',
+      audience: 'Product and design leadership',
+      purpose: 'Adopt the release gate',
+      successCriteria: ['Exactly 6 slides', 'Every object remains editable'],
+    };
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-dogfood-export',
+      projectId: 'project-dogfood-export',
+      title: 'NodeSlide dogfood quality system',
+      brief,
+      themeId: 'editorial-signal',
+      now: 1_000,
+    });
+    const slide = built.snapshot.slides[5];
+    const headline = built.snapshot.elements.find(
+      (element) => element.slideId === slide?.id && element.role === 'headline',
+    );
+    if (!slide || !headline) throw new Error('Missing dogfood close headline.');
+    const candidate = applyDeckPatch(
+      built.snapshot,
+      {
+        baseDeckVersion: 1,
+        scope: {
+          kind: 'elements',
+          deckId: built.snapshot.deck.id,
+          slideIds: [slide.id],
+          elementIds: [headline.id],
+          operationMode: 'copy',
+        },
+        operations: [
+          {
+            op: 'replace_text',
+            slideId: slide.id,
+            elementId: headline.id,
+            text: 'Adopt the quality gate and require recorded proof for every release.',
+          },
+        ],
+      },
+      1_001,
+    );
+    const validation = validateSnapshot(candidate.snapshot);
+    expect(
+      validation.publishOk,
+      JSON.stringify({
+        issues: validation.issues,
+        elements: candidate.snapshot.elements
+          .filter((element) => element.slideId === slide.id)
+          .map((element) => ({
+            id: element.id,
+            role: element.role,
+            kind: element.kind,
+            bbox: element.bbox,
+          })),
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps server validation aligned with the export collision gate', () => {
+    const snapshot = structuredClone(buildGoldenNodeSlide('validation-parity', 1_000).snapshot);
+    const slide = snapshot.slides[0];
+    const body = snapshot.elements.find(
+      (element) => element.slideId === slide?.id && element.role === 'body',
+    );
+    const bullet = snapshot.elements.find(
+      (element) => element.slideId === slide?.id && element.role === 'bullet',
+    );
+    if (!slide || !body || !bullet) throw new Error('Missing collision parity fixture.');
+    bullet.bbox = {
+      ...bullet.bbox,
+      x: body.bbox.x,
+      y: body.bbox.y + body.bbox.height - bullet.bbox.height * 0.33,
+    };
+
+    const exportIssues = validateSnapshot(snapshot).issues.filter(
+      (issue) => issue.code === 'collision' && issue.severity === 'error',
+    );
+    const serverIssues = validateNodeSlideSnapshot(snapshot, 1_001).issues.filter(
+      (issue) => issue.code === 'collision' && issue.severity === 'error',
+    );
+    expect(exportIssues).toHaveLength(1);
+    expect(serverIssues).toHaveLength(1);
   });
 
   it('keeps explicit slide directions and chart values in a compact deterministic fallback', () => {

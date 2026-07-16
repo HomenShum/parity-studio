@@ -14,6 +14,9 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_comments',
   'nodeslide_versions',
   'nodeslide_sources',
+  'nodeslide_claim_evidence_receipts',
+  'nodeslide_source_revisions',
+  'nodeslide_uploads',
   'nodeslide_evidence_steps',
   'nodeslide_evidence_captures',
   'nodeslide_sync_connections',
@@ -170,6 +173,26 @@ export async function deleteNodeSlideDeckRows(
       .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
   );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_claim_evidence_receipts')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_source_revisions')
+      .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  const uploads = await ctx.db
+    .query('nodeslide_uploads')
+    .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
+    .take(nextLimit());
+  for (const upload of uploads) {
+    if (upload.storageId) attachmentStorageIds.add(upload.storageId);
+  }
+  addGroup(uploads);
   const evidenceSteps = await ctx.db
     .query('nodeslide_evidence_steps')
     .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))

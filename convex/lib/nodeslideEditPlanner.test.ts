@@ -190,6 +190,52 @@ describe('NodeSlide baseline edit planner extraction', () => {
     if (result.ok) expect(result.receipt.providerOutcome).toBe('not_requested');
   });
 
+  it('turns retained web research into a reviewable source-bound proposal', async () => {
+    const { snapshot, target } = fixture();
+    const source = snapshot.sources[0];
+    const slide = snapshot.slides.find((candidate) => candidate.id === target.slideId);
+    if (!source || !slide) throw new Error('Expected source and slide fixtures.');
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slide.id],
+      operationMode: 'unrestricted',
+    };
+    const planningInput = {
+      ...input(snapshot, target, scope),
+      readContext: {
+        references: [{ id: source.id, kind: 'source' as const, label: source.title }],
+        slides: [slide],
+        elements: snapshot.elements.filter((element) => element.slideId === slide.id),
+        sources: [source],
+        comments: [],
+      },
+    };
+    planningInput.request.instruction =
+      'Search the web for the latest public information supporting this claim.';
+    planningInput.request.providerMode = 'deterministic';
+    planningInput.request.focusSlideId = slide.id;
+    planningInput.request.requireFactualSourceBindings = true;
+
+    const result = await planNodeSlideEdit(planningInput);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0]).toMatchObject({
+      op: 'replace_text',
+      slideId: slide.id,
+      sourceIds: [source.id],
+    });
+    expect(result.operations[0]?.op === 'replace_text' && result.operations[0].text).toMatch(
+      / \[evidence\]$/,
+    );
+    expect(result.receipt).toMatchObject({
+      origin: 'deterministic_fallback',
+      terminalOutcome: 'completed',
+    });
+  });
+
   it('keeps an explicitly requested element removal as a reviewable provider proposal', async () => {
     const { snapshot, target, scope } = fixture();
     scope.operationMode = 'unrestricted';
@@ -421,11 +467,24 @@ describe('NodeSlide baseline edit planner extraction', () => {
         text: 'Launch-ready decisions stay reviewable',
       },
     ]);
+    expect(result.receipt.semanticCoverage).toMatchObject({
+      status: 'pass',
+      missingObligationIds: [],
+      obligations: [
+        expect.objectContaining({
+          field: 'headline',
+          elementId: headline.id,
+          expectedText: 'Launch-ready decisions stay reviewable',
+        }),
+      ],
+    });
   });
 
   it('accepts valid provider operations and derives its summary from the validated diff', async () => {
     const { snapshot, target, scope } = fixture();
     const before = structuredClone(snapshot);
+    const planningInput = input(snapshot, target, scope);
+    planningInput.request.instruction = 'Rewrite the selected text.';
     const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true as const,
       value: {
@@ -448,7 +507,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     }));
 
-    const result = await planNodeSlideEdit(input(snapshot, target, scope), {
+    const result = await planNodeSlideEdit(planningInput, {
       callProvider: provider,
     });
 
@@ -476,6 +535,116 @@ describe('NodeSlide baseline edit planner extraction', () => {
     );
     expect(provider.mock.calls[0]?.[0].model).toBe(NODESLIDE_EDIT_MODEL);
     expect(snapshot).toEqual(before);
+  });
+
+  it('rejects the observed five-field rewrite when the provider returns one unrelated move', async () => {
+    const snapshot = buildGoldenNodeSlide('five-field-semantic-coverage', NOW).snapshot;
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Expected opening slide fixture.');
+    const slideElements = snapshot.elements.filter((element) => element.slideId === slide.id);
+    const section = slideElements.find((element) => element.name === 'Section label');
+    if (!section) throw new Error('Expected section label fixture.');
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slide.id],
+      operationMode: 'unrestricted',
+    };
+    const planningInput = input(snapshot, section, scope);
+    planningInput.request.focusSlideId = slide.id;
+    planningInput.request.instruction =
+      'Rewrite the section label, headline, body copy, key point 1, and key point 2. Change nothing else.';
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Moved one label',
+          operations: [
+            {
+              op: 'move',
+              slideId: slide.id,
+              elementId: section.id,
+              x: section.bbox.x + 0.01,
+              y: section.bbox.y,
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 10,
+          inputTokens: 100,
+          outputTokens: 20,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('fallback_unavailable');
+    expect(result.receipt.providerOutcome).toBe('invalid');
+    expect(result.receipt.fallbackReason).toContain('semantic coverage was incomplete (0/5');
+    expect(result.receipt.semanticCoverage).toMatchObject({
+      status: 'blocked',
+      coveredObligationIds: [],
+    });
+    expect(result.receipt.semanticCoverage?.missingObligationIds).toHaveLength(5);
+  });
+
+  it('preserves a narrow one-field headline rewrite with a passing coverage receipt', async () => {
+    const snapshot = buildGoldenNodeSlide('one-field-semantic-coverage', NOW).snapshot;
+    const slide = snapshot.slides[0];
+    const headline = snapshot.elements.find(
+      (element) =>
+        element.slideId === slide?.id &&
+        !element.locked &&
+        element.kind === 'text' &&
+        (element.role === 'title' || element.role === 'headline'),
+    );
+    if (!slide || !headline) throw new Error('Expected opening headline fixture.');
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slide.id],
+      operationMode: 'copy',
+    };
+    const planningInput = input(snapshot, headline, scope);
+    planningInput.request.focusSlideId = slide.id;
+    planningInput.request.instruction = 'Rewrite the headline to be more decisive.';
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Sharper headline',
+          operations: [
+            {
+              op: 'replace_text',
+              slideId: slide.id,
+              elementId: headline.id,
+              text: 'Make every decision reviewable.',
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 10,
+          inputTokens: 100,
+          outputTokens: 20,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt.origin).toBe('free_route');
+    expect(result.receipt.semanticCoverage).toMatchObject({
+      status: 'pass',
+      missingObligationIds: [],
+    });
+    expect(result.receipt.semanticCoverage?.obligations).toHaveLength(1);
   });
 
   it('passes the user-selected catalog model to the pi-ai provider boundary', async () => {
@@ -529,6 +698,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     };
     planningInput.request.requireFactualSourceBindings = true;
+    planningInput.request.instruction = 'Rewrite the selected text using the supplied evidence.';
     const provider = vi.fn<NodeSlideEditProvider>(async () => ({
       ok: true,
       value: {
@@ -940,7 +1110,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.5.0',
+      adapterVersion: '1.7.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'failed',
       terminalOutcome: 'completed',
@@ -986,7 +1156,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.5.0',
+      adapterVersion: '1.7.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
@@ -1074,7 +1244,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.5.0',
+      adapterVersion: '1.7.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',

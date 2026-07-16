@@ -3,11 +3,17 @@ import {
   type DeckSnapshot,
   NODESLIDE_SCHEMA_VERSION,
   NODESLIDE_TOOLCHAIN_VERSION,
+  type PatchOperation,
+  type PatchScope,
   type Slide,
   type SlideElement,
   type SourceRecord,
 } from '../../shared/nodeslide';
-import { evaluateNodeSlideDeckCi } from './nodeslideDeckCi';
+import {
+  evaluateNodeSlideSemanticCoverage,
+  materializeNodeSlideCandidate,
+} from './nodeslideCandidate';
+import { evaluateNodeSlideDeckCi, nodeSlideDeckCiAllowsAutoCommit } from './nodeslideDeckCi';
 
 const NOW = 1_800_000_000_000;
 const STALE_AFTER_MS = 10_000;
@@ -22,6 +28,7 @@ describe('NodeSlide Deck CI', () => {
     expect(result.severityCounts).toEqual({ critical: 0, error: 0, warning: 0, info: 0 });
     expect(result.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(result.validation).toMatchObject({ ok: true, publishOk: true, cleanOk: true });
+    expect(nodeSlideDeckCiAllowsAutoCommit(result)).toBe(true);
   });
 
   it('fails closed on stale, failed, unsupported, and missing evidence plus hook blockers', () => {
@@ -80,6 +87,7 @@ describe('NodeSlide Deck CI', () => {
     expect(result.affectedSourceIds).toEqual(
       expect.arrayContaining(['source-secondary', 'source-missing']),
     );
+    expect(nodeSlideDeckCiAllowsAutoCommit(result)).toBe(false);
   });
 
   it('returns warnings without blockers for refreshing evidence and advisory hooks', () => {
@@ -104,6 +112,89 @@ describe('NodeSlide Deck CI', () => {
     expect(codes(result)).toEqual(
       expect.arrayContaining(['source_refreshing', 'pdf_font_substitution']),
     );
+    expect(nodeSlideDeckCiAllowsAutoCommit(result)).toBe(false);
+  });
+
+  it('fails the Turbo gate closed when a receipt is internally inconsistent', () => {
+    const clean = evaluateNodeSlideDeckCi(snapshot(), options());
+
+    expect(nodeSlideDeckCiAllowsAutoCommit({ ...clean, blockerCount: 1 })).toBe(false);
+    expect(
+      nodeSlideDeckCiAllowsAutoCommit({
+        ...clean,
+        validation: { ...clean.validation, cleanOk: false },
+      }),
+    ).toBe(false);
+  });
+
+  it('fails Deck CI and Turbo for an under-covered candidate bound to an exact receipt', () => {
+    const base = snapshot();
+    const target = requiredElement(base, 'opening-copy');
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: base.deck.id,
+      slideIds: ['slide-opening'],
+      operationMode: 'unrestricted',
+    };
+    const operations: PatchOperation[] = [
+      {
+        op: 'move',
+        slideId: target.slideId,
+        elementId: target.id,
+        x: target.bbox.x + 0.01,
+        y: target.bbox.y,
+      },
+    ];
+    const semanticCoverage = evaluateNodeSlideSemanticCoverage({
+      snapshot: base,
+      instruction: 'Rewrite the headline and body copy on slide 1.',
+      scope,
+      operations,
+      focusSlideId: 'slide-opening',
+    });
+    const candidate = materializeNodeSlideCandidate(base, { scope, operations }, NOW);
+
+    const result = evaluateNodeSlideDeckCi(candidate, {
+      ...options(),
+      semanticCoverage,
+    });
+
+    expect(semanticCoverage.status).toBe('blocked');
+    expect(result.status).toBe('fail');
+    expect(codes(result)).toContain('semantic_coverage_undercovered');
+    expect(nodeSlideDeckCiAllowsAutoCommit(result)).toBe(false);
+  });
+
+  it('fails Deck CI closed when semantic coverage belongs to a different candidate', () => {
+    const base = snapshot();
+    const target = requiredElement(base, 'opening-copy');
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: base.deck.id,
+      slideIds: [target.slideId],
+      elementIds: [target.id],
+      operationMode: 'copy',
+    };
+    const operations: PatchOperation[] = [
+      {
+        op: 'replace_text',
+        slideId: target.slideId,
+        elementId: target.id,
+        text: 'Updated opening copy.',
+      },
+    ];
+    const receipt = evaluateNodeSlideSemanticCoverage({
+      snapshot: base,
+      instruction: 'Rewrite the selected text.',
+      scope,
+      operations,
+    });
+
+    const result = evaluateNodeSlideDeckCi(base, { ...options(), semanticCoverage: receipt });
+
+    expect(result.status).toBe('fail');
+    expect(codes(result)).toContain('semantic_coverage_receipt_mismatch');
+    expect(nodeSlideDeckCiAllowsAutoCommit(result)).toBe(false);
   });
 
   it('produces a deterministic digest and does not mutate its inputs', () => {

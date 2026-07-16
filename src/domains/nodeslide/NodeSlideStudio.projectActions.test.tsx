@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { Children, type ReactElement, type ReactNode, isValidElement } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { NodeSlideWorkspace } from '../../../shared/nodeslide';
 import {
   getDeckOwnerAccessKey,
   listStoredDeckAccess,
@@ -17,6 +18,7 @@ import {
   type OwnerCapabilityRecovery,
   OwnerCapabilityRecoveryDialog,
 } from './components/OwnerCapabilityRecoveryDialog';
+import { runFocusedEditorMutation } from './components/shell/editorActions';
 
 const studioSource = readFileSync('src/domains/nodeslide/NodeSlideStudio.tsx', 'utf8');
 const projectDialogSource = readFileSync(
@@ -156,6 +158,98 @@ describe('NodeSlide editor project actions', () => {
   });
 });
 
+describe('NodeSlide focused direct text mutations', () => {
+  it('persists an accepted slide-6 headline and restores its active selection', async () => {
+    let workspace = focusedWorkspace('Original headline', 2, 4);
+    let activeSlideId = 'slide-1';
+    let selectedElementIds: string[] = [];
+
+    const accepted = await runFocusedEditorMutation({
+      focus: { slideId: 'slide-6', elementIds: ['headline-6'] },
+      readWorkspace: () => workspace,
+      mutate: async () => {
+        expect(workspace.deck.version).toBe(2);
+        expect(workspace.elements[0]?.version).toBe(4);
+        workspace = focusedWorkspace('Decision-ready headline', 3, 5);
+        return true;
+      },
+      restoreFocus: (focus) => {
+        activeSlideId = focus.slideId;
+        selectedElementIds = focus.elementIds;
+      },
+    });
+
+    expect(accepted).toBe(true);
+    expect(workspace.elements[0]).toMatchObject({
+      id: 'headline-6',
+      content: 'Decision-ready headline',
+      version: 5,
+    });
+    expect(activeSlideId).toBe('slide-6');
+    expect(selectedElementIds).toEqual(['headline-6']);
+  });
+
+  it('preserves slide-6 focus when the canonical CAS rejects a stale element version', async () => {
+    const workspace = focusedWorkspace('Newer remote headline', 3, 5);
+    let activeSlideId = 'slide-1';
+    let selectedElementIds: string[] = [];
+
+    const accepted = await runFocusedEditorMutation({
+      focus: { slideId: 'slide-6', elementIds: ['headline-6'] },
+      readWorkspace: () => workspace,
+      mutate: async () => false,
+      restoreFocus: (focus) => {
+        activeSlideId = focus.slideId;
+        selectedElementIds = focus.elementIds;
+      },
+    });
+
+    expect(accepted).toBe(false);
+    expect(activeSlideId).toBe('slide-6');
+    expect(selectedElementIds).toEqual(['headline-6']);
+    expect(workspace.elements[0]?.content).toBe('Newer remote headline');
+  });
+
+  it('preserves focus and reports an unexpected failed mutation instead of resetting', async () => {
+    const workspace = focusedWorkspace('Original headline', 2, 4);
+    let activeSlideId = 'slide-1';
+    let selectedElementIds: string[] = [];
+    const onUnexpectedFailure = vi.fn();
+
+    const accepted = await runFocusedEditorMutation({
+      focus: { slideId: 'slide-6', elementIds: ['headline-6'] },
+      readWorkspace: () => workspace,
+      mutate: async () => {
+        throw new Error('Mutation service unavailable.');
+      },
+      restoreFocus: (focus) => {
+        activeSlideId = focus.slideId;
+        selectedElementIds = focus.elementIds;
+      },
+      onUnexpectedFailure,
+    });
+
+    expect(accepted).toBe(false);
+    expect(onUnexpectedFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Mutation service unavailable.' }),
+    );
+    expect(activeSlideId).toBe('slide-6');
+    expect(selectedElementIds).toEqual(['headline-6']);
+  });
+
+  it('keeps native blur edits on the canonical versioned patch path', () => {
+    expect(studioSource).toContain('onReplaceText={(elementId, text, baseElementVersion) => {');
+    expect(studioSource).toContain('applyFocusedOperations(');
+    expect(studioSource).toContain(
+      "[{ op: 'replace_text', slideId: element.slideId, elementId, text }]",
+    );
+    expect(studioSource).toContain('{ [elementId]: baseElementVersion }');
+    expect(studioSource).toContain('baseDeckVersion: currentWorkspace.deck.version');
+    expect(studioSource).toContain('baseSlideVersions: clocks.baseSlideVersions');
+    expect(studioSource).toContain('baseElementVersions: applyExpectedElementVersions(');
+  });
+});
+
 function findElement(
   children: readonly ReactNode[],
   type: ReactElement['type'],
@@ -165,4 +259,41 @@ function findElement(
     throw new Error('Expected project dialog element was not rendered.');
   }
   return element;
+}
+
+function focusedWorkspace(
+  headline: string,
+  deckVersion: number,
+  elementVersion: number,
+): NodeSlideWorkspace {
+  return {
+    deck: {
+      id: 'deck-1',
+      slideOrder: ['slide-1', 'slide-6'],
+      version: deckVersion,
+    },
+    slides: [
+      { id: 'slide-1', deckId: 'deck-1', elementOrder: [], version: 1 },
+      { id: 'slide-6', deckId: 'deck-1', elementOrder: ['headline-6'], version: 2 },
+    ],
+    elements: [
+      {
+        id: 'headline-6',
+        slideId: 'slide-6',
+        kind: 'text',
+        name: 'Headline',
+        content: headline,
+        version: elementVersion,
+      },
+    ],
+    sources: [],
+    comments: [],
+    patches: [],
+    versions: [],
+    traces: [],
+    validations: [],
+    exports: [],
+    presence: [],
+    publication: null,
+  } as unknown as NodeSlideWorkspace;
 }

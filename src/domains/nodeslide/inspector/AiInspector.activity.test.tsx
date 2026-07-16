@@ -274,6 +274,10 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     const composer = screen.getByTestId('ai-composer');
     const composerHeading = composer.querySelector('.ns-ai-v3-composer-heading');
     if (!composerHeading) throw new Error('Expected the prompt-first composer heading.');
+    expect(screen.getByTestId('assistant-ui-thread')).toHaveAttribute(
+      'data-thread-layout',
+      'content',
+    );
     expect(within(composerHeading as HTMLElement).getByText('Writes to this slide')).toBeVisible();
     await user.type(
       screen.getByRole('textbox', { name: 'AI instruction' }),
@@ -311,6 +315,48 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     await waitFor(() =>
       expect(screen.getAllByText('Writes to 1 selected element').length).toBeGreaterThan(0),
     );
+  });
+
+  it('fails closed instead of widening authority when an element selection disappears', async () => {
+    const snapshot = fixture('selection-scope-loss');
+    const selectedElement = snapshot.elements[0];
+    if (!selectedElement) throw new Error('Fixture requires a selectable element.');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    const view = renderInspector(snapshot, {
+      initialProviderMode: 'deterministic',
+      selectedElements: [selectedElement],
+      onPropose,
+    });
+
+    expect(screen.getAllByText('Writes to 1 selected element').length).toBeGreaterThan(0);
+    view.rerender(
+      <div className="nodeslide-studio">
+        <AiInspector
+          {...inspectorProps(snapshot, {
+            initialProviderMode: 'deterministic',
+            selectedElements: [],
+            onPropose,
+          })}
+        />
+      </div>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByText('Writes to selected elements · reselect required').length,
+      ).toBeGreaterThan(0),
+    );
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Tighten this title.');
+    await user.click(screen.getByTestId('ai-submit'));
+
+    expect(onPropose).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        'The selected element scope is no longer available. Reselect the element or explicitly choose a wider write scope.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Writes to this slide')).not.toBeInTheDocument();
   });
 
   it('fails closed before session consent and reuses the grant across editor requests', async () => {
@@ -504,6 +550,29 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(onPropose.mock.calls[0]?.[2]).not.toHaveProperty('providerConsent');
   });
 
+  it('binds an explicit hard spend ceiling into the submitted durable request', async () => {
+    const snapshot = fixture('run-spend-ceiling');
+    const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
+    const user = userEvent.setup();
+    renderInspector(snapshot, { onPropose });
+
+    await user.click(screen.getByTestId('ai-provider-summary'));
+    const limit = screen.getByTestId('ai-run-spend-limit');
+    expect(limit).toBeEnabled();
+    await user.type(limit, '0.25');
+    expect(screen.getByTestId('ai-provider-route-status')).toHaveTextContent('Hard cap $0.25');
+
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Tighten the title.');
+    await user.click(screen.getByTestId('ai-provider-consent'));
+    await user.click(screen.getByTestId('ai-submit'));
+
+    await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1));
+    expect(onPropose.mock.calls[0]?.[2]).toMatchObject({
+      providerMode: 'nebius',
+      maxCostUsd: 0.25,
+    });
+  });
+
   it('gates deterministic Web, submits after one session grant, and fails closed after revoke', async () => {
     const snapshot = fixture('deterministic-web-consent');
     const onPropose = vi.fn<AiInspectorProps<string>['onPropose']>();
@@ -601,8 +670,14 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
     const details = screen.getByTestId('ai-turbo-details');
     expect(details).toHaveTextContent('Session change authority');
-    expect(details).toHaveTextContent(/Authority expires after .* proposals/);
-    expect(details).toHaveTextContent('Publish, share, export, delete, and sync are excluded');
+    expect(details).toHaveTextContent(/Turbo (?:until|active)/);
+    const limits = within(details).getByText('Limits and exclusions');
+    expect(limits).toBeVisible();
+    const exclusions = within(details).getByText(/Authority expires after .* proposals/);
+    expect(exclusions).not.toBeVisible();
+    await user.click(limits);
+    expect(exclusions).toBeVisible();
+    expect(exclusions).toHaveTextContent('Publish, share, export, delete, and sync are excluded');
   });
 
   it('shows one compact Deck CI line and opens Trace from the composer status', async () => {
@@ -981,6 +1056,30 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.queryByRole('button', { name: 'Retry the same request' })).toBeNull();
   });
 
+  it('maps transport failures to interface copy while keeping a safe Trace affordance', async () => {
+    const snapshot = fixture('transport-failure-copy');
+    const onOpenDeckCiTrace = vi.fn();
+    const user = userEvent.setup();
+    renderInspector(snapshot, {
+      agentActivity: {
+        status: 'failed',
+        elapsedMs: 1_200,
+        ask: 'Rewrite the headline.',
+        message:
+          'Convex Server Error: [Request ID: debug-secret] upstream transport failed with private details',
+      },
+      onOpenDeckCiTrace,
+    });
+
+    expect(
+      screen.getByText('The agent failed before a reviewable proposal was returned.'),
+    ).toBeVisible();
+    expect(screen.queryByText(/Convex Server Error|debug-secret|private details/i)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Open Trace' }));
+    expect(onOpenDeckCiTrace).toHaveBeenCalledTimes(1);
+  });
+
   it('does not keep a stale durable run cancellable after the request has failed', () => {
     const snapshot = fixture('terminal-over-stale-run');
     const staleRun: NodeSlideAgentRun = {
@@ -1074,6 +1173,10 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
 
     const loadEarlier = screen.getByRole('button', { name: /Show 5 earlier messages/ });
     expect(loadEarlier).toBeVisible();
+    expect(screen.getByTestId('assistant-ui-thread')).toHaveAttribute(
+      'data-thread-layout',
+      'anchored',
+    );
     expect(screen.getByTestId('ai-composer')).toBeVisible();
     await user.click(loadEarlier);
     expect(screen.queryByTestId('agent-load-earlier')).toBeNull();

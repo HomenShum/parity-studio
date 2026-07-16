@@ -82,9 +82,8 @@ describe('OpenUI slide-agent interaction contract', () => {
     });
     expect(errors).toEqual([]);
     const candidate = apply(snapshot);
-    expect(validateNodeSlideSnapshot(candidate, 1_700_000_000_200, 'openui-candidate').ok).toBe(
-      true,
-    );
+    const validation = validateNodeSlideSnapshot(candidate, 1_700_000_000_200, 'openui-candidate');
+    expect(validation.ok, JSON.stringify(validation.issues)).toBe(true);
   });
 
   it('A4 keeps all four claims editable in the SlideLang candidate', () => {

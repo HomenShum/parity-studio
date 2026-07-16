@@ -43,7 +43,7 @@ interface DesignInspectorProps {
   onEvictTasteSignal: ((signalId: string) => void) | undefined;
   onOpenPreferenceEvidence: ((eventId: string) => void) | undefined;
   onClearTastePack: () => void;
-  onApplyPatch: (operations: PatchOperation[], summary: string) => void;
+  onApplyPatch: (operations: PatchOperation[], summary: string) => unknown;
 }
 
 export type DesignInspectorSectionId = 'content' | 'data' | 'appearance' | 'advanced';
@@ -100,6 +100,7 @@ export function DesignInspector({
   onApplyPatch,
 }: DesignInspectorProps) {
   const [openSections, setOpenSections] = useState(initialDesignInspectorSections);
+  const [contentMutationError, setContentMutationError] = useState<string | null>(null);
   const toggleSection = (section: DesignInspectorSectionId) => {
     setOpenSections((current) => {
       const next = toggleDesignInspectorSection(current, section);
@@ -327,6 +328,7 @@ export function DesignInspector({
                       ? (primary.math?.expression ?? '')
                       : (primary.content ?? '');
                   if (next !== current) {
+                    setContentMutationError(null);
                     const operations: PatchOperation[] = [
                       {
                         op: 'replace_text',
@@ -345,7 +347,20 @@ export function DesignInspector({
                         properties: { title: next.trim() || 'Untitled slide' },
                       });
                     }
-                    onApplyPatch(operations, `Edited ${primary.name}`);
+                    const result = onApplyPatch(operations, `Edited ${primary.name}`);
+                    const showFailure = () =>
+                      setContentMutationError(
+                        'This text edit was not committed. Your slide and selection were preserved; review the editor error and retry.',
+                      );
+                    if (result instanceof Promise) {
+                      void result
+                        .then((accepted) => {
+                          if (accepted === false) showFailure();
+                        })
+                        .catch(showFailure);
+                    } else if (result === false) {
+                      showFailure();
+                    }
                   }
                 }}
                 onKeyDown={(event) => {
@@ -362,6 +377,7 @@ export function DesignInspector({
                   }
                 }}
               />
+              {contentMutationError ? <output role="alert">{contentMutationError}</output> : null}
               <small>Ctrl/⌘ + Enter to apply · Escape to cancel</small>
             </label>
           </InspectorGroup>

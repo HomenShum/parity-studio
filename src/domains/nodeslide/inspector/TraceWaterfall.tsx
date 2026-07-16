@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   type CSSProperties,
+  type ComponentType,
   type KeyboardEvent,
   type UIEvent,
   createContext,
@@ -41,6 +42,7 @@ import type {
   NodeSlideEvidenceStepDetail,
   SourceRecord,
 } from '../../../../shared/nodeslide';
+import type { PdfEvidencePageProps } from './PdfEvidencePage';
 import {
   numericAttribute,
   spanDurationMs,
@@ -97,6 +99,7 @@ const MAX_VISIBLE_ATTRIBUTES = 24;
 const MAX_VISIBLE_EVIDENCE = 12;
 const MAX_VISIBLE_GROUPS = 12;
 const MAX_RECURSIVE_O11Y_SPANS = 64;
+const MAX_COMPACT_SPANS = 6;
 
 function spanMatches(span: NodeSlideAgentSpan, filter: WaterfallFilter, query: string): boolean {
   if (filter === 'errors' && span.status !== 'error') return false;
@@ -992,6 +995,7 @@ function TraceWaterfallRun({
   const [captureDetail, setCaptureDetail] = useState<NodeSlideEvidenceCaptureDetail | null>(null);
   const [captureLoading, setCaptureLoading] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const captureRequestSequence = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const spans = useMemo(
@@ -1154,13 +1158,18 @@ function TraceWaterfallRun({
   useEffect(() => {
     // Reset lazy evidence whenever the active waterfall row changes.
     void activeSelectedSpanId;
+    captureRequestSequence.current += 1;
     setSelectedCaptureId(null);
     setCaptureDetail(null);
     setCaptureError(null);
     setCaptureLoading(false);
+    return () => {
+      captureRequestSequence.current += 1;
+    };
   }, [activeSelectedSpanId]);
 
   const openEvidenceCapture = async (capture: NodeSlideEvidenceCaptureSummary) => {
+    const requestSequence = ++captureRequestSequence.current;
     setSelectedCaptureId(capture.id);
     setCaptureDetail(null);
     setCaptureError(null);
@@ -1171,24 +1180,26 @@ function TraceWaterfallRun({
     setCaptureLoading(true);
     try {
       const detail = await onLoadEvidenceCapture(capture.id);
+      if (requestSequence !== captureRequestSequence.current) return;
       if (!detail) setCaptureError('This visual evidence record is no longer available.');
       else setCaptureDetail(detail);
     } catch (error) {
+      if (requestSequence !== captureRequestSequence.current) return;
       setCaptureError(
         error instanceof Error ? error.message : 'Visual evidence could not be loaded.',
       );
     } finally {
-      setCaptureLoading(false);
+      if (requestSequence === captureRequestSequence.current) setCaptureLoading(false);
     }
   };
 
   if (compact) {
     const orderedSpans = [...spans].sort((left, right) => left.sequence - right.sequence);
     const compactSpans = (
-      orderedSpans.length <= 6
+      orderedSpans.length <= MAX_COMPACT_SPANS
         ? orderedSpans
-        : [orderedSpans[0], ...orderedSpans.slice(-5)].filter((span): span is NodeSlideAgentSpan =>
-            Boolean(span),
+        : [orderedSpans[0], ...orderedSpans.slice(-(MAX_COMPACT_SPANS - 1))].filter(
+            (span): span is NodeSlideAgentSpan => Boolean(span),
           )
     ).sort((left, right) => left.startTime - right.startTime || left.sequence - right.sequence);
     const hiddenCount = Math.max(0, orderedSpans.length - compactSpans.length);
@@ -1199,6 +1210,9 @@ function TraceWaterfallRun({
       <section
         className="ns-trace-activity-compact"
         data-testid="trace-waterfall"
+        data-bounded="true"
+        data-rendered-spans={compactSpans.length}
+        data-total-spans={spans.length}
         aria-label="Compact trace activity"
       >
         <header>
@@ -1861,11 +1875,18 @@ function EvidenceCaptureDetail({ detail }: { detail: NodeSlideEvidenceCaptureDet
           {detail.error ?? 'The visual capture failed; the text citation remains available.'}
         </p>
       ) : null}
-      <div className="ns-waterfall-capture-steps">
-        {detail.steps.map((step) => (
-          <EvidenceCaptureStep key={step.id} step={step} />
-        ))}
-      </div>
+      {detail.steps.length > 0 ? (
+        <div className="ns-waterfall-capture-steps">
+          {detail.steps.map((step) => (
+            <EvidenceCaptureStep key={step.id} step={step} provider={detail.provider} />
+          ))}
+        </div>
+      ) : (
+        <p className="ns-waterfall-capture-state" data-testid="trace-evidence-empty">
+          No visual steps were stored. The capture status, digest, and trace binding remain
+          available.
+        </p>
+      )}
       <footer>
         <code title={detail.traceId}>{detail.spanId}</code>
         {detail.contentDigest ? (
@@ -1878,8 +1899,31 @@ function EvidenceCaptureDetail({ detail }: { detail: NodeSlideEvidenceCaptureDet
   );
 }
 
-function EvidenceCaptureStep({ step }: { step: NodeSlideEvidenceStepDetail }) {
+function EvidenceCaptureStep({
+  step,
+  provider,
+}: {
+  step: NodeSlideEvidenceStepDetail;
+  provider: string;
+}) {
   const attachment = step.attachment;
+  const screenshotBox =
+    attachment?.kind === 'screenshot' && attachment.box && isNormalizedEvidenceBox(attachment.box)
+      ? attachment.box
+      : null;
+  const pdfPage =
+    attachment?.kind === 'pdf' ? (attachment.page ?? attachment.box?.page) : undefined;
+  const pdfBox =
+    attachment?.kind === 'pdf' &&
+    attachment.box &&
+    isNormalizedEvidenceBox(attachment.box) &&
+    Number.isInteger(pdfPage) &&
+    Number(pdfPage) > 0 &&
+    (attachment.box.page === undefined || attachment.box.page === pdfPage)
+      ? attachment.box
+      : null;
+  const sourceSnapshot = provider === 'nodeslide-source-snapshot/v1';
+  const sourceLevelRegion = step.regionScope !== 'claim';
   return (
     <section className="ns-waterfall-capture-step" data-status={step.status}>
       <header>
@@ -1893,33 +1937,88 @@ function EvidenceCaptureStep({ step }: { step: NodeSlideEvidenceStepDetail }) {
       </header>
       {step.detail ? <p>{step.detail}</p> : null}
       {attachment?.kind === 'screenshot' ? (
-        <a
-          className="ns-waterfall-shot-link"
-          href={attachment.url}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="ns-waterfall-shot-frame">
-            <img src={attachment.url} alt={`Captured evidence: ${step.label}`} loading="lazy" />
-            {attachment.box ? <EvidenceBoxOverlay box={attachment.box} /> : null}
-          </span>
-        </a>
-      ) : attachment?.kind === 'pdf' ? (
-        <div className="ns-waterfall-pdf-frame">
-          <object
-            data={`${attachment.url}#page=${attachment.page ?? attachment.box?.page ?? 1}`}
-            type="application/pdf"
-            aria-label={`PDF evidence: ${step.label}`}
+        <>
+          <a
+            className="ns-waterfall-shot-link"
+            href={attachment.url}
+            target="_blank"
+            rel="noreferrer"
           >
-            <a href={attachment.url} target="_blank" rel="noreferrer">
-              Open PDF evidence
-            </a>
-          </object>
-          {attachment.box ? <EvidenceBoxOverlay box={attachment.box} /> : null}
-        </div>
+            <span className="ns-waterfall-shot-frame">
+              <img src={attachment.url} alt={`Captured evidence: ${step.label}`} loading="lazy" />
+              {screenshotBox ? <EvidenceBoxOverlay box={screenshotBox} /> : null}
+            </span>
+          </a>
+          {screenshotBox ? (
+            <p
+              className="ns-waterfall-geometry-state"
+              data-testid="trace-screenshot-geometry-state"
+            >
+              {isWholeEvidenceBox(screenshotBox)
+                ? sourceLevelRegion
+                  ? 'Whole captured screenshot; exact source-level geometry, not a claim-level box.'
+                  : 'Whole captured screenshot recorded as claim-level geometry.'
+                : sourceLevelRegion
+                  ? 'Exact source-level screenshot region; claim-level precision requires a separate claim receipt.'
+                  : 'Exact claim-level screenshot region recorded by the capture.'}
+            </p>
+          ) : null}
+        </>
+      ) : attachment?.kind === 'pdf' ? (
+        <>
+          {pdfBox && pdfPage ? (
+            <PdfEvidencePreview
+              url={attachment.url}
+              page={pdfPage}
+              box={pdfBox}
+              label={`PDF evidence: ${step.label}`}
+            />
+          ) : (
+            <div className="ns-waterfall-pdf-frame" data-region-precision="unavailable">
+              <p className="ns-waterfall-capture-state">
+                PDF page geometry is unavailable. No region overlay is shown.
+              </p>
+            </div>
+          )}
+          <a
+            className="ns-waterfall-pdf-link"
+            href={attachment.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open PDF attachment <ExternalLink size={12} />
+          </a>
+          <p
+            className={`ns-waterfall-geometry-state${pdfBox ? '' : ' is-degraded'}`}
+            data-testid="trace-pdf-geometry-state"
+          >
+            {pdfBox
+              ? isWholeEvidenceBox(pdfBox)
+                ? sourceLevelRegion
+                  ? `Whole rendered PDF page ${pdfPage}; exact source-level geometry, not a claim-level box.`
+                  : `Whole rendered PDF page ${pdfPage} recorded as claim-level geometry.`
+                : sourceLevelRegion && sourceSnapshot
+                  ? `Exact source-snapshot excerpt region on rendered page ${pdfPage}; this is source-level evidence, not a claim-level box.`
+                  : sourceLevelRegion
+                    ? `Exact source-level region on rendered PDF page ${pdfPage}; claim-level precision requires a separate claim receipt.`
+                    : `Exact claim-level region on rendered PDF page ${pdfPage}.`
+              : attachment.box
+                ? 'Stored PDF coordinates or page metadata are invalid. No region overlay is shown.'
+                : 'No exact PDF region was recorded. No region overlay is shown.'}
+          </p>
+        </>
       ) : (
         <p className="ns-waterfall-capture-state">No visual attachment was stored for this step.</p>
       )}
+      {attachment?.kind === 'screenshot' && attachment.box && !screenshotBox ? (
+        <p
+          className="ns-waterfall-geometry-state is-degraded"
+          data-testid="trace-screenshot-geometry-state"
+        >
+          Stored screenshot coordinates fall outside the normalized image bounds. No region overlay
+          is shown.
+        </p>
+      ) : null}
       {step.quote ? <blockquote>{step.quote}</blockquote> : null}
       {step.selector ? (
         <p>
@@ -1928,8 +2027,9 @@ function EvidenceCaptureStep({ step }: { step: NodeSlideEvidenceStepDetail }) {
       ) : null}
       {step.box ? (
         <small className="ns-waterfall-box-coordinates">
-          Region x {formatDecimal(step.box.x)} / y {formatDecimal(step.box.y)} / w{' '}
-          {formatDecimal(step.box.w)} / h {formatDecimal(step.box.h)}
+          {sourceLevelRegion ? 'Source region' : 'Claim region'} x {formatDecimal(step.box.x)} / y{' '}
+          {formatDecimal(step.box.y)} / w {formatDecimal(step.box.w)} / h{' '}
+          {formatDecimal(step.box.h)}
           {step.box.page ? ` / page ${step.box.page}` : ''}
         </small>
       ) : (
@@ -1943,6 +2043,8 @@ function EvidenceBoxOverlay({ box }: { box: NodeSlideEvidenceBox }) {
   return (
     <span
       className="ns-waterfall-evidence-box"
+      data-testid="trace-screenshot-evidence-box"
+      data-region-precision="normalized-image"
       aria-hidden="true"
       style={{
         left: `${box.x * 100}%`,
@@ -1951,6 +2053,60 @@ function EvidenceBoxOverlay({ box }: { box: NodeSlideEvidenceBox }) {
         height: `${box.h * 100}%`,
       }}
     />
+  );
+}
+
+function PdfEvidencePreview(props: PdfEvidencePageProps) {
+  const [Renderer, setRenderer] = useState<ComponentType<PdfEvidencePageProps> | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setRenderer(null);
+    setLoadFailed(false);
+    void import('./PdfEvidencePage')
+      .then((module) => {
+        if (active) setRenderer(() => module.PdfEvidencePage);
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  if (loadFailed) {
+    return (
+      <div className="ns-waterfall-pdf-frame" data-region-precision="unavailable">
+        <p className="ns-waterfall-geometry-state is-degraded">
+          The PDF renderer could not be loaded. No region overlay is shown.
+        </p>
+      </div>
+    );
+  }
+  if (!Renderer) {
+    return (
+      <div className="ns-waterfall-pdf-frame" data-region-precision="unavailable">
+        <p className="ns-waterfall-capture-state">Loading geometry-controlled PDF renderer...</p>
+      </div>
+    );
+  }
+  return <Renderer {...props} />;
+}
+
+function isWholeEvidenceBox(box: NodeSlideEvidenceBox): boolean {
+  return box.x === 0 && box.y === 0 && box.w === 1 && box.h === 1;
+}
+
+export function isNormalizedEvidenceBox(box: NodeSlideEvidenceBox): boolean {
+  const coordinates = [box.x, box.y, box.w, box.h];
+  return (
+    coordinates.every(Number.isFinite) &&
+    box.x >= 0 &&
+    box.y >= 0 &&
+    box.w > 0 &&
+    box.h > 0 &&
+    box.x + box.w <= 1 &&
+    box.y + box.h <= 1
   );
 }
 

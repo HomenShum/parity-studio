@@ -282,7 +282,7 @@ function buildTransformationLadderElements(
       'Provenance note',
       'source',
       spec.provenanceLabel,
-      box(0.07, 0.84, 0.72, 0.045),
+      box(0.07, 0.84, 0.64, 0.045),
       {
         color: deck.theme.colors.muted,
         fontFamily: deck.theme.typography.data,
