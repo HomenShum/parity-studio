@@ -11036,6 +11036,13 @@
   backdrop-filter: blur(8px);
 }
 
+/* Radix portals the destructive dialog beside its overlay. The shared overlay
+   intentionally sits above the editor at 500, so dialog content must occupy
+   the next layer or the visible controls are intercepted by the backdrop. */
+.nodeslide-studio .ns-share-dialog[data-state="open"] {
+  z-index: 501;
+}
+
 .nodeslide-studio .ns-project-dialog[data-state="open"] {
   background: var(--ns-paper);
   border: 1px solid color-mix(in srgb, var(--ns-line-d) 78%, transparent);

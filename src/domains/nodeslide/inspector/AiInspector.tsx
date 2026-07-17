@@ -1950,6 +1950,11 @@ export function AiInspector<CommandId extends string = string>({
                             <Checkbox
                               id="nodeslide-ai-provider-consent"
                               type="button"
+                              aria-label={
+                                deterministicWebResearch
+                                  ? 'Allow web research for this session'
+                                  : 'Allow external model access for this session'
+                              }
                               checked={externalConsent.granted}
                               onCheckedChange={(checked) => {
                                 externalConsent.setGranted(checked === true);
