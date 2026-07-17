@@ -356,6 +356,7 @@ function normalizeOutput(
 }
 
 export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
+  const exportSnapshot = await hydrateRemoteImages(snapshot);
   // Keep the sizeable MIT exporter out of the normal NodeSlide bundle until export is requested.
   const { default: PptxGenJSClass } = await import('pptxgenjs');
   const pptx = new PptxGenJSClass();
@@ -364,17 +365,17 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
   pptx.layout = layoutName;
   pptx.author = 'NodeSlide';
   pptx.company = 'Parity Studio';
-  pptx.subject = snapshot.deck.brief.purpose;
-  pptx.title = snapshot.deck.title;
+  pptx.subject = exportSnapshot.deck.brief.purpose;
+  pptx.title = exportSnapshot.deck.title;
   pptx.theme = {
-    headFontFace: safeFontFamily(snapshot.deck.theme.typography.display),
-    bodyFontFace: safeFontFamily(snapshot.deck.theme.typography.body),
+    headFontFace: safeFontFamily(exportSnapshot.deck.theme.typography.display),
+    bodyFontFace: safeFontFamily(exportSnapshot.deck.theme.typography.body),
   };
 
-  for (const slide of orderedSlides(snapshot)) {
+  for (const slide of orderedSlides(exportSnapshot)) {
     const pptxSlide = pptx.addSlide();
     pptxSlide.background = {
-      color: colorToPptxHex(slide.background, snapshot.deck.theme.colors.canvas),
+      color: colorToPptxHex(slide.background, exportSnapshot.deck.theme.colors.canvas),
     };
     // PowerPoint has no stable public slide object-name field. Keep a non-rendering marker in the
     // package so NodeSlide exports can recover the canonical slide identity on re-import. The
@@ -388,13 +389,51 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
       fill: { color: 'FFFFFF', transparency: 100 },
       line: { color: 'FFFFFF', transparency: 100 },
     });
-    for (const element of orderedExportElements(snapshot, slide)) {
-      addElement(pptx, pptxSlide, snapshot, element);
+    for (const element of orderedExportElements(exportSnapshot, slide)) {
+      addElement(pptx, pptxSlide, exportSnapshot, element);
     }
-    const notes = speakerNotesForSlide(snapshot, slide);
+    const notes = speakerNotesForSlide(exportSnapshot, slide);
     if (notes) pptxSlide.addNotes(notes);
   }
 
   const output = await pptx.write({ outputType: 'arraybuffer', compression: true });
   return normalizeOutput(output);
+}
+
+const REMOTE_IMAGE_TIMEOUT_MS = 8_000;
+const REMOTE_IMAGE_MAX_BYTES = 700_000;
+const BASE64_CHUNK_BYTES = 0x8000;
+
+async function hydrateRemoteImages(snapshot: DeckSnapshot): Promise<DeckSnapshot> {
+  if (typeof fetch !== 'function') return snapshot;
+  const elements = await Promise.all(
+    snapshot.elements.map(async (element) => {
+      const url = element.kind === 'image' ? element.imageUrl?.trim() : undefined;
+      if (!url?.startsWith('https://') || isEmbeddedImageData(url)) return element;
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(REMOTE_IMAGE_TIMEOUT_MS) });
+        if (!response.ok) return element;
+        // Reject on the declared length before buffering, so an oversized body is never read.
+        const declared = Number(response.headers.get('content-length'));
+        if (Number.isFinite(declared) && declared > REMOTE_IMAGE_MAX_BYTES) return element;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/') || blob.size > REMOTE_IMAGE_MAX_BYTES) return element;
+        return { ...element, imageUrl: await blobDataUrl(blob) };
+      } catch {
+        return element;
+      }
+    }),
+  );
+  return { ...snapshot, elements };
+}
+
+// Export runs in the browser and under Node (the proof scripts), so this deliberately avoids
+// FileReader, which Node does not expose. btoa and Blob#arrayBuffer exist in both.
+async function blobDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += BASE64_CHUNK_BYTES) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + BASE64_CHUNK_BYTES));
+  }
+  return `data:${blob.type};base64,${btoa(binary)}`;
 }
