@@ -13,6 +13,7 @@ import {
   watchRuntimeProblems,
 } from './editor-control-matrix.helpers';
 import { openFreshLanding, openSampleWorkspace } from './helpers';
+import { chooseSelectOption, readSelectOptions } from './landing-start-flow.helpers';
 
 test.describe('NodeSlide editor-wide control and surface matrix', () => {
   test.describe.configure({ mode: 'serial' });
@@ -361,10 +362,10 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await page.getByRole('button', { name: 'Expand composer' }).click();
     await expect(page.getByTestId('ai-effort-select')).toBeVisible();
     const effort = page.getByTestId('ai-effort-select');
-    const effortOptions = await effort
-      .locator('option')
-      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
-    if (effortOptions.length > 1) await effort.selectOption(effortOptions.at(-1) ?? '');
+    const effortOptions = await readSelectOptions(page, effort);
+    if (effortOptions.length > 1) {
+      await chooseSelectOption(page, effort, effortOptions.at(-1) ?? '');
+    }
 
     await page.getByTestId('ai-data-file-input').setInputFiles({
       name: 'matrix.csv',

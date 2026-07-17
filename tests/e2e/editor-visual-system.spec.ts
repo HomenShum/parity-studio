@@ -65,17 +65,18 @@ test.describe('NodeSlide editor visual-system boundary', () => {
       await expect(textarea).toBeVisible();
       const toolsToggle = page.getByTestId('ai-tools-toggle');
       await expect(toolsToggle).toBeVisible();
+      await expect(composer.getByRole('button', { name: 'Toggle web research' })).toBeVisible();
       await toolsToggle.click();
       for (const label of [
         'Connect BYOK model or coding agent',
-        'Toggle web research',
         'Manage deck memory',
         'Add read context reference',
         'Add command',
-        'Propose edit',
       ]) {
-        await expect(composer.getByRole('button', { name: label })).toBeVisible();
+        await expect(page.getByRole('menuitem', { name: label })).toBeVisible();
       }
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('button', { name: 'Propose edit' })).toBeVisible();
       await expect(page.getByTestId('ai-model-select')).toBeVisible();
       const expandComposer = composer.getByRole('button', { name: 'Expand composer' });
       if (await expandComposer.isVisible()) await expandComposer.click();

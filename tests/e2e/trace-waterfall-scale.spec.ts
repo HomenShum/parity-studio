@@ -54,7 +54,7 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       await page.getByRole('button', { name: 'Open full trace timeline' }).click();
       await expect(page.getByLabel('Expanded trace observability view')).toBeVisible();
       await expect(page.getByLabel('Search trace spans')).toBeVisible();
-      await expect(page.getByLabel('Group trace spans')).toHaveValue('trace');
+      await expect(page.getByLabel('Group trace spans')).toHaveAttribute('data-value', 'trace');
       await expect(page.getByTestId('trace-minimap-bucket')).toHaveCount(48);
       await expect(page.locator('.ns-waterfall-toolbar output')).toContainText(
         `of ${count} loaded spans visible`,
@@ -144,7 +144,7 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       .toBeCloseTo(scrollBeforeCollapse, 0);
     expect(await selectedSpanId(page)).toBe(selectedBeforeCollapse);
 
-    await page.getByLabel('Group trace spans').selectOption('service');
+    await chooseTraceGrouping(page, 'Service');
     const groupSummaryCount = await page.getByTestId('trace-group-summary').count();
     expect(groupSummaryCount).toBeGreaterThan(1);
     expect(groupSummaryCount).toBeLessThanOrEqual(12);
@@ -182,7 +182,7 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('trace-compact-selection')).toContainText(target.name);
     await page.getByRole('button', { name: 'Open full trace timeline' }).click();
-    await expect(page.getByLabel('Group trace spans')).toHaveValue('service');
+    await expect(page.getByLabel('Group trace spans')).toHaveAttribute('data-value', 'service');
     await expect(page.getByRole('button', { name: 'Sources', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -195,13 +195,13 @@ test.describe('NodeSlide trace waterfall scale scenarios', () => {
       '1,000 of 1,000 spans loaded',
     );
     await expect(page.getByLabel('Search trace spans')).toHaveValue(target.name);
-    await expect(page.getByLabel('Group trace spans')).toHaveValue('service');
+    await expect(page.getByLabel('Group trace spans')).toHaveAttribute('data-value', 'service');
     expect(await selectedSpanId(page)).toBe(target.spanId);
 
     await page.getByLabel('Search trace spans').fill('');
     await page.getByRole('button', { name: 'All', exact: true }).click();
     const regroupStart = await page.evaluate(() => performance.now());
-    await page.getByLabel('Group trace spans').selectOption('trace');
+    await chooseTraceGrouping(page, 'Trace hierarchy');
     await expect(page.locator('.ns-waterfall-toolbar output')).toContainText(
       '1000 of 1000 loaded spans visible',
     );
@@ -251,6 +251,14 @@ function collectRuntimeErrors(page: Page): string[] {
     if (message.type() === 'error') errors.push(`console: ${message.text()}`);
   });
   return errors;
+}
+
+async function chooseTraceGrouping(page: Page, label: string): Promise<void> {
+  await page.getByLabel('Group trace spans').click();
+  const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
+  await listbox.getByRole('option', { name: label, exact: true }).click();
+  await expect(listbox).toBeHidden();
 }
 
 async function selectedSpanId(page: Page): Promise<string> {

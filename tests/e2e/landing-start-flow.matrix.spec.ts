@@ -5,6 +5,7 @@ import {
   LANDING_STARTERS,
   chooseDeterministicLandingModel,
   chooseLandingModel,
+  chooseSelectOption,
   expectCleanRuntime,
   expectLandingSessionConsent,
   expectNoDocumentOverflow,
@@ -41,6 +42,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
       'BYOK / Agents',
       'Attach data',
       'Generation model',
+      'Reasoning effort: Medium',
       'Create presentation',
       ...LANDING_STARTERS.map(({ label }) => label),
       'Explore the editable sample workspace',
@@ -70,6 +72,14 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
       .evaluateAll((controls) =>
         controls
           .filter((control) => {
+            const style = getComputedStyle(control);
+            if (
+              control.getAttribute('aria-hidden') === 'true' ||
+              control.closest('[aria-hidden="true"]') ||
+              (style.opacity === '0' && style.pointerEvents === 'none')
+            ) {
+              return false;
+            }
             const aria = control.getAttribute('aria-label')?.trim();
             const title = control.getAttribute('title')?.trim();
             const text = control.textContent?.trim();
@@ -130,9 +140,9 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
       await expect(page.getByTestId('landing-model-select')).toContainText(model.label);
       await expect(page.locator('.ns-landing-web')).toHaveText(model.provider);
       await expectLandingSessionConsent(page, false);
-      await expect(readSelectOptions(page.getByTestId('landing-effort-select'))).resolves.toEqual(
-        model.efforts,
-      );
+      await expect(
+        readSelectOptions(page, page.getByTestId('landing-effort-select')),
+      ).resolves.toEqual(model.efforts);
     }
 
     await chooseDeterministicLandingModel(page);
@@ -160,7 +170,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await prompt.type(' Updated.');
     await expectLandingSessionConsent(page, true);
 
-    await page.getByTestId('landing-effort-select').selectOption('low');
+    await chooseSelectOption(page, page.getByTestId('landing-effort-select'), 'Low');
     await expectLandingSessionConsent(page, true);
 
     await chooseLandingModel(page, LANDING_MODEL_MATRIX[1]);
@@ -296,7 +306,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Continue to Google' })).toBeDisabled();
     await expect(
-      dialog.getByText(/does not expose a Google Slides push or pull action/i),
+      dialog.getByRole('heading', { name: 'Authorize app-scoped Google Slides access' }),
     ).toBeVisible();
 
     await dialog.getByLabel('Anthropic').fill('test-anthropic-1234');
@@ -394,13 +404,29 @@ test('mobile landing controls meet the minimum touch-target floor', async ({ pag
   await openIsolatedLanding(page);
   const undersized = await page.locator('button:visible, select:visible').evaluateAll((controls) =>
     controls
-      .map((control) => ({
-        height: Math.round(control.getBoundingClientRect().height * 10) / 10,
-        name:
-          control.getAttribute('aria-label') ||
-          control.textContent?.replace(/\s+/g, ' ').trim() ||
-          control.tagName.toLowerCase(),
-      }))
+      .filter((control) => {
+        const style = getComputedStyle(control);
+        return (
+          control.getAttribute('aria-hidden') !== 'true' &&
+          !control.closest('[aria-hidden="true"]') &&
+          style.visibility !== 'hidden' &&
+          !(style.opacity === '0' && style.pointerEvents === 'none')
+        );
+      })
+      .map((control) => {
+        const controlRect = control.getBoundingClientRect();
+        const label = control.id
+          ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(control.id)}"]`)
+          : null;
+        const labelRect = label?.getBoundingClientRect();
+        return {
+          height: Math.round(Math.max(controlRect.height, labelRect?.height ?? 0) * 10) / 10,
+          name:
+            control.getAttribute('aria-label') ||
+            control.textContent?.replace(/\s+/g, ' ').trim() ||
+            control.tagName.toLowerCase(),
+        };
+      })
       .filter(({ height }) => height < 40),
   );
   expect(undersized, JSON.stringify(undersized, null, 2)).toEqual([]);

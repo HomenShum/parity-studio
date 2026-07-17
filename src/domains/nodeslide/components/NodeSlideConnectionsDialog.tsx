@@ -68,6 +68,11 @@ function NodeSlideConnectionsDialogContent({
   deckId: string | undefined;
 }) {
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [routing, setRouting] = useState({ model: 'z-ai/glm-5.2', baseUrl: '' });
   const [client, setClient] = useState<ClientKind>('claude');
@@ -370,6 +375,7 @@ function NodeSlideConnectionsDialogContent({
     >
       <DialogContent
         className="ns-connections-dialog"
+        aria-labelledby="ns-connections-title"
         overlayClassName="ns-modal-backdrop"
         portalContainer={
           typeof document === 'undefined'
@@ -380,6 +386,10 @@ function NodeSlideConnectionsDialogContent({
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           firstInputRef.current?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus();
         }}
       >
         <div className="ns-connections-shell">

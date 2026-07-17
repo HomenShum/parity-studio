@@ -1402,7 +1402,7 @@ function TraceWaterfallRun({
             value={grouping}
             onValueChange={(value) => setGrouping(value as WaterfallGrouping)}
           >
-            <SelectTrigger aria-labelledby="ns-waterfall-grouping-label">
+            <SelectTrigger aria-label="Group trace spans" data-value={grouping}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

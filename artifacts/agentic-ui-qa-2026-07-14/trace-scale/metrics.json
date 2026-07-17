@@ -1,34 +1,34 @@
 [
   {
     "scenario": "exact-4",
-    "compactDomNodes": 312,
-    "expandedDomNodes": 562,
+    "compactDomNodes": 208,
+    "expandedDomNodes": 437,
     "mountedRows": 4,
     "totalSpans": 4
   },
   {
     "scenario": "exact-10",
-    "compactDomNodes": 333,
-    "expandedDomNodes": 668,
+    "compactDomNodes": 229,
+    "expandedDomNodes": 543,
     "mountedRows": 10,
     "totalSpans": 10
   },
   {
     "scenario": "exact-100",
-    "compactDomNodes": 332,
-    "expandedDomNodes": 810,
+    "compactDomNodes": 228,
+    "expandedDomNodes": 685,
     "mountedRows": 20,
     "totalSpans": 100
   },
   {
     "scenario": "high-volume-250-of-1000",
-    "compactDomNodes": 339,
-    "expandedDomNodes": 792,
+    "compactDomNodes": 235,
+    "expandedDomNodes": 678,
     "mountedRows": 20,
     "totalSpans": 1000,
-    "expandLatencyMs": 96.60000000149012,
-    "searchLatencyMs": 75.80000000074506,
-    "regroupLatencyMs": 92.09999999776483,
+    "expandLatencyMs": 74.60000000149012,
+    "searchLatencyMs": 67.19999999552965,
+    "regroupLatencyMs": 189.79999999701977,
     "restoredScrollTop": 1800
   }
 ]

@@ -2080,6 +2080,7 @@ export function AiInspector<CommandId extends string = string>({
                           <DropdownMenuItem
                             className="ns-ai-tool-button"
                             data-testid="ai-connect-agent"
+                            aria-label="Connect BYOK model or coding agent"
                             disabled={approvalControlLocked}
                             onSelect={() => setConnectionsOpen(true)}
                             title="Connect BYOK model or coding agent"
@@ -2091,6 +2092,7 @@ export function AiInspector<CommandId extends string = string>({
                             <DropdownMenuItem
                               className="ns-ai-tool-button"
                               data-testid="ai-memory"
+                              aria-label="Manage deck memory"
                               disabled={approvalControlLocked}
                               onSelect={() => setMemoryOpen(true)}
                               title="Manage durable deck memory"
@@ -2105,6 +2107,7 @@ export function AiInspector<CommandId extends string = string>({
                           ) : null}
                           <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-context"
+                            aria-label="Add read context reference"
                             disabled={approvalControlLocked || references.length === 0}
                             onSelect={() => openTokenMenu('@')}
                             title="Add read context"
@@ -2114,6 +2117,7 @@ export function AiInspector<CommandId extends string = string>({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-command"
+                            aria-label="Add command"
                             disabled={approvalControlLocked}
                             onSelect={() => openTokenMenu('/')}
                             title="Add command"

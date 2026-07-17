@@ -28,7 +28,7 @@ test('connections dialog is centered, readable, scrollable, and restores focus',
     .getByRole('heading', { level: 1 })
     .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(titleSize).toBeGreaterThanOrEqual(20);
-  const firstInput = dialog.locator('input').first();
+  const firstInput = dialog.getByPlaceholder('sk-ant-...');
   await expect(firstInput).toBeFocused();
   const firstInputBox = await firstInput.boundingBox();
   if (!firstInputBox) throw new Error('First BYOK field has no rendered geometry.');
