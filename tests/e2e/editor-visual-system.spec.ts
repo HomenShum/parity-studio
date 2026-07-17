@@ -216,6 +216,7 @@ async function collectMetrics(
         };
       };
       const visible = (element: Element) => {
+        if (element.closest('[aria-hidden="true"]')) return false;
         const style = getComputedStyle(element);
         const bounds = element.getBoundingClientRect();
         return (

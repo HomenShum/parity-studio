@@ -11039,6 +11039,8 @@
 /* Radix portals the destructive dialog beside its overlay. The shared overlay
    intentionally sits above the editor at 500, so dialog content must occupy
    the next layer or the visible controls are intercepted by the backdrop. */
+.nodeslide-studio [data-slot="dialog-content"][data-state="open"],
+.nodeslide-studio [data-slot="alert-dialog-content"][data-state="open"],
 .nodeslide-studio .ns-share-dialog[data-state="open"] {
   z-index: 501;
 }
