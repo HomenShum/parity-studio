@@ -239,7 +239,7 @@ function snapshotFixture(
       },
     ],
     sources: [],
-  } as DeckSnapshot;
+  } as unknown as DeckSnapshot;
 }
 
 function remoteDocument(

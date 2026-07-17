@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "nodeslide.journey-proof/v2",
+  "deckId": "deck_job_294c1e9e1b2f089e8a8b288c6f8b60a8",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784256579639
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784256602680,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_creation_verified",
+      "occurredAt": 1784256603993,
+      "phase": "brief-to-deck",
+      "inputTokens": 459,
+      "outputTokens": 977,
+      "costUsd": 0.0021,
+      "traceText": "Completed deck v1 Started 7:49:40 PM The user consented to send the full brief to OpenRouter. The named GLM 5.2 model supplied the narrative plan through pi-ai under authoring-policy:default-v1 (sha256:db9dda1c8a3da541bb19237cd7446bb5aeb3f5fee0af5676e2c32270a5279227); NodeSlide normalized, persisted, and validated the deck deterministically. openrouter · z-ai/glm-5.2 · Low effort RUN TIME 21s TOKENS 459 → 977 COST $0.0021 VALIDATION Passed Execution 4 auditable records Activity 2 spans · 21.0 s Full timeline 4 loaded 0 errors 1 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 459 in · 977 out COST $0.002057 DIGEST not recorded Invoke NodeSlide agent invoke_agent 21.0 s Queue and authorize agent.queue 21.0 s 2 sources Chain of custody and countersigned receipt"
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784256604884,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_edit_verified",
+      "occurredAt": 1784256653175,
+      "phase": "edit-auto-apply",
+      "inputTokens": 1347,
+      "outputTokens": 151,
+      "costUsd": 0.0015,
+      "traceText": "Completed deck v2 Started 7:50:07 PM OpenRouter GLM 5.2 prepared 1 validated scoped operation. Write scope · 1 slide openrouter · z-ai/glm-5.2 · Low effort EDIT CYCLE 43s TOKENS 1,347 → 151 COST $0.0015 VALIDATION Passed Execution 26 auditable records Activity 13 spans · 43.1 s Full timeline 26 loaded 0 errors 5 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 1,347 in · 151 out COST $0.001502 CANDIDATE DIGEST sha256:8b4e411…b719b9f Invoke NodeSlide agent invoke_agent 43.1 s Validate candidate candidate_validation 98 ms Validate candidate candidate_validation 66 ms 1 source Validate candidate candidate_validation 43 ms 1 source Validate candidate candidate_validation 184 ms 1 source Accept validated proposal with delegated authority agent.delegated_decision 0 ms 7 earlier loaded steps hidden here; open the full timeline to inspect them. Chain of custody and countersigned receipt"
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784256653175,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:840a87e0979fdb839d37295fd892aa11ee65413fee33f6e28812e445e6537986",
+      "runId": "agent_run_0c5cff9f344866c877a1ae895d471443",
+      "patchId": "patch_agent_5ca7b7865cbee084877181c86743893f",
+      "candidateDigest": "sha256:8b4e411193de02b788fca665075fe7cf67223b70e83d602c0a30587e4b719b9f",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784256653577,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:653d691ea700350aa90282eecfe28890a611843ed0127d9a8e7a9dfb35cb26d7",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "runId": "agent_run_0c5cff9f344866c877a1ae895d471443",
+      "patchId": "patch_agent_5ca7b7865cbee084877181c86743893f",
+      "candidateDigest": "sha256:8b4e411193de02b788fca665075fe7cf67223b70e83d602c0a30587e4b719b9f",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784256655732,
+      "deckVersion": 3,
+      "patchId": "patch_agent_5ca7b7865cbee084877181c86743893f",
+      "contentDigest": "sha256:40c390a9ddf682220bdb7f23ea6a5deeb1f20322b8c0df623449a958e88c2142",
+      "receiptDigest": "sha256:fb339095dc617526e4b167b98ac3d4d9437ec252ae28b7116e63562bc3a8c4e6"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784256657618,
+      "deckVersion": 4,
+      "patchId": "patch_agent_5ca7b7865cbee084877181c86743893f",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "receiptDigest": "sha256:31523395b5a8f7391105ecbe0c64606c712e656fa6f0d620ded96e8bfc09b51a"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784256657618,
+      "deckVersion": 4
+    },
+    {
+      "kind": "full_deck_visual_qa",
+      "occurredAt": 1784256665279,
+      "deckVersion": 4,
+      "slideCount": 7,
+      "distinctCompositionCount": 7,
+      "screenshotDigest": "sha256:aad57e55be31e9210542447f58fcf74a13a2b9e54d427bbb63bc5a3b5375e95a"
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784256667105,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\final-editor.png",
+    "slideScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-01.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-02.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-03.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-04.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-05.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-06.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\slide-07.png"
+    ],
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-quality-full-live-v3-2026-07-16\\run-manifest.json"
+  },
+  "digest": "sha256:013ade075581698009637ef8aee1cc0e1528791a34cb1b62794e73f8318ee176"
+}
