@@ -49,6 +49,79 @@ const nodeslideDecisionProvenanceValidator = v.union(
   }),
 );
 
+const nodeslideAccessPolicyValidator = v.object({
+  schemaVersion: v.literal('nodeslide.access-policy/v1'),
+  role: v.union(
+    v.literal('researcher'),
+    v.literal('analyst'),
+    v.literal('storyteller'),
+    v.literal('designer'),
+    v.literal('fact_checker'),
+    v.literal('reviewer'),
+    v.literal('planner'),
+    v.literal('executor'),
+    v.literal('validator'),
+  ),
+  capabilities: v.array(
+    v.union(
+      v.literal('deck:read'),
+      v.literal('source:read'),
+      v.literal('source:refresh'),
+      v.literal('web:read'),
+      v.literal('model:invoke'),
+      v.literal('tool:invoke'),
+      v.literal('memory:read'),
+      v.literal('memory:write'),
+      v.literal('proposal:create'),
+      v.literal('validation:run'),
+      v.literal('deck:commit'),
+      v.literal('publication:write'),
+      v.literal('share:write'),
+      v.literal('export:write'),
+      v.literal('delete:write'),
+      v.literal('external_sync:write'),
+    ),
+  ),
+  scopes: v.object({
+    deckIds: v.array(v.string()),
+    sourceIds: v.array(v.string()),
+    providerIds: v.array(v.string()),
+    modelIds: v.array(v.string()),
+    toolIds: v.array(v.string()),
+    memoryScopeKeys: v.array(v.string()),
+  }),
+  budget: v.object({
+    maxCostMicroUsd: v.number(),
+    maxInputTokens: v.number(),
+    maxOutputTokens: v.number(),
+    maxDurationMs: v.number(),
+    maxIterations: v.number(),
+    maxToolCalls: v.number(),
+  }),
+});
+
+const nodeslideWorkspaceAccessPolicyValidator = v.object({
+  schemaVersion: v.literal('nodeslide.workspace-access-policy/v1'),
+  workspaceId: v.string(),
+  role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+  projectScope: v.union(
+    v.object({ kind: v.literal('workspace') }),
+    v.object({ kind: v.literal('project'), projectId: v.string() }),
+  ),
+  capabilities: v.array(
+    v.union(
+      v.literal('workspace:read'),
+      v.literal('project:read'),
+      v.literal('project:create'),
+      v.literal('deck:read'),
+      v.literal('deck:attach'),
+      v.literal('grant:issue'),
+      v.literal('grant:revoke'),
+    ),
+  ),
+  agentPolicy: nodeslideAccessPolicyValidator,
+});
+
 const nodeslideEvidenceBoxValidator = v.object({
   x: v.number(),
   y: v.number(),
@@ -664,6 +737,9 @@ export default defineSchema({
     activeSignatureProfileDigest: v.optional(v.string()),
     // Optional so deployed anonymous-session rows can be claimed lazily.
     ownerAccessKey: v.optional(v.string()),
+    // Workspace membership is row-level authority metadata, not deck snapshot content.
+    workspaceId: v.optional(v.string()),
+    workspaceProjectId: v.optional(v.string()),
     shareSlug: v.optional(v.string()),
     plan: v.array(v.string()),
     spec: v.any(),
@@ -674,7 +750,56 @@ export default defineSchema({
     .index('by_project_id', ['projectId'])
     .index('by_project_row', ['projectRowId'])
     .index('by_session_updated', ['clientSessionId', 'updatedAt'])
-    .index('by_share_slug', ['shareSlug']),
+    .index('by_share_slug', ['shareSlug'])
+    .index('by_workspace_project', ['workspaceId', 'workspaceProjectId']),
+
+  nodeslide_workspaces: defineTable({
+    id: v.string(),
+    name: v.string(),
+    status: v.literal('active'),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_stable_id', ['id']),
+
+  nodeslide_workspace_projects: defineTable({
+    id: v.string(),
+    workspaceId: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_workspace_created', ['workspaceId', 'createdAt']),
+
+  nodeslide_access_grants: defineTable({
+    id: v.string(),
+    workspaceId: v.string(),
+    projectId: v.optional(v.string()),
+    role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')),
+    tokenDigest: v.string(),
+    policy: nodeslideWorkspaceAccessPolicyValidator,
+    parentGrantId: v.optional(v.string()),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_token_digest', ['tokenDigest'])
+    .index('by_workspace_created', ['workspaceId', 'createdAt'])
+    .index('by_project_created', ['projectId', 'createdAt']),
+
+  nodeslide_access_grant_events: defineTable({
+    id: v.string(),
+    workspaceId: v.string(),
+    projectId: v.optional(v.string()),
+    grantId: v.string(),
+    actorGrantId: v.optional(v.string()),
+    kind: v.union(v.literal('issued'), v.literal('revoked')),
+    occurredAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_grant_occurred', ['grantId', 'occurredAt'])
+    .index('by_workspace_occurred', ['workspaceId', 'occurredAt']),
 
   nodeslide_sync_connections: defineTable({
     id: v.string(),
@@ -730,6 +855,74 @@ export default defineSchema({
   })
     .index('by_deck_provider', ['deckId', 'provider'])
     .index('by_updated', ['updatedAt']),
+
+  /** Server-only Google Slides baseline, review, execution, and verification state. */
+  nodeslide_google_sync_states: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    remotePresentationId: v.string(),
+    status: v.union(
+      v.literal('active'),
+      v.literal('planning'),
+      v.literal('awaiting_pull_review'),
+      v.literal('awaiting_push_review'),
+      v.literal('executing'),
+      v.literal('verifying'),
+      v.literal('conflict'),
+      v.literal('error'),
+    ),
+    stateVersion: v.number(),
+    baselineJson: v.string(),
+    baselineDigest: v.string(),
+    baselineRemoteRevision: v.string(),
+    pendingDirection: v.optional(v.union(v.literal('inbound'), v.literal('outbound'))),
+    pendingPlanJson: v.optional(v.string()),
+    pendingPlanDigest: v.optional(v.string()),
+    pendingPatchId: v.optional(v.string()),
+    lastReceiptJson: v.optional(v.string()),
+    lastReceiptDigest: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck', ['deckId'])
+    .index('by_remote', ['remotePresentationId']),
+
+  /** Server-owned linked-PPTX baseline and review/finalization state. */
+  nodeslide_pptx_sync_links: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    remoteArtifactId: v.string(),
+    status: v.union(
+      v.literal('active'),
+      v.literal('awaiting_review'),
+      v.literal('awaiting_outbound_verification'),
+      v.literal('ready_to_finalize'),
+      v.literal('conflict'),
+    ),
+    stateVersion: v.number(),
+    baselineJson: v.string(),
+    baselineDigest: v.string(),
+    baselineLocalDeckVersion: v.number(),
+    baselineRemotePackageDigest: v.string(),
+    pendingPlanJson: v.optional(v.string()),
+    pendingPlanDigest: v.optional(v.string()),
+    pendingLocalJson: v.optional(v.string()),
+    pendingLocalDigest: v.optional(v.string()),
+    pendingRemoteJson: v.optional(v.string()),
+    pendingRemoteDigest: v.optional(v.string()),
+    verifiedRemoteJson: v.optional(v.string()),
+    verifiedRemoteDigest: v.optional(v.string()),
+    verifiedRemotePackageDigest: v.optional(v.string()),
+    lastFinalizationDigest: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck', ['deckId'])
+    .index('by_remote_artifact', ['remoteArtifactId']),
 
   nodeslide_slides: defineTable({
     id: v.string(),
@@ -1034,6 +1227,69 @@ export default defineSchema({
     .index('by_source_created', ['sourceId', 'createdAt'])
     .index('by_source_content_digest', ['sourceId', 'contentDigest']),
 
+  /** Opt-in polling state kept separate so unchanged checks never stale deck candidates. */
+  nodeslide_source_refresh_schedules: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    sourceId: v.string(),
+    ownerDigest: v.string(),
+    enabled: v.boolean(),
+    intervalMinutes: v.number(),
+    nextRunAt: v.number(),
+    status: v.union(
+      v.literal('ready'),
+      v.literal('checking'),
+      v.literal('backoff'),
+      v.literal('disabled'),
+    ),
+    lastSemanticDigest: v.string(),
+    leaseId: v.optional(v.string()),
+    leaseExpiresAt: v.optional(v.number()),
+    failureCount: v.number(),
+    checksInWindow: v.optional(v.number()),
+    windowStartedAt: v.optional(v.number()),
+    lastCheckedAt: v.optional(v.number()),
+    lastChangedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_source', ['deckId', 'sourceId'])
+    .index('by_due', ['enabled', 'nextRunAt'])
+    .index('by_deck_updated', ['deckId', 'updatedAt']),
+
+  /** Review work created by source monitoring; never an executable patch by itself. */
+  nodeslide_source_refresh_proposals: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    sourceId: v.string(),
+    ownerDigest: v.string(),
+    scheduleId: v.string(),
+    status: v.union(
+      v.literal('ready'),
+      v.literal('prepared'),
+      v.literal('dismissed'),
+      v.literal('converted'),
+      v.literal('stale'),
+    ),
+    baseDeckVersion: v.number(),
+    baseSnapshotDigest: v.string(),
+    beforeRevisionId: v.string(),
+    afterRevisionId: v.string(),
+    afterRevisionDigest: v.string(),
+    planDigest: v.string(),
+    planJson: v.string(),
+    deckCiDigest: v.string(),
+    affectedSlideIds: v.array(v.string()),
+    affectedElementIds: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
+    .index('by_source_created', ['sourceId', 'createdAt']),
+
   nodeslide_uploads: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -1097,6 +1353,7 @@ export default defineSchema({
     // Budget ownership is intentionally optional until provider/job wiring lands.
     budgetId: v.optional(v.string()),
     memoryIds: v.array(v.string()),
+    memoryDigests: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1249,6 +1506,9 @@ export default defineSchema({
     // Links this durable run to the server-authoritative cost ledger when enabled.
     budgetId: v.optional(v.string()),
     memoryIds: v.optional(v.array(v.string())),
+    memoryDigests: v.optional(v.array(v.string())),
+    sourceRefreshProposalId: v.optional(v.string()),
+    sourceRefreshBaseSnapshotDigest: v.optional(v.string()),
     attempt: v.number(),
     otelTraceId: v.optional(v.string()),
     rootSpanId: v.optional(v.string()),
@@ -1430,6 +1690,48 @@ export default defineSchema({
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_run_created', ['runId', 'createdAt']),
 
+  /** Durable, independently replayable cognitive stages inside an edit job. */
+  nodeslide_role_stages: defineTable({
+    id: v.string(),
+    schemaVersion: v.literal('nodeslide.role-stage/v1'),
+    jobId: v.string(),
+    deckId: v.string(),
+    runId: v.string(),
+    role: v.union(
+      v.literal('researcher'),
+      v.literal('analyst'),
+      v.literal('storyteller'),
+      v.literal('designer'),
+      v.literal('fact_checker'),
+      v.literal('reviewer'),
+    ),
+    ordinal: v.number(),
+    parentStageId: v.optional(v.string()),
+    status: v.union(
+      v.literal('running'),
+      v.literal('completed'),
+      v.literal('fallback'),
+      v.literal('failed'),
+    ),
+    attempt: v.number(),
+    inputDigest: v.string(),
+    outputDigest: v.optional(v.string()),
+    outputJson: v.optional(v.string()),
+    provider: v.string(),
+    model: v.string(),
+    callId: v.optional(v.string()),
+    leaseId: v.string(),
+    leaseExpiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_job_ordinal', ['jobId', 'ordinal'])
+    .index('by_run_ordinal', ['runId', 'ordinal'])
+    .index('by_deck_ordinal', ['deckId', 'ordinal'])
+    .index('by_job_status', ['jobId', 'status']),
+
   nodeslide_agent_memories: defineTable({
     id: v.string(),
     deckId: v.string(),
@@ -1453,6 +1755,37 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck_updated', ['deckId', 'updatedAt'])
     .index('by_deck_status_updated', ['deckId', 'status', 'updatedAt']),
+
+  /** Capability-gated memory with exact workspace, project, and deck partitions. */
+  nodeslide_scoped_memories: defineTable({
+    id: v.string(),
+    schemaVersion: v.literal('nodeslide.scoped-memory/v1'),
+    scopeKind: v.union(v.literal('workspace'), v.literal('project'), v.literal('deck')),
+    scopeKey: v.string(),
+    workspaceId: v.string(),
+    projectId: v.optional(v.string()),
+    deckId: v.optional(v.string()),
+    category: v.union(
+      v.literal('preference'),
+      v.literal('fact'),
+      v.literal('decision'),
+      v.literal('instruction'),
+      v.literal('context'),
+    ),
+    content: v.string(),
+    contentDigest: v.string(),
+    bindingDigest: v.string(),
+    status: v.union(v.literal('active'), v.literal('archived')),
+    source: v.union(v.literal('user'), v.literal('agent')),
+    sourceRunId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    useCount: v.number(),
+  })
+    .index('by_stable_id', ['id'])
+    .index('by_scope_digest', ['scopeKey', 'contentDigest'])
+    .index('by_scope_status_updated', ['scopeKey', 'status', 'updatedAt']),
 
   nodeslide_agent_spans: defineTable({
     id: v.string(),

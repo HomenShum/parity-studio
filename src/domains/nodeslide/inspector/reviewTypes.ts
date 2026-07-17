@@ -103,6 +103,7 @@ interface AiProposalContext {
   webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
   memoryMode?: 'off' | 'relevant';
   maxCostUsd?: number;
+  sourceRefreshBinding?: { proposalId: string; baseSnapshotDigest: string };
 }
 
 export type AiProposalOptions<CommandId extends string = NodeSlideEditorCommandId> =

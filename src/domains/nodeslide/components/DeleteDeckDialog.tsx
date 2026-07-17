@@ -81,8 +81,9 @@ function OpenDeleteDeckDialog({
       <form id={formId} onSubmit={submit}>
         <div className="ns-share-dialog-body">
           <p id={descriptionId}>
-            This permanently deletes the deck, slides, sources, history, comments, agent data,
-            traces, publications, and exports. This action cannot be undone.
+            This permanently deletes the deck, slides, sources, history, comments, deck-scoped
+            memories, role stages, source refresh plans, sync state, traces, publications, and
+            exports. This action cannot be undone.
           </p>
           <label className="ns-share-url">
             Type <strong>{deckTitle}</strong> to confirm

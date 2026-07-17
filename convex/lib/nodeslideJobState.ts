@@ -61,6 +61,7 @@ export interface NodeSlideJobRecord {
   maxAttempts: number;
   streamId: string;
   memoryIds: readonly string[];
+  memoryDigests?: readonly string[];
   workflowId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
@@ -85,6 +86,7 @@ export interface PublicNodeSlideJob {
   maxAttempts: number;
   streamId: string;
   memoryIds: readonly string[];
+  memoryDigests?: readonly string[];
   workflowId?: string;
   resultDeckId?: string;
   resultPatchId?: string;
@@ -229,6 +231,7 @@ export function advanceNodeSlideJob(
     resultCandidateDigest?: string;
     conversationRunId?: string;
     memoryIds?: readonly string[];
+    memoryDigests?: readonly string[];
     workflowId?: string;
     error?: string;
   },
@@ -245,6 +248,20 @@ export function advanceNodeSlideJob(
   if (progress < job.progress) throw new Error('NodeSlide job progress cannot move backwards.');
   const status = update.status ?? job.status;
   validatePhaseStatus(update.phase, status, progress);
+  if (
+    job.memoryIds.length > 0 &&
+    update.memoryIds &&
+    !sameOrderedStrings(job.memoryIds, update.memoryIds)
+  ) {
+    throw new Error('NodeSlide job memory binding cannot change after retrieval.');
+  }
+  if (
+    (job.memoryDigests?.length ?? 0) > 0 &&
+    update.memoryDigests &&
+    !sameOrderedStrings(job.memoryDigests ?? [], update.memoryDigests)
+  ) {
+    throw new Error('NodeSlide job memory digest binding cannot change after retrieval.');
+  }
   const terminal = TERMINAL.has(status);
   return {
     ...job,
@@ -262,6 +279,11 @@ export function advanceNodeSlideJob(
     ...(update.memoryIds
       ? { memoryIds: uniqueBounded(update.memoryIds, 24) }
       : { memoryIds: job.memoryIds }),
+    ...(update.memoryDigests
+      ? { memoryDigests: uniqueBounded(update.memoryDigests, 24) }
+      : job.memoryDigests
+        ? { memoryDigests: job.memoryDigests }
+        : {}),
     ...(update.workflowId ? { workflowId: boundedText(update.workflowId, 256) } : {}),
     ...(update.error ? { error: boundedText(update.error, 600) } : {}),
     updatedAt: now,
@@ -426,6 +448,7 @@ export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob 
     maxAttempts: job.maxAttempts,
     streamId: job.streamId,
     memoryIds: [...job.memoryIds],
+    ...(job.memoryDigests ? { memoryDigests: [...job.memoryDigests] } : {}),
     ...(job.workflowId ? { workflowId: job.workflowId } : {}),
     ...(job.resultDeckId ? { resultDeckId: job.resultDeckId } : {}),
     ...(job.resultPatchId ? { resultPatchId: job.resultPatchId } : {}),
@@ -527,6 +550,10 @@ function boundedError(value: string): string {
 
 function uniqueBounded(values: readonly string[], limit: number): string[] {
   return [...new Set(values.map((value) => boundedText(value, 256)))].slice(0, limit);
+}
+
+function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function stableSerialize(value: unknown): string {

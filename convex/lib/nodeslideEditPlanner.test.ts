@@ -647,6 +647,61 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.receipt.semanticCoverage?.obligations).toHaveLength(1);
   });
 
+  it('treats preservation clauses as constraints instead of requested mutation targets', async () => {
+    const snapshot = buildGoldenNodeSlide('preservation-constraint-coverage', NOW).snapshot;
+    const slide = snapshot.slides[0];
+    const headline = snapshot.elements.find(
+      (element) =>
+        element.slideId === slide?.id &&
+        !element.locked &&
+        element.kind === 'text' &&
+        (element.role === 'title' || element.role === 'headline'),
+    );
+    if (!slide || !headline) throw new Error('Expected opening headline fixture.');
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slide.id],
+      operationMode: 'copy',
+    };
+    const planningInput = input(snapshot, headline, scope);
+    planningInput.request.focusSlideId = slide.id;
+    planningInput.request.instruction =
+      'Rewrite the headline to be decision-ready. Keep the chart, formula, source binding, and layout unchanged.';
+
+    const result = await planNodeSlideEdit(planningInput, {
+      callProvider: async () => ({
+        ok: true,
+        value: {
+          summary: 'Decision-ready headline',
+          operations: [
+            {
+              op: 'replace_text',
+              slideId: slide.id,
+              elementId: headline.id,
+              text: 'World Cup data becomes a decision-ready story.',
+            },
+          ],
+        },
+        telemetry: {
+          provider: NODESLIDE_EDIT_PROVIDER,
+          model: NODESLIDE_EDIT_MODEL,
+          costMicroUsd: 10,
+          inputTokens: 100,
+          outputTokens: 20,
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt.semanticCoverage).toMatchObject({
+      status: 'pass',
+      missingObligationIds: [],
+      obligations: [expect.objectContaining({ field: 'headline', elementId: headline.id })],
+    });
+  });
+
   it('passes the user-selected catalog model to the pi-ai provider boundary', async () => {
     const { snapshot, target, scope } = fixture();
     const planningInput = input(snapshot, target, scope);

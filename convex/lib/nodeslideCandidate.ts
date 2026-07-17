@@ -222,12 +222,13 @@ function semanticCoverageObligations(
   input: NodeSlideSemanticCoverageInput,
 ): NodeSlideSemanticCoverageObligation[] {
   const instruction = normalizedInstruction(input.instruction);
-  const descriptors = requestedSemanticFields(instruction);
+  const mutationIntent = semanticMutationIntent(instruction);
+  const descriptors = requestedSemanticFields(mutationIntent);
   const exactReplacement = exactReplacementIntent(input.instruction);
   const scoped = semanticScopedElements(input.snapshot, input.scope);
   const requestedSlideIds = semanticRequestedSlideIds(input, instruction);
-  const operationClass = requestedSemanticOperationClass(instruction, descriptors);
-  const expectedVisibility = requestedVisibility(instruction, operationClass);
+  const operationClass = requestedSemanticOperationClass(mutationIntent, descriptors);
+  const expectedVisibility = requestedVisibility(mutationIntent, operationClass);
   const obligations: NodeSlideSemanticCoverageObligation[] = [];
   const singleScopedElementId =
     input.scope.kind !== 'deck' &&
@@ -302,6 +303,31 @@ function semanticCoverageObligations(
   }
 
   return dedupeObligations(obligations);
+}
+
+/**
+ * Semantic coverage binds requested mutations, not preservation constraints. A phrase such as
+ * "rewrite the headline; keep the chart and layout unchanged" must require a headline edit while
+ * treating the chart and layout as protected context rather than additional mutation targets.
+ */
+function semanticMutationIntent(instruction: string): string {
+  return instruction
+    .replace(
+      /\b(?:and\s+)?(?:keep|preserve|leave|retain)\b[^.;!?]{0,160}?\b(?:unchanged|intact|as is|the same)\b/gu,
+      ' ',
+    )
+    .replace(
+      /\b(?:and\s+)?(?:do not|don['’]?t|must not|never)\s+(?:change|alter|modify|touch|remove)\b[^.;!?]*/gu,
+      ' ',
+    )
+    .replace(
+      /\b(?:and\s+)?without\s+(?:changing|altering|modifying|touching|removing)\b[^.;!?]*/gu,
+      ' ',
+    )
+    .replace(/\b(?:and\s+)?change\s+nothing\s+else\b/gu, ' ')
+    .replace(/[.;!?]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
 }
 
 function semanticObligation(

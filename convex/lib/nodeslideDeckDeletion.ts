@@ -20,11 +20,17 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_evidence_steps',
   'nodeslide_evidence_captures',
   'nodeslide_sync_connections',
+  'nodeslide_pptx_sync_links',
+  'nodeslide_google_sync_states',
   'nodeslide_oauth_sessions',
   'nodeslide_oauth_credentials',
   'nodeslide_agent_runs',
   'nodeslide_agent_messages',
+  'nodeslide_role_stages',
+  'nodeslide_source_refresh_schedules',
+  'nodeslide_source_refresh_proposals',
   'nodeslide_agent_memories',
+  'nodeslide_scoped_memories',
   'nodeslide_agent_spans',
   'nodeslide_agent_events',
   'nodeslide_validations',
@@ -48,6 +54,21 @@ export const NODESLIDE_DECK_ERASURE_MAX_BYTES = 4 * 1024 * 1024;
 type DeleteDeckCtx = Pick<MutationCtx, 'db' | 'storage'>;
 type ErasureTable = (typeof NODESLIDE_DECK_ERASURE_TABLES)[number];
 type ErasureRow = Doc<ErasureTable>;
+const NODESLIDE_SCOPED_MEMORY_VERSION = 'nodeslide.scoped-memory/v1';
+
+function nodeSlideDeckScopedMemoryKey(deck: Doc<'nodeslide_decks'>): string {
+  return [
+    NODESLIDE_SCOPED_MEMORY_VERSION,
+    'workspace',
+    deck.workspaceId ?? deck.clientSessionId,
+    'project',
+    deck.workspaceProjectId ?? deck.projectId,
+    'deck',
+    deck.id,
+  ]
+    .map(encodeURIComponent)
+    .join('/');
+}
 
 /**
  * Atomically erases a deck only when its complete deletion set fits the
@@ -216,6 +237,18 @@ export async function deleteNodeSlideDeckRows(
   );
   addGroup(
     await ctx.db
+      .query('nodeslide_pptx_sync_links')
+      .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_google_sync_states')
+      .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_oauth_sessions')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
@@ -240,10 +273,46 @@ export async function deleteNodeSlideDeckRows(
   );
   addGroup(
     await ctx.db
+      .query('nodeslide_role_stages')
+      .withIndex('by_deck_ordinal', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_source_refresh_schedules')
+      .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_source_refresh_proposals')
+      .withIndex('by_deck_status_created', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
       .query('nodeslide_agent_memories')
       .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
   );
+  const scopedMemories = await ctx.db
+    .query('nodeslide_scoped_memories')
+    .withIndex('by_scope_status_updated', (query) =>
+      query.eq('scopeKey', nodeSlideDeckScopedMemoryKey(deck)),
+    )
+    .take(nextLimit());
+  for (const memory of scopedMemories) {
+    if (
+      memory.schemaVersion !== NODESLIDE_SCOPED_MEMORY_VERSION ||
+      memory.scopeKind !== 'deck' ||
+      memory.deckId !== deck.id ||
+      memory.workspaceId !== (deck.workspaceId ?? deck.clientSessionId) ||
+      memory.projectId !== (deck.workspaceProjectId ?? deck.projectId)
+    ) {
+      throw new Error('NodeSlide deck deletion failed closed: scoped memory binding is invalid.');
+    }
+  }
+  addGroup(scopedMemories);
   addGroup(
     await ctx.db
       .query('nodeslide_agent_spans')

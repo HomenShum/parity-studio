@@ -20,6 +20,7 @@ import {
   evaluateNodeSlideSemanticCoverage,
 } from './nodeslideCandidate';
 import { nodeSlideMemoryUse } from './nodeslideMemoryPolicy';
+import type { NodeSlideCoordinationBriefs } from './nodeslideMultiAgent';
 import {
   deterministicAgentOperations,
   summarizePatchOperations,
@@ -206,6 +207,8 @@ export interface NodeSlideEditPlanningRequest {
   providerModel?: NodeSlideAgentModelId;
   providerEffort?: NodeSlideReasoningEffort;
   memories?: readonly NodeSlideAgentMemory[];
+  /** Separate, provider-attributed cognitive-role outputs; advisory only and never write authority. */
+  coordinationBriefs?: NodeSlideCoordinationBriefs;
   /** True only when the turn explicitly supplies web/file evidence to an external planner. */
   requireFactualSourceBindings?: boolean;
 }
@@ -536,6 +539,7 @@ export function buildNodeSlideEditProviderInput(
       standingInstructions: standingInstructions.map(memoryPayload),
       retrievedMemories: retrievedMemories.map(memoryPayload),
     },
+    coordination: request.coordinationBriefs ?? {},
     evidencePolicy: {
       factualSourceBindings: request.requireFactualSourceBindings ? 'required' : 'optional',
       authorizedSourceIds: readContext.sources.map((source) => source.id),

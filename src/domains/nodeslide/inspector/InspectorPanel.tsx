@@ -41,6 +41,10 @@ import type {
 } from '../../../../shared/nodeslide';
 import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
+import type {
+  NodeSlidePreparedSourceRefreshEdit,
+  NodeSlideSourceRefreshState,
+} from '../../../../shared/nodeslideSourceMonitoring';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NODESLIDE_RESPONSIVE_DRAWER_QUERY } from '../components/editorShellResponsive';
 import {
@@ -113,6 +117,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   agentTelemetryLoadingMore?: boolean;
   agentTelemetryLoadError?: string;
   aiCommentContext?: AiCommentContext | null;
+  sourceRefreshHandoff?: Extract<NodeSlidePreparedSourceRefreshEdit, { status: 'prepared' }>;
   previewedPatchId?: string | null;
   activeTastePackId: NodeSlideTastePackId | null;
   tastePackBusy: boolean;
@@ -138,6 +143,10 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onDeleteAiMemory?: (memoryId: string) => Promise<void>;
   onApprovalModeChange?: (mode: AgentSessionApprovalMode) => void;
   onDeleteAiDataSource?: (sourceId: string) => Promise<void>;
+  sourceRefresh?: NodeSlideSourceRefreshState;
+  onConfigureSourceRefresh?: (sourceId: string, enabled: boolean) => Promise<void>;
+  onPrepareSourceRefresh?: (proposalId: string) => Promise<void>;
+  onDismissSourceRefresh?: (proposalId: string) => Promise<void>;
   onCancelAiRun?: (runId: string) => void;
   onRetryAiRun?: () => void;
   canUndo?: boolean;
@@ -232,6 +241,7 @@ export function InspectorPanel<CommandId extends string = string>({
   agentTelemetryLoadingMore = false,
   agentTelemetryLoadError,
   aiCommentContext = null,
+  sourceRefreshHandoff,
   previewedPatchId = null,
   activeTastePackId,
   tastePackBusy,
@@ -250,6 +260,10 @@ export function InspectorPanel<CommandId extends string = string>({
   onDeleteAiMemory,
   onApprovalModeChange,
   onDeleteAiDataSource,
+  sourceRefresh,
+  onConfigureSourceRefresh,
+  onPrepareSourceRefresh,
+  onDismissSourceRefresh,
   onCancelAiRun,
   onRetryAiRun,
   canUndo = false,
@@ -541,6 +555,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   references={aiReferences}
                   commands={aiCommands}
                   commentContext={aiCommentContext}
+                  {...(sourceRefreshHandoff ? { sourceRefreshHandoff } : {})}
                   previewedPatchId={previewedPatchId}
                   {...(aiSuggestedActions ? { suggestedActions: aiSuggestedActions } : {})}
                   {...(aiAgentActivity !== undefined ? { agentActivity: aiAgentActivity } : {})}
@@ -653,6 +668,10 @@ export function InspectorPanel<CommandId extends string = string>({
                       }
                     : {})}
                   {...(onDeleteAiDataSource ? { onDeleteSource: onDeleteAiDataSource } : {})}
+                  {...(sourceRefresh ? { sourceRefresh } : {})}
+                  {...(onConfigureSourceRefresh ? { onConfigureSourceRefresh } : {})}
+                  {...(onPrepareSourceRefresh ? { onPrepareSourceRefresh } : {})}
+                  {...(onDismissSourceRefresh ? { onDismissSourceRefresh } : {})}
                 />
               </InspectorTabPanel>
             ) : null}

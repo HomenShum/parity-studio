@@ -202,6 +202,7 @@ export const startCreateDeck = mutation({
       maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
       streamId,
       memoryIds: [],
+      memoryDigests: [],
       ...(request.providerMode && request.providerMode !== 'deterministic' ? { budgetId } : {}),
       createdAt: now,
       updatedAt: now,
@@ -319,6 +320,8 @@ export const startEditProposal = mutation({
       maxAttempts: NODESLIDE_JOB_MAX_ATTEMPTS,
       streamId,
       memoryIds: [],
+      memoryDigests: [],
+      resultDeckId: request.deckId,
       ...(request.providerMode && request.providerMode !== 'deterministic' ? { budgetId } : {}),
       createdAt: now,
       updatedAt: now,
@@ -564,6 +567,28 @@ export const retry = mutation({
     const streamId = await streaming.createStream(ctx);
     const next = { ...retryNodeSlideJob(jobFromRow(row), Date.now()), streamId };
     await retryNodeSlideDurableSession(ctx, next.id);
+    if (row.kind === 'edit_proposal' && row.resultDeckId) {
+      const activeRun = await ctx.db
+        .query('nodeslide_agent_runs')
+        .withIndex('by_deck_idempotency', (queryBuilder) =>
+          queryBuilder
+            .eq('deckId', row.resultDeckId as string)
+            .eq('idempotencyKey', `job:${row.id}`),
+        )
+        .first();
+      const now = Date.now();
+      if (
+        activeRun &&
+        ['queued', 'researching', 'planning', 'validating'].includes(activeRun.status) &&
+        (activeRun.leaseExpiresAt ?? 0) > now
+      ) {
+        const reattached = claimNodeSlideJobAttempt(next, now);
+        await claimNodeSlideDurableSession(ctx, reattached.id, reattached.attempt);
+        await patchJob(ctx, row, reattached);
+        await appendProgress(ctx, reattached);
+        return publicNodeSlideJob(reattached);
+      }
+    }
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next);
     await workflow.restart(ctx, row.workflowId as WorkflowId, {
@@ -600,6 +625,7 @@ export const checkpointInternal = internalMutation({
     resultCandidateDigest: v.optional(v.string()),
     conversationRunId: v.optional(v.string()),
     memoryIds: v.optional(v.array(v.string())),
+    memoryDigests: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -620,6 +646,7 @@ export const checkpointInternal = internalMutation({
           : {}),
         ...(args.conversationRunId ? { conversationRunId: args.conversationRunId } : {}),
         ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
+        ...(args.memoryDigests ? { memoryDigests: args.memoryDigests } : {}),
         ...(args.error ? { error: args.error } : {}),
       },
       Date.now(),
@@ -643,6 +670,7 @@ export const completeCreateDeckInternal = internalMutation({
     resultDeckId: v.string(),
     conversationRunId: v.string(),
     memoryIds: v.optional(v.array(v.string())),
+    memoryDigests: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const row = await findJob(ctx, args.jobId);
@@ -658,6 +686,7 @@ export const completeCreateDeckInternal = internalMutation({
         resultDeckId: args.resultDeckId,
         conversationRunId: args.conversationRunId,
         ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
+        ...(args.memoryDigests ? { memoryDigests: args.memoryDigests } : {}),
       },
       Date.now(),
     );
@@ -681,6 +710,7 @@ export const completeEditProposalInternal = internalMutation({
     resultCandidateDigest: v.string(),
     conversationRunId: v.string(),
     memoryIds: v.optional(v.array(v.string())),
+    memoryDigests: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const row = await findJob(ctx, args.jobId);
@@ -698,6 +728,7 @@ export const completeEditProposalInternal = internalMutation({
         resultCandidateDigest: args.resultCandidateDigest,
         conversationRunId: args.conversationRunId,
         ...(args.memoryIds ? { memoryIds: args.memoryIds } : {}),
+        ...(args.memoryDigests ? { memoryDigests: args.memoryDigests } : {}),
       },
       Date.now(),
     );
@@ -1160,6 +1191,7 @@ async function patchJob(
     ...(next.conversationRunId ? { conversationRunId: next.conversationRunId } : {}),
     ...(next.budgetId ? { budgetId: next.budgetId } : {}),
     memoryIds: [...next.memoryIds],
+    memoryDigests: [...(next.memoryDigests ?? [])],
     ...(next.error ? { error: next.error } : { error: undefined }),
     updatedAt: next.updatedAt,
     ...(next.completedAt ? { completedAt: next.completedAt } : { completedAt: undefined }),

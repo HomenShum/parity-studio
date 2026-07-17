@@ -43,7 +43,12 @@ export const createDeckJobWorkflow = workflow.define({
     const result = (await step.runAction(jobRunnerInternal.executeCreateDeckInternal, args, {
       name: 'execute-create-deck',
       retry: { maxAttempts: 3, initialBackoffMs: 1_000, base: 2 },
-    })) as { deckId: string; conversationRunId: string; memoryIds: string[] };
+    })) as {
+      deckId: string;
+      conversationRunId: string;
+      memoryIds: string[];
+      memoryDigests: string[];
+    };
 
     const afterCreate = (await step.runMutation(
       jobControlInternal.heartbeatInternal,
@@ -59,6 +64,7 @@ export const createDeckJobWorkflow = workflow.define({
         resultDeckId: result.deckId,
         conversationRunId: result.conversationRunId,
         memoryIds: result.memoryIds,
+        memoryDigests: result.memoryDigests,
       },
       { inline: true, name: 'complete-create-deck' },
     );
@@ -99,6 +105,7 @@ export const editProposalJobWorkflow = workflow.define({
       candidateDigest: string;
       conversationRunId: string;
       memoryIds: string[];
+      memoryDigests: string[];
     };
 
     const afterEdit = (await step.runMutation(
@@ -117,6 +124,7 @@ export const editProposalJobWorkflow = workflow.define({
         resultCandidateDigest: result.candidateDigest,
         conversationRunId: result.conversationRunId,
         memoryIds: result.memoryIds,
+        memoryDigests: result.memoryDigests,
       },
       { inline: true, name: 'complete-edit-proposal' },
     );

@@ -64,6 +64,7 @@ import {
   NODESLIDE_DELEGATION_MAX_OPERATIONS,
   NODESLIDE_DELEGATION_MAX_USES,
 } from '../../../../shared/nodeslideDelegation';
+import type { NodeSlidePreparedSourceRefreshEdit } from '../../../../shared/nodeslideSourceMonitoring';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NodeSlideConnectionsDialog } from '../components/NodeSlideConnectionsDialog';
 import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
@@ -195,6 +196,7 @@ export interface AiInspectorProps<CommandId extends string = string> {
   commentContext?: AiCommentContext | null;
   initialInstruction?: string;
   initialReadContext?: readonly AiReadReference[];
+  sourceRefreshHandoff?: Extract<NodeSlidePreparedSourceRefreshEdit, { status: 'prepared' }>;
   initialProviderMode?: AiProviderMode;
   initialProviderModel?: NodeSlideAgentModelId;
   previewedPatchId?: string | null;
@@ -260,6 +262,7 @@ export function AiInspector<CommandId extends string = string>({
   commentContext = null,
   initialInstruction = '',
   initialReadContext = [],
+  sourceRefreshHandoff,
   initialProviderMode = 'nebius',
   initialProviderModel = NODESLIDE_DEFAULT_AGENT_MODEL,
   previewedPatchId = null,
@@ -308,6 +311,20 @@ export function AiInspector<CommandId extends string = string>({
   const [selectedReadContext, setSelectedReadContext] =
     useState<readonly AiReadReference[]>(initialReadContext);
   const [selectedCommand, setSelectedCommand] = useState<AiComposerCommand<CommandId> | null>(null);
+  const hydratedSourceRefreshIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      !sourceRefreshHandoff ||
+      hydratedSourceRefreshIdRef.current === sourceRefreshHandoff.proposalId
+    )
+      return;
+    hydratedSourceRefreshIdRef.current = sourceRefreshHandoff.proposalId;
+    composerSession.setText(sourceRefreshHandoff.instruction);
+    setSelectedReadContext(sourceRefreshHandoff.readContext);
+    setScopeChoice(sourceRefreshHandoff.affectedSlideIds.length > 1 ? 'selected_slides' : 'slide');
+    setReferenceUse('context_only');
+  }, [composerSession, sourceRefreshHandoff]);
   const [cursorPosition, setCursorPosition] = useState(instruction.length);
   const [dismissedMenuKey, setDismissedMenuKey] = useState<string | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
@@ -837,16 +854,18 @@ export function AiInspector<CommandId extends string = string>({
       setSelectedCommand(null);
       return;
     }
-    const writeScope = commentContext
-      ? createCommentScope(commentContext, operationMode, deck, workspaceElements)
-      : createScope(
-          scopeChoice,
-          operationMode,
-          deck.id,
-          slide.id,
-          selectedSlideIds,
-          selectedElements,
-        );
+    const writeScope = sourceRefreshHandoff
+      ? sourceRefreshScope(sourceRefreshHandoff, deck.id, workspaceElements)
+      : commentContext
+        ? createCommentScope(commentContext, operationMode, deck, workspaceElements)
+        : createScope(
+            scopeChoice,
+            operationMode,
+            deck.id,
+            slide.id,
+            selectedSlideIds,
+            selectedElements,
+          );
     if (!writeScope) {
       setScopeError(
         scopeChoice === 'elements'
@@ -896,6 +915,14 @@ export function AiInspector<CommandId extends string = string>({
           }
         : {}),
       ...(submittedMaxCostUsd !== undefined ? { maxCostUsd: submittedMaxCostUsd } : {}),
+      ...(sourceRefreshHandoff
+        ? {
+            sourceRefreshBinding: {
+              proposalId: sourceRefreshHandoff.proposalId,
+              baseSnapshotDigest: sourceRefreshHandoff.baseSnapshotDigest,
+            },
+          }
+        : {}),
       ...(commentContext ? { commentContext } : {}),
       ...(command && !isVariationsCommand(command.id)
         ? {
@@ -2669,6 +2696,39 @@ function createScope(
     };
   }
   return { kind: 'slide', deckId, slideIds: [slideId], operationMode };
+}
+
+function sourceRefreshScope(
+  handoff: Extract<NodeSlidePreparedSourceRefreshEdit, { status: 'prepared' }>,
+  deckId: string,
+  elements: readonly SlideElement[],
+): PatchScope | null {
+  const slideIds = [...new Set(handoff.affectedSlideIds)];
+  if (slideIds.length > 0 && slideIds.length <= NODESLIDE_SCOPE_SLIDE_LIMIT) {
+    return { kind: 'slide', deckId, slideIds, operationMode: 'unrestricted' };
+  }
+  const elementIds = [...new Set(handoff.affectedElementIds)];
+  if (elementIds.length > 0) {
+    const elementIdSet = new Set(elementIds);
+    const elementSlideIds = [
+      ...new Set(
+        elements
+          .filter((element) => elementIdSet.has(element.id))
+          .map((element) => element.slideId),
+      ),
+    ];
+    if (elementSlideIds.length === 0 || elementSlideIds.length > NODESLIDE_SCOPE_SLIDE_LIMIT) {
+      return null;
+    }
+    return {
+      kind: 'elements',
+      deckId,
+      slideIds: elementSlideIds,
+      elementIds,
+      operationMode: 'unrestricted',
+    };
+  }
+  return null;
 }
 
 export function createCommentScope(

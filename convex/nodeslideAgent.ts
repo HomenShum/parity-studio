@@ -47,6 +47,7 @@ import {
   NODESLIDE_BASELINE_EDIT_ADAPTER_VERSION,
   type NodeSlideEditPlannerReceipt,
   type NodeSlideEditPlanningRequest,
+  buildNodeSlideEditProviderInput,
   planNodeSlideEdit,
 } from './lib/nodeslideEditPlanner';
 import {
@@ -67,6 +68,13 @@ import {
 } from './lib/nodeslideJobValidators';
 import { validateNodeSlideLiveEditWithDeckRepl } from './lib/nodeslideLiveDeckRepl';
 import { nodeSlideMemoryUse } from './lib/nodeslideMemoryPolicy';
+import {
+  type NodeSlideCognitiveAgentRole,
+  type NodeSlideCoordinationBriefs,
+  nodeSlideRoleHandoffText,
+  nodeSlideRoleProviderRequest,
+  parseNodeSlideRoleCompletion,
+} from './lib/nodeslideMultiAgent';
 import { NODESLIDE_EDIT_MODEL, callNodeSlideFreeJson } from './lib/nodeslideProvider';
 import {
   NodeSlideProviderConsentError,
@@ -102,6 +110,7 @@ import {
   validateNodeSlideCreateDeckFields,
   validateNodeSlidePreviewAdmission,
 } from './lib/nodeslideValidators';
+import type { NodeSlideScopedMemoryItem } from './nodeslideScopedMemory';
 
 // Convex's generated API creates a TypeScript self-reference when this action module invokes
 // functions whose declarations also include this module. Runtime arguments still cross explicit
@@ -110,12 +119,18 @@ import {
 const nodeslideInternal: any = (internal as any).nodeslide;
 // biome-ignore lint/suspicious/noExplicitAny: breaks generated Convex action self-reference recursion
 const nodeslideMemoryInternal: any = (internal as any).nodeslideMemory;
+// biome-ignore lint/suspicious/noExplicitAny: generated scoped-memory action/query cycle
+const nodeslideScopedMemoryInternal: any = (internal as any).nodeslideScopedMemory;
 // biome-ignore lint/suspicious/noExplicitAny: generated durable-job action/query cycle
 const nodeslideJobsInternal: any = (internal as any).nodeslideJobs;
 // biome-ignore lint/suspicious/noExplicitAny: generated durable-budget action/mutation cycle
 const nodeslideBudgetsInternal: any = (internal as any).nodeslideBudgets;
 // biome-ignore lint/suspicious/noExplicitAny: generated durable-session action/mutation cycle
 const nodeslideSessionsInternal: any = (internal as any).nodeslideSessions;
+// biome-ignore lint/suspicious/noExplicitAny: generated durable role-stage action/mutation cycle
+const nodeslideRoleStagesInternal: any = (internal as any).nodeslideRoleStages;
+// biome-ignore lint/suspicious/noExplicitAny: generated source-refresh action/query cycle
+const nodeslideSourceRefreshInternal: any = (internal as any).nodeslideSourceRefresh;
 
 const NODESLIDE_PREVIEW_ACCESS_CODE_ENV = 'NODESLIDE_PREVIEW_ACCESS_CODE';
 const NODESLIDE_PREVIEW_ADMISSION_SUBJECT_ENV = 'NODESLIDE_PREVIEW_ADMISSION_SUBJECT';
@@ -145,6 +160,9 @@ export const proposeEdit = action({
     webResearch: v.optional(v.boolean()),
     webResearchConsent: v.optional(v.string()),
     memoryMode: v.optional(v.union(v.literal('off'), v.literal('relevant'))),
+    sourceRefreshBinding: v.optional(
+      v.object({ proposalId: v.string(), baseSnapshotDigest: v.string() }),
+    ),
     durableJob: v.optional(
       v.object({
         jobId: v.string(),
@@ -263,6 +281,49 @@ export const proposeEdit = action({
     });
     if (!workspace) throw new Error(`Deck ${args.deckId} not found.`);
     if (args.scope.deckId !== args.deckId) throw new Error('Patch scope deckId mismatch.');
+    type PreparedSourceRefreshContext = {
+      sourceId: string;
+      affectedSlideIds: string[];
+      affectedElementIds: string[];
+      baseSnapshotDigest: string;
+      pendingSource: NodeSlideWorkspace['sources'][number];
+    };
+    let preparedSourceRefresh: PreparedSourceRefreshContext | null = null;
+    if (args.sourceRefreshBinding) {
+      const prepared = await ctx.runQuery(
+        nodeslideSourceRefreshInternal.validatePreparedBindingInternal,
+        {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          proposalId: args.sourceRefreshBinding.proposalId,
+          baseSnapshotDigest: args.sourceRefreshBinding.baseSnapshotDigest,
+        },
+      );
+      preparedSourceRefresh = prepared as PreparedSourceRefreshContext;
+      const readSourceIds = new Set(
+        (args.readContext ?? [])
+          .filter((reference) => reference.kind === 'source')
+          .map((reference) => reference.id),
+      );
+      if (!readSourceIds.has(prepared.sourceId)) {
+        throw publicAgentError(
+          'invalid_request',
+          'The monitored-source update must retain its exact source read binding.',
+        );
+      }
+      const exactSlideScope =
+        args.scope.kind === 'slide' &&
+        sameStringSet(args.scope.slideIds, prepared.affectedSlideIds);
+      const exactElementScope =
+        args.scope.kind === 'elements' &&
+        sameStringSet(args.scope.elementIds, prepared.affectedElementIds);
+      if (!exactSlideScope && !exactElementScope) {
+        throw publicAgentError(
+          'invalid_request',
+          'The monitored-source update write scope no longer matches its impact plan.',
+        );
+      }
+    }
     if (
       args.focusSlideId &&
       (!workspace.slides.some((slide) => slide.id === args.focusSlideId) ||
@@ -289,6 +350,12 @@ export const proposeEdit = action({
       provider: requestedRoute?.provider ?? 'deterministic',
       model: requestedModel,
       webResearch: args.webResearch === true,
+      ...(args.sourceRefreshBinding
+        ? {
+            sourceRefreshProposalId: args.sourceRefreshBinding.proposalId,
+            sourceRefreshBaseSnapshotDigest: args.sourceRefreshBinding.baseSnapshotDigest,
+          }
+        : {}),
     });
     const runId = runStart.run.id as string;
     if (!runStart.created) {
@@ -428,7 +495,7 @@ export const proposeEdit = action({
         });
         handoffParentMessageId = researchReceipt?.messageId;
       }
-      const memories: NodeSlideAgentMemory[] =
+      const legacyMemories: NodeSlideAgentMemory[] =
         args.memoryMode === 'relevant'
           ? ((await ctx.runQuery(nodeslideMemoryInternal.retrieveRelevantInternal, {
               deckId: args.deckId,
@@ -436,6 +503,14 @@ export const proposeEdit = action({
               instruction,
             })) as NodeSlideAgentMemory[])
           : [];
+      const scopedMemories: NodeSlideScopedMemoryItem[] =
+        args.memoryMode === 'relevant'
+          ? ((await ctx.runQuery(nodeslideScopedMemoryInternal.retrieveForOwnerInternal, {
+              deckId: args.deckId,
+              ownerAccessKey: args.ownerAccessKey,
+            })) as NodeSlideScopedMemoryItem[])
+          : [];
+      const memories = mergeAgentJobMemories(args.deckId, scopedMemories, legacyMemories);
       if (memories.length > 0) {
         const standingInstructionCount = memories.filter(
           (memory) => nodeSlideMemoryUse(memory) === 'standing_instruction',
@@ -458,11 +533,32 @@ export const proposeEdit = action({
           memoryDigests: memories.map((memory) => memory.contentDigest),
         });
         handoffParentMessageId = memoryReceipt?.messageId ?? handoffParentMessageId;
-        await ctx.runMutation(nodeslideMemoryInternal.markUsedInternal, {
-          deckId: args.deckId,
-          ownerAccessKey: args.ownerAccessKey,
-          memoryIds: memories.map((memory) => memory.id),
-        });
+        const legacyMemoryIds = new Set(legacyMemories.map((memory) => memory.id));
+        const usedLegacyMemoryIds = memories
+          .filter((memory) => legacyMemoryIds.has(memory.id))
+          .map((memory) => memory.id);
+        if (usedLegacyMemoryIds.length > 0) {
+          await ctx.runMutation(nodeslideMemoryInternal.markUsedInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            memoryIds: usedLegacyMemoryIds,
+          });
+        }
+        const usedMemoryIds = new Set(memories.map((memory) => memory.id));
+        const scopedBindings = scopedMemories
+          .filter((memory) => usedMemoryIds.has(memory.id))
+          .map((memory) => ({
+            memoryId: memory.id,
+            contentDigest: memory.contentDigest,
+            bindingDigest: memory.binding.bindingDigest,
+          }));
+        if (scopedBindings.length > 0) {
+          await ctx.runMutation(nodeslideScopedMemoryInternal.markUsedForOwnerInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            bindings: scopedBindings,
+          });
+        }
       }
       const scopedCommentId = args.scope.kind === 'comment' ? args.scope.commentId : undefined;
       const snapshot = snapshotOf(workspace);
@@ -470,25 +566,21 @@ export const proposeEdit = action({
         ...(args.readContext ?? []),
         ...webSourceIds.map((id) => ({ id, kind: 'source' as const, label: 'Web source' })),
       ];
-      const readContext = resolveNodeSlideReadContext({
+      let readContext = resolveNodeSlideReadContext({
         workspace,
         writeScope: args.scope,
         ...(requestedReadContext.length ? { requested: requestedReadContext } : {}),
       });
-      const analysisReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
-        deckId: args.deckId,
-        ownerAccessKey: args.ownerAccessKey,
-        runId,
-        status: 'planning',
-        message: `Analyzed ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, and ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'} within the authorized scope.`,
-        role: 'tool',
-        toolName: 'delegate_analyst',
-        agentRole: 'analyst',
-        branchId: 'presentation-analysis',
-        branchLabel: 'Audience and evidence analysis',
-        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
-      });
-      handoffParentMessageId = analysisReceipt?.messageId ?? handoffParentMessageId;
+      if (preparedSourceRefresh) {
+        readContext = {
+          ...readContext,
+          sources: readContext.sources.map((source) =>
+            source.id === preparedSourceRefresh?.sourceId
+              ? preparedSourceRefresh.pendingSource
+              : source,
+          ),
+        };
+      }
       const explicitlySuppliedEvidence =
         webSourceIds.length > 0 ||
         (args.readContext ?? []).some((reference) => reference.kind === 'source');
@@ -505,7 +597,7 @@ export const proposeEdit = action({
         `Run budget: hard ceiling $${runBudget.maxCostUsd ?? 1} USD`,
       ];
 
-      const request: NodeSlideEditPlanningRequest = {
+      let request: NodeSlideEditPlanningRequest = {
         deckId: args.deckId,
         instruction,
         baseDeckVersion: args.baseDeckVersion,
@@ -525,20 +617,212 @@ export const proposeEdit = action({
             }
           : {}),
       };
-      const storyReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
-        deckId: args.deckId,
-        ownerAccessKey: args.ownerAccessKey,
-        runId,
-        status: 'planning',
-        message: 'Shaping the requested change into a coherent presentation narrative.',
-        role: 'tool',
-        toolName: 'delegate_storyteller',
-        agentRole: 'storyteller',
-        branchId: 'presentation-story',
-        branchLabel: 'Narrative structure',
-        ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
-      });
-      handoffParentMessageId = storyReceipt?.messageId ?? handoffParentMessageId;
+      const durableCognitiveTeam =
+        durableJob && providerChoice.providerMode !== 'deterministic'
+          ? {
+              jobId: durableJob.jobId,
+              model: providerChoice.providerModel,
+              reasoningEffort: providerChoice.providerEffort,
+            }
+          : null;
+      if (durableCognitiveTeam) {
+        const boundedContext = buildNodeSlideEditProviderInput(snapshot, request, readContext);
+        const parallelDiscoveryGroupId = nodeslideStableId(
+          'agent_parallel_group',
+          runId,
+          'discovery',
+        );
+        const [researcherStage, analystStage] = await Promise.all([
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-researcher',
+            ordinal: 1,
+            budget: runBudget,
+            role: 'researcher',
+            instruction,
+            boundedContext,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-analyst',
+            ordinal: 2,
+            budget: runBudget,
+            role: 'analyst',
+            instruction,
+            boundedContext,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+        ]);
+        const researcher = researcherStage.completion;
+        const analyst = analystStage.completion;
+        const discoveryParentMessageId = handoffParentMessageId;
+        const [researcherReceipt, analystReceipt] = await Promise.all([
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: nodeSlideRoleHandoffText(researcher),
+            messageId: nodeslideStableId('agent_handoff_message', researcherStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_researcher',
+            agentRole: 'researcher',
+            branchId: 'presentation-research',
+            branchLabel: 'Evidence research',
+            parallelGroupId: parallelDiscoveryGroupId,
+            ...(discoveryParentMessageId ? { parentMessageId: discoveryParentMessageId } : {}),
+            ...(readContext.sources.length
+              ? { sourceIds: readContext.sources.map((s) => s.id) }
+              : {}),
+          }),
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: nodeSlideRoleHandoffText(analyst),
+            messageId: nodeslideStableId('agent_handoff_message', analystStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_analyst',
+            agentRole: 'analyst',
+            branchId: 'presentation-analysis',
+            branchLabel: 'Audience and evidence analysis',
+            parallelGroupId: parallelDiscoveryGroupId,
+            ...(discoveryParentMessageId ? { parentMessageId: discoveryParentMessageId } : {}),
+          }),
+        ]);
+
+        const priorBriefs: NodeSlideCoordinationBriefs = {
+          researcher: researcher.summary,
+          analyst: analyst.summary,
+        };
+        const parallelSynthesisGroupId = nodeslideStableId(
+          'agent_parallel_group',
+          runId,
+          'synthesis',
+        );
+        const [storytellerStage, designerStage] = await Promise.all([
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-storyteller',
+            ordinal: 3,
+            parentStageId: analystStage.stageId,
+            budget: runBudget,
+            role: 'storyteller',
+            instruction,
+            boundedContext,
+            priorBriefs,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-designer',
+            ordinal: 4,
+            parentStageId: researcherStage.stageId,
+            budget: runBudget,
+            role: 'designer',
+            instruction,
+            boundedContext,
+            priorBriefs,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+        ]);
+        const storyteller = storytellerStage.completion;
+        const designer = designerStage.completion;
+        const [storyReceipt] = await Promise.all([
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: nodeSlideRoleHandoffText(storyteller),
+            messageId: nodeslideStableId('agent_handoff_message', storytellerStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_storyteller',
+            agentRole: 'storyteller',
+            branchId: 'presentation-story',
+            branchLabel: 'Narrative structure',
+            parallelGroupId: parallelSynthesisGroupId,
+            ...(analystReceipt?.messageId ? { parentMessageId: analystReceipt.messageId } : {}),
+          }),
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'planning',
+            message: nodeSlideRoleHandoffText(designer),
+            messageId: nodeslideStableId('agent_handoff_message', designerStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_designer_brief',
+            agentRole: 'designer',
+            branchId: 'presentation-design',
+            branchLabel: 'Visual strategy',
+            parallelGroupId: parallelSynthesisGroupId,
+            ...(researcherReceipt?.messageId
+              ? { parentMessageId: researcherReceipt.messageId }
+              : {}),
+          }),
+        ]);
+        handoffParentMessageId = storyReceipt?.messageId ?? analystReceipt?.messageId;
+        request = {
+          ...request,
+          coordinationBriefs: {
+            researcher: researcher.summary,
+            analyst: analyst.summary,
+            storyteller: storyteller.summary,
+            designer: designer.summary,
+          },
+        };
+        traceContext.push(
+          `Cognitive team: researcher ${researcher.status}; analyst ${analyst.status}; storyteller ${storyteller.status}; designer ${designer.status}`,
+        );
+      } else {
+        const analysisReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'planning',
+          message: `Deterministically analyzed ${readContext.slides.length} slide${readContext.slides.length === 1 ? '' : 's'}, ${readContext.elements.length} element${readContext.elements.length === 1 ? '' : 's'}, and ${readContext.sources.length} source${readContext.sources.length === 1 ? '' : 's'} within the authorized scope.`,
+          role: 'tool',
+          toolName: 'deterministic_context_analysis',
+          agentRole: 'analyst',
+          branchId: 'presentation-analysis',
+          branchLabel: 'Audience and evidence analysis',
+          ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+        });
+        handoffParentMessageId = analysisReceipt?.messageId ?? handoffParentMessageId;
+        const storyReceipt = await ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+          deckId: args.deckId,
+          ownerAccessKey: args.ownerAccessKey,
+          runId,
+          status: 'planning',
+          message: 'Applied the deterministic narrative handoff for this bounded edit.',
+          role: 'tool',
+          toolName: 'deterministic_story_handoff',
+          agentRole: 'storyteller',
+          branchId: 'presentation-story',
+          branchLabel: 'Narrative structure',
+          ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
+        });
+        handoffParentMessageId = storyReceipt?.messageId ?? handoffParentMessageId;
+      }
       const planningStartedAt = Date.now();
       const scopedComment =
         scopedCommentId === undefined
@@ -621,15 +905,116 @@ export const proposeEdit = action({
         ownerAccessKey: args.ownerAccessKey,
         runId,
         status: 'planning',
-        message: `Translated the narrative into ${finalOperations.length} bounded slide operation${finalOperations.length === 1 ? '' : 's'}.`,
-        role: 'tool',
-        toolName: 'delegate_designer',
+        messageId: nodeslideStableId(
+          'agent_handoff_message',
+          runId,
+          'designer',
+          nodeSlideDurableDigest(finalOperations),
+        ),
+        message:
+          providerChoice.providerMode !== 'deterministic' &&
+          baseline.receipt.origin === 'free_route'
+            ? `Designer model produced ${finalOperations.length} bounded slide operation${finalOperations.length === 1 ? '' : 's'} from the analyst and storyteller handoffs. ${baseline.summary}`
+            : `Deterministic designer fallback produced ${finalOperations.length} bounded slide operation${finalOperations.length === 1 ? '' : 's'}. ${baseline.receipt.fallbackReason ?? baseline.summary}`,
+        role:
+          providerChoice.providerMode !== 'deterministic' &&
+          baseline.receipt.origin === 'free_route'
+            ? 'assistant'
+            : 'tool',
+        toolName:
+          providerChoice.providerMode !== 'deterministic' &&
+          baseline.receipt.origin === 'free_route'
+            ? 'agent_designer'
+            : 'deterministic_designer_fallback',
         agentRole: 'designer',
         branchId: 'presentation-design',
         branchLabel: 'Slide design',
         ...(handoffParentMessageId ? { parentMessageId: handoffParentMessageId } : {}),
       });
       handoffParentMessageId = designReceipt?.messageId ?? handoffParentMessageId;
+      if (durableCognitiveTeam) {
+        const boundedReviewContext = buildNodeSlideEditProviderInput(
+          snapshot,
+          request,
+          readContext,
+        );
+        const parallelReviewGroupId = nodeslideStableId('agent_parallel_group', runId, 'review');
+        const [factCheckerStage, reviewerStage] = await Promise.all([
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-fact-checker',
+            ordinal: 5,
+            budget: runBudget,
+            role: 'fact_checker',
+            instruction,
+            boundedContext: boundedReviewContext,
+            ...(request.coordinationBriefs ? { priorBriefs: request.coordinationBriefs } : {}),
+            operations: finalOperations,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+          runNodeSlideCognitiveRole(ctx, {
+            jobId: durableCognitiveTeam.jobId,
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            callKey: 'agent-reviewer',
+            ordinal: 6,
+            budget: runBudget,
+            role: 'reviewer',
+            instruction,
+            boundedContext: boundedReviewContext,
+            ...(request.coordinationBriefs ? { priorBriefs: request.coordinationBriefs } : {}),
+            operations: finalOperations,
+            model: durableCognitiveTeam.model,
+            reasoningEffort: durableCognitiveTeam.reasoningEffort,
+          }),
+        ]);
+        const factChecker = factCheckerStage.completion;
+        const reviewer = reviewerStage.completion;
+        const reviewParentMessageId = handoffParentMessageId;
+        const [factCheckerReceipt, reviewerReceipt] = await Promise.all([
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'validating',
+            message: nodeSlideRoleHandoffText(factChecker),
+            messageId: nodeslideStableId('agent_handoff_message', factCheckerStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_fact_checker',
+            agentRole: 'fact_checker',
+            branchId: 'presentation-fact-check',
+            branchLabel: 'Evidence and quality check',
+            parallelGroupId: parallelReviewGroupId,
+            ...(reviewParentMessageId ? { parentMessageId: reviewParentMessageId } : {}),
+            ...(boundSourceIds.length ? { sourceIds: boundSourceIds } : {}),
+          }),
+          ctx.runMutation(nodeslideInternal.advanceAgentRunInternal, {
+            deckId: args.deckId,
+            ownerAccessKey: args.ownerAccessKey,
+            runId,
+            status: 'validating',
+            message: nodeSlideRoleHandoffText(reviewer),
+            messageId: nodeslideStableId('agent_handoff_message', reviewerStage.stageId),
+            role: 'assistant',
+            toolName: 'agent_reviewer',
+            agentRole: 'reviewer',
+            branchId: 'presentation-review',
+            branchLabel: 'Audience and scope review',
+            parallelGroupId: parallelReviewGroupId,
+            ...(reviewParentMessageId ? { parentMessageId: reviewParentMessageId } : {}),
+          }),
+        ]);
+        handoffParentMessageId =
+          reviewerReceipt?.messageId ?? factCheckerReceipt?.messageId ?? handoffParentMessageId;
+        traceContext.push(
+          `Cognitive team: fact-checker ${factChecker.status}; reviewer ${reviewer.status}`,
+        );
+      }
       const runBeforeValidation = await ctx.runQuery(nodeslideInternal.getAgentRunInternal, {
         deckId: args.deckId,
         ownerAccessKey: args.ownerAccessKey,
@@ -828,6 +1213,7 @@ export const proposeEdit = action({
         ...proposal,
         conversationRunId: runId,
         memoryIds: memories.map((memory) => memory.id),
+        memoryDigests: memories.map((memory) => memory.contentDigest),
       };
     } catch (error) {
       const publicError =
@@ -1708,6 +2094,143 @@ function nodeSlideBudgetLedgerClient(
   };
 }
 
+async function runNodeSlideCognitiveRole(
+  ctx: Pick<ActionCtx, 'runMutation' | 'runQuery'>,
+  args: {
+    jobId: string;
+    deckId: string;
+    ownerAccessKey: string;
+    runId: string;
+    callKey: string;
+    ordinal: number;
+    parentStageId?: string;
+    budget: NodeSlideRunBudgetInput;
+    role: NodeSlideCognitiveAgentRole;
+    instruction: string;
+    boundedContext: string;
+    model: Parameters<typeof nodeSlideRoleProviderRequest>[0]['model'];
+    reasoningEffort: Parameters<typeof nodeSlideRoleProviderRequest>[0]['reasoningEffort'];
+    priorBriefs?: NodeSlideCoordinationBriefs;
+    operations?: readonly PatchOperation[];
+  },
+) {
+  const providerRequest = nodeSlideRoleProviderRequest({
+    role: args.role,
+    instruction: args.instruction,
+    boundedContext: args.boundedContext,
+    model: args.model,
+    reasoningEffort: args.reasoningEffort,
+    ...(args.priorBriefs ? { priorBriefs: args.priorBriefs } : {}),
+    ...(args.operations ? { operations: args.operations } : {}),
+  });
+  const inputDigest = nodeSlideDurableDigest({
+    schemaVersion: 'nodeslide.role-stage-input/v1',
+    providerRequest,
+  });
+  const route = nodeSlideAgentModel(args.model);
+  const stageReceipt = await ctx.runMutation(nodeslideRoleStagesInternal.beginInternal, {
+    jobId: args.jobId,
+    deckId: args.deckId,
+    ownerAccessKey: args.ownerAccessKey,
+    runId: args.runId,
+    role: args.role,
+    ordinal: args.ordinal,
+    ...(args.parentStageId ? { parentStageId: args.parentStageId } : {}),
+    inputDigest,
+    provider: route.provider,
+    model: route.upstreamId,
+  });
+  if (stageReceipt.state === 'in_flight') {
+    throw new Error('This cognitive stage is already running under another durable lease.');
+  }
+  const stage = stageReceipt.stage;
+  if (stageReceipt.state === 'terminal' && typeof stage.outputJson === 'string') {
+    const replayed = parseStoredNodeSlideRoleCompletion(args.role, stage.outputJson);
+    return { completion: replayed, stageId: stage.id as string, replayed: true };
+  }
+  try {
+    const dispatched = await callNodeSlideBudgetedJson(
+      {
+        runId: args.jobId,
+        callKey: args.callKey,
+        budget: args.budget,
+        providerRequest,
+      },
+      { ledger: nodeSlideBudgetLedgerClient(ctx) },
+    );
+    const replay = await resolveNodeSlideBudgetedProviderReplay(ctx, args.jobId, dispatched);
+    if (!replay.replayed) {
+      await appendNodeSlideModelJournalReceipt(ctx, {
+        jobId: args.jobId,
+        operation: args.callKey,
+        providerRequest,
+        result: replay.result,
+      });
+    }
+    const completion = parseNodeSlideRoleCompletion(args.role, replay.result);
+    const outputJson = JSON.stringify({
+      role: completion.role,
+      status: completion.status,
+      summary: completion.summary,
+      details: completion.details,
+    });
+    await ctx.runMutation(nodeslideRoleStagesInternal.completeInternal, {
+      stageId: stage.id,
+      ownerAccessKey: args.ownerAccessKey,
+      leaseId: stage.leaseId,
+      inputDigest,
+      status: completion.status,
+      outputJson,
+      outputDigest: nodeslideContentDigest(outputJson),
+      ...('accounting' in replay.result ? { callId: replay.result.accounting.callId } : {}),
+    });
+    return { completion, stageId: stage.id as string, replayed: false };
+  } catch (error) {
+    try {
+      await ctx.runMutation(nodeslideRoleStagesInternal.failInternal, {
+        stageId: stage.id,
+        ownerAccessKey: args.ownerAccessKey,
+        leaseId: stage.leaseId,
+        inputDigest,
+        error: agentRunErrorMessage(error),
+      });
+    } catch {
+      // Preserve the stage exception. A completed stage remains replayable, and
+      // a superseding lease must not be failed by this stale attempt.
+    }
+    throw error;
+  }
+}
+
+function parseStoredNodeSlideRoleCompletion(role: NodeSlideCognitiveAgentRole, outputJson: string) {
+  try {
+    const value = JSON.parse(outputJson) as {
+      role?: unknown;
+      status?: unknown;
+      summary?: unknown;
+      details?: unknown;
+    };
+    if (
+      value.role !== role ||
+      !['completed', 'fallback'].includes(String(value.status)) ||
+      typeof value.summary !== 'string' ||
+      !Array.isArray(value.details) ||
+      !value.details.every((detail) => typeof detail === 'string')
+    ) {
+      throw new Error();
+    }
+    return {
+      role,
+      status: value.status as 'completed' | 'fallback',
+      summary: value.summary,
+      details: value.details as string[],
+      providerResult: { ok: false as const, reason: 'durable_role_stage_replay' },
+    };
+  } catch {
+    throw new Error('Durable cognitive stage replay is invalid.');
+  }
+}
+
 type NodeSlideDurableJournalSession = {
   sessionId: string;
   requestBinding: {
@@ -2069,6 +2592,43 @@ function extractPlan(
   return fallback.slides.map((slide, index) => `${index + 1}. ${slide.section}: ${slide.headline}`);
 }
 
+export function mergeAgentJobMemories(
+  deckId: string,
+  scoped: readonly NodeSlideScopedMemoryItem[],
+  legacy: readonly NodeSlideAgentMemory[],
+): NodeSlideAgentMemory[] {
+  const selected: NodeSlideAgentMemory[] = [];
+  const contentDigests = new Set<string>();
+  let bytes = 0;
+  for (const memory of [
+    ...scoped.map((item) => ({
+      id: item.id,
+      deckId,
+      category: item.category,
+      content: item.content,
+      status: item.status,
+      source: item.source,
+      ...(item.sourceRunId ? { sourceRunId: item.sourceRunId } : {}),
+      contentDigest: item.contentDigest,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      ...(item.lastUsedAt ? { lastUsedAt: item.lastUsedAt } : {}),
+      useCount: item.useCount,
+    })),
+    ...legacy,
+  ]) {
+    if (selected.length >= 6) break;
+    if (memory.status !== 'active') continue;
+    if (contentDigests.has(memory.contentDigest)) continue;
+    const memoryBytes = new TextEncoder().encode(memory.content).byteLength;
+    if (bytes + memoryBytes > 4_800) continue;
+    selected.push(memory);
+    contentDigests.add(memory.contentDigest);
+    bytes += memoryBytes;
+  }
+  return selected;
+}
+
 interface NodeSlideAgentRecord extends Record<string, unknown> {
   plan?: unknown;
 }
@@ -2145,4 +2705,10 @@ function snapshotOf(workspace: NodeSlideWorkspace): DeckSnapshot {
     elements: workspace.elements,
     sources: workspace.sources,
   };
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const expected = new Set(right);
+  return left.every((value) => expected.has(value));
 }

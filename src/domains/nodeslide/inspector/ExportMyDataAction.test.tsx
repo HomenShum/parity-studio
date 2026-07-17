@@ -9,7 +9,7 @@ import { ExportMyDataButton } from './ExportMyDataAction';
 
 const bundle: NodeSlideOwnerDataExport = {
   manifest: {
-    schemaVersion: 'nodeslide.owner-data-export/v2',
+    schemaVersion: 'nodeslide.owner-data-export/v3',
     generatedAt: Date.UTC(2026, 6, 14, 12),
     mediaType: 'application/json',
     scope: { kind: 'deck_owner_capability', deckId: 'deck:owner', deckVersion: 4 },
@@ -51,6 +51,8 @@ const bundle: NodeSlideOwnerDataExport = {
     sources: [{ id: 'source:one', citation: 'Owner evidence' }],
     evidence: { captures: [], steps: [] },
     memories: [],
+    scopedMemories: [],
+    sourceRefresh: { schedules: [], proposals: [] },
     activity: {
       jobs: [],
       durableSessions: [],
@@ -64,9 +66,10 @@ const bundle: NodeSlideOwnerDataExport = {
       executionTraces: [],
       shadowComparisons: [],
       validations: [],
+      roleStages: [],
     },
     budgets: { ledgers: [], billableCalls: [], events: [] },
-    sync: { connections: [] },
+    sync: { connections: [], googleStates: [], pptxLinks: [] },
     delegation: { grants: [], uses: [] },
     outputs: { exports: [], publications: [] },
     preferenceEvents: [],

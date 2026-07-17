@@ -108,6 +108,8 @@ function seedDeck(
 ) {
   return database.seed('nodeslide_decks', {
     id: deckId,
+    projectId: `${deckId}:tenant`,
+    clientSessionId: `${deckId}:session`,
     ownerAccessKey,
     title,
     version: 7,
@@ -299,7 +301,7 @@ describe('NodeSlide owner data export', () => {
     });
     const serialized = JSON.stringify(bundle);
 
-    expect(bundle.manifest.schemaVersion).toBe('nodeslide.owner-data-export/v2');
+    expect(bundle.manifest.schemaVersion).toBe('nodeslide.owner-data-export/v3');
     expect(bundle.manifest.completeness).toMatchObject({ status: 'complete', truncated: false });
     expect(bundle.manifest.mutationPolicy).toBe('read_only_no_cas_or_proposal_state_changes');
     expect(bundle.manifest.redaction.removedFieldCount).toBeGreaterThan(0);
@@ -348,6 +350,156 @@ describe('NodeSlide owner data export', () => {
     expect(bundle.data.activity.traces).toHaveLength(1);
     expect(bundle.data.activity.executionTraces).toHaveLength(1);
     expect(bundle.data.comments).toHaveLength(1);
+  });
+
+  it('exports deck lifecycle state while removing ciphertext, auth tokens, and raw capabilities', async () => {
+    const database = new MemoryDatabase();
+    const deckId = 'deck:lifecycle';
+    const ownerDigest = `actor_${nodeslideContentDigest(OWNER_ACCESS_KEY)}`;
+    const scopeKey = [
+      'nodeslide.scoped-memory/v1',
+      'workspace',
+      `${deckId}:session`,
+      'project',
+      `${deckId}:tenant`,
+      'deck',
+      deckId,
+    ]
+      .map(encodeURIComponent)
+      .join('/');
+    seedDeck(database, { deckId, ownerAccessKey: OWNER_ACCESS_KEY });
+    database.seed('nodeslide_scoped_memories', {
+      id: 'scoped-memory:deck',
+      schemaVersion: 'nodeslide.scoped-memory/v1',
+      scopeKind: 'deck',
+      scopeKey,
+      workspaceId: `${deckId}:session`,
+      projectId: `${deckId}:tenant`,
+      deckId,
+      content: 'Deck-only lifecycle preference',
+      createdAt: 10,
+      updatedAt: 11,
+    });
+    database.seed('nodeslide_scoped_memories', {
+      id: 'scoped-memory:workspace',
+      schemaVersion: 'nodeslide.scoped-memory/v1',
+      scopeKind: 'workspace',
+      scopeKey: 'nodeslide.scoped-memory%2Fv1/workspace/deck%3Alifecycle%3Asession',
+      workspaceId: `${deckId}:session`,
+      content: 'Shared workspace memory must stay outside a deck export',
+      createdAt: 12,
+      updatedAt: 13,
+    });
+    database.seed('nodeslide_role_stages', {
+      id: 'role-stage:one',
+      deckId,
+      role: 'analyst',
+      outputJson: JSON.stringify({
+        summary: 'Safe role output',
+        accessTokenCiphertext: 'role-ciphertext-secret',
+        rawCapability: OWNER_ACCESS_KEY,
+      }),
+      createdAt: 14,
+      updatedAt: 15,
+    });
+    database.seed('nodeslide_source_refresh_schedules', {
+      id: 'refresh-schedule:one',
+      deckId,
+      sourceId: 'source:one',
+      ownerDigest,
+      lastError: 'Authorization: Bearer refresh-bearer-secret',
+      createdAt: 16,
+      updatedAt: 17,
+    });
+    database.seed('nodeslide_source_refresh_proposals', {
+      id: 'refresh-proposal:one',
+      deckId,
+      sourceId: 'source:one',
+      ownerDigest,
+      planJson: JSON.stringify({ change: 'Update a chart', token: 'proposal-token-secret' }),
+      createdAt: 18,
+      updatedAt: 19,
+    });
+    database.seed('nodeslide_google_sync_states', {
+      id: 'google-state:one',
+      deckId,
+      baselineJson: JSON.stringify({
+        title: 'Safe Google baseline',
+        refreshTokenCiphertext: 'google-ciphertext-secret',
+      }),
+      pendingPlanJson: JSON.stringify({ operation: 'pull', rawCapability: OWNER_ACCESS_KEY }),
+      credentialCiphertext: 'google-row-ciphertext-secret',
+      createdAt: 20,
+      updatedAt: 21,
+    });
+    database.seed('nodeslide_pptx_sync_links', {
+      id: 'pptx-link:one',
+      deckId,
+      baselineJson: JSON.stringify({ title: 'Safe PPTX baseline' }),
+      pendingPlanJson: JSON.stringify({ operation: 'merge', token: 'pptx-token-secret' }),
+      rawCapability: OWNER_ACCESS_KEY,
+      createdAt: 22,
+      updatedAt: 23,
+    });
+    database.seed('nodeslide_google_sync_states', {
+      id: 'google-state:other',
+      deckId: 'deck:other',
+      baselineJson: '{}',
+      createdAt: 24,
+      updatedAt: 25,
+    });
+
+    const bundle = await exportMyDataHandler(queryContext(database), {
+      deckId,
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    const serialized = JSON.stringify(bundle);
+
+    expect(bundle.data.scopedMemories).toHaveLength(1);
+    expect(bundle.data.scopedMemories[0]?.content).toBe('Deck-only lifecycle preference');
+    expect(bundle.data.activity.roleStages).toHaveLength(1);
+    expect(bundle.data.sourceRefresh.schedules).toHaveLength(1);
+    expect(bundle.data.sourceRefresh.proposals).toHaveLength(1);
+    expect(bundle.data.sync.googleStates).toHaveLength(1);
+    expect(bundle.data.sync.pptxLinks).toHaveLength(1);
+    expect(bundle.data.sourceRefresh.schedules[0]).not.toHaveProperty('ownerDigest');
+    expect(bundle.data.sourceRefresh.proposals[0]).not.toHaveProperty('ownerDigest');
+    expect(bundle.data.sync.googleStates[0]).not.toHaveProperty('credentialCiphertext');
+    expect(bundle.data.sync.pptxLinks[0]).not.toHaveProperty('rawCapability');
+    expect(JSON.parse(String(bundle.data.activity.roleStages[0]?.outputJson))).toEqual({
+      summary: 'Safe role output',
+    });
+    expect(JSON.parse(String(bundle.data.sync.googleStates[0]?.baselineJson))).toEqual({
+      title: 'Safe Google baseline',
+    });
+    expect(JSON.parse(String(bundle.data.sync.pptxLinks[0]?.pendingPlanJson))).toEqual({
+      operation: 'merge',
+    });
+    for (const secret of [
+      OWNER_ACCESS_KEY,
+      'role-ciphertext-secret',
+      'refresh-bearer-secret',
+      'proposal-token-secret',
+      'google-ciphertext-secret',
+      'google-row-ciphertext-secret',
+      'pptx-token-secret',
+      'Shared workspace memory must stay outside a deck export',
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized.toLowerCase()).not.toContain('ciphertext');
+    expect(serialized).not.toContain('rawCapability');
+    expect(serialized).not.toContain('"token"');
+    expect(bundle.manifest.collections.map((entry) => entry.path)).toEqual(
+      expect.arrayContaining([
+        'data.scopedMemories',
+        'data.activity.roleStages',
+        'data.sourceRefresh.schedules',
+        'data.sourceRefresh.proposals',
+        'data.sync.googleStates',
+        'data.sync.pptxLinks',
+      ]),
+    );
   });
 
   it('exports deck-bound custody, evidence, sync, delegation, output, and budget metadata', async () => {

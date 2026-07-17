@@ -79,6 +79,29 @@ interface RedactionState {
   sensitiveValues: string[];
 }
 
+const NODESLIDE_SCOPED_MEMORY_VERSION = 'nodeslide.scoped-memory/v1';
+
+function nodeSlideDeckScopedMemoryKey(
+  deck: Pick<Doc<'nodeslide_decks'>, 'id' | 'projectId' | 'clientSessionId'> & {
+    workspaceId?: string;
+    workspaceProjectId?: string;
+  },
+): string {
+  const workspaceId = deck.workspaceId ?? deck.clientSessionId;
+  const projectId = deck.workspaceProjectId ?? deck.projectId;
+  return [
+    NODESLIDE_SCOPED_MEMORY_VERSION,
+    'workspace',
+    workspaceId,
+    'project',
+    projectId,
+    'deck',
+    deck.id,
+  ]
+    .map(encodeURIComponent)
+    .join('/');
+}
+
 /**
  * Reads one complete, deck-bound owner export. Every collection is bounded and
  * the function rejects instead of returning a partial bundle.
@@ -108,12 +131,18 @@ export async function collectNodeSlideOwnerDataExport(
     runs,
     messages,
     memories,
+    scopedMemories,
+    roleStages,
+    sourceRefreshSchedules,
+    sourceRefreshProposals,
     spans,
     events,
     validations,
     traces,
     executionTraces,
     syncConnections,
+    googleSyncStates,
+    pptxSyncLinks,
     delegationGrants,
     delegationUses,
     evidenceCaptures,
@@ -181,6 +210,24 @@ export async function collectNodeSlideOwnerDataExport(
       .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
       .take(limit),
     ctx.db
+      .query('nodeslide_scoped_memories')
+      .withIndex('by_scope_status_updated', (query) =>
+        query.eq('scopeKey', nodeSlideDeckScopedMemoryKey(deck)),
+      )
+      .take(limit),
+    ctx.db
+      .query('nodeslide_role_stages')
+      .withIndex('by_deck_ordinal', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_source_refresh_schedules')
+      .withIndex('by_deck_updated', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_source_refresh_proposals')
+      .withIndex('by_deck_status_created', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
       .query('nodeslide_agent_spans')
       .withIndex('by_deck_created', (query) => query.eq('deckId', deck.id))
       .take(limit),
@@ -205,6 +252,14 @@ export async function collectNodeSlideOwnerDataExport(
       .withIndex('by_deck_provider', (query) =>
         query.eq('deckId', deck.id).eq('provider', 'google_slides'),
       )
+      .take(limit),
+    ctx.db
+      .query('nodeslide_google_sync_states')
+      .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .take(limit),
+    ctx.db
+      .query('nodeslide_pptx_sync_links')
+      .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
       .take(limit),
     ctx.db
       .query('nodeslide_delegation_grants')
@@ -336,12 +391,18 @@ export async function collectNodeSlideOwnerDataExport(
     ['runs', runs],
     ['messages', messages],
     ['memories', memories],
+    ['scoped memories', scopedMemories],
+    ['role stages', roleStages],
+    ['source refresh schedules', sourceRefreshSchedules],
+    ['source refresh proposals', sourceRefreshProposals],
     ['spans', spans],
     ['events', events],
     ['validations', validations],
     ['traces', traces],
     ['execution traces', executionTraces],
     ['sync connections', syncConnections],
+    ['Google sync states', googleSyncStates],
+    ['PPTX sync links', pptxSyncLinks],
     ['delegation grants', delegationGrants],
     ['delegation uses', delegationUses],
     ['evidence captures', evidenceCaptures],
@@ -374,12 +435,17 @@ export async function collectNodeSlideOwnerDataExport(
     runs,
     messages,
     memories,
+    roleStages,
+    sourceRefreshSchedules,
+    sourceRefreshProposals,
     spans,
     events,
     validations,
     traces,
     executionTraces,
     syncConnections,
+    googleSyncStates,
+    pptxSyncLinks,
     delegationGrants,
     delegationUses,
     evidenceCaptures,
@@ -392,6 +458,7 @@ export async function collectNodeSlideOwnerDataExport(
   ]) {
     assertDeckScopedRows(deck.id, rows);
   }
+  assertDeckScopedMemoryRows(deck, scopedMemories);
 
   const expectedJobOwnerDigest = nodeSlideJobOwnerDigest(ownerAccessKey);
   const expectedRunOwnerDigest = `actor_${nodeslideContentDigest(ownerAccessKey)}`;
@@ -413,6 +480,16 @@ export async function collectNodeSlideOwnerDataExport(
   for (const receipt of claimEvidenceReceipts) {
     if (receipt.ownerDigest !== expectedRunOwnerDigest) {
       throw exportInvariantError('claim evidence receipt ownership is inconsistent');
+    }
+  }
+  for (const schedule of sourceRefreshSchedules) {
+    if (schedule.ownerDigest !== expectedRunOwnerDigest) {
+      throw exportInvariantError('source refresh schedule ownership is inconsistent');
+    }
+  }
+  for (const proposal of sourceRefreshProposals) {
+    if (proposal.ownerDigest !== expectedRunOwnerDigest) {
+      throw exportInvariantError('source refresh proposal ownership is inconsistent');
     }
   }
   for (const version of versions) assertVersionSnapshotScope(version, deck.id);
@@ -466,6 +543,11 @@ export async function collectNodeSlideOwnerDataExport(
       claimReceipts: redactRows(claimEvidenceReceipts, redaction, ['ownerDigest']),
     },
     memories: redactRows(memories, redaction),
+    scopedMemories: redactRows(scopedMemories, redaction),
+    sourceRefresh: {
+      schedules: redactRows(sourceRefreshSchedules, redaction, ['ownerDigest']),
+      proposals: redactRows(sourceRefreshProposals, redaction, ['ownerDigest']),
+    },
     activity: {
       jobs: redactRows(jobs, redaction),
       durableSessions: redactRows(durableSessions, redaction),
@@ -479,13 +561,18 @@ export async function collectNodeSlideOwnerDataExport(
       executionTraces: redactRows(executionTraces, redaction),
       shadowComparisons: redactRows(shadowComparisons, redaction),
       validations: redactRows(validations, redaction),
+      roleStages: redactRows(roleStages, redaction),
     },
     budgets: {
       ledgers: redactRows(budgetLedgers, redaction),
       billableCalls: redactRows(billableCalls, redaction),
       events: redactRows(budgetEvents, redaction),
     },
-    sync: { connections: redactRows(syncConnections, redaction) },
+    sync: {
+      connections: redactRows(syncConnections, redaction),
+      googleStates: redactRows(googleSyncStates, redaction),
+      pptxLinks: redactRows(pptxSyncLinks, redaction),
+    },
     delegation: {
       grants: redactRows(delegationGrants, redaction, ['tokenDigest']),
       uses: redactRows(delegationUses, redaction),
@@ -557,6 +644,25 @@ function assertCompleteCollection(name: string, rowCount: number): void {
 function assertDeckScopedRows(deckId: string, rows: readonly ScopedRow[]): void {
   if (rows.some((row) => row.deckId !== deckId)) {
     throw exportInvariantError('a persisted row crossed the authorized deck boundary');
+  }
+}
+
+function assertDeckScopedMemoryRows(
+  deck: Doc<'nodeslide_decks'>,
+  rows: readonly Doc<'nodeslide_scoped_memories'>[],
+): void {
+  const scopeKey = nodeSlideDeckScopedMemoryKey(deck);
+  for (const row of rows) {
+    if (
+      row.schemaVersion !== NODESLIDE_SCOPED_MEMORY_VERSION ||
+      row.scopeKind !== 'deck' ||
+      row.scopeKey !== scopeKey ||
+      row.deckId !== deck.id ||
+      row.workspaceId !== (deck.workspaceId ?? deck.clientSessionId) ||
+      row.projectId !== (deck.workspaceProjectId ?? deck.projectId)
+    ) {
+      throw exportInvariantError('scoped memory ownership is inconsistent');
+    }
   }
 }
 
@@ -780,6 +886,7 @@ function isSensitiveField(key: string): boolean {
     return true;
   }
   if (
+    normalized.includes('ciphertext') ||
     normalized.includes('password') ||
     normalized.includes('passphrase') ||
     normalized.includes('secret') ||
@@ -787,7 +894,10 @@ function isSensitiveField(key: string): boolean {
     normalized.includes('privatekey') ||
     normalized.includes('apikey') ||
     normalized.includes('accesskey') ||
-    normalized.includes('capabilitykey')
+    normalized.includes('capabilitykey') ||
+    normalized.endsWith('capability') ||
+    normalized.endsWith('capabilitytoken') ||
+    normalized.endsWith('capabilityvalue')
   ) {
     return true;
   }
@@ -803,6 +913,8 @@ function isSensitiveField(key: string): boolean {
 }
 
 function redactString(value: string, state: RedactionState): string {
+  const structured = redactSerializedJson(value, state);
+  if (structured !== undefined) return structured;
   if (/^data:(?:image\/[^;,]+|application\/pdf);base64,/i.test(value)) {
     state.redactedValueCount += 1;
     return OMITTED_BINARY_DATA;
@@ -826,6 +938,25 @@ function redactString(value: string, state: RedactionState): string {
     .replace(/\btoken(\s*[:=]\s*)[^\s,;&]+/gi, `token$1${REDACTED}`);
   if (redacted !== value) state.redactedValueCount += 1;
   return redacted;
+}
+
+function redactSerializedJson(value: string, state: RedactionState): string | undefined {
+  const trimmed = value.trim();
+  if (
+    !(
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    )
+  ) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    const redacted = redactValue(parsed, state, new Set());
+    return redacted === undefined ? undefined : JSON.stringify(redacted);
+  } catch {
+    return undefined;
+  }
 }
 
 function dataCollectionManifest(
@@ -855,6 +986,15 @@ function dataCollectionManifest(
       recordCount: data.evidence.claimReceipts?.length ?? 0,
     },
     { path: 'data.memories', recordCount: data.memories.length },
+    { path: 'data.scopedMemories', recordCount: data.scopedMemories.length },
+    {
+      path: 'data.sourceRefresh.schedules',
+      recordCount: data.sourceRefresh.schedules.length,
+    },
+    {
+      path: 'data.sourceRefresh.proposals',
+      recordCount: data.sourceRefresh.proposals.length,
+    },
     { path: 'data.activity.jobs', recordCount: data.activity.jobs.length },
     {
       path: 'data.activity.durableSessions',
@@ -882,10 +1022,13 @@ function dataCollectionManifest(
       recordCount: data.activity.shadowComparisons.length,
     },
     { path: 'data.activity.validations', recordCount: data.activity.validations.length },
+    { path: 'data.activity.roleStages', recordCount: data.activity.roleStages.length },
     { path: 'data.budgets.ledgers', recordCount: data.budgets.ledgers.length },
     { path: 'data.budgets.billableCalls', recordCount: data.budgets.billableCalls.length },
     { path: 'data.budgets.events', recordCount: data.budgets.events.length },
     { path: 'data.sync.connections', recordCount: data.sync.connections.length },
+    { path: 'data.sync.googleStates', recordCount: data.sync.googleStates.length },
+    { path: 'data.sync.pptxLinks', recordCount: data.sync.pptxLinks.length },
     { path: 'data.delegation.grants', recordCount: data.delegation.grants.length },
     { path: 'data.delegation.uses', recordCount: data.delegation.uses.length },
     { path: 'data.outputs.exports', recordCount: data.outputs.exports.length },

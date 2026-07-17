@@ -51,6 +51,9 @@ export const nodeslideEditProposalJobRequestFields = {
   webResearch: v.optional(v.boolean()),
   webResearchConsent: v.optional(v.string()),
   memoryMode: v.optional(v.union(v.literal('off'), v.literal('relevant'))),
+  sourceRefreshBinding: v.optional(
+    v.object({ proposalId: v.string(), baseSnapshotDigest: v.string() }),
+  ),
 };
 
 export const nodeslideEditProposalJobRequestValidator = v.object(
@@ -105,5 +108,6 @@ export function nodeSlideEditProposalJobRequestFromArgs(
       ? { webResearchConsent: args.webResearchConsent }
       : {}),
     ...(args.memoryMode ? { memoryMode: args.memoryMode } : {}),
+    ...(args.sourceRefreshBinding ? { sourceRefreshBinding: args.sourceRefreshBinding } : {}),
   };
 }
