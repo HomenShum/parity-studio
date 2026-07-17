@@ -29,7 +29,7 @@
       "id": "ai-fund",
       "title": "AI Fund — people, product, and decision",
       "slideCount": 6,
-      "prompt": "Create exactly six editable slides for an AI Fund review of NodeSlide. Use official AI Fund web sources to explain the relevant roles of Mike Rubino, Andrew Ng, and Eli, then connect those people to the product thesis: changing evidence becomes a decision-ready presentation with traceable claims and reviewable AI changes. Include three sourced profile visuals, an editable product workflow diagram, a comparison chart, speaker notes, and a clear next-step decision. Do not invent biographical facts.",
+      "prompt": "Create exactly six editable slides for an AI Fund review of NodeSlide. Use official AI Fund web sources to explain the relevant roles of Mike Rubino, Andrew Ng, and Eli, then connect those people to the product thesis: changing evidence becomes a decision-ready presentation with traceable claims and reviewable AI changes. Include three sourced profile photos, an editable product workflow diagram, a comparison chart, speaker notes, and a clear next-step decision. Do not invent biographical facts.",
       "actions": [
         "fresh-create",
         "primitive-scan",

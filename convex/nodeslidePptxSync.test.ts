@@ -201,8 +201,35 @@ function snapshotFixture(
       id: 'deck-1',
       projectId: 'project-1',
       title: 'Quarterly review',
-      brief: 'Review the quarter.',
-      theme: {},
+      brief: {
+        prompt: 'Review the quarter.',
+        audience: 'Executive team',
+        purpose: 'Quarterly review',
+        successCriteria: ['Keep linked edits bounded and reviewable.'],
+      },
+      theme: {
+        id: 'test-theme',
+        name: 'Test theme',
+        mode: 'light',
+        colors: {
+          canvas: '#F5F1E8',
+          ink: '#14231C',
+          muted: '#5F6B64',
+          accent: '#B44A2D',
+          accentSoft: '#F8D8CC',
+          insight: '#DCEBDD',
+          insightInk: '#17442D',
+          trace: '#6B5BD2',
+          border: '#D8D1C5',
+        },
+        typography: {
+          display: 'Fraunces Variable',
+          body: 'Geist Variable',
+          data: 'JetBrains Mono Variable',
+        },
+        defaultRadius: 18,
+        spacingUnit: 8,
+      },
       slideOrder: ['slide-1'],
       version: overrides.version ?? 7,
       status: 'draft',
@@ -215,7 +242,7 @@ function snapshotFixture(
         deckId: 'deck-1',
         title: 'Results',
         notes: overrides.notes ?? 'Baseline note',
-        background: { color: '#ffffff' },
+        background: '#ffffff',
         elementOrder: ['element-1'],
         version: overrides.version ?? 7,
       },
@@ -239,7 +266,7 @@ function snapshotFixture(
       },
     ],
     sources: [],
-  } as DeckSnapshot;
+  };
 }
 
 function remoteDocument(

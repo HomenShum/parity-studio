@@ -727,6 +727,33 @@ describe('NodeSlide seed', () => {
     expect(normalized.slides[2]?.formula).toBeUndefined();
   });
 
+  it('keeps an honest replace-image primitive when a provider omits a requested image', () => {
+    const brief = {
+      prompt: 'Create six slides with an editable, credited team profile image.',
+      audience: 'Reviewers',
+      purpose: 'Review the team',
+      successCriteria: ['Keep every visual editable'],
+    };
+    const rawSpec = {
+      title: 'Provider story',
+      narrative: ['Provider narrative'],
+      slides: Array.from({ length: 6 }, (_, index) => ({
+        title: `Slide ${index + 1}`,
+        section: `Story / ${index + 1}`,
+        headline: `Point ${index + 1}`,
+        body: 'Evidence-led context.',
+        bullets: ['One', 'Two', 'Three'],
+      })),
+    };
+
+    const normalized = coerceBriefSpec(rawSpec, 'Provider story', brief);
+    expect(normalized.slides.filter((slide) => slide.image)).toHaveLength(1);
+    expect(normalized.slides.find((slide) => slide.image)?.image).toMatchObject({
+      altText: 'Structured evidence map derived from the supplied brief',
+      caption: 'The visual is illustrative and remains replaceable as an image object.',
+    });
+  });
+
   it('keeps deterministic fallback headlines sentence-cased and sequence labels singular', () => {
     const spec = deterministicBriefSpec('Pilot story', {
       prompt: 'Explain a bounded pilot.',

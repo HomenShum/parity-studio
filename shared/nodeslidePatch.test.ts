@@ -1210,6 +1210,31 @@ describe('NodeSlide deck-level operations and clocks', () => {
     ]);
   });
 
+  it('treats preserve-layout language as a constraint on an explicit copy replacement', () => {
+    const current = snapshot();
+    const scope: PatchScope = {
+      kind: 'slide',
+      deckId: current.deck.id,
+      slideIds: ['slide-1'],
+      operationMode: 'unrestricted',
+    };
+
+    expect(
+      deterministicAgentOperations(
+        current,
+        'Replace only this selected headline with “AI 2027 is a decision system, not a forecast.” Preserve every other element and the current layout.',
+        scope,
+      ),
+    ).toEqual([
+      {
+        op: 'replace_text',
+        slideId: 'slide-1',
+        elementId: 'headline',
+        text: 'AI 2027 is a decision system, not a forecast.',
+      },
+    ]);
+  });
+
   it('fails honestly when deterministic copy fallback cannot infer safe wording', () => {
     const current = snapshot();
     expect(() =>

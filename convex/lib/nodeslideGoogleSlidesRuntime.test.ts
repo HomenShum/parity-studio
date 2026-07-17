@@ -252,6 +252,14 @@ describe('NodeSlide Google Slides runtime', () => {
     local.deck.version += 1;
     const verifiedRemote = remoteFixture('Pushed');
     verifiedRemote.revisionId = 'revision-after-write';
+    const plan = createGoogleSlidesOutboundExternalPlan(
+      { baseline, local, remote: remoteFixture('Base') },
+      {
+        strategy: 'read_after_write',
+        remoteObjectId: 'presentation-1',
+        compareAgainstVersionId: 'revision-current',
+      },
+    );
 
     expect(() =>
       assertVerifiedGoogleSlidesConvergence({ baseline, acceptedLocal: local, verifiedRemote }),
@@ -261,6 +269,26 @@ describe('NodeSlide Google Slides runtime', () => {
         baseline,
         acceptedLocal: local,
         verifiedRemote: { ...remoteFixture('Unexpected'), revisionId: 'revision-after-write' },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'verification_failed' }));
+    const providerCanonicalized = structuredClone(verifiedRemote);
+    const remoteSlide = providerCanonicalized.slides[0];
+    if (!remoteSlide) throw new Error('fixture slide missing');
+    remoteSlide.title = 'Derived from the first textbox';
+    expect(() =>
+      assertVerifiedGoogleSlidesConvergence({
+        baseline,
+        acceptedLocal: local,
+        verifiedRemote: providerCanonicalized,
+        plan,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertVerifiedGoogleSlidesConvergence({
+        baseline,
+        acceptedLocal: local,
+        verifiedRemote: { ...remoteFixture('Unexpected'), revisionId: 'revision-after-write' },
+        plan,
       }),
     ).toThrowError(expect.objectContaining({ code: 'verification_failed' }));
   });

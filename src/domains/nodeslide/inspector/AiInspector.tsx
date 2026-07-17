@@ -1746,6 +1746,7 @@ export function AiInspector<CommandId extends string = string>({
                         <select
                           value={operationMode}
                           disabled={approvalControlLocked}
+                          data-testid="ai-operation-mode"
                           onChange={(event) =>
                             setOperationMode(event.target.value as OperationMode)
                           }

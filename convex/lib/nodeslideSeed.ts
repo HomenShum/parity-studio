@@ -1224,6 +1224,7 @@ export function coerceBriefSpec(
     .slice(0, requestedSlideCount ?? 8);
   if (slides.length < (requestedSlideCount ?? 6)) return fallback;
   if (!applyRequestedDiagramPrimitive(slides, brief.prompt)) return fallback;
+  ensureRequestedImagePlaceholder(slides, fallback.slides, brief.prompt);
 
   const narrative = Array.isArray(rawSpec.narrative)
     ? rawSpec.narrative
@@ -1240,6 +1241,42 @@ export function coerceBriefSpec(
     narrative: narrative.length > 0 ? narrative : fallback.narrative,
     slides,
   };
+}
+
+function ensureRequestedImagePlaceholder(
+  slides: NodeSlidePlannedSlide[],
+  fallbackSlides: readonly NodeSlidePlannedSlide[],
+  prompt: string,
+): void {
+  if (
+    !requestsBriefPrimitive(prompt, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.image) ||
+    slides.some((slide) => slide.image)
+  ) {
+    return;
+  }
+  const fallbackIndex = fallbackSlides.findIndex((slide) => slide.image);
+  const fallbackImage = fallbackSlides[fallbackIndex]?.image;
+  if (!fallbackImage) return;
+  const targetIndex =
+    fallbackIndex >= 0 && !hasPrimaryVisual(slides[fallbackIndex])
+      ? fallbackIndex
+      : lastSlideWithoutPrimaryVisual(slides);
+  const target = slides[targetIndex];
+  if (!target) return;
+  slides[targetIndex] = { ...target, image: fallbackImage };
+}
+
+function lastSlideWithoutPrimaryVisual(slides: readonly NodeSlidePlannedSlide[]): number {
+  for (let index = slides.length - 1; index >= 0; index -= 1) {
+    if (!hasPrimaryVisual(slides[index])) return index;
+  }
+  return -1;
+}
+
+function hasPrimaryVisual(slide: NodeSlidePlannedSlide | undefined): boolean {
+  return Boolean(
+    slide && (slide.chart || slide.formula || slide.image || slide.video || slide.diagram),
+  );
 }
 
 export function buildBriefNodeSlide(input: BuildBriefDeckInput): NodeSlideBuildResult {
@@ -1688,7 +1725,7 @@ function buildSlide(input: {
         style: {
           color: theme.colors.muted,
           fontFamily: theme.typography.body,
-          fontSize: isOpening ? 12 : 15,
+          fontSize: isOpening ? 14 : 15,
           fontWeight: 500,
           lineHeight: 1.25,
           textAlign: 'center',

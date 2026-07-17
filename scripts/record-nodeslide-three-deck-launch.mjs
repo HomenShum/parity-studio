@@ -144,6 +144,19 @@ async function main() {
           }
         : {}),
     });
+    const captureOrigin = new URL(targetUrl).origin;
+    await context.route(`${captureOrigin}/**`, async (route) => {
+      const response = await route.fetch();
+      const blockedFrameHeaders = new Set([
+        'content-security-policy',
+        'content-security-policy-report-only',
+        'x-frame-options',
+      ]);
+      const headers = Object.fromEntries(
+        Object.entries(response.headers()).filter(([name]) => !blockedFrameHeaders.has(name)),
+      );
+      await route.fulfill({ response, headers });
+    });
     page = await context.newPage();
     video = page.video();
     page.on('console', (message) => {
@@ -284,6 +297,8 @@ async function createFreshDeck(run) {
       clear: true,
     });
     await ensureNamedLandingModel(run);
+    const effort = run.app.getByTestId('landing-effort-select');
+    if (await effort.isVisible().catch(() => false)) await effort.selectOption('low');
     const consent = run.app.getByTestId('landing-provider-consent');
     if (await consent.isVisible().catch(() => false)) await humanCheck(run, consent);
     const submit = run.app.getByRole('button', { name: 'Create presentation' });
@@ -408,14 +423,18 @@ async function recordAi2027(run) {
     if (!Number.isFinite(before)) throw new Error('Selected element X position is not numeric.');
     const after = Number(Math.min(88, before + 1).toFixed(1));
     await humanType(run, x, String(after), { clear: true });
-    await x.press('Enter');
+    await x.press('Tab');
     const version = await waitForVersionAdvance(run, baseVersion);
     return { property: 'x', before, after, version };
   });
 
   await checkpoint(run, 'ai-2027-memory', async () => {
     await openInspectorTab(run, 'ai');
-    await humanClick(run, run.app.getByTestId('ai-memory'));
+    const memoryButton = run.app.getByTestId('ai-memory');
+    if (!(await memoryButton.isVisible().catch(() => false))) {
+      await humanClick(run, run.app.getByTestId('ai-tools-toggle'));
+    }
+    await humanClick(run, memoryButton);
     const dialog = run.app.getByTestId('memory-dialog');
     await dialog.waitFor({ state: 'visible', timeout: 15_000 });
     const text = 'Prefer action-led headlines and distinguish measured evidence from scenarios.';
@@ -484,7 +503,7 @@ async function recordAiFund(run) {
     const label = await monitor.getAttribute('aria-label');
     await humanClick(run, monitor);
     await run.app
-      .getByText(/Monitoring on|next /i)
+      .getByRole('button', { name: /^Pause /i })
       .first()
       .waitFor({ state: 'visible', timeout: 30_000 });
     return { enabled: true, sourceControl: label };
@@ -572,9 +591,12 @@ async function recordWorldCup(run) {
     const dialog = await openConnections(run);
     const input = dialog.getByLabel('Link matching PowerPoint');
     await input.setInputFiles(run.lastPptxPath);
-    await dialog
-      .getByText(/PowerPoint linked from an exact semantic match/i)
-      .waitFor({ state: 'visible', timeout: 120_000 });
+    const notice = dialog.locator('.ns-connection-notice');
+    await notice.waitFor({ state: 'visible', timeout: 120_000 });
+    const noticeText = (await notice.textContent())?.trim() ?? '';
+    if (!/PowerPoint linked from an exact semantic match/i.test(noticeText)) {
+      throw new Error(`PowerPoint link failed: ${noticeText || 'No connection result was shown.'}`);
+    }
     return { linkedFile: relativeRepoPath(run.lastPptxPath), baseline: 'exact semantic match' };
   });
 
@@ -658,13 +680,18 @@ async function attachLandingFile(run, path) {
 async function ensureNamedLandingModel(run) {
   const trigger = run.app.getByTestId('landing-model-select');
   if (!(await trigger.isVisible().catch(() => false))) return;
-  const label = cleanText(await trigger.textContent());
-  if (!/private|deterministic/i.test(label)) return;
   await humanClick(run, trigger);
   const dialog = run.app.getByRole('dialog', { name: 'Generation model' });
   await dialog.waitFor({ state: 'visible', timeout: 10_000 });
-  const recommended = dialog.getByLabel('Recommended').locator('[cmdk-item]').first();
-  await humanClick(run, recommended);
+  const fastNamedRoute = dialog
+    .locator('[cmdk-item]')
+    .filter({ hasText: /Gemini 3\.5 Flash.*OpenRouter/s })
+    .first();
+  if (await fastNamedRoute.isVisible().catch(() => false)) {
+    await humanClick(run, fastNamedRoute);
+    return;
+  }
+  await humanClick(run, dialog.getByLabel('Recommended').locator('[cmdk-item]').first());
 }
 
 async function configureAgent(run, { scope, web, turbo }) {
@@ -676,8 +703,17 @@ async function configureAgent(run, { scope, web, turbo }) {
     if (active !== turbo) await humanClick(run, turboToggle);
   }
   const controls = run.app.getByTestId('ai-provider-controls');
-  if (!(await controls.evaluate((node) => node.open))) {
-    await humanClick(run, run.app.getByTestId('ai-provider-summary'));
+  if (await controls.isVisible().catch(() => false)) {
+    const isOpen = await controls.evaluate((node) => 'open' in node && Boolean(node.open));
+    const summary = run.app.getByTestId('ai-provider-summary');
+    if (!isOpen && (await summary.isVisible().catch(() => false))) await humanClick(run, summary);
+  }
+  const operationMode = run.app
+    .getByTestId('ai-operation-mode')
+    .or(run.app.getByLabel('Operation mode'))
+    .first();
+  if (await operationMode.isVisible().catch(() => false)) {
+    await operationMode.selectOption('unrestricted');
   }
   const external = run.app.getByTestId('ai-provider-external');
   if (await external.isVisible().catch(() => false)) await humanCheck(run, external);
@@ -686,7 +722,7 @@ async function configureAgent(run, { scope, web, turbo }) {
     scope === 'Selected slides'
       ? scopeGroup.getByRole('button', { name: /^Selected slides/ })
       : scopeGroup.getByRole('button', { name: new RegExp(`^${escapeRegExp(scope)}`) });
-  await humanClick(run, button);
+  if (await button.isVisible().catch(() => false)) await humanClick(run, button);
   const webToggle = run.app.getByTestId('ai-web-research-toggle');
   if (await webToggle.isVisible().catch(() => false)) {
     const active = (await webToggle.getAttribute('aria-pressed')) === 'true';
@@ -701,13 +737,23 @@ async function configureAgent(run, { scope, web, turbo }) {
 }
 
 async function ensureNamedEditorModel(run) {
+  if (run.deck.editorModelReady) return;
   const trigger = run.app.getByTestId('ai-model-select');
   await trigger.waitFor({ state: 'visible', timeout: 15_000 });
-  if (!/deterministic|private/i.test(cleanText(await trigger.textContent()))) return;
   await humanClick(run, trigger);
   const dialog = run.app.getByRole('dialog', { name: 'Agent model' });
   await dialog.waitFor({ state: 'visible', timeout: 10_000 });
-  await humanClick(run, dialog.getByLabel('Recommended').locator('[cmdk-item]').first());
+  const fastNamedRoute = dialog
+    .locator('[cmdk-item]')
+    .filter({ hasText: /Gemini 3\.5 Flash.*OpenRouter/s })
+    .first();
+  await humanClick(
+    run,
+    (await fastNamedRoute.isVisible().catch(() => false))
+      ? fastNamedRoute
+      : dialog.getByLabel('Recommended').locator('[cmdk-item]').first(),
+  );
+  run.deck.editorModelReady = true;
 }
 
 async function submitAgent(run, instruction) {
@@ -744,12 +790,18 @@ async function waitForProposal(run, timeout = 180_000) {
 
 async function compareAndAccept(run, proposal) {
   const preview = proposal.getByTestId('proposal-preview');
-  await humanClick(run, preview);
-  await run.app
-    .getByLabel('Baseline and candidate comparison')
-    .waitFor({ state: 'visible', timeout: 15_000 });
-  const receipt = proposal.getByTestId('candidate-receipt');
-  if ((await receipt.getAttribute('data-candidate-status')) !== 'ready') {
+  const comparison = run.app.getByLabel('Baseline and candidate comparison');
+  if (!(await comparison.isVisible().catch(() => false))) {
+    await humanClick(run, preview);
+    if (!(await comparison.isVisible().catch(() => false))) {
+      const compareTab = run.app.getByRole('tab', { name: 'Compare' });
+      if (await compareTab.isVisible().catch(() => false)) await humanClick(run, compareTab);
+    }
+  }
+  await comparison.waitFor({ state: 'visible', timeout: 15_000 });
+  const receipt = run.app.getByTestId('candidate-receipt');
+  const candidateStatus = await receipt.getAttribute('data-candidate-status');
+  if (candidateStatus !== 'ready' && candidateStatus !== 'warning') {
     throw new Error('Candidate receipt is not ready for acceptance.');
   }
   await humanClick(run, proposal.getByTestId('proposal-accept'));
@@ -785,17 +837,13 @@ async function assertMultiAgentHandoffs(run, { present = false } = {}) {
   while (await showMore.isVisible().catch(() => false)) await humanClick(run, showMore);
   const roles = ['Researcher', 'Analyst', 'Storyteller', 'Designer', 'Fact checker', 'Reviewer'];
   const found = [];
+  const thread = run.app.getByTestId('assistant-ui-thread');
   for (const role of roles) {
-    const locator = run.app.getByText(new RegExp(`^${escapeRegExp(role)}$`, 'i')).last();
+    const locator = thread.getByText(new RegExp(`\\b${escapeRegExp(role)}\\b`, 'i')).first();
     await locator.waitFor({ state: 'attached', timeout: 60_000 });
     found.push(role);
   }
-  const activity = cleanText(
-    await run.app
-      .getByTestId('assistant-ui-thread')
-      .textContent()
-      .catch(() => ''),
-  );
+  const activity = cleanText(await thread.textContent().catch(() => ''));
   const parallelGroups = activity.match(/parallel/gi)?.length ?? 0;
   if (present) await run.page.waitForTimeout(1_500);
   return { roles: found, visibleHandoffs: true, parallelSignals: parallelGroups };

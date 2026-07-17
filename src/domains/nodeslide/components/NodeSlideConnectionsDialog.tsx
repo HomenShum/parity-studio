@@ -383,6 +383,7 @@ function NodeSlideConnectionsDialogContent({
         </header>
 
         <div className="ns-connections-body">
+          {notice ? <output className="ns-connection-notice">{notice}</output> : null}
           <section className="ns-connection-section" aria-labelledby="ns-powerpoint-sync-title">
             <div className="ns-connection-heading">
               <span>
@@ -681,7 +682,10 @@ function NodeSlideConnectionsDialogContent({
                             : 'Cancel pull proposal'}
                       </button>
                     ) : null}
-                    {googleRuntime.status === 'awaiting_push_review' &&
+                    {(googleRuntime.status === 'awaiting_push_review' ||
+                      googleRuntime.status === 'executing' ||
+                      googleRuntime.status === 'verifying' ||
+                      googleRuntime.status === 'error') &&
                     googleRuntime.pendingPlanDigest ? (
                       <button
                         type="button"
@@ -698,7 +702,9 @@ function NodeSlideConnectionsDialogContent({
                           })
                         }
                       >
-                        Push and verify
+                        {googleRuntime.status === 'awaiting_push_review'
+                          ? 'Push and verify'
+                          : 'Resume verification'}
                       </button>
                     ) : null}
                     {googleRuntime.status === 'awaiting_push_review' ? (
@@ -909,7 +915,6 @@ function NodeSlideConnectionsDialogContent({
               same.
             </span>
           </aside>
-          {notice ? <output className="ns-connection-notice">{notice}</output> : null}
         </div>
       </div>
     </dialog>
@@ -923,11 +928,8 @@ function googlePresentationId(value: string): string {
 }
 
 async function sha256Digest(payload: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', payload);
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
-    '',
-  );
-  return `sha256:${hex}`;
+  const { sha256Hex } = await import('../signature/extractor');
+  return `sha256:${await sha256Hex(new Uint8Array(payload))}`;
 }
 
 function googleSyncNotice(

@@ -45,6 +45,13 @@ export interface NodeSlideBudgetLedgerView {
   };
 }
 
+/** A review candidate cannot be persisted while a paid dispatch is still active. */
+export function nodeSlideBudgetHasActiveReservation(
+  state: NodeSlideBudgetLedgerView | null | undefined,
+): boolean {
+  return Boolean(state && state.budget.reservedMicroUsd > 0);
+}
+
 /**
  * Structural client for convex/nodeslideBudgets.ts. An action binds these
  * methods to ctx.runMutation/internal.nodeslideBudgets and ctx.runQuery.

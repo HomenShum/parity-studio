@@ -164,6 +164,82 @@ describe('bounded PPTX import', () => {
     ).toMatchObject({ fidelity: 'native', targetId: 'deck:roundtrip:shape' });
   });
 
+  it('links an unchanged NodeSlide export without fabricating deck replacement operations', async () => {
+    const source = createRoundTripSnapshot();
+    const result = await createPptxImportCandidate(source, await buildPptx(source), {
+      fileName: 'nodeslide-export.pptx',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidate.operations).toEqual([]);
+    expect(result.candidate.snapshot).toEqual(source);
+    expect(result.candidate.summary).toBe('Link nodeslide-export.pptx: exact NodeSlide export');
+  });
+
+  it('turns a PowerPoint-only text edit with stable identities into one bounded operation', async () => {
+    const source = createRoundTripSnapshot();
+    const changed = structuredClone(source);
+    const text = changed.elements.find((element) => element.id === 'deck:roundtrip:text');
+    if (!text) throw new Error('Round-trip text fixture is missing.');
+    text.content = 'Stable text, revised in PowerPoint';
+    const result = await createPptxImportCandidate(source, await buildPptx(changed), {
+      fileName: 'nodeslide-edited.pptx',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidate.operations).toEqual([
+      {
+        op: 'replace_text',
+        slideId: text.slideId,
+        elementId: text.id,
+        text: 'Stable text, revised in PowerPoint',
+      },
+    ]);
+    expect(
+      result.candidate.snapshot.elements.find((element) => element.id === text.id)?.content,
+    ).toBe('Stable text, revised in PowerPoint');
+  });
+
+  it('collapses an editable image fallback pair back to its stable NodeSlide identity', async () => {
+    const source = createRoundTripSnapshot();
+    const slide = source.slides[0];
+    if (!slide) throw new Error('Round-trip slide fixture is missing.');
+    const imageId = 'deck:roundtrip:image-placeholder';
+    source.elements.push({
+      id: imageId,
+      slideId: slide.id,
+      name: 'Editable image',
+      kind: 'image',
+      bbox: { x: 0.62, y: 0.08, width: 0.3, height: 0.3 },
+      rotation: 0,
+      style: { fill: '#E2E8F0', stroke: '#94A3B8', strokeWidth: 2 },
+      image: { placeholder: true, credit: 'Credit required' },
+      altText: 'Replaceable official-source image',
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_editable', 'google_importable'],
+      version: 1,
+    });
+    slide.elementOrder.push(imageId);
+
+    const result = await createPptxImportCandidate(source, await buildPptx(source), {
+      fileName: 'nodeslide-image-fallback.pptx',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidate.operations).toEqual([]);
+    expect(result.candidate.snapshot.elements.map((element) => element.id)).toContain(imageId);
+    expect(result.candidate.snapshot.elements.map((element) => element.id)).not.toContain(
+      `${imageId}:fallback-shape`,
+    );
+    expect(result.candidate.snapshot.elements.map((element) => element.id)).not.toContain(
+      `${imageId}:fallback-label`,
+    );
+  });
+
   it('enforces explicit slide bounds before inflating slide parts', async () => {
     const result = await importPptxSnapshot(await createPptxImportFixture(), {
       deckId: 'deck:bounded',

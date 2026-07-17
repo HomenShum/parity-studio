@@ -313,6 +313,10 @@ function semanticCoverageObligations(
 function semanticMutationIntent(instruction: string): string {
   return instruction
     .replace(
+      /\b(?:and\s+)?(?:keep|preserve|leave|retain)\b[^.;!?]{0,160}\b(?:every\s+other|all\s+other|other\s+(?:elements?|content)|current\s+(?:layout|position|geometry|styling|formatting)|existing\s+(?:layout|position|geometry|styling|formatting)|everything\s+else)\b[^.;!?]*/gu,
+      ' ',
+    )
+    .replace(
       /\b(?:and\s+)?(?:keep|preserve|leave|retain)\b[^.;!?]{0,160}?\b(?:unchanged|intact|as is|the same)\b/gu,
       ' ',
     )

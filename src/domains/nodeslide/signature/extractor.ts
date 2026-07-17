@@ -423,7 +423,7 @@ function sha256Fallback(bytes: Uint8Array): string {
   return [...hash].map((value) => value.toString(16).padStart(8, '0')).join('');
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   if (globalThis.crypto?.subtle) {
     const source = bytes.slice().buffer;
     const digest = await globalThis.crypto.subtle.digest('SHA-256', source);

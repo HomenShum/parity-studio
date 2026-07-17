@@ -5,6 +5,7 @@ import {
   type NodeSlideBudgetedProviderCall,
   callNodeSlideBudgetedJson,
   estimateNodeSlideProviderInputTokens,
+  nodeSlideBudgetHasActiveReservation,
   nodeSlideProviderBudgetId,
   nodeSlideProviderCallId,
 } from './nodeslideBudgetedProvider';
@@ -134,6 +135,36 @@ function ledgerFixture(
 }
 
 describe('NodeSlide budgeted provider adapter', () => {
+  it('blocks proposal persistence only while a paid dispatch is still active', () => {
+    expect(nodeSlideBudgetHasActiveReservation(null)).toBe(false);
+    expect(
+      nodeSlideBudgetHasActiveReservation({
+        budget: {
+          id: 'budget',
+          status: 'open',
+          revision: 1,
+          stateDigest: `sha256:${'1'.repeat(64)}`,
+          actualMicroUsd: 0,
+          reservedMicroUsd: 1,
+          unreconciledMicroUsd: 0,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      nodeSlideBudgetHasActiveReservation({
+        budget: {
+          id: 'budget',
+          status: 'open',
+          revision: 1,
+          stateDigest: `sha256:${'1'.repeat(64)}`,
+          actualMicroUsd: 0,
+          reservedMicroUsd: 0,
+          unreconciledMicroUsd: 1,
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('derives opaque deterministic IDs from canonical request content', () => {
     const reorderedRequest = {
       ...providerRequest,

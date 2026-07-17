@@ -184,4 +184,53 @@ describe('NodeSlide candidate validation binding', () => {
     expect(passed.status).toBe('pass');
     expect(passed.coveredObligationIds).toHaveLength(2);
   });
+
+  it('treats preserve-current-layout language as a constraint, not a layout mutation', () => {
+    const snapshot = buildGoldenNodeSlide(
+      'semantic-preservation-constraint',
+      1_700_000_000_000,
+    ).snapshot;
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Expected opening slide fixture.');
+    const headline = snapshot.elements.find(
+      (element) =>
+        element.slideId === slide.id &&
+        !element.locked &&
+        element.kind === 'text' &&
+        (element.role === 'title' || element.role === 'headline'),
+    );
+    if (!headline) throw new Error('Expected headline fixture.');
+    const scope: PatchScope = {
+      kind: 'elements',
+      deckId: snapshot.deck.id,
+      slideIds: [slide.id],
+      elementIds: [headline.id],
+      operationMode: 'unrestricted',
+    };
+
+    const receipt = evaluateNodeSlideSemanticCoverage({
+      snapshot,
+      instruction:
+        'Replace only this selected headline with “AI 2027 is a decision system, not a forecast.” Preserve every other element and the current layout.',
+      scope,
+      operations: [
+        {
+          op: 'replace_text',
+          slideId: slide.id,
+          elementId: headline.id,
+          text: 'AI 2027 is a decision system, not a forecast.',
+        },
+      ],
+      focusSlideId: slide.id,
+    });
+
+    expect(receipt.status).toBe('pass');
+    expect(receipt.obligations).toEqual([
+      expect.objectContaining({
+        field: 'headline',
+        elementId: headline.id,
+        operationClass: 'copy',
+      }),
+    ]);
+  });
 });

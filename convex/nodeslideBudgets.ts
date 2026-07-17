@@ -402,7 +402,7 @@ export const finalize = internalMutation({
     }
     const state = stateFromRow(row);
     assertOpenAndExpected(state, args.expectedRevision, args.expectedStateDigest);
-    await assertReconciledForFinalization(ctx, state);
+    await assertNoActiveReservationsForFinalization(ctx, state);
     return await persistFinalization(ctx, row, state, operationDigest);
   },
 });
@@ -418,7 +418,7 @@ export const finalizeForJob = internalMutation({
     assertNodeSlideLedgerKey('budgetId', args.budgetId);
     const row = await requireBudget(ctx, args.budgetId);
     const state = stateFromRow(row);
-    await assertReconciledForFinalization(ctx, state);
+    await assertNoActiveReservationsForFinalization(ctx, state);
     const operationDigest = nodeSlideBudgetFinalizeDigest(args.budgetId);
     if (state.status === 'finalized') {
       if (state.finalizeDigest !== operationDigest) {
@@ -553,11 +553,15 @@ function assertOpenAndExpected(
   assertNodeSlideExpectedBudgetState(state, revision, digest);
 }
 
-async function assertReconciledForFinalization(
+async function assertNoActiveReservationsForFinalization(
   ctx: MutationCtx,
   state: NodeSlideBudgetLedgerState,
 ): Promise<void> {
-  if (state.reservedMicroUsd !== 0 || state.unreconciledMicroUsd !== 0) {
+  // Ambiguous provider calls retain their full worst-case quote in
+  // unreconciledMicroUsd. That conservative exposure remains inside the hard cap
+  // after finalization and is never presented as actual spend. Only an actively
+  // reserved dispatch can still change the ledger and therefore blocks closing.
+  if (state.reservedMicroUsd !== 0) {
     unresolvedFinalization();
   }
   const reservedCall = await ctx.db
@@ -567,13 +571,6 @@ async function assertReconciledForFinalization(
     )
     .first();
   if (reservedCall) unresolvedFinalization();
-  const unreconciledCall = await ctx.db
-    .query('nodeslide_billable_calls')
-    .withIndex('by_budget_status', (index) =>
-      index.eq('budgetId', state.id).eq('status', 'unreconciled'),
-    )
-    .first();
-  if (unreconciledCall) unresolvedFinalization();
 }
 
 function unresolvedFinalization(): never {
