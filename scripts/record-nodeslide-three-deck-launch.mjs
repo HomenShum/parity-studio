@@ -713,7 +713,13 @@ async function configureAgent(run, { scope, web, turbo }) {
     .or(run.app.getByLabel('Operation mode'))
     .first();
   if (await operationMode.isVisible().catch(() => false)) {
-    await operationMode.selectOption('unrestricted');
+    const tagName = await operationMode.evaluate((node) => node.tagName.toLowerCase());
+    if (tagName === 'select') {
+      await operationMode.selectOption('unrestricted');
+    } else {
+      await humanClick(run, operationMode);
+      await humanClick(run, run.app.getByRole('option', { name: 'Full edit' }));
+    }
   }
   const external = run.app.getByTestId('ai-provider-external');
   if (await external.isVisible().catch(() => false)) await humanCheck(run, external);

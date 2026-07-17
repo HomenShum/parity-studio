@@ -115,6 +115,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
       selectedSlideIds: [slide2.id, slide4.id],
     });
 
+    await user.click(screen.getByTestId('ai-provider-summary'));
     const scopeButton = screen.getByRole('button', { name: 'Selected slides (2)' });
     expect(scopeButton).toHaveAttribute('aria-pressed', 'false');
     await user.click(scopeButton);
@@ -604,6 +605,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     await user.click(consent);
     expect(consent).toBeChecked();
 
+    await user.click(screen.getByTestId('ai-provider-summary'));
     await user.click(screen.getByRole('button', { name: 'Deck' }));
 
     expect(consent).toBeChecked();
@@ -751,15 +753,14 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(onApprovalModeChange).toHaveBeenLastCalledWith('review');
 
     await user.click(screen.getByTestId('ai-provider-summary'));
-    expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
+    expect(screen.getByTestId('ai-provider-controls')).toHaveAttribute('data-state', 'open');
     const details = screen.getByTestId('ai-turbo-details');
     expect(details).toHaveTextContent('Session change authority');
     expect(details).toHaveTextContent(/Turbo (?:until|active)/);
     const limits = within(details).getByText('Limits and exclusions');
     expect(limits).toBeVisible();
-    const exclusions = within(details).getByText(/Authority expires after .* proposals/);
-    expect(exclusions).not.toBeVisible();
     await user.click(limits);
+    const exclusions = within(details).getByText(/Authority expires after .* proposals/);
     expect(exclusions).toBeVisible();
     expect(exclusions).toHaveTextContent('Publish, share, export, delete, and sync are excluded');
   });
@@ -849,6 +850,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
       onApprovalModeChange: vi.fn(),
     });
 
+    await user.click(screen.getByTestId('ai-provider-summary'));
     await user.upload(
       screen.getByTestId('ai-data-file-input'),
       new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),
@@ -861,7 +863,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
     expect(screen.getByRole('combobox', { name: 'Operation mode' })).toBeDisabled();
     expect(screen.getByTestId('ai-model-select')).toBeDisabled();
     expect(screen.getByTestId('ai-web-research-toggle')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Add command' })).toBeDisabled();
+    expect(screen.getByTestId('ai-tools-toggle')).toBeDisabled();
     expect(screen.getByRole('textbox', { name: 'AI instruction' })).toBeDisabled();
     expect(screen.getByTestId('ai-submit')).toBeDisabled();
     const form = screen.getByTestId('ai-submit').closest('form');
@@ -927,6 +929,7 @@ describe('NodeSlide persisted activity assistant-ui thread adapter', () => {
       onApprovalModeChange: vi.fn(),
     });
 
+    await user.click(screen.getByTestId('ai-provider-summary'));
     await user.upload(
       screen.getByTestId('ai-data-file-input'),
       new File(['label,value\nA,1'], 'evidence.csv', { type: 'text/csv' }),

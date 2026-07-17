@@ -1,3 +1,11 @@
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import {
   Bot,
@@ -29,7 +37,6 @@ import {
   writeSessionByokRouting,
 } from '../../../lib/sessionByok';
 import { listStoredDeckAccess } from '../../../lib/sessionIdentity';
-import { useModalDialog } from './useModalDialog';
 
 interface NodeSlideConnectionsDialogProps {
   open: boolean;
@@ -61,11 +68,6 @@ function NodeSlideConnectionsDialogContent({
   deckId: string | undefined;
 }) {
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
-    open: true,
-    onClose,
-    initialFocusRef: firstInputRef,
-  });
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [routing, setRouting] = useState({ model: 'z-ai/glm-5.2', baseUrl: '' });
   const [client, setClient] = useState<ClientKind>('claude');
@@ -360,26 +362,46 @@ function NodeSlideConnectionsDialogContent({
   };
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="ns-connections-dialog"
-      aria-labelledby="ns-connections-title"
-      onCancel={handleCancel}
-      onKeyDown={handleKeyDown}
-      onMouseDown={handleBackdropMouseDown}
+    <Dialog
+      open
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
     >
-      <div className="ns-connections-shell">
+      <DialogContent
+        className="ns-connections-dialog"
+        overlayClassName="ns-modal-backdrop"
+        portalContainer={
+          typeof document === 'undefined'
+            ? null
+            : document.querySelector<HTMLElement>('.nodeslide-studio')
+        }
+        showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          firstInputRef.current?.focus();
+        }}
+      >
+        <div className="ns-connections-shell">
         <header className="ns-connections-header">
           <span className="ns-connections-mark" aria-hidden="true">
             <ServerCog size={18} />
           </span>
           <div>
             <span className="ns-eyebrow">Models & agents</span>
-            <h1 id="ns-connections-title">Connect your own runtime</h1>
+            <DialogTitle asChild>
+              <h1 id="ns-connections-title">Connect your own runtime</h1>
+            </DialogTitle>
+            <DialogDescription className="ns-sr-only">
+              Configure PowerPoint, Google Slides, local provider keys, and coding-agent
+              connections.
+            </DialogDescription>
           </div>
-          <button type="button" className="ns-icon-button" onClick={onClose} aria-label="Close">
-            <X size={16} />
-          </button>
+          <DialogClose asChild>
+            <button type="button" className="ns-icon-button" aria-label="Close">
+              <X size={16} />
+            </button>
+          </DialogClose>
         </header>
 
         <div className="ns-connections-body">
@@ -855,26 +877,16 @@ function NodeSlideConnectionsDialogContent({
               grant: external-model and web tools require <code>consent: true</code> on that exact
               call after user approval.
             </p>
-            <div className="ns-agent-client-tabs" role="tablist" aria-label="Agent client">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={client === 'claude'}
-                className={client === 'claude' ? 'is-active' : ''}
-                onClick={() => setClient('claude')}
-              >
-                <Code2 size={13} /> Claude Code / Cursor
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={client === 'codex'}
-                className={client === 'codex' ? 'is-active' : ''}
-                onClick={() => setClient('codex')}
-              >
-                <Laptop size={13} /> Codex
-              </button>
-            </div>
+            <Tabs value={client} onValueChange={(value) => setClient(value as ClientKind)} unstyled>
+              <TabsList className="ns-agent-client-tabs" aria-label="Agent client" unstyled>
+                <TabsTrigger value="claude" unstyled>
+                  <Code2 size={13} /> Claude Code / Cursor
+                </TabsTrigger>
+                <TabsTrigger value="codex" unstyled>
+                  <Laptop size={13} /> Codex
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <div className="ns-agent-connect-card">
               <div>
                 <strong>{client === 'codex' ? '~/.codex/config.toml' : '.mcp.json'}</strong>
@@ -916,8 +928,9 @@ function NodeSlideConnectionsDialogContent({
             </span>
           </aside>
         </div>
-      </div>
-    </dialog>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

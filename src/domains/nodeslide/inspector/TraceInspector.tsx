@@ -1,3 +1,12 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Activity,
   BookOpen,
@@ -25,7 +34,6 @@ import {
 } from 'lucide-react';
 import {
   type CSSProperties,
-  type KeyboardEvent,
   type ReactNode,
   useEffect,
   useId,
@@ -148,13 +156,6 @@ export function TraceInspector({
     setDensityState(next);
     persistDensity(next);
   };
-  const onDensityKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const next = traceDensityForKey(density, event.key);
-    if (!next) return;
-    event.preventDefault();
-    setDensity(next);
-    requestAnimationFrame(() => document.getElementById(tabId(next))?.focus());
-  };
   const openExpanded = () => setExpanded(true);
   const closeExpanded = () => {
     setExpanded(false);
@@ -204,37 +205,38 @@ export function TraceInspector({
             <span className="ns-eyebrow">Agent activity</span>
             <h2>Run details</h2>
           </div>
-          <div
-            className="ns-trace-density"
-            role="tablist"
-            aria-label="Trace detail level"
-            onKeyDown={onDensityKeyDown}
+          <Tabs
+            value={density}
+            onValueChange={(value) => setDensity(value as TraceDensity)}
+            unstyled
           >
-            <DensityButton
-              active={density === 'human'}
-              id={tabId('human')}
-              controls={panelId}
-              icon={<Eye size={11} />}
-              label="Summary"
-              onClick={() => setDensity('human')}
-            />
-            <DensityButton
-              active={density === 'pro'}
-              id={tabId('pro')}
-              controls={panelId}
-              icon={<Gauge size={11} />}
-              label="Timeline"
-              onClick={() => setDensity('pro')}
-            />
-            <DensityButton
-              active={density === 'tech'}
-              id={tabId('tech')}
-              controls={panelId}
-              icon={<Braces size={11} />}
-              label="Raw"
-              onClick={() => setDensity('tech')}
-            />
-          </div>
+            <TabsList className="ns-trace-density" aria-label="Trace detail level" unstyled>
+              <DensityButton
+                value="human"
+                active={density === 'human'}
+                id={tabId('human')}
+                controls={panelId}
+                icon={<Eye size={11} />}
+                label="Summary"
+              />
+              <DensityButton
+                value="pro"
+                active={density === 'pro'}
+                id={tabId('pro')}
+                controls={panelId}
+                icon={<Gauge size={11} />}
+                label="Timeline"
+              />
+              <DensityButton
+                value="tech"
+                active={density === 'tech'}
+                id={tabId('tech')}
+                controls={panelId}
+                icon={<Braces size={11} />}
+                label="Raw"
+              />
+            </TabsList>
+          </Tabs>
           <button
             ref={expandButtonRef}
             type="button"
@@ -263,28 +265,30 @@ export function TraceInspector({
         </div>
       ) : (
         <>
-          <label className="ns-trace-picker" htmlFor={runPickerId}>
-            <span>Run</span>
-            <select
-              id={runPickerId}
+          <div className="ns-trace-picker">
+            <span id={runPickerId}>Run</span>
+            <Select
               name="traceRun"
               value={selected?.id ?? ''}
-              onChange={(event) => {
-                const traceId = event.target.value;
+              onValueChange={(traceId) => {
                 setSelectedTraceId(traceId);
                 const nextTrace = sorted.find((trace) => trace.id === traceId);
                 const nextRun = nextTrace ? agentRunForTrace(agentRuns, nextTrace.id) : undefined;
                 if (nextRun) onSelectAgentRun?.(nextRun.id);
               }}
             >
-              {sorted.map((trace) => (
-                <option key={trace.id} value={trace.id}>
-                  {trace.summary}
-                </option>
-              ))}
-            </select>
-            <ChevronRight size={13} aria-hidden="true" />
-          </label>
+              <SelectTrigger aria-labelledby={runPickerId}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sorted.map((trace) => (
+                  <SelectItem key={trace.id} value={trace.id}>
+                    {trace.summary}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {selected ? (
             <article
@@ -338,17 +342,21 @@ export function TraceInspector({
                         : {})}
                       {...(onLoadEvidenceCapture ? { onLoadEvidenceCapture } : {})}
                     />
-                    <details className="ns-trace-custody-disclosure">
-                      <summary>Chain of custody and countersigned receipt</summary>
-                      <CustodyRail
-                        trace={selected}
-                        patch={patch}
-                        validation={traceValidation}
-                        density={density}
-                        openNode={openNode}
-                        onToggle={toggleNode}
-                      />
-                    </details>
+                    <Collapsible className="ns-trace-custody-disclosure">
+                      <CollapsibleTrigger>
+                        Chain of custody and countersigned receipt
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CustodyRail
+                          trace={selected}
+                          patch={patch}
+                          validation={traceValidation}
+                          density={density}
+                          openNode={openNode}
+                          onToggle={toggleNode}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 ) : (
                   <div className="ns-trace-timeline-empty">
@@ -399,15 +407,15 @@ function RunJournal({
 }) {
   if (runs.length === 0) return null;
   return (
-    <details className="ns-run-journal" aria-label="Durable agent run journal">
-      <summary className="ns-section-heading">
+    <Collapsible className="ns-run-journal">
+      <CollapsibleTrigger className="ns-section-heading" aria-label="Durable agent run journal">
         <span>
           <Activity size={13} /> Run journal
         </span>
         <small>{runs.length} server persisted</small>
         <ChevronRight size={13} />
-      </summary>
-      <div className="ns-run-journal-list">
+      </CollapsibleTrigger>
+      <CollapsibleContent className="ns-run-journal-list">
         {[...runs].slice(0, 6).map((run) => {
           const tools = messages.filter(
             (message) => message.runId === run.id && message.role === 'tool',
@@ -443,40 +451,37 @@ function RunJournal({
             </article>
           );
         })}
-      </div>
-    </details>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
 function DensityButton({
+  value,
   active,
   id,
   controls,
   icon,
   label,
-  onClick,
 }: {
+  value: TraceDensity;
   active: boolean;
   id: string;
   controls: string;
   icon: ReactNode;
   label: string;
-  onClick: () => void;
 }) {
   return (
-    <button
+    <TabsTrigger
+      value={value}
       id={id}
       className={active ? 'is-active' : ''}
-      type="button"
-      role="tab"
-      aria-selected={active}
       aria-controls={controls}
-      tabIndex={active ? 0 : -1}
-      onClick={onClick}
+      unstyled
     >
       {icon}
       {label}
-    </button>
+    </TabsTrigger>
   );
 }
 

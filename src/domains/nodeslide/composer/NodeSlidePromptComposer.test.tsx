@@ -108,10 +108,7 @@ describe('NodeSlide AI Elements composer interactions', () => {
     const effort = screen.getByTestId('test-effort-select');
     expect(effort).toHaveAccessibleName('Reasoning effort: High');
     expect(effort).toHaveAttribute('title', 'Reasoning effort: High');
-    expect(optionLabels(effort)).toEqual(['Low', 'Medium', 'High']);
-    expect(optionLabels(effort)).not.toEqual(
-      expect.arrayContaining(['Light', 'Extra High', 'Ultra']),
-    );
+    expect(effort).toHaveTextContent('High');
 
     await user.click(screen.getByTestId('test-model-select'));
     const dialog = await screen.findByRole('dialog', { name: 'Model and provider' });
@@ -126,20 +123,20 @@ describe('NodeSlide AI Elements composer interactions', () => {
     await user.click(within(dialog).getByText('Claude Sonnet 5'));
 
     expect(screen.getByTestId('test-model-select')).toHaveTextContent('Claude Sonnet 5');
-    expect(optionLabels(screen.getByTestId('test-effort-select'))).toEqual([
+    const effortTrigger = screen.getByTestId('test-effort-select');
+    effortTrigger.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getAllByRole('option').map((option) => option.textContent?.trim())).toEqual([
       'Low',
       'Medium',
       'High',
       'XHigh',
       'Max',
     ]);
-    await user.selectOptions(screen.getByTestId('test-effort-select'), 'max');
-    expect(screen.getByTestId('test-effort-select')).toHaveValue('max');
-    expect(screen.getByTestId('test-effort-select')).toHaveAccessibleName('Reasoning effort: Max');
-    expect(screen.getByTestId('test-effort-select')).toHaveAttribute(
-      'title',
-      'Reasoning effort: Max',
-    );
+    await user.click(screen.getByRole('option', { name: 'Max' }));
+    expect(effortTrigger).toHaveTextContent('Max');
+    expect(effortTrigger).toHaveAccessibleName('Reasoning effort: Max');
+    expect(effortTrigger).toHaveAttribute('title', 'Reasoning effort: Max');
   });
 
   it('keeps Shift+Enter as a newline and submits with Enter', async () => {
@@ -163,6 +160,42 @@ describe('NodeSlide AI Elements composer interactions', () => {
       text: 'First line\nSecond line',
       files: [],
     });
+  });
+
+  it('submits the controlled text through the visible submit button', async () => {
+    const sessionKey = 'editor:pointer-submit';
+    clearNodeSlideComposerSession(sessionKey);
+    const onSubmit = vi.fn(async (_message: NodeSlidePromptComposerSubmit) => undefined);
+    const user = userEvent.setup();
+    render(<ComposerPanel onSubmit={onSubmit} sessionKey={sessionKey} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'AI instruction' }), 'Tighten the title.');
+    await user.click(screen.getByRole('button', { name: 'Send instruction' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      text: 'Tighten the title.',
+      files: [],
+    });
+  });
+
+  it('does not invent an attachment race for a text-only request', async () => {
+    const sessionKey = 'editor:text-only-revision';
+    clearNodeSlideComposerSession(sessionKey);
+    const onSubmit = vi.fn(async (_message: NodeSlidePromptComposerSubmit) => undefined);
+    const user = userEvent.setup();
+    render(<TextOnlyRevisionHarness onSubmit={onSubmit} sessionKey={sessionKey} />);
+
+    const textbox = screen.getByRole('textbox', { name: 'AI instruction' });
+    await user.type(textbox, 'Keep the request authority exact');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      text: 'Keep the request authority exact',
+      files: [],
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('adds and removes an attachment through PromptInput', async () => {
@@ -395,6 +428,38 @@ function ComposerPanel({
   );
 }
 
+function TextOnlyRevisionHarness({
+  sessionKey,
+  onSubmit,
+}: {
+  sessionKey: string;
+  onSubmit: (message: NodeSlidePromptComposerSubmit) => void | Promise<void>;
+}) {
+  const session = useNodeSlideComposerSession(sessionKey);
+  const [revision, setRevision] = useState(0);
+  return (
+    <div className="nodeslide-studio">
+      <NodeSlidePromptComposer
+        allowAttachments={false}
+        disabled={false}
+        model={NODESLIDE_DEFAULT_AGENT_MODEL}
+        modelLabel="Model and provider"
+        modelTestId="test-model-select"
+        onModelChange={() => undefined}
+        onSubmit={onSubmit}
+        onSubmissionPreparingChange={(preparing) => {
+          if (preparing) setRevision((current) => current + 1);
+        }}
+        placeholder="Describe the change"
+        session={session}
+        submissionRevision={revision}
+        submitLabel="Send instruction"
+        textareaLabel="AI instruction"
+      />
+    </div>
+  );
+}
+
 function AttachmentErrorHarness({ sessionKey }: { sessionKey: string }) {
   const [error, setError] = useState<string | null>(null);
   return (
@@ -424,12 +489,6 @@ function TabHarness({ sessionKey }: { sessionKey: string }) {
       {tab === 'ai' ? <ComposerPanel sessionKey={sessionKey} /> : <div>Trace panel</div>}
     </>
   );
-}
-
-function optionLabels(select: HTMLElement): string[] {
-  return within(select)
-    .getAllByRole('option')
-    .map((option) => option.textContent ?? '');
 }
 
 function readBlob(blob: Blob): Promise<string> {

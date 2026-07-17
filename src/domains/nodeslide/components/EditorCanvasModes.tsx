@@ -1,3 +1,5 @@
+import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pause, Play } from 'lucide-react';
 import {
   type CSSProperties,
@@ -159,26 +161,26 @@ export function EditorCanvasModes({
         {storyArcBoard ? (
           <span className="ns-story-mode-label">Story arc</span>
         ) : (
-          <div className="ns-editor-mode-controls" role="tablist" aria-label="Canvas views">
-            {CANVAS_MODES.map((canvasMode) => (
-              <button
-                type="button"
-                role="tab"
-                id={`${shellId}-${canvasMode}-tab`}
-                aria-controls={`${shellId}-${canvasMode}-panel`}
-                aria-selected={mode === canvasMode}
-                className={mode === canvasMode ? 'is-active' : ''}
-                key={canvasMode}
-                tabIndex={mode === canvasMode ? 0 : -1}
-                onClick={() => onModeChange(canvasMode)}
-                onKeyDown={(event) =>
-                  handleTabKeyDown(event, CANVAS_MODES, canvasMode, onModeChange)
-                }
-              >
-                {capitalize(canvasMode)}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            value={mode}
+            onValueChange={(value) => onModeChange(value as EditorCanvasMode)}
+            unstyled
+          >
+            <TabsList className="ns-editor-mode-controls" aria-label="Canvas views" unstyled>
+              {CANVAS_MODES.map((canvasMode) => (
+                <TabsTrigger
+                  value={canvasMode}
+                  id={`${shellId}-${canvasMode}-tab`}
+                  aria-controls={`${shellId}-${canvasMode}-panel`}
+                  className={mode === canvasMode ? 'is-active' : ''}
+                  key={canvasMode}
+                  unstyled
+                >
+                  {capitalize(canvasMode)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         )}
         <div className="ns-editor-mode-context">
           <span className="ns-editor-slide-number">
@@ -191,29 +193,29 @@ export function EditorCanvasModes({
 
       {mode === 'compare' && !storyArcBoard ? (
         <div className="ns-compare-toolbar">
-          <div
-            className="ns-compare-mode-controls"
-            role="tablist"
-            aria-label="Comparison presentation"
+          <Tabs
+            value={compareMode}
+            onValueChange={(value) => onCompareModeChange(value as EditorCompareMode)}
+            unstyled
           >
-            {COMPARE_MODES.map((comparisonMode) => (
-              <button
-                type="button"
-                role="tab"
-                aria-controls={`${shellId}-comparison`}
-                aria-selected={compareMode === comparisonMode}
-                className={compareMode === comparisonMode ? 'is-active' : ''}
-                key={comparisonMode}
-                tabIndex={compareMode === comparisonMode ? 0 : -1}
-                onClick={() => onCompareModeChange(comparisonMode)}
-                onKeyDown={(event) =>
-                  handleTabKeyDown(event, COMPARE_MODES, comparisonMode, onCompareModeChange)
-                }
-              >
-                {compareModeLabel(comparisonMode)}
-              </button>
-            ))}
-          </div>
+            <TabsList
+              className="ns-compare-mode-controls"
+              aria-label="Comparison presentation"
+              unstyled
+            >
+              {COMPARE_MODES.map((comparisonMode) => (
+                <TabsTrigger
+                  value={comparisonMode}
+                  aria-controls={`${shellId}-comparison`}
+                  className={compareMode === comparisonMode ? 'is-active' : ''}
+                  key={comparisonMode}
+                  unstyled
+                >
+                  {compareModeLabel(comparisonMode)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <span>
             {hasCandidate ? 'proposal · pending review' : 'no proposal pending'}
             {hasCandidate && candidateScopeLabel ? (
@@ -346,17 +348,16 @@ export function EditorCanvasModes({
                 {compareMode === 'slider' ? (
                   <label className="ns-compare-adjustment">
                     <span>Candidate reveal</span>
-                    <input
-                      type="range"
-                      min="5"
-                      max="95"
-                      step="1"
-                      value={safeSliderPosition}
+                    <Slider
+                      min={5}
+                      max={95}
+                      step={1}
+                      value={[safeSliderPosition]}
                       disabled={!onSliderPositionChange}
                       aria-label="Candidate reveal position"
-                      onChange={(event) =>
-                        onSliderPositionChange?.(Number(event.currentTarget.value))
-                      }
+                      onValueChange={([value]) => {
+                        if (value !== undefined) onSliderPositionChange?.(value);
+                      }}
                     />
                     <output>{safeSliderPosition}%</output>
                   </label>
@@ -364,17 +365,16 @@ export function EditorCanvasModes({
                 {compareMode === 'overlay' ? (
                   <label className="ns-compare-adjustment">
                     <span>Candidate opacity</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={safeOverlayOpacity}
+                    <Slider
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={[safeOverlayOpacity]}
                       disabled={!onOverlayOpacityChange}
                       aria-label="Candidate overlay opacity"
-                      onChange={(event) =>
-                        onOverlayOpacityChange?.(Number(event.currentTarget.value))
-                      }
+                      onValueChange={([value]) => {
+                        if (value !== undefined) onOverlayOpacityChange?.(value);
+                      }}
                     />
                     <output>{safeOverlayOpacity}%</output>
                   </label>
@@ -604,31 +604,6 @@ function capitalize(value: string) {
 function clamp(value: number, minimum: number, maximum: number) {
   if (!Number.isFinite(value)) return minimum;
   return Math.min(maximum, Math.max(minimum, Math.round(value)));
-}
-
-function handleTabKeyDown<T extends string>(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  tabs: readonly T[],
-  activeTab: T,
-  onTabChange: (tab: T) => void,
-) {
-  let nextIndex: number | undefined;
-  const activeIndex = tabs.indexOf(activeTab);
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
-    nextIndex = (activeIndex + 1) % tabs.length;
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
-    nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
-  if (event.key === 'Home') nextIndex = 0;
-  if (event.key === 'End') nextIndex = tabs.length - 1;
-  if (nextIndex === undefined) return;
-  const nextTab = tabs[nextIndex];
-  if (!nextTab) return;
-  event.preventDefault();
-  event.stopPropagation();
-  onTabChange(nextTab);
-  const buttons =
-    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-  buttons?.[nextIndex]?.focus();
 }
 
 function stopStudioNavigationFromControls(event: ReactKeyboardEvent<HTMLElement>) {

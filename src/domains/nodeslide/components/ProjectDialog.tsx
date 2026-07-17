@@ -1,3 +1,13 @@
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowRight,
   Check,
@@ -10,7 +20,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   type CreateDeckRequest,
   NODESLIDE_DEFAULT_AGENT_MODEL,
@@ -38,7 +48,6 @@ import {
   useSessionExternalConsent,
 } from '../externalProviderConsent';
 import { readNodeSlideAttachmentFiles } from './nodeSlideAttachmentFiles';
-import { useModalDialog } from './useModalDialog';
 
 export const NODESLIDE_OPENROUTER_BRIEF_CONSENT = 'openrouter_full_brief_v1' as const;
 export const NODESLIDE_NEBIUS_BRIEF_CONSENT = 'nebius_full_brief_v1' as const;
@@ -228,7 +237,6 @@ export function ProjectDialog({
     };
   }
   const dialogId = useId();
-  const titleId = `${dialogId}-title`;
   const createTabId = `${dialogId}-create-tab`;
   const createPanelId = `${dialogId}-create-panel`;
   const openTabId = `${dialogId}-open-tab`;
@@ -240,8 +248,6 @@ export function ProjectDialog({
   const createFormId = `${dialogId}-create-form`;
   const initialFocusRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
-  const createTabRef = useRef<HTMLButtonElement>(null);
-  const openTabRef = useRef<HTMLButtonElement>(null);
   const clearAdmissionAndClose = () => {
     setAccessCode('');
     setProviderMode(nodeSlideProviderModeForModel(NODESLIDE_DEFAULT_AGENT_MODEL));
@@ -251,11 +257,6 @@ export function ProjectDialog({
     setAttachmentError(null);
     onClose();
   };
-  const { dialogRef, handleBackdropMouseDown, handleCancel, handleKeyDown } = useModalDialog({
-    open,
-    onClose: clearAdmissionAndClose,
-    initialFocusRef,
-  });
 
   useEffect(
     () => () => {
@@ -293,29 +294,6 @@ export function ProjectDialog({
     clearComposerSession();
     setAttachmentError(null);
   }, [clearComposerSession, createEnabled, initialDraft, initialMode, open, resetComposerSession]);
-
-  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    let nextMode: 'create' | 'open';
-    switch (event.key) {
-      case 'ArrowLeft':
-      case 'ArrowRight':
-        nextMode = mode === 'create' ? 'open' : 'create';
-        break;
-      case 'Home':
-        nextMode = 'create';
-        break;
-      case 'End':
-        nextMode = 'open';
-        break;
-      default:
-        return;
-    }
-
-    event.preventDefault();
-    setMode(nextMode);
-    const nextTab = nextMode === 'create' ? createTabRef.current : openTabRef.current;
-    nextTab?.focus();
-  };
 
   const submit = async ({ text, files }: { text: string; files: File[] }) => {
     const submittedRevision = submissionTrackerRef.current.revision;
@@ -403,23 +381,26 @@ export function ProjectDialog({
   if (!open) return null;
 
   return (
-    <div
-      className="nodeslide-studio ns-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) clearAdmissionAndClose();
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) clearAdmissionAndClose();
       }}
     >
-      <dialog
-        ref={dialogRef}
+      <DialogContent
         className="ns-project-dialog"
-        aria-labelledby={titleId}
-        aria-modal="true"
+        overlayClassName="nodeslide-studio ns-modal-backdrop"
+        portalContainer={
+          typeof document === 'undefined'
+            ? null
+            : document.querySelector<HTMLElement>('.nodeslide-studio:not(.ns-modal-backdrop)')
+        }
+        showCloseButton={false}
         data-testid="new-deck-modal"
-        tabIndex={-1}
-        onCancel={handleCancel}
-        onKeyDown={handleKeyDown}
-        onMouseDown={handleBackdropMouseDown}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          initialFocusRef.current?.focus();
+        }}
       >
         <header>
           <div className="ns-project-mark">
@@ -427,50 +408,46 @@ export function ProjectDialog({
           </div>
           <div>
             <span className="ns-eyebrow">NodeSlide workspace</span>
-            <h1 id={titleId}>
-              {createEnabled && mode === 'create' ? 'Shape a new story' : 'Open a deck'}
-            </h1>
+            <DialogTitle asChild>
+              <h1>{createEnabled && mode === 'create' ? 'Shape a new story' : 'Open a deck'}</h1>
+            </DialogTitle>
+            <DialogDescription className="ns-sr-only">
+              Create a reviewable NodeSlide deck or reopen one owned by this browser.
+            </DialogDescription>
           </div>
-          <button
-            className="ns-icon-button"
-            type="button"
-            onClick={clearAdmissionAndClose}
-            aria-label="Close project dialog"
-          >
-            <X size={17} />
-          </button>
+          <DialogClose asChild>
+            <button className="ns-icon-button" type="button" aria-label="Close project dialog">
+              <X size={17} />
+            </button>
+          </DialogClose>
         </header>
         {createEnabled ? (
-          <div className="ns-project-tabs" role="tablist" aria-label="Project dialog views">
-            <button
-              ref={createTabRef}
-              id={createTabId}
-              type="button"
-              role="tab"
-              aria-controls={createPanelId}
-              aria-selected={mode === 'create'}
-              tabIndex={mode === 'create' ? 0 : -1}
-              className={mode === 'create' ? 'is-active' : ''}
-              onClick={() => setMode('create')}
-              onKeyDown={handleTabKeyDown}
-            >
-              <Plus size={14} /> New deck
-            </button>
-            <button
-              ref={openTabRef}
-              id={openTabId}
-              type="button"
-              role="tab"
-              aria-controls={openPanelId}
-              aria-selected={mode === 'open'}
-              tabIndex={mode === 'open' ? 0 : -1}
-              className={mode === 'open' ? 'is-active' : ''}
-              onClick={() => setMode('open')}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FolderOpen size={14} /> Open
-            </button>
-          </div>
+          <Tabs
+            value={mode}
+            onValueChange={(value) => setMode(value as 'create' | 'open')}
+            unstyled
+          >
+            <TabsList className="ns-project-tabs" aria-label="Project dialog views" unstyled>
+              <TabsTrigger
+                value="create"
+                id={createTabId}
+                aria-controls={createPanelId}
+                className={mode === 'create' ? 'is-active' : ''}
+                unstyled
+              >
+                <Plus size={14} /> New deck
+              </TabsTrigger>
+              <TabsTrigger
+                value="open"
+                id={openTabId}
+                aria-controls={openPanelId}
+                className={mode === 'open' ? 'is-active' : ''}
+                unstyled
+              >
+                <FolderOpen size={14} /> Open
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         ) : null}
 
         {createEnabled && mode === 'create' ? (
@@ -587,48 +564,50 @@ export function ProjectDialog({
                   <small>CSV, JSON, TXT, or Markdown · up to 3 files</small>
                   {attachmentError ? <output role="alert">{attachmentError}</output> : null}
                 </div>
-                <details className="ns-brief-details">
-                  <summary>Improve the brief</summary>
-                  <div className="ns-form-columns">
+                <Collapsible className="ns-brief-details">
+                  <CollapsibleTrigger>Improve the brief</CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="ns-form-columns">
+                      <label>
+                        <span>Audience</span>
+                        <input
+                          form={createFormId}
+                          value={audience}
+                          onChange={(event) => setAudience(event.target.value)}
+                          placeholder="Executive leadership"
+                          maxLength={240}
+                          required
+                        />
+                      </label>
+                      <label>
+                        <span>Purpose</span>
+                        <input
+                          form={createFormId}
+                          value={purpose}
+                          onChange={(event) => setPurpose(event.target.value)}
+                          placeholder="Decision briefing"
+                          maxLength={240}
+                          required
+                        />
+                      </label>
+                    </div>
                     <label>
-                      <span>Audience</span>
-                      <input
+                      <span>
+                        Success criteria <small>one per line</small>
+                      </span>
+                      <textarea
                         form={createFormId}
-                        value={audience}
-                        onChange={(event) => setAudience(event.target.value)}
-                        placeholder="Executive leadership"
-                        maxLength={240}
-                        required
+                        rows={3}
+                        value={successCriteria}
+                        onChange={(event) => setSuccessCriteria(event.target.value)}
+                        maxLength={2411}
+                        placeholder={
+                          'Decision is clear by slide 3\nEvery claim has a source\nEnds with one concrete ask'
+                        }
                       />
                     </label>
-                    <label>
-                      <span>Purpose</span>
-                      <input
-                        form={createFormId}
-                        value={purpose}
-                        onChange={(event) => setPurpose(event.target.value)}
-                        placeholder="Decision briefing"
-                        maxLength={240}
-                        required
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    <span>
-                      Success criteria <small>one per line</small>
-                    </span>
-                    <textarea
-                      form={createFormId}
-                      rows={3}
-                      value={successCriteria}
-                      onChange={(event) => setSuccessCriteria(event.target.value)}
-                      maxLength={2411}
-                      placeholder={
-                        'Decision is clear by slide 3\nEvery claim has a source\nEnds with one concrete ask'
-                      }
-                    />
-                  </label>
-                </details>
+                  </CollapsibleContent>
+                </Collapsible>
               </section>
               <section>
                 <div className="ns-form-section-heading">
@@ -687,29 +666,32 @@ export function ProjectDialog({
                     {providerMode !== 'deterministic' ? <Check size={14} /> : null}
                   </button>
                 </fieldset>
-                <label
+                <div
                   className={`ns-session-consent-pill ns-project-session-consent ${
                     externalConsent.granted ? 'is-ready' : ''
                   }`}
                   title="Allow selected external models and optional web research for this browser tab"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
+                    id="nodeslide-project-provider-consent"
+                    type="button"
                     form={createFormId}
                     data-testid="provider-consent"
                     checked={externalConsent.granted}
-                    onChange={(event) => {
-                      externalConsent.setGranted(event.target.checked);
+                    onCheckedChange={(checked) => {
+                      externalConsent.setGranted(checked === true);
                       setAttachmentError(null);
                     }}
                   />
-                  <ShieldCheck size={13} aria-hidden="true" />
-                  <span>
-                    {externalConsent.granted
-                      ? 'External AI allowed this session'
-                      : 'Allow external AI this session'}
-                  </span>
-                </label>
+                  <label htmlFor="nodeslide-project-provider-consent">
+                    <ShieldCheck size={13} aria-hidden="true" />
+                    <span>
+                      {externalConsent.granted
+                        ? 'External AI allowed this session'
+                        : 'Allow external AI this session'}
+                    </span>
+                  </label>
+                </div>
                 <label>
                   <span>
                     Private-preview access code
@@ -845,8 +827,8 @@ export function ProjectDialog({
             </div>
           </div>
         )}
-      </dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

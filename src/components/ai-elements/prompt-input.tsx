@@ -475,6 +475,11 @@ export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, 'onSubmit' 
   maxFileSize?: number;
   /** Clear text and attachments after a successful submit. */
   clearOnSubmit?: boolean;
+  /**
+   * Reset every native form control before asynchronous submission. Disable this when
+   * the form contains controlled session settings that must survive a submit.
+   */
+  resetNativeFormOnSubmit?: boolean;
   /** App-level attributes for the generated hidden file input. */
   fileInputProps?: Omit<
     ComponentProps<'input'>,
@@ -501,6 +506,7 @@ export const PromptInput = ({
   maxFiles,
   maxFileSize,
   clearOnSubmit = true,
+  resetNativeFormOnSubmit = true,
   fileInputProps,
   onError,
   onSubmissionPreparingChange,
@@ -832,9 +838,13 @@ export const PromptInput = ({
       event.preventDefault();
       if (submissionPreparingRef.current) return;
       submissionPreparingRef.current = true;
+      const preparingAttachments = files.length > 0;
 
       try {
-        onSubmissionPreparingChange?.(true);
+        // This signal protects the asynchronous file-conversion boundary. Text-only requests
+        // have no preparation phase, so announcing one needlessly locks sibling controls and can
+        // race an affirmative consent click against an already-rejected submit.
+        if (preparingAttachments) onSubmissionPreparingChange?.(true);
         const form = event.currentTarget;
         const text = usingProvider
           ? controller.textInput.value
@@ -845,24 +855,26 @@ export const PromptInput = ({
 
         // Reset form immediately after capturing text to avoid race condition
         // where user input during async blob conversion would be lost
-        if (!usingProvider && clearOnSubmit) {
+        if (!usingProvider && clearOnSubmit && resetNativeFormOnSubmit) {
           form.reset();
         }
 
         // Convert blob URLs to data URLs asynchronously
-        const convertedFiles: FileUIPart[] = await Promise.all(
-          files.map(async ({ id: _id, ...item }) => {
-            if (item.url?.startsWith('blob:')) {
-              const dataUrl = await convertBlobUrlToDataUrl(item.url);
-              // If conversion failed, keep the original blob URL
-              return {
-                ...item,
-                url: dataUrl ?? item.url,
-              };
-            }
-            return item;
-          }),
-        );
+        const convertedFiles: FileUIPart[] = preparingAttachments
+          ? await Promise.all(
+              files.map(async ({ id: _id, ...item }) => {
+                if (item.url?.startsWith('blob:')) {
+                  const dataUrl = await convertBlobUrlToDataUrl(item.url);
+                  // If conversion failed, keep the original blob URL
+                  return {
+                    ...item,
+                    url: dataUrl ?? item.url,
+                  };
+                }
+                return item;
+              }),
+            )
+          : [];
 
         const result = onSubmit({ files: convertedFiles, text }, event);
 
@@ -892,10 +904,19 @@ export const PromptInput = ({
         // Don't clear on error - user may want to retry
       } finally {
         submissionPreparingRef.current = false;
-        onSubmissionPreparingChange?.(false);
+        if (preparingAttachments) onSubmissionPreparingChange?.(false);
       }
     },
-    [usingProvider, controller, files, onSubmit, onSubmissionPreparingChange, clear, clearOnSubmit],
+    [
+      usingProvider,
+      controller,
+      files,
+      onSubmit,
+      onSubmissionPreparingChange,
+      clear,
+      clearOnSubmit,
+      resetNativeFormOnSubmit,
+    ],
   );
 
   // Render with or without local provider

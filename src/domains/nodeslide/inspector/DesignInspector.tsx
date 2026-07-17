@@ -1,4 +1,11 @@
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -415,29 +422,31 @@ export function DesignInspector({
       >
         {primary.kind === 'text' || primary.kind === 'math' ? (
           <InspectorGroup icon={<Type size={14} />} title="Typography">
-            <label className="ns-select-field">
-              <span>Typeface</span>
-              <select
+            <div className="ns-select-field">
+              <span id="ns-design-typeface">Typeface</span>
+              <Select
                 value={primary.style.fontFamily ?? theme.typography.body}
                 disabled={editable.length === 0}
-                onChange={(event) =>
-                  patchStyle({ fontFamily: event.target.value }, 'Updated typeface')
-                }
+                onValueChange={(value) => patchStyle({ fontFamily: value }, 'Updated typeface')}
               >
-                <option value={theme.typography.display}>
-                  {labelFont(theme.typography.display)} · Display
-                </option>
-                <option value={theme.typography.body}>
-                  {labelFont(theme.typography.body)} · Body
-                </option>
-                <option value={theme.typography.data}>
-                  {labelFont(theme.typography.data)} · Data
-                </option>
-                <option value="system-ui, sans-serif">System sans</option>
-                <option value="Georgia, serif">Georgia</option>
-              </select>
-              <ChevronDown size={13} />
-            </label>
+                <SelectTrigger aria-labelledby="ns-design-typeface">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={theme.typography.display}>
+                    {labelFont(theme.typography.display)} · Display
+                  </SelectItem>
+                  <SelectItem value={theme.typography.body}>
+                    {labelFont(theme.typography.body)} · Body
+                  </SelectItem>
+                  <SelectItem value={theme.typography.data}>
+                    {labelFont(theme.typography.data)} · Data
+                  </SelectItem>
+                  <SelectItem value="system-ui, sans-serif">System sans</SelectItem>
+                  <SelectItem value="Georgia, serif">Georgia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="ns-control-line">
               <NumberStepper
                 icon={<Baseline size={14} />}
@@ -774,15 +783,20 @@ function ChartDataEditor({
           onApplyPatch([result.operation], `Updated chart data for ${element.name}`);
         }}
       >
-        <label>
-          <span>Chart type</span>
-          <select name="chartType" defaultValue={chart.chartType}>
-            <option value="bar">Bar</option>
-            <option value="line">Line</option>
-            <option value="area">Area</option>
-            <option value="donut">Donut</option>
-          </select>
-        </label>
+        <div className="ns-primitive-field">
+          <span id={`${element.id}-chart-type`}>Chart type</span>
+          <Select name="chartType" defaultValue={chart.chartType}>
+            <SelectTrigger aria-labelledby={`${element.id}-chart-type`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bar">Bar</SelectItem>
+              <SelectItem value="line">Line</SelectItem>
+              <SelectItem value="area">Area</SelectItem>
+              <SelectItem value="donut">Donut</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="ns-chart-data-grid">
           <table>
             <caption className="ns-sr-only">Chart data points</caption>

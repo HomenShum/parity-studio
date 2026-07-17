@@ -1,3 +1,4 @@
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileJson2, FileUp } from 'lucide-react';
 import { type CSSProperties, useMemo, useState } from 'react';
 import type {
@@ -456,20 +457,20 @@ export function JsonInspector({
         </section>
       ) : null}
 
-      <div style={rowStyle} role="tablist" aria-label="JSON view">
-        {MODES.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={mode === option.id}
-            onClick={() => setMode(option.id)}
-            style={chipStyle(mode === option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={mode} onValueChange={(value) => setMode(value as DeckJsonMode)} unstyled>
+        <TabsList style={rowStyle} aria-label="JSON view" unstyled>
+          {MODES.map((option) => (
+            <TabsTrigger
+              value={option.id}
+              key={option.id}
+              style={chipStyle(mode === option.id)}
+              unstyled
+            >
+              {option.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       <div style={rowStyle}>
         <button type="button" onClick={copy} disabled={!json} style={actionStyle}>

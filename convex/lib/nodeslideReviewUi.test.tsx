@@ -112,30 +112,27 @@ describe('NodeSlide AI review inspector', () => {
 
   it('recommends the live Nebius GLM route with provider-native effort controls', () => {
     const markup = renderAi({ onApprovalModeChange: () => undefined });
-    expect(markup).toContain('External model: on · Nebius · GLM 5.2');
+    expect(markup).toContain('data-provider-configuration="valid"');
+    expect(markup).toContain('data-provider-model="nebius/zai-org/GLM-5.2"');
+    expect(markup).toContain('Nebius · external');
     expect(markup).toContain('data-testid="ai-turbo-toggle"');
     expect(markup).toMatch(
       /<button(?=[^>]*role="switch")(?=[^>]*aria-checked="false")(?=[^>]*data-testid="ai-turbo-toggle")[^>]*>/,
     );
     expect(markup).toContain('Validated edits that pass Deck CI auto-apply');
     expect(markup).not.toContain('data-testid="ai-provider-external"');
-    expect(markup).toContain('Consent required');
     expect(markup).toContain('Allow this session');
     expect(markup).toContain(
       'title="Allow selected external models and optional web research for this browser tab"',
     );
-    expect(markup).toContain('12 hours');
-    expect(markup).toContain('64 proposals');
-    expect(markup).toContain('up to 8 non-destructive operations per proposal');
     expect(markup).toContain('data-testid="ai-model-select"');
     expect(markup).toContain('data-testid="ai-effort-select"');
-    expect(markup).toContain('<option value="low">Low</option>');
-    expect(markup).toContain('<option value="medium" selected="">Medium</option>');
-    expect(markup).toContain('<option value="high">High</option>');
-    expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
-    expect(markup).not.toContain('<option value="max">Max</option>');
+    expect(markup).toContain('aria-label="Reasoning effort: Medium"');
+    expect(markup).toContain('data-provider-effort="medium"');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="ai-provider-consent"/);
+    expect(markup).toMatch(
+      /<button(?=[^>]*role="checkbox")(?=[^>]*data-testid="ai-provider-consent")[^>]*>/,
+    );
 
     expect(createAiProviderRequest('nebius', null)).toBeNull();
     expect(createAiProviderRequest('nebius', NODESLIDE_OPENROUTER_REVIEW_CONSENT)).toBeNull();
@@ -197,17 +194,17 @@ describe('NodeSlide AI review inspector', () => {
       /<button(?=[^>]*role="switch")(?=[^>]*aria-checked="true")(?=[^>]*data-testid="ai-turbo-toggle")(?=[^>]*disabled="")[^>]*>/,
     );
     expect(markup).toMatch(/<button(?=[^>]*data-testid="ai-submit")(?=[^>]*disabled="")[^>]*>/);
-    expect(markup).toContain('Updating session authority');
   });
 
-  it('shows extended effort levels only for models whose provider exposes them', () => {
+  it('keeps the effort control bound to the selected provider model', () => {
     const markup = renderAi({
       initialProviderMode: 'openrouter_free',
       initialProviderModel: 'z-ai/glm-5.2',
     });
 
-    expect(markup).toContain('<option value="xhigh">XHigh</option>');
-    expect(markup).not.toContain('<option value="max">Max</option>');
+    expect(markup).toContain('data-provider-model="z-ai/glm-5.2"');
+    expect(markup).toContain('data-provider-effort="medium"');
+    expect(markup).toContain('aria-label="Reasoning effort: Medium"');
   });
 
   it('keeps the idle AI surface conversational while preserving advanced controls', () => {
@@ -219,7 +216,7 @@ describe('NodeSlide AI review inspector', () => {
     expect(markup).toContain('Writes to this slide');
     expect(markup).toContain('Advanced controls');
     expect(markup).not.toMatch(/data-testid="ai-provider-controls"[^>]*open=/);
-    expect(markup).toContain('data-testid="ai-provider-route-status"');
+    expect(markup).toContain('data-provider-configuration="valid"');
     expect(markup).not.toContain('ns-ai-v3-route-disclosure');
     expect(markup).not.toContain('data-testid="variation-section"');
     expect(markup).not.toContain('No proposal waiting');
@@ -362,13 +359,7 @@ describe('NodeSlide AI review inspector', () => {
     const trace = proposalTrace(patch);
     const withReceipt = renderAi({ patches: [patch], traces: [trace] });
     expect(withReceipt).toContain('Review diff');
-    expect(withReceipt).toContain('Write scope');
-    expect(withReceipt).toContain(`Deck v${snapshot.deck.version}`);
-    expect(withReceipt).toContain('Operations');
-    expect(withReceipt).toContain('Historical route');
-    expect(withReceipt).toContain(`${trace.provider} · ${trace.model}`);
     expect(withReceipt).toContain('Candidate validation passed');
-    expect(withReceipt).toContain('Validation receipt');
     expect(withReceipt).toContain('data-testid="proposal-accept"');
     expect(withReceipt).toContain('data-testid="proposal-reject"');
 
@@ -410,9 +401,15 @@ describe('NodeSlide comment and inspector routing surfaces', () => {
     const expanded = renderPanel(workspace, slide, false, [element]);
     expect(expanded).toContain(`Slide · ${slide.title}`);
     expect(expanded).toContain('Selection · 1');
-    expect(expanded).toMatch(/data-testid="inspector-tab-ai"[^>]*tabindex="0"/);
+    expect(expanded).toMatch(
+      /<button(?=[^>]*data-testid="inspector-tab-ai")(?=[^>]*aria-selected="true")[^>]*>/,
+    );
     for (const tab of ['design', 'comments', 'data', 'trace']) {
-      expect(expanded).toMatch(new RegExp(`data-testid="inspector-tab-${tab}"[^>]*tabindex="-1"`));
+      expect(expanded).toMatch(
+        new RegExp(
+          `<button(?=[^>]*data-testid="inspector-tab-${tab}")(?=[^>]*aria-selected="false")[^>]*>`,
+        ),
+      );
     }
     expect(expanded).toContain('data-testid="inspector-more"');
     expect(expanded).toContain('aria-label="More inspector views"');

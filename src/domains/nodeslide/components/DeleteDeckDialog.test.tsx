@@ -2,23 +2,8 @@
 
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { DeleteDeckDialog, deleteDeckConfirmationMatches } from './DeleteDeckDialog';
-
-beforeAll(() => {
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-    configurable: true,
-    value(this: HTMLDialogElement) {
-      this.open = true;
-    },
-  });
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-    configurable: true,
-    value(this: HTMLDialogElement) {
-      this.open = false;
-    },
-  });
-});
 
 describe('DeleteDeckDialog', () => {
   it('requires an exact, case-sensitive deck title', () => {

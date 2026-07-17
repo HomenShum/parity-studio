@@ -49,10 +49,20 @@ function SelectContent({
   children,
   position = 'item-aligned',
   align = 'center',
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: React.ComponentProps<typeof SelectPrimitive.Content> & {
+  portalContainer?: HTMLElement | null;
+}) {
+  const resolvedPortalContainer =
+    portalContainer ??
+    (typeof document === 'undefined'
+      ? null
+      : document.querySelector<HTMLElement>('.nodeslide-studio:not(.ns-modal-backdrop)'));
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal
+      {...(resolvedPortalContainer ? { container: resolvedPortalContainer } : {})}
+    >
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(

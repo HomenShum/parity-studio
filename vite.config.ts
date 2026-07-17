@@ -89,6 +89,13 @@ export default defineConfig(() => {
                 if (moduleId.includes('/node_modules/convex/')) return 'convex';
                 if (moduleId.includes('/node_modules/lucide-react/')) return 'icons';
                 if (moduleId.includes('/node_modules/jszip/')) return 'zip';
+                if (
+                  moduleId.includes('/node_modules/@radix-ui/') ||
+                  moduleId.includes('/node_modules/radix-ui/') ||
+                  moduleId.includes('/node_modules/cmdk/')
+                ) {
+                  return 'interaction-primitives';
+                }
                 // Preserve source-level async boundaries for heavyweight packages.
                 // A generic vendor bucket would otherwise make dynamic PPTX export
                 // part of the startup graph again.

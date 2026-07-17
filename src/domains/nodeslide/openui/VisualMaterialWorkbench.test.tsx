@@ -22,6 +22,7 @@ describe('VisualMaterialWorkbench interaction', () => {
 
     render(<VisualMaterialWorkbench deck={snapshot.deck} slide={slide} onPropose={onPropose} />);
 
+    fireEvent.click(screen.getByRole('button', { name: /Visual material lab/i }));
     const action = screen.getByTestId('openui-create-proposal');
     fireEvent.click(action);
     fireEvent.click(action);

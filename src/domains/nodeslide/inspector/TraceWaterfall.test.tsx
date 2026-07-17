@@ -920,9 +920,11 @@ describe('TraceWaterfall deterministic fixture matrix', () => {
       totalRecorded: fixture.spans.length + events.length,
     };
 
-    const html = renderToStaticMarkup(
+    const { container } = render(
       <TraceWaterfall run={run} telemetry={telemetry} messages={[]} sources={[source]} />,
     );
+    fireEvent.click(screen.getByRole('button', { name: '30 attributes' }));
+    const html = container.innerHTML;
     expect(html.match(/class="ns-waterfall-event is-info"/g)).toHaveLength(8);
     expect(html).toContain('class="ns-waterfall-event is-overflow"');
     expect(html).toContain('<span>bounded-event-39</span>');

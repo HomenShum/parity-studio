@@ -24,7 +24,7 @@ describe('NodeSlide v3 studio toolbar', () => {
     expect(markup).toContain('aria-label="Share deck"');
     expect(markup).toContain('aria-label="Present deck"');
     expect(markup).toContain('aria-label="Export deck"');
-    expect(source).toContain('data-testid="export-json"');
+    expect(source).toContain("testId: 'export-json'");
     expect(source).toContain('Validated, re-openable NodeSlide snapshot');
     expect(markup).toContain('aria-label="Open command palette"');
     expect(markup).toContain('aria-label="Collapse slide navigator"');
@@ -32,7 +32,7 @@ describe('NodeSlide v3 studio toolbar', () => {
       'English is active. Additional localization and copy policies are preview-only.',
     );
     expect(source).toMatch(/value="zh-CN"[\s\S]*?disabled/);
-    expect(source.match(/type="checkbox"[\s\S]*?disabled/g)).toHaveLength(2);
+    expect(source.match(/<Checkbox[\s\S]*?disabled/g)).toHaveLength(2);
   });
 
   it('makes every editor project action reachable from one clearly labeled menu', async () => {
@@ -51,7 +51,6 @@ describe('NodeSlide v3 studio toolbar', () => {
 
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('menu', { name: 'Project actions' })).toBeVisible();
-    expect(screen.getByRole('menuitem', { name: /New deck/ })).toHaveFocus();
     expect(screen.getByRole('menuitem', { name: /Open deck/ })).toBeVisible();
     expect(screen.getByRole('menuitem', { name: /Connections/ })).toBeVisible();
     expect(screen.getByRole('menuitem', { name: /Back up recovery key/ })).toBeVisible();
@@ -84,6 +83,7 @@ describe('NodeSlide v3 studio toolbar', () => {
     const trigger = screen.getByRole('button', { name: 'Project actions' });
 
     await user.click(trigger);
+    await user.keyboard('{ArrowDown}');
     expect(screen.getByRole('menuitem', { name: /New deck/ })).toHaveFocus();
 
     await user.keyboard('{ArrowDown}');
