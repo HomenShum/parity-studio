@@ -669,3 +669,60 @@ describe('hosted SlideLang seam', () => {
     );
   });
 });
+
+describe('PPTX native artifact presence', () => {
+  const adapter = createLocalSlideLangAdapter();
+
+  async function exportedPackage(snapshot: DeckSnapshot) {
+    const binary = await adapter.buildPptx(snapshot);
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = (await zip.file('ppt/slides/slide1.xml')?.async('string')) ?? '';
+    const chartParts = Object.keys(zip.files).filter(
+      (fileName) => fileName.startsWith('ppt/charts/') && zip.files[fileName]?.dir === false,
+    );
+    return { zip, slideXml, chartParts };
+  }
+
+  it('exports the chart as a native chart part, never a placeholder', async () => {
+    const snapshot = cleanSnapshot();
+    const { zip, slideXml, chartParts } = await exportedPackage(snapshot);
+
+    // A regression from addChart to addEditablePlaceholder keeps CI green unless the
+    // package itself is inspected: the placeholder is just a text shape.
+    expect(chartParts.length).toBeGreaterThan(0);
+    expect(slideXml).toContain('<p:graphicFrame>');
+    expect(slideXml).not.toContain('Chart data unavailable');
+
+    const chartPartName = chartParts.find((fileName) => /chart\d+\.xml$/.test(fileName));
+    expect(chartPartName).toBeDefined();
+    const chartXml = (await zip.file(chartPartName ?? '')?.async('string')) ?? '';
+    expect(chartXml).toContain('barChart');
+    expect(chartXml).toContain('Teams');
+    expect(chartXml).toContain('<c:v>47</c:v>');
+  });
+
+  it('falls back to an editable placeholder only when chart data is missing', async () => {
+    const snapshot = cleanSnapshot();
+    const chartElement = snapshot.elements.find((element) => element.kind === 'chart');
+    if (!chartElement) throw new Error('Missing chart fixture.');
+    chartElement.chart = undefined;
+
+    const { slideXml, chartParts } = await exportedPackage(snapshot);
+    expect(chartParts).toHaveLength(0);
+    expect(slideXml).toContain('Chart data unavailable');
+  });
+
+  it('writes speaker notes into the notes slide part', async () => {
+    const snapshot = cleanSnapshot();
+    const { zip } = await exportedPackage(snapshot);
+    const notesXml = await zip.file('ppt/notesSlides/notesSlide1.xml')?.async('string');
+    expect(notesXml).toContain('Advance after explaining that every object remains editable.');
+  });
+
+  it('writes the slide background as a native fill', async () => {
+    const snapshot = cleanSnapshot();
+    const { slideXml } = await exportedPackage(snapshot);
+    expect(slideXml).toContain('<p:bg>');
+    expect(slideXml).toContain('val="10131A"');
+  });
+});
