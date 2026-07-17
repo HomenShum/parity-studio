@@ -238,11 +238,15 @@ export interface NodeSlidePricedModelMetadata {
   readonly outputMicroUsdPerMillionTokens: number;
   readonly providerContextWindowTokens: number;
   readonly providerMaxOutputTokens: number;
-  readonly source: 'nebius_token_factory_model_catalog' | 'openrouter_request_price_ceiling';
+  readonly source:
+    | 'nebius_token_factory_model_catalog'
+    | 'openrouter_request_price_ceiling'
+    | 'openrouter_model_catalog';
   readonly sourceUrl:
     | 'https://tokenfactory.nebius.com/proxy/inference/private/v1/models_info'
-    | 'https://openrouter.ai/docs/guides/routing/provider-selection';
-  readonly verifiedAt: '2026-07-16T01:22:40Z' | '2026-07-16T20:30:00Z';
+    | 'https://openrouter.ai/docs/guides/routing/provider-selection'
+    | 'https://openrouter.ai/google/gemini-3.5-flash/pricing';
+  readonly verifiedAt: '2026-07-16T01:22:40Z' | '2026-07-16T20:30:00Z' | '2026-07-16T23:55:00Z';
 }
 
 export interface NodeSlideZeroCostModelMetadata {
@@ -323,10 +327,17 @@ export const NODESLIDE_MODEL_PRICING = {
   },
   'google/gemini-3.5-flash': {
     version: NODESLIDE_MODEL_PRICING_VERSION,
-    kind: 'unknown',
+    kind: 'priced',
     modelId: 'google/gemini-3.5-flash',
-    reason: 'provider_pricing_not_pinned',
-    source: 'openrouter_dynamic_catalog',
+    currency: 'USD',
+    billingUnit: 'million_tokens',
+    inputMicroUsdPerMillionTokens: 1_500_000,
+    outputMicroUsdPerMillionTokens: 9_000_000,
+    providerContextWindowTokens: 1_048_576,
+    providerMaxOutputTokens: 65_536,
+    source: 'openrouter_model_catalog',
+    sourceUrl: 'https://openrouter.ai/google/gemini-3.5-flash/pricing',
+    verifiedAt: '2026-07-16T23:55:00Z',
   },
   'google/gemini-3.1-pro-preview': {
     version: NODESLIDE_MODEL_PRICING_VERSION,

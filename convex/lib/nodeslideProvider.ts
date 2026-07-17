@@ -195,9 +195,7 @@ export async function callNodeSlideFreeJson(
   let telemetry = emptyTelemetry(selectedModel, reasoningEffort);
   let hasTelemetry = false;
   let invalidResponse = '';
-  let structuredOutputMode: NodeSlideStructuredOutputMode = args.jsonSchema
-    ? 'json_schema'
-    : 'prompt';
+  let structuredOutputMode = preferredStructuredOutputMode(selectedModel, args.jsonSchema);
 
   try {
     // Exactly two model calls are possible: the initial completion and one JSON-repair completion.
@@ -252,7 +250,7 @@ export async function callNodeSlideFreeJson(
           attempt === 0 &&
           args.jsonSchema &&
           structuredOutputMode === 'json_schema' &&
-          isStructuredOutputRejection(result.errorMessage)
+          shouldRetryStructuredOutputCompatibility(result)
         ) {
           structuredOutputMode = structuredOutputFallbackMode(result.errorMessage);
           invalidResponse =
@@ -299,6 +297,39 @@ export async function callNodeSlideFreeJson(
     controller.abort();
     if (timeout !== undefined) clearTimeout(timeout);
   }
+}
+
+function preferredStructuredOutputMode(
+  model: NodeSlideAgentModelId,
+  jsonSchema: NodeSlideJsonSchema | undefined,
+): NodeSlideStructuredOutputMode {
+  if (!jsonSchema) return 'prompt';
+  // OpenRouter's Gemini route accepts ordinary JSON schemas, but the edit planner's
+  // dynamically scoped union is large enough to be rejected before token generation.
+  // Keep the exact schema in the prompt and validate it locally; json_object only
+  // changes provider transport, never the accepted NodeSlide contract.
+  if (model === 'google/gemini-3.5-flash' && jsonSchema.name === 'nodeslide_edit_patch') {
+    return 'json_object';
+  }
+  return 'json_schema';
+}
+
+function shouldRetryStructuredOutputCompatibility(result: NodeSlideCompletionResult): boolean {
+  if (isStructuredOutputRejection(result.errorMessage)) return true;
+  const normalized = result.errorMessage?.toLowerCase() ?? '';
+  if (
+    normalized.includes('rate') ||
+    normalized.includes('quota') ||
+    normalized.includes('auth') ||
+    normalized.includes('credit') ||
+    normalized.includes('timeout')
+  ) {
+    return false;
+  }
+  // Some OpenAI-compatible streaming endpoints collapse a preflight schema
+  // rejection to a generic error. A zero-usage failure is safe to spend the sole
+  // compatibility retry on; any billed/partially generated failure remains terminal.
+  return result.inputTokens === 0 && result.outputTokens === 0 && result.costMicroUsd === 0;
 }
 
 async function completeNodeSlideWithPiAi(

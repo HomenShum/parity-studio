@@ -1,4 +1,3 @@
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   ArrowRight,
   ChevronDown,
@@ -318,27 +317,29 @@ export function NodeSlideLanding({
                 {providerDisplayName(providerMode)}
               </span>
               {providerMode !== 'deterministic' || externalConsent.granted ? (
-                <div
+                <label
                   className={`ns-session-consent-pill ${externalConsent.granted ? 'is-ready' : ''}`}
+                  htmlFor="nodeslide-landing-provider-consent"
                   title="Allow selected external models and optional web research for this browser tab"
                 >
-                  <Checkbox
+                  <input
                     id="nodeslide-landing-provider-consent"
-                    type="button"
+                    type="checkbox"
+                    aria-label="Allow prompt and files for this browser tab"
                     data-testid="landing-provider-consent"
                     checked={externalConsent.granted}
-                    onCheckedChange={(checked) => {
-                      externalConsent.setGranted(checked === true);
+                    onChange={(event) => {
+                      externalConsent.setGranted(event.currentTarget.checked);
                       setAttachmentError(null);
                     }}
                   />
-                  <label htmlFor="nodeslide-landing-provider-consent">
+                  <span>
                     <ShieldCheck size={13} aria-hidden="true" />
                     <span>
                       {externalConsent.granted ? 'AI allowed this session' : 'Allow prompt + files'}
                     </span>
-                  </label>
-                </div>
+                  </span>
+                </label>
               ) : null}
             </>
           }

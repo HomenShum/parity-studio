@@ -33,6 +33,8 @@ import {
   type NodeSlideBudgetedJsonRequest,
   type NodeSlideBudgetedProviderResult,
   callNodeSlideBudgetedJson,
+  nodeSlideBudgetHasActiveReservation,
+  nodeSlideProviderBudgetId,
 } from './lib/nodeslideBudgetedProvider';
 import {
   nodeSlideDeckReplDefaultBudget,
@@ -1129,6 +1131,15 @@ export const proposeEdit = action({
           executionAccessKey: durableJob.executionAccessKey,
           requestDigest: durableRequestDigest,
         });
+        const budgetState = await nodeSlideBudgetLedgerClient(ctx).replay({
+          budgetId: nodeSlideProviderBudgetId(durableJob.jobId),
+        });
+        if (nodeSlideBudgetHasActiveReservation(budgetState)) {
+          throw publicAgentError(
+            'fallback_unavailable',
+            'One or more paid model calls are still active. No review candidate was created; the deck is unchanged.',
+          );
+        }
       }
       const proposal = await ctx.runMutation(nodeslideInternal.proposeAgentPatchInternal, {
         id: patchId,

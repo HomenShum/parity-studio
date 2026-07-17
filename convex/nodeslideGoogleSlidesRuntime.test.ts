@@ -40,6 +40,15 @@ describe('NodeSlide Google Slides server runtime contract', () => {
     }
   });
 
+  it('never forwards plan digests or other action-only fields into the runtime context query', () => {
+    expect(runtimeSource).toContain('const authorizationArgs = {');
+    expect(runtimeSource).toContain('...ownerRuntimeArgs(args)');
+    expect(runtimeSource).toContain('runtimeInternal.readContextInternal,\n    authorizationArgs');
+    expect(runtimeSource).not.toContain('runtimeInternal.readContextInternal, args');
+    expect(runtimeSource).toContain('function ownerRuntimeArgs');
+    expect(runtimeSource.match(/\.\.\.ownerRuntimeArgs\(args\)/gu)).toHaveLength(5);
+  });
+
   it('creates inbound proposals without accepting or applying them automatically', () => {
     expect(runtimeSource).toContain('api.nodeslide.proposePatch');
     expect(runtimeSource).not.toContain('api.nodeslide.acceptPatch');
@@ -47,13 +56,22 @@ describe('NodeSlide Google Slides server runtime contract', () => {
     expect(runtimeSource).not.toMatch(/status:\s*['"]accepted['"]/u);
   });
 
-  it('allows a Google deck write only in executePush after a pending-plan claim', () => {
+  it('allows content writes only in executePush and a bounded empty-placeholder cleanup at bootstrap', () => {
+    const createPresentation = exportedBlock('createPresentation', 'planPull');
     const planPush = exportedBlock('planPush', 'executePush');
     const executePush = exportedBlock('executePush', 'readContextInternal');
 
     expect(planPush).not.toContain('adapter.batchUpdate');
-    expect(runtimeSource.match(/adapter\.batchUpdate/gu)).toHaveLength(1);
+    expect(runtimeSource.match(/adapter\.batchUpdate/gu)).toHaveLength(2);
+    expect(createPresentation).toContain('appCreatedGoogleSlidesBootstrapPlaceholders');
+    expect(createPresentation).toContain('deleteObject');
     expect(executePush.indexOf('runtimeInternal.claimPending')).toBeGreaterThanOrEqual(0);
+    expect(executePush).toContain('requireResumableOutboundState');
+    expect(executePush).toContain("state.status === 'awaiting_push_review'");
+    expect(executePush).toContain("claimed.status === 'verifying'");
+    expect(runtimeSource).toContain("'awaiting_push_review', 'executing', 'verifying', 'error'");
+    expect(runtimeSource).toContain("['executing', 'error'], 'verifying'");
+    expect(executePush).toContain('The interrupted Google Slides write did not converge');
     expect(executePush.indexOf('adapter.batchUpdate')).toBeGreaterThan(
       executePush.indexOf('runtimeInternal.claimPending'),
     );
@@ -67,7 +85,10 @@ describe('NodeSlide Google Slides server runtime contract', () => {
     );
     expect(createPresentation).toContain('createAppBlankGoogleSlidesBootstrapBaseline');
     expect(createPresentation).toContain('runtimeInternal.attachState');
-    expect(createPresentation).not.toContain('adapter.batchUpdate');
+    expect(createPresentation).toContain('adapter.batchUpdate');
+    expect(runtimeSource).toContain('element.writable');
+    expect(runtimeSource).toContain("element.kind === 'text' || element.kind === 'shape'");
+    expect(runtimeSource).toContain('!element.content?.trim()');
     expect(runtimeSource).toContain('remote.slides.length !== 1');
     expect(runtimeSource).toContain('remoteSlide.elements.length !== 0');
   });
@@ -98,10 +119,11 @@ describe('NodeSlide Google Slides server runtime contract', () => {
     const write = executePush.indexOf('adapter.batchUpdate');
     const verifying = executePush.indexOf('runtimeInternal.markVerifying');
     const secondRead = executePush.indexOf('adapter.getPresentation', firstRead + 1);
-    const convergence = executePush.indexOf('assertVerifiedGoogleSlidesConvergence');
+    const convergence = executePush.indexOf('assertVerifiedGoogleSlidesConvergence', secondRead);
 
     expect(firstRead).toBeGreaterThanOrEqual(0);
     expect(currentPlanCheck).toBeGreaterThan(firstRead);
+    expect(executePush).toContain('if (dispatchRequired)');
     expect(write).toBeGreaterThan(currentPlanCheck);
     expect(verifying).toBeGreaterThan(write);
     expect(secondRead).toBeGreaterThan(verifying);

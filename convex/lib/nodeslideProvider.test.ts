@@ -298,6 +298,55 @@ describe('NodeSlide named pi-ai JSON provider', () => {
     expect(complete.mock.calls[1]?.[0].userText).toContain('provider rejected JSON Schema mode');
   });
 
+  it('uses provider-compatible JSON object transport for the large Gemini edit contract', async () => {
+    const complete = vi.fn<NodeSlideCompletion>(async () =>
+      completion('{"operations":[{"op":"replace_text"}]}'),
+    );
+
+    const result = await callNodeSlideFreeJson(
+      {
+        ...request,
+        model: 'google/gemini-3.5-flash',
+        reasoningEffort: 'medium',
+        jsonSchema: { ...request.jsonSchema, name: 'nodeslide_edit_patch' },
+      },
+      { complete },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]?.[0]).not.toHaveProperty('jsonSchema');
+    expect(complete.mock.calls[0]?.[0]).toMatchObject({
+      model: 'google/gemini-3.5-flash',
+      structuredOutputMode: 'json_object',
+    });
+    expect(complete.mock.calls[0]?.[0].systemPrompt).toContain('JSON Schema');
+  });
+
+  it('spends the sole schema compatibility retry on a generic zero-usage preflight error', async () => {
+    const complete = vi
+      .fn<NodeSlideCompletion>()
+      .mockResolvedValueOnce(
+        completion('', {
+          stopReason: 'error',
+          errorMessage: 'Provider returned an error stop reason',
+          costMicroUsd: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+        }),
+      )
+      .mockResolvedValueOnce(completion('{"operations":[{"op":"replace_text"}]}'));
+
+    const result = await callNodeSlideFreeJson(request, { complete });
+
+    expect(result.ok).toBe(true);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[1]?.[0]).toMatchObject({
+      structuredOutputMode: 'prompt',
+      repairAttempt: true,
+    });
+  });
+
   it('falls back honestly when the schema compatibility retry also errors', async () => {
     const complete = vi.fn<NodeSlideCompletion>(async () =>
       completion('', {

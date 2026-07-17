@@ -1408,8 +1408,20 @@ async function parseSlide(
   );
   const objectNames = new Set(identityNodes.map((node) => shapeIdentity(node).objectName));
   const companionByBaseId = new Map<string, PptxXmlNode>();
+  const fallbackLabelByBaseId = new Map<string, PptxXmlNode>();
+  const fallbackShapeNames = new Set(
+    identityNodes
+      .map((node) => shapeIdentity(node).objectName)
+      .filter((name) => name.endsWith(':fallback-shape')),
+  );
   for (const node of identityNodes) {
     const objectName = shapeIdentity(node).objectName;
+    if (objectName.endsWith(':fallback-label')) {
+      const baseId = objectName.slice(0, -':fallback-label'.length);
+      if (isStableId(baseId) && fallbackShapeNames.has(`${baseId}:fallback-shape`)) {
+        fallbackLabelByBaseId.set(baseId, node);
+      }
+    }
     if (!objectName.endsWith(':text')) continue;
     const baseId = objectName.slice(0, -':text'.length);
     if (isStableId(baseId) && objectNames.has(baseId)) companionByBaseId.set(baseId, node);
@@ -1438,6 +1450,24 @@ async function parseSlide(
     slideItems += 1;
     incrementItem(context, slideItems, partName);
     const identity = shapeIdentity(node);
+    if (identity.objectName.endsWith(':fallback-label')) {
+      const baseId = identity.objectName.slice(0, -':fallback-label'.length);
+      if (fallbackLabelByBaseId.get(baseId) === node) {
+        context.fidelity.add(
+          'unsupported_object',
+          'approximated',
+          'NodeSlide editable fallback label was merged back into its stable source object.',
+          {
+            sourcePart: partName,
+            sourceId: identity.sourceId,
+            sourceObjectName: identity.objectName,
+            slideIndex,
+            targetId: baseId,
+          },
+        );
+        continue;
+      }
+    }
     if (
       identity.objectName.endsWith(':text') &&
       companionByBaseId.get(identity.objectName.slice(0, -':text'.length)) === node
@@ -1473,7 +1503,11 @@ async function parseSlide(
               partName,
               context,
               usedIds,
-              companionByBaseId.get(identity.objectName) ?? node,
+              identity.objectName.endsWith(':fallback-shape')
+                ? (fallbackLabelByBaseId.get(
+                    identity.objectName.slice(0, -':fallback-shape'.length),
+                  ) ?? node)
+                : (companionByBaseId.get(identity.objectName) ?? node),
             );
     } else if (node.tag.localName === 'cxnSp') {
       element = parseConnector(node, slideId, slideIndex, partName, context, usedIds);
@@ -1523,6 +1557,14 @@ async function parseSlide(
           slideIndex,
         },
       );
+    }
+    if (element && identity.objectName.endsWith(':fallback-shape')) {
+      const baseId = identity.objectName.slice(0, -':fallback-shape'.length);
+      if (fallbackLabelByBaseId.has(baseId) && isStableId(baseId)) {
+        usedIds.delete(element.id);
+        element.id = uniqueId(baseId, usedIds);
+        usedIds.add(element.id);
+      }
     }
     if (element) elements.push(element);
   }
@@ -1893,6 +1935,214 @@ function withCandidateFidelity(
   return { items, summary, hasLoss: true };
 }
 
+const PPTX_GEOMETRY_EPSILON = 0.000_01;
+
+/**
+ * NodeSlide exports durable slide/element IDs into OOXML object names. When those IDs return,
+ * derive only the portable changes instead of replacing the entire deck. PowerPoint does not
+ * preserve NodeSlide-only role, source, group, radius, padding, or exact variable-font metadata,
+ * so those fields remain owned by the canonical deck.
+ */
+function identityPreservingPptxOperations(
+  base: DeckSnapshot,
+  imported: DeckSnapshot,
+): PatchOperation[] | null {
+  if (!sameStringSet(base.deck.slideOrder, imported.deck.slideOrder)) return null;
+  if (
+    !sameStringSet(
+      base.elements.map((item) => item.id),
+      imported.elements.map((item) => item.id),
+    )
+  ) {
+    return null;
+  }
+  const importedSlides = new Map(imported.slides.map((slide) => [slide.id, slide]));
+  const importedElements = new Map(imported.elements.map((element) => [element.id, element]));
+  const operations: PatchOperation[] = [];
+
+  const workingSlideOrder = [...base.deck.slideOrder];
+  for (let index = 0; index < imported.deck.slideOrder.length; index += 1) {
+    const slideId = imported.deck.slideOrder[index];
+    if (!slideId) return null;
+    const currentIndex = workingSlideOrder.indexOf(slideId);
+    if (currentIndex < 0) return null;
+    if (currentIndex !== index) {
+      operations.push({ op: 'reorder_slide', slideId, index });
+      workingSlideOrder.splice(currentIndex, 1);
+      workingSlideOrder.splice(index, 0, slideId);
+    }
+  }
+
+  for (const baseSlide of base.slides) {
+    const remoteSlide = importedSlides.get(baseSlide.id);
+    if (!remoteSlide) return null;
+    const workingElementOrder = [...baseSlide.elementOrder];
+    if (!sameStringSet(workingElementOrder, remoteSlide.elementOrder)) return null;
+    for (let index = 0; index < remoteSlide.elementOrder.length; index += 1) {
+      const elementId = remoteSlide.elementOrder[index];
+      if (!elementId) return null;
+      const currentIndex = workingElementOrder.indexOf(elementId);
+      if (currentIndex < 0) return null;
+      if (currentIndex !== index) {
+        operations.push({ op: 'reorder_element_v1', slideId: baseSlide.id, elementId, index });
+        workingElementOrder.splice(currentIndex, 1);
+        workingElementOrder.splice(index, 0, elementId);
+      }
+    }
+  }
+
+  for (const baseElement of base.elements) {
+    const remoteElement = importedElements.get(baseElement.id);
+    if (!remoteElement || remoteElement.slideId !== baseElement.slideId) return null;
+    if (isEditablePptxFallback(baseElement, remoteElement)) continue;
+    if (
+      remoteElement.kind !== baseElement.kind &&
+      !(baseElement.kind === 'math' && remoteElement.kind === 'text')
+    ) {
+      return null;
+    }
+    if ((baseElement.content ?? '') !== (remoteElement.content ?? '')) {
+      operations.push({
+        op: 'replace_text',
+        slideId: baseElement.slideId,
+        elementId: baseElement.id,
+        text: remoteElement.content ?? '',
+      });
+    }
+    if (
+      !nearPptxNumber(baseElement.bbox.x, remoteElement.bbox.x) ||
+      !nearPptxNumber(baseElement.bbox.y, remoteElement.bbox.y)
+    ) {
+      operations.push({
+        op: 'move',
+        slideId: baseElement.slideId,
+        elementId: baseElement.id,
+        x: remoteElement.bbox.x,
+        y: remoteElement.bbox.y,
+      });
+    }
+    if (
+      !nearPptxDimension(baseElement.bbox.width, remoteElement.bbox.width) ||
+      !nearPptxDimension(baseElement.bbox.height, remoteElement.bbox.height)
+    ) {
+      operations.push({
+        op: 'resize',
+        slideId: baseElement.slideId,
+        elementId: baseElement.id,
+        width: remoteElement.bbox.width,
+        height: remoteElement.bbox.height,
+      });
+    }
+    const style = portablePptxStyleDelta(baseElement.style, remoteElement.style, baseElement.kind);
+    if (Object.keys(style).length > 0) {
+      operations.push({
+        op: 'update_style',
+        slideId: baseElement.slideId,
+        elementId: baseElement.id,
+        properties: style,
+      });
+    }
+    if (baseElement.kind === 'chart' && remoteElement.chart) {
+      if (portableChartDigest(baseElement.chart) !== portableChartDigest(remoteElement.chart)) {
+        operations.push({
+          op: 'update_chart',
+          slideId: baseElement.slideId,
+          elementId: baseElement.id,
+          chart: {
+            ...structuredClone(remoteElement.chart),
+            ...(baseElement.chart?.unit ? { unit: baseElement.chart.unit } : {}),
+            ...(baseElement.chart?.sourceId ? { sourceId: baseElement.chart.sourceId } : {}),
+          },
+        });
+      }
+    }
+  }
+  return operations;
+}
+
+function isEditablePptxFallback(local: SlideElement, remote: SlideElement): boolean {
+  if (remote.kind !== 'shape' || !['image', 'chart', 'video'].includes(local.kind)) return false;
+  const label = remote.content?.toLocaleLowerCase('en-US') ?? '';
+  return (
+    label.includes('replace image') ||
+    label.includes('static image unavailable') ||
+    label.includes('chart data unavailable') ||
+    label.includes('linked web video')
+  );
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
+}
+
+function nearPptxNumber(left: number, right: number): boolean {
+  return Math.abs(left - right) <= PPTX_GEOMETRY_EPSILON;
+}
+
+function nearPptxDimension(local: number, remote: number): boolean {
+  return nearPptxNumber(local, remote) || (local <= 0.05 && remote <= 0.01 + PPTX_GEOMETRY_EPSILON);
+}
+
+function portableChartDigest(chart: ChartData | undefined): string {
+  if (!chart) return 'none';
+  return JSON.stringify({
+    chartType: chart.chartType,
+    labels: chart.labels,
+    series: chart.series.map((series) => ({ name: series.name, values: series.values })),
+  });
+}
+
+function portablePptxStyleDelta(
+  local: ElementStyle,
+  remote: ElementStyle,
+  elementKind: SlideElement['kind'],
+): Partial<ElementStyle> {
+  const delta: Partial<ElementStyle> = {};
+  for (const property of [
+    'color',
+    'fill',
+    'stroke',
+    'strokeWidth',
+    'fontFamily',
+    'fontSize',
+    'lineHeight',
+    'textAlign',
+    'verticalAlign',
+    'opacity',
+  ] as const) {
+    if (
+      elementKind === 'shape' &&
+      ['fontFamily', 'fontSize', 'lineHeight', 'textAlign', 'verticalAlign'].includes(property)
+    ) {
+      continue;
+    }
+    if (property === 'fill' && remote.fill === 'transparent' && local.fill !== undefined) continue;
+    const left = canonicalPptxStyleValue(property, local[property]);
+    const right = canonicalPptxStyleValue(property, remote[property]);
+    if (left !== right && remote[property] !== undefined) {
+      Object.assign(delta, { [property]: remote[property] });
+    }
+  }
+  const localBold = (local.fontWeight ?? 400) >= 600;
+  const remoteBold = (remote.fontWeight ?? 400) >= 600;
+  if (localBold !== remoteBold) delta.fontWeight = remoteBold ? 700 : 400;
+  return delta;
+}
+
+function canonicalPptxStyleValue(
+  property: keyof ElementStyle,
+  value: ElementStyle[keyof ElementStyle],
+): ElementStyle[keyof ElementStyle] {
+  if (property === 'fill' && value === 'transparent') return undefined;
+  if (property === 'stroke' && value === '#FFFFFF') return undefined;
+  if (property === 'strokeWidth' && value === 1) return undefined;
+  if (property === 'lineHeight' && value === 1.2) return undefined;
+  if (property === 'textAlign' && value === 'left') return undefined;
+  if (property === 'verticalAlign' && value === 'top') return undefined;
+  if (property === 'fontFamily' && value === 'Aptos') return undefined;
+  return value;
+}
+
 /**
  * Build a wholesale-import proposal for the existing applyPatch/CAS mutation. This function does
  * not write; its candidate snapshot is materialized with the same shared applyDeckPatch semantics.
@@ -1910,7 +2160,63 @@ export async function createPptxImportCandidate(
   if (!imported.ok) return imported;
   try {
     const rekeyed = rekeyImportedSnapshot(imported.snapshot, baseSnapshot);
-    const operations: PatchOperation[] = [];
+    const identityOperations = identityPreservingPptxOperations(baseSnapshot, rekeyed);
+    const operations: PatchOperation[] = identityOperations ?? [];
+    if (identityOperations !== null) {
+      const scope = {
+        kind: 'deck' as const,
+        deckId: baseSnapshot.deck.id,
+        operationMode: 'unrestricted' as const,
+      };
+      if (operations.length > NODESLIDE_PATCH_OPERATION_LIMIT) {
+        throw new ImportFailure(
+          'candidate_too_large',
+          `The import candidate requires ${operations.length} operations; the limit is ${NODESLIDE_PATCH_OPERATION_LIMIT}.`,
+        );
+      }
+      const committedAt = options.timestamp ?? baseSnapshot.deck.updatedAt;
+      const snapshot =
+        operations.length === 0
+          ? structuredClone(baseSnapshot)
+          : applyDeckPatch(
+              baseSnapshot,
+              { baseDeckVersion: baseSnapshot.deck.version, operations, scope },
+              committedAt,
+            ).snapshot;
+      const validation = validateSnapshot(snapshot);
+      if (!validation.ok) {
+        throw new ImportFailure(
+          'candidate_invalid',
+          'The identity-preserving PPTX candidate failed canonical validation.',
+        );
+      }
+      return {
+        ok: true,
+        candidate: {
+          deckId: baseSnapshot.deck.id,
+          baseDeckVersion: baseSnapshot.deck.version,
+          baseSlideVersions: Object.fromEntries(
+            baseSnapshot.slides.map((slide) => [slide.id, slide.version]),
+          ),
+          baseElementVersions: Object.fromEntries(
+            baseSnapshot.elements.map((element) => [element.id, element.version]),
+          ),
+          scope,
+          operations,
+          summary:
+            operations.length === 0
+              ? `Link ${options.fileName ?? 'PowerPoint'}: exact NodeSlide export`
+              : `Synchronize ${options.fileName ?? 'PowerPoint'}: ${operations.length} bounded change${operations.length === 1 ? '' : 's'}`,
+          snapshot,
+          validation,
+          fidelity: withCandidateFidelity(
+            imported.fidelity,
+            options.bounds?.maxFidelityItems ?? DEFAULT_PPTX_IMPORT_BOUNDS.maxFidelityItems,
+          ),
+          source: imported.source,
+        },
+      };
+    }
     if (rekeyed.deck.title !== baseSnapshot.deck.title) {
       operations.push({ op: 'update_deck', properties: { title: rekeyed.deck.title } });
     }
@@ -2014,6 +2320,11 @@ export async function createPptxImportCandidate(
         ...(item.targetId ? { targetId: item.targetId } : {}),
       });
     }
-    return failureResult(error, collector) as PptxImportCandidateResult;
+    return failureResult(
+      error instanceof Error && !(error instanceof ImportFailure)
+        ? new ImportFailure('candidate_invalid', error.message)
+        : error,
+      collector,
+    ) as PptxImportCandidateResult;
   }
 }

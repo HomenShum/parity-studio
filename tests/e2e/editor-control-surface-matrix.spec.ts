@@ -13,6 +13,7 @@ import {
   watchRuntimeProblems,
 } from './editor-control-matrix.helpers';
 import { openFreshLanding, openSampleWorkspace } from './helpers';
+import { chooseSelectOption, readSelectOptions } from './landing-start-flow.helpers';
 
 test.describe('NodeSlide editor-wide control and surface matrix', () => {
   test.describe.configure({ mode: 'serial' });
@@ -89,7 +90,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     const commandTrigger = page.getByRole('button', { name: 'Open command palette' });
     await commandTrigger.click();
     const commandDialog = page.getByRole('dialog', { name: 'Command palette' });
-    const commandSearch = commandDialog.getByRole('searchbox', { name: 'Search commands' });
+    const commandSearch = commandDialog.getByRole('combobox', { name: 'Search commands' });
     await expect(commandSearch).toBeFocused();
     await commandSearch.fill('comments');
     await commandSearch.press('Enter');
@@ -200,7 +201,8 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await expect(slidesTab).toHaveAttribute('aria-selected', 'true');
     const slideActions = navigator.getByRole('button', { name: /Slide 1 actions/ });
     await slideActions.click();
-    const slideMenu = navigator.getByRole('menu');
+    // Radix portals dropdown content to the studio root, outside the navigator.
+    const slideMenu = page.getByRole('menu');
     await expect(slideMenu.getByRole('menuitemcheckbox')).toBeVisible();
     await expect(slideMenu.getByRole('menuitem', { name: /Rename slide/ })).toBeVisible();
     await expect(slideMenu.getByRole('menuitem', { name: /Duplicate slide/ })).toBeVisible();
@@ -361,10 +363,10 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await page.getByRole('button', { name: 'Expand composer' }).click();
     await expect(page.getByTestId('ai-effort-select')).toBeVisible();
     const effort = page.getByTestId('ai-effort-select');
-    const effortOptions = await effort
-      .locator('option')
-      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
-    if (effortOptions.length > 1) await effort.selectOption(effortOptions.at(-1) ?? '');
+    const effortOptions = await readSelectOptions(page, effort);
+    if (effortOptions.length > 1) {
+      await chooseSelectOption(page, effort, effortOptions.at(-1) ?? '');
+    }
 
     await page.getByTestId('ai-data-file-input').setInputFiles({
       name: 'matrix.csv',
@@ -393,10 +395,12 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await memoryDialog.getByRole('tab', { name: /Active/ }).click();
     await memoryDialog.getByRole('button', { name: 'Close' }).click();
 
-    const contextReference = page.getByRole('button', { name: 'Add read context reference' });
+    const contextReference = page.getByRole('menuitem', {
+      name: 'Add read context reference',
+    });
     if (!(await contextReference.isVisible())) await page.getByTestId('ai-tools-toggle').click();
     await chooseFirstMenuItem(page, contextReference);
-    const command = page.getByRole('button', { name: 'Add command' });
+    const command = page.getByRole('menuitem', { name: 'Add command' });
     if (!(await command.isVisible())) await page.getByTestId('ai-tools-toggle').click();
     await chooseFirstMenuItem(page, command);
     await expect(page.getByRole('button', { name: 'Collapse composer' })).toBeVisible();
@@ -404,7 +408,8 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     await page.getByRole('button', { name: 'Expand composer' }).click();
     const providerSummary = page.getByTestId('ai-provider-summary');
     await providerSummary.click();
-    await expect(page.getByTestId('ai-provider-controls')).toHaveAttribute('open', '');
+    await expect(providerSummary).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('ai-provider-controls')).toHaveAttribute('data-state', 'open');
     await providerSummary.click();
     inventories.push(await snapshotSurface(page, inspector, 'inspector-ai'));
 
@@ -575,16 +580,19 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
       const toolbarSnapshot = await snapshotSurface(page, toolbar, `${visualCase.name}-toolbar`);
       expectSurfaceSnapshotOperable(toolbarSnapshot);
 
-      const inspector = page.getByTestId('inspector');
-      if ((await inspector.getAttribute('aria-label')) !== 'NodeSlide inspector') {
-        await page
+      const composer = page.getByTestId('ai-composer');
+      if (!(await composer.isVisible())) {
+        const openInspector = page
           .locator(
             'button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible',
           )
-          .first()
-          .click();
+          .first();
+        await expect(openInspector).toBeVisible();
+        await openInspector.click();
       }
-      await expect(page.getByTestId('ai-composer')).toBeVisible();
+      await expect(composer).toBeVisible();
+      const inspector = page.getByTestId('inspector');
+      await expect(inspector).toHaveAttribute('aria-label', 'NodeSlide inspector');
       await expectKeyboardFocusVisible(page.getByTestId('inspector-tab-ai'), 'AI inspector tab');
       const inspectorSnapshot = await snapshotSurface(
         page,

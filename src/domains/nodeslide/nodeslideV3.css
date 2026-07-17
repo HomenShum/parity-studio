@@ -11036,7 +11036,27 @@
   backdrop-filter: blur(8px);
 }
 
-.nodeslide-studio .ns-project-dialog[open] {
+/* Radix portals the destructive dialog beside its overlay. The shared overlay
+   intentionally sits above the editor at 500, so dialog content must occupy
+   the next layer or the visible controls are intercepted by the backdrop. */
+.nodeslide-studio [data-slot="dialog-content"][data-state="open"],
+.nodeslide-studio [data-slot="alert-dialog-content"][data-state="open"],
+.nodeslide-studio .ns-share-dialog[data-state="open"] {
+  z-index: 501;
+}
+
+.nodeslide-studio .ns-command-palette[data-state="open"] {
+  inset: auto;
+  left: 50%;
+  margin: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+}
+
+.nodeslide-studio .ns-project-dialog[data-state="open"] {
   background: var(--ns-paper);
   border: 1px solid color-mix(in srgb, var(--ns-line-d) 78%, transparent);
   border-radius: 20px;
@@ -11044,22 +11064,26 @@
   color: var(--ns-ink);
   display: grid;
   grid-template-rows: 76px 46px minmax(0, 1fr);
-  inset: 0;
-  margin: auto;
+  inset: auto;
+  left: 50%;
+  margin: 0;
   max-height: min(820px, calc(100dvh - 40px));
   max-width: min(920px, calc(100vw - 40px));
   min-height: min(680px, calc(100dvh - 40px));
   overflow: hidden;
   padding: 0;
   position: fixed;
+  top: 50%;
+  transform: none;
   width: 100%;
+  z-index: 501;
 }
 
-.nodeslide-studio .ns-project-dialog[open]:has(.ns-open-project) {
+.nodeslide-studio .ns-project-dialog[data-state="open"]:has(.ns-open-project) {
   min-height: min(430px, calc(100dvh - 40px));
 }
 
-.nodeslide-studio .ns-project-dialog[open]:not(:has(.ns-project-tabs)) {
+.nodeslide-studio .ns-project-dialog[data-state="open"]:not(:has(.ns-project-tabs)) {
   grid-template-rows: 76px minmax(0, 1fr);
 }
 
@@ -11404,18 +11428,22 @@
   margin-top: 4px;
 }
 
-.nodeslide-studio .ns-connections-dialog[open] {
+.nodeslide-studio .ns-connections-dialog[data-state="open"] {
   background: transparent;
   border: 0;
   color: var(--ns-ink);
-  inset: 0;
-  margin: auto;
+  inset: auto;
+  left: 50%;
+  margin: 0;
   max-height: min(860px, calc(100dvh - 32px));
   max-width: min(960px, calc(100vw - 32px));
   overflow: hidden;
   padding: 0;
   position: fixed;
+  top: 50%;
+  transform: none;
   width: 100%;
+  z-index: 501;
 }
 
 .nodeslide-studio .ns-connections-dialog::backdrop {
@@ -11686,8 +11714,8 @@
     padding: 8px;
   }
 
-  .nodeslide-studio .ns-project-dialog[open],
-  .nodeslide-studio .ns-project-dialog[open]:has(.ns-open-project) {
+  .nodeslide-studio .ns-project-dialog[data-state="open"],
+  .nodeslide-studio .ns-project-dialog[data-state="open"]:has(.ns-open-project) {
     border-radius: 16px;
     max-height: calc(100dvh - 16px);
     max-width: calc(100vw - 16px);
@@ -11729,12 +11757,14 @@
     display: none;
   }
 
-  .nodeslide-studio .ns-connections-dialog[open] {
-    inset: 8px;
+  .nodeslide-studio .ns-connections-dialog[data-state="open"] {
+    inset: auto;
+    left: 50%;
     margin: 0;
     max-height: calc(100dvh - 16px);
     max-width: calc(100vw - 16px);
-    width: auto;
+    top: 50%;
+    width: calc(100vw - 16px);
   }
 
   .nodeslide-studio .ns-connections-shell {

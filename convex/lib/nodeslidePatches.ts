@@ -695,12 +695,12 @@ export function deterministicAgentOperations(
   const inferredMode =
     scope.operationMode !== 'unrestricted'
       ? scope.operationMode
-      : /move|layout|align|position|space|resize/.test(lower)
-        ? 'layout'
-        : /copy|text|title|headline|body|paragraph|description|summary|bullet|section|label|word|short|concise|say|read|replace|rewrite/.test(
-              lower,
-            )
-          ? 'copy'
+      : /copy|text|title|headline|body|paragraph|description|summary|bullet|section|label|word|short|concise|say|read|replace|rewrite/.test(
+            lower,
+          )
+        ? 'copy'
+        : /move|layout|align|position|space|resize/.test(lower)
+          ? 'layout'
           : /style|color|font|bold|weight|emphasis|accent|contrast|visual/.test(lower)
             ? 'style'
             : null;

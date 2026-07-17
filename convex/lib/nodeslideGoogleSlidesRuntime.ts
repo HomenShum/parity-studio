@@ -8,7 +8,11 @@ import type {
 } from '../../src/domains/nodeslide/integrations/googleSlides/googleSlides';
 import type { GoogleSlidesThreeWaySyncInput } from '../../src/domains/nodeslide/integrations/googleSlides/planning';
 import { planGoogleSlidesThreeWaySync } from '../../src/domains/nodeslide/integrations/googleSlides/planning';
-import type { GoogleSlidesBatchUpdateResponse } from '../../src/domains/nodeslide/integrations/googleSlides/types';
+import type {
+  GooglePageElementProperties,
+  GoogleSlidesBatchUpdateResponse,
+  GoogleSlidesRequest,
+} from '../../src/domains/nodeslide/integrations/googleSlides/types';
 import type {
   NormalizedPresentationElement,
   NormalizedPresentationSlide,
@@ -420,6 +424,7 @@ export function assertVerifiedGoogleSlidesConvergence(input: {
   baseline: PresentationSyncBaseline;
   acceptedLocal: DeckSnapshot;
   verifiedRemote: NormalizedPresentationState;
+  plan?: GoogleSlidesOutboundExternalPlanV1;
 }): void {
   const verification = planGoogleSlidesThreeWaySync({
     baseline: input.baseline,
@@ -431,11 +436,186 @@ export function assertVerifiedGoogleSlidesConvergence(input: {
     verification.inbound.operations.length > 0 ||
     verification.outbound.requests.length > 0
   ) {
+    let approvedWriteMismatch: string | undefined;
+    if (input.plan) {
+      try {
+        assertApprovedGoogleWriteEffects(input.plan, input.baseline, input.verifiedRemote);
+        return;
+      } catch (error) {
+        approvedWriteMismatch = error instanceof Error ? error.message : 'unknown effect mismatch';
+      }
+    }
     throw new NodeSlideGoogleRuntimeError(
       'verification_failed',
-      'Google Slides changed, but the verified presentation does not match the approved plan.',
+      `Google Slides changed, but the verified presentation does not match the approved plan.${approvedWriteMismatch ? ` First failed effect: ${approvedWriteMismatch}.` : ''}`,
     );
   }
+}
+
+/**
+ * Google canonicalizes slide titles, inherited styles, and some geometry on write. Those lossy
+ * provider projections must not make a successful, revision-bound write impossible to verify.
+ * Verify the observable effect of every approved request instead; the advanced baseline then
+ * records Google's exact normalized result for the next three-way comparison.
+ */
+function assertApprovedGoogleWriteEffects(
+  plan: GoogleSlidesOutboundExternalPlanV1,
+  baseline: PresentationSyncBaseline,
+  remote: NormalizedPresentationState,
+): void {
+  if (remote.remotePresentationId !== plan.batchUpdate.presentationId) {
+    throw new Error('presentation identity');
+  }
+  const slides = new Map(remote.slides.map((slide) => [slide.remoteId, slide]));
+  const elements = new Map(
+    remote.slides.flatMap((slide) =>
+      slide.elements.map((element) => [element.remoteId, element] as const),
+    ),
+  );
+  const baselineElements = new Map(
+    baseline.remote.slides.flatMap((slide) =>
+      slide.elements.map((element) => [element.remoteId, element] as const),
+    ),
+  );
+  const expectedText = new Map(
+    [...baselineElements].map(([id, element]) => [id, element.content ?? ''] as const),
+  );
+  const textTouched = new Set<string>();
+  const deleted = new Set<string>();
+
+  for (const request of plan.batchUpdate.requests) {
+    if ('createSlide' in request) {
+      if (!slides.has(request.createSlide.objectId)) throw new Error('created slide missing');
+      continue;
+    }
+    if ('createShape' in request) {
+      const element = elements.get(request.createShape.objectId);
+      if (
+        !element ||
+        element.remoteSlideId !== request.createShape.elementProperties.pageObjectId
+      ) {
+        throw new Error('created shape missing or on the wrong slide');
+      }
+      if (!matchesGoogleGeometry(element, request.createShape.elementProperties, remote)) {
+        throw new Error('created shape geometry');
+      }
+      expectedText.set(request.createShape.objectId, '');
+      continue;
+    }
+    if ('createImage' in request) {
+      const element = elements.get(request.createImage.objectId);
+      if (
+        !element ||
+        element.kind !== 'image' ||
+        element.remoteSlideId !== request.createImage.elementProperties.pageObjectId ||
+        !matchesGoogleGeometry(element, request.createImage.elementProperties, remote)
+      ) {
+        throw new Error('created image missing, misplaced, or has changed geometry');
+      }
+      continue;
+    }
+    if ('deleteObject' in request) {
+      deleted.add(request.deleteObject.objectId);
+      continue;
+    }
+    if ('deleteText' in request) {
+      expectedText.set(request.deleteText.objectId, '');
+      textTouched.add(request.deleteText.objectId);
+      continue;
+    }
+    if ('insertText' in request) {
+      const current = expectedText.get(request.insertText.objectId) ?? '';
+      const index = Math.max(0, Math.min(request.insertText.insertionIndex, current.length));
+      expectedText.set(
+        request.insertText.objectId,
+        `${current.slice(0, index)}${request.insertText.text}${current.slice(index)}`,
+      );
+      textTouched.add(request.insertText.objectId);
+      continue;
+    }
+    if ('updatePageElementTransform' in request) {
+      const element = elements.get(request.updatePageElementTransform.objectId);
+      if (!element || !matchesAbsoluteGoogleTransform(element, request, remote)) {
+        throw new Error('updated element transform');
+      }
+      continue;
+    }
+    if ('updatePageElementAltText' in request) {
+      const element = elements.get(request.updatePageElementAltText.objectId);
+      if (
+        !element ||
+        (element.altText ?? '') !== (request.updatePageElementAltText.description ?? '')
+      ) {
+        throw new Error('updated alt text');
+      }
+      continue;
+    }
+    if ('replaceImage' in request) {
+      const element = elements.get(request.replaceImage.imageObjectId);
+      if (!element || element.kind !== 'image') throw new Error('replaced image missing');
+      continue;
+    }
+    if ('updatePageProperties' in request) {
+      const slide = slides.get(request.updatePageProperties.objectId);
+      if (!slide || !slide.background) throw new Error('updated slide background missing');
+      continue;
+    }
+    if ('updateSlidesPosition' in request) {
+      if (request.updateSlidesPosition.slideObjectIds.some((id) => !slides.has(id))) {
+        throw new Error('reordered slide missing');
+      }
+    }
+  }
+
+  for (const id of deleted) {
+    if (slides.has(id) || elements.has(id)) throw new Error('deleted object still present');
+  }
+  for (const id of textTouched) {
+    if ((elements.get(id)?.content ?? '') !== (expectedText.get(id) ?? '')) {
+      throw new Error('written text differs');
+    }
+  }
+}
+
+function matchesGoogleGeometry(
+  element: NormalizedPresentationElement,
+  properties: GooglePageElementProperties,
+  presentation: NormalizedPresentationState,
+): boolean {
+  const width = properties.size.width.magnitude ?? 0;
+  const height = properties.size.height.magnitude ?? 0;
+  const transform = properties.transform;
+  return (
+    closeEnough(element.bbox.x, (transform.translateX ?? 0) / presentation.pageWidthEmu) &&
+    closeEnough(element.bbox.y, (transform.translateY ?? 0) / presentation.pageHeightEmu) &&
+    closeEnough(
+      element.bbox.width,
+      (width * Math.abs(transform.scaleX ?? 1)) / presentation.pageWidthEmu,
+    ) &&
+    closeEnough(
+      element.bbox.height,
+      (height * Math.abs(transform.scaleY ?? 1)) / presentation.pageHeightEmu,
+    )
+  );
+}
+
+function matchesAbsoluteGoogleTransform(
+  element: NormalizedPresentationElement,
+  request: Extract<GoogleSlidesRequest, { updatePageElementTransform: unknown }>,
+  presentation: NormalizedPresentationState,
+): boolean {
+  const transform = request.updatePageElementTransform.transform;
+  return (
+    closeEnough(element.bbox.x, transform.translateX / presentation.pageWidthEmu) &&
+    closeEnough(element.bbox.y, transform.translateY / presentation.pageHeightEmu)
+  );
+}
+
+function closeEnough(left: number, right: number): boolean {
+  // Google quantizes EMU transforms and may rewrite an equivalent size/scale pair. A tenth of a
+  // percent is sub-pixel at the editor's normal presentation sizes while still rejecting visible
+  // drift or movement.
+  return Math.abs(left - right) <= 0.001;
 }
 
 export function assertGoogleSlidesBatchUpdateResponse(

@@ -11,7 +11,9 @@ import {
   googleSlidesExternalSnapshotDigest,
 } from '../src/domains/nodeslide/integrations/googleSlides/googleSlides';
 import { planGoogleSlidesThreeWaySync } from '../src/domains/nodeslide/integrations/googleSlides/planning';
+import type { GoogleSlidesRequest } from '../src/domains/nodeslide/integrations/googleSlides/types';
 import {
+  type NormalizedPresentationElement,
   type NormalizedPresentationState,
   type PresentationSyncBaseline,
   syncSemanticFingerprint,
@@ -204,8 +206,26 @@ export const createPresentation = action({
       session.accessToken,
       initial.snapshot.deck.title,
     );
-    const remote = (await session.adapter.getPresentation(presentationId)).normalized.presentation;
-    const revision = requiredRevision(remote);
+    let remote = (await session.adapter.getPresentation(presentationId)).normalized.presentation;
+    let revision = requiredRevision(remote);
+    const bootstrapPlaceholders = appCreatedGoogleSlidesBootstrapPlaceholders(remote);
+    if (bootstrapPlaceholders.length > 0) {
+      const requests = bootstrapPlaceholders.map((element) => ({
+        deleteObject: { objectId: element.remoteId },
+      })) satisfies GoogleSlidesRequest[];
+      await session.adapter.batchUpdate({
+        kind: 'google_slides_batch_update',
+        provider: 'google_slides',
+        presentationId,
+        requiredRevisionId: revision,
+        requests,
+        body: { requests, writeControl: { requiredRevisionId: revision } },
+        blocked: false,
+        blockedReasons: [],
+      });
+      remote = (await session.adapter.getPresentation(presentationId)).normalized.presentation;
+      revision = requiredRevision(remote);
+    }
     const baseline = createAppBlankGoogleSlidesBootstrapBaseline(initial.snapshot, remote);
     const encoded = encodeGoogleRuntimeBaseline(baseline);
     const state = (await ctx.runMutation(runtimeInternal.attachState, {
@@ -444,40 +464,64 @@ export const executePush = action({
   },
   handler: async (ctx, args): Promise<VerificationResult> => {
     const initial = await readRuntimeContext(ctx, args);
-    const state = requirePendingState(initial.state, 'outbound', args.planDigest);
+    const state = requireResumableOutboundState(initial.state, args.planDigest);
     const envelope = decodeGoogleRuntimePlan(required(state.pendingPlanJson), args.planDigest);
     const plan = envelope.plan as GoogleSlidesOutboundExternalPlanV1;
-    const claimed = (await ctx.runMutation(runtimeInternal.claimPending, {
-      ...args,
-      expectedStateVersion: state.stateVersion,
-      direction: 'outbound',
-      nextStatus: 'executing',
-    })) as Doc<'nodeslide_google_sync_states'>;
+    const dispatchRequired = state.status === 'awaiting_push_review';
+    const claimed = dispatchRequired
+      ? ((await ctx.runMutation(runtimeInternal.claimPending, {
+          ...args,
+          expectedStateVersion: state.stateVersion,
+          direction: 'outbound',
+          nextStatus: 'executing',
+        })) as Doc<'nodeslide_google_sync_states'>)
+      : state;
 
     try {
       const current = await readRuntimeContext(ctx, args);
       const adapter = await authorizedAdapter(ctx, args, current);
       const preWriteRemote = (await adapter.getPresentation(state.remotePresentationId)).normalized
         .presentation;
-      assertGoogleSlidesExternalPlanCurrent(plan, {
-        ...envelope.planningInput,
-        local: current.snapshot,
-        remote: preWriteRemote,
-      });
-
-      let responseVerified = false;
-      let writeError: unknown;
-      try {
-        const response = await adapter.batchUpdate(plan.batchUpdate);
-        assertGoogleSlidesBatchUpdateResponse(plan, response);
-        responseVerified = true;
-      } catch (error) {
-        writeError = error;
+      if (dispatchRequired) {
+        assertGoogleSlidesExternalPlanCurrent(plan, {
+          ...envelope.planningInput,
+          local: current.snapshot,
+          remote: preWriteRemote,
+        });
       }
-      const verifying = (await ctx.runMutation(runtimeInternal.markVerifying, {
-        ...args,
-        expectedStateVersion: claimed.stateVersion,
-      })) as Doc<'nodeslide_google_sync_states'>;
+
+      let responseVerified = !dispatchRequired;
+      let writeError: unknown;
+      if (dispatchRequired) {
+        try {
+          const response = await adapter.batchUpdate(plan.batchUpdate);
+          assertGoogleSlidesBatchUpdateResponse(plan, response);
+          responseVerified = true;
+        } catch (error) {
+          writeError = error;
+        }
+      } else {
+        try {
+          assertVerifiedGoogleSlidesConvergence({
+            baseline: envelope.planningInput.baseline,
+            acceptedLocal: current.snapshot,
+            verifiedRemote: preWriteRemote,
+            plan,
+          });
+        } catch {
+          throw new NodeSlideGoogleRuntimeError(
+            'remote_conflict',
+            'The interrupted Google Slides write did not converge. Re-plan before retrying.',
+          );
+        }
+      }
+      const verifying =
+        claimed.status === 'verifying'
+          ? claimed
+          : ((await ctx.runMutation(runtimeInternal.markVerifying, {
+              ...ownerRuntimeArgs(args),
+              expectedStateVersion: claimed.stateVersion,
+            })) as Doc<'nodeslide_google_sync_states'>);
       const verifiedRemote = (await adapter.getPresentation(state.remotePresentationId)).normalized
         .presentation;
       try {
@@ -485,6 +529,7 @@ export const executePush = action({
           baseline: envelope.planningInput.baseline,
           acceptedLocal: current.snapshot,
           verifiedRemote,
+          plan,
         });
       } catch (verificationError) {
         if (writeError) {
@@ -871,7 +916,8 @@ export const markVerifying = internalMutation({
     ownerAccessKey: v.string(),
     expectedStateVersion: v.number(),
   },
-  handler: async (ctx, args) => await transitionState(ctx, args, ['executing'], 'verifying', {}),
+  handler: async (ctx, args) =>
+    await transitionState(ctx, args, ['executing', 'error'], 'verifying', {}),
 });
 
 export const finishVerified = internalMutation({
@@ -938,12 +984,35 @@ async function readRuntimeContext(
   ctx: ActionCtx,
   args: { deckId: string; ownerAccessKey: string },
 ): Promise<RuntimeContext> {
-  const first = (await ctx.runQuery(runtimeInternal.readContextInternal, args)) as RuntimeContext;
+  const authorizationArgs = {
+    ...ownerRuntimeArgs(args),
+  };
+  const first = (await ctx.runQuery(
+    runtimeInternal.readContextInternal,
+    authorizationArgs,
+  )) as RuntimeContext;
   if (!first.state?.pendingPatchId) return first;
   return (await ctx.runQuery(runtimeInternal.readContextInternal, {
-    ...args,
+    ...authorizationArgs,
     patchId: first.state.pendingPatchId,
   })) as RuntimeContext;
+}
+
+function appCreatedGoogleSlidesBootstrapPlaceholders(
+  remote: NormalizedPresentationState,
+): NormalizedPresentationElement[] {
+  if (remote.slides.length !== 1) return [];
+  const elements = remote.slides[0]?.elements ?? [];
+  if (elements.length === 0) return [];
+  const placeholders = elements.filter(
+    (element) =>
+      element.writable &&
+      (element.kind === 'text' || element.kind === 'shape') &&
+      !element.content?.trim() &&
+      !element.imageUrl,
+  );
+  if (placeholders.length !== elements.length) return [];
+  return placeholders.map((element) => ({ ...element }));
 }
 
 async function authorizedAdapter(
@@ -976,7 +1045,7 @@ async function authorizedGoogleSession(
   });
   if (resolved.update) {
     const stored = (await ctx.runMutation(runtimeInternal.storeRefreshedCredential, {
-      ...args,
+      ...ownerRuntimeArgs(args),
       ...resolved.update,
     })) as boolean;
     if (!stored) {
@@ -1005,7 +1074,7 @@ async function finishVerifiedAction(
   const encodedReceipt = encodeGoogleRuntimeReceipt(receipt);
   assertGoogleRuntimeStateSize(baseline.json, encodedReceipt.json);
   const state = (await ctx.runMutation(runtimeInternal.finishVerified, {
-    ...args,
+    ...ownerRuntimeArgs(args),
     expectedStateVersion,
     baselineJson: baseline.json,
     baselineDigest: baseline.digest,
@@ -1024,12 +1093,16 @@ async function recordActionFailure(
 ): Promise<NodeSlideGoogleRuntimeError> {
   const failure = runtimeError(error);
   await ctx.runMutation(runtimeInternal.recordFailure, {
-    ...args,
+    ...ownerRuntimeArgs(args),
     expectedStateVersion,
     errorCode: failure.code,
     errorMessage: failure.message,
   });
   return failure;
+}
+
+function ownerRuntimeArgs(args: { deckId: string; ownerAccessKey: string }) {
+  return { deckId: args.deckId, ownerAccessKey: args.ownerAccessKey };
 }
 
 async function transitionState(
@@ -1101,6 +1174,24 @@ function requirePendingState(
     throw new NodeSlideGoogleRuntimeError(
       'invalid_runtime_state',
       'The approved Google Slides plan is no longer pending; re-plan before continuing.',
+    );
+  }
+  return requiredState;
+}
+
+function requireResumableOutboundState(
+  state: Doc<'nodeslide_google_sync_states'> | null,
+  digest: string,
+): Doc<'nodeslide_google_sync_states'> {
+  const requiredState = requireRuntimeState(state);
+  if (
+    !['awaiting_push_review', 'executing', 'verifying', 'error'].includes(requiredState.status) ||
+    requiredState.pendingDirection !== 'outbound' ||
+    requiredState.pendingPlanDigest !== digest
+  ) {
+    throw new NodeSlideGoogleRuntimeError(
+      'invalid_runtime_state',
+      'The approved Google Slides push is no longer resumable; re-plan before continuing.',
     );
   }
   return requiredState;

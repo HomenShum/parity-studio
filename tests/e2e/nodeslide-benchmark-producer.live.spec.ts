@@ -707,8 +707,12 @@ async function chooseRecommendedNebius(page: Page, surface: 'landing' | 'editor'
   if ((await recommended.count()) !== 1) throw new Error('recommended GLM model was ambiguous');
   await recommended.click();
   const effort = page.getByTestId(effortTestId);
-  await effort.selectOption('medium');
-  if ((await effort.inputValue()) !== 'medium') throw new Error('reasoning effort was not medium');
+  await effort.click();
+  const effortListbox = page.getByRole('listbox');
+  await effortListbox.getByRole('option', { name: 'Medium', exact: true }).click();
+  if (!(await effort.textContent())?.includes('Medium')) {
+    throw new Error('reasoning effort was not medium');
+  }
 }
 
 async function grantSessionConsent(consent: Locator): Promise<void> {

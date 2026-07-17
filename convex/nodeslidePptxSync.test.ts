@@ -203,27 +203,31 @@ function snapshotFixture(
       title: 'Quarterly review',
       brief: {
         prompt: 'Review the quarter.',
-        audience: 'Quarterly business reviewers',
-        purpose: 'Summarize the quarterly results',
-        successCriteria: ['Keep the exported presentation editable'],
+        audience: 'Executive team',
+        purpose: 'Quarterly review',
+        successCriteria: ['Keep linked edits bounded and reviewable.'],
       },
       theme: {
-        id: 'theme-1',
+        id: 'test-theme',
         name: 'Test theme',
         mode: 'light',
         colors: {
-          canvas: '#ffffff',
-          ink: '#111111',
-          muted: '#666666',
-          accent: '#ff6600',
-          accentSoft: '#fff0e8',
-          insight: '#dbeafe',
-          insightInk: '#1e3a8a',
-          trace: '#334155',
-          border: '#dddddd',
+          canvas: '#F5F1E8',
+          ink: '#14231C',
+          muted: '#5F6B64',
+          accent: '#B44A2D',
+          accentSoft: '#F8D8CC',
+          insight: '#DCEBDD',
+          insightInk: '#17442D',
+          trace: '#6B5BD2',
+          border: '#D8D1C5',
         },
-        typography: { display: 'Inter', body: 'Inter', data: 'Mono' },
-        defaultRadius: 8,
+        typography: {
+          display: 'Fraunces Variable',
+          body: 'Geist Variable',
+          data: 'JetBrains Mono Variable',
+        },
+        defaultRadius: 18,
         spacingUnit: 8,
       },
       slideOrder: ['slide-1'],
@@ -262,7 +266,7 @@ function snapshotFixture(
       },
     ],
     sources: [],
-  } as DeckSnapshot;
+  };
 }
 
 function remoteDocument(

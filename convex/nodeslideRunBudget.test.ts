@@ -113,6 +113,14 @@ describe('NodeSlide model pricing metadata', () => {
       providerMaxOutputTokens: 131_072,
       source: 'openrouter_request_price_ceiling',
     });
+    expect(nodeSlideModelPricing('google/gemini-3.5-flash')).toMatchObject({
+      kind: 'priced',
+      inputMicroUsdPerMillionTokens: 1_500_000,
+      outputMicroUsdPerMillionTokens: 9_000_000,
+      providerContextWindowTokens: 1_048_576,
+      providerMaxOutputTokens: 65_536,
+      source: 'openrouter_model_catalog',
+    });
   });
 
   it('returns typed unscored data, never a fabricated estimate, for unknown pricing', () => {

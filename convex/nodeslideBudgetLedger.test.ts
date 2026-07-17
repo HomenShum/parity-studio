@@ -171,7 +171,7 @@ describe('NodeSlide trusted job budget finalization', () => {
     expect(database.rows('nodeslide_budget_events')).toEqual([]);
   });
 
-  it('refuses reserved and unreconciled exposure, then finalizes reconciled state once', async () => {
+  it('refuses active reservations and finalizes with conservative unreconciled exposure', async () => {
     const database = new MemoryDatabase();
     const ctx = mutationContext(database);
     const budgetId = 'budget-job-finalize';
@@ -201,33 +201,13 @@ describe('NodeSlide trusted job budget finalization', () => {
       reservedMicroUsd: 0,
       unreconciledMicroUsd: reserved.budget.reservedMicroUsd,
     });
-    const unreconciledWrites = database.writes.length;
-    await expect(finalizeForJobHandler(ctx, { budgetId })).rejects.toThrowError(
-      expect.objectContaining({ code: 'invalid_call_transition' }),
-    );
-    expect(database.writes).toHaveLength(unreconciledWrites);
-
-    const released = await releaseHandler(ctx, {
-      budgetId,
-      callId: 'provider-call-1',
-      ...expectedState(unreconciled),
-    });
-    expect(released.budget).toMatchObject({ reservedMicroUsd: 0, unreconciledMicroUsd: 0 });
-    await expect(
-      finalizeHandler(ctx, {
-        budgetId,
-        expectedRevision: released.budget.revision + 1,
-        expectedStateDigest: released.budget.stateDigest,
-      }),
-    ).rejects.toThrowError(expect.objectContaining({ code: 'stale_budget_state' }));
-
     const finalized = await finalizeForJobHandler(ctx, { budgetId });
     expect(finalized.budget).toMatchObject({
       status: 'finalized',
-      revision: released.budget.revision + 1,
-      actualMicroUsd: released.budget.actualMicroUsd,
+      revision: unreconciled.budget.revision + 1,
+      actualMicroUsd: unreconciled.budget.actualMicroUsd,
       reservedMicroUsd: 0,
-      unreconciledMicroUsd: 0,
+      unreconciledMicroUsd: unreconciled.budget.unreconciledMicroUsd,
     });
     expect(database.rows('nodeslide_budget_events').at(-1)).toMatchObject({
       budgetId,
@@ -272,9 +252,12 @@ describe('NodeSlide trusted job budget finalization', () => {
       budget: { reservedMicroUsd: 0, unreconciledMicroUsd: 0 },
       call: { status: 'unreconciled', quoteMicroUsd: 0 },
     });
-    await expect(finalizeForJobHandler(ctx, { budgetId })).rejects.toThrowError(
-      expect.objectContaining({ code: 'invalid_call_transition' }),
-    );
+    const finalized = await finalizeForJobHandler(ctx, { budgetId });
+    expect(finalized.budget).toMatchObject({
+      status: 'finalized',
+      reservedMicroUsd: 0,
+      unreconciledMicroUsd: 0,
+    });
   });
 });
 

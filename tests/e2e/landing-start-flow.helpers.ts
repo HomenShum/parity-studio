@@ -131,11 +131,29 @@ export async function chooseDeterministicLandingModel(page: Page): Promise<void>
   await expect(dialog).toBeHidden();
 }
 
-export async function readSelectOptions(select: Locator): Promise<string[]> {
-  return select
-    .locator('option')
+export async function readSelectOptions(page: Page, trigger: Locator): Promise<string[]> {
+  await trigger.click();
+  const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
+  const labels = await listbox
+    .getByRole('option')
     .allTextContents()
-    .then((labels) => labels.map((label) => label.trim()));
+    .then((options) => options.map((label) => label.trim()));
+  await page.keyboard.press('Escape');
+  await expect(listbox).toBeHidden();
+  return labels;
+}
+
+export async function chooseSelectOption(
+  page: Page,
+  trigger: Locator,
+  label: string,
+): Promise<void> {
+  await trigger.click();
+  const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
+  await listbox.getByRole('option', { name: label, exact: true }).click();
+  await expect(listbox).toBeHidden();
 }
 
 export async function grantLandingSessionConsent(page: Page): Promise<void> {

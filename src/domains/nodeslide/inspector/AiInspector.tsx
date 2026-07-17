@@ -1519,7 +1519,9 @@ export function AiInspector<CommandId extends string = string>({
                 data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}
                 data-provider-configuration={providerConfigurationValid ? 'valid' : 'invalid'}
                 data-provider-effort={providerEffort}
-                data-provider-model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                data-provider-model={
+                  providerMode === 'deterministic' ? 'deterministic' : providerModel
+                }
                 data-provider-ready={providerReady ? 'true' : 'false'}
                 onFocusCapture={() => {
                   if (compactReviewComposer) setComposerExpanded(true);
@@ -1770,7 +1772,10 @@ export function AiInspector<CommandId extends string = string>({
                           disabled={approvalControlLocked}
                           onValueChange={(value) => setOperationMode(value as OperationMode)}
                         >
-                          <SelectTrigger aria-labelledby={`${composerId}-operation-mode`}>
+                          <SelectTrigger
+                            data-testid="ai-operation-mode"
+                            aria-labelledby={`${composerId}-operation-mode`}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1945,6 +1950,11 @@ export function AiInspector<CommandId extends string = string>({
                             <Checkbox
                               id="nodeslide-ai-provider-consent"
                               type="button"
+                              aria-label={
+                                deterministicWebResearch
+                                  ? 'Allow web research for this session'
+                                  : 'Allow external model access for this session'
+                              }
                               checked={externalConsent.granted}
                               onCheckedChange={(checked) => {
                                 externalConsent.setGranted(checked === true);
@@ -2075,6 +2085,7 @@ export function AiInspector<CommandId extends string = string>({
                           <DropdownMenuItem
                             className="ns-ai-tool-button"
                             data-testid="ai-connect-agent"
+                            aria-label="Connect BYOK model or coding agent"
                             disabled={approvalControlLocked}
                             onSelect={() => setConnectionsOpen(true)}
                             title="Connect BYOK model or coding agent"
@@ -2086,6 +2097,7 @@ export function AiInspector<CommandId extends string = string>({
                             <DropdownMenuItem
                               className="ns-ai-tool-button"
                               data-testid="ai-memory"
+                              aria-label="Manage deck memory"
                               disabled={approvalControlLocked}
                               onSelect={() => setMemoryOpen(true)}
                               title="Manage durable deck memory"
@@ -2100,6 +2112,7 @@ export function AiInspector<CommandId extends string = string>({
                           ) : null}
                           <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-context"
+                            aria-label="Add read context reference"
                             disabled={approvalControlLocked || references.length === 0}
                             onSelect={() => openTokenMenu('@')}
                             title="Add read context"
@@ -2109,6 +2122,7 @@ export function AiInspector<CommandId extends string = string>({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-command"
+                            aria-label="Add command"
                             disabled={approvalControlLocked}
                             onSelect={() => openTokenMenu('/')}
                             title="Add command"

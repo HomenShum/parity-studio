@@ -38,3 +38,7 @@ mcp/node_modules/
 
 .vercel
 .vercel.env.tmp
+
+# Local launch recordings and live log captures
+artifacts/nodeslide-three-deck-launch-final-v22/
+convex-logs-*.txt
