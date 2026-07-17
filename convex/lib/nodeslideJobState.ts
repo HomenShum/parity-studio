@@ -1,4 +1,6 @@
 import { nodeslideContentDigest } from './nodeslideIds';
+import type { NodeSlideJobRenderRepairSummary } from './nodeslideLiveRenderRepair';
+import type { NodeSlideJobRoutingReceipt } from './nodeslideRoutingReceipt';
 
 export const NODESLIDE_JOB_MAX_ATTEMPTS = 3;
 
@@ -69,6 +71,10 @@ export interface NodeSlideJobRecord {
   conversationRunId?: string;
   /** Stable server-owned ledger binding for every externally billable durable run. */
   budgetId?: string;
+  /** Immutable admission-time routing decision for this run (advisory_v1). */
+  routingReceipt?: NodeSlideJobRoutingReceipt;
+  /** Live render-repair pass evidence for this run (post-creation). */
+  renderRepair?: NodeSlideJobRenderRepairSummary;
   error?: string;
   createdAt: number;
   updatedAt: number;
@@ -102,6 +108,8 @@ export interface PublicNodeSlideJob {
       };
   conversationRunId?: string;
   budgetId?: string;
+  routingReceipt?: NodeSlideJobRoutingReceipt;
+  renderRepair?: NodeSlideJobRenderRepairSummary;
   error?: string;
   createdAt: number;
   updatedAt: number;
@@ -455,6 +463,8 @@ export function publicNodeSlideJob(job: NodeSlideJobRecord): PublicNodeSlideJob 
     ...(job.resultCandidateDigest ? { resultCandidateDigest: job.resultCandidateDigest } : {}),
     ...(job.conversationRunId ? { conversationRunId: job.conversationRunId } : {}),
     ...(job.budgetId ? { budgetId: job.budgetId } : {}),
+    ...(job.routingReceipt ? { routingReceipt: job.routingReceipt } : {}),
+    ...(job.renderRepair ? { renderRepair: job.renderRepair } : {}),
     ...(job.error ? { error: job.error } : {}),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,

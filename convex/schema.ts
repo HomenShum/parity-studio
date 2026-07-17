@@ -2,6 +2,10 @@ import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 import { nodeslideExecutionTraceFields } from './lib/nodeslideExecutionTraceValidator';
 import { NODESLIDE_JOB_PHASES, NODESLIDE_JOB_STATUSES } from './lib/nodeslideJobState';
+import {
+  nodeslideJobRenderRepairSummaryValidator,
+  nodeslideJobRoutingReceiptValidator,
+} from './lib/nodeslideJobValidators';
 import { nodeslideShadowComparisonFields } from './lib/nodeslideShadowComparisonValidator';
 import {
   nodeslideBoundingBoxValidator,
@@ -1352,6 +1356,8 @@ export default defineSchema({
     conversationRunId: v.optional(v.string()),
     // Budget ownership is intentionally optional until provider/job wiring lands.
     budgetId: v.optional(v.string()),
+    routingReceipt: v.optional(nodeslideJobRoutingReceiptValidator),
+    renderRepair: v.optional(nodeslideJobRenderRepairSummaryValidator),
     memoryIds: v.array(v.string()),
     memoryDigests: v.optional(v.array(v.string())),
     error: v.optional(v.string()),
@@ -2000,7 +2006,9 @@ export default defineSchema({
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_status_created', ['deckId', 'status', 'createdAt'])
     .index('by_patch', ['patchId'])
-    .index('by_stable_deck_patch', ['id', 'deckId', 'patchId']),
+    .index('by_stable_deck_patch', ['id', 'deckId', 'patchId'])
+    // Cross-deck recency scan for provider-availability signals (bounded take).
+    .index('by_created', ['createdAt']),
 
   nodeslide_execution_traces: defineTable(nodeslideExecutionTraceFields)
     .index('by_stable_id', ['id'])

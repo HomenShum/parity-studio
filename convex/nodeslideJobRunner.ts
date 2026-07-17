@@ -1,6 +1,7 @@
 'use node';
 
 import { v } from 'convex/values';
+import type { DeckSnapshot } from '../shared/nodeslide';
 import { api, internal } from './_generated/api';
 import { internalAction } from './_generated/server';
 import { nodeSlideCreationTraceId } from './lib/nodeslideCreationTelemetry';
@@ -9,6 +10,7 @@ import {
   nodeslideCreateJobRequestValidator,
   nodeslideEditProposalJobRequestValidator,
 } from './lib/nodeslideJobValidators';
+import { runNodeSlideLiveRenderRepair } from './lib/nodeslideLiveRenderRepair';
 
 // Generated Convex references form a deliberate action -> mutation/action
 // boundary. All values still cross explicit validators.
@@ -73,8 +75,29 @@ export const executeCreateDeckInternal = internalAction({
     const workspace = (await ctx.runQuery(nodeslideInternal.getAgentContextInternal, {
       deckId: resultDeckId,
       ownerAccessKey: args.ownerAccessKey,
-    })) as { sources?: Array<{ id: string }> } | null;
+    })) as (DeckSnapshot & { sources?: Array<{ id: string }> }) | null;
     const sourceIds = (workspace?.sources ?? []).map((source) => source.id).slice(0, 32);
+
+    // D1 live render-repair pass: deterministic render -> observe -> repair loop
+    // over the just-created deck. Its receipts are evidence on the job; a repair
+    // failure degrades honestly and never fails the create itself.
+    if (workspace?.deck && workspace.slides && workspace.elements) {
+      try {
+        const repair = runNodeSlideLiveRenderRepair({
+          deck: workspace.deck,
+          slides: workspace.slides,
+          elements: workspace.elements,
+          sources: (workspace.sources ?? []) as DeckSnapshot['sources'],
+        });
+        await ctx.runMutation(jobsInternal.recordRenderRepairInternal, {
+          jobId: args.jobId,
+          renderRepair: repair.summary,
+        });
+      } catch {
+        // The create result stands; absence of a renderRepair receipt is the
+        // honest signal that the repair pass did not complete.
+      }
+    }
 
     await ctx.runMutation(jobsInternal.checkpointInternal, {
       jobId: args.jobId,

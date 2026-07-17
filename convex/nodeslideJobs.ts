@@ -48,12 +48,18 @@ import {
   nodeSlideEditProposalJobRequestFromArgs,
   nodeslideCreateJobRequestFields,
   nodeslideEditProposalJobRequestFields,
+  nodeslideJobRenderRepairSummaryValidator,
 } from './lib/nodeslideJobValidators';
 import {
   NodeSlideProviderConsentError,
   validateNodeSlideProviderChoice,
 } from './lib/nodeslideProviderConsent';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
+import {
+  NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS,
+  NODESLIDE_ROUTE_SIGNAL_LIMIT,
+  buildNodeSlideCreateRoutingReceipt,
+} from './lib/nodeslideRoutingReceipt';
 import {
   nodeslideCreatePublicError,
   validateNodeSlideBriefAttachments,
@@ -185,6 +191,39 @@ export const startCreateDeck = mutation({
       },
     });
     const streamId = await streaming.createStream(ctx);
+    // Admission-time routing decision: availability is derived only from observed
+    // provider outcomes in the recent window (fail closed), never from a probe we
+    // did not run. The receipt is advisory_v1 and immutable for the job's lifetime.
+    const routeSignalRows = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_created', (q) =>
+        q.gt('createdAt', now - NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS),
+      )
+      .order('desc')
+      .take(NODESLIDE_ROUTE_SIGNAL_LIMIT);
+    const routingReceipt = buildNodeSlideCreateRoutingReceipt({
+      providerMode: request.providerMode,
+      providerModel: request.providerModel,
+      providerEffort: request.providerEffort,
+      briefCharacters: request.brief.prompt.length,
+      attachmentCharacters: (request.attachments ?? []).reduce(
+        (total, attachment) => total + attachment.content.length,
+        0,
+      ),
+      signals: routeSignalRows.flatMap((row) =>
+        row.provider && row.model
+          ? [
+              {
+                provider: row.provider,
+                model: row.model,
+                ok: row.status === 'completed' || row.status === 'awaiting_review',
+                at: row.completedAt ?? row.createdAt,
+              },
+            ]
+          : [],
+      ),
+      now,
+    });
     const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
       id: jobId,
       kind: 'create_deck',
@@ -204,6 +243,7 @@ export const startCreateDeck = mutation({
       memoryIds: [],
       memoryDigests: [],
       ...(request.providerMode && request.providerMode !== 'deterministic' ? { budgetId } : {}),
+      routingReceipt,
       createdAt: now,
       updatedAt: now,
     });
@@ -661,6 +701,24 @@ export const checkpointInternal = internalMutation({
     await patchJob(ctx, row, next);
     await appendProgress(ctx, next);
     return publicNodeSlideJob(next);
+  },
+});
+
+export const recordRenderRepairInternal = internalMutation({
+  args: {
+    jobId: v.string(),
+    renderRepair: nodeslideJobRenderRepairSummaryValidator,
+  },
+  handler: async (ctx, args) => {
+    const row = await findJob(ctx, args.jobId);
+    if (!row) throw new Error('NodeSlide job not found.');
+    // Evidence attachment, not a state transition: the repair pass may only be
+    // recorded once and never mutates job status or progress.
+    if (row.renderRepair) return;
+    await ctx.db.patch(row._id, {
+      renderRepair: structuredClone(args.renderRepair),
+      updatedAt: Date.now(),
+    });
   },
 });
 

@@ -1182,6 +1182,29 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const contractDeckId = workspace?.deck.id;
   const contractDeckVersion = workspace?.deck.version;
   const contractSlideCount = workspace?.slides.length;
+  const contractJob = useMemo(() => {
+    if (!durableSessionJob) return undefined;
+    return {
+      id: durableSessionJob.jobId,
+      status: durableSessionJob.status,
+      phase: durableSessionJob.phase,
+      ...(durableSessionJob.routingReceipt
+        ? {
+            routing:
+              durableSessionJob.routingReceipt.decision.kind === 'selected'
+                ? ({
+                    kind: 'selected',
+                    modelId: durableSessionJob.routingReceipt.decision.modelId,
+                    estimatedMicroUsd: durableSessionJob.routingReceipt.decision.estimatedMicroUsd,
+                  } as const)
+                : ({
+                    kind: 'refused',
+                    code: durableSessionJob.routingReceipt.decision.code,
+                  } as const),
+          }
+        : {}),
+    };
+  }, [durableSessionJob]);
   useEffect(() => {
     if (!contractDeckId || contractDeckVersion === undefined || contractSlideCount === undefined) {
       return;
@@ -1191,8 +1214,16 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       connection: 'ready',
       theme: studioTheme,
       deck: { id: contractDeckId, version: contractDeckVersion, slideCount: contractSlideCount },
+      ...(contractJob ? { job: contractJob } : {}),
     });
-  }, [contractDeckId, contractDeckVersion, contractSlideCount, studioTheme, presentMode]);
+  }, [
+    contractDeckId,
+    contractDeckVersion,
+    contractSlideCount,
+    studioTheme,
+    presentMode,
+    contractJob,
+  ]);
   const activeSignatureProfile = workspace?.deck.activeSignatureProfileId
     ? (signatureProfiles.find(
         (profile) =>
