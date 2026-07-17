@@ -306,6 +306,15 @@ Screenshots, trace, citations, and versions prove the work.
 The result remains editable and reversible.
 ```
 
+## Scope decisions recorded during Phase 1
+
+- Math exports as native *editable text runs* (PowerPoint users can edit them), not
+  OMML equations. pptxgenjs has no OMML API; raw-XML injection is out of scope until
+  a real user need appears. The capability is honest: no rasterization, no fake claim.
+- Timeline and comparison are **layout archetypes**, not element kinds: they compose
+  from existing text/shape/connector/chart primitives under a SlideJob's visual
+  relationship. The archetype registry (Delta 2) owns them; no new schema.
+
 ## Non-goals
 
 - Copying any third-party template's exact design, or redistributing reference pixels.

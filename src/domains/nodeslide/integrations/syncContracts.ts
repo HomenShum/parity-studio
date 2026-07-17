@@ -210,7 +210,11 @@ export function createCandidatePatchPlan(input: {
   const existingElementIds = new Set(input.snapshot.elements.map((element) => element.id));
 
   for (const operation of operations) {
-    if (operation.op !== 'update_deck' && operation.op !== 'add_slide') {
+    if (
+      operation.op !== 'update_deck' &&
+      operation.op !== 'update_theme_v1' &&
+      operation.op !== 'add_slide'
+    ) {
       touchedSlideIds.add(operation.slideId);
     }
     if (operation.op === 'remove_slide') {

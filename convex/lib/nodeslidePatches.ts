@@ -15,7 +15,7 @@ import {
   type SlideElement,
   operationElementIds,
 } from '../../shared/nodeslide';
-import { validatePatchScope } from '../../shared/nodeslidePatch';
+import { validatePatchScope, validatedThemeUpdate } from '../../shared/nodeslidePatch';
 import { nodeslideCleanText } from './nodeslideIds';
 import { boundingBoxesIntersect, isNormalizedBoundingBox } from './nodeslideValidation';
 
@@ -75,6 +75,7 @@ export function validateNodeSlidePatch(
   );
   const slideOrder = [...snapshot.deck.slideOrder];
   let deckTitle = snapshot.deck.title;
+  let deckTheme = structuredClone(snapshot.deck.theme);
   const sources = new Set(snapshot.sources.map((source) => source.id));
   const addedSlideIds = new Set<string>();
   const addedElementSlideIds = new Map<string, string>();
@@ -154,6 +155,15 @@ export function validateNodeSlidePatch(
         errors.push('update_deck must change the deck title.');
       }
       if (nextTitle && nextTitle.length <= MAX_DECK_TITLE_LENGTH) deckTitle = nextTitle;
+      continue;
+    }
+
+    if (operation.op === 'update_theme_v1') {
+      try {
+        deckTheme = validatedThemeUpdate(deckTheme, operation.properties);
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'update_theme_v1 was invalid.');
+      }
       continue;
     }
 
@@ -578,7 +588,8 @@ export function evaluateNodeSlideCas(
     (operation) =>
       operation.op === 'add_slide' ||
       operation.op === 'remove_slide' ||
-      operation.op === 'update_deck',
+      operation.op === 'update_deck' ||
+      operation.op === 'update_theme_v1',
   );
   if (requiresExactDeckVersion && patch.baseDeckVersion !== snapshot.deck.version) {
     reasons.push(
@@ -624,7 +635,13 @@ export function touchedNodeSlideIds(
   const elementIds = new Set<string>();
   const existingIds = new Set(snapshot.elements.map((element) => element.id));
   for (const operation of operations) {
-    if (operation.op === 'update_deck' || operation.op === 'add_slide') continue;
+    if (
+      operation.op === 'update_deck' ||
+      operation.op === 'update_theme_v1' ||
+      operation.op === 'add_slide'
+    ) {
+      continue;
+    }
     slideIds.add(operation.slideId);
     if (operation.op === 'remove_slide') {
       for (const element of snapshot.elements) {
@@ -869,6 +886,7 @@ export function summarizePatchOperations(
   }
   const labels = operations.map((operation) => {
     if (operation.op === 'update_deck') return 'update deck title';
+    if (operation.op === 'update_theme_v1') return 'update deck theme';
     if (operation.op === 'add_slide') return `add slide ${operation.slide.title}`;
     const slideLabel =
       snapshot?.slides.find((slide) => slide.id === operation.slideId)?.title ?? operation.slideId;

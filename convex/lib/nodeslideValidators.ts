@@ -760,6 +760,32 @@ export const nodeslidePatchOperationValidator = v.union(
       title: v.optional(v.string()),
     }),
   }),
+  v.object({
+    op: v.literal('update_theme_v1'),
+    properties: v.object({
+      mode: v.optional(v.union(v.literal('light'), v.literal('dark'))),
+      colors: v.optional(
+        v.object({
+          canvas: v.optional(v.string()),
+          ink: v.optional(v.string()),
+          muted: v.optional(v.string()),
+          accent: v.optional(v.string()),
+          accentSoft: v.optional(v.string()),
+          insight: v.optional(v.string()),
+          insightInk: v.optional(v.string()),
+          trace: v.optional(v.string()),
+          border: v.optional(v.string()),
+        }),
+      ),
+      typography: v.optional(
+        v.object({
+          display: v.optional(v.string()),
+          body: v.optional(v.string()),
+          data: v.optional(v.string()),
+        }),
+      ),
+    }),
+  }),
 );
 
 export const nodeslidePatchSourceValidator = v.union(

@@ -3070,6 +3070,7 @@ function describeOperation(operation: PatchOperation) {
     return `Add ${operation.element.kind} “${operation.element.name}”`;
   if (operation.op === 'remove_element') return `Remove ${operation.elementId}`;
   if (operation.op === 'reorder_slide') return `Move slide to position ${operation.index + 1}`;
+  if (operation.op === 'update_theme_v1') return 'Update deck theme';
   return `Update slide ${operation.slideId}`;
 }
 

@@ -532,7 +532,15 @@ export type PatchOperation =
       slideId: string;
       properties: Partial<Pick<Slide, 'title' | 'notes' | 'background'>>;
     }
-  | { op: 'update_deck'; properties: { title?: string } };
+  | { op: 'update_deck'; properties: { title?: string } }
+  | {
+      op: 'update_theme_v1';
+      properties: {
+        mode?: ThemeSpec['mode'];
+        colors?: Partial<ThemeSpec['colors']>;
+        typography?: Partial<ThemeSpec['typography']>;
+      };
+    };
 
 export interface DeckPatch {
   id: string;
@@ -1148,6 +1156,7 @@ export function isElementOperation(
   | { op: 'reorder_slide' }
   | { op: 'update_slide' }
   | { op: 'update_deck' }
+  | { op: 'update_theme_v1' }
   | { op: 'group_elements_v1' }
   | { op: 'ungroup_elements_v1' }
 > {
@@ -1157,6 +1166,7 @@ export function isElementOperation(
     operation.op !== 'reorder_slide' &&
     operation.op !== 'update_slide' &&
     operation.op !== 'update_deck' &&
+    operation.op !== 'update_theme_v1' &&
     operation.op !== 'group_elements_v1' &&
     operation.op !== 'ungroup_elements_v1'
   );

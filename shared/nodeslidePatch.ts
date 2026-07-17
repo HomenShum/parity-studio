@@ -10,6 +10,7 @@ import {
   type PatchScope,
   type Slide,
   type SlideElement,
+  type ThemeSpec,
   clampNormalized,
   operationElementIds,
 } from './nodeslide';
@@ -43,7 +44,7 @@ export function validatePatchScope(
     const targetSlideId =
       operation.op === 'add_slide'
         ? operation.slide.id
-        : operation.op === 'update_deck'
+        : operation.op === 'update_deck' || operation.op === 'update_theme_v1'
           ? null
           : operation.slideId;
     if (allowedSlides && targetSlideId !== null && !allowedSlides.has(targetSlideId)) {
@@ -74,6 +75,13 @@ export function validatePatchScope(
     ) {
       errors.push('update_deck requires deck scope with unrestricted mode.');
     }
+    if (
+      operation.op === 'update_theme_v1' &&
+      (scope.kind !== 'deck' ||
+        (scope.operationMode !== 'unrestricted' && scope.operationMode !== 'style'))
+    ) {
+      errors.push('update_theme_v1 requires deck scope in unrestricted or style mode.');
+    }
 
     if (scope.operationMode === 'copy' && operation.op !== 'replace_text') {
       errors.push(`Copy-only scope does not permit ${operation.op}.`);
@@ -81,7 +89,8 @@ export function validatePatchScope(
     if (
       scope.operationMode === 'style' &&
       operation.op !== 'update_style' &&
-      operation.op !== 'set_visibility_v1'
+      operation.op !== 'set_visibility_v1' &&
+      operation.op !== 'update_theme_v1'
     ) {
       errors.push(`Style-only scope does not permit ${operation.op}.`);
     }
@@ -137,6 +146,11 @@ export function applyDeckPatch(
     if (operation.op === 'update_deck') {
       const title = validatedDeckTitle(operation.properties.title);
       deck.title = title;
+      continue;
+    }
+
+    if (operation.op === 'update_theme_v1') {
+      deck.theme = validatedThemeUpdate(deck.theme, operation.properties);
       continue;
     }
 
@@ -538,6 +552,49 @@ function validatedDeckTitle(value: string | undefined): string {
     throw new Error(`Deck title cannot exceed ${MAX_DECK_TITLE_LENGTH} characters.`);
   }
   return title;
+}
+
+const THEME_HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const MAX_THEME_FONT_LENGTH = 80;
+
+export function validatedThemeUpdate(
+  theme: ThemeSpec,
+  properties: Extract<PatchOperation, { op: 'update_theme_v1' }>['properties'],
+): ThemeSpec {
+  const colorEntries = Object.entries(properties.colors ?? {});
+  const typographyEntries = Object.entries(properties.typography ?? {});
+  if (
+    properties.mode === undefined &&
+    colorEntries.length === 0 &&
+    typographyEntries.length === 0
+  ) {
+    throw new Error('update_theme_v1 requires at least one mode, color, or typography change.');
+  }
+  for (const [key, value] of colorEntries) {
+    if (!(key in theme.colors)) throw new Error(`Unknown theme color "${key}".`);
+    if (typeof value !== 'string' || !THEME_HEX_COLOR.test(value)) {
+      throw new Error(`Theme color "${key}" must be a #rrggbb hex value.`);
+    }
+  }
+  for (const [key, value] of typographyEntries) {
+    if (!(key in theme.typography)) throw new Error(`Unknown theme typography slot "${key}".`);
+    if (typeof value !== 'string' || !value.trim() || value.length > MAX_THEME_FONT_LENGTH) {
+      throw new Error(`Theme typography "${key}" must be 1-${MAX_THEME_FONT_LENGTH} characters.`);
+    }
+  }
+  if (properties.mode !== undefined && properties.mode !== 'light' && properties.mode !== 'dark') {
+    throw new Error('Theme mode must be "light" or "dark".');
+  }
+  const next: ThemeSpec = {
+    ...theme,
+    ...(properties.mode !== undefined ? { mode: properties.mode } : {}),
+    colors: { ...theme.colors, ...(properties.colors ?? {}) },
+    typography: { ...theme.typography, ...(properties.typography ?? {}) },
+  };
+  if (JSON.stringify(next) === JSON.stringify(theme)) {
+    throw new Error('update_theme_v1 must change the theme.');
+  }
+  return next;
 }
 
 function normalizeBox(bbox: SlideElement['bbox']): SlideElement['bbox'] {

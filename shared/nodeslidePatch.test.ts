@@ -7,6 +7,7 @@ import {
   touchedNodeSlideIds,
   validateNodeSlidePatch,
 } from '../convex/lib/nodeslidePatches';
+import { buildGoldenNodeSlide } from '../convex/lib/nodeslideSeed';
 import {
   type DeckSnapshot,
   NODESLIDE_PATCH_OPERATION_LIMIT,
@@ -1313,5 +1314,103 @@ describe('NodeSlide deck-level operations and clocks', () => {
     expect(() =>
       deterministicAgentOperations(current, 'Replace "Missing" with "After".', scope),
     ).toThrow('could not safely infer new wording');
+  });
+});
+
+describe('update_theme_v1', () => {
+  const NOW = 1_700_000_000_000;
+
+  function themeFixture() {
+    const snapshot = buildGoldenNodeSlide('theme-op-tests', NOW).snapshot;
+    const scope: PatchScope = {
+      kind: 'deck',
+      deckId: snapshot.deck.id,
+      operationMode: 'unrestricted',
+    };
+    return { snapshot, scope };
+  }
+
+  it('applies a partial palette, typography, and mode change deck-wide', () => {
+    const { snapshot, scope } = themeFixture();
+    const result = applyDeckPatch(snapshot, {
+      baseDeckVersion: snapshot.deck.version,
+      scope,
+      operations: [
+        {
+          op: 'update_theme_v1',
+          properties: {
+            mode: snapshot.deck.theme.mode === 'dark' ? 'light' : 'dark',
+            colors: { accent: '#ff5733' },
+            typography: { display: 'Inter Display' },
+          },
+        },
+      ],
+    });
+    expect(result.snapshot.deck.theme.colors.accent).toBe('#ff5733');
+    expect(result.snapshot.deck.theme.typography.display).toBe('Inter Display');
+    expect(result.snapshot.deck.theme.mode).not.toBe(snapshot.deck.theme.mode);
+    // Untouched slots survive the merge.
+    expect(result.snapshot.deck.theme.colors.canvas).toBe(snapshot.deck.theme.colors.canvas);
+    expect(result.snapshot.deck.theme.typography.body).toBe(snapshot.deck.theme.typography.body);
+  });
+
+  it('rejects non-hex colors, empty updates, and no-op updates', () => {
+    const { snapshot, scope } = themeFixture();
+    const patch = (properties: Record<string, unknown>) => ({
+      baseDeckVersion: snapshot.deck.version,
+      scope,
+      operations: [{ op: 'update_theme_v1', properties } as PatchOperation],
+    });
+    expect(() => applyDeckPatch(snapshot, patch({ colors: { accent: 'tomato' } }))).toThrow(
+      '#rrggbb',
+    );
+    expect(() => applyDeckPatch(snapshot, patch({}))).toThrow('at least one');
+    expect(() =>
+      applyDeckPatch(snapshot, patch({ colors: { accent: snapshot.deck.theme.colors.accent } })),
+    ).toThrow('must change the theme');
+  });
+
+  it('requires deck scope in unrestricted or style mode', () => {
+    const { snapshot } = themeFixture();
+    const slideId = snapshot.deck.slideOrder[0];
+    if (!slideId) throw new Error('Golden fixture must include a slide.');
+    const operation: PatchOperation = {
+      op: 'update_theme_v1',
+      properties: { colors: { accent: '#ff5733' } },
+    };
+    const slideScope: PatchScope = {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slideId],
+      operationMode: 'unrestricted',
+    };
+    expect(validatePatchScope(slideScope, [operation])).toContainEqual(
+      expect.stringContaining('update_theme_v1 requires deck scope'),
+    );
+    const styleScope: PatchScope = {
+      kind: 'deck',
+      deckId: snapshot.deck.id,
+      operationMode: 'style',
+    };
+    expect(validatePatchScope(styleScope, [operation])).toEqual([]);
+  });
+
+  it('is validated and summarized by the convex patch pipeline', () => {
+    const { snapshot, scope } = themeFixture();
+    const operations: PatchOperation[] = [
+      { op: 'update_theme_v1', properties: { colors: { accent: '#ff5733' } } },
+    ];
+    expect(
+      validateNodeSlidePatch(snapshot, {
+        deckId: snapshot.deck.id,
+        baseDeckVersion: snapshot.deck.version,
+        baseSlideVersions: {},
+        baseElementVersions: {},
+        scope,
+        operations,
+      }),
+    ).toEqual([]);
+    expect(touchedNodeSlideIds(snapshot, operations)).toEqual({ slideIds: [], elementIds: [] });
+    expect(summarizePatchOperations(operations, snapshot)).toContain('update deck theme');
   });
 });
