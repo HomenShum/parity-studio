@@ -11045,6 +11045,17 @@
   z-index: 501;
 }
 
+.nodeslide-studio .ns-command-palette[data-state="open"] {
+  inset: auto;
+  left: 50%;
+  margin: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+}
+
 .nodeslide-studio .ns-project-dialog[data-state="open"] {
   background: var(--ns-paper);
   border: 1px solid color-mix(in srgb, var(--ns-line-d) 78%, transparent);

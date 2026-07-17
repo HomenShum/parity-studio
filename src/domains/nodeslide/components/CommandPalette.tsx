@@ -57,7 +57,12 @@ export function CommandPalette({ open, commands, onClose }: CommandPaletteProps)
       }
       showCloseButton={false}
     >
-      <CommandInput autoFocus className="ns-command-search" placeholder="Search commands…" />
+      <CommandInput
+        autoFocus
+        aria-label="Search commands"
+        className="ns-command-search"
+        placeholder="Search commands…"
+      />
       <CommandList className="ns-command-results">
         <CommandEmpty className="ns-command-empty">No commands match.</CommandEmpty>
         {commands.map((command) => {

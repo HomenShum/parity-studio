@@ -90,7 +90,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
     const commandTrigger = page.getByRole('button', { name: 'Open command palette' });
     await commandTrigger.click();
     const commandDialog = page.getByRole('dialog', { name: 'Command palette' });
-    const commandSearch = commandDialog.getByRole('searchbox', { name: 'Search commands' });
+    const commandSearch = commandDialog.getByRole('combobox', { name: 'Search commands' });
     await expect(commandSearch).toBeFocused();
     await commandSearch.fill('comments');
     await commandSearch.press('Enter');
