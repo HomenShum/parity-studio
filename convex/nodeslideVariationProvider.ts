@@ -8,7 +8,7 @@ import {
   nodeslideReasoningEffortValidator,
 } from './lib/nodeslideValidators';
 
-const FREE_ROUTE_TOTAL_DEADLINE_MS = 30_000;
+const FREE_ROUTE_TOTAL_DEADLINE_MS = 90_000;
 const MAX_PROMPT_CHARS = 100_000;
 
 export const generateStrictJson = internalAction({

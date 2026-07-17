@@ -3,6 +3,10 @@ import { estimateTextFit } from '../../src/domains/nodeslide/slidelang/utils';
 import { validateSnapshot } from '../../src/domains/nodeslide/slidelang/validation';
 import { buildBriefNodeSlide, coerceBriefSpec, deterministicBriefSpec } from './nodeslideSeed';
 import { validateNodeSlideSnapshot } from './nodeslideValidation';
+import {
+  buildSlideVariations,
+  variationMaterializedFingerprint,
+} from './nodeslideVariationHarness';
 
 const prompt = [
   'Create exactly seven visually ambitious, claim-led slides explaining why NodeSlide should dogfood its own authoring system.',
@@ -113,6 +117,51 @@ describe('NodeSlide OpenUI dogfood quality contract', () => {
         .join('|'),
     );
     expect(new Set(fingerprints).size).toBe(7);
+  });
+
+  it('materializes three distinct validated directions for every multimodal composition', () => {
+    const built = buildBriefNodeSlide({
+      deckId: 'deck_openui_variations',
+      projectId: 'project_openui_variations',
+      title: 'NodeSlide governed creativity',
+      brief,
+      themeId: 'editorial-signal',
+      rawSpec: deterministicBriefSpec('NodeSlide governed creativity', brief),
+      now: 1_000,
+    });
+
+    for (const slide of built.snapshot.slides) {
+      const snapshot = {
+        deck: { ...built.snapshot.deck, slideOrder: [slide.id] },
+        slides: [slide],
+        elements: built.snapshot.elements.filter((element) => element.slideId === slide.id),
+        sources: built.snapshot.sources,
+      };
+      let result: ReturnType<typeof buildSlideVariations>;
+      try {
+        result = buildSlideVariations({
+          snapshot,
+          slideId: slide.id,
+          batchId: `batch-${slide.id}`,
+          createdAt: 2_000,
+          provider: { ok: false, reason: 'provider_unavailable' },
+        });
+      } catch (error) {
+        throw new Error(
+          `${slide.title}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      expect(result.variations, slide.title).toHaveLength(3);
+      expect(
+        new Set(
+          result.variations.map((variation) =>
+            variationMaterializedFingerprint(variation.candidate),
+          ),
+        ).size,
+        slide.title,
+      ).toBe(3);
+      expect(result.variations.every((variation) => variation.validation.publishOk)).toBe(true);
+    }
   });
 
   it('compiles a leaky live-provider draft back into the explicit audience contract', () => {

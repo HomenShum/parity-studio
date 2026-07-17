@@ -53,6 +53,13 @@ describe('NodeSlide variation inspector states', () => {
     expect(loadingAndError).toContain('role="alert"');
     expect(loadingAndError).toContain('Typed generation failure');
   });
+
+  it('keeps the directions entry point available after a persisted agent turn', () => {
+    const { snapshot } = fixture();
+    const markup = renderInspector(snapshot, [], { persistedAgentTurn: true });
+
+    expect(markup).toContain('Generate 3 directions');
+  });
 });
 
 function fixture(): { snapshot: DeckSnapshot; variations: SlideVariation[] } {
@@ -94,6 +101,7 @@ function renderInspector(
     variationGenerating: boolean;
     variationError: string | null;
     previewedVariationId: string | null;
+    persistedAgentTurn: boolean;
   }> = {},
 ) {
   const slide = snapshot.slides[0];
@@ -112,6 +120,20 @@ function renderInspector(
       variationGenerating={overrides.variationGenerating ?? false}
       variationError={overrides.variationError ?? null}
       previewedVariationId={overrides.previewedVariationId ?? null}
+      agentMessages={
+        overrides.persistedAgentTurn
+          ? [
+              {
+                id: 'message-1',
+                deckId: snapshot.deck.id,
+                runId: 'run-1',
+                role: 'assistant',
+                content: 'Created and validated the editable deck.',
+                createdAt: 1_000,
+              },
+            ]
+          : []
+      }
       onPropose={() => undefined}
       onAccept={() => undefined}
       onReject={() => undefined}

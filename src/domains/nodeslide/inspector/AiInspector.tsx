@@ -647,7 +647,6 @@ export function AiInspector<CommandId extends string = string>({
     suggestedActions ?? defaultSuggestedActions(selectedElements.length, commentContext);
   const showSuggested =
     !instruction.trim() &&
-    agentMessages.length === 0 &&
     proposals.length === 0 &&
     !resolvedActivity &&
     !activeTrace &&

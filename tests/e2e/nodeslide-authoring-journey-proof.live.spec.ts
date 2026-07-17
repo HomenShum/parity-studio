@@ -100,31 +100,33 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     }
     const variationScreenshotPaths: string[] = [];
     const tasteScreenshotPaths: string[] = [];
-    if (journeyMode === 'live') {
+    if (journeyMode === 'live' || process.env['NODESLIDE_JOURNEY_CAPTURE_DIRECTIONS'] === '1') {
       await page.getByRole('button', { name: 'Generate 3 directions' }).first().click();
       const cards = page.getByTestId('variation-card');
       await expect(cards).toHaveCount(3, { timeout: 120_000 });
       for (let index = 0; index < 3; index += 1) {
         await cards.nth(index).getByTestId('variation-preview').click();
         const screenshotPath = path.join(outputDirectory, `variation-${index + 1}.png`);
-        await page.getByRole('region', { name: 'Canvas, slide 1' }).screenshot({
+        await page.locator('.ns-editor-compare').screenshot({
           path: screenshotPath,
         });
         variationScreenshotPaths.push(screenshotPath);
       }
       await page.getByRole('button', { name: 'Return to original' }).click();
-      step('three_live_directions_verified', {
+      step('three_directions_verified', {
         count: variationScreenshotPaths.length,
+        mode: journeyMode,
         screenshotDigest: digest(variationScreenshotPaths.join('\n')),
       });
 
       await page.getByTestId('inspector-tab-design').click();
+      await page.getByRole('button', { name: 'Advanced' }).click();
       for (const packId of ['startup-narrative', 'finance-ibcs']) {
         const card = page.getByTestId(`signature-profile-${packId}`);
         await expect(card).toBeVisible();
         await card.getByRole('button', { name: 'Preview' }).click();
         const screenshotPath = path.join(outputDirectory, `taste-${packId}.png`);
-        await page.getByRole('region', { name: 'Canvas, slide 1' }).screenshot({
+        await page.locator('.ns-editor-compare').screenshot({
           path: screenshotPath,
         });
         tasteScreenshotPaths.push(screenshotPath);

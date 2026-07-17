@@ -371,7 +371,7 @@ export function buildSlideVariations(args: {
         axes,
         args.signatureProfile,
       );
-      materialized = materializeCandidate(
+      materialized = materializeWithOneRepair(
         args.snapshot,
         args.slideId,
         fallback.operations,
@@ -380,9 +380,9 @@ export function buildSlideVariations(args: {
         args.signatureProfile,
       );
       if (
-        materialized &&
-        (fingerprints.has(variationOperationFingerprint(materialized.operations)) ||
-          candidateFingerprints.has(variationMaterializedFingerprint(materialized.candidate)))
+        !materialized ||
+        fingerprints.has(variationOperationFingerprint(materialized.operations)) ||
+        candidateFingerprints.has(variationMaterializedFingerprint(materialized.candidate))
       ) {
         materialized = materializeDistinctFallback(
           args.snapshot,
@@ -489,47 +489,48 @@ function materializeDistinctFallback(
   usedCandidateFingerprints: ReadonlySet<string>,
   signatureProfile?: SignatureProfile,
 ): MaterializedCandidate | null {
-  const target = orderedSlideElements(snapshot, slideId).find((element) => !element.locked);
-  if (!target) return null;
+  const targets = orderedSlideElements(snapshot, slideId).filter((element) => !element.locked);
+  if (targets.length === 0) return null;
   const axisOffset = NODESLIDE_DEFAULT_VARIATION_AXES.findIndex((candidate) =>
     sameAxes(candidate, axes),
   );
-  const markers: Array<Partial<ElementStyle>> = [
-    { opacity: distinctNumber(target.style.opacity, 0.81 + axisOffset * 0.03, 0.79) },
-    { radius: distinctNumber(target.style.radius, 7 + axisOffset, 11 + axisOffset) },
-    {
-      strokeWidth: distinctNumber(
-        target.style.strokeWidth,
-        1.25 + axisOffset * 0.25,
-        2.25 + axisOffset * 0.25,
-      ),
-    },
-  ];
-  for (const [index, properties] of markers.entries()) {
-    const marker: PatchOperation = {
-      op: 'update_style',
-      slideId,
-      elementId: target.id,
-      properties,
-    };
-    const candidateOperations: PatchOperation[] = [...operations, marker].slice(
-      0,
-      NODESLIDE_VARIANT_OPERATION_LIMIT,
-    );
-    const materialized = materializeCandidate(
-      snapshot,
-      slideId,
-      candidateOperations,
-      `${variationId}_distinct_${index}`,
-      checkedAt,
-      signatureProfile,
-    );
-    if (
-      materialized &&
-      !usedFingerprints.has(variationOperationFingerprint(materialized.operations)) &&
-      !usedCandidateFingerprints.has(variationMaterializedFingerprint(materialized.candidate))
-    ) {
-      return materialized;
+  for (const [targetIndex, target] of targets.entries()) {
+    const markers: Array<Partial<ElementStyle>> = [
+      { opacity: distinctNumber(target.style.opacity, 0.81 + axisOffset * 0.03, 0.79) },
+      { radius: distinctNumber(target.style.radius, 7 + axisOffset, 11 + axisOffset) },
+      {
+        strokeWidth: distinctNumber(
+          target.style.strokeWidth,
+          1.25 + axisOffset * 0.25,
+          2.25 + axisOffset * 0.25,
+        ),
+      },
+    ];
+    for (const [markerIndex, properties] of markers.entries()) {
+      const marker: PatchOperation = {
+        op: 'update_style',
+        slideId,
+        elementId: target.id,
+        properties,
+      };
+      const candidateOperations: PatchOperation[] = [...operations, marker].slice(
+        -NODESLIDE_VARIANT_OPERATION_LIMIT,
+      );
+      const materialized = materializeWithOneRepair(
+        snapshot,
+        slideId,
+        candidateOperations,
+        `${variationId}_distinct_${targetIndex}_${markerIndex}`,
+        checkedAt,
+        signatureProfile,
+      );
+      if (
+        materialized &&
+        !usedFingerprints.has(variationOperationFingerprint(materialized.operations)) &&
+        !usedCandidateFingerprints.has(variationMaterializedFingerprint(materialized.candidate))
+      ) {
+        return materialized;
+      }
     }
   }
   return null;
@@ -588,13 +589,14 @@ export function deterministicVariationOperations(
   const textElements = eligible.filter(
     (element) => element.kind === 'text' && Boolean(element.content?.trim()),
   );
-  const evidence = eligible.find(
-    (element) =>
-      element.kind === 'chart' ||
-      element.sourceIds.length > 0 ||
-      Boolean(element.chart?.sourceId) ||
-      /metric|evidence|data|chart|proof/i.test(`${element.role ?? ''} ${element.name}`),
-  );
+  const evidence =
+    eligible.find((element) => ['chart', 'image', 'video'].includes(element.kind)) ??
+    eligible.find(
+      (element) =>
+        element.sourceIds.length > 0 ||
+        Boolean(element.chart?.sourceId) ||
+        /metric|evidence|data|chart|proof/i.test(`${element.role ?? ''} ${element.name}`),
+    );
   const semanticHeadline = textElements.find((element) =>
     /headline|title|takeaway|insight/i.test(`${element.role ?? ''} ${element.name}`),
   );
@@ -631,6 +633,28 @@ export function deterministicVariationOperations(
               },
       },
     ];
+    if (target.kind !== 'text') {
+      const width = roundNormalized(target.bbox.width * 0.88);
+      const height = roundNormalized(target.bbox.height * 0.88);
+      if (width !== target.bbox.width || height !== target.bbox.height) {
+        operations.push({
+          op: 'resize',
+          slideId,
+          elementId: target.id,
+          width,
+          height,
+        });
+      }
+      operations.push({
+        op: 'move',
+        slideId,
+        elementId: target.id,
+        x: roundNormalized(
+          clamp(target.bbox.x + (target.bbox.x < 0.5 ? -0.025 : 0.025), 0, 1 - width),
+        ),
+        y: roundNormalized(clamp(target.bbox.y - 0.02, 0, 1 - height)),
+      });
+    }
     const support = textElements.find((element) => element.id !== target.id);
     const tightened = support?.content ? tightenExistingCopy(support.content, 180) : null;
     if (support?.content && tightened && tightened !== support.content) {
@@ -667,6 +691,19 @@ export function deterministicVariationOperations(
               },
       },
     ];
+    if (target.kind === 'text') {
+      const width = roundNormalized(Math.min(1 - target.bbox.x, target.bbox.width * 1.1));
+      const height = roundNormalized(Math.min(1 - target.bbox.y, target.bbox.height * 1.05));
+      if (width !== target.bbox.width || height !== target.bbox.height) {
+        operations.push({
+          op: 'resize',
+          slideId,
+          elementId: target.id,
+          width,
+          height,
+        });
+      }
+    }
     const secondary = textElements.find((element) => element.id !== target.id);
     const simplified = secondary?.content ? tightenExistingCopy(secondary.content, 140) : null;
     if (secondary?.content && simplified && simplified !== secondary.content) {
@@ -693,8 +730,8 @@ export function deterministicVariationOperations(
       properties:
         target.kind === 'text'
           ? {
-              lineHeight: distinctNumber(target.style.lineHeight, 1.16, 1.12),
-              letterSpacing: distinctNumber(target.style.letterSpacing, -0.1, -0.2),
+              fontWeight: distinctNumber(target.style.fontWeight, 620, 580),
+              opacity: distinctNumber(target.style.opacity, 0.9, 0.94),
             }
           : {
               opacity: distinctNumber(target.style.opacity, 0.94, 0.9),
@@ -702,6 +739,15 @@ export function deterministicVariationOperations(
             },
     },
   ];
+  if (target.kind !== 'text') {
+    const x = roundNormalized(
+      clamp(target.bbox.x + (target.bbox.x < 0.5 ? 0.04 : -0.04), 0, 1 - target.bbox.width),
+    );
+    const width = roundNormalized(Math.max(0.01, target.bbox.width * 0.9));
+    const height = roundNormalized(Math.min(1 - target.bbox.y, target.bbox.height * 1.05));
+    operations.push({ op: 'move', slideId, elementId: target.id, x, y: target.bbox.y });
+    operations.push({ op: 'resize', slideId, elementId: target.id, width, height });
+  }
   const companion = eligible.find((element) => element.id !== target.id);
   if (companion) {
     operations.push({

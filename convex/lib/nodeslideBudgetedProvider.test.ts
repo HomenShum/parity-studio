@@ -63,6 +63,7 @@ function ledgerFixture(
     quoteMicroUsd?: number;
     outputCeiling?: number;
     reserveError?: unknown;
+    providerTimeoutMs?: number;
   } = {},
 ) {
   let revision = 1;
@@ -86,7 +87,7 @@ function ledgerFixture(
     status,
     quoteMicroUsd: options.quoteMicroUsd ?? 1_000,
     providerSafeOutputTokenCeiling: options.outputCeiling ?? 1_000,
-    providerTimeoutMs: 12_000,
+    providerTimeoutMs: options.providerTimeoutMs ?? 12_000,
   });
   const advance = () => {
     revision += 1;
@@ -206,6 +207,22 @@ describe('NodeSlide budgeted provider adapter', () => {
     expect(provider.mock.invocationCallOrder[0]).toBeLessThan(
       fixture.settle.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
     );
+  });
+
+  it('allows long-form deck creation up to the provider hard deadline', async () => {
+    const fixture = ledgerFixture({ providerTimeoutMs: 120_000 });
+    const provider = vi.fn<NodeSlideBudgetedProviderCall>(async (_request, dependencies) => {
+      expect(dependencies.dispatchPolicy).toEqual({ maxOutputTokens: 500, timeoutMs: 90_000 });
+      return successfulProviderResult();
+    });
+
+    const result = await callNodeSlideBudgetedJson(
+      { runId: 'run-long-form-deck', callKey: 'deck-creation', providerRequest },
+      { ledger: fixture.ledger, provider },
+    );
+
+    expect(result).toMatchObject({ ok: true, accounting: { disposition: 'settled' } });
+    expect(provider).toHaveBeenCalledOnce();
   });
 
   it('passes the pinned OpenRouter pricing ceiling into provider routing', async () => {

@@ -1,0 +1,137 @@
+{
+  "deckId": "deck_job_e988f184770d66f2ea83afbe4881fbf6",
+  "journeyMode": "deterministic",
+  "creationMode": "deterministic",
+  "modelExpectation": "deterministic",
+  "expectedLayouts": [
+    "hero",
+    "comparison",
+    "contract",
+    "flow",
+    "split",
+    "evidence_board",
+    "decision"
+  ],
+  "liveCreationTrace": null,
+  "liveEditTrace": {
+    "phase": "edit-auto-apply",
+    "traceText": "Completed deck v2 Started 8:59:03 PM Deterministic local planning proposed 1 scoped operation without provider egress. Write scope · 1 slide deterministic · bounded-edit-planner/v1 EDIT CYCLE 1s TOKENS — → — COST not recorded VALIDATION Passed No external provider billing was recorded for this fallback. Execution 18 auditable records Activity 9 spans · 772 ms Full timeline 18 loaded 0 errors 0 cited ROUTE deterministic · bounded-edit-planner/v1 TOKENS not recorded in · not recorded out COST not recorded CANDIDATE DIGEST sha256:490b708…bf590d2 Invoke NodeSlide agent invoke_agent 772 ms Plan bounded slide edit chat 70 ms Plan bounded slide edit chat 57 ms Validate candidate candidate_validation 32 ms Validate candidate candidate_validation 163 ms Accept validated proposal with delegated authority agent.delegated_decision 0 ms 3 earlier loaded steps hidden here; open the full timeline to inspect them. Chain of custody and countersigned receipt"
+  },
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784260732300
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784260737367,
+      "deckVersion": 1
+    },
+    {
+      "kind": "three_directions_verified",
+      "occurredAt": 1784260740533,
+      "count": 3,
+      "mode": "deterministic",
+      "screenshotDigest": "sha256:1f12b255f13dd4779dd0f922b5051cfb14d5e115d0d91e2eccaf206ae04768fb"
+    },
+    {
+      "kind": "taste_pack_previews_verified",
+      "occurredAt": 1784260741865,
+      "count": 2,
+      "screenshotDigest": "sha256:5f01f745f5e591f8be2f0dbbc296c4895cc237d592c278bf0bfc362f54163b2f"
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784260742577,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784260746650,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:ecb460fd1a0d220b90acd567d89d05c89093ad8b6370008633b07eb390ce6927",
+      "runId": "agent_run_fe2f16a87243fde63c8607cb9030da54",
+      "patchId": "patch_agent_efd3a51617673576b09b421c7e9c862f",
+      "candidateDigest": "sha256:490b70870cbb12e8628d1754f87066f63f6695dbb1413de8b969dce43bf590d2",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784260746778,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:e06543a3c03f88e5a65bf5a7bb4c9f621de39304ba6814825962c34b68c6b50e",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "runId": "agent_run_fe2f16a87243fde63c8607cb9030da54",
+      "patchId": "patch_agent_efd3a51617673576b09b421c7e9c862f",
+      "candidateDigest": "sha256:490b70870cbb12e8628d1754f87066f63f6695dbb1413de8b969dce43bf590d2",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784260748206,
+      "deckVersion": 3,
+      "patchId": "patch_agent_efd3a51617673576b09b421c7e9c862f",
+      "contentDigest": "sha256:40c390a9ddf682220bdb7f23ea6a5deeb1f20322b8c0df623449a958e88c2142",
+      "receiptDigest": "sha256:878f4471d3d7d0a90f5954ba5f4e1d988319d1a530950821d9766c79dfc8f2ad"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784260749841,
+      "deckVersion": 4,
+      "patchId": "patch_agent_efd3a51617673576b09b421c7e9c862f",
+      "contentDigest": "sha256:256f48ff8e7daad40eea348d2e05c19fded2f63725ba4d8360275c7f644023bd",
+      "receiptDigest": "sha256:11207b353d9456dbb1cbf929c464c56670a4d946508a4fe420f3fcf22efae386"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784260749841,
+      "deckVersion": 4
+    },
+    {
+      "kind": "full_deck_visual_qa",
+      "occurredAt": 1784260754077,
+      "deckVersion": 4,
+      "slideCount": 7,
+      "distinctCompositionCount": 7,
+      "screenshotDigest": "sha256:9d44131f02032b3e9a327f679ed3efb0cc96466fe8e32d8baad16a64bad900bb"
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784260754717,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\nodeslide-self-authored.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\final-editor.png",
+    "slideScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-01.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-02.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-03.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-04.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-05.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-06.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\slide-07.png"
+    ],
+    "variationScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\variation-1.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\variation-2.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\variation-3.png"
+    ],
+    "tasteScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\taste-startup-narrative.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\taste-finance-ibcs.png"
+    ],
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\nodeslide-self-authored.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-openui-multimodal-visual-proof-v5-2026-07-16\\run-manifest.json"
+  }
+}
