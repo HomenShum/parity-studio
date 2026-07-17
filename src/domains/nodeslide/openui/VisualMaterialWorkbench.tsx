@@ -1,3 +1,4 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { type ActionEvent, Renderer, createLibrary, defineComponent } from '@openuidev/react-lang';
 import { ArrowRight, Check, Layers3, ShieldCheck, Sparkles } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -127,8 +128,8 @@ export function VisualMaterialWorkbench({
   };
 
   return (
-    <details className="ns-openui-workbench" data-testid="openui-visual-workbench">
-      <summary>
+    <Collapsible className="ns-openui-workbench" data-testid="openui-visual-workbench">
+      <CollapsibleTrigger>
         <span className="ns-openui-summary-icon">
           <Layers3 size={14} />
         </span>
@@ -140,8 +141,8 @@ export function VisualMaterialWorkbench({
           {validation.ok ? <Check size={12} /> : null}
           {validation.ok ? 'Unit-safe' : 'Blocked'}
         </span>
-      </summary>
-      <div className="ns-openui-workbench-body" aria-busy={status === 'working'}>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="ns-openui-workbench-body" aria-busy={status === 'working'}>
         <Renderer
           response={AI2027_OPENUI_PROGRAM}
           library={nodeslideVisualMaterialLibrary}
@@ -165,7 +166,7 @@ export function VisualMaterialWorkbench({
             {message}
           </output>
         ) : null}
-      </div>
-    </details>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

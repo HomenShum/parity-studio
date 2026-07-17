@@ -1,5 +1,13 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
   ArrowDown,
   ArrowUp,
   Check,
@@ -270,24 +278,26 @@ export function SlideNavigator({
       </div>
 
       <div className="ns-navigator-expanded">
-        <div className="ns-navigator-tabs" role="tablist" aria-label="Navigator views">
-          {NAVIGATOR_TABS.map((tab) => (
-            <button
-              type="button"
-              role="tab"
-              id={`${tabsId}-${tab}-tab`}
-              aria-controls={`${tabsId}-${tab}-panel`}
-              aria-selected={activeTab === tab}
-              className={activeTab === tab ? 'is-active' : ''}
-              key={tab}
-              tabIndex={activeTab === tab ? 0 : -1}
-              onClick={() => onTabChange?.(tab)}
-              onKeyDown={(event) => handleTabKeyDown(event, NAVIGATOR_TABS, tab, onTabChange)}
-            >
-              {capitalize(tab)}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => onTabChange?.(value as SlideNavigatorTab)}
+          unstyled
+        >
+          <TabsList className="ns-navigator-tabs" aria-label="Navigator views" unstyled>
+            {NAVIGATOR_TABS.map((tab) => (
+              <TabsTrigger
+                value={tab}
+                id={`${tabsId}-${tab}-tab`}
+                aria-controls={`${tabsId}-${tab}-panel`}
+                className={activeTab === tab ? 'is-active' : ''}
+                key={tab}
+                unstyled
+              >
+                {capitalize(tab)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {activeTab === 'slides' ? (
           <div
@@ -455,99 +465,88 @@ export function SlideNavigator({
                                   <GripVertical size={13} /> Drag to reorder
                                 </span>
                               </div>
-                              <button
-                                className="ns-slide-more"
-                                type="button"
-                                aria-label={`Slide ${slideIndex + 1} actions`}
-                                aria-haspopup="menu"
-                                aria-expanded={menuSlideId === slide.id}
-                                title={`Slide ${slideIndex + 1} actions`}
-                                onClick={() =>
-                                  setMenuSlideId((value) => (value === slide.id ? null : slide.id))
-                                }
+                              <DropdownMenu
+                                open={menuSlideId === slide.id}
+                                onOpenChange={(open) => setMenuSlideId(open ? slide.id : null)}
                               >
-                                <MoreHorizontal size={15} />
-                              </button>
-                              {menuSlideId === slide.id ? (
-                                <div className="ns-popover ns-slide-menu" role="menu">
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="ns-slide-more"
+                                    type="button"
+                                    aria-label={`Slide ${slideIndex + 1} actions`}
+                                    title={`Slide ${slideIndex + 1} actions`}
+                                  >
+                                    <MoreHorizontal size={15} />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="ns-popover ns-slide-menu"
+                                  portalContainer={
+                                    typeof document === 'undefined'
+                                      ? null
+                                      : document.querySelector<HTMLElement>('.nodeslide-studio')
+                                  }
+                                >
                                   {onSelectedSlideIdsChange ? (
-                                    <button
-                                      type="button"
-                                      role="menuitemcheckbox"
-                                      aria-checked={selectedForMultiEdit}
+                                    <DropdownMenuCheckboxItem
+                                      checked={selectedForMultiEdit}
                                       disabled={
                                         !selectedForMultiEdit &&
                                         selectedSlideIds.length >= NODESLIDE_SCOPE_SLIDE_LIMIT
                                       }
-                                      onClick={() => {
-                                        setMenuSlideId(null);
+                                      onSelect={() => {
                                         toggleSlideSelection(slide.id);
                                       }}
                                     >
-                                      <Check size={14} />
                                       {selectedForMultiEdit
                                         ? 'Remove from multi-slide edit'
                                         : 'Select for multi-slide edit'}
-                                    </button>
+                                    </DropdownMenuCheckboxItem>
                                   ) : null}
                                   {onRenameSlide ? (
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setMenuSlideId(null);
+                                    <DropdownMenuItem
+                                      onSelect={() => {
                                         onRenameSlide(slide.id, slide.title);
                                       }}
                                     >
                                       <Pencil size={14} /> Rename slide
-                                    </button>
+                                    </DropdownMenuItem>
                                   ) : null}
-                                  <button
-                                    type="button"
-                                    role="menuitem"
+                                  <DropdownMenuItem
                                     disabled={slideIndex <= 0}
-                                    onClick={() => {
-                                      setMenuSlideId(null);
+                                    onSelect={() => {
                                       onReorderSlide(slide.id, slideIndex - 1);
                                     }}
                                   >
                                     <ArrowUp size={14} /> Move slide up
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
                                     disabled={slideIndex >= slides.length - 1}
-                                    onClick={() => {
-                                      setMenuSlideId(null);
+                                    onSelect={() => {
                                       onReorderSlide(slide.id, slideIndex + 1);
                                     }}
                                   >
                                     <ArrowDown size={14} /> Move slide down
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setMenuSlideId(null);
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => {
                                       onDuplicateSlide(slide.id);
                                     }}
                                   >
                                     <Copy size={14} /> Duplicate slide
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
                                     className="is-danger"
                                     disabled={!canDeleteSlide || slides.length <= 1}
-                                    onClick={() => {
-                                      setMenuSlideId(null);
+                                    onSelect={() => {
                                       onDeleteSlide(slide.id);
                                     }}
                                   >
                                     <Trash2 size={14} /> Delete slide
-                                  </button>
-                                </div>
-                              ) : null}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           );
                         })}
@@ -1162,31 +1161,6 @@ function handleRenameKeyDown(
   event.preventDefault();
   event.stopPropagation();
   onRenameSlide(slide.id, slide.title);
-}
-
-function handleTabKeyDown<T extends string>(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  tabs: readonly T[],
-  activeTab: T,
-  onTabChange: ((tab: T) => void) | undefined,
-) {
-  let nextIndex: number | undefined;
-  const activeIndex = tabs.indexOf(activeTab);
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
-    nextIndex = (activeIndex + 1) % tabs.length;
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
-    nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
-  if (event.key === 'Home') nextIndex = 0;
-  if (event.key === 'End') nextIndex = tabs.length - 1;
-  if (nextIndex === undefined) return;
-  const nextTab = tabs[nextIndex];
-  if (!nextTab) return;
-  event.preventDefault();
-  event.stopPropagation();
-  onTabChange?.(nextTab);
-  const buttons =
-    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-  buttons?.[nextIndex]?.focus();
 }
 
 function capitalize(value: string) {

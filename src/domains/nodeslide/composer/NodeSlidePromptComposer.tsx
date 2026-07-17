@@ -27,6 +27,13 @@ import {
   PromptInputTools,
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { ChatStatus, FileUIPart } from 'ai';
 import { Check, ChevronsUpDown, Paperclip, ShieldCheck, Sparkles } from 'lucide-react';
 import {
@@ -46,6 +53,7 @@ import {
   NODESLIDE_DEFAULT_AGENT_MODEL,
   type NodeSlideAgentModelId,
   type NodeSlideReasoningEffort,
+  isNodeSlideReasoningEffort,
   nodeSlideAgentModel,
   nodeSlideProviderModeForModel,
 } from '../../../../shared/nodeslide';
@@ -258,7 +266,8 @@ export function NodeSlidePromptComposer({
     [agentSession, onModelChange],
   );
   const chooseEffort = useCallback(
-    (next: NodeSlideReasoningEffort) => {
+    (next: string) => {
+      if (!isNodeSlideReasoningEffort(next)) return;
       agentSession?.updateControls({ effort: next });
       onEffortChange?.(next);
     },
@@ -279,14 +288,19 @@ export function NodeSlidePromptComposer({
     const submittedLifecycleRevision = lifecycleRevisionRef.current;
     onAttachmentError?.(null);
     try {
-      const files = await promptInputMessageFiles(message.files);
-      if (
-        submittedLifecycleRevision !== lifecycleRevisionRef.current ||
-        (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current)
-      ) {
-        throw new Error(
-          'Change handling changed while attachments were being prepared. Review and submit again.',
-        );
+      // A text-only request has no asynchronous attachment boundary to protect. Avoid yielding
+      // before the surface-level authority guard captures its request; parent state used only to
+      // render the preparing UI may legitimately advance during that artificial microtask.
+      const files = message.files.length > 0 ? await promptInputMessageFiles(message.files) : [];
+      if (message.files.length > 0) {
+        if (
+          submittedLifecycleRevision !== lifecycleRevisionRef.current ||
+          (submittedRevision !== undefined && submittedRevision !== submissionRevisionRef.current)
+        ) {
+          throw new Error(
+            'Change handling changed while attachments were being prepared. Review and submit again.',
+          );
+        }
       }
       await onSubmit({ text: message.text, files }, event);
     } catch (error) {
@@ -304,10 +318,12 @@ export function NodeSlidePromptComposer({
       className={`ns-ai-elements ns-node-prompt-composer ${composerClassName ?? ''}`.trim()}
       ref={capturePortalContainer}
     >
+      {header ? <PromptInputHeader className="ns-prompt-header">{header}</PromptInputHeader> : null}
       <PromptInput
         {...(allowAttachments ? { accept: attachmentAccept } : {})}
         className={`ns-prompt-input ${className ?? ''}`.trim()}
         clearOnSubmit={clearAttachmentsOnSubmit}
+        resetNativeFormOnSubmit={false}
         fileInputProps={{
           ...(attachmentInputTestId ? { 'data-testid': attachmentInputTestId } : {}),
           id: `${resolvedFormId}-attachments`,
@@ -328,9 +344,6 @@ export function NodeSlidePromptComposer({
           {...(onAttachmentsChange ? { onAttachmentsChange } : {})}
           {...(onAttachmentSyncingChange ? { onSyncingChange: onAttachmentSyncingChange } : {})}
         />
-        {header ? (
-          <PromptInputHeader className="ns-prompt-header">{header}</PromptInputHeader>
-        ) : null}
         <PromptInputAttachmentShelf />
         <PromptInputTextarea
           {...textareaAria}
@@ -373,26 +386,30 @@ export function NodeSlidePromptComposer({
             authoritativeEffort &&
             effortOptions.length > 0 &&
             onEffortChange ? (
-              <label className="ns-prompt-effort-wrap">
+              <div className="ns-prompt-effort-wrap">
                 <span className="sr-only">{effortLabel}</span>
-                <select
-                  aria-label={`${effortLabel}: ${authoritativeEffortLabel}`}
-                  className="ns-prompt-effort"
-                  data-testid={effortTestId}
-                  disabled={interactionDisabled}
-                  onChange={(event) =>
-                    chooseEffort(event.currentTarget.value as NodeSlideReasoningEffort)
-                  }
-                  title={`${effortLabel}: ${authoritativeEffortLabel}`}
+                <Select
                   value={authoritativeEffort}
+                  onValueChange={chooseEffort}
+                  disabled={interactionDisabled}
                 >
-                  {effortOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {nodeSlideNativeEffortLabel(option.id)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger
+                    aria-label={`${effortLabel}: ${authoritativeEffortLabel}`}
+                    className="ns-prompt-effort"
+                    data-testid={effortTestId}
+                    title={`${effortLabel}: ${authoritativeEffortLabel}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent portalContainer={portalContainer}>
+                    {effortOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {nodeSlideNativeEffortLabel(option.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : null}
             {tools}
             {footerStatus ? <span className="ns-prompt-footer-status">{footerStatus}</span> : null}

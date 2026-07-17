@@ -1,5 +1,8 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { cleanup, render } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { NodeSlideLanding } from '../../src/domains/nodeslide/components/NodeSlideLanding';
 import {
   ProjectDialog,
@@ -13,8 +16,29 @@ import {
 } from './nodeslideValidators';
 
 describe('NodeSlide informed provider controls', () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      value: class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    });
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: () => 'blob:nodeslide-consent-ui-test',
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: () => undefined,
+    });
+  });
+
+  afterEach(cleanup);
+
   it('recommends Nebius while keeping external egress ungranted by default', () => {
-    const markup = renderToStaticMarkup(
+    render(
       <ProjectDialog
         open
         clientSessionId="session-test"
@@ -25,6 +49,7 @@ describe('NodeSlide informed provider controls', () => {
         onOpenDeck={() => undefined}
       />,
     );
+    const markup = document.body.innerHTML;
 
     expect(markup).toMatch(/data-testid="provider-deterministic"[^>]*aria-pressed="false"/);
     expect(markup).toMatch(/data-testid="provider-external"[^>]*aria-pressed="true"/);
@@ -37,15 +62,11 @@ describe('NodeSlide informed provider controls', () => {
     );
     expect(markup).toContain('data-testid="create-model-select"');
     expect(markup).toContain('data-testid="create-effort-select"');
-    expect(markup).toContain('<option value="low">Low</option>');
-    expect(markup).toContain('<option value="medium" selected="">Medium</option>');
-    expect(markup).toContain('<option value="high">High</option>');
-    expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
-    expect(markup).not.toContain('<option value="max">Max</option>');
+    expect(markup).toContain('aria-label="Reasoning effort: Medium"');
     expect(markup).toContain('data-testid="create-file-input"');
     expect(markup).toContain('type="password"');
     expect(markup).toContain('name="nodeslide-preview-access-code"');
-    expect(markup).toContain('autoComplete="off"');
+    expect(markup).toContain('autocomplete="off"');
     expect(markup).toContain('Add a deck title to continue.');
     expect(markup).toContain('Use World Cup data story');
     expect(markup).toContain('chart, formula, and image primitives');
@@ -53,7 +74,7 @@ describe('NodeSlide informed provider controls', () => {
   });
 
   it('renders admission failures inside the project dialog', () => {
-    const markup = renderToStaticMarkup(
+    render(
       <ProjectDialog
         open
         clientSessionId="session-test"
@@ -66,6 +87,7 @@ describe('NodeSlide informed provider controls', () => {
         onOpenDeck={() => undefined}
       />,
     );
+    const markup = document.body.innerHTML;
 
     expect(markup).toContain('role="alert"');
     expect(markup).toContain('That private-preview access code is not valid.');
@@ -80,7 +102,7 @@ describe('NodeSlide informed provider controls', () => {
   });
 
   it('recommends a live model and keeps consent inline before direct creation', () => {
-    const markup = renderToStaticMarkup(
+    render(
       <AgentSessionProvider clientSessionId="session-test" storage={null}>
         <NodeSlideLanding
           clientSessionId="session-test"
@@ -92,15 +114,14 @@ describe('NodeSlide informed provider controls', () => {
         />
       </AgentSessionProvider>,
     );
+    const markup = document.body.innerHTML;
 
     expect(markup).toContain('data-testid="nodeslide-landing"');
     expect(markup).toContain('What presentation should we build?');
     expect(markup).toContain('>GLM 5.2</span>');
     expect(markup).toContain('>Nebius</span>');
     expect(markup).toContain('data-testid="landing-effort-select"');
-    expect(markup).toContain('<option value="medium" selected="">Medium</option>');
-    expect(markup).not.toContain('<option value="xhigh">XHigh</option>');
-    expect(markup).not.toContain('<option value="max">Max</option>');
+    expect(markup).toContain('aria-label="Reasoning effort: Medium"');
     expect(markup).toContain('data-testid="landing-file-input"');
     expect(markup).toContain('data-testid="landing-provider-consent"');
     expect(markup).not.toMatch(/data-testid="landing-provider-consent"[^>]*checked/);
@@ -118,7 +139,7 @@ describe('NodeSlide informed provider controls', () => {
   });
 
   it('carries a root-composer draft into the detailed creation contract', () => {
-    const markup = renderToStaticMarkup(
+    render(
       <ProjectDialog
         open
         clientSessionId="session-test"
@@ -136,13 +157,16 @@ describe('NodeSlide informed provider controls', () => {
         onOpenDeck={() => undefined}
       />,
     );
+    const markup = document.body.innerHTML;
 
     expect(markup).toContain('value="AI 2027 — Scenarios and Decisions"');
     expect(markup).toContain('Build an evidence-led AI 2027 scenario deck.');
     expect(markup).toMatch(/data-testid="provider-external"[^>]*aria-pressed="true"/);
     expect(markup).toContain('>Claude Sonnet 5</span>');
     expect(markup).toContain('and attached files');
-    expect(markup).toMatch(/type="checkbox"[^>]*data-testid="provider-consent"/);
+    expect(markup).toMatch(
+      /<button(?=[^>]*role="checkbox")(?=[^>]*data-testid="provider-consent")[^>]*>/,
+    );
     expect(markup).not.toMatch(/data-testid="provider-consent"[^>]*disabled/);
   });
 });

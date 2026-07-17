@@ -23,8 +23,8 @@ describe('NodeSlide inspector shell state', () => {
     ]);
     expect(MORE_INSPECTOR_TABS.map(({ label }) => label)).toEqual(['Versions', 'JSON']);
     expect(source).toContain('data-testid="inspector-more"');
-    expect(source).toContain('aria-haspopup="menu"');
-    expect(source).toContain('surfaceRole="menu"');
+    expect(source).toContain('<DropdownMenuContent');
+    expect(source).toContain('<DropdownMenuItem');
   });
 
   it('implements automatic, wrapping roving focus for the five primary tabs', () => {
@@ -58,11 +58,11 @@ describe('NodeSlide inspector shell state', () => {
   });
 
   it('binds the responsive drawer to modal labeling, backdrop, focus, and Escape handling', () => {
-    expect(source).toContain("role={drawerOpen ? 'dialog' : undefined}");
-    expect(source).toContain('aria-modal={drawerOpen ? true : undefined}');
-    expect(source).toContain('initialFocusRef: closeButtonRef');
-    expect(source).toContain('onKeyDown={drawerOpen ? handleDrawerKeyDown : undefined}');
-    expect(source).toContain('<OverlayBackdrop');
+    expect(source).toContain('<Sheet');
+    expect(source).toContain('<SheetContent');
+    expect(source).toContain('<SheetTitle');
+    expect(source).toContain('overlayClassName="ns-inspector-backdrop"');
+    expect(source).toContain('closeButtonRef.current?.focus()');
   });
 
   it('removes the duplicate validation footer while preserving Deck CI and Trace access', () => {

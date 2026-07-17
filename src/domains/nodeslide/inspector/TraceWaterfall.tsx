@@ -1,3 +1,11 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SpanByIndexProvider, SpanPrimitive, SpanResource } from '@assistant-ui/react-o11y';
 import { AuiProvider, useAui, useAuiState } from '@assistant-ui/store';
 import {
@@ -1388,19 +1396,23 @@ function TraceWaterfallRun({
             </button>
           ))}
         </fieldset>
-        <label className="ns-waterfall-grouping">
-          <span>Group</span>
-          <select
+        <div className="ns-waterfall-grouping">
+          <span id="ns-waterfall-grouping-label">Group</span>
+          <Select
             value={grouping}
-            aria-label="Group trace spans"
-            onChange={(event) => setGrouping(event.target.value as WaterfallGrouping)}
+            onValueChange={(value) => setGrouping(value as WaterfallGrouping)}
           >
-            <option value="trace">Trace hierarchy</option>
-            <option value="service">Service</option>
-            <option value="type">Span type</option>
-            <option value="status">Status</option>
-          </select>
-        </label>
+            <SelectTrigger aria-labelledby="ns-waterfall-grouping-label">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="trace">Trace hierarchy</SelectItem>
+              <SelectItem value="service">Service</SelectItem>
+              <SelectItem value="type">Span type</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="ns-waterfall-tree-actions" aria-label="Trace tree controls">
           <button
             type="button"
@@ -1628,23 +1640,28 @@ function TraceWaterfallRun({
                 <p>No events on this span.</p>
               )}
               {selected.attributes.length ? (
-                <details>
-                  <summary>{selected.attributes.length} attributes</summary>
-                  <dl>
-                    {visibleSelectedAttributes.map((attribute) => (
-                      <div key={attribute.key}>
-                        <dt>{attribute.key}</dt>
-                        <dd>{String(attribute.value)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {selected.attributes.length > visibleSelectedAttributes.length ? (
-                    <button type="button" onClick={() => setExpandedAttributesFor(selected.spanId)}>
-                      Show {selected.attributes.length - visibleSelectedAttributes.length} more
-                      loaded attributes
-                    </button>
-                  ) : null}
-                </details>
+                <Collapsible>
+                  <CollapsibleTrigger>{selected.attributes.length} attributes</CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <dl>
+                      {visibleSelectedAttributes.map((attribute) => (
+                        <div key={attribute.key}>
+                          <dt>{attribute.key}</dt>
+                          <dd>{String(attribute.value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {selected.attributes.length > visibleSelectedAttributes.length ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedAttributesFor(selected.spanId)}
+                      >
+                        Show {selected.attributes.length - visibleSelectedAttributes.length} more
+                        loaded attributes
+                      </button>
+                    ) : null}
+                  </CollapsibleContent>
+                </Collapsible>
               ) : null}
             </section>
             <section
@@ -1714,10 +1731,14 @@ function TraceWaterfallRun({
                       {source.citation.length > 320 ? '…' : ''}
                     </p>
                     {source.citation.length > 320 ? (
-                      <details className="ns-waterfall-citation-more">
-                        <summary>Show full citation · {source.citation.length} characters</summary>
-                        <p>{source.citation}</p>
-                      </details>
+                      <Collapsible className="ns-waterfall-citation-more">
+                        <CollapsibleTrigger>
+                          Show full citation · {source.citation.length} characters
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <p>{source.citation}</p>
+                        </CollapsibleContent>
+                      </Collapsible>
                     ) : null}
                     <footer>
                       {source.contentDigest ? (
@@ -1769,21 +1790,23 @@ function ClaimBindingSummary({
 }) {
   if (bindings.length === 0) return <span>source record only / no claim-output binding</span>;
   return (
-    <details className="ns-waterfall-claim-bindings">
-      <summary>
+    <Collapsible className="ns-waterfall-claim-bindings">
+      <CollapsibleTrigger>
         {bindings.length} claim/output binding{bindings.length === 1 ? '' : 's'}
-      </summary>
-      <ul>
-        {bindings.map((binding) => (
-          <li key={`${binding.operationIndex}:${binding.elementId}:${binding.claimDigest}`}>
-            <span>
-              Slide <code>{binding.slideId}</code> / element <code>{binding.elementId}</code>
-            </span>
-            <code title={binding.claimDigest}>{shortDigest(binding.claimDigest)}</code>
-          </li>
-        ))}
-      </ul>
-    </details>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul>
+          {bindings.map((binding) => (
+            <li key={`${binding.operationIndex}:${binding.elementId}:${binding.claimDigest}`}>
+              <span>
+                Slide <code>{binding.slideId}</code> / element <code>{binding.elementId}</code>
+              </span>
+              <code title={binding.claimDigest}>{shortDigest(binding.claimDigest)}</code>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

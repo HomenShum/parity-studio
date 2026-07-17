@@ -107,19 +107,18 @@ describe('NodeSlide memory manager', () => {
     const disclosure = screen.getByTestId('memory-scope-disclosure');
     expect(disclosure).toHaveTextContent('Deck-scoped, not account-wide');
     expect(disclosure).toHaveTextContent('owner-gated');
+    const disclosureTrigger = within(disclosure).getByRole('button', {
+      name: /Deck-scoped, not account-wide/,
+    });
+    expect(disclosureTrigger).toHaveAttribute('aria-expanded', 'false');
+    await user.click(disclosureTrigger);
+    expect(disclosureTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(disclosure).toHaveTextContent('Only relevant active memory can be used in a new run');
     expect(disclosure).toHaveTextContent('retained until you delete them');
     expect(disclosure).toHaveTextContent(
       'Public shares and exported snapshots never include memory',
     );
     expect(disclosure).toHaveTextContent('Trace stores memory IDs and digests, not memory text');
-
-    const details = disclosure.querySelector('details');
-    const summary = disclosure.querySelector('summary');
-    expect(details).not.toHaveAttribute('open');
-    expect(summary).toHaveProperty('tabIndex', 0);
-    await user.click(summary as HTMLElement);
-    expect(details).toHaveAttribute('open');
 
     const activeCard = screen.getByText(activeMemory.content).closest('article');
     expect(activeCard).not.toBeNull();
@@ -187,8 +186,8 @@ describe('NodeSlide memory manager', () => {
     const activeTab = screen.getByRole('tab', { name: /Active 1/i });
     const archivedTab = screen.getByRole('tab', { name: /Archived 1/i });
     expect(activeTab).toHaveAttribute('aria-controls', 'ns-memory-active-panel');
-    expect(activeTab).toHaveAttribute('tabindex', '0');
-    expect(archivedTab).toHaveAttribute('tabindex', '-1');
+    expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    expect(archivedTab).toHaveAttribute('aria-selected', 'false');
 
     activeTab.focus();
     await user.keyboard('{ArrowRight}');
@@ -204,14 +203,16 @@ describe('NodeSlide memory manager', () => {
       name: `Archive memory: ${activeMemory.content}`,
     });
     await user.click(archiveButton);
-    const archiveConfirmation = screen.getByRole('group', { name: 'Archive this memory?' });
+    const archiveConfirmation = screen.getByRole('alertdialog', { name: 'Archive this memory?' });
     expect(archiveConfirmation).toHaveTextContent(
       'It stays stored in this deck and can be restored, but archived memory is excluded from new runs.',
     );
     expect(screen.getByRole('button', { name: 'Confirm archive' })).toHaveFocus();
 
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('group', { name: 'Archive this memory?' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('alertdialog', { name: 'Archive this memory?' }),
+    ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: `Archive memory: ${activeMemory.content}` }),
@@ -322,7 +323,7 @@ describe('NodeSlide memory manager', () => {
       screen.getByRole('button', { name: `Archive memory: ${activeMemory.content}` }),
     );
     expect(onUpdate).not.toHaveBeenCalled();
-    expect(screen.getByRole('group', { name: 'Archive this memory?' })).toHaveTextContent(
+    expect(screen.getByRole('alertdialog', { name: 'Archive this memory?' })).toHaveTextContent(
       'stays stored in this deck and can be restored',
     );
     await user.click(screen.getByRole('button', { name: 'Confirm archive' }));
@@ -341,7 +342,7 @@ describe('NodeSlide memory manager', () => {
         name: `Restore memory: ${archivedMemory.content}`,
       }),
     );
-    expect(screen.getByRole('group', { name: 'Restore this memory?' })).toHaveTextContent(
+    expect(screen.getByRole('alertdialog', { name: 'Restore this memory?' })).toHaveTextContent(
       'eligible for relevance matching because memory use is on',
     );
     await user.click(screen.getByRole('button', { name: 'Confirm restore' }));
@@ -361,7 +362,7 @@ describe('NodeSlide memory manager', () => {
       }),
     );
     expect(
-      screen.getByRole('group', { name: 'Delete this memory permanently?' }),
+      screen.getByRole('alertdialog', { name: 'Delete this memory permanently?' }),
     ).toHaveTextContent('cannot be undone');
     expect(onDelete).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Confirm delete' }));
@@ -400,12 +401,16 @@ describe('NodeSlide memory manager', () => {
     expect(alert).toHaveTextContent(
       'reopen Deck memory and verify its current status before retrying',
     );
-    expect(screen.getByRole('group', { name: 'Archive this memory?' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('alertdialog', { name: 'Archive this memory?' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm archive' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Confirm archive' }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole('group', { name: 'Archive this memory?' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('alertdialog', { name: 'Archive this memory?' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/Memory archived. It remains stored/)).toBeInTheDocument();
   });
 

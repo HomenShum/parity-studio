@@ -1,4 +1,19 @@
 import { PromptInputButton } from '@/components/ai-elements/prompt-input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { type AppendMessage, ThreadPrimitive } from '@assistant-ui/react';
 import {
   ArrowDown,
@@ -71,6 +86,7 @@ import { NodeSlideMemoryDialog } from '../components/NodeSlideMemoryDialog';
 import {
   NODESLIDE_COMPOSER_DEFAULT_REASONING_EFFORT,
   NodeSlidePromptComposer,
+  type NodeSlidePromptComposerSubmit,
   nodeSlideNativeEffortLabel,
 } from '../composer/NodeSlidePromptComposer';
 import {
@@ -357,7 +373,6 @@ export function AiInspector<CommandId extends string = string>({
   const turboDescriptionId = `${composerId}-turbo-description`;
   const menuId = `${composerId}-menu`;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const toolsMenuRef = useRef<HTMLDetailsElement | null>(null);
   const reviewScrollRef = useRef<HTMLDivElement | null>(null);
   const scopeWasManuallyChosenRef = useRef(false);
   const previousSelectedElementCountRef = useRef(selectedElements.length);
@@ -940,6 +955,10 @@ export function AiInspector<CommandId extends string = string>({
 
   const runtimeSubmitRef = useRef(submit);
   runtimeSubmitRef.current = submit;
+  const handlePromptSubmit = useCallback(
+    ({ text, files }: NodeSlidePromptComposerSubmit) => runtimeSubmitRef.current(text, files),
+    [],
+  );
   const runtimeCancelTargetRef = useRef({ onCancelRun, runId: visibleDurableRun?.id });
   runtimeCancelTargetRef.current = { onCancelRun, runId: visibleDurableRun?.id };
   const handleRuntimeNew = useCallback(async (message: AppendMessage) => {
@@ -1103,14 +1122,17 @@ export function AiInspector<CommandId extends string = string>({
             ) : null}
 
             {hiddenMessageCount > 0 ? (
-              <details className="ns-conversation-summary" data-testid="conversation-summary-event">
-                <summary>
+              <Collapsible
+                className="ns-conversation-summary"
+                data-testid="conversation-summary-event"
+              >
+                <CollapsibleTrigger>
                   <Brain size={12} aria-hidden="true" />
                   <span>Conversation summarized</span>
                   <small>{hiddenMessageCount} earlier</small>
                   <ChevronRight size={12} aria-hidden="true" />
-                </summary>
-                <div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
                   <p>
                     Showing the latest {recentMessages.length} persisted messages. Earlier messages
                     are unchanged and remain available on demand.
@@ -1122,8 +1144,8 @@ export function AiInspector<CommandId extends string = string>({
                   >
                     Show {Math.min(50, hiddenMessageCount)} earlier messages
                   </button>
-                </div>
-              </details>
+                </CollapsibleContent>
+              </Collapsible>
             ) : null}
 
             <div className="ns-ai-v3-conversation" data-testid="assistant-ui-messages">
@@ -1495,6 +1517,10 @@ export function AiInspector<CommandId extends string = string>({
                 }`}
                 data-testid="ai-composer"
                 data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}
+                data-provider-configuration={providerConfigurationValid ? 'valid' : 'invalid'}
+                data-provider-effort={providerEffort}
+                data-provider-model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                data-provider-ready={providerReady ? 'true' : 'false'}
                 onFocusCapture={() => {
                   if (compactReviewComposer) setComposerExpanded(true);
                 }}
@@ -1585,14 +1611,14 @@ export function AiInspector<CommandId extends string = string>({
                   <span>{referenceUseLabel(referenceUse)}</span>
                 </fieldset>
 
-                <details
+                <Collapsible
                   id="nodeslide-ai-advanced-controls"
                   className="ns-ai-v3-controls-disclosure"
                   data-testid="ai-provider-controls"
                   open={providerControlsOpen}
-                  onToggle={(event) => setProviderControlsOpen(event.currentTarget.open)}
+                  onOpenChange={setProviderControlsOpen}
                 >
-                  <summary
+                  <CollapsibleTrigger
                     data-testid="ai-provider-summary"
                     aria-label="Advanced provider, privacy, scope, and editing controls"
                   >
@@ -1612,8 +1638,8 @@ export function AiInspector<CommandId extends string = string>({
                         </>
                       )}
                     </span>
-                  </summary>
-                  <div className="ns-ai-v3-controls-body">
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="ns-ai-v3-controls-body">
                     <div className="ns-ai-v3-route-summary" data-testid="ai-provider-route-status">
                       {providerMode === 'deterministic' ? (
                         <>
@@ -1651,17 +1677,19 @@ export function AiInspector<CommandId extends string = string>({
                               : 'Review each change'}
                           </span>
                         </div>
-                        <details className="ns-ai-turbo-limits">
-                          <summary>Limits and exclusions</summary>
-                          <small>
-                            Authority expires after{' '}
-                            {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
-                            {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
-                            {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
-                            proposal. Publish, share, export, delete, and sync are excluded and
-                            always require direct confirmation.
-                          </small>
-                        </details>
+                        <Collapsible className="ns-ai-turbo-limits">
+                          <CollapsibleTrigger>Limits and exclusions</CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <small>
+                              Authority expires after{' '}
+                              {NODESLIDE_BROWSER_DELEGATION_TTL_MS / (60 * 60 * 1_000)} hours or{' '}
+                              {NODESLIDE_DELEGATION_MAX_USES} proposals, with up to{' '}
+                              {NODESLIDE_DELEGATION_MAX_OPERATIONS} non-destructive operations per
+                              proposal. Publish, share, export, delete, and sync are excluded and
+                              always require direct confirmation.
+                            </small>
+                          </CollapsibleContent>
+                        </Collapsible>
                         {approvalBusy ? (
                           <output className="ns-ai-approval-status">
                             Updating session authority…
@@ -1734,61 +1762,69 @@ export function AiInspector<CommandId extends string = string>({
                       </div>
                     )}
 
-                    {scopeError ? (
-                      <p className="ns-ai-v3-inline-error" role="alert">
-                        {scopeError}
-                      </p>
-                    ) : null}
-
                     <div className="ns-ai-policy-grid">
-                      <label>
-                        <span>Operation mode</span>
-                        <select
+                      <div className="ns-ai-policy-field">
+                        <span id={`${composerId}-operation-mode`}>Operation mode</span>
+                        <Select
                           value={operationMode}
                           disabled={approvalControlLocked}
-                          onChange={(event) =>
-                            setOperationMode(event.target.value as OperationMode)
-                          }
-                          aria-label="Operation mode"
+                          onValueChange={(value) => setOperationMode(value as OperationMode)}
                         >
-                          <option value="unrestricted">Full edit</option>
-                          <option value="copy">Copy only</option>
-                          <option value="style">Style only</option>
-                          <option value="layout">Layout only</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Design behavior</span>
-                        <select
+                          <SelectTrigger aria-labelledby={`${composerId}-operation-mode`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unrestricted">Full edit</SelectItem>
+                            <SelectItem value="copy">Copy only</SelectItem>
+                            <SelectItem value="style">Style only</SelectItem>
+                            <SelectItem value="layout">Layout only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="ns-ai-policy-field">
+                        <span id={`${composerId}-design-behavior`}>Design behavior</span>
+                        <Select
                           value={designBehavior}
                           disabled={approvalControlLocked}
-                          onChange={(event) =>
-                            setDesignBehavior(event.target.value as AiDesignBehaviorPolicy)
+                          onValueChange={(value) =>
+                            setDesignBehavior(value as AiDesignBehaviorPolicy)
                           }
-                          data-testid="ai-design-behavior"
                         >
-                          <option value="preserve">Preserve exactly</option>
-                          <option value="refine">Refine subtly</option>
-                          <option value="rebalance">Rebalance hierarchy</option>
-                          <option value="reinterpret">Explore a new direction</option>
-                          <option value="reimagine">Reimagine boldly</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Reference use</span>
-                        <select
+                          <SelectTrigger
+                            aria-labelledby={`${composerId}-design-behavior`}
+                            data-testid="ai-design-behavior"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="preserve">Preserve exactly</SelectItem>
+                            <SelectItem value="refine">Refine subtly</SelectItem>
+                            <SelectItem value="rebalance">Rebalance hierarchy</SelectItem>
+                            <SelectItem value="reinterpret">Explore a new direction</SelectItem>
+                            <SelectItem value="reimagine">Reimagine boldly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="ns-ai-policy-field">
+                        <span id={`${composerId}-reference-use`}>Reference use</span>
+                        <Select
                           value={referenceUse}
                           disabled={approvalControlLocked}
-                          onChange={(event) =>
-                            setReferenceUse(event.target.value as AiReferenceUsePolicy)
-                          }
-                          data-testid="ai-reference-use"
+                          onValueChange={(value) => setReferenceUse(value as AiReferenceUsePolicy)}
                         >
-                          <option value="context_only">Context only</option>
-                          <option value="inspiration">Use as inspiration</option>
-                          <option value="style_direction">Follow style direction</option>
-                        </select>
-                      </label>
+                          <SelectTrigger
+                            aria-labelledby={`${composerId}-reference-use`}
+                            data-testid="ai-reference-use"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="context_only">Context only</SelectItem>
+                            <SelectItem value="inspiration">Use as inspiration</SelectItem>
+                            <SelectItem value="style_direction">Follow style direction</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <label>
                         <span>Run spend ceiling</span>
                         <input
@@ -1814,8 +1850,14 @@ export function AiInspector<CommandId extends string = string>({
                         </small>
                       </label>
                     </div>
-                  </div>
-                </details>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                {scopeError ? (
+                  <p className="ns-ai-v3-inline-error" role="alert">
+                    {scopeError}
+                  </p>
+                ) : null}
 
                 {commentContext || selectedReadContext.length > 0 || selectedCommand ? (
                   <div className="ns-composer-tokens" aria-label="Composer tokens">
@@ -1890,7 +1932,7 @@ export function AiInspector<CommandId extends string = string>({
                             : `${providerNameForMode(providerMode)} · external`}
                         </span>
                         {requiresExternalConsent || externalConsent.granted ? (
-                          <label
+                          <div
                             className={`ns-session-consent-pill ns-ai-session-consent ${
                               externalConsent.granted ? 'is-ready' : ''
                             }`}
@@ -1900,27 +1942,30 @@ export function AiInspector<CommandId extends string = string>({
                                 : 'Allow selected external models and optional web research for this browser tab'
                             }
                           >
-                            <input
-                              type="checkbox"
+                            <Checkbox
+                              id="nodeslide-ai-provider-consent"
+                              type="button"
                               checked={externalConsent.granted}
-                              onChange={(event) => {
-                                externalConsent.setGranted(event.target.checked);
+                              onCheckedChange={(checked) => {
+                                externalConsent.setGranted(checked === true);
                                 setAttachmentError(null);
                               }}
                               data-agent-web-consent="session"
                               data-testid="ai-provider-consent"
                             />
-                            <ShieldCheck size={12} aria-hidden="true" />
-                            <span>
-                              {deterministicWebResearch
-                                ? externalConsent.granted
-                                  ? 'Web allowed'
-                                  : 'Allow Web'
-                                : externalConsent.granted
-                                  ? 'Session allowed'
-                                  : 'Allow this session'}
-                            </span>
-                          </label>
+                            <label htmlFor="nodeslide-ai-provider-consent">
+                              <ShieldCheck size={12} aria-hidden="true" />
+                              <span>
+                                {deterministicWebResearch
+                                  ? externalConsent.granted
+                                    ? 'Web allowed'
+                                    : 'Allow Web'
+                                  : externalConsent.granted
+                                    ? 'Session allowed'
+                                    : 'Allow this session'}
+                              </span>
+                            </label>
+                          </div>
                         ) : null}
                       </div>
                     ) : undefined
@@ -1942,7 +1987,7 @@ export function AiInspector<CommandId extends string = string>({
                     window.localStorage.setItem('nodeslide.agent-effort', effort);
                   }}
                   onModelChange={chooseProviderModel}
-                  onSubmit={({ text, files }) => submit(text, files)}
+                  onSubmit={handlePromptSubmit}
                   onTextareaKeyDown={handleComposerKeyDown}
                   onTextareaSelect={(event) =>
                     setCursorPosition(event.currentTarget.selectionStart)
@@ -2007,92 +2052,85 @@ export function AiInspector<CommandId extends string = string>({
                         <Globe2 size={14} />
                         <span className="ns-ai-tool-label">Web</span>
                       </PromptInputButton>
-                      <details className="ns-ai-tools-menu" ref={toolsMenuRef}>
-                        <summary aria-label="Open composer tools" data-testid="ai-tools-toggle">
-                          <PlugZap size={14} /> <span>Tools</span>
-                        </summary>
-                        <div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <PromptInputButton
-                            aria-label="Connect BYOK model or coding agent"
+                            aria-label="Open composer tools"
+                            className="ns-ai-tools-menu"
+                            data-testid="ai-tools-toggle"
+                            disabled={approvalControlLocked}
+                          >
+                            <PlugZap size={14} /> <span>Tools</span>
+                          </PromptInputButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          className="ns-ai-tools-menu-content"
+                          portalContainer={
+                            typeof document === 'undefined'
+                              ? null
+                              : document.querySelector<HTMLElement>('.nodeslide-studio')
+                          }
+                        >
+                          <DropdownMenuItem
                             className="ns-ai-tool-button"
                             data-testid="ai-connect-agent"
                             disabled={approvalControlLocked}
-                            onClick={() => {
-                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
-                              setConnectionsOpen(true);
-                            }}
+                            onSelect={() => setConnectionsOpen(true)}
                             title="Connect BYOK model or coding agent"
                           >
                             <PlugZap size={14} />
                             <span className="ns-ai-tool-label">Connect</span>
-                          </PromptInputButton>
+                          </DropdownMenuItem>
                           {onCreateMemory && onUpdateMemory && onDeleteMemory ? (
-                            <PromptInputButton
-                              aria-label="Manage deck memory"
+                            <DropdownMenuItem
                               className="ns-ai-tool-button"
-                              aria-pressed={useMemoryForRun}
                               data-testid="ai-memory"
                               disabled={approvalControlLocked}
-                              onClick={() => {
-                                if (toolsMenuRef.current) toolsMenuRef.current.open = false;
-                                setMemoryOpen(true);
-                              }}
+                              onSelect={() => setMemoryOpen(true)}
                               title="Manage durable deck memory"
-                              variant={useMemoryForRun ? 'default' : 'ghost'}
+                              data-active={useMemoryForRun ? '' : undefined}
                             >
                               <Brain size={14} />
                               <span className="ns-ai-tool-label">Memory</span>
                               {memories.length ? (
                                 <span className="ns-prompt-badge">{activeMemoryCount}</span>
                               ) : null}
-                            </PromptInputButton>
+                            </DropdownMenuItem>
                           ) : null}
-                          <PromptInputButton
-                            aria-label="Add read context reference"
+                          <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-context"
                             disabled={approvalControlLocked || references.length === 0}
-                            onClick={() => {
-                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
-                              openTokenMenu('@');
-                            }}
+                            onSelect={() => openTokenMenu('@')}
                             title="Add read context"
                           >
                             <AtSign size={14} />
                             <span className="ns-ai-tool-label">Context</span>
-                          </PromptInputButton>
-                          <PromptInputButton
-                            aria-label="Add command"
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             className="ns-ai-tool-button ns-ai-tool-command"
                             disabled={approvalControlLocked}
-                            onClick={() => {
-                              if (toolsMenuRef.current) toolsMenuRef.current.open = false;
-                              openTokenMenu('/');
-                            }}
+                            onSelect={() => openTokenMenu('/')}
                             title="Add command"
                           >
                             <Command size={14} />
                             <span className="ns-ai-tool-label">Command</span>
-                          </PromptInputButton>
+                          </DropdownMenuItem>
                           {onProposeVisualMaterial ? (
-                            <PromptInputButton
-                              aria-label="Open visual material tool"
+                            <DropdownMenuItem
                               className="ns-ai-tool-button"
-                              aria-pressed={materialWorkbenchOpen}
                               data-testid="ai-open-material-workbench"
                               disabled={approvalControlLocked}
-                              onClick={() => {
-                                if (toolsMenuRef.current) toolsMenuRef.current.open = false;
-                                setMaterialWorkbenchOpen((open) => !open);
-                              }}
+                              onSelect={() => setMaterialWorkbenchOpen((open) => !open)}
                               title="Open the visual material tool"
-                              variant={materialWorkbenchOpen ? 'default' : 'ghost'}
+                              data-active={materialWorkbenchOpen ? '' : undefined}
                             >
                               <Layers3 size={14} />
                               <span className="ns-ai-tool-label">Visual</span>
-                            </PromptInputButton>
+                            </DropdownMenuItem>
                           ) : null}
-                        </div>
-                      </details>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </>
                   }
                 />
@@ -2245,14 +2283,16 @@ function VariationCard({
         </span>
       </div>
       {validationNotes.length > 0 ? (
-        <details className="ns-variation-validation-details">
-          <summary>View validation notes</summary>
-          <ul>
-            {validationNotes.map((issue) => (
-              <li key={issue.id}>{issue.message}</li>
-            ))}
-          </ul>
-        </details>
+        <Collapsible className="ns-variation-validation-details">
+          <CollapsibleTrigger>View validation notes</CollapsibleTrigger>
+          <CollapsibleContent>
+            <ul>
+              {validationNotes.map((issue) => (
+                <li key={issue.id}>{issue.message}</li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
       <p className="ns-variation-change-summary">{variationChangedFields(variation.operations)}</p>
       {variation.fallbackReason && variation.fallbackReason !== 'provider_not_requested' ? (
@@ -2260,14 +2300,18 @@ function VariationCard({
           Fallback reason: {humanizeDiagnostic(variation.fallbackReason)}
         </p>
       ) : null}
-      <details>
-        <summary>Review {variation.operations.length} bounded changes</summary>
-        <ul>
-          {variation.operations.map((operation, index) => (
-            <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
-          ))}
-        </ul>
-      </details>
+      <Collapsible>
+        <CollapsibleTrigger>
+          Review {variation.operations.length} bounded changes
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul>
+            {variation.operations.map((operation, index) => (
+              <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
       <div className="ns-variation-actions">
         <button
           ref={previewButtonRef}
@@ -2417,51 +2461,53 @@ function ProposalCard({
               )}
             </div>
           ) : null}
-          <details className="ns-proposal-technical">
-            <summary>Technical details</summary>
-            <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
-              <div>
-                <dt>Write scope</dt>
-                <dd>{`Technical scope: ${nodeSlideScopeLabel(patch.scope)}`}</dd>
-              </div>
-              <div>
-                <dt>Base</dt>
-                <dd>{baseEvidence(patch)}</dd>
-              </div>
-              <div>
-                <dt>Operations</dt>
-                <dd>{patch.operations.length}</dd>
-              </div>
-              {provider && model ? (
+          <Collapsible className="ns-proposal-technical">
+            <CollapsibleTrigger>Technical details</CollapsibleTrigger>
+            <CollapsibleContent>
+              <dl className="ns-proposal-evidence" aria-label="Proposal evidence">
                 <div>
-                  <dt>Historical route</dt>
-                  <dd>
-                    {provider} · {model}
-                  </dd>
+                  <dt>Write scope</dt>
+                  <dd>{`Technical scope: ${nodeSlideScopeLabel(patch.scope)}`}</dd>
                 </div>
-              ) : null}
-              {candidateValidation ? (
                 <div>
-                  <dt>Validation receipt</dt>
-                  <dd>{candidateValidation.id}</dd>
+                  <dt>Base</dt>
+                  <dd>{baseEvidence(patch)}</dd>
                 </div>
+                <div>
+                  <dt>Operations</dt>
+                  <dd>{patch.operations.length}</dd>
+                </div>
+                {provider && model ? (
+                  <div>
+                    <dt>Historical route</dt>
+                    <dd>
+                      {provider} · {model}
+                    </dd>
+                  </div>
+                ) : null}
+                {candidateValidation ? (
+                  <div>
+                    <dt>Validation receipt</dt>
+                    <dd>{candidateValidation.id}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {candidateValidation?.issues.length ? (
+                <ul>
+                  {candidateValidation.issues.map((issue) => (
+                    <li key={issue.id}>
+                      {humanizeAxis(issue.severity)} · {issue.message}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
-            </dl>
-            {candidateValidation?.issues.length ? (
-              <ul>
-                {candidateValidation.issues.map((issue) => (
-                  <li key={issue.id}>
-                    {humanizeAxis(issue.severity)} · {issue.message}
-                  </li>
+              <ul className="ns-proposal-operation-list">
+                {patch.operations.map((operation, index) => (
+                  <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
                 ))}
               </ul>
-            ) : null}
-            <ul className="ns-proposal-operation-list">
-              {patch.operations.map((operation, index) => (
-                <li key={`${operation.op}-${index}`}>{describeOperation(operation)}</li>
-              ))}
-            </ul>
-          </details>
+            </CollapsibleContent>
+          </Collapsible>
           <div className="ns-proposal-actions">
             <button
               className="ns-button ns-button--quiet"

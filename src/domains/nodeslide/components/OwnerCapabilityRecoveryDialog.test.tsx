@@ -2,7 +2,7 @@
 
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   type OwnerCapabilityRecovery,
   OwnerCapabilityRecoveryDialog,
@@ -13,21 +13,6 @@ const recovery: OwnerCapabilityRecovery = {
   deckTitle: 'Private plan',
   ownerAccessKey: 'owner-secret-capability',
 };
-
-beforeAll(() => {
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-    configurable: true,
-    value(this: HTMLDialogElement) {
-      this.open = true;
-    },
-  });
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-    configurable: true,
-    value(this: HTMLDialogElement) {
-      this.open = false;
-    },
-  });
-});
 
 describe('NodeSlide owner capability recovery dialog', () => {
   it('keeps the capability masked while explaining how to restore it', () => {

@@ -1,4 +1,12 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
   Activity,
   Bot,
   Braces,
@@ -12,11 +20,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import {
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useEffect,
-  useId,
   useRef,
   useState,
 } from 'react';
@@ -47,13 +53,7 @@ import type {
 } from '../../../../shared/nodeslideSourceMonitoring';
 import type { SlideVariation } from '../../../../shared/nodeslideVariation';
 import { NODESLIDE_RESPONSIVE_DRAWER_QUERY } from '../components/editorShellResponsive';
-import {
-  OverlayBackdrop,
-  PopoverSurface,
-  getRovingFocusIndex,
-  useDrawerSurface,
-  useViewportMatch,
-} from '../components/overlayPrimitives';
+import { getRovingFocusIndex, useViewportMatch } from '../components/overlayPrimitives';
 import type { AgentSessionApprovalMode } from '../session';
 import type { NodeSlideTastePackId } from '../signature/packs/index';
 import {
@@ -298,22 +298,11 @@ export function InspectorPanel<CommandId extends string = string>({
 }: InspectorPanelProps<CommandId>) {
   const resizeRef = useRef<ResizeState | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const mountedTabsRef = useRef<Set<InspectorTab>>(new Set());
-  const shouldRestoreDrawerFocusRef = useRef(true);
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreMenuId = useId();
   const drawerViewport = useViewportMatch(NODESLIDE_RESPONSIVE_DRAWER_QUERY);
   const drawerOpen = drawerViewport && !collapsed;
   rememberInspectorTab(mountedTabsRef.current, activeTab);
-  shouldRestoreDrawerFocusRef.current = collapsed;
-  const { surfaceRef: drawerRef, handleKeyDown: handleDrawerKeyDown } =
-    useDrawerSurface<HTMLElement>({
-      open: drawerOpen,
-      onClose: onToggleCollapsed,
-      initialFocusRef: closeButtonRef,
-      shouldRestoreFocusRef: shouldRestoreDrawerFocusRef,
-    });
 
   useEffect(() => {
     if (collapsed) setMoreOpen(false);
@@ -351,56 +340,53 @@ export function InspectorPanel<CommandId extends string = string>({
     (comment) => !comment.parentId && comment.status === 'open',
   ).length;
 
-  return (
-    <>
-      <OverlayBackdrop
-        open={drawerOpen}
-        className="ns-inspector-backdrop"
-        onDismiss={onToggleCollapsed}
-      />
-      <aside
-        id="nodeslide-inspector"
-        ref={drawerRef}
-        className={`ns-inspector${collapsed ? ' is-collapsed' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
-        aria-label={collapsed ? 'Inspector collapsed' : 'NodeSlide inspector'}
-        aria-hidden={drawerViewport && collapsed ? true : undefined}
-        role={drawerOpen ? 'dialog' : undefined}
-        aria-modal={drawerOpen ? true : undefined}
-        data-overlay-mode={drawerViewport ? 'drawer' : 'pane'}
-        style={{ width }}
-        data-testid="inspector"
-        onKeyDown={drawerOpen ? handleDrawerKeyDown : undefined}
-      >
-        <div className="ns-inspector-collapsed-shell" hidden={!collapsed}>
-          <button
-            className="ns-inspector-collapsed-button"
-            type="button"
-            onClick={onToggleCollapsed}
-            aria-label="Open inspector"
-          >
-            <ChevronLeft size={16} />
-            <span>Inspector</span>
-          </button>
-          <div className="ns-inspector-collapsed-tabs">
-            {INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                className={activeTab === id ? 'is-active' : ''}
-                aria-pressed={activeTab === id}
-                onClick={() => {
-                  onTabChange(id);
-                  onToggleCollapsed();
-                }}
-                aria-label={`Open ${label}`}
-                title={label}
-              >
-                <Icon size={15} />
-                {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-              </button>
-            ))}
-          </div>
+  const inspector = (
+    <aside
+      id="nodeslide-inspector"
+      className={`ns-inspector${collapsed ? ' is-collapsed' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
+      aria-label={collapsed ? 'Inspector collapsed' : 'NodeSlide inspector'}
+      aria-hidden={drawerViewport && collapsed ? true : undefined}
+      data-overlay-mode={drawerViewport ? 'drawer' : 'pane'}
+      style={{ width }}
+      data-testid="inspector"
+    >
+      {drawerViewport ? <SheetTitle className="ns-sr-only">NodeSlide inspector</SheetTitle> : null}
+      <div className="ns-inspector-collapsed-shell" hidden={!collapsed}>
+        <button
+          className="ns-inspector-collapsed-button"
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label="Open inspector"
+        >
+          <ChevronLeft size={16} />
+          <span>Inspector</span>
+        </button>
+        <div className="ns-inspector-collapsed-tabs">
+          {INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={activeTab === id ? 'is-active' : ''}
+              aria-pressed={activeTab === id}
+              onClick={() => {
+                onTabChange(id);
+                onToggleCollapsed();
+              }}
+              aria-label={`Open ${label}`}
+              title={label}
+            >
+              <Icon size={15} />
+              {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
+            </button>
+          ))}
         </div>
+      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => onTabChange(value as InspectorTab)}
+        unstyled
+        asChild
+      >
         <div className="ns-inspector-expanded-shell" hidden={collapsed} inert={collapsed}>
           <button
             className="ns-inspector-resizer"
@@ -445,82 +431,76 @@ export function InspectorPanel<CommandId extends string = string>({
             </button>
           </div>
           <nav className="ns-inspector-nav" aria-label="Inspector views">
-            <div className="ns-inspector-tabs" role="tablist" aria-label="Primary inspector views">
-              {PRIMARY_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
-                <button
-                  type="button"
-                  role="tab"
-                  id={`ns-tab-${id}`}
-                  aria-controls={`ns-tabpanel-${id}`}
-                  aria-selected={activeTab === id}
-                  className={activeTab === id ? 'is-active' : ''}
-                  data-testid={`inspector-tab-${id}`}
-                  key={id}
-                  tabIndex={activeTab === id ? 0 : -1}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    onTabChange(id);
-                  }}
-                  onKeyDown={(event) => handlePrimaryInspectorTabKeyDown(event, id, onTabChange)}
-                >
-                  <Icon size={14} />
-                  <span>{label}</span>
-                  {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
-                  {id === 'ai' && (agentBusy || variationBusy) ? <i className="is-live" /> : null}
-                </button>
-              ))}
-            </div>
-            <div className="ns-inspector-more">
-              <button
-                ref={moreTriggerRef}
-                id="ns-inspector-more-trigger"
-                className={`ns-inspector-more-trigger ${
-                  MORE_INSPECTOR_TABS.some(({ id }) => id === activeTab) ? 'is-active' : ''
-                }`}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                aria-controls={moreMenuId}
-                aria-label={`More inspector views${
-                  MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label
-                    ? `, current: ${MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label}`
-                    : ''
-                }`}
-                data-testid="inspector-more"
-                onClick={() => setMoreOpen((open) => !open)}
-              >
-                <MoreHorizontal size={14} aria-hidden="true" />
-                <span>More</span>
-                <ChevronDown size={11} aria-hidden="true" />
-              </button>
-              <PopoverSurface
-                open={moreOpen}
-                id={moreMenuId}
-                surfaceRole="menu"
-                ariaLabel="More inspector views"
-                className="ns-popover ns-inspector-more-menu"
-                triggerRef={moreTriggerRef}
-                onClose={() => setMoreOpen(false)}
-              >
-                {MORE_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={activeTab === id ? 'is-active' : ''}
-                    data-testid={`inspector-tab-${id}`}
-                    key={id}
-                    onClick={() => {
-                      onTabChange(id);
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Icon size={14} aria-hidden="true" />
-                    <span>{label}</span>
-                    {activeTab === id ? <span className="ns-sr-only">Current view</span> : null}
-                  </button>
+            <TabsList unstyled asChild aria-label="Primary inspector views">
+              <div className="ns-inspector-tabs">
+                {PRIMARY_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+                  <TabsTrigger value={id} unstyled asChild key={id}>
+                    <button
+                      type="button"
+                      id={`ns-tab-${id}`}
+                      className={activeTab === id ? 'is-active' : ''}
+                      data-testid={`inspector-tab-${id}`}
+                      onClick={() => setMoreOpen(false)}
+                    >
+                      <Icon size={14} />
+                      <span>{label}</span>
+                      {id === 'comments' && openComments > 0 ? <i>{openComments}</i> : null}
+                      {id === 'ai' && (agentBusy || variationBusy) ? (
+                        <i className="is-live" />
+                      ) : null}
+                    </button>
+                  </TabsTrigger>
                 ))}
-              </PopoverSurface>
-            </div>
+              </div>
+            </TabsList>
+            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+              <div className="ns-inspector-more">
+                <DropdownMenuTrigger asChild>
+                  <button
+                    id="ns-inspector-more-trigger"
+                    className={`ns-inspector-more-trigger ${
+                      MORE_INSPECTOR_TABS.some(({ id }) => id === activeTab) ? 'is-active' : ''
+                    }`}
+                    type="button"
+                    aria-label={`More inspector views${
+                      MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label
+                        ? `, current: ${MORE_INSPECTOR_TABS.find(({ id }) => id === activeTab)?.label}`
+                        : ''
+                    }`}
+                    data-testid="inspector-more"
+                  >
+                    <MoreHorizontal size={14} aria-hidden="true" />
+                    <span>More</span>
+                    <ChevronDown size={11} aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  aria-label="More inspector views"
+                  className="ns-popover ns-inspector-more-menu"
+                  portalContainer={
+                    typeof document === 'undefined'
+                      ? null
+                      : document.querySelector<HTMLElement>('.nodeslide-studio')
+                  }
+                >
+                  {MORE_INSPECTOR_TABS.map(({ id, label, icon: Icon }) => (
+                    <DropdownMenuItem asChild key={id}>
+                      <button
+                        type="button"
+                        className={activeTab === id ? 'is-active' : ''}
+                        data-testid={`inspector-tab-${id}`}
+                        onClick={() => onTabChange(id)}
+                      >
+                        <Icon size={14} aria-hidden="true" />
+                        <span>{label}</span>
+                        {activeTab === id ? <span className="ns-sr-only">Current view</span> : null}
+                      </button>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </div>
+            </DropdownMenu>
           </nav>
 
           <div className="ns-inspector-content">
@@ -714,8 +694,37 @@ export function InspectorPanel<CommandId extends string = string>({
             ) : null}
           </div>
         </div>
-      </aside>
-    </>
+      </Tabs>
+    </aside>
+  );
+
+  if (!drawerViewport) return inspector;
+
+  return (
+    <Sheet
+      open={drawerOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !collapsed) onToggleCollapsed();
+      }}
+    >
+      <SheetContent
+        asChild
+        side="right"
+        showCloseButton={false}
+        overlayClassName="ns-inspector-backdrop"
+        portalContainer={
+          typeof document === 'undefined'
+            ? null
+            : document.querySelector<HTMLElement>('.nodeslide-studio')
+        }
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          closeButtonRef.current?.focus();
+        }}
+      >
+        {inspector}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -745,18 +754,6 @@ function InspectorTabPanel({ id, activeTab, children }: InspectorTabPanelProps) 
       {children}
     </section>
   );
-}
-
-function handlePrimaryInspectorTabKeyDown(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  currentTab: InspectorTab,
-  onTabChange: (tab: InspectorTab) => void,
-) {
-  const nextTab = primaryInspectorTabAfterKey(currentTab, event.key);
-  if (!nextTab) return;
-  event.preventDefault();
-  onTabChange(nextTab);
-  requestAnimationFrame(() => document.getElementById(`ns-tab-${nextTab}`)?.focus());
 }
 
 export function primaryInspectorTabAfterKey(

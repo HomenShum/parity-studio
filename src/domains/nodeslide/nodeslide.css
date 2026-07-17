@@ -3017,7 +3017,8 @@
   padding: 0;
   width: 680px;
 }
-.ns-first-run-dialog::backdrop {
+.ns-first-run-dialog::backdrop,
+.ns-first-run-backdrop {
   background: rgb(20 22 20 / 52%);
   backdrop-filter: blur(9px);
 }
@@ -3223,7 +3224,8 @@
   padding: 0;
   width: 600px;
 }
-.ns-share-dialog::backdrop {
+.ns-share-dialog::backdrop,
+.ns-share-dialog-backdrop {
   background: rgb(20 22 20 / 54%);
   backdrop-filter: blur(9px);
 }

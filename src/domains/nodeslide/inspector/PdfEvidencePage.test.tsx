@@ -108,8 +108,10 @@ describe('PdfEvidencePage', () => {
 
     resize?.(450);
     await waitFor(() => expect(pdfMocks.render).toHaveBeenCalledTimes(2));
-    expect(screen.getByTestId('trace-pdf-page-surface').getAttribute('style')).toContain(
-      'width: 450px',
+    await waitFor(() =>
+      expect(screen.getByTestId('trace-pdf-page-surface').getAttribute('style')).toContain(
+        'width: 450px',
+      ),
     );
     expect(overlay.style.left).toBe('10%');
   });

@@ -1,10 +1,17 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom/vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentTrace, ValidationResult } from '../../shared/nodeslide';
 import { CustodyRail, TraceInspector } from '../../src/domains/nodeslide/inspector/TraceInspector';
 import { NODESLIDE_EDIT_MODEL, NODESLIDE_EDIT_PROVIDER } from './nodeslideProvider';
 
 describe('NodeSlide trace validation receipts', () => {
+  afterEach(cleanup);
+
   it('uses the compact agent-activity hierarchy instead of the legacy trace framing', () => {
     const current = validation('validation-v2', 2, 2_000);
     const trace: AgentTrace = {
@@ -134,8 +141,9 @@ describe('NodeSlide trace validation receipts', () => {
     expect(markup).not.toContain('total_goals,172');
   });
 
-  it('renders the durable run journal and persisted web tool evidence', () => {
-    const markup = renderToStaticMarkup(
+  it('renders the durable run journal and reveals persisted web tool evidence', async () => {
+    const user = userEvent.setup();
+    render(
       <TraceInspector
         traces={[]}
         validations={[]}
@@ -169,11 +177,15 @@ describe('NodeSlide trace validation receipts', () => {
       />,
     );
 
-    expect(markup).toContain('Run journal');
-    expect(markup).toContain('server persisted');
-    expect(markup).toContain('Web consented');
-    expect(markup).toContain('web_search');
-    expect(markup).toContain('z-ai/glm-5.2');
+    expect(screen.getByText('Run journal')).toBeInTheDocument();
+    expect(screen.getByText(/server persisted/)).toBeInTheDocument();
+    expect(screen.queryByText('Web consented')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Durable agent run journal' }));
+
+    expect(screen.getByText('Web consented')).toBeInTheDocument();
+    expect(screen.getByText(/web_search/)).toBeInTheDocument();
+    expect(screen.getByText(/z-ai\/glm-5\.2/)).toBeInTheDocument();
   });
 });
 
