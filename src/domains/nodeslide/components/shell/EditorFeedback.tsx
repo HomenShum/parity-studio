@@ -1,3 +1,4 @@
+import { useConvex } from 'convex/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -7,9 +8,58 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react';
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { publishNodeSlideUiContract } from '../../uiContract';
 
-export function LoadingScreen({ title }: { title: string }) {
+/** After this long on one loading stage, offer an honest retry instead of spinning forever. */
+const LOADING_RETRY_AFTER_MS = 12_000;
+
+function useConvexConnectionReady(): boolean {
+  const convex = useConvex();
+  const [ready, setReady] = useState(() => convex.connectionState().isWebSocketConnected);
+  useEffect(() => {
+    if (ready) return;
+    const interval = window.setInterval(() => {
+      if (convex.connectionState().isWebSocketConnected) setReady(true);
+    }, 300);
+    return () => window.clearInterval(interval);
+  }, [convex, ready]);
+  return ready;
+}
+
+export function LoadingScreen({
+  title,
+  kind = 'preparing_sample',
+  theme = 'light',
+}: {
+  title: string;
+  kind?: 'preparing_sample' | 'opening_deck';
+  theme?: 'light' | 'dark';
+}) {
+  const connected = useConvexConnectionReady();
+  const [startedAt] = useState(() => Date.now());
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    const interval = window.setInterval(() => setElapsedMs(Date.now() - startedAt), 1_000);
+    return () => window.clearInterval(interval);
+  }, [startedAt]);
+
+  const stage = connected ? kind : 'connecting';
+  const retryVisible = elapsedMs >= LOADING_RETRY_AFTER_MS;
+  const stageTitle = connected ? title : 'Connecting to the workspace service…';
+  const stageDetail = connected
+    ? 'Loading canonical slides, sources, comments, and revision clocks.'
+    : 'Establishing the realtime connection before anything loads.';
+
+  useEffect(() => {
+    publishNodeSlideUiContract({
+      phase: 'loading',
+      connection: connected ? 'ready' : 'connecting',
+      theme,
+      loading: { stage, elapsedMs, retryVisible },
+    });
+  }, [connected, stage, elapsedMs, retryVisible, theme]);
+
   return (
     <main
       className="nodeslide-studio ns-loading-screen"
@@ -17,13 +67,28 @@ export function LoadingScreen({ title }: { title: string }) {
       aria-busy="true"
     >
       <output className="ns-sr-only" aria-live="polite">
-        {title}
+        {stageTitle}
       </output>
-      <span className="ns-loading-mark" aria-hidden="true">
-        <LoaderCircle className="ns-spin" size={20} />
-      </span>
-      <strong>{title}</strong>
-      <p>Loading canonical slides, sources, comments, and revision clocks.</p>
+      <div className="ns-loading-group" data-testid="ns-loading-stage" data-stage={stage}>
+        <span className="ns-loading-mark" aria-hidden="true">
+          <LoaderCircle className="ns-spin" size={20} />
+        </span>
+        <strong>{stageTitle}</strong>
+        <p>{stageDetail}</p>
+        {retryVisible ? (
+          <div className="ns-loading-retry">
+            <p>Still working — first-time sample setup can take longer than usual.</p>
+            <button
+              className="ns-button"
+              type="button"
+              onClick={() => window.location.reload()}
+              data-testid="ns-loading-retry"
+            >
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
+        ) : null}
+      </div>
     </main>
   );
 }

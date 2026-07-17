@@ -137,6 +137,7 @@ import {
 } from './signature/packs/index';
 import { DEFAULT_PPTX_IMPORT_BOUNDS, NODESLIDE_JSON_LIMITS } from './slidelang/importBounds';
 import { validateSnapshot } from './slidelang/validation';
+import { publishNodeSlideUiContract } from './uiContract';
 import './nodeslide.css';
 import './nodeslideV3.css';
 
@@ -1176,6 +1177,22 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   }
   const variationBusy = variationGenerating || variationDecisionBusy;
   const signatureProfiles = parseSignatureProfileRows(signatureProfileRows ?? []);
+  // Agent-native UI contract: publish machine-readable phase/deck/theme state whenever
+  // the mounted workspace changes. Landing/loading/recovery publish their own phases.
+  const contractDeckId = workspace?.deck.id;
+  const contractDeckVersion = workspace?.deck.version;
+  const contractSlideCount = workspace?.slides.length;
+  useEffect(() => {
+    if (!contractDeckId || contractDeckVersion === undefined || contractSlideCount === undefined) {
+      return;
+    }
+    publishNodeSlideUiContract({
+      phase: presentMode ? 'present' : 'workspace',
+      connection: 'ready',
+      theme: studioTheme,
+      deck: { id: contractDeckId, version: contractDeckVersion, slideCount: contractSlideCount },
+    });
+  }, [contractDeckId, contractDeckVersion, contractSlideCount, studioTheme, presentMode]);
   const activeSignatureProfile = workspace?.deck.activeSignatureProfileId
     ? (signatureProfiles.find(
         (profile) =>
@@ -2930,7 +2947,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   }
 
   if (!workspace || !activeSlide) {
-    return <LoadingScreen title={requestedDeck ? 'Opening your deck…' : 'Preparing the sample…'} />;
+    return (
+      <LoadingScreen
+        title={requestedDeck ? 'Opening your deck…' : 'Preparing the sample…'}
+        kind={requestedDeck ? 'opening_deck' : 'preparing_sample'}
+        theme={studioTheme}
+      />
+    );
   }
 
   if (presentMode) {

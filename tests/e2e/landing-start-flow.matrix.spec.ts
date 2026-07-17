@@ -39,7 +39,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
 
     expect(await visibleControlNames(page)).toEqual([
-      'BYOK / Agents',
+      'Connections',
       'Attach data',
       'Generation model',
       'Reasoning effort: Medium',
@@ -299,7 +299,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
     const runtime = watchLandingRuntime(page);
     await openIsolatedLanding(page);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    const trigger = page.getByRole('button', { name: 'BYOK / Agents' });
+    const trigger = page.getByRole('button', { name: 'Connections' });
     await trigger.click();
 
     const dialog = page.getByRole('dialog', { name: 'Connect your own runtime' });
@@ -385,7 +385,7 @@ for (const visualCase of [
 
     await expect(page.getByLabel('Presentation brief')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create presentation' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'BYOK / Agents' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connections' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
     await expectNoDocumentOverflow(page);
     await expectNoMojibake(page);

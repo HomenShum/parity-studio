@@ -13,7 +13,7 @@ test('connections dialog is centered, readable, scrollable, and restores focus',
   page,
 }) => {
   await openFreshLanding(page);
-  const trigger = page.getByRole('button', { name: 'BYOK / Agents' });
+  const trigger = page.getByRole('button', { name: 'Connections' });
   await trigger.click();
 
   const dialog = page.getByRole('dialog', { name: 'Connect your own runtime' });
@@ -53,14 +53,14 @@ test('landing omits the editor-owned Open deck dialog entry point', async ({ pag
   await openFreshLanding(page);
   await expect(page.getByRole('button', { name: 'Open deck' })).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Open a deck' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'BYOK / Agents' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connections' })).toBeVisible();
   await expectNoDocumentOverflow(page);
 });
 
 test('connections dialog remains usable on a mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openFreshLanding(page);
-  await page.getByRole('button', { name: 'BYOK / Agents' }).click();
+  await page.getByRole('button', { name: 'Connections' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Connect your own runtime' });
   await expect(dialog).toBeVisible();
