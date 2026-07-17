@@ -149,6 +149,20 @@ export interface AgentSessionJobReceipt {
   resultCandidateDigest?: string;
   conversationRunId?: string;
   budgetId?: string;
+  /** Admission-time routing decision published by the server (advisory_v1). */
+  routingReceipt?: {
+    decision:
+      | {
+          kind: 'selected';
+          provider: string;
+          modelId: string;
+          estimatedMicroUsd: number | null;
+          pricingSource: string | null;
+        }
+      | { kind: 'refused'; code: string; message: string };
+    availabilityBasis: { windowMs: number; signalCount: number };
+    enforcement: 'advisory_v1';
+  };
   memoryIds?: readonly string[];
   error?: string;
   updatedAt: number;

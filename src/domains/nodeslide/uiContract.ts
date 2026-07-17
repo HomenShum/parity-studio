@@ -35,6 +35,16 @@ export interface NodeSlideUiContract {
     version: number;
     slideCount: number;
   };
+  /** The active durable job, when one is running or awaiting review. */
+  job?: {
+    id: string;
+    status: string;
+    phase: string;
+    /** Admission-time routing decision (advisory_v1) when the server published one. */
+    routing?:
+      | { kind: 'selected'; modelId: string; estimatedMicroUsd: number | null }
+      | { kind: 'refused'; code: string };
+  };
   updatedAt: number;
 }
 
@@ -73,6 +83,19 @@ export function publishNodeSlideUiContract(
   } else {
     root.removeAttribute('data-ns-deck-id');
     root.removeAttribute('data-ns-deck-version');
+  }
+  if (contract.job) {
+    root.setAttribute('data-ns-job-status', contract.job.status);
+    root.setAttribute('data-ns-job-phase', contract.job.phase);
+    if (contract.job.routing) {
+      root.setAttribute('data-ns-routing', contract.job.routing.kind);
+    } else {
+      root.removeAttribute('data-ns-routing');
+    }
+  } else {
+    root.removeAttribute('data-ns-job-status');
+    root.removeAttribute('data-ns-job-phase');
+    root.removeAttribute('data-ns-routing');
   }
 }
 

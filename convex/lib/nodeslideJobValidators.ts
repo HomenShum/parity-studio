@@ -111,3 +111,46 @@ export function nodeSlideEditProposalJobRequestFromArgs(
     ...(args.sourceRefreshBinding ? { sourceRefreshBinding: args.sourceRefreshBinding } : {}),
   };
 }
+
+/** Bounded live render-repair evidence persisted on a durable job row. */
+export const nodeslideJobRenderRepairSummaryValidator = v.object({
+  schemaVersion: v.literal('nodeslide.live-render-repair/v1'),
+  status: v.union(v.literal('completed'), v.literal('stopped')),
+  terminalReason: v.string(),
+  attempts: v.number(),
+  proposalOperationCount: v.number(),
+  baseSnapshotDigest: v.string(),
+  candidateSnapshotDigest: v.string(),
+  receipts: v.array(v.object({ attempt: v.number(), status: v.string(), summary: v.string() })),
+});
+
+/** Immutable admission-time routing decision persisted on a durable job row. */
+export const nodeslideJobRoutingReceiptValidator = v.object({
+  policyVersion: v.literal('nodeslide.auto-routing/v1'),
+  enforcement: v.literal('advisory_v1'),
+  decidedAt: v.number(),
+  task: v.literal('create_deck_from_brief'),
+  requested: v.union(
+    v.object({ mode: v.literal('deterministic') }),
+    v.object({
+      mode: v.union(v.literal('openrouter_free'), v.literal('nebius')),
+      model: v.string(),
+    }),
+  ),
+  decision: v.union(
+    v.object({
+      kind: v.literal('selected'),
+      provider: v.string(),
+      modelId: v.string(),
+      estimatedMicroUsd: v.union(v.number(), v.null()),
+      pricingSource: v.union(v.string(), v.null()),
+    }),
+    v.object({
+      kind: v.literal('refused'),
+      code: v.string(),
+      message: v.string(),
+    }),
+  ),
+  availabilityBasis: v.object({ windowMs: v.number(), signalCount: v.number() }),
+  reasons: v.array(v.string()),
+});
