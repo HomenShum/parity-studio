@@ -468,7 +468,9 @@ function assertApprovedGoogleWriteEffects(
   }
   const slides = new Map(remote.slides.map((slide) => [slide.remoteId, slide]));
   const elements = new Map(
-    remote.slides.flatMap((slide) => slide.elements.map((element) => [element.remoteId, element] as const)),
+    remote.slides.flatMap((slide) =>
+      slide.elements.map((element) => [element.remoteId, element] as const),
+    ),
   );
   const baselineElements = new Map(
     baseline.remote.slides.flatMap((slide) =>
@@ -488,7 +490,10 @@ function assertApprovedGoogleWriteEffects(
     }
     if ('createShape' in request) {
       const element = elements.get(request.createShape.objectId);
-      if (!element || element.remoteSlideId !== request.createShape.elementProperties.pageObjectId) {
+      if (
+        !element ||
+        element.remoteSlideId !== request.createShape.elementProperties.pageObjectId
+      ) {
         throw new Error('created shape missing or on the wrong slide');
       }
       if (!matchesGoogleGeometry(element, request.createShape.elementProperties, remote)) {
@@ -537,7 +542,10 @@ function assertApprovedGoogleWriteEffects(
     }
     if ('updatePageElementAltText' in request) {
       const element = elements.get(request.updatePageElementAltText.objectId);
-      if (!element || (element.altText ?? '') !== (request.updatePageElementAltText.description ?? '')) {
+      if (
+        !element ||
+        (element.altText ?? '') !== (request.updatePageElementAltText.description ?? '')
+      ) {
         throw new Error('updated alt text');
       }
       continue;

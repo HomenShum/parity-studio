@@ -24,10 +24,7 @@
       "scheme": "light",
       "viewport": { "width": 1440, "height": 900 },
       "fullPage": false,
-      "clicks": [
-        "text=Explore the editable sample workspace",
-        "text=New request"
-      ],
+      "clicks": ["text=Explore the editable sample workspace", "text=New request"],
       "assert": ["New request", "Deck CI"],
       "waitMs": 1400
     },
@@ -36,10 +33,7 @@
       "scheme": "light",
       "viewport": { "width": 1440, "height": 900 },
       "fullPage": false,
-      "clicks": [
-        "text=Explore the editable sample workspace",
-        "[data-testid=\"ai-model-select\"]"
-      ],
+      "clicks": ["text=Explore the editable sample workspace", "[data-testid=\"ai-model-select\"]"],
       "assert": ["Choose the agent model", "Deterministic"],
       "waitMs": 1400
     }

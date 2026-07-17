@@ -401,9 +401,7 @@ describe('NodeSlide memory manager', () => {
     expect(alert).toHaveTextContent(
       'reopen Deck memory and verify its current status before retrying',
     );
-    expect(
-      screen.getByRole('alertdialog', { name: 'Archive this memory?' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog', { name: 'Archive this memory?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm archive' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Confirm archive' }));

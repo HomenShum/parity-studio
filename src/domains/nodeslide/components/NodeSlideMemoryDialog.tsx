@@ -1,5 +1,3 @@
-import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -8,6 +6,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogClose,
@@ -545,66 +545,66 @@ export function NodeSlideMemoryDialog({
                         </small>
                       </div>
                       <div className="ns-memory-item-actions">
-                          {status === 'active' ? (
-                            <>
-                              <button
-                                id={`ns-memory-${memory.id}-edit-action`}
-                                type="button"
-                                onClick={(event) => beginEdit(memory, event.currentTarget)}
-                                disabled={busy !== null}
-                                aria-describedby={`${contentId} ${retentionId}`}
-                                aria-label={`Edit memory: ${memory.content}`}
-                              >
-                                <Pencil size={12} /> Edit
-                              </button>
-                              <MemoryActionControl
-                                action="archive"
-                                busy={busy}
-                                enabled={enabled}
-                                icon={<Archive size={12} />}
-                                memory={memory}
-                                onBegin={() => beginAction(memory.id, 'archive')}
-                                onCancel={cancelAction}
-                                onConfirm={confirmAction}
-                                open={
-                                  pendingAction?.memoryId === memory.id &&
-                                  pendingAction.action === 'archive'
-                                }
-                                retentionId={retentionId}
-                              />
-                            </>
-                          ) : (
+                        {status === 'active' ? (
+                          <>
+                            <button
+                              id={`ns-memory-${memory.id}-edit-action`}
+                              type="button"
+                              onClick={(event) => beginEdit(memory, event.currentTarget)}
+                              disabled={busy !== null}
+                              aria-describedby={`${contentId} ${retentionId}`}
+                              aria-label={`Edit memory: ${memory.content}`}
+                            >
+                              <Pencil size={12} /> Edit
+                            </button>
                             <MemoryActionControl
-                              action="restore"
+                              action="archive"
                               busy={busy}
                               enabled={enabled}
-                              icon={<RotateCcw size={12} />}
+                              icon={<Archive size={12} />}
                               memory={memory}
-                              onBegin={() => beginAction(memory.id, 'restore')}
+                              onBegin={() => beginAction(memory.id, 'archive')}
                               onCancel={cancelAction}
                               onConfirm={confirmAction}
                               open={
                                 pendingAction?.memoryId === memory.id &&
-                                pendingAction.action === 'restore'
+                                pendingAction.action === 'archive'
                               }
                               retentionId={retentionId}
                             />
-                          )}
+                          </>
+                        ) : (
                           <MemoryActionControl
-                            action="delete"
+                            action="restore"
                             busy={busy}
                             enabled={enabled}
-                            icon={<Trash2 size={12} />}
+                            icon={<RotateCcw size={12} />}
                             memory={memory}
-                            onBegin={() => beginAction(memory.id, 'delete')}
+                            onBegin={() => beginAction(memory.id, 'restore')}
                             onCancel={cancelAction}
                             onConfirm={confirmAction}
                             open={
                               pendingAction?.memoryId === memory.id &&
-                              pendingAction.action === 'delete'
+                              pendingAction.action === 'restore'
                             }
                             retentionId={retentionId}
                           />
+                        )}
+                        <MemoryActionControl
+                          action="delete"
+                          busy={busy}
+                          enabled={enabled}
+                          icon={<Trash2 size={12} />}
+                          memory={memory}
+                          onBegin={() => beginAction(memory.id, 'delete')}
+                          onCancel={cancelAction}
+                          onConfirm={confirmAction}
+                          open={
+                            pendingAction?.memoryId === memory.id &&
+                            pendingAction.action === 'delete'
+                          }
+                          retentionId={retentionId}
+                        />
                       </div>
                     </article>
                   );
@@ -666,7 +666,8 @@ function MemoryActionControl({
   retentionId,
 }: MemoryActionControlProps) {
   const confirmationRef = useRef<HTMLButtonElement>(null);
-  const visibleLabel = action === 'delete' ? 'Delete' : action === 'archive' ? 'Archive' : 'Restore';
+  const visibleLabel =
+    action === 'delete' ? 'Delete' : action === 'archive' ? 'Archive' : 'Restore';
   const accessibleLabel =
     action === 'delete'
       ? `Delete memory permanently: ${memory.content}`
@@ -722,7 +723,9 @@ function MemoryActionControl({
               ? operationButtonLabel(action)
               : `Confirm ${action}`}
           </button>
-          <AlertDialogCancel disabled={busy !== null}>{cancelActionLabel(action)}</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy !== null}>
+            {cancelActionLabel(action)}
+          </AlertDialogCancel>
         </div>
       </AlertDialogContent>
     </AlertDialog>

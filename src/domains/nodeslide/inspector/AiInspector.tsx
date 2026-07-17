@@ -1519,7 +1519,9 @@ export function AiInspector<CommandId extends string = string>({
                 data-composer-mode={compactReviewComposer ? 'follow-up' : 'full'}
                 data-provider-configuration={providerConfigurationValid ? 'valid' : 'invalid'}
                 data-provider-effort={providerEffort}
-                data-provider-model={providerMode === 'deterministic' ? 'deterministic' : providerModel}
+                data-provider-model={
+                  providerMode === 'deterministic' ? 'deterministic' : providerModel
+                }
                 data-provider-ready={providerReady ? 'true' : 'false'}
                 onFocusCapture={() => {
                   if (compactReviewComposer) setComposerExpanded(true);

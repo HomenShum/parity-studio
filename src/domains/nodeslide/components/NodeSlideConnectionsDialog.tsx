@@ -383,551 +383,563 @@ function NodeSlideConnectionsDialogContent({
         }}
       >
         <div className="ns-connections-shell">
-        <header className="ns-connections-header">
-          <span className="ns-connections-mark" aria-hidden="true">
-            <ServerCog size={18} />
-          </span>
-          <div>
-            <span className="ns-eyebrow">Models & agents</span>
-            <DialogTitle asChild>
-              <h1 id="ns-connections-title">Connect your own runtime</h1>
-            </DialogTitle>
-            <DialogDescription className="ns-sr-only">
-              Configure PowerPoint, Google Slides, local provider keys, and coding-agent
-              connections.
-            </DialogDescription>
-          </div>
-          <DialogClose asChild>
-            <button type="button" className="ns-icon-button" aria-label="Close">
-              <X size={16} />
-            </button>
-          </DialogClose>
-        </header>
-
-        <div className="ns-connections-body">
-          {notice ? <output className="ns-connection-notice">{notice}</output> : null}
-          <section className="ns-connection-section" aria-labelledby="ns-powerpoint-sync-title">
-            <div className="ns-connection-heading">
-              <span>
-                <Presentation size={14} /> PowerPoint
-              </span>
-              <small>
-                {pptxLink
-                  ? `${pptxLink.status.replaceAll('_', ' ')} · baseline v${pptxLink.baselineLocalDeckVersion}`
-                  : 'Review-gated three-way sync'}
-              </small>
+          <header className="ns-connections-header">
+            <span className="ns-connections-mark" aria-hidden="true">
+              <ServerCog size={18} />
+            </span>
+            <div>
+              <span className="ns-eyebrow">Models & agents</span>
+              <DialogTitle asChild>
+                <h1 id="ns-connections-title">Connect your own runtime</h1>
+              </DialogTitle>
+              <DialogDescription className="ns-sr-only">
+                Configure PowerPoint, Google Slides, local provider keys, and coding-agent
+                connections.
+              </DialogDescription>
             </div>
-            <h2 id="ns-powerpoint-sync-title">Keep an editable PPTX linked to this deck</h2>
-            <p>
-              Link an exported semantic match once. Later imports are compared against the exact
-              shared baseline, so PowerPoint-only and NodeSlide-only edits become a bounded review
-              plan. Conflicts stop before mutation; outbound files must be re-imported and verified.
-            </p>
-            <div className="ns-google-sync-actions" data-testid="nodeslide-pptx-sync">
-              <label className="ns-connection-file-action">
-                <input
-                  type="file"
-                  hidden
-                  aria-label={pptxLink ? 'Import changed PowerPoint' : 'Link matching PowerPoint'}
-                  accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
-                  disabled={!deckWorkspace || pptxBusy !== null}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.currentTarget.value = '';
-                    if (file) void linkOrPlanPptx(file);
-                  }}
-                />
+            <DialogClose asChild>
+              <button type="button" className="ns-icon-button" aria-label="Close">
+                <X size={16} />
+              </button>
+            </DialogClose>
+          </header>
+
+          <div className="ns-connections-body">
+            {notice ? <output className="ns-connection-notice">{notice}</output> : null}
+            <section className="ns-connection-section" aria-labelledby="ns-powerpoint-sync-title">
+              <div className="ns-connection-heading">
                 <span>
-                  {pptxBusy === 'link' || pptxBusy === 'plan' ? (
-                    <LoaderCircle className="ns-spin" size={13} />
-                  ) : (
-                    <Presentation size={13} />
-                  )}
-                  {pptxLink ? 'Import changed PPTX' : 'Link matching PPTX'}
+                  <Presentation size={14} /> PowerPoint
                 </span>
-              </label>
-              {pptxLink?.status === 'awaiting_outbound_verification' ? (
+                <small>
+                  {pptxLink
+                    ? `${pptxLink.status.replaceAll('_', ' ')} · baseline v${pptxLink.baselineLocalDeckVersion}`
+                    : 'Review-gated three-way sync'}
+                </small>
+              </div>
+              <h2 id="ns-powerpoint-sync-title">Keep an editable PPTX linked to this deck</h2>
+              <p>
+                Link an exported semantic match once. Later imports are compared against the exact
+                shared baseline, so PowerPoint-only and NodeSlide-only edits become a bounded review
+                plan. Conflicts stop before mutation; outbound files must be re-imported and
+                verified.
+              </p>
+              <div className="ns-google-sync-actions" data-testid="nodeslide-pptx-sync">
                 <label className="ns-connection-file-action">
                   <input
                     type="file"
                     hidden
-                    aria-label="Verify exported PowerPoint"
+                    aria-label={pptxLink ? 'Import changed PowerPoint' : 'Link matching PowerPoint'}
                     accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
-                    disabled={pptxBusy !== null}
+                    disabled={!deckWorkspace || pptxBusy !== null}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.currentTarget.value = '';
-                      if (file) void verifyPptxFile(file);
+                      if (file) void linkOrPlanPptx(file);
                     }}
                   />
                   <span>
-                    {pptxBusy === 'verify' ? (
+                    {pptxBusy === 'link' || pptxBusy === 'plan' ? (
+                      <LoaderCircle className="ns-spin" size={13} />
+                    ) : (
+                      <Presentation size={13} />
+                    )}
+                    {pptxLink ? 'Import changed PPTX' : 'Link matching PPTX'}
+                  </span>
+                </label>
+                {pptxLink?.status === 'awaiting_outbound_verification' ? (
+                  <label className="ns-connection-file-action">
+                    <input
+                      type="file"
+                      hidden
+                      aria-label="Verify exported PowerPoint"
+                      accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
+                      disabled={pptxBusy !== null}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.currentTarget.value = '';
+                        if (file) void verifyPptxFile(file);
+                      }}
+                    />
+                    <span>
+                      {pptxBusy === 'verify' ? (
+                        <LoaderCircle className="ns-spin" size={13} />
+                      ) : (
+                        <Check size={13} />
+                      )}
+                      Verify exported PPTX
+                    </span>
+                  </label>
+                ) : null}
+                {pptxLink?.pendingPlanDigest &&
+                (pptxLink.status === 'awaiting_review' ||
+                  pptxLink.status === 'ready_to_finalize') ? (
+                  <button
+                    type="button"
+                    className="is-primary"
+                    disabled={pptxBusy !== null}
+                    onClick={() => void finalizePptxSync()}
+                  >
+                    {pptxBusy === 'finalize' ? (
                       <LoaderCircle className="ns-spin" size={13} />
                     ) : (
                       <Check size={13} />
                     )}
-                    Verify exported PPTX
-                  </span>
-                </label>
-              ) : null}
-              {pptxLink?.pendingPlanDigest &&
-              (pptxLink.status === 'awaiting_review' || pptxLink.status === 'ready_to_finalize') ? (
-                <button
-                  type="button"
-                  className="is-primary"
-                  disabled={pptxBusy !== null}
-                  onClick={() => void finalizePptxSync()}
-                >
-                  {pptxBusy === 'finalize' ? (
-                    <LoaderCircle className="ns-spin" size={13} />
-                  ) : (
-                    <Check size={13} />
-                  )}
-                  Finalize verified sync
-                </button>
-              ) : null}
-              {pptxLink?.pendingPlan ? (
-                <output>
-                  {pptxLink.pendingPlan.inbound.length} inbound ·{' '}
-                  {pptxLink.pendingPlan.outbound.length} outbound ·{' '}
-                  {pptxLink.pendingPlan.conflicts.length} conflicts
-                </output>
-              ) : null}
-            </div>
-          </section>
+                    Finalize verified sync
+                  </button>
+                ) : null}
+                {pptxLink?.pendingPlan ? (
+                  <output>
+                    {pptxLink.pendingPlan.inbound.length} inbound ·{' '}
+                    {pptxLink.pendingPlan.outbound.length} outbound ·{' '}
+                    {pptxLink.pendingPlan.conflicts.length} conflicts
+                  </output>
+                ) : null}
+              </div>
+            </section>
 
-          <section
-            className="ns-connection-section ns-google-connection-section"
-            aria-labelledby="ns-google-slides-title"
-          >
-            <div className="ns-connection-heading">
-              <span>
-                <Presentation size={14} /> Google Slides
-              </span>
-              <small>
-                {!deckId || !ownerAccessKey
-                  ? 'Open an owned deck'
-                  : googleStatus?.connected
-                    ? 'OAuth authorized'
-                    : googleStatus === undefined
-                      ? 'Checking…'
-                      : 'Not connected'}
-              </small>
-            </div>
-            <h2 id="ns-google-slides-title">Authorize app-scoped Google Slides access</h2>
-            <p>
-              NodeSlide requests Google&apos;s <code>drive.file</code> scope. It covers
-              presentations NodeSlide creates or that are explicitly opened with this app; it does
-              not make an arbitrary pasted Drive ID readable. An existing target can link only when
-              it is already app-authorized and is an exact semantic match for this deck. NodeSlide
-              then stores the exact three-way baseline server-side. Conflicts stop before any write,
-              and every remote write is read back and verified.
-            </p>
-            <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
-              <div>
-                <strong>
-                  {googleStatus?.connected
-                    ? googleRuntime
-                      ? `Linked · ${googleRuntime.status.replaceAll('_', ' ')}`
-                      : 'OAuth authorized · create or link a compatible target'
-                    : 'Explicit Google consent'}
-                </strong>
+            <section
+              className="ns-connection-section ns-google-connection-section"
+              aria-labelledby="ns-google-slides-title"
+            >
+              <div className="ns-connection-heading">
+                <span>
+                  <Presentation size={14} /> Google Slides
+                </span>
                 <small>
-                  {googleStatus?.connected
-                    ? googleRuntime
-                      ? `Baseline revision ${googleRuntime.baselineRemoteRevision}`
-                      : 'Create an app-owned blank target, or link an exact app-authorized match.'
-                    : 'drive.file is not broad Drive access and does not authorize arbitrary files.'}
+                  {!deckId || !ownerAccessKey
+                    ? 'Open an owned deck'
+                    : googleStatus?.connected
+                      ? 'OAuth authorized'
+                      : googleStatus === undefined
+                        ? 'Checking…'
+                        : 'Not connected'}
                 </small>
               </div>
+              <h2 id="ns-google-slides-title">Authorize app-scoped Google Slides access</h2>
+              <p>
+                NodeSlide requests Google&apos;s <code>drive.file</code> scope. It covers
+                presentations NodeSlide creates or that are explicitly opened with this app; it does
+                not make an arbitrary pasted Drive ID readable. An existing target can link only
+                when it is already app-authorized and is an exact semantic match for this deck.
+                NodeSlide then stores the exact three-way baseline server-side. Conflicts stop
+                before any write, and every remote write is read back and verified.
+              </p>
+              <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
+                <div>
+                  <strong>
+                    {googleStatus?.connected
+                      ? googleRuntime
+                        ? `Linked · ${googleRuntime.status.replaceAll('_', ' ')}`
+                        : 'OAuth authorized · create or link a compatible target'
+                      : 'Explicit Google consent'}
+                  </strong>
+                  <small>
+                    {googleStatus?.connected
+                      ? googleRuntime
+                        ? `Baseline revision ${googleRuntime.baselineRemoteRevision}`
+                        : 'Create an app-owned blank target, or link an exact app-authorized match.'
+                      : 'drive.file is not broad Drive access and does not authorize arbitrary files.'}
+                  </small>
+                </div>
+                {googleStatus?.connected ? (
+                  <button
+                    type="button"
+                    className="is-danger"
+                    disabled={googleBusy !== null}
+                    onClick={() => void disconnectGoogleSlides()}
+                  >
+                    {googleBusy === 'disconnect' ? (
+                      <LoaderCircle className="ns-spin" size={13} />
+                    ) : (
+                      <Unplug size={13} />
+                    )}
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!deckId || !ownerAccessKey || googleBusy !== null}
+                    onClick={() => void connectGoogleSlides()}
+                  >
+                    {googleBusy === 'connect' ? (
+                      <LoaderCircle className="ns-spin" size={13} />
+                    ) : (
+                      <ExternalLink size={13} />
+                    )}
+                    Continue to Google
+                  </button>
+                )}
+              </div>
               {googleStatus?.connected ? (
-                <button
-                  type="button"
-                  className="is-danger"
-                  disabled={googleBusy !== null}
-                  onClick={() => void disconnectGoogleSlides()}
-                >
-                  {googleBusy === 'disconnect' ? (
-                    <LoaderCircle className="ns-spin" size={13} />
-                  ) : (
-                    <Unplug size={13} />
-                  )}
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={!deckId || !ownerAccessKey || googleBusy !== null}
-                  onClick={() => void connectGoogleSlides()}
-                >
-                  {googleBusy === 'connect' ? (
-                    <LoaderCircle className="ns-spin" size={13} />
-                  ) : (
-                    <ExternalLink size={13} />
-                  )}
-                  Continue to Google
-                </button>
-              )}
-            </div>
-            {googleStatus?.connected ? (
-              <div className="ns-google-sync-workbench">
-                {!googleRuntime ? (
-                  <>
-                    <div className="ns-google-sync-actions">
-                      <button
-                        type="button"
-                        className="is-primary"
-                        disabled={googleSyncBusy !== null}
-                        onClick={() =>
-                          void runGoogleSyncAction('create', async () => {
-                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await createGooglePresentation({ deckId, ownerAccessKey });
-                          })
-                        }
-                      >
-                        {googleSyncBusy === 'create' ? (
-                          <LoaderCircle className="ns-spin" size={13} />
-                        ) : (
-                          <Presentation size={13} />
-                        )}
-                        Create compatible target
-                      </button>
-                    </div>
-                    <label>
-                      <span>Or link an exact, already app-authorized presentation</span>
-                      <span>
-                        <input
-                          value={googlePresentation}
-                          placeholder="Google Slides URL or presentation ID"
-                          onChange={(event) => setGooglePresentation(event.target.value)}
-                        />
+                <div className="ns-google-sync-workbench">
+                  {!googleRuntime ? (
+                    <>
+                      <div className="ns-google-sync-actions">
                         <button
                           type="button"
-                          disabled={!googlePresentation.trim() || googleSyncBusy !== null}
+                          className="is-primary"
+                          disabled={googleSyncBusy !== null}
                           onClick={() =>
-                            void runGoogleSyncAction('attach', async () => {
+                            void runGoogleSyncAction('create', async () => {
                               if (!deckId || !ownerAccessKey)
                                 throw new Error('Open an owned deck.');
-                              await attachGooglePresentation({
-                                deckId,
-                                ownerAccessKey,
-                                presentationId: googlePresentationId(googlePresentation),
-                              });
-                              return {};
+                              return await createGooglePresentation({ deckId, ownerAccessKey });
                             })
                           }
                         >
-                          {googleSyncBusy === 'attach' ? (
+                          {googleSyncBusy === 'create' ? (
                             <LoaderCircle className="ns-spin" size={13} />
                           ) : (
                             <Presentation size={13} />
                           )}
-                          Link exact match
+                          Create compatible target
                         </button>
-                      </span>
-                      <small>
-                        A URL or ID identifies the file; it does not grant <code>drive.file</code>
-                        access or establish a baseline by itself.
-                      </small>
-                    </label>
-                  </>
-                ) : (
-                  <div className="ns-google-sync-actions">
-                    <button
-                      type="button"
-                      disabled={googleSyncBusy !== null || !googleCanPlan}
-                      onClick={() =>
-                        void runGoogleSyncAction('pull', async () => {
-                          if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                          return await planGooglePull({ deckId, ownerAccessKey });
-                        })
-                      }
-                    >
-                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
-                        ? 'Re-plan Google pull'
-                        : 'Check Google changes'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={googleSyncBusy !== null || !googleCanPlan}
-                      onClick={() =>
-                        void runGoogleSyncAction('plan-push', async () => {
-                          if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                          return await planGooglePush({ deckId, ownerAccessKey });
-                        })
-                      }
-                    >
-                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
-                        ? 'Re-plan NodeSlide push'
-                        : 'Plan NodeSlide push'}
-                    </button>
-                    {googleRuntime.status === 'awaiting_pull_review' &&
-                    googleRuntime.pendingPlanDigest &&
-                    googleRuntime.pendingPatchStatus === 'accepted' ? (
+                      </div>
+                      <label>
+                        <span>Or link an exact, already app-authorized presentation</span>
+                        <span>
+                          <input
+                            value={googlePresentation}
+                            placeholder="Google Slides URL or presentation ID"
+                            onChange={(event) => setGooglePresentation(event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            disabled={!googlePresentation.trim() || googleSyncBusy !== null}
+                            onClick={() =>
+                              void runGoogleSyncAction('attach', async () => {
+                                if (!deckId || !ownerAccessKey)
+                                  throw new Error('Open an owned deck.');
+                                await attachGooglePresentation({
+                                  deckId,
+                                  ownerAccessKey,
+                                  presentationId: googlePresentationId(googlePresentation),
+                                });
+                                return {};
+                              })
+                            }
+                          >
+                            {googleSyncBusy === 'attach' ? (
+                              <LoaderCircle className="ns-spin" size={13} />
+                            ) : (
+                              <Presentation size={13} />
+                            )}
+                            Link exact match
+                          </button>
+                        </span>
+                        <small>
+                          A URL or ID identifies the file; it does not grant <code>drive.file</code>
+                          access or establish a baseline by itself.
+                        </small>
+                      </label>
+                    </>
+                  ) : (
+                    <div className="ns-google-sync-actions">
                       <button
                         type="button"
-                        disabled={googleSyncBusy !== null}
+                        disabled={googleSyncBusy !== null || !googleCanPlan}
                         onClick={() =>
-                          void runGoogleSyncAction('finalize-pull', async () => {
+                          void runGoogleSyncAction('pull', async () => {
                             if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await finalizeGooglePull({
-                              deckId,
-                              ownerAccessKey,
-                              planDigest: googleRuntime.pendingPlanDigest as string,
-                            });
+                            return await planGooglePull({ deckId, ownerAccessKey });
                           })
                         }
                       >
-                        Verify accepted pull
+                        {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
+                          ? 'Re-plan Google pull'
+                          : 'Check Google changes'}
                       </button>
-                    ) : null}
-                    {googleRuntime.status === 'awaiting_pull_review' &&
-                    googleRuntime.pendingPatchStatus !== 'accepted' ? (
                       <button
                         type="button"
-                        disabled={googleSyncBusy !== null}
+                        disabled={googleSyncBusy !== null || !googleCanPlan}
                         onClick={() =>
-                          void runGoogleSyncAction('cancel', async () => {
+                          void runGoogleSyncAction('plan-push', async () => {
                             if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await cancelGooglePending({
-                              deckId,
-                              ownerAccessKey,
-                              expectedStateVersion: googleRuntime.stateVersion,
-                            });
+                            return await planGooglePush({ deckId, ownerAccessKey });
                           })
                         }
                       >
-                        {googleRuntime.pendingPatchStatus === 'rejected'
-                          ? 'Reset rejected pull'
-                          : googleRuntime.pendingPatchStatus === 'stale'
-                            ? 'Reset stale pull'
-                            : 'Cancel pull proposal'}
+                        {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
+                          ? 'Re-plan NodeSlide push'
+                          : 'Plan NodeSlide push'}
                       </button>
-                    ) : null}
-                    {(googleRuntime.status === 'awaiting_push_review' ||
-                      googleRuntime.status === 'executing' ||
-                      googleRuntime.status === 'verifying' ||
-                      googleRuntime.status === 'error') &&
-                    googleRuntime.pendingPlanDigest ? (
-                      <button
-                        type="button"
-                        className="is-primary"
-                        disabled={googleSyncBusy !== null}
-                        onClick={() =>
-                          void runGoogleSyncAction('execute-push', async () => {
-                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await executeGooglePush({
-                              deckId,
-                              ownerAccessKey,
-                              planDigest: googleRuntime.pendingPlanDigest as string,
-                            });
-                          })
-                        }
+                      {googleRuntime.status === 'awaiting_pull_review' &&
+                      googleRuntime.pendingPlanDigest &&
+                      googleRuntime.pendingPatchStatus === 'accepted' ? (
+                        <button
+                          type="button"
+                          disabled={googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('finalize-pull', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              return await finalizeGooglePull({
+                                deckId,
+                                ownerAccessKey,
+                                planDigest: googleRuntime.pendingPlanDigest as string,
+                              });
+                            })
+                          }
+                        >
+                          Verify accepted pull
+                        </button>
+                      ) : null}
+                      {googleRuntime.status === 'awaiting_pull_review' &&
+                      googleRuntime.pendingPatchStatus !== 'accepted' ? (
+                        <button
+                          type="button"
+                          disabled={googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('cancel', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              return await cancelGooglePending({
+                                deckId,
+                                ownerAccessKey,
+                                expectedStateVersion: googleRuntime.stateVersion,
+                              });
+                            })
+                          }
+                        >
+                          {googleRuntime.pendingPatchStatus === 'rejected'
+                            ? 'Reset rejected pull'
+                            : googleRuntime.pendingPatchStatus === 'stale'
+                              ? 'Reset stale pull'
+                              : 'Cancel pull proposal'}
+                        </button>
+                      ) : null}
+                      {(googleRuntime.status === 'awaiting_push_review' ||
+                        googleRuntime.status === 'executing' ||
+                        googleRuntime.status === 'verifying' ||
+                        googleRuntime.status === 'error') &&
+                      googleRuntime.pendingPlanDigest ? (
+                        <button
+                          type="button"
+                          className="is-primary"
+                          disabled={googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('execute-push', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              return await executeGooglePush({
+                                deckId,
+                                ownerAccessKey,
+                                planDigest: googleRuntime.pendingPlanDigest as string,
+                              });
+                            })
+                          }
+                        >
+                          {googleRuntime.status === 'awaiting_push_review'
+                            ? 'Push and verify'
+                            : 'Resume verification'}
+                        </button>
+                      ) : null}
+                      {googleRuntime.status === 'awaiting_push_review' ? (
+                        <button
+                          type="button"
+                          disabled={googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('cancel', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              return await cancelGooglePending({
+                                deckId,
+                                ownerAccessKey,
+                                expectedStateVersion: googleRuntime.stateVersion,
+                              });
+                            })
+                          }
+                        >
+                          Cancel pending push
+                        </button>
+                      ) : null}
+                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
+                        <button
+                          type="button"
+                          disabled={googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('reset', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              return await resetGoogleAttachment({
+                                deckId,
+                                ownerAccessKey,
+                                expectedStateVersion: googleRuntime.stateVersion,
+                              });
+                            })
+                          }
+                        >
+                          Reset attachment
+                        </button>
+                      ) : null}
+                      <a
+                        href={`https://docs.google.com/presentation/d/${encodeURIComponent(googleRuntime.remotePresentationId)}/edit`}
+                        target="_blank"
+                        rel="noreferrer"
                       >
-                        {googleRuntime.status === 'awaiting_push_review'
-                          ? 'Push and verify'
-                          : 'Resume verification'}
-                      </button>
-                    ) : null}
-                    {googleRuntime.status === 'awaiting_push_review' ? (
-                      <button
-                        type="button"
-                        disabled={googleSyncBusy !== null}
-                        onClick={() =>
-                          void runGoogleSyncAction('cancel', async () => {
-                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await cancelGooglePending({
-                              deckId,
-                              ownerAccessKey,
-                              expectedStateVersion: googleRuntime.stateVersion,
-                            });
-                          })
-                        }
-                      >
-                        Cancel pending push
-                      </button>
-                    ) : null}
-                    {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
-                      <button
-                        type="button"
-                        disabled={googleSyncBusy !== null}
-                        onClick={() =>
-                          void runGoogleSyncAction('reset', async () => {
-                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
-                            return await resetGoogleAttachment({
-                              deckId,
-                              ownerAccessKey,
-                              expectedStateVersion: googleRuntime.stateVersion,
-                            });
-                          })
-                        }
-                      >
-                        Reset attachment
-                      </button>
-                    ) : null}
-                    <a
-                      href={`https://docs.google.com/presentation/d/${encodeURIComponent(googleRuntime.remotePresentationId)}/edit`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open Google Slides <ExternalLink size={12} />
-                    </a>
-                    {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
-                      <output role="alert">
-                        {googleRuntime.errorMessage ?? 'Re-plan required.'}
-                      </output>
-                    ) : null}
-                    {googleRuntime.status === 'awaiting_pull_review' &&
-                    googleRuntime.pendingPatchStatus !== 'accepted' ? (
-                      <output>
-                        {googleRuntime.pendingPatchStatus === 'rejected'
-                          ? 'The pull proposal was rejected. Reset it before planning again.'
-                          : googleRuntime.pendingPatchStatus === 'stale'
-                            ? 'The pull proposal became stale. Reset it before planning again.'
-                            : 'Review and accept the NodeSlide proposal before verification, or cancel it.'}
-                      </output>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </section>
+                        Open Google Slides <ExternalLink size={12} />
+                      </a>
+                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
+                        <output role="alert">
+                          {googleRuntime.errorMessage ?? 'Re-plan required.'}
+                        </output>
+                      ) : null}
+                      {googleRuntime.status === 'awaiting_pull_review' &&
+                      googleRuntime.pendingPatchStatus !== 'accepted' ? (
+                        <output>
+                          {googleRuntime.pendingPatchStatus === 'rejected'
+                            ? 'The pull proposal was rejected. Reset it before planning again.'
+                            : googleRuntime.pendingPatchStatus === 'stale'
+                              ? 'The pull proposal became stale. Reset it before planning again.'
+                              : 'Review and accept the NodeSlide proposal before verification, or cancel it.'}
+                        </output>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </section>
 
-          <section className="ns-connection-section" aria-labelledby="ns-byok-title">
-            <div className="ns-connection-heading">
-              <span>
-                <KeyRound size={14} /> Local BYOK
-              </span>
-              <small>{configuredCount ? `${configuredCount} configured` : 'Optional'}</small>
-            </div>
-            <h2 id="ns-byok-title">Use your provider, without giving NodeSlide the key</h2>
-            <p>
-              Values live in this tab’s session storage, then run in the local MCP process you
-              launch. They are never sent to Convex, written into Trace, or returned by a tool.
-              Every model request still needs explicit per-call consent; copied config never grants
-              it.
-            </p>
-            <div className="ns-byok-grid">
-              {SESSION_BYOK_KEYS.filter((key) => key.provider !== 'google').map((key, index) => (
-                <label key={key.envVar}>
+            <section className="ns-connection-section" aria-labelledby="ns-byok-title">
+              <div className="ns-connection-heading">
+                <span>
+                  <KeyRound size={14} /> Local BYOK
+                </span>
+                <small>{configuredCount ? `${configuredCount} configured` : 'Optional'}</small>
+              </div>
+              <h2 id="ns-byok-title">Use your provider, without giving NodeSlide the key</h2>
+              <p>
+                Values live in this tab’s session storage, then run in the local MCP process you
+                launch. They are never sent to Convex, written into Trace, or returned by a tool.
+                Every model request still needs explicit per-call consent; copied config never
+                grants it.
+              </p>
+              <div className="ns-byok-grid">
+                {SESSION_BYOK_KEYS.filter((key) => key.provider !== 'google').map((key, index) => (
+                  <label key={key.envVar}>
+                    <span>
+                      {key.label}
+                      <small>{maskKey(keys[key.envVar])}</small>
+                    </span>
+                    <input
+                      ref={index === 0 ? firstInputRef : undefined}
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={keys[key.envVar] ?? ''}
+                      placeholder={key.placeholder}
+                      onChange={(event) =>
+                        setKeys((current) => ({ ...current, [key.envVar]: event.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+                <label>
                   <span>
-                    {key.label}
-                    <small>{maskKey(keys[key.envVar])}</small>
+                    Model ID <small>pi-ai routing</small>
                   </span>
                   <input
-                    ref={index === 0 ? firstInputRef : undefined}
-                    type="password"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={keys[key.envVar] ?? ''}
-                    placeholder={key.placeholder}
+                    value={routing.model}
                     onChange={(event) =>
-                      setKeys((current) => ({ ...current, [key.envVar]: event.target.value }))
+                      setRouting((current) => ({ ...current, model: event.target.value }))
                     }
+                    placeholder="z-ai/glm-5.2"
                   />
                 </label>
-              ))}
-              <label>
-                <span>
-                  Model ID <small>pi-ai routing</small>
-                </span>
-                <input
-                  value={routing.model}
-                  onChange={(event) =>
-                    setRouting((current) => ({ ...current, model: event.target.value }))
-                  }
-                  placeholder="z-ai/glm-5.2"
-                />
-              </label>
-              <label className="is-wide">
-                <span>
-                  OpenAI-compatible endpoint <small>optional · local or HTTPS</small>
-                </span>
-                <input
-                  value={routing.baseUrl}
-                  onChange={(event) =>
-                    setRouting((current) => ({ ...current, baseUrl: event.target.value }))
-                  }
-                  placeholder="http://127.0.0.1:11434/v1"
-                />
-              </label>
-            </div>
-            <div className="ns-connection-actions">
-              <button type="button" onClick={save}>
-                <Check size={13} /> Save in this tab
-              </button>
-              <button type="button" className="is-danger" onClick={revoke}>
-                <Trash2 size={13} /> Revoke all
-              </button>
-            </div>
-          </section>
-
-          <section className="ns-connection-section" aria-labelledby="ns-mcp-title">
-            <div className="ns-connection-heading">
-              <span>
-                <Bot size={14} /> Coding agents
-              </span>
-              <small>stdio · production package</small>
-            </div>
-            <h2 id="ns-mcp-title">Let Claude Code, Codex, or Cursor drive NodeSlide</h2>
-            <p>
-              The agent can read decks and traces, upload evidence, and propose edits. Proposals
-              remain unapplied until a separate accept call; the server rechecks owner authority,
-              scope, clocks, quotas, and candidate validation. The copied config contains no consent
-              grant: external-model and web tools require <code>consent: true</code> on that exact
-              call after user approval.
-            </p>
-            <Tabs value={client} onValueChange={(value) => setClient(value as ClientKind)} unstyled>
-              <TabsList className="ns-agent-client-tabs" aria-label="Agent client" unstyled>
-                <TabsTrigger value="claude" unstyled>
-                  <Code2 size={13} /> Claude Code / Cursor
-                </TabsTrigger>
-                <TabsTrigger value="codex" unstyled>
-                  <Laptop size={13} /> Codex
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="ns-agent-connect-card">
-              <div>
-                <strong>{client === 'codex' ? '~/.codex/config.toml' : '.mcp.json'}</strong>
-                <small>
-                  {ownerAccessKey
-                    ? 'This deck’s owner capability will be included.'
-                    : 'Open an owned deck before copying to include its owner capability.'}
-                </small>
+                <label className="is-wide">
+                  <span>
+                    OpenAI-compatible endpoint <small>optional · local or HTTPS</small>
+                  </span>
+                  <input
+                    value={routing.baseUrl}
+                    onChange={(event) =>
+                      setRouting((current) => ({ ...current, baseUrl: event.target.value }))
+                    }
+                    placeholder="http://127.0.0.1:11434/v1"
+                  />
+                </label>
               </div>
-              <button type="button" onClick={() => void copyConfig()}>
-                <Clipboard size={13} /> Copy config
-              </button>
-            </div>
-            <a
-              className="ns-connection-doc-link"
-              href="https://github.com/HomenShum/parity-studio/tree/main/mcp"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Setup and tool reference <ExternalLink size={12} />
-            </a>
-            <a
-              className="ns-connection-doc-link"
-              href="/downloads/parity-studio-mcp-0.4.0.sha256"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Verify v0.4.0 checksum <ExternalLink size={12} />
-            </a>
-          </section>
+              <div className="ns-connection-actions">
+                <button type="button" onClick={save}>
+                  <Check size={13} /> Save in this tab
+                </button>
+                <button type="button" className="is-danger" onClick={revoke}>
+                  <Trash2 size={13} /> Revoke all
+                </button>
+              </div>
+            </section>
 
-          <aside className="ns-connection-trust">
-            <ShieldCheck size={15} />
-            <span>
-              <strong>Same locks, second front door.</strong>
-              The UI checkbox and MCP’s per-call consent field each authorize one request. Server
-              scope, proposals, validation receipts, version clocks, and honest failures stay the
-              same.
-            </span>
-          </aside>
-        </div>
+            <section className="ns-connection-section" aria-labelledby="ns-mcp-title">
+              <div className="ns-connection-heading">
+                <span>
+                  <Bot size={14} /> Coding agents
+                </span>
+                <small>stdio · production package</small>
+              </div>
+              <h2 id="ns-mcp-title">Let Claude Code, Codex, or Cursor drive NodeSlide</h2>
+              <p>
+                The agent can read decks and traces, upload evidence, and propose edits. Proposals
+                remain unapplied until a separate accept call; the server rechecks owner authority,
+                scope, clocks, quotas, and candidate validation. The copied config contains no
+                consent grant: external-model and web tools require <code>consent: true</code> on
+                that exact call after user approval.
+              </p>
+              <Tabs
+                value={client}
+                onValueChange={(value) => setClient(value as ClientKind)}
+                unstyled
+              >
+                <TabsList className="ns-agent-client-tabs" aria-label="Agent client" unstyled>
+                  <TabsTrigger value="claude" unstyled>
+                    <Code2 size={13} /> Claude Code / Cursor
+                  </TabsTrigger>
+                  <TabsTrigger value="codex" unstyled>
+                    <Laptop size={13} /> Codex
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <div className="ns-agent-connect-card">
+                <div>
+                  <strong>{client === 'codex' ? '~/.codex/config.toml' : '.mcp.json'}</strong>
+                  <small>
+                    {ownerAccessKey
+                      ? 'This deck’s owner capability will be included.'
+                      : 'Open an owned deck before copying to include its owner capability.'}
+                  </small>
+                </div>
+                <button type="button" onClick={() => void copyConfig()}>
+                  <Clipboard size={13} /> Copy config
+                </button>
+              </div>
+              <a
+                className="ns-connection-doc-link"
+                href="https://github.com/HomenShum/parity-studio/tree/main/mcp"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Setup and tool reference <ExternalLink size={12} />
+              </a>
+              <a
+                className="ns-connection-doc-link"
+                href="/downloads/parity-studio-mcp-0.4.0.sha256"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Verify v0.4.0 checksum <ExternalLink size={12} />
+              </a>
+            </section>
+
+            <aside className="ns-connection-trust">
+              <ShieldCheck size={15} />
+              <span>
+                <strong>Same locks, second front door.</strong>
+                The UI checkbox and MCP’s per-call consent field each authorize one request. Server
+                scope, proposals, validation receipts, version clocks, and honest failures stay the
+                same.
+              </span>
+            </aside>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
