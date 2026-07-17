@@ -824,7 +824,11 @@ export const nodeslideSourceBindingStatusValidator = v.union(
 
 export const nodeslideClaimSourceBindingValidator = v.object({
   operationIndex: v.number(),
-  operation: v.union(v.literal('replace_text'), v.literal('update_chart')),
+  operation: v.union(
+    v.literal('replace_text'),
+    v.literal('update_chart'),
+    v.literal('add_element'),
+  ),
   slideId: v.string(),
   elementId: v.string(),
   sourceIds: v.array(v.string()),

@@ -917,7 +917,7 @@ export type NodeSlideSourceBindingStatus = 'bound' | 'not_applicable' | 'legacy_
 /** Immutable element-level evidence binding for one factual candidate operation. */
 export interface NodeSlideClaimSourceBinding {
   operationIndex: number;
-  operation: 'replace_text' | 'update_chart';
+  operation: 'replace_text' | 'update_chart' | 'add_element';
   slideId: string;
   elementId: string;
   sourceIds: string[];

@@ -1165,7 +1165,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
       },
     ]);
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.7.0',
+      adapterVersion: '1.8.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'failed',
       terminalOutcome: 'completed',
@@ -1211,7 +1211,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.7.0',
+      adapterVersion: '1.8.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
@@ -1299,7 +1299,7 @@ describe('NodeSlide baseline edit planner extraction', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.receipt).toMatchObject({
-      adapterVersion: '1.7.0',
+      adapterVersion: '1.8.0',
       origin: 'deterministic_fallback',
       providerOutcome: 'invalid',
       terminalOutcome: 'completed',
@@ -1322,5 +1322,211 @@ describe('NodeSlide baseline edit planner extraction', () => {
         ),
       ),
     ).toEqual(new Set(selectedSlideIds));
+  });
+});
+
+describe('NodeSlide bounded agent element additions', () => {
+  const TELEMETRY = {
+    provider: 'openrouter',
+    model: 'z-ai/glm-5.2',
+    inputTokens: 10,
+    outputTokens: 5,
+    costMicroUsd: 1,
+  } as const;
+
+  function unrestrictedSlideScope(snapshot: DeckSnapshot, slideId: string): PatchScope {
+    return {
+      kind: 'slide',
+      deckId: snapshot.deck.id,
+      slideIds: [slideId],
+      operationMode: 'unrestricted',
+    };
+  }
+
+  it('offers add_element only for deck/slide scopes in unrestricted mode', async () => {
+    const { snapshot, target, scope } = fixture();
+    const okProvider = () =>
+      vi.fn<NodeSlideEditProvider>(async () => ({
+        ok: true as const,
+        value: {
+          summary: 'Updated copy',
+          operations: [
+            { op: 'replace_text', slideId: target.slideId, elementId: target.id, text: 'After' },
+          ],
+        },
+        telemetry: TELEMETRY,
+      }));
+
+    const openProvider = okProvider();
+    await planNodeSlideEdit(
+      input(snapshot, target, unrestrictedSlideScope(snapshot, target.slideId)),
+      { callProvider: openProvider },
+    );
+    const addSchema = operationResponseSchema(openProvider, 'add_element');
+    expect(addSchema).toBeDefined();
+    expect(addSchema?.properties?.slideId).toMatchObject({ enum: [target.slideId] });
+    expect(addSchema?.properties?.kind).toMatchObject({
+      enum: ['text', 'chart', 'image', 'shape'],
+    });
+
+    const scopedProvider = okProvider();
+    await planNodeSlideEdit(input(snapshot, target, scope), { callProvider: scopedProvider });
+    expect(operationResponseSchema(scopedProvider, 'add_element')).toBeUndefined();
+  });
+
+  it('synthesizes a canonical chart element from a bounded provider add spec', async () => {
+    const { snapshot, target } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Added the requested revenue chart.',
+        operations: [
+          {
+            op: 'add_element',
+            slideId: target.slideId,
+            kind: 'chart',
+            name: 'Quarterly revenue chart',
+            bbox: { x: 0.55, y: 0.6, width: 0.4, height: 0.3 },
+            chart: {
+              chartType: 'bar',
+              labels: ['Q1', 'Q2'],
+              series: [{ name: 'Revenue', values: [12, 19] }],
+              unit: '$M',
+            },
+          },
+        ],
+      },
+      telemetry: TELEMETRY,
+    }));
+
+    const planningInput = input(snapshot, target, unrestrictedSlideScope(snapshot, target.slideId));
+    const result = await planNodeSlideEdit(
+      {
+        ...planningInput,
+        request: {
+          ...planningInput.request,
+          instruction: 'Add a bar chart of quarterly revenue.',
+        },
+      },
+      { callProvider: provider },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.receipt.providerOutcome).toBe('accepted');
+    expect(result.receipt.origin).toBe('free_route');
+    const operation = result.operations[0];
+    expect(operation?.op).toBe('add_element');
+    if (operation?.op !== 'add_element') return;
+    expect(operation.element).toMatchObject({
+      id: `element:agent-add-v${snapshot.deck.version}-1`,
+      slideId: target.slideId,
+      kind: 'chart',
+      name: 'Quarterly revenue chart',
+      locked: false,
+      version: 1,
+      sourceIds: [],
+      chart: {
+        chartType: 'bar',
+        labels: ['Q1', 'Q2'],
+        series: [{ name: 'Revenue', values: [12, 19] }],
+        unit: '$M',
+      },
+    });
+    expect(operation.element.style.fill).toBe(snapshot.deck.theme.colors.accentSoft);
+    expect(operation.element.exportCapabilities).toContain('pptx_editable');
+  });
+
+  it('rejects an image add whose URL is not https', async () => {
+    const { snapshot, target } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Added the image.',
+        operations: [
+          {
+            op: 'add_element',
+            slideId: target.slideId,
+            kind: 'image',
+            name: 'Stadium photo',
+            bbox: { x: 0.1, y: 0.6, width: 0.3, height: 0.3 },
+            imageUrl: 'http://cdn.example.com/stadium.png',
+          },
+        ],
+      },
+      telemetry: TELEMETRY,
+    }));
+
+    const planningInput = input(snapshot, target, unrestrictedSlideScope(snapshot, target.slideId));
+    const result = await planNodeSlideEdit(
+      {
+        ...planningInput,
+        request: { ...planningInput.request, instruction: 'Add an image of the stadium.' },
+      },
+      { callProvider: provider },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.receipt.providerOutcome).toBe('invalid');
+  });
+
+  it('flags a proposal that ignores an explicit add request', async () => {
+    const { snapshot, target } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Tightened the headline instead.',
+        operations: [
+          { op: 'replace_text', slideId: target.slideId, elementId: target.id, text: 'After' },
+        ],
+      },
+      telemetry: TELEMETRY,
+    }));
+
+    const planningInput = input(snapshot, target, unrestrictedSlideScope(snapshot, target.slideId));
+    const result = await planNodeSlideEdit(
+      {
+        ...planningInput,
+        request: {
+          ...planningInput.request,
+          instruction: 'Add a chart of adoption by quarter.',
+        },
+      },
+      { callProvider: provider },
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('proposal_invalid');
+    expect(result.message).toContain('addition');
+  });
+
+  it('requires source bindings on adds when factual evidence policy is enforced', async () => {
+    const { snapshot, target } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Updated copy',
+        operations: [
+          { op: 'replace_text', slideId: target.slideId, elementId: target.id, text: 'After' },
+        ],
+      },
+      telemetry: TELEMETRY,
+    }));
+
+    const planningInput = input(snapshot, target, unrestrictedSlideScope(snapshot, target.slideId));
+    await planNodeSlideEdit(
+      {
+        ...planningInput,
+        request: { ...planningInput.request, requireFactualSourceBindings: true },
+      },
+      { callProvider: provider },
+    );
+
+    const addSchema = operationResponseSchema(provider, 'add_element');
+    expect(addSchema).toBeDefined();
+    expect(addSchema?.required).toContain('sourceIds');
+    expect(addSchema?.properties?.sourceIds?.minItems).toBe(1);
   });
 });
