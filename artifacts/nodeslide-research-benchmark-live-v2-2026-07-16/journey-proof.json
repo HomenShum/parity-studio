@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "nodeslide.journey-proof/v2",
+  "deckId": "deck_job_f7f9ae95b94c736b7553d02559a9841e",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "expectedLayouts": [
+    "hero",
+    "comparison",
+    "evidence_board",
+    "flow",
+    "contract",
+    "split",
+    "contract",
+    "decision"
+  ],
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784262426939
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784262448970,
+      "deckVersion": 1
+    },
+    {
+      "kind": "live_creation_verified",
+      "occurredAt": 1784262450667,
+      "phase": "brief-to-deck",
+      "inputTokens": 2679,
+      "outputTokens": 1238,
+      "costUsd": 0.0035,
+      "traceText": "Completed deck v1 Started 9:27:07 PM The user consented to send the full brief to OpenRouter. The named GLM 5.2 model supplied the narrative plan through pi-ai under authoring-policy:default-v1 (sha256:640012b2a15dd349df816b5bd3d2169474880de27deebcf923a8bef5d7bd9c65); NodeSlide normalized, persisted, and validated the deck deterministically. openrouter · z-ai/glm-5.2 · Low effort RUN TIME 20s TOKENS 2,679 → 1,238 COST $0.0035 VALIDATION Passed Execution 4 auditable records Activity 2 spans · 20.0 s Full timeline 4 loaded 0 errors 1 cited ROUTE openrouter · z-ai/glm-5.2 TOKENS 2,679 in · 1,238 out COST $0.003496 DIGEST not recorded Invoke NodeSlide agent invoke_agent 20.0 s Queue and authorize agent.queue 20.0 s 10 sources Chain of custody and countersigned receipt"
+    },
+    {
+      "kind": "three_directions_verified",
+      "occurredAt": 1784262453809,
+      "count": 3,
+      "mode": "deterministic",
+      "screenshotDigest": "sha256:91214ff51afc771e2ee78051d5f478106b19633d2c94129f83dcaabbde3ae83b"
+    },
+    {
+      "kind": "taste_pack_previews_verified",
+      "occurredAt": 1784262455272,
+      "count": 2,
+      "screenshotDigest": "sha256:d79829a2788d1cb67694f62cdfcaf9df264d37980ba050f18a925c2d8f293ff9"
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784262456179,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784262460020,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:4833218aa554ac68e8978aa2380758bc8690403e59e7779a46d177051f40743e",
+      "runId": "agent_run_46a405301d957f4b83e7ebed311b2503",
+      "patchId": "patch_agent_e8f6ecde777143dc1156f84051d5107b",
+      "candidateDigest": "sha256:9c3ba6f0a1953991fc58bafa31699ed1177d6f6a1f8dcca865f2f57d15158274",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784262460281,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:44211951df49e6014131ce5f956d9388d4124b3af25925d6e743f6811bb44daa",
+      "contentDigest": "sha256:984b98862976a6e41bb42dce8f03b96dca4932c1aa0a9879b4d77e7da0f9c2d8",
+      "runId": "agent_run_46a405301d957f4b83e7ebed311b2503",
+      "patchId": "patch_agent_e8f6ecde777143dc1156f84051d5107b",
+      "candidateDigest": "sha256:9c3ba6f0a1953991fc58bafa31699ed1177d6f6a1f8dcca865f2f57d15158274",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784262461830,
+      "deckVersion": 3,
+      "patchId": "patch_agent_e8f6ecde777143dc1156f84051d5107b",
+      "contentDigest": "sha256:238e4794c4dc5dd18b48d62aa505ef5fed1a80b86225ceaf7065d7dfdd6f24f7",
+      "receiptDigest": "sha256:53c1cb89b60760d302486b560b5c3f4dc8f55548d36675153f07bdb7baffd1ea"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784262463355,
+      "deckVersion": 4,
+      "patchId": "patch_agent_e8f6ecde777143dc1156f84051d5107b",
+      "contentDigest": "sha256:984b98862976a6e41bb42dce8f03b96dca4932c1aa0a9879b4d77e7da0f9c2d8",
+      "receiptDigest": "sha256:905eb1fda9d74f96f285335aa1803005428349351a5a49cb4fb0e960c0189c4a"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784262463355,
+      "deckVersion": 4
+    },
+    {
+      "kind": "full_deck_visual_qa",
+      "occurredAt": 1784262468544,
+      "deckVersion": 4,
+      "slideCount": 8,
+      "distinctCompositionCount": 8,
+      "screenshotDigest": "sha256:69c3b38e6d80c2b3b9b7ec11c169b57ee0a05c17e2a2571fc5a50a77e54ebe6d"
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784262470541,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\nodeslide-research-benchmark.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\final-editor.png",
+    "slideScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-01.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-02.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-03.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-04.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-05.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-06.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-07.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\slide-08.png"
+    ],
+    "variationScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\variation-1.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\variation-2.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\variation-3.png"
+    ],
+    "tasteScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\taste-startup-narrative.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\taste-finance-ibcs.png"
+    ],
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\nodeslide-research-benchmark.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-live-v2-2026-07-16\\run-manifest.json"
+  },
+  "digest": "sha256:a22d7a7714d3591fbd1a184319689b4c812ae166491a02f22aefecdba2c1b06d"
+}

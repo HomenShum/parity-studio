@@ -15,7 +15,7 @@ afterEach(async () =>
   ),
 );
 
-async function fixture() {
+async function fixture(slideCount = 7) {
   const directory = await mkdtemp(path.join(tmpdir(), 'nodeslide-journey-proof-'));
   directories.push(directory);
   const paths = {
@@ -24,7 +24,7 @@ async function fixture() {
     finalScreenshotPath: path.join(directory, 'final.png'),
     exportedDeckPath: path.join(directory, 'deck.pptx'),
     runManifestPath: path.join(directory, 'run-manifest.json'),
-    slideScreenshotPaths: Array.from({ length: 7 }, (_, index) =>
+    slideScreenshotPaths: Array.from({ length: slideCount }, (_, index) =>
       path.join(directory, `slide-${index + 1}.png`),
     ),
   };
@@ -58,6 +58,7 @@ async function fixture() {
     baseVersion: 1,
     appliedVersion: 2,
     finalVersion: 4,
+    expectedLayouts: Array.from({ length: slideCount }, () => 'contract'),
     steps: kinds.map((kind, index) => {
       const common = { kind, occurredAt: index + 1 };
       if (kind === 'validation_received') {
@@ -148,8 +149,14 @@ describe('NodeSlide journey proof artifact verifier', () => {
       }),
     );
     await expect(finalizeNodeSlideJourneyProof(paths.runManifestPath)).rejects.toThrow(
-      /exactly seven slide screenshots/iu,
+      /exactly 7 slide screenshots/iu,
     );
+  });
+
+  it('accepts a complete eight-slide research-deck screenshot set', async () => {
+    const { paths } = await fixture(8);
+    const result = await finalizeNodeSlideJourneyProof(paths.runManifestPath);
+    expect(result.result.ok).toBe(true);
   });
 
   it('continues to verify v1 proofs while v2 artifacts migrate', async () => {

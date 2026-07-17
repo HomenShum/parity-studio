@@ -910,4 +910,88 @@ runner_up,Lionel Messi,7 goals,FIFA`,
     editedBullet.version = 2;
     expect(repairLegacyGoldenSnapshot(edited, canonical).changed).toBe(false);
   });
+
+  it('compiles an eight-slide paper-backed benchmark into editable research primitives', () => {
+    const prompt = [
+      'Create exactly eight paper-backed slides.',
+      'Sources: https://arxiv.org/abs/2512.04529 https://arxiv.org/abs/2303.17651 https://arxiv.org/abs/2210.03629 https://arxiv.org/abs/2303.11366 https://arxiv.org/abs/2603.19461 https://www.canva.com/create/ai-presentations/ https://gamma.app/products/presentations .',
+      'Use this exact layout contract in order: hero, comparison, evidence_board, flow, contract, split, contract, decision.',
+      'Slide 1 is a thesis cover: "Evidence-to-decision throughput is the benchmark." Include this image: https://example.com/research-hero.webp',
+      'Slide 2 is a competitive baseline for Canva AI, Gamma AI, and NodeSlide.',
+      'Slide 3 is a five-paper research synthesis.',
+      'Slide 4 is the only agentic authoring architecture diagram: use exactly four native editable nodes labeled Source ledger, Story agents, Visual compose, and Validate + export.',
+      'Slide 5 contains proposed benchmark scoring weights as one editable bar chart labeled Source 30, Narrative 20, Visual 20, Editability 15, and Governance 15, measured in percent.',
+      'Slide 6 is a SlideGen paper spotlight on scientific slide generation.',
+      'Slide 7 is a blind evaluation protocol for a held-out benchmark. Include this recorded video: https://example.com/journey.webm',
+      'Slide 8 is the release-gate checklist.',
+    ].join(' ');
+    const brief = {
+      prompt,
+      audience: 'Product and design leadership',
+      purpose: 'Approve a held-out benchmark',
+      successCriteria: ['Exactly 8 slides', 'Preserve source links'],
+    };
+    const spec = deterministicBriefSpec('Research benchmark', brief);
+
+    expect(spec.slides).toHaveLength(8);
+    expect(spec.slides.map((slide) => slide.layout)).toEqual([
+      'hero',
+      'comparison',
+      'evidence_board',
+      'flow',
+      'contract',
+      'split',
+      'contract',
+      'decision',
+    ]);
+    expect(spec.slides[2]).toMatchObject({ title: 'Five papers point to one authoring loop' });
+    expect(spec.slides[3]?.diagram?.nodes).toEqual([
+      'Source ledger',
+      'Story agents',
+      'Visual compose',
+      'Validate + export',
+    ]);
+    expect(spec.slides[4]?.chart).toMatchObject({
+      labels: ['Source', 'Narrative', 'Visual', 'Editability', 'Governance'],
+      values: [30, 20, 20, 15, 15],
+      unit: '%',
+    });
+    expect(spec.slides[5]).toMatchObject({
+      title: 'SlideGen raises the bar from summary to visual reasoning',
+    });
+    expect(spec.slides[6]).toMatchObject({ title: 'Run the same brief, sources, and constraints' });
+
+    const providerSpecWithoutRequestedMedia = {
+      ...spec,
+      slides: spec.slides.map((slide) => {
+        const { image: _image, video: _video, ...withoutMedia } = slide;
+        return withoutMedia;
+      }),
+    };
+    const normalizedProviderSpec = coerceBriefSpec(
+      providerSpecWithoutRequestedMedia,
+      'Research benchmark',
+      brief,
+    );
+    expect(normalizedProviderSpec.slides[0]?.image?.imageUrl).toBe(
+      'https://example.com/research-hero.webp',
+    );
+    expect(normalizedProviderSpec.slides[6]?.video?.url).toBe('https://example.com/journey.webm');
+
+    const built = buildBriefNodeSlide({
+      deckId: 'deck-research-benchmark',
+      projectId: 'project-research-benchmark',
+      title: 'Research benchmark',
+      brief,
+      themeId: 'editorial-signal',
+      rawSpec: spec,
+      now: 1_000,
+    });
+    expect(built.snapshot.sources.filter((source) => source.sourceType === 'url')).toHaveLength(8);
+    expect(built.snapshot.elements.some((element) => element.kind === 'chart')).toBe(true);
+    expect(
+      built.snapshot.elements.filter((element) => element.role === 'diagram_node'),
+    ).toHaveLength(4);
+    expect(validateNodeSlideSnapshot(built.snapshot, 1_000).publishOk).toBe(true);
+  });
 });

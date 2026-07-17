@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "nodeslide.journey-proof/v2",
+  "deckId": "deck_job_c4b8d424ac507cfb02a58751004c202b",
+  "expectedCreationProvenance": "brief_to_new_deck",
+  "actualCreationProvenance": "brief_to_new_deck",
+  "expectedLayouts": [
+    "hero",
+    "comparison",
+    "evidence_board",
+    "flow",
+    "contract",
+    "split",
+    "contract",
+    "decision"
+  ],
+  "baseVersion": 1,
+  "appliedVersion": 2,
+  "finalVersion": 4,
+  "steps": [
+    {
+      "kind": "brief_submitted",
+      "occurredAt": 1784263454487
+    },
+    {
+      "kind": "deck_created",
+      "occurredAt": 1784263457769,
+      "deckVersion": 1
+    },
+    {
+      "kind": "three_directions_verified",
+      "occurredAt": 1784263461210,
+      "count": 3,
+      "mode": "deterministic",
+      "screenshotDigest": "sha256:515a528c39bcb2108d1c7083519c15444d19ece609098715823cfebb1a6da561"
+    },
+    {
+      "kind": "taste_pack_previews_verified",
+      "occurredAt": 1784263462707,
+      "count": 2,
+      "screenshotDigest": "sha256:30e23672603b7d08ba82122990d2d6041a1b4c76a318925724e804cde4417094"
+    },
+    {
+      "kind": "edit_submitted",
+      "occurredAt": 1784263463567,
+      "deckVersion": 1
+    },
+    {
+      "kind": "validation_received",
+      "occurredAt": 1784263467735,
+      "deckVersion": 1,
+      "receiptDigest": "sha256:119433a2eb168db9f568c8d90b1c3a2428e6df250a23e1a7263bef610c4629c4",
+      "runId": "agent_run_34bcbc647aaf0013f9407d5c8802d627",
+      "patchId": "patch_agent_177b93bb5f7195e79646772668c323c1",
+      "candidateDigest": "sha256:0e344063678d42ff4abb8132d48febc956498d12082e7270ab5ccca0558bbc13",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "edit_applied",
+      "occurredAt": 1784263467929,
+      "deckVersion": 2,
+      "receiptDigest": "sha256:a2934ce380ce7331e0bd13ef057410f911b75f7fe2ffd73da6e44670ac70ac44",
+      "contentDigest": "sha256:c74f55af6c4d4aee40c950458e64ab058dbbd20fea2fadf6ef46b22b506ee78b",
+      "runId": "agent_run_34bcbc647aaf0013f9407d5c8802d627",
+      "patchId": "patch_agent_177b93bb5f7195e79646772668c323c1",
+      "candidateDigest": "sha256:0e344063678d42ff4abb8132d48febc956498d12082e7270ab5ccca0558bbc13",
+      "baseDeckVersion": 1,
+      "resultingDeckVersion": 2
+    },
+    {
+      "kind": "undo_verified",
+      "occurredAt": 1784263469483,
+      "deckVersion": 3,
+      "patchId": "patch_agent_177b93bb5f7195e79646772668c323c1",
+      "contentDigest": "sha256:238e4794c4dc5dd18b48d62aa505ef5fed1a80b86225ceaf7065d7dfdd6f24f7",
+      "receiptDigest": "sha256:0abbfdaac0cdbad25e596fd554afb55c62bbb712c19ec5395d2d901033a7e481"
+    },
+    {
+      "kind": "redo_verified",
+      "occurredAt": 1784263471274,
+      "deckVersion": 4,
+      "patchId": "patch_agent_177b93bb5f7195e79646772668c323c1",
+      "contentDigest": "sha256:c74f55af6c4d4aee40c950458e64ab058dbbd20fea2fadf6ef46b22b506ee78b",
+      "receiptDigest": "sha256:6d0bdc498b12a04c506d938b1d11f6316a1d59b82b49ac5497d20b1521b1018c"
+    },
+    {
+      "kind": "version_advanced",
+      "occurredAt": 1784263471274,
+      "deckVersion": 4
+    },
+    {
+      "kind": "full_deck_visual_qa",
+      "occurredAt": 1784263476231,
+      "deckVersion": 4,
+      "slideCount": 8,
+      "distinctCompositionCount": 8,
+      "screenshotDigest": "sha256:aeaafc9505bab665ddf8abe0f31c945f9bea5d8dffbbbc0cde9983cc4f546e9e"
+    },
+    {
+      "kind": "export_downloaded",
+      "occurredAt": 1784263476974,
+      "deckVersion": 4,
+      "artifactPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\nodeslide-research-benchmark.pptx"
+    }
+  ],
+  "artifacts": {
+    "rawRecordingPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\browser-journey.webm",
+    "gifPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\browser-journey.gif",
+    "finalScreenshotPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\final-editor.png",
+    "slideScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-01.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-02.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-03.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-04.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-05.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-06.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-07.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\slide-08.png"
+    ],
+    "variationScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\variation-1.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\variation-2.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\variation-3.png"
+    ],
+    "tasteScreenshotPaths": [
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\taste-startup-narrative.png",
+      "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\taste-finance-ibcs.png"
+    ],
+    "exportedDeckPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\nodeslide-research-benchmark.pptx",
+    "runManifestPath": "D:\\VSCode Projects\\parity-studio-openui-quality\\artifacts\\nodeslide-research-benchmark-deterministic-final-2026-07-16\\run-manifest.json"
+  },
+  "digest": "sha256:ecf408250ad0313df04cf528b65c627df46eca11241e1fb129c4094df4716a2c"
+}

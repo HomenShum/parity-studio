@@ -33,6 +33,7 @@ export async function finalizeNodeSlideJourneyProof(manifestPath, outputPath) {
     deckId: manifest.deckId,
     expectedCreationProvenance: manifest.expectedCreationProvenance,
     actualCreationProvenance: manifest.actualCreationProvenance,
+    expectedLayouts: manifest.expectedLayouts,
     baseVersion: manifest.baseVersion,
     appliedVersion: manifest.appliedVersion,
     finalVersion: manifest.finalVersion,
@@ -145,8 +146,17 @@ async function verifyArtifacts(proof, findings) {
   }
   const slideScreenshotPaths = proof?.artifacts?.slideScreenshotPaths;
   if (slideScreenshotPaths !== undefined) {
-    if (!Array.isArray(slideScreenshotPaths) || slideScreenshotPaths.length !== 7) {
-      findings.push('Full-deck visual QA must include exactly seven slide screenshots.');
+    const expectedSlideCount =
+      Array.isArray(proof?.expectedLayouts) && proof.expectedLayouts.length > 0
+        ? proof.expectedLayouts.length
+        : 7;
+    if (
+      !Array.isArray(slideScreenshotPaths) ||
+      slideScreenshotPaths.length !== expectedSlideCount
+    ) {
+      findings.push(
+        `Full-deck visual QA must include exactly ${expectedSlideCount} slide screenshots.`,
+      );
       return;
     }
     if (new Set(slideScreenshotPaths).size !== slideScreenshotPaths.length) {

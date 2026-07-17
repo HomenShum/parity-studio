@@ -18,6 +18,7 @@ const enabled =
 const journeyMode = process.env['NODESLIDE_JOURNEY_MODE'] === 'live' ? 'live' : 'deterministic';
 const creationMode =
   process.env['NODESLIDE_JOURNEY_CREATION_MODE'] === 'live' ? 'live' : 'deterministic';
+const researchBenchmarkMode = process.env['NODESLIDE_JOURNEY_RESEARCH_BENCHMARK'] === '1';
 
 test.describe('NodeSlide self-authored browser journey proof', () => {
   test.skip(
@@ -51,7 +52,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     } else {
       await chooseDeterministicLandingModel(page);
     }
-    const brief = [
+    const legacyBrief = [
       'Create exactly seven visually ambitious, claim-led slides explaining why NodeSlide should dogfood its own authoring system.',
       'Audience: product and design leadership. Decision: approve the governed live-agent authoring roadmap and require recorded browser proof for every release.',
       'Use a refined editorial product-design aesthetic: warm off-white canvas, near-black typography, electric blue and coral accents, generous whitespace, strong hierarchy, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
@@ -66,6 +67,8 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       'Keep copy concise, use sentence-case headlines, preserve source notes for external references, and do not invent data or benchmark metrics.',
       'Treat Canva and Gamma as design inspirations rather than unverified performance claims. Treat HyperAgent as inspiration for versioned policy evolution, held-out evaluation, and safe promotion—not permission to mutate production code. Keep every object editable and do not invent data.',
     ].join(' ');
+    const profile = journeyProfile(researchBenchmarkMode, legacyBrief);
+    const brief = profile.brief;
     await page.getByLabel('Presentation brief').fill(brief);
     await page.getByRole('button', { name: 'Create presentation' }).click();
     step('brief_submitted');
@@ -75,7 +78,9 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const deckId = deckUrl.searchParams.get('deck');
     if (!deckId) throw new Error('The created deck URL is missing its deck id.');
     step('deck_created', { deckVersion: 1 });
-    await expect(page.getByRole('button', { name: /^Slide \d+:/u })).toHaveCount(7);
+    await expect(page.getByRole('button', { name: /^Slide \d+:/u })).toHaveCount(
+      profile.slideCount,
+    );
     const base = await readVersionState(page);
 
     const creationTrace =
@@ -89,6 +94,9 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     await expect(turbo).toHaveAttribute('aria-checked', 'true');
     if (journeyMode === 'live' && creationMode !== 'live') {
       await chooseEditorModel(page, { group: 'More live models', label: 'GLM 5.2' });
+    }
+    if (journeyMode === 'deterministic' && creationMode === 'live') {
+      await chooseEditorModel(page, { group: 'Private fallback', label: 'Deterministic' });
     }
     await expect(page.getByTestId('ai-model-select')).toContainText(
       journeyMode === 'live' ? 'GLM 5.2' : 'Deterministic',
@@ -138,12 +146,14 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       });
       await page.getByTestId('inspector-tab-ai').click();
     }
-    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    await page
+      .getByRole('button', { name: new RegExp(`^Slide ${profile.editSlide}:`, 'u') })
+      .click();
     const headline = page.getByRole('button', { name: 'Headline, text slide element' });
     const beforeContentDigest = digest((await headline.innerText()).trim());
     const composer = page.getByLabel('AI instruction');
     await composer.fill(
-      'On slide 6, replace only the unlocked Headline text element with "A live run is only real when its receipt survives export." Use exactly one replace_text operation with the existing headline elementId; do not use update_slide.',
+      `On slide ${profile.editSlide}, replace only the unlocked Headline text element with "${profile.editHeadline}". Use exactly one replace_text operation with the existing headline elementId; do not use update_slide.`,
     );
     await composer.press('Enter');
     step('edit_submitted', { deckVersion: base.version });
@@ -196,7 +206,9 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       timeout: 60_000,
     });
     const undone = await readVersionState(page);
-    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    await page
+      .getByRole('button', { name: new RegExp(`^Slide ${profile.editSlide}:`, 'u') })
+      .click();
     const undoneContentDigest = digest((await headline.innerText()).trim());
     expect(undoneContentDigest).toBe(beforeContentDigest);
     step('undo_verified', {
@@ -213,7 +225,9 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       timeout: 60_000,
     });
     const redone = await readVersionState(page);
-    await page.getByRole('button', { name: /^Slide 6:/u }).click();
+    await page
+      .getByRole('button', { name: new RegExp(`^Slide ${profile.editSlide}:`, 'u') })
+      .click();
     const redoneContentDigest = digest((await headline.innerText()).trim());
     expect(redoneContentDigest).toBe(appliedContentDigest);
     step('redo_verified', {
@@ -226,7 +240,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
 
     const slideScreenshotPaths: string[] = [];
     const compositionFingerprints: string[] = [];
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < profile.slideCount; index += 1) {
       await page.getByRole('button', { name: new RegExp(`^Slide ${index + 1}:`, 'u') }).click();
       const canvas = page.getByRole('region', { name: `Canvas, slide ${index + 1}` });
       await expect(canvas).toBeVisible();
@@ -234,7 +248,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       expect(visibleCopy, `Slide ${index + 1} leaked authoring instructions`).not.toMatch(
         /Slide \d+ is|use exactly/iu,
       );
-      if (index === 3) {
+      if (index === profile.diagramSlide - 1) {
         await expect(canvas.getByRole('button', { name: /^Diagram node \d+,/u })).toHaveCount(4);
         await expect(canvas.getByRole('button', { name: /^Diagram connector \d+,/u })).toHaveCount(
           3,
@@ -258,7 +272,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       await canvas.screenshot({ path: screenshotPath });
       slideScreenshotPaths.push(screenshotPath);
     }
-    expect(new Set(compositionFingerprints).size).toBe(7);
+    expect(new Set(compositionFingerprints).size).toBe(profile.slideCount);
     step('full_deck_visual_qa', {
       deckVersion: redone.version,
       slideCount: slideScreenshotPaths.length,
@@ -270,7 +284,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
     await page.getByTestId('export-pptx').click();
     const download = await downloadPromise;
-    const exportedDeckPath = path.join(outputDirectory, 'nodeslide-self-authored.pptx');
+    const exportedDeckPath = path.join(outputDirectory, profile.exportFileName);
     await download.saveAs(exportedDeckPath);
     step('export_downloaded', { deckVersion: redone.version, artifactPath: exportedDeckPath });
 
@@ -296,15 +310,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
           journeyMode,
           creationMode,
           modelExpectation: journeyMode === 'live' ? 'openrouter / z-ai/glm-5.2' : 'deterministic',
-          expectedLayouts: [
-            'hero',
-            'comparison',
-            'contract',
-            'flow',
-            'split',
-            'evidence_board',
-            'decision',
-          ],
+          expectedLayouts: profile.expectedLayouts,
           liveCreationTrace: creationTrace,
           liveEditTrace: editTrace,
           expectedCreationProvenance: 'brief_to_new_deck',
@@ -332,6 +338,64 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     runNodeScript('scripts/nodeslide-journey-proof.mjs', ['--manifest', runManifestPath]);
   });
 });
+
+function journeyProfile(researchBenchmark: boolean, legacyBrief: string) {
+  if (!researchBenchmark) {
+    return {
+      brief: legacyBrief,
+      slideCount: 7,
+      editSlide: 6,
+      editHeadline: 'A live run is only real when its receipt survives export.',
+      diagramSlide: 4,
+      exportFileName: 'nodeslide-self-authored.pptx',
+      expectedLayouts: [
+        'hero',
+        'comparison',
+        'contract',
+        'flow',
+        'split',
+        'evidence_board',
+        'decision',
+      ],
+    };
+  }
+  const brief = [
+    'Create exactly eight visually ambitious, source-backed, claim-led slides answering: can a governed authoring agent beat one-shot presentation generation?',
+    'Audience: product and design leadership. Decision: approve a held-out benchmark of NodeSlide against Gamma AI and Canva AI, but claim a win only after blind artifact scoring.',
+    'Use a research-editorial aesthetic: warm paper canvas, near-black typography, cobalt and signal-coral accents, large type, generous whitespace, visible source labels, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
+    'Primary paper sources: SlideGen: Collaborative Multimodal Agents for Scientific Slide Generation https://arxiv.org/abs/2512.04529 ; Self-Refine: Iterative Refinement with Self-Feedback https://arxiv.org/abs/2303.17651 ; ReAct: Synergizing Reasoning and Acting in Language Models https://arxiv.org/abs/2210.03629 ; Reflexion: Language Agents with Verbal Reinforcement Learning https://arxiv.org/abs/2303.11366 ; Hyperagents https://arxiv.org/abs/2603.19461 .',
+    'Official product sources: Canva AI presentations https://www.canva.com/create/ai-presentations/ ; Gamma presentations https://gamma.app/products/presentations .',
+    'Use this exact layout contract in order: hero, comparison, evidence_board, flow, contract, split, contract, decision.',
+    'Slide 1 is a bold thesis cover: "Winning is not a faster first draft. It is better evidence-to-decision throughput." Add one supporting line and this original NodeSlide editorial image: https://raw.githubusercontent.com/HomenShum/parity-studio/codex/nodeslide-openui-quality-v2/public/nodeslide-assets/governed-creativity.webp',
+    'Slide 2 is a competitive baseline, not a victory claim. Canva officially emphasizes AI drafts, templates, Brand Kit, media, collaboration, editing, and export. Gamma officially emphasizes prompt or document generation, smart layouts and themes, sources, editing, presentation, and export. NodeSlide must prove source lineage, native editability, validation receipts, and reversible agent actions.',
+    'Slide 3 is a five-paper research synthesis. ReAct interleaves reasoning and external action. Self-Refine uses iterative self-feedback and reports about 20 percent absolute average improvement across seven evaluated tasks. Reflexion uses linguistic feedback and episodic memory. SlideGen coordinates multimodal agents and editable PPTX creation. Hyperagents motivates evaluated, versioned improvement of task and meta-level policy. State clearly that only SlideGen directly evaluates slide generation.',
+    'Slide 4 is the only agentic authoring architecture diagram: use exactly four short native editable nodes labeled Source ledger, Story agents, Visual compose, and Validate + export.',
+    'Slide 5 contains the proposed benchmark scoring weights as one native editable bar chart labeled Source 30, Narrative 20, Visual 20, Editability 15, and Governance 15, measured in percent. These are proposed evaluation weights, not measured performance.',
+    'Slide 6 is a SlideGen paper spotlight. Explain its coordinated outlining, mapping, arrangement, note synthesis, iterative refinement, editable PPTX output, and the authors reported improvements in visual quality, content faithfulness, and readability. Do not invent effect sizes.',
+    'Slide 7 is the blind evaluation protocol: same prompt, same sources, same slide count, held-out topics, blind human scoring, citation-survival checks, native editability checks, Undo tests, export inspection, and recorded journey. Include this prior NodeSlide recording as a real linked video element: https://raw.githubusercontent.com/HomenShum/parity-studio/codex/nodeslide-openui-quality-v2/artifacts/nodeslide-openui-quality-full-live-v3-2026-07-16/browser-journey.webm',
+    'Slide 8 is a decisive release-gate checklist ending with "NodeSlide wins only when citations survive export and every material agent action remains reversible."',
+    'Keep copy concise and audience-facing. Preserve all supplied URLs as source records and source notes. Distinguish paper-reported findings, official product capability claims, and our proposed benchmark. Do not invent comparative scores or imply that Gamma and Canva were tested in this run.',
+  ].join(' ');
+  return {
+    brief,
+    slideCount: 8,
+    editSlide: 8,
+    editHeadline:
+      'NodeSlide wins when citations survive export and every agent action stays reversible.',
+    diagramSlide: 4,
+    exportFileName: 'nodeslide-research-benchmark.pptx',
+    expectedLayouts: [
+      'hero',
+      'comparison',
+      'evidence_board',
+      'flow',
+      'contract',
+      'split',
+      'contract',
+      'decision',
+    ],
+  };
+}
 
 async function captureTrace(
   page: import('playwright/test').Page,

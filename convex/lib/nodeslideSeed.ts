@@ -893,6 +893,72 @@ function audienceFacingDirectiveCopy(
   subject: string,
 ): Partial<NodeSlidePlannedSlide> | null {
   const quote = nodeslideCleanText(context.match(/[“"]([^”"]{8,180})[”"]/u)?.[1] ?? '', 120);
+  if (/research synthesis|five-paper|paper-backed/iu.test(context)) {
+    return {
+      title: 'Five papers point to one authoring loop',
+      headline: 'Reason, act, critique, remember, and improve - without flattening the artifact.',
+      body: 'ReAct (2210.03629) joins reasoning and tools. Self-Refine (2303.17651) and Reflexion (2303.11366) add feedback and memory. SlideGen (2512.04529) adds visual agents.',
+      bullets: [
+        'ReAct: reasoning plus external action',
+        'Self-Refine + Reflexion: feedback and memory',
+        'SlideGen + Hyperagents: visual orchestration and policy evolution',
+      ],
+    };
+  }
+  if (
+    /agentic authoring architecture|evidence-to-slide architecture|architecture diagram/iu.test(
+      context,
+    )
+  ) {
+    return {
+      title: 'Evidence should survive every handoff',
+      headline:
+        'The winning architecture keeps claims, visuals, validation, and export in one editable graph.',
+      body: 'Source-aware planning feeds a claim ledger, multimodal composition, and a validation receipt before editable delivery.',
+      bullets: [
+        'Source-aware planning',
+        'Claim-led visual composition',
+        'Receipt-bound editable export',
+      ],
+    };
+  }
+  if (/scoring weights|benchmark weights|weighted rubric/iu.test(context)) {
+    return {
+      title: 'Source fidelity carries the most weight',
+      headline: 'A beautiful deck cannot win if its evidence does not survive editing and export.',
+      body: 'The proposed blind rubric weights factual grounding first, then story and visual reasoning, while preserving editability and governance as release requirements.',
+      bullets: [
+        'Evidence before ornament',
+        'Blind scoring across identical inputs',
+        'Editable, reversible output required',
+      ],
+    };
+  }
+  if (/paper spotlight|SlideGen spotlight|scientific slide generation/iu.test(context)) {
+    return {
+      title: 'SlideGen raises the bar from summary to visual reasoning',
+      headline:
+        'Scientific slide generation is a multimodal planning problem, not a text-to-template shortcut.',
+      body: 'SlideGen (Liang et al., arXiv:2512.04529) coordinates outlining, mapping, arrangement, notes, and visual refinement into editable PPTX.',
+      bullets: [
+        'Agentic and modular',
+        'Visual-in-the-loop refinement',
+        'Reported gains: quality, faithfulness, readability',
+      ],
+    };
+  }
+  if (/blind evaluation protocol|same-prompt benchmark|held-out benchmark/iu.test(context)) {
+    return {
+      title: 'Run the same brief, sources, and constraints',
+      headline: 'NodeSlide earns the claim only through a blind, artifact-level comparison.',
+      body: 'Generate held-out decks with identical inputs, score exported artifacts, inspect citation survival, and test whether every material change can be undone.',
+      bullets: [
+        'Same prompt + sources',
+        'Blind artifact scoring',
+        'Citation, edit, export, and Undo checks',
+      ],
+    };
+  }
   if (/thesis cover/iu.test(context)) {
     return {
       title: 'The governed-creative thesis',
@@ -901,11 +967,11 @@ function audienceFacingDirectiveCopy(
       bullets: ['Creative range', 'Governed execution', 'Native editability'],
     };
   }
-  if (/competitive landscape|Canva AI|Gamma AI/iu.test(context)) {
+  if (/competitive landscape|competitive baseline|Canva AI|Gamma AI/iu.test(context)) {
     return {
       title: 'Three authoring advantages',
       headline: 'NodeSlide can own the governed path from intent to editable execution.',
-      body: 'The opportunity is not another one-shot generator. It is a durable authoring system with visible control.',
+      body: 'Official Canva and Gamma product pages define the baseline; NodeSlide must prove a durable authoring system with visible control.',
       bullets: [
         'Canva AI — brand and asset velocity',
         'Gamma AI — research-to-story speed',
@@ -1125,15 +1191,14 @@ function requestedChartValues(instruction: string): NodeSlidePlannedChart | null
   const pairs = Array.from(
     chartClause.matchAll(/\b([A-Za-z][A-Za-z0-9_-]{1,24})\s+(-?\d+(?:\.\d+)?)/gu),
   ).slice(0, 8);
-  const labeledPairs =
-    pairs.length >= 2 &&
-    pairs.every((match) => /^(?:input|output|draft|edit|undo|redo)$/iu.test(match[1] ?? ''));
+  const numericValues = Array.from(chartClause.matchAll(/-?\d+(?:\.\d+)?/gu))
+    .map((match) => Number(match[0]))
+    .filter((value) => Number.isFinite(value))
+    .slice(0, 8);
+  const labeledPairs = pairs.length >= 2 && pairs.length === numericValues.length;
   const values = labeledPairs
     ? pairs.map((match) => Number(match[2])).filter((value) => Number.isFinite(value))
-    : Array.from(chartClause.matchAll(/-?\d+(?:\.\d+)?/gu))
-        .map((match) => Number(match[0]))
-        .filter((value) => Number.isFinite(value))
-        .slice(0, 8);
+    : numericValues;
   if (values.length < 2) return null;
   return {
     labels:
@@ -1467,6 +1532,8 @@ export function coerceBriefSpec(
     .slice(0, requestedSlideCount ?? 8);
   if (slides.length < (requestedSlideCount ?? 6)) return fallback;
   applyAudienceFacingDirectiveContract(slides, brief.prompt);
+  applyDeterministicBriefPrimitives(slides, brief.prompt);
+  preserveRequestedPrimitives(slides, brief.prompt, requestedSlideCount ?? slides.length);
   if (!applyRequestedDiagramPrimitive(slides, brief.prompt)) return fallback;
   const hasLayoutContract = applyRequestedLayoutContract(slides, brief.prompt);
 
