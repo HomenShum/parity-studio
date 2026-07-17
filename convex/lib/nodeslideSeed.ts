@@ -547,9 +547,9 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   };
   const requestedSlideCount =
     inferNodeSlideRequestedSlideCount(brief.prompt, ...brief.successCriteria) ?? 7;
-  applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
   applyRequestedNarrativeJobs(spec.slides, brief, requestedSlideCount);
   applyExplicitSlideDirectives(spec.slides, brief.prompt, requestedSlideCount);
+  applyDeterministicBriefPrimitives(spec.slides, brief.prompt);
   preserveRequestedPrimitives(spec.slides, brief.prompt, requestedSlideCount);
   removeUnsupportedFallbackPrimitives(spec.slides, brief.prompt);
   // An explicit diagram can target a slide that originally carried a generic
@@ -569,7 +569,7 @@ interface ExplicitSlideDirective {
   instruction: string;
 }
 
-type BriefPrimaryPrimitive = 'formula' | 'chart' | 'image';
+type BriefPrimaryPrimitive = 'formula' | 'chart' | 'image' | 'video';
 
 /**
  * Keeps a bounded deterministic fallback faithful to an explicitly enumerated story.
@@ -735,7 +735,7 @@ function removeUnsupportedFallbackPrimitives(
       const { formula: _formula, ...withoutFormula } = next;
       next = withoutFormula;
     }
-    if (next.image && !requestsImage && !next.image.url) {
+    if (next.image && !requestsImage && !next.image.url && !next.image.imageUrl) {
       const { image: _image, ...withoutImage } = next;
       next = withoutImage;
     }
@@ -781,6 +781,7 @@ const BRIEF_PRIMARY_PRIMITIVE_PATTERNS: Record<BriefPrimaryPrimitive, RegExp> = 
   formula: /\b(?:formula|equation|math|mathematical)\b/iu,
   chart: /\b(?:chart|graph|plot)\b/iu,
   image: /\b(?:image|images|photo|photos|portrait|portraits)\b/iu,
+  video: /\b(?:video|film|recording|motion)\b/iu,
 };
 
 function explicitSlideDirectives(prompt: string, slideCount: number): ExplicitSlideDirective[] {
@@ -836,8 +837,31 @@ function applyAudienceFacingDirectiveContract(
     if (!slide) continue;
     const context = explicitSlideContext(prompt, directive.index, slides.length);
     const authored = audienceFacingDirectiveCopy(context, directive.instruction);
-    if (authored) replacePlannedSlideCopy(slide, authored);
+    if (authored) {
+      const requestedPrimitive = requestedDirectivePrimitive(slide, context);
+      replacePlannedSlideCopy(slide, authored);
+      Object.assign(slide, requestedPrimitive);
+    }
   }
+}
+
+function requestedDirectivePrimitive(
+  slide: NodeSlidePlannedSlide,
+  context: string,
+): Partial<NodeSlidePlannedSlide> {
+  if (requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.chart) && slide.chart) {
+    return { chart: slide.chart };
+  }
+  if (requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.image) && slide.image) {
+    return { image: slide.image };
+  }
+  if (requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.video) && slide.video) {
+    return { video: slide.video };
+  }
+  if (requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.formula) && slide.formula) {
+    return { formula: slide.formula };
+  }
+  return {};
 }
 
 function replacePlannedSlideCopy(
@@ -976,12 +1000,14 @@ function preserveRequestedPrimitives(
 ): void {
   const directives = explicitSlideDirectives(prompt, slideCount);
   const claimedTargets = new Set<number>();
-  for (const kind of ['formula', 'chart', 'image'] as const) {
+  for (const kind of ['formula', 'chart', 'image', 'video'] as const) {
     if (!requestsBriefPrimitive(prompt, BRIEF_PRIMARY_PRIMITIVE_PATTERNS[kind])) continue;
     const sourceIndex = slides.findIndex((slide) => Boolean(slide[kind]));
     if (sourceIndex < 0) continue;
     const directive = directives.find((candidate) =>
-      BRIEF_PRIMARY_PRIMITIVE_PATTERNS[kind].test(candidate.instruction),
+      BRIEF_PRIMARY_PRIMITIVE_PATTERNS[kind].test(
+        explicitSlideContext(prompt, candidate.index, slideCount),
+      ),
     );
     const targetIndex =
       directive?.index ??
@@ -1055,6 +1081,9 @@ function moveBriefPrimaryPrimitive(
   if (kind === 'image') {
     slides[targetIndex] = { ...targetBase, image: primitive as NodeSlidePlannedImage };
   }
+  if (kind === 'video') {
+    slides[targetIndex] = { ...targetBase, video: primitive as NodeSlidePlannedVideo };
+  }
 }
 
 function withoutBriefPrimaryPrimitive(
@@ -1067,6 +1096,10 @@ function withoutBriefPrimaryPrimitive(
   }
   if (kind === 'formula') {
     const { formula: _formula, ...rest } = slide;
+    return rest;
+  }
+  if (kind === 'video') {
+    const { video: _video, ...rest } = slide;
     return rest;
   }
   const { image: _image, ...rest } = slide;
@@ -1088,16 +1121,31 @@ function withoutAllPrimaryPrimitives(slide: NodeSlidePlannedSlide): NodeSlidePla
 function requestedChartValues(instruction: string): NodeSlidePlannedChart | null {
   const chartMatch = instruction.match(BRIEF_PRIMARY_PRIMITIVE_PATTERNS.chart);
   if (!chartMatch || chartMatch.index === undefined) return null;
-  const chartClause = instruction.slice(chartMatch.index);
-  const values = Array.from(chartClause.matchAll(/-?\d+(?:\.\d+)?/gu))
-    .map((match) => Number(match[0]))
-    .filter((value) => Number.isFinite(value))
-    .slice(0, 8);
+  const chartClause = instruction.slice(chartMatch.index).split(/[.!?]/u)[0] ?? '';
+  const pairs = Array.from(
+    chartClause.matchAll(/\b([A-Za-z][A-Za-z0-9_-]{1,24})\s+(-?\d+(?:\.\d+)?)/gu),
+  ).slice(0, 8);
+  const labeledPairs =
+    pairs.length >= 2 &&
+    pairs.every((match) => /^(?:input|output|draft|edit|undo|redo)$/iu.test(match[1] ?? ''));
+  const values = labeledPairs
+    ? pairs.map((match) => Number(match[2])).filter((value) => Number.isFinite(value))
+    : Array.from(chartClause.matchAll(/-?\d+(?:\.\d+)?/gu))
+        .map((match) => Number(match[0]))
+        .filter((value) => Number.isFinite(value))
+        .slice(0, 8);
   if (values.length < 2) return null;
   return {
-    labels: values.map((_, index) => `Point ${index + 1}`),
+    labels:
+      labeledPairs && pairs.length === values.length
+        ? pairs.map((match) => nodeslideCleanText(match[1] ?? '', 30))
+        : values.map((_, index) => `Point ${index + 1}`),
     values,
-    ...(/%|\bpercent(?:age)?\b/iu.test(chartClause) ? { unit: '%' } : {}),
+    ...(/\btokens?\b/iu.test(chartClause)
+      ? { unit: 'tokens' }
+      : /%|\bpercent(?:age)?\b/iu.test(chartClause)
+        ? { unit: '%' }
+        : {}),
   };
 }
 
@@ -1247,6 +1295,30 @@ function applyDeterministicBriefPrimitives(slides: NodeSlidePlannedSlide[], prom
       altText: `${imageLabel} — replace with a licensed image`,
       credit: 'Licensed image and visible credit required before external use',
     };
+  }
+
+  for (const directive of explicitSlideDirectives(prompt, slides.length)) {
+    const slide = slides[directive.index];
+    if (!slide) continue;
+    const context = explicitSlideContext(prompt, directive.index, slides.length);
+    const chart = requestedChartValues(context);
+    if (chart) slide.chart = chart;
+    const urls = context.match(/https:\/\/[^\s<>()]+/gu) ?? [];
+    const imageUrl = urls.find((url) => /\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/iu.test(url));
+    if (imageUrl && requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.image)) {
+      slide.image = {
+        altText: 'NodeSlide live authoring proof shown as an editable visual asset',
+        credit: 'NodeSlide recorded proof artifact',
+        imageUrl: imageUrl.replace(/[.,;:!?]+$/u, ''),
+      };
+    }
+    const videoUrl = urls.find((url) => /\.(?:mp4|webm|mov)(?:[?#].*)?$/iu.test(url));
+    if (videoUrl && requestsBriefPrimitive(context, BRIEF_PRIMARY_PRIMITIVE_PATTERNS.video)) {
+      slide.video = {
+        url: videoUrl.replace(/[.,;:!?]+$/u, ''),
+        title: 'Recorded NodeSlide browser journey',
+      };
+    }
   }
 
   applyRequestedDiagramPrimitive(slides, prompt);

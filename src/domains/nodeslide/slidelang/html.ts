@@ -308,8 +308,9 @@ function renderShape(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
 }
 
 function renderImage(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
-  if (isEmbeddedImageData(element.imageUrl)) {
-    return `<image x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" href="${escapeHtml(element.imageUrl.trim())}" preserveAspectRatio="xMidYMid slice" opacity="${clamp(finite(element.style.opacity, 1), 0, 1)}"/>`;
+  const imageUrl = element.imageUrl?.trim();
+  if (imageUrl && (imageUrl.startsWith('https://') || isEmbeddedImageData(imageUrl))) {
+    return `<image x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" href="${escapeHtml(imageUrl)}" preserveAspectRatio="xMidYMid slice" opacity="${clamp(finite(element.style.opacity, 1), 0, 1)}"/>`;
   }
   const fill = colorToHex(element.style.fill, snapshot.deck.theme.colors.accentSoft);
   const stroke = colorToHex(element.style.stroke, snapshot.deck.theme.colors.border);

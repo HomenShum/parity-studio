@@ -56,12 +56,12 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       'Audience: product and design leadership. Decision: approve the governed live-agent authoring roadmap and require recorded browser proof for every release.',
       'Use a refined editorial product-design aesthetic: warm off-white canvas, near-black typography, electric blue and coral accents, generous whitespace, strong hierarchy, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
       'Use this exact layout contract in order: hero, comparison, contract, flow, split, evidence_board, decision.',
-      'Slide 1 is a bold thesis cover: "NodeSlide must beat one-shot generation on governed creativity," with one supporting line and a visual tension motif.',
+      'Slide 1 is a bold thesis cover: "NodeSlide must beat one-shot generation on governed creativity," with one supporting line and this original NodeSlide editorial image: https://raw.githubusercontent.com/HomenShum/parity-studio/codex/nodeslide-openui-quality-v2/public/nodeslide-assets/governed-creativity.webp',
       'Slide 2 is a three-column competitive landscape. Canva AI wins brand and asset velocity; Gamma AI wins research-to-story speed; NodeSlide must own editable, governed execution.',
       'Slide 3 is an authoring contract that locks audience, decision, evidence ledger, and claim-led storyboard before layout. Show it as a structured editorial artifact, not bullets.',
       'Slide 4 is the only diagram: use exactly four short native editable nodes labeled Strategy, Agent team, Validate + review, and Editable export.',
-      'Slide 5 uses a split composition: bounded repair on the left; HyperAgent-inspired versioned policy evolution, held-out evaluation, and safe promotion on the right.',
-      'Slide 6 is an evidence board with labeled proof slots for provider, named model, input and output tokens, nonzero cost, candidate digest, durable validation receipt, version delta, and export artifact. Do not invent values.',
+      'Slide 5 uses a split composition: bounded repair on the left; HyperAgent-inspired versioned policy evolution, held-out evaluation, and safe promotion on the right. Include this recorded browser video as a real linked video element: https://raw.githubusercontent.com/HomenShum/parity-studio/codex/nodeslide-openui-quality-v2/artifacts/nodeslide-openui-quality-full-live-v3-2026-07-16/browser-journey.webm',
+      'Slide 6 is an evidence board with labeled proof slots for provider, named model, input and output tokens, nonzero cost, candidate digest, durable validation receipt, version delta, and export artifact. Add one native editable token chart using the recorded creation values Input 459 and Output 977, measured in tokens. Do not invent other values.',
       'Slide 7 is a decisive release-gate checklist ending with "Approve the quality gate and require recorded proof for every release."',
       'Keep copy concise, use sentence-case headlines, preserve source notes for external references, and do not invent data or benchmark metrics.',
       'Treat Canva and Gamma as design inspirations rather than unverified performance claims. Treat HyperAgent as inspiration for versioned policy evolution, held-out evaluation, and safe promotion—not permission to mutate production code. Keep every object editable and do not invent data.',
@@ -97,6 +97,44 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       const consent = page.getByTestId('ai-provider-consent');
       await expect(consent).toBeVisible();
       if (!(await consent.isChecked())) await consent.check();
+    }
+    const variationScreenshotPaths: string[] = [];
+    const tasteScreenshotPaths: string[] = [];
+    if (journeyMode === 'live') {
+      await page.getByRole('button', { name: 'Generate 3 directions' }).first().click();
+      const cards = page.getByTestId('variation-card');
+      await expect(cards).toHaveCount(3, { timeout: 120_000 });
+      for (let index = 0; index < 3; index += 1) {
+        await cards.nth(index).getByTestId('variation-preview').click();
+        const screenshotPath = path.join(outputDirectory, `variation-${index + 1}.png`);
+        await page.getByRole('region', { name: 'Canvas, slide 1' }).screenshot({
+          path: screenshotPath,
+        });
+        variationScreenshotPaths.push(screenshotPath);
+      }
+      await page.getByRole('button', { name: 'Return to original' }).click();
+      step('three_live_directions_verified', {
+        count: variationScreenshotPaths.length,
+        screenshotDigest: digest(variationScreenshotPaths.join('\n')),
+      });
+
+      await page.getByTestId('inspector-tab-design').click();
+      for (const packId of ['startup-narrative', 'finance-ibcs']) {
+        const card = page.getByTestId(`signature-profile-${packId}`);
+        await expect(card).toBeVisible();
+        await card.getByRole('button', { name: 'Preview' }).click();
+        const screenshotPath = path.join(outputDirectory, `taste-${packId}.png`);
+        await page.getByRole('region', { name: 'Canvas, slide 1' }).screenshot({
+          path: screenshotPath,
+        });
+        tasteScreenshotPaths.push(screenshotPath);
+        await card.getByRole('button', { name: 'Revert preview' }).click();
+      }
+      step('taste_pack_previews_verified', {
+        count: tasteScreenshotPaths.length,
+        screenshotDigest: digest(tasteScreenshotPaths.join('\n')),
+      });
+      await page.getByTestId('inspector-tab-ai').click();
     }
     await page.getByRole('button', { name: /^Slide 6:/u }).click();
     const headline = page.getByRole('button', { name: 'Headline, text slide element' });
@@ -278,6 +316,8 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
             gifPath,
             finalScreenshotPath,
             slideScreenshotPaths,
+            variationScreenshotPaths,
+            tasteScreenshotPaths,
             exportedDeckPath,
             runManifestPath,
           },

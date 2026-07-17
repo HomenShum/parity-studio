@@ -356,6 +356,7 @@ function normalizeOutput(
 }
 
 export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
+  const exportSnapshot = await hydrateRemoteImages(snapshot);
   // Keep the sizeable MIT exporter out of the normal NodeSlide bundle until export is requested.
   const { default: PptxGenJSClass } = await import('pptxgenjs');
   const pptx = new PptxGenJSClass();
@@ -364,17 +365,17 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
   pptx.layout = layoutName;
   pptx.author = 'NodeSlide';
   pptx.company = 'Parity Studio';
-  pptx.subject = snapshot.deck.brief.purpose;
-  pptx.title = snapshot.deck.title;
+  pptx.subject = exportSnapshot.deck.brief.purpose;
+  pptx.title = exportSnapshot.deck.title;
   pptx.theme = {
-    headFontFace: safeFontFamily(snapshot.deck.theme.typography.display),
-    bodyFontFace: safeFontFamily(snapshot.deck.theme.typography.body),
+    headFontFace: safeFontFamily(exportSnapshot.deck.theme.typography.display),
+    bodyFontFace: safeFontFamily(exportSnapshot.deck.theme.typography.body),
   };
 
-  for (const slide of orderedSlides(snapshot)) {
+  for (const slide of orderedSlides(exportSnapshot)) {
     const pptxSlide = pptx.addSlide();
     pptxSlide.background = {
-      color: colorToPptxHex(slide.background, snapshot.deck.theme.colors.canvas),
+      color: colorToPptxHex(slide.background, exportSnapshot.deck.theme.colors.canvas),
     };
     // PowerPoint has no stable public slide object-name field. Keep a non-rendering marker in the
     // package so NodeSlide exports can recover the canonical slide identity on re-import. The
@@ -388,13 +389,46 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
       fill: { color: 'FFFFFF', transparency: 100 },
       line: { color: 'FFFFFF', transparency: 100 },
     });
-    for (const element of orderedExportElements(snapshot, slide)) {
-      addElement(pptx, pptxSlide, snapshot, element);
+    for (const element of orderedExportElements(exportSnapshot, slide)) {
+      addElement(pptx, pptxSlide, exportSnapshot, element);
     }
-    const notes = speakerNotesForSlide(snapshot, slide);
+    const notes = speakerNotesForSlide(exportSnapshot, slide);
     if (notes) pptxSlide.addNotes(notes);
   }
 
   const output = await pptx.write({ outputType: 'arraybuffer', compression: true });
   return normalizeOutput(output);
+}
+
+async function hydrateRemoteImages(snapshot: DeckSnapshot): Promise<DeckSnapshot> {
+  if (typeof fetch !== 'function' || typeof FileReader === 'undefined') return snapshot;
+  const elements = await Promise.all(
+    snapshot.elements.map(async (element) => {
+      const url = element.kind === 'image' ? element.imageUrl?.trim() : undefined;
+      if (!url?.startsWith('https://') || isEmbeddedImageData(url)) return element;
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+        if (!response.ok) return element;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/') || blob.size > 700_000) return element;
+        const imageUrl = await blobDataUrl(blob);
+        return { ...element, imageUrl };
+      } catch {
+        return element;
+      }
+    }),
+  );
+  return { ...snapshot, elements };
+}
+
+function blobDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Image conversion failed.'));
+    reader.onload = () =>
+      typeof reader.result === 'string'
+        ? resolve(reader.result)
+        : reject(new Error('Image conversion returned no data URL.'));
+    reader.readAsDataURL(blob);
+  });
 }
