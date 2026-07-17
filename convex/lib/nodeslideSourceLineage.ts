@@ -52,7 +52,13 @@ export function buildNodeSlideSourceLineage(args: {
         'An external evidence-grounded factual operation is missing a required source binding.',
       );
     }
-    if (operation.op !== 'replace_text' && operation.op !== 'update_chart') return;
+    if (
+      operation.op !== 'replace_text' &&
+      operation.op !== 'update_chart' &&
+      operation.op !== 'add_element'
+    ) {
+      return;
+    }
     const sourceIds = sourceIdsForClaimOperation(operation);
     if (
       sourceIds.length > NODESLIDE_ELEMENT_SOURCE_LIMIT ||
@@ -61,7 +67,15 @@ export function buildNodeSlideSourceLineage(args: {
     ) {
       throw new Error('A factual operation contains an invalid or unauthorized source binding.');
     }
-    if (args.policy === 'required_external_evidence' && sourceIds.length === 0) {
+    const assertsFactualOutput =
+      operation.op !== 'add_element' ||
+      operation.element.kind === 'text' ||
+      operation.element.kind === 'chart';
+    if (
+      args.policy === 'required_external_evidence' &&
+      assertsFactualOutput &&
+      sourceIds.length === 0
+    ) {
       throw new Error(
         'An external evidence-grounded factual operation is missing a required source binding.',
       );
@@ -71,7 +85,7 @@ export function buildNodeSlideSourceLineage(args: {
       operationIndex,
       operation: operation.op,
       slideId: operation.slideId,
-      elementId: operation.elementId,
+      elementId: operation.op === 'add_element' ? operation.element.id : operation.elementId,
       sourceIds: [...sourceIds],
       claimDigest: claimDigest(operation),
     });
@@ -88,16 +102,32 @@ function sourceIdsForClaimOperation(operation: PatchOperation): string[] {
   if (operation.op === 'update_chart') {
     return operation.chart.sourceId ? [operation.chart.sourceId] : [];
   }
+  if (operation.op === 'add_element') {
+    const chartSourceId = operation.element.chart?.sourceId;
+    return [
+      ...new Set([...operation.element.sourceIds, ...(chartSourceId ? [chartSourceId] : [])]),
+    ];
+  }
   return [];
 }
 
 function claimDigest(
-  operation: Extract<PatchOperation, { op: 'replace_text' | 'update_chart' }>,
+  operation: Extract<PatchOperation, { op: 'replace_text' | 'update_chart' | 'add_element' }>,
 ): string {
   const claim =
     operation.op === 'replace_text'
       ? { operation: operation.op, text: operation.text }
-      : { operation: operation.op, chart: operation.chart };
+      : operation.op === 'update_chart'
+        ? { operation: operation.op, chart: operation.chart }
+        : {
+            operation: operation.op,
+            element: {
+              kind: operation.element.kind,
+              content: operation.element.content ?? null,
+              chart: operation.element.chart ?? null,
+              imageUrl: operation.element.imageUrl ?? null,
+            },
+          };
   return nodeslideContentDigest(stableJson(claim));
 }
 

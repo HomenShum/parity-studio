@@ -570,7 +570,17 @@ function operationCoversObligation(
   operations: readonly PatchOperation[],
   obligation: NodeSlideSemanticCoverageObligation,
 ): boolean {
-  if (!obligation.elementId) return false;
+  if (!obligation.elementId) {
+    // No existing element satisfies the request; only a same-slide agent add of the
+    // matching artifact kind can cover it.
+    return operations.some(
+      (operation) =>
+        operation.op === 'add_element' &&
+        operation.slideId === obligation.slideId &&
+        ((obligation.operationClass === 'chart' && operation.element.kind === 'chart') ||
+          (obligation.operationClass === 'copy' && operation.element.kind === 'text')),
+    );
+  }
   return operations.some((operation) => {
     if (!('elementId' in operation)) return false;
     if (operation.slideId !== obligation.slideId || operation.elementId !== obligation.elementId) {
