@@ -131,6 +131,10 @@ async function main() {
       viewport: { width: 1920, height: 1080 },
       recordVideo: { dir: dirs.video, size: { width: 1920, height: 1080 } },
       acceptDownloads: true,
+      // The recorder's local browser-chrome shell embeds the real production app. Production
+      // correctly sends frame-ancestors 'none'; bypassing CSP only inside this isolated capture
+      // context preserves that security policy for every real user while allowing full-frame video.
+      bypassCSP: true,
       ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
         ? {
             extraHTTPHeaders: {
