@@ -2933,10 +2933,36 @@
   margin-left: 5px;
   pointer-events: auto;
 }
-.ns-loading-screen {
-  align-content: center;
-  justify-items: center;
+.nodeslide-studio.ns-loading-screen {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  justify-content: center;
+  min-height: 100vh;
   text-align: center;
+}
+.ns-loading-screen .ns-loading-group {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+}
+.ns-loading-screen .ns-loading-retry {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+.ns-loading-screen .ns-loading-retry p {
+  font-size: 11px;
+}
+.ns-loading-screen .ns-loading-retry button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
 }
 .ns-loading-screen .ns-loading-mark {
   align-items: center;

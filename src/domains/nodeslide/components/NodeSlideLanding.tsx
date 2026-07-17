@@ -30,6 +30,7 @@ import {
   useSessionExternalConsent,
 } from '../externalProviderConsent';
 import { useAgentSession } from '../session/AgentSessionProvider';
+import { publishNodeSlideUiContract } from '../uiContract';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
@@ -96,6 +97,10 @@ export function NodeSlideLanding({
   const [attachmentsSyncing, setAttachmentsSyncing] = useState(false);
   const [submissionPreparing, setSubmissionPreparing] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  // Agent-native UI contract: the landing is its own publishable phase.
+  useEffect(() => {
+    publishNodeSlideUiContract({ phase: 'landing', connection: 'ready', theme: 'light' });
+  }, []);
   const [recentDecksExpanded, setRecentDecksExpanded] = useState(false);
   const handleAttachmentsChange = useCallback(() => {
     setAttachmentError(null);
@@ -236,7 +241,7 @@ export function NodeSlideLanding({
             type="button"
             onClick={() => setConnectionsOpen(true)}
           >
-            <PlugZap size={14} /> BYOK / Agents
+            <PlugZap size={14} /> Connections
           </button>
         </div>
       </header>
