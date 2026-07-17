@@ -9,6 +9,7 @@ import {
   type NodeSlidePresentationQualityReceipt,
   verifyNodeSlidePresentationQualityReceipt,
 } from '../../shared/nodeslideAuthoringQuality';
+import { nodeslideArtifactPresenceChecks } from './nodeslideArtifactPresence';
 import {
   type NodeSlideSemanticCoverageReceipt,
   nodeSlideCandidateDigest,
@@ -228,7 +229,12 @@ export function evaluateNodeSlideDeckCi(
   drafts.push(
     ...checksFromHookInputs(
       'layout_structure_hook',
-      resolvedOptions.layoutStructureChecks,
+      // Artifact presence is computed here, not caller-supplied, so no Deck CI run
+      // can skip verifying that every ordered element actually renders.
+      [
+        ...nodeslideArtifactPresenceChecks(snapshot),
+        ...(resolvedOptions.layoutStructureChecks ?? []),
+      ],
       'layout',
     ),
     ...checksFromHookInputs(
