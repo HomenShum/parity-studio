@@ -1,8 +1,10 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig } from 'playwright/test';
+import { loadEnv } from 'vite';
 
 const remoteBaseUrl = process.env['PLAYWRIGHT_BASE_URL'];
+const localEnv = loadEnv(process.env['NODE_ENV'] ?? 'development', process.cwd(), '');
 const journeyProofEnabled = process.env['NODESLIDE_JOURNEY_PROOF'] === '1';
 const baseURL = remoteBaseUrl ?? 'http://127.0.0.1:4173';
 const vercelBypassSecret = process.env['VERCEL_AUTOMATION_BYPASS_SECRET']?.trim();
@@ -48,9 +50,14 @@ export default defineConfig({
         reuseExistingServer: !process.env['CI'],
         timeout: 120_000,
         env: {
-          VITE_CONVEX_URL: process.env['VITE_CONVEX_URL'] ?? 'https://ci-placeholder.convex.cloud',
+          VITE_CONVEX_URL:
+            process.env['VITE_CONVEX_URL'] ??
+            localEnv['VITE_CONVEX_URL'] ??
+            'https://ci-placeholder.convex.cloud',
           VITE_CONVEX_SITE_URL:
-            process.env['VITE_CONVEX_SITE_URL'] ?? 'https://ci-placeholder.convex.site',
+            process.env['VITE_CONVEX_SITE_URL'] ??
+            localEnv['VITE_CONVEX_SITE_URL'] ??
+            'https://ci-placeholder.convex.site',
         },
       },
 });

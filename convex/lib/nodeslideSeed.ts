@@ -558,6 +558,9 @@ export function deterministicBriefSpec(title: string, brief: DeckBrief): NodeSli
   // primary primitive on the same slide.
   applyRequestedDiagramPrimitive(spec.slides, brief.prompt);
   spec.slides = spec.slides.slice(0, requestedSlideCount);
+  if (applyRequestedLayoutContract(spec.slides, brief.prompt)) {
+    spec.slides = spec.slides.map(fitPlannedSlideForLayout);
+  }
   return spec;
 }
 
@@ -799,6 +802,7 @@ function applyExplicitSlideDirectives(
   for (const directive of explicitSlideDirectives(prompt, slideCount)) {
     const slide = slides[directive.index];
     if (!slide) continue;
+    const context = explicitSlideContext(prompt, directive.index, slideCount);
     const subject = nodeslideCleanText(
       directive.instruction.replace(
         /^(?:(?:should|must|will|can|to)\s+)?(?:explain|explains|show|shows|state|states|cover|covers|present|presents|use|uses|contain|contains|feature|features)\s+/iu,
@@ -807,6 +811,11 @@ function applyExplicitSlideDirectives(
       160,
     );
     if (!subject) continue;
+    const authored = audienceFacingDirectiveCopy(context, subject);
+    if (authored) {
+      replacePlannedSlideCopy(slide, authored);
+      continue;
+    }
     slide.title = nodeslideCleanText(sentenceCase(subject), 80);
     slide.headline = sentenceCase(subject);
     slide.body = nodeslideCleanText(narrativeJobClaim(subject), 360);
@@ -816,6 +825,148 @@ function applyExplicitSlideDirectives(
       slide.metricLabel = 'content, visual, and release proof must agree';
     }
   }
+}
+
+function applyAudienceFacingDirectiveContract(
+  slides: NodeSlidePlannedSlide[],
+  prompt: string,
+): void {
+  for (const directive of explicitSlideDirectives(prompt, slides.length)) {
+    const slide = slides[directive.index];
+    if (!slide) continue;
+    const context = explicitSlideContext(prompt, directive.index, slides.length);
+    const authored = audienceFacingDirectiveCopy(context, directive.instruction);
+    if (authored) replacePlannedSlideCopy(slide, authored);
+  }
+}
+
+function replacePlannedSlideCopy(
+  slide: NodeSlidePlannedSlide,
+  authored: Partial<NodeSlidePlannedSlide>,
+): void {
+  Reflect.deleteProperty(slide, 'chart');
+  Reflect.deleteProperty(slide, 'formula');
+  Reflect.deleteProperty(slide, 'image');
+  Reflect.deleteProperty(slide, 'video');
+  Reflect.deleteProperty(slide, 'diagram');
+  Reflect.deleteProperty(slide, 'metric');
+  Reflect.deleteProperty(slide, 'metricLabel');
+  Object.assign(slide, authored);
+}
+
+function explicitSlideContext(prompt: string, index: number, slideCount: number): string {
+  const slideNumber = index + 1;
+  const start = prompt.search(new RegExp(`\\bslide\\s+${slideNumber}\\b`, 'iu'));
+  if (start < 0) return '';
+  if (slideNumber >= slideCount) return prompt.slice(start);
+  const remainder = prompt.slice(start + 1);
+  const next = remainder.search(new RegExp(`\\bslide\\s+${slideNumber + 1}\\b`, 'iu'));
+  return next < 0 ? prompt.slice(start) : prompt.slice(start, start + 1 + next);
+}
+
+function audienceFacingDirectiveCopy(
+  context: string,
+  subject: string,
+): Partial<NodeSlidePlannedSlide> | null {
+  const quote = nodeslideCleanText(context.match(/[“"]([^”"]{8,180})[”"]/u)?.[1] ?? '', 120);
+  if (/thesis cover/iu.test(context)) {
+    return {
+      title: 'The governed-creative thesis',
+      headline: quote || sentenceCase(subject),
+      body: 'NodeSlide should turn live-agent ambition into an editable, reviewable, reversible authoring system.',
+      bullets: ['Creative range', 'Governed execution', 'Native editability'],
+    };
+  }
+  if (/competitive landscape|Canva AI|Gamma AI/iu.test(context)) {
+    return {
+      title: 'Three authoring advantages',
+      headline: 'NodeSlide can own the governed path from intent to editable execution.',
+      body: 'The opportunity is not another one-shot generator. It is a durable authoring system with visible control.',
+      bullets: [
+        'Canva AI — brand and asset velocity',
+        'Gamma AI — research-to-story speed',
+        'NodeSlide — editable, governed execution',
+      ],
+    };
+  }
+  if (/authoring contract/iu.test(context)) {
+    return {
+      title: 'Lock the authoring contract first',
+      headline: 'A strong deck begins with a decision contract, not a layout lottery.',
+      body: 'Fix the audience, decision, evidence ledger, and claim-led storyboard before visual composition begins.',
+      bullets: ['Audience + decision', 'Evidence ledger', 'Claim-led storyboard'],
+    };
+  }
+  if (/only diagram|native editable nodes?\s+labeled/iu.test(context)) {
+    return {
+      title: 'One governed authoring loop',
+      headline:
+        'Strategy moves through agents, review, and editable delivery as one visible system.',
+      body: 'Every handoff stays inspectable, bounded, and reversible.',
+      bullets: narrativeJobBullets(subject),
+    };
+  }
+  if (/evidence board|proof slots/iu.test(context)) {
+    return {
+      title: 'A live run must leave durable proof',
+      headline: 'The evidence board makes every model action auditable after the browser closes.',
+      body: 'Provider, model, tokens, cost, digests, validation, version delta, and export remain attached to the run.',
+      bullets: [
+        'Provider + model + tokens',
+        'Cost + candidate digest',
+        'Receipt + version + export',
+      ],
+    };
+  }
+  if (/release-gate|release gate|checklist/iu.test(context)) {
+    return {
+      title: 'The release gate',
+      headline: quote || 'Approve the quality gate and require recorded proof for every release.',
+      body: 'Ship only when the artifact, receipt, version transition, export, and recorded browser journey agree.',
+      bullets: ['Artifact quality passes', 'Receipt survives export', 'Undo remains immediate'],
+    };
+  }
+  if (/split composition|HyperAgent/iu.test(context)) {
+    return {
+      title: 'Bound repair. Evolve policy safely.',
+      headline: 'Separate in-deck repair from the slower work of improving authoring policy.',
+      body: 'Repair the current artifact inside declared scope; promote policy changes only after held-out evaluation.',
+      bullets: ['Versioned policy', 'Held-out evaluation', 'Safe promotion'],
+    };
+  }
+  return null;
+}
+
+function applyRequestedLayoutContract(slides: NodeSlidePlannedSlide[], prompt: string): boolean {
+  const contract = prompt.match(/layout contract[^:]*:\s*([^.!?\r\n]+)/iu)?.[1];
+  if (!contract) return false;
+  const layouts = contract
+    .split(/\s*,\s*|\s+and\s+/iu)
+    .map((value) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/gu, '_'),
+    )
+    .filter(isNodeSlideLayoutIntent);
+  if (layouts.length !== slides.length) return false;
+  slides.forEach((slide, index) => {
+    const layout = layouts[index];
+    if (layout) slide.layout = layout;
+  });
+  return true;
+}
+
+function fitPlannedSlideForLayout(slide: NodeSlidePlannedSlide): NodeSlidePlannedSlide {
+  return {
+    ...slide,
+    headline: nodeslideCleanText(slide.headline, slide.layout === 'hero' ? 112 : 100),
+    body: nodeslideCleanText(slide.body, 180),
+    bullets: slide.bullets
+      .map((bullet) => nodeslideCleanText(bullet, 72))
+      .filter(Boolean)
+      .slice(0, 3),
+  };
 }
 
 function preserveRequestedPrimitives(
@@ -1115,8 +1266,19 @@ function requestsDiagramPrimitive(prompt: string): boolean {
     ) ||
     /\b(?:editable|native|structured)\s+(?:(?:workflow|process)\s+)?(?:diagram|flowchart|connector)(?:s|\s+primitives?)?\b/iu.test(
       prompt,
-    )
+    ) ||
+    /\b(?:is\s+the\s+(?:only\s+)?diagram|diagram\s*:\s*use)\b/iu.test(prompt)
   );
+}
+
+function requestedDiagramNodes(instruction: string): string[] {
+  const labels = instruction.match(/\blabeled\s+(.+?)(?:\.|$)/iu)?.[1];
+  if (!labels) return [];
+  return labels
+    .split(/\s*,\s*|\s*,?\s+and\s+/iu)
+    .map((label) => nodeslideCleanText(label.replace(/^and\s+/iu, ''), 32))
+    .filter(Boolean)
+    .slice(0, 4);
 }
 
 function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt: string): boolean {
@@ -1126,7 +1288,13 @@ function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt:
   );
   const existingIndex = slides.findIndex((slide) => slide.diagram);
   if (existingIndex >= 0) {
-    if (!directive || directive.index === existingIndex) return true;
+    const requestedNodes = requestedDiagramNodes(directive?.instruction ?? prompt);
+    if (!directive || directive.index === existingIndex) {
+      if (requestedNodes.length >= 2 && slides[existingIndex]) {
+        slides[existingIndex].diagram = { nodes: requestedNodes };
+      }
+      return true;
+    }
     const source = slides[existingIndex];
     const target = slides[directive.index];
     if (
@@ -1140,7 +1308,7 @@ function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt:
       return false;
     }
     const { diagram, ...sourceWithoutDiagram } = source;
-    target.diagram = diagram;
+    target.diagram = requestedNodes.length >= 2 ? { nodes: requestedNodes } : diagram;
     slides[existingIndex] = sourceWithoutDiagram;
     return true;
   }
@@ -1165,7 +1333,10 @@ function applyRequestedDiagramPrimitive(slides: NodeSlidePlannedSlide[], prompt:
     return false;
   }
 
-  const nodes = candidate.bullets
+  const requestedNodes = requestedDiagramNodes(
+    directive ? explicitSlideContext(prompt, directive.index, slides.length) : prompt,
+  );
+  const nodes = (requestedNodes.length >= 2 ? requestedNodes : candidate.bullets)
     .map((label) => nodeslideCleanText(label, 52))
     .filter(Boolean)
     .slice(0, 4);
@@ -1223,7 +1394,9 @@ export function coerceBriefSpec(
     .filter((slide): slide is NodeSlidePlannedSlide => slide !== null)
     .slice(0, requestedSlideCount ?? 8);
   if (slides.length < (requestedSlideCount ?? 6)) return fallback;
+  applyAudienceFacingDirectiveContract(slides, brief.prompt);
   if (!applyRequestedDiagramPrimitive(slides, brief.prompt)) return fallback;
+  const hasLayoutContract = applyRequestedLayoutContract(slides, brief.prompt);
 
   const narrative = Array.isArray(rawSpec.narrative)
     ? rawSpec.narrative
@@ -1238,7 +1411,7 @@ export function coerceBriefSpec(
         ? nodeslideCleanText(rawSpec.title, 80) || fallback.title
         : fallback.title,
     narrative: narrative.length > 0 ? narrative : fallback.narrative,
-    slides,
+    slides: hasLayoutContract ? slides.map(fitPlannedSlideForLayout) : slides,
   };
 }
 
@@ -1450,13 +1623,25 @@ function buildSlide(input: {
       name: 'Headline',
       kind: 'text',
       role: input.index === 0 ? 'title' : 'headline',
-      bbox: box(0.07, 0.15, isOpening ? 0.62 : isClosing ? 0.8 : 0.76, isOpening ? 0.27 : 0.2),
+      bbox: box(
+        0.07,
+        isOpening ? 0.16 : 0.14,
+        isOpening ? 0.61 : 0.82,
+        isOpening ? 0.28 : isClosing ? 0.22 : 0.19,
+      ),
       rotation: 0,
       content: planned.headline,
       style: {
         color: theme.colors.ink,
         fontFamily: theme.typography.display,
-        fontSize: isOpening ? 48 : isClosing ? 42 : 38,
+        fontSize:
+          planned.headline.length > (isOpening ? 78 : 72)
+            ? isOpening
+              ? 42
+              : 35
+            : isOpening
+              ? 48
+              : 38,
         fontWeight: 620,
         lineHeight: 1.04,
         letterSpacing: -0.8,
@@ -1508,7 +1693,7 @@ function buildSlide(input: {
         name: 'Authoring contract panel',
         kind: 'shape',
         role: 'decoration',
-        bbox: box(0.49, 0.37, 0.43, 0.34),
+        bbox: box(0.515, 0.39, 0.405, 0.4),
         rotation: 0,
         style: {
           fill: theme.colors.insight,
@@ -1528,9 +1713,14 @@ function buildSlide(input: {
         name: 'Split composition divider',
         kind: 'shape',
         role: 'decoration',
-        bbox: box(0.485, 0.39, 0.003, 0.36),
+        bbox: box(0.5, 0.39, 0.42, 0.4),
         rotation: 0,
-        style: { fill: theme.colors.trace, radius: 999 },
+        style: {
+          fill: theme.colors.accentSoft,
+          stroke: theme.colors.border,
+          strokeWidth: 1,
+          radius: theme.defaultRadius,
+        },
         sourceIds: [],
         locked: false,
         exportCapabilities: [...EDITABLE_CAPABILITIES],
@@ -1543,7 +1733,7 @@ function buildSlide(input: {
         name: 'Decision gate rule',
         kind: 'shape',
         role: 'decoration',
-        bbox: box(0.07, 0.67, 0.82, 0.012),
+        bbox: box(0.07, 0.83, 0.82, 0.012),
         rotation: 0,
         style: { fill: theme.colors.accent, radius: 999 },
         sourceIds: [],
@@ -1553,13 +1743,25 @@ function buildSlide(input: {
     );
   }
   if (cardRowLayout) {
-    for (let cardIndex = 0; cardIndex < 3; cardIndex += 1) {
+    const cardBoxes =
+      layout === 'evidence_board'
+        ? [
+            box(0.065, 0.54, 0.5, 0.12),
+            box(0.585, 0.54, 0.305, 0.12),
+            box(0.065, 0.68, 0.825, 0.12),
+          ]
+        : [
+            box(0.065, 0.57, 0.26, 0.23),
+            box(0.345, 0.57, 0.26, 0.23),
+            box(0.625, 0.57, 0.26, 0.23),
+          ];
+    for (let cardIndex = 0; cardIndex < cardBoxes.length; cardIndex += 1) {
       add(
         element(`layout-card-${cardIndex + 1}`, {
           name: `${layout === 'comparison' ? 'Comparison' : 'Evidence'} card ${cardIndex + 1}`,
           kind: 'shape',
           role: 'decoration',
-          bbox: box(0.065 + cardIndex * 0.28, 0.59, 0.26, 0.2),
+          bbox: cardBoxes[cardIndex] ?? box(0.07 + cardIndex * 0.28, 0.54, 0.26, 0.23),
           rotation: 0,
           style: {
             fill: layout === 'evidence_board' ? theme.colors.insight : theme.colors.accentSoft,
@@ -1574,19 +1776,24 @@ function buildSlide(input: {
       );
     }
   }
-  const bodyWidth = hasVisual ? 0.39 : isOpening || isClosing ? 0.66 : cardRowLayout ? 0.82 : 0.41;
-  const bodyX = mirrorSplit ? 0.52 : 0.07;
+  const bodyWidth = hasVisual
+    ? 0.39
+    : isOpening || isClosing
+      ? 0.66
+      : cardRowLayout
+        ? layout === 'evidence_board'
+          ? 0.72
+          : 0.82
+        : 0.41;
+  const bodyX = 0.07;
+  const bodyY = isOpening ? 0.5 : cardRowLayout ? 0.36 : layout === 'flow' ? 0.37 : 0.4;
+  const bodyHeight = isOpening ? 0.15 : cardRowLayout ? 0.13 : isClosing ? 0.16 : 0.2;
   add(
     element('body', {
       name: 'Body copy',
       kind: 'text',
       role: 'body',
-      bbox: box(
-        bodyX,
-        isOpening ? 0.48 : 0.4,
-        bodyWidth,
-        isOpening ? 0.17 : cardRowLayout ? 0.13 : 0.2,
-      ),
+      bbox: box(bodyX, bodyY, bodyWidth, bodyHeight),
       rotation: 0,
       content: planned.body,
       style: {
@@ -1604,30 +1811,45 @@ function buildSlide(input: {
 
   const horizontalBullets =
     (isOpening && !hasPrimaryMedia) || ((isClosing || cardRowLayout) && !hasVisual);
-  const bulletX = horizontalBullets ? 0.07 : hasVisual || mirrorSplit ? 0.07 : 0.57;
+  const bulletX = horizontalBullets ? 0.07 : mirrorSplit ? 0.53 : hasVisual ? 0.07 : 0.57;
   const bulletY = horizontalBullets
     ? cardRowLayout
-      ? 0.62
-      : 0.72
+      ? layout === 'evidence_board'
+        ? 0.56
+        : 0.6
+      : isClosing
+        ? 0.69
+        : 0.72
     : hasVisual
       ? isOpening
         ? 0.67
         : 0.62
-      : 0.42;
+      : mirrorSplit
+        ? 0.45
+        : 0.42;
   const bulletWidth = horizontalBullets ? 0.8 : hasVisual ? 0.39 : mirrorSplit ? 0.36 : 0.35;
   const stackedBulletStep = isOpening && hasVisual ? 0.1 : 0.12;
-  planned.bullets.slice(0, 3).forEach((bullet, bulletIndex) => {
+  const renderedBullets = layout === 'flow' && planned.diagram ? [] : planned.bullets.slice(0, 3);
+  const evidenceBulletBoxes = [
+    box(0.08, 0.56, 0.47, 0.08),
+    box(0.6, 0.56, 0.275, 0.08),
+    box(0.08, 0.7, 0.795, 0.08),
+  ];
+  renderedBullets.forEach((bullet, bulletIndex) => {
     add(
       element(`bullet-${bulletIndex + 1}`, {
         name: `Key point ${bulletIndex + 1}`,
         kind: 'text',
         role: 'bullet',
-        bbox: box(
-          horizontalBullets ? bulletX + bulletIndex * 0.28 : bulletX,
-          horizontalBullets ? bulletY : bulletY + bulletIndex * stackedBulletStep,
-          horizontalBullets ? 0.25 : bulletWidth,
-          horizontalBullets ? (cardRowLayout ? 0.16 : 0.08) : 0.09,
-        ),
+        bbox:
+          layout === 'evidence_board' && cardRowLayout
+            ? (evidenceBulletBoxes[bulletIndex] ?? box(0.08, 0.7, 0.795, 0.08))
+            : box(
+                horizontalBullets ? bulletX + bulletIndex * 0.28 : bulletX,
+                horizontalBullets ? bulletY : bulletY + bulletIndex * stackedBulletStep,
+                horizontalBullets ? 0.25 : bulletWidth,
+                horizontalBullets ? (cardRowLayout ? 0.16 : 0.08) : 0.09,
+              ),
         rotation: 0,
         content: `${horizontalBullets ? '•' : `0${bulletIndex + 1}`}  ${bullet}`,
         style: {
@@ -1703,24 +1925,47 @@ function buildSlide(input: {
   if (planned.diagram) {
     const nodes = planned.diagram.nodes.slice(0, 4);
     const groupId = nodeslideStableId('group', input.slideId, 'diagram');
-    const gap = 0.01;
-    const diagramWidth = 0.41;
-    const connectorWidth = 0.018;
+    const gap = 0.014;
+    const diagramWidth = 0.82;
+    const connectorWidth = 0.024;
     const nodeWidth =
       (diagramWidth - connectorWidth * (nodes.length - 1) - gap * (nodes.length - 1)) /
       nodes.length;
-    let x = 0.52;
+    let x = 0.07;
+    nodes.forEach((_, index) => {
+      if (index >= nodes.length - 1) return;
+      add(
+        element(`diagram-connector-${index + 1}`, {
+          name: `Diagram connector ${index + 1}`,
+          kind: 'connector',
+          role: 'diagram_connector',
+          bbox: box(x + nodeWidth + gap / 2, 0.615, connectorWidth, 0.05),
+          rotation: 0,
+          style: {
+            color: theme.colors.trace,
+            stroke: theme.colors.trace,
+            strokeWidth: 2,
+          },
+          sourceIds: claimSourceIds,
+          locked: false,
+          groupId,
+          exportCapabilities: [...EDITABLE_CAPABILITIES],
+        }),
+      );
+      x += nodeWidth + connectorWidth + gap;
+    });
+    x = 0.07;
     nodes.forEach((label, index) => {
       add(
         element(`diagram-node-${index + 1}`, {
           name: `Diagram node ${index + 1}`,
           kind: 'shape',
           role: 'diagram_node',
-          bbox: box(x, 0.47, nodeWidth, 0.18),
+          bbox: box(x, 0.55, nodeWidth, 0.2),
           rotation: 0,
           content: label,
           style: {
-            fill: theme.colors.insight,
+            fill: index === nodes.length - 1 ? theme.colors.accentSoft : theme.colors.insight,
             stroke: theme.colors.border,
             strokeWidth: 1.5,
             color: theme.colors.insightInk,
@@ -1739,28 +1984,7 @@ function buildSlide(input: {
           exportCapabilities: [...EDITABLE_CAPABILITIES],
         }),
       );
-      x += nodeWidth;
-      if (index < nodes.length - 1) {
-        add(
-          element(`diagram-connector-${index + 1}`, {
-            name: `Diagram connector ${index + 1}`,
-            kind: 'connector',
-            role: 'diagram_connector',
-            bbox: box(x + gap / 2, 0.535, connectorWidth, 0.05),
-            rotation: 0,
-            style: {
-              color: theme.colors.trace,
-              stroke: theme.colors.trace,
-              strokeWidth: 2,
-            },
-            sourceIds: claimSourceIds,
-            locked: false,
-            groupId,
-            exportCapabilities: [...EDITABLE_CAPABILITIES],
-          }),
-        );
-        x += connectorWidth + gap;
-      }
+      x += nodeWidth + connectorWidth + gap;
     });
   }
 

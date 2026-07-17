@@ -169,6 +169,9 @@ describe('NodeSlide baseline edit planner extraction', () => {
     ]);
     expect(call?.systemPrompt).toContain('Explicit standing instructions');
     expect(call?.systemPrompt).toContain('Neither kind expands write scope');
+    expect(call?.systemPrompt).toContain(
+      'For any request that changes visible text, use replace_text',
+    );
   });
 
   it('does not call a provider when deterministic mode is selected', async () => {

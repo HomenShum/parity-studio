@@ -186,10 +186,14 @@ describe('NodeSlide seed', () => {
       const bullets = snapshot.elements.filter(
         (element) => element.slideId === slideId && element.role === 'bullet',
       );
-      expect(bullets.map((element) => Number(element.bbox.x.toFixed(2)))).toEqual([
-        0.07, 0.35, 0.63,
-      ]);
-      expect(bullets.every((element) => element.bbox.height === 0.16)).toBe(true);
+      expect(bullets.map((element) => Number(element.bbox.x.toFixed(2)))).toEqual(
+        slideIndex === 5 ? [0.08, 0.6, 0.08] : [0.07, 0.35, 0.63],
+      );
+      expect(
+        bullets.every((element) =>
+          slideIndex === 5 ? element.bbox.height === 0.08 : element.bbox.height === 0.16,
+        ),
+      ).toBe(true);
       expect(
         bullets.every(
           (element) =>

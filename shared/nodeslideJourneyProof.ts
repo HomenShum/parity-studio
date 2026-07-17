@@ -34,6 +34,7 @@ export interface NodeSlideJourneyArtifacts {
   rawRecordingPath?: string;
   gifPath?: string;
   finalScreenshotPath?: string;
+  slideScreenshotPaths?: string[];
   exportedDeckPath?: string;
   runManifestPath?: string;
 }
@@ -201,13 +202,13 @@ export function verifyNodeSlideJourneyProof(
     );
   }
 
-  const requiredArtifacts: Array<keyof NodeSlideJourneyArtifacts> = [
+  const requiredArtifacts = [
     'rawRecordingPath',
     'gifPath',
     'finalScreenshotPath',
     'exportedDeckPath',
     'runManifestPath',
-  ];
+  ] as const;
   for (const key of requiredArtifacts) {
     if (!proof.artifacts[key]?.trim()) {
       findings.push(

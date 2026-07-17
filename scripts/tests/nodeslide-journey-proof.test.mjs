@@ -24,6 +24,9 @@ async function fixture() {
     finalScreenshotPath: path.join(directory, 'final.png'),
     exportedDeckPath: path.join(directory, 'deck.pptx'),
     runManifestPath: path.join(directory, 'run-manifest.json'),
+    slideScreenshotPaths: Array.from({ length: 7 }, (_, index) =>
+      path.join(directory, `slide-${index + 1}.png`),
+    ),
   };
   await writeFile(paths.rawRecordingPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1]));
   await writeFile(paths.gifPath, Buffer.from('GIF89a'));
@@ -32,6 +35,11 @@ async function fixture() {
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]),
   );
   await writeFile(paths.exportedDeckPath, Buffer.from('PKfixture'));
+  await Promise.all(
+    paths.slideScreenshotPaths.map((screenshotPath) =>
+      writeFile(screenshotPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])),
+    ),
+  );
   const kinds = [
     'brief_submitted',
     'deck_created',
@@ -125,6 +133,23 @@ describe('NodeSlide journey proof artifact verifier', () => {
     const { paths } = await fixture();
     const { proof } = await finalizeNodeSlideJourneyProof(paths.runManifestPath);
     expect((await verifyNodeSlideJourneyProofFiles({ ...proof, deckId: 'other' })).ok).toBe(false);
+  });
+
+  it('fails closed when the full-deck screenshot set is incomplete', async () => {
+    const { paths, manifest } = await fixture();
+    await writeFile(
+      paths.runManifestPath,
+      JSON.stringify({
+        ...manifest,
+        artifacts: {
+          ...manifest.artifacts,
+          slideScreenshotPaths: paths.slideScreenshotPaths.slice(1),
+        },
+      }),
+    );
+    await expect(finalizeNodeSlideJourneyProof(paths.runManifestPath)).rejects.toThrow(
+      /exactly seven slide screenshots/iu,
+    );
   });
 
   it('continues to verify v1 proofs while v2 artifacts migrate', async () => {

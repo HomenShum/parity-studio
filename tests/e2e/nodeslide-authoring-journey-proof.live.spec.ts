@@ -45,6 +45,8 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     await openIsolatedLanding(page);
     if (creationMode === 'live') {
       await chooseLandingModel(page, { group: 'More live models', label: 'GLM 5.2' });
+      await page.getByTestId('landing-effort-select').selectOption('low');
+      await expect(page.getByTestId('landing-effort-select')).toHaveValue('low');
       await grantLandingSessionConsent(page);
     } else {
       await chooseDeterministicLandingModel(page);
@@ -54,13 +56,13 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
       'Audience: product and design leadership. Decision: approve the governed live-agent authoring roadmap and require recorded browser proof for every release.',
       'Use a refined editorial product-design aesthetic: warm off-white canvas, near-black typography, electric blue and coral accents, generous whitespace, strong hierarchy, and a distinct composition on every slide. Avoid repeated bullet-card grids. Keep every visible object natively editable.',
       'Use this exact layout contract in order: hero, comparison, contract, flow, split, evidence_board, decision.',
-      'Slide 1 is a bold thesis cover: “NodeSlide must beat one-shot generation on governed creativity,” with one supporting line and a visual tension motif.',
+      'Slide 1 is a bold thesis cover: "NodeSlide must beat one-shot generation on governed creativity," with one supporting line and a visual tension motif.',
       'Slide 2 is a three-column competitive landscape. Canva AI wins brand and asset velocity; Gamma AI wins research-to-story speed; NodeSlide must own editable, governed execution.',
       'Slide 3 is an authoring contract that locks audience, decision, evidence ledger, and claim-led storyboard before layout. Show it as a structured editorial artifact, not bullets.',
       'Slide 4 is the only diagram: use exactly four short native editable nodes labeled Strategy, Agent team, Validate + review, and Editable export.',
       'Slide 5 uses a split composition: bounded repair on the left; HyperAgent-inspired versioned policy evolution, held-out evaluation, and safe promotion on the right.',
       'Slide 6 is an evidence board with labeled proof slots for provider, named model, input and output tokens, nonzero cost, candidate digest, durable validation receipt, version delta, and export artifact. Do not invent values.',
-      'Slide 7 is a decisive release-gate checklist ending with “Approve the quality gate and require recorded proof for every release.”',
+      'Slide 7 is a decisive release-gate checklist ending with "Approve the quality gate and require recorded proof for every release."',
       'Keep copy concise, use sentence-case headlines, preserve source notes for external references, and do not invent data or benchmark metrics.',
       'Treat Canva and Gamma as design inspirations rather than unverified performance claims. Treat HyperAgent as inspiration for versioned policy evolution, held-out evaluation, and safe promotion—not permission to mutate production code. Keep every object editable and do not invent data.',
     ].join(' ');
@@ -101,7 +103,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     const beforeContentDigest = digest((await headline.innerText()).trim());
     const composer = page.getByLabel('AI instruction');
     await composer.fill(
-      'Replace the headline exactly with "A live run is only real when its receipt survives export."',
+      'On slide 6, replace only the unlocked Headline text element with "A live run is only real when its receipt survives export." Use exactly one replace_text operation with the existing headline elementId; do not use update_slide.',
     );
     await composer.press('Enter');
     step('edit_submitted', { deckVersion: base.version });
@@ -182,6 +184,48 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
     });
     step('version_advanced', { deckVersion: redone.version });
 
+    const slideScreenshotPaths: string[] = [];
+    const compositionFingerprints: string[] = [];
+    for (let index = 0; index < 7; index += 1) {
+      await page.getByRole('button', { name: new RegExp(`^Slide ${index + 1}:`, 'u') }).click();
+      const canvas = page.getByRole('region', { name: `Canvas, slide ${index + 1}` });
+      await expect(canvas).toBeVisible();
+      const visibleCopy = (await canvas.innerText()).replace(/\s+/gu, ' ').trim();
+      expect(visibleCopy, `Slide ${index + 1} leaked authoring instructions`).not.toMatch(
+        /Slide \d+ is|use exactly/iu,
+      );
+      if (index === 3) {
+        await expect(canvas.getByRole('button', { name: /^Diagram node \d+,/u })).toHaveCount(4);
+        await expect(canvas.getByRole('button', { name: /^Diagram connector \d+,/u })).toHaveCount(
+          3,
+        );
+      }
+      compositionFingerprints.push(
+        await canvas.locator('[data-element-id]').evaluateAll((elements) =>
+          elements
+            .map((element) => {
+              const style = getComputedStyle(element);
+              return `${element.getAttribute('data-element-kind')}:${style.left}:${style.top}:${style.width}:${style.height}`;
+            })
+            .sort()
+            .join('|'),
+        ),
+      );
+      const screenshotPath = path.join(
+        outputDirectory,
+        `slide-${String(index + 1).padStart(2, '0')}.png`,
+      );
+      await canvas.screenshot({ path: screenshotPath });
+      slideScreenshotPaths.push(screenshotPath);
+    }
+    expect(new Set(compositionFingerprints).size).toBe(7);
+    step('full_deck_visual_qa', {
+      deckVersion: redone.version,
+      slideCount: slideScreenshotPaths.length,
+      distinctCompositionCount: new Set(compositionFingerprints).size,
+      screenshotDigest: digest(slideScreenshotPaths.join('\n')),
+    });
+
     await page.getByRole('button', { name: 'Export deck' }).click();
     const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
     await page.getByTestId('export-pptx').click();
@@ -233,6 +277,7 @@ test.describe('NodeSlide self-authored browser journey proof', () => {
             rawRecordingPath,
             gifPath,
             finalScreenshotPath,
+            slideScreenshotPaths,
             exportedDeckPath,
             runManifestPath,
           },

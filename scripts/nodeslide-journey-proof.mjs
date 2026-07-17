@@ -143,6 +143,25 @@ async function verifyArtifacts(proof, findings) {
   if (proof?.artifacts?.rawRecordingPath === proof?.artifacts?.gifPath) {
     findings.push('Raw recording and GIF must be separate artifacts.');
   }
+  const slideScreenshotPaths = proof?.artifacts?.slideScreenshotPaths;
+  if (slideScreenshotPaths !== undefined) {
+    if (!Array.isArray(slideScreenshotPaths) || slideScreenshotPaths.length !== 7) {
+      findings.push('Full-deck visual QA must include exactly seven slide screenshots.');
+      return;
+    }
+    if (new Set(slideScreenshotPaths).size !== slideScreenshotPaths.length) {
+      findings.push('Full-deck visual QA screenshots must be distinct files.');
+    }
+    for (const [index, screenshotPath] of slideScreenshotPaths.entries()) {
+      const absolute = typeof screenshotPath === 'string' ? path.resolve(screenshotPath) : '';
+      const info = absolute ? await stat(absolute).catch(() => null) : null;
+      if (!info?.isFile() || info.size === 0) {
+        findings.push(`Slide ${index + 1} screenshot does not exist or is empty.`);
+      } else if (!(await hasExpectedMagic('finalScreenshotPath', absolute))) {
+        findings.push(`Slide ${index + 1} screenshot is not a PNG or JPEG.`);
+      }
+    }
+  }
 }
 
 function verifyLegacyJourneyStructure(proof, findings) {

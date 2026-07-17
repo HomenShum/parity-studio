@@ -25,7 +25,10 @@ export const NODESLIDE_EDIT_PROVIDER = NODESLIDE_NEBIUS_PROVIDER;
 export const NODESLIDE_EDIT_MODEL = NODESLIDE_DEFAULT_AGENT_MODEL;
 export const NODESLIDE_NEBIUS_GLM_MODEL = 'zai-org/GLM-5.2' as const;
 
-const MODEL_TIMEOUT_MS = 30_000;
+// Full-deck structured generation is substantially heavier than a scoped edit.
+// Keep one bounded deadline for both paths, but allow enough time for a seven-slide
+// JSON-schema response to finish and reconcile its provider receipt.
+const MODEL_TIMEOUT_MS = 90_000;
 const MAX_OUTPUT_TOKENS = 2_200;
 const MAX_RESPONSE_BYTES = 200_000;
 const MAX_REPAIR_CONTEXT_CHARS = 24_000;
