@@ -33,7 +33,11 @@ export function planNodeSlidePropagation(
   }
   const sourceSlideIds = new Set(
     parent.operations.flatMap((operation) =>
-      operation.op === 'update_deck' || operation.op === 'add_slide' ? [] : [operation.slideId],
+      operation.op === 'update_deck' ||
+      operation.op === 'update_theme_v1' ||
+      operation.op === 'add_slide'
+        ? []
+        : [operation.slideId],
     ),
   );
   const sourceElements = new Map(snapshot.elements.map((element) => [element.id, element]));

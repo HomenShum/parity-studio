@@ -705,7 +705,7 @@ describe('PPTX native artifact presence', () => {
     const snapshot = cleanSnapshot();
     const chartElement = snapshot.elements.find((element) => element.kind === 'chart');
     if (!chartElement) throw new Error('Missing chart fixture.');
-    chartElement.chart = undefined;
+    delete chartElement.chart;
 
     const { slideXml, chartParts } = await exportedPackage(snapshot);
     expect(chartParts).toHaveLength(0);

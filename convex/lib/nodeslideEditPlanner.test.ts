@@ -1529,4 +1529,58 @@ describe('NodeSlide bounded agent element additions', () => {
     expect(addSchema?.required).toContain('sourceIds');
     expect(addSchema?.properties?.sourceIds?.minItems).toBe(1);
   });
+
+  it('accepts a bounded deck-theme update for deck scope and normalizes colors', async () => {
+    const { snapshot, target } = fixture();
+    const deckScope: PatchScope = {
+      kind: 'deck',
+      deckId: snapshot.deck.id,
+      operationMode: 'unrestricted',
+    };
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Switched the deck to an orange accent.',
+        operations: [{ op: 'update_theme_v1', properties: { colors: { accent: '#FF5733' } } }],
+      },
+      telemetry: TELEMETRY,
+    }));
+
+    const planningInput = input(snapshot, target, deckScope);
+    const result = await planNodeSlideEdit(
+      {
+        ...planningInput,
+        request: {
+          ...planningInput.request,
+          instruction: 'Change the accent color to #FF5733 across the deck.',
+        },
+      },
+      { callProvider: provider },
+    );
+
+    const themeSchema = operationResponseSchema(provider, 'update_theme_v1');
+    expect(themeSchema).toBeDefined();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.operations[0]).toEqual({
+      op: 'update_theme_v1',
+      properties: { colors: { accent: '#ff5733' } },
+    });
+  });
+
+  it('does not offer theme updates outside deck scope', async () => {
+    const { snapshot, target, scope } = fixture();
+    const provider = vi.fn<NodeSlideEditProvider>(async () => ({
+      ok: true as const,
+      value: {
+        summary: 'Updated copy',
+        operations: [
+          { op: 'replace_text', slideId: target.slideId, elementId: target.id, text: 'After' },
+        ],
+      },
+      telemetry: TELEMETRY,
+    }));
+    await planNodeSlideEdit(input(snapshot, target, scope), { callProvider: provider });
+    expect(operationResponseSchema(provider, 'update_theme_v1')).toBeUndefined();
+  });
 });

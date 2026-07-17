@@ -1042,7 +1042,7 @@ function patchTouchesSlide(patch: DeckPatch, slideId: string) {
   if ('slideIds' in patch.scope && patch.scope.slideIds.includes(slideId)) return true;
   return patch.operations.some((operation) => {
     if (operation.op === 'add_slide') return operation.slide.id === slideId;
-    if (operation.op === 'update_deck') return false;
+    if (operation.op === 'update_deck' || operation.op === 'update_theme_v1') return false;
     return operation.slideId === slideId;
   });
 }

@@ -43,7 +43,7 @@ describe('NodeSlide artifact presence gate', () => {
     const snapshot = golden();
     const chart = snapshot.elements.find((element) => element.kind === 'chart');
     if (!chart) throw new Error('Golden fixture must include a chart element.');
-    chart.chart = undefined;
+    delete chart.chart;
 
     const checks = nodeslideArtifactPresenceChecks(snapshot);
     expect(checks).toContainEqual(

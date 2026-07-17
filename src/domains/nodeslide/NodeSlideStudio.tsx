@@ -5000,7 +5000,13 @@ function clocksForScope(
     }
   } else {
     for (const operation of operations) {
-      if (operation.op === 'update_deck' || operation.op === 'add_slide') continue;
+      if (
+        operation.op === 'update_deck' ||
+        operation.op === 'update_theme_v1' ||
+        operation.op === 'add_slide'
+      ) {
+        continue;
+      }
       slideIds.add(operation.slideId);
       if (operation.op === 'remove_slide') {
         for (const element of workspace.elements) {

@@ -579,7 +579,7 @@ function operationTarget(operation: PatchOperation) {
   if (operation.op === 'add_element') return operation.element.id;
   if (operation.op === 'group_elements_v1' || operation.op === 'ungroup_elements_v1')
     return operation.groupId;
-  if (operation.op === 'update_deck') return 'deck';
+  if (operation.op === 'update_deck' || operation.op === 'update_theme_v1') return 'deck';
   if ('elementId' in operation) return operation.elementId;
   return operation.slideId;
 }

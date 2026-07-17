@@ -254,6 +254,9 @@ export function nodeSlideDelegationOperationRequiresReview(operation: PatchOpera
       return false;
     case 'reorder_element_v1':
       return true;
+    case 'update_theme_v1':
+      // Deck-wide but fully reversible styling; Deck CI and theme validation still gate it.
+      return false;
     case 'update_chart':
       return chartRequiresReview(operation.chart);
     default: {
