@@ -140,6 +140,10 @@ describe('bounded PPTX import', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.snapshot.deck.slideOrder).toEqual(source.deck.slideOrder);
+    expect(result.snapshot.slides.map((slide) => slide.id)).toEqual(
+      source.slides.map((slide) => slide.id),
+    );
     expect(result.snapshot.elements.map((element) => element.id)).toEqual([
       'deck:roundtrip:text',
       'deck:roundtrip:shape',

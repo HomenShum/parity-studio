@@ -2239,6 +2239,8 @@ export const beginAgentRunInternal = internalMutation({
     provider: v.string(),
     model: v.string(),
     webResearch: v.boolean(),
+    sourceRefreshProposalId: v.optional(v.string()),
+    sourceRefreshBaseSnapshotDigest: v.optional(v.string()),
     startedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -2252,6 +2254,12 @@ export const beginAgentRunInternal = internalMutation({
       )
       .first();
     if (existing) {
+      if (
+        existing.sourceRefreshProposalId !== args.sourceRefreshProposalId ||
+        existing.sourceRefreshBaseSnapshotDigest !== args.sourceRefreshBaseSnapshotDigest
+      ) {
+        throw new Error('Agent run source-refresh binding changed across an idempotent replay.');
+      }
       if (existing.status === 'failed' && !existing.patchId && existing.attempt < 3) {
         const now = Date.now();
         const traceId = existing.otelTraceId ?? agentTraceId(args.deckId, existing.id);
@@ -2339,6 +2347,12 @@ export const beginAgentRunInternal = internalMutation({
       provider: requiredText(args.provider, 'provider', 80),
       model: requiredText(args.model, 'model', 180),
       webResearch: args.webResearch,
+      ...(args.sourceRefreshProposalId
+        ? { sourceRefreshProposalId: args.sourceRefreshProposalId }
+        : {}),
+      ...(args.sourceRefreshBaseSnapshotDigest
+        ? { sourceRefreshBaseSnapshotDigest: args.sourceRefreshBaseSnapshotDigest }
+        : {}),
       attempt: 1,
       otelTraceId,
       rootSpanId,
@@ -2849,6 +2863,7 @@ export const advanceAgentRunInternal = internalMutation({
     traceId: v.optional(v.string()),
     error: v.optional(v.string()),
     message: v.optional(v.string()),
+    messageId: v.optional(v.string()),
     role: v.optional(v.union(v.literal('assistant'), v.literal('tool'), v.literal('system'))),
     toolName: v.optional(v.string()),
     toolCallId: v.optional(v.string()),
@@ -2882,11 +2897,46 @@ export const advanceAgentRunInternal = internalMutation({
       .unique();
     if (!row || row.deckId !== args.deckId) throw new Error('Agent run not found.');
     if (row.status === 'cancelled' && args.status !== 'cancelled') return null;
+    const traceId = row.otelTraceId ?? agentTraceId(args.deckId, args.runId);
+    const rootSpanId = row.rootSpanId ?? agentSpanId(traceId, 'invoke_agent', 1);
+    if (args.message && args.messageId) {
+      const replayMessageId = requiredText(args.messageId, 'message id', 180);
+      const replayMessage = requiredText(args.message, 'run message', 4000);
+      const replayRole = args.role ?? 'system';
+      const existingMessage = await ctx.db
+        .query('nodeslide_agent_messages')
+        .withIndex('by_stable_id', (query) => query.eq('id', replayMessageId))
+        .unique();
+      if (existingMessage) {
+        const expectedSourceIds = args.sourceIds?.slice(0, 32);
+        if (
+          existingMessage.deckId !== args.deckId ||
+          existingMessage.runId !== args.runId ||
+          existingMessage.role !== replayRole ||
+          existingMessage.content !== replayMessage ||
+          existingMessage.toolName !== args.toolName ||
+          existingMessage.toolCallId !== args.toolCallId ||
+          existingMessage.parentMessageId !== args.parentMessageId ||
+          existingMessage.agentRole !== args.agentRole ||
+          existingMessage.branchId !== args.branchId ||
+          existingMessage.branchLabel !== args.branchLabel ||
+          existingMessage.parallelGroupId !== args.parallelGroupId ||
+          !sameOptionalStrings(existingMessage.sourceIds, expectedSourceIds)
+        ) {
+          throw new Error('Agent message idempotency binding conflict.');
+        }
+        return {
+          runId: args.runId,
+          traceId,
+          spanId: rootSpanId,
+          messageId: replayMessageId,
+          replayed: true,
+        };
+      }
+    }
     const now = Date.now();
     const terminal = ['completed', 'failed', 'cancelled'].includes(args.status);
     const sequence = row.nextTelemetrySequence ?? 3;
-    const traceId = row.otelTraceId ?? agentTraceId(args.deckId, args.runId);
-    const rootSpanId = row.rootSpanId ?? agentSpanId(traceId, 'invoke_agent', 1);
     const phase = agentOperation(row.status, args.activity);
     const phaseSpanId = agentSpanId(traceId, phase.operationName, sequence);
     const phaseStatus = args.status === 'failed' ? 'error' : 'ok';
@@ -2973,6 +3023,7 @@ export const advanceAgentRunInternal = internalMutation({
       ...(args.patchId ? { patchId: args.patchId } : {}),
       ...(args.traceId ? { traceId: args.traceId } : {}),
       ...(args.memoryIds ? { memoryIds: args.memoryIds.slice(0, 6) } : {}),
+      ...(args.memoryDigests ? { memoryDigests: args.memoryDigests.slice(0, 6) } : {}),
       ...(args.error ? { error: requiredText(args.error, 'run error', 600) } : {}),
     });
     if (terminal) {
@@ -2998,7 +3049,9 @@ export const advanceAgentRunInternal = internalMutation({
     if (args.message) {
       const message = requiredText(args.message, 'run message', 4000);
       const role = args.role ?? 'system';
-      messageId = nodeslideStableId('agent_message', args.runId, role, String(now), message);
+      messageId = args.messageId
+        ? requiredText(args.messageId, 'message id', 180)
+        : nodeslideStableId('agent_message', args.runId, role, String(now), message);
       await ctx.db.insert('nodeslide_agent_messages', {
         id: messageId,
         deckId: args.deckId,
@@ -4157,6 +4210,25 @@ async function commitPatch(
   ) {
     throw new Error('Claim evidence receipt job crossed its deck boundary.');
   }
+  if (receiptJob?.conversationRunId) {
+    const boundRun = await ctx.db
+      .query('nodeslide_agent_runs')
+      .withIndex('by_stable_id', (query) => query.eq('id', receiptJob.conversationRunId as string))
+      .unique();
+    if (boundRun?.sourceRefreshProposalId) {
+      if (!boundRun.sourceRefreshBaseSnapshotDigest) {
+        throw new Error('Accepted source refresh is missing its snapshot binding.');
+      }
+      await commitAcceptedSourceRefresh(ctx, {
+        deckId: args.deckId,
+        ownerAccessKey: delegatedAuthority ? (deckRow.ownerAccessKey ?? '') : args.ownerAccessKey,
+        proposalId: boundRun.sourceRefreshProposalId,
+        baseSnapshotDigest: boundRun.sourceRefreshBaseSnapshotDigest,
+        patch: existing ?? accepted,
+        acceptedAt: now,
+      });
+    }
+  }
   const receiptOwnerAccessKey = delegatedAuthority
     ? (deckRow.ownerAccessKey ?? '')
     : args.ownerAccessKey;
@@ -4178,6 +4250,82 @@ async function commitPatch(
     validation,
     rebased: cas.rebased,
   };
+}
+
+async function commitAcceptedSourceRefresh(
+  ctx: MutationCtx,
+  args: {
+    deckId: string;
+    ownerAccessKey: string;
+    proposalId: string;
+    baseSnapshotDigest: string;
+    patch: Pick<Doc<'nodeslide_patches'>, 'scope' | 'baseDeckVersion'>;
+    acceptedAt: number;
+  },
+): Promise<void> {
+  if (!args.ownerAccessKey) {
+    throw new Error('Accepted source refresh is missing its owner or snapshot binding.');
+  }
+  const proposal = await ctx.db
+    .query('nodeslide_source_refresh_proposals')
+    .withIndex('by_stable_id', (query) => query.eq('id', args.proposalId))
+    .unique();
+  if (
+    !proposal ||
+    proposal.deckId !== args.deckId ||
+    proposal.ownerDigest !== `actor_${nodeslideContentDigest(args.ownerAccessKey)}` ||
+    proposal.status !== 'prepared' ||
+    proposal.baseSnapshotDigest !== args.baseSnapshotDigest ||
+    proposal.baseDeckVersion !== args.patch.baseDeckVersion
+  ) {
+    throw new Error('Accepted patch no longer matches its prepared source-refresh binding.');
+  }
+  const exactSlideScope =
+    args.patch.scope.kind === 'slide' &&
+    equalStringSets(args.patch.scope.slideIds, proposal.affectedSlideIds);
+  const exactElementScope =
+    args.patch.scope.kind === 'elements' &&
+    equalStringSets(args.patch.scope.elementIds, proposal.affectedElementIds);
+  if (!exactSlideScope && !exactElementScope) {
+    throw new Error('Accepted patch crossed its monitored-source impact scope.');
+  }
+  const source = await ctx.db
+    .query('nodeslide_sources')
+    .withIndex('by_stable_id', (query) => query.eq('id', proposal.sourceId))
+    .unique();
+  const revision = await ctx.db
+    .query('nodeslide_source_revisions')
+    .withIndex('by_stable_id', (query) => query.eq('id', proposal.afterRevisionId))
+    .unique();
+  if (!source || !revision || source.deckId !== args.deckId || revision.deckId !== args.deckId) {
+    throw new Error('Accepted source revision is unavailable.');
+  }
+  await ctx.db.patch(source._id, {
+    title: revision.title,
+    url: revision.url,
+    sourceType: revision.sourceType,
+    retrievedAt: revision.retrievedAt,
+    citation: revision.citation,
+    license: revision.license,
+    format: revision.format,
+    contentDigest: revision.contentDigest,
+    byteSize: revision.byteSize,
+    rowCount: revision.rowCount,
+    columns: revision.columns,
+    provider: revision.provider,
+    retention: revision.retention,
+    status: 'ready',
+    lastRefreshedAt: args.acceptedAt,
+  });
+  await ctx.db.patch(proposal._id, { status: 'converted', updatedAt: args.acceptedAt });
+}
+
+function equalStringSets(left: readonly string[], right: readonly string[]): boolean {
+  return (
+    left.length === right.length &&
+    new Set(left).size === left.length &&
+    left.every((id) => right.includes(id))
+  );
 }
 
 function normalizeHumanPatchArgs(args: HumanPatchMutationArgs): PatchMutationArgs {
@@ -4838,4 +4986,12 @@ function requiredText(value: string, label: string, max: number): string {
   if (!clean) throw new Error(`${label} is required.`);
   if (clean.length > max) throw new Error(`${label} exceeds ${max} characters.`);
   return clean;
+}
+
+function sameOptionalStrings(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): boolean {
+  if (!left || !right) return left === undefined && right === undefined;
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

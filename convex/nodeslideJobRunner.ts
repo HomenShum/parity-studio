@@ -29,7 +29,12 @@ export const executeCreateDeckInternal = internalAction({
   handler: async (
     ctx,
     args,
-  ): Promise<{ deckId: string; conversationRunId: string; memoryIds: string[] }> => {
+  ): Promise<{
+    deckId: string;
+    conversationRunId: string;
+    memoryIds: string[];
+    memoryDigests: string[];
+  }> => {
     const claimed = (await ctx.runMutation(jobsInternal.claimAttemptInternal, {
       jobId: args.jobId,
     })) as {
@@ -90,7 +95,7 @@ export const executeCreateDeckInternal = internalAction({
       startedAt: claimed.createdAt,
     })) as {
       created: boolean;
-      run: { id: string; status: string; memoryIds?: string[] };
+      run: { id: string; status: string; memoryIds?: string[]; memoryDigests?: string[] };
     };
     if (
       runStart.created ||
@@ -110,6 +115,9 @@ export const executeCreateDeckInternal = internalAction({
     const memoryIds = Array.isArray(runStart.run.memoryIds)
       ? runStart.run.memoryIds.slice(0, 6)
       : [];
+    const memoryDigests = Array.isArray(runStart.run.memoryDigests)
+      ? runStart.run.memoryDigests.slice(0, 6)
+      : [];
     await ctx.runMutation(jobsInternal.checkpointInternal, {
       jobId: args.jobId,
       status: 'running',
@@ -118,11 +126,13 @@ export const executeCreateDeckInternal = internalAction({
       resultDeckId,
       conversationRunId: runStart.run.id,
       memoryIds,
+      memoryDigests,
     });
     return {
       deckId: resultDeckId,
       conversationRunId: runStart.run.id,
       memoryIds,
+      memoryDigests,
     };
   },
 });
@@ -143,6 +153,7 @@ export const executeEditProposalInternal = internalAction({
     candidateDigest: string;
     conversationRunId: string;
     memoryIds: string[];
+    memoryDigests: string[];
   }> => {
     const claimed = (await ctx.runMutation(jobsInternal.claimAttemptInternal, {
       jobId: args.jobId,
@@ -154,6 +165,7 @@ export const executeEditProposalInternal = internalAction({
       resultCandidateDigest?: string;
       conversationRunId?: string;
       memoryIds?: string[];
+      memoryDigests?: string[];
     };
     if (claimed.status === 'cancelled') throw new Error('NodeSlide job was cancelled.');
     if (
@@ -169,6 +181,7 @@ export const executeEditProposalInternal = internalAction({
         candidateDigest: claimed.resultCandidateDigest,
         conversationRunId: claimed.conversationRunId,
         memoryIds: claimed.memoryIds ?? [],
+        memoryDigests: claimed.memoryDigests ?? [],
       };
     }
     await ctx.runMutation(jobsInternal.checkpointInternal, {
@@ -190,6 +203,7 @@ export const executeEditProposalInternal = internalAction({
       patch: { id: string; deckId: string; status: string; candidateDigest?: string };
       conversationRunId: string;
       memoryIds?: string[];
+      memoryDigests?: string[];
     };
     if (
       result.patch.deckId !== args.request.deckId ||
@@ -213,6 +227,7 @@ export const executeEditProposalInternal = internalAction({
       resultCandidateDigest: result.patch.candidateDigest,
       conversationRunId: result.conversationRunId,
       ...(result.memoryIds ? { memoryIds: result.memoryIds } : {}),
+      ...(result.memoryDigests ? { memoryDigests: result.memoryDigests } : {}),
     });
     return {
       deckId: result.patch.deckId,
@@ -220,6 +235,7 @@ export const executeEditProposalInternal = internalAction({
       candidateDigest: result.patch.candidateDigest,
       conversationRunId: result.conversationRunId,
       memoryIds: result.memoryIds ?? [],
+      memoryDigests: result.memoryDigests ?? [],
     };
   },
 });

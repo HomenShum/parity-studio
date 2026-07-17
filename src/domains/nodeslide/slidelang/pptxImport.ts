@@ -48,6 +48,8 @@ import {
 import { isStableId, stableHash } from './utils';
 import { validateSnapshot } from './validation';
 
+const NODESLIDE_PPTX_SLIDE_ID_PREFIX = 'nodeslide-slide-id:';
+
 const PRESENTATION_NS = new Set([
   'http://schemas.openxmlformats.org/presentationml/2006/main',
   'http://purl.oclc.org/ooxml/presentationml/main',
@@ -1385,13 +1387,22 @@ async function parseSlide(
       slideIndex,
     });
   }
-  const slideId = `${context.deckId}:pptx:slide:${slideIndex}`;
   const usedIds = context.usedElementIds;
   const elements: SlideElement[] = [];
   const spTree = firstDescendant(parsed.root, 'spTree');
-  const objectNodes = spTree
+  const packageObjectNodes = spTree
     ? spTree.children.filter((node) => !['nvGrpSpPr', 'grpSpPr'].includes(node.tag.localName))
     : [];
+  const slideMarker = packageObjectNodes.find((node) =>
+    shapeIdentity(node).objectName.startsWith(NODESLIDE_PPTX_SLIDE_ID_PREFIX),
+  );
+  const markedSlideId = slideMarker
+    ? shapeIdentity(slideMarker).objectName.slice(NODESLIDE_PPTX_SLIDE_ID_PREFIX.length)
+    : '';
+  const slideId = isStableId(markedSlideId)
+    ? markedSlideId
+    : `${context.deckId}:pptx:slide:${slideIndex}`;
+  const objectNodes = packageObjectNodes.filter((node) => node !== slideMarker);
   const identityNodes = objectNodes.filter((node) =>
     ['sp', 'cxnSp', 'pic', 'graphicFrame', 'grpSp'].includes(node.tag.localName),
   );

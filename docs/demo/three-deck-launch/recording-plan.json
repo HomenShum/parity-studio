@@ -1,0 +1,84 @@
+{
+  "schema": "nodeslide-three-deck-launch/v1",
+  "title": "NodeSlide three-deck launch guide",
+  "invariants": [
+    "The run starts at the canonical landing page with no deck query parameter.",
+    "All three decks are created by visibly typing and submitting a new landing-page brief.",
+    "No deck ID may be supplied to the recorder or reused within the run.",
+    "Every required checkpoint is backed by a screenshot and an evidence record.",
+    "Missing product capabilities stop the recording instead of being represented by synthetic UI.",
+    "Only browser chrome, the visible cursor, and captions are recorder overlays."
+  ],
+  "decks": [
+    {
+      "id": "ai-2027",
+      "title": "AI 2027 — scenarios and decisions",
+      "slideCount": 6,
+      "prompt": "Create exactly six editable slides for an executive AI 2027 scenario review. Build a decision-ready story with a title slide, scenario timeline, quantitative chart, native editable formula, strategic options, and action plan. Distinguish evidence from assumptions, use concise action-led headlines, include source links for web claims, and keep every chart, equation, image, and layout element editable.",
+      "actions": [
+        "fresh-create",
+        "primitive-scan",
+        "one-element-review",
+        "multi-agent-handoffs",
+        "math-edit",
+        "layout-edit",
+        "memory"
+      ]
+    },
+    {
+      "id": "ai-fund",
+      "title": "AI Fund — people, product, and decision",
+      "slideCount": 6,
+      "prompt": "Create exactly six editable slides for an AI Fund review of NodeSlide. Use official AI Fund web sources to explain the relevant roles of Mike Rubino, Andrew Ng, and Eli, then connect those people to the product thesis: changing evidence becomes a decision-ready presentation with traceable claims and reviewable AI changes. Include three sourced profile visuals, an editable product workflow diagram, a comparison chart, speaker notes, and a clear next-step decision. Do not invent biographical facts.",
+      "actions": [
+        "fresh-create",
+        "primitive-scan",
+        "web-one-slide-edit",
+        "image-upload",
+        "trace-citations",
+        "source-monitoring"
+      ]
+    },
+    {
+      "id": "world-cup",
+      "title": "World Cup — data to decision",
+      "slideCount": 6,
+      "prompt": "Create exactly six editable slides that turn the attached World Cup data into a decision-ready briefing. Include a sourced title, an editable data-bound chart, one native editable formula, one visual story slide, a comparison of at least two tournament dimensions, and a concise conclusion. Preserve exact uploaded values, label assumptions, cite external context, and keep all content, visuals, positions, and chart data editable.",
+      "actions": [
+        "fresh-create-with-file",
+        "primitive-scan",
+        "bounded-multi-slide-edit",
+        "chart-grid-edit",
+        "trace-citations",
+        "pptx-json-export",
+        "pptx-link",
+        "connections"
+      ]
+    }
+  ],
+  "captions": {
+    "opening": "Start with a blank NodeSlide landing page — no recycled deck, hidden setup, or static slide images.",
+    "ai-2027-create": "The first new deck turns an AI 2027 question into editable scenarios, data, math, and decisions.",
+    "ai-2027-primitive-scan": "The generated story is made of real text, math, chart, image, and diagram objects that remain selectable.",
+    "ai-2027-one-element-review": "A precise request changes one selected element; Compare makes the bounded candidate visible before approval.",
+    "ai-2027-multi-agent-handoffs": "Researcher, analyst, storyteller, designer, fact-checker, and reviewer hand work forward in one visible run.",
+    "ai-2027-math-edit": "The equation remains a native editable primitive instead of becoming a screenshot.",
+    "ai-2027-layout-edit": "Layout is structured state too, so position can change without flattening the slide.",
+    "ai-2027-memory": "A scoped presentation preference persists for later work without hiding what the agent remembered.",
+    "ai-fund-create": "The second deck starts fresh and uses official web evidence for the people, product, and decision story.",
+    "ai-fund-primitive-scan": "Profile visuals, text, and the product story remain structured objects — not flattened slide screenshots.",
+    "ai-fund-web-one-slide-edit": "One slide is strengthened with current web evidence while every unrelated slide stays outside the write scope.",
+    "ai-fund-image-upload": "A rights-cleared photo is uploaded with alt text and credit as an editable image element.",
+    "ai-fund-trace-citations": "The trace connects model work, tool spans, validation, and exact source citations in one auditable timeline.",
+    "ai-fund-source-monitoring": "Source monitoring turns a changing web page into a bounded future refresh proposal — never a silent rewrite.",
+    "world-cup-create": "The third deck begins from a typed brief plus uploaded data, preserving the file as evidence.",
+    "world-cup-primitive-scan": "The World Cup briefing compiles uploaded data into editable slide and chart primitives.",
+    "world-cup-bounded-multi-slide-edit": "Two selected slides receive one coordinated change while the rest of the deck remains untouched.",
+    "world-cup-chart-grid-edit": "Chart labels and values stay editable in a typed grid, then re-render through the validated mutation path.",
+    "world-cup-trace-citations": "The run remains explainable even after multi-step agent and data work.",
+    "world-cup-pptx-json-export": "The reviewed state leaves NodeSlide as editable PowerPoint and inspectable deck JSON.",
+    "world-cup-pptx-link": "The exported PowerPoint is linked back to the exact semantic baseline for later three-way reconciliation.",
+    "world-cup-connections": "Google Slides, PowerPoint, MCP, and model connections meet the same versioned NodeSlide state.",
+    "closing": "Three genuinely new decks, one governed authoring loop: create, change, verify, synchronize, and hand off."
+  }
+}

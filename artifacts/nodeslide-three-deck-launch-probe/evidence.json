@@ -1,0 +1,45 @@
+{
+  "schema": "nodeslide-three-deck-launch-evidence/v1",
+  "mode": "checkpoint-probe",
+  "targetUrl": "http://127.0.0.1:5193/",
+  "plan": "docs/demo/three-deck-launch/recording-plan.json",
+  "commitSha": "3070bd85146c0a4db0ae97c4ca59d520bad6f9e7",
+  "startedAt": "2026-07-17T02:36:33.852Z",
+  "inputs": {
+    "worldCupData": {
+      "path": "D:\\VSCode Projects\\parity-studio\\docs\\demo\\three-deck-launch\\world-cup-tournament-data.csv",
+      "exists": true,
+      "bytes": 619,
+      "sha256": "b5d94973cffeb0d6b3a500647e4810d404b48de4554b5c03f324d0bf6ac5a528"
+    },
+    "aiFundImage": {
+      "path": "D:\\VSCode Projects\\parity-studio\\docs\\demo\\three-deck-launch\\mike-rubino-official.png",
+      "exists": true,
+      "bytes": 734828,
+      "sha256": "8d5ff66b322a641346b174beb23f2e11f02f7a26dab30a157c59968da3b9e9bc"
+    }
+  },
+  "checkpoints": [
+    {
+      "id": "opening",
+      "deckId": null,
+      "status": "passed",
+      "startedAt": "2026-07-17T02:36:34.349Z",
+      "durationMs": 3567,
+      "screenshot": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-three-deck-launch-probe\\checkpoints\\01-opening.png",
+      "details": {
+        "url": "http://127.0.0.1:5193/",
+        "editorMounted": false
+      }
+    }
+  ],
+  "decks": [],
+  "downloads": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "outputs": {
+    "webm": "D:\\VSCode Projects\\parity-studio\\artifacts\\nodeslide-three-deck-launch-probe\\probe-through-opening.webm"
+  },
+  "verdict": "checkpoint-probe-passed",
+  "completedAt": "2026-07-17T02:36:37.919Z"
+}

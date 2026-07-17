@@ -7,18 +7,24 @@ import {
   Image as ImageIcon,
   Link2,
   Quote,
+  RefreshCw,
   Sheet,
   StickyNote,
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { SlideElement, SourceRecord } from '../../../../shared/nodeslide';
+import type { NodeSlideSourceRefreshState } from '../../../../shared/nodeslideSourceMonitoring';
 import { ExportMyDataAction } from './ExportMyDataAction';
 
 interface DataInspectorProps {
   sources: readonly SourceRecord[];
   selectedElements: readonly SlideElement[];
   onDeleteSource?: (sourceId: string) => Promise<void>;
+  sourceRefresh?: NodeSlideSourceRefreshState;
+  onConfigureSourceRefresh?: (sourceId: string, enabled: boolean) => Promise<void>;
+  onPrepareSourceRefresh?: (proposalId: string) => Promise<void>;
+  onDismissSourceRefresh?: (proposalId: string) => Promise<void>;
   ownerDataExport?: { deckId: string; deckTitle: string; ownerAccessKey: string };
 }
 
@@ -26,10 +32,17 @@ export function DataInspector({
   sources,
   selectedElements,
   onDeleteSource,
+  sourceRefresh,
+  onConfigureSourceRefresh,
+  onPrepareSourceRefresh,
+  onDismissSourceRefresh,
   ownerDataExport,
 }: DataInspectorProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [refreshBusyId, setRefreshBusyId] = useState<string | null>(null);
+  const [proposalBusyId, setProposalBusyId] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const dependencyIds = new Set(
     selectedElements.flatMap((element) => [
       ...element.sourceIds,
@@ -111,6 +124,134 @@ export function DataInspector({
           {structuredElements.map((element) => (
             <PrimitiveDetails element={element} key={element.id} />
           ))}
+        </section>
+      ) : null}
+
+      {sources.some((source) => source.sourceType === 'url' && source.url) && sourceRefresh ? (
+        <section className="ns-source-monitor" aria-labelledby="nodeslide-source-monitor-title">
+          <div className="ns-section-heading">
+            <span id="nodeslide-source-monitor-title">
+              <RefreshCw size={13} /> Source monitoring
+            </span>
+            <small>Opt in once per source</small>
+          </div>
+          <p>
+            Detect material web changes, map affected claims and slides, then prepare a bounded
+            update in the AI composer. Monitoring never edits the deck automatically.
+          </p>
+          {sources
+            .filter((source) => source.sourceType === 'url' && source.url)
+            .map((source) => {
+              const schedule = sourceRefresh.schedules.find(
+                (candidate) => candidate.sourceId === source.id,
+              );
+              return (
+                <div className="ns-source-monitor-row" key={source.id}>
+                  <span>
+                    <strong>{source.title}</strong>
+                    <small>
+                      {schedule?.enabled
+                        ? `${sourceRefreshStatusLabel(schedule.status)} · next ${formatRelative(schedule.nextRunAt)}`
+                        : 'Monitoring off'}
+                    </small>
+                  </span>
+                  {onConfigureSourceRefresh ? (
+                    <button
+                      type="button"
+                      disabled={refreshBusyId === source.id}
+                      aria-label={`${schedule?.enabled ? 'Pause monitoring' : 'Monitor changes'} for ${source.title}`}
+                      onClick={() => {
+                        setRefreshError(null);
+                        setRefreshBusyId(source.id);
+                        void onConfigureSourceRefresh(source.id, !schedule?.enabled)
+                          .catch((error) =>
+                            setRefreshError(
+                              error instanceof Error
+                                ? error.message
+                                : 'Source monitoring could not be updated.',
+                            ),
+                          )
+                          .finally(() => setRefreshBusyId(null));
+                      }}
+                    >
+                      <RefreshCw size={12} /> {schedule?.enabled ? 'Pause' : 'Monitor'}
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          {sourceRefresh.proposals.filter((proposal) => proposal.status === 'ready').length > 0 ? (
+            <div className="ns-source-refresh-proposals">
+              {sourceRefresh.proposals
+                .filter((proposal) => proposal.status === 'ready')
+                .map((proposal) => {
+                  const sourceTitle =
+                    sources.find((source) => source.id === proposal.sourceId)?.title ??
+                    'updated source';
+                  return (
+                    <article key={proposal.id}>
+                      <div>
+                        <strong>Source changed</strong>
+                        <small>
+                          {proposal.affectedSlideIds.length} affected slide
+                          {proposal.affectedSlideIds.length === 1 ? '' : 's'} ·{' '}
+                          {proposal.affectedElementIds.length} bound element
+                          {proposal.affectedElementIds.length === 1 ? '' : 's'}
+                        </small>
+                      </div>
+                      <div>
+                        {onDismissSourceRefresh ? (
+                          <button
+                            type="button"
+                            disabled={proposalBusyId === proposal.id}
+                            aria-label={`Dismiss update from ${sourceTitle}`}
+                            onClick={() => {
+                              setRefreshError(null);
+                              setProposalBusyId(proposal.id);
+                              void onDismissSourceRefresh(proposal.id)
+                                .catch((error) =>
+                                  setRefreshError(
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'The source update could not be dismissed.',
+                                  ),
+                                )
+                                .finally(() => setProposalBusyId(null));
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        ) : null}
+                        {onPrepareSourceRefresh ? (
+                          <button
+                            type="button"
+                            className="is-primary"
+                            disabled={proposalBusyId === proposal.id}
+                            aria-label={`Prepare update from ${sourceTitle}`}
+                            onClick={() => {
+                              setRefreshError(null);
+                              setProposalBusyId(proposal.id);
+                              void onPrepareSourceRefresh(proposal.id)
+                                .catch((error) =>
+                                  setRefreshError(
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'The source update could not be prepared.',
+                                  ),
+                                )
+                                .finally(() => setProposalBusyId(null));
+                            }}
+                          >
+                            Prepare update
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+            </div>
+          ) : null}
+          {refreshError ? <output role="alert">{refreshError}</output> : null}
         </section>
       ) : null}
 
@@ -274,4 +415,18 @@ function formatDate(timestamp: number) {
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function sourceRefreshStatusLabel(status: 'ready' | 'checking' | 'backoff' | 'disabled') {
+  if (status === 'checking') return 'Checking now';
+  if (status === 'backoff') return 'Retry scheduled';
+  if (status === 'disabled') return 'Monitoring off';
+  return 'Monitoring';
+}
+
+function formatRelative(timestamp: number) {
+  const minutes = Math.max(0, Math.round((timestamp - Date.now()) / 60_000));
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `in ${minutes}m`;
+  return `in ${Math.round(minutes / 60)}h`;
 }

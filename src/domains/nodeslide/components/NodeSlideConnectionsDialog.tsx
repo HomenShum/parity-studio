@@ -1,4 +1,4 @@
-import { useAction, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import {
   Bot,
   Check,
@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../../convex/_generated/api';
+import type { DeckSnapshot } from '../../../../shared/nodeslide';
+import { nodeSlideSnapshotToPptxSyncDocument } from '../../../../shared/nodeslidePptxLink';
 import {
   SESSION_BYOK_KEYS,
   clearSessionByok,
@@ -69,6 +71,19 @@ function NodeSlideConnectionsDialogContent({
   const [client, setClient] = useState<ClientKind>('claude');
   const [notice, setNotice] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState<'connect' | 'disconnect' | null>(null);
+  const [googleSyncBusy, setGoogleSyncBusy] = useState<
+    | 'create'
+    | 'attach'
+    | 'pull'
+    | 'finalize-pull'
+    | 'plan-push'
+    | 'execute-push'
+    | 'cancel'
+    | 'reset'
+    | null
+  >(null);
+  const [googlePresentation, setGooglePresentation] = useState('');
+  const [pptxBusy, setPptxBusy] = useState<'link' | 'plan' | 'verify' | 'finalize' | null>(null);
 
   const ownerAccessKey = listStoredDeckAccess().find(
     (entry) => entry.deckId === deckId,
@@ -77,8 +92,33 @@ function NodeSlideConnectionsDialogContent({
     api.nodeslideGoogleAuth.getStatus,
     deckId && ownerAccessKey ? { deckId, ownerAccessKey } : 'skip',
   );
+  const deckWorkspace = useQuery(
+    api.nodeslide.getWorkspace,
+    deckId && ownerAccessKey ? { deckId, ownerAccessKey } : 'skip',
+  );
+  const pptxLink = useQuery(
+    api.nodeslidePptxSync.getLink,
+    deckId && ownerAccessKey ? { deckId, ownerAccessKey } : 'skip',
+  );
+  const attachPptxBaseline = useMutation(api.nodeslidePptxSync.attachImportedBaseline);
+  const planPptxImport = useMutation(api.nodeslidePptxSync.planImportedSnapshot);
+  const verifyPptxOutbound = useMutation(api.nodeslidePptxSync.verifyOutboundSnapshot);
+  const finalizePptxPlan = useMutation(api.nodeslidePptxSync.finalizePlan);
+  const proposePptxPatch = useMutation(api.nodeslide.proposePatch);
   const beginGoogleAuth = useAction(api.nodeslideGoogleAuth.begin);
   const disconnectGoogleAuth = useAction(api.nodeslideGoogleAuth.disconnect);
+  const googleRuntime = useQuery(
+    api.nodeslideGoogleSlidesRuntime.getState,
+    deckId && ownerAccessKey && googleStatus?.connected ? { deckId, ownerAccessKey } : 'skip',
+  );
+  const createGooglePresentation = useAction(api.nodeslideGoogleSlidesRuntime.createPresentation);
+  const attachGooglePresentation = useAction(api.nodeslideGoogleSlidesRuntime.attachPresentation);
+  const planGooglePull = useAction(api.nodeslideGoogleSlidesRuntime.planPull);
+  const finalizeGooglePull = useAction(api.nodeslideGoogleSlidesRuntime.finalizePull);
+  const planGooglePush = useAction(api.nodeslideGoogleSlidesRuntime.planPush);
+  const executeGooglePush = useAction(api.nodeslideGoogleSlidesRuntime.executePush);
+  const cancelGooglePending = useAction(api.nodeslideGoogleSlidesRuntime.cancelPending);
+  const resetGoogleAttachment = useAction(api.nodeslideGoogleSlidesRuntime.resetAttachment);
 
   useEffect(() => {
     setKeys(readSessionByok());
@@ -87,6 +127,13 @@ function NodeSlideConnectionsDialogContent({
   }, []);
 
   const configuredCount = SESSION_BYOK_KEYS.filter((key) => keys[key.envVar]?.trim()).length;
+  const googleCanPlan =
+    googleRuntime !== undefined &&
+    googleRuntime !== null &&
+    (googleRuntime.status === 'active' ||
+      googleRuntime.status === 'conflict' ||
+      googleRuntime.status === 'error') &&
+    googleRuntime.errorCode !== 'bootstrap_mismatch';
 
   const save = () => {
     writeSessionByok(keys);
@@ -145,6 +192,146 @@ function NodeSlideConnectionsDialogContent({
     }
   };
 
+  const runGoogleSyncAction = async (
+    busy: NonNullable<typeof googleSyncBusy>,
+    syncAction: () => Promise<{
+      result?: string;
+      operationCount?: number;
+      verified?: boolean;
+      presentationUrl?: string;
+      cancelled?: boolean;
+      reset?: boolean;
+    }>,
+  ) => {
+    setGoogleSyncBusy(busy);
+    setNotice(null);
+    try {
+      const receipt = await syncAction();
+      setNotice(googleSyncNotice(busy, receipt));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Google Slides sync could not complete.');
+    } finally {
+      setGoogleSyncBusy(null);
+    }
+  };
+
+  const readPptxSyncFile = async (file: File) => {
+    if (!deckId || !ownerAccessKey || !deckWorkspace) {
+      throw new Error('Open an owned deck before linking PowerPoint.');
+    }
+    const baseSnapshot: DeckSnapshot = {
+      deck: deckWorkspace.deck,
+      slides: deckWorkspace.slides,
+      elements: deckWorkspace.elements,
+      sources: deckWorkspace.sources,
+    };
+    const payload = await file.arrayBuffer();
+    const { createPptxImportCandidate } = await import('../slidelang/pptxImport');
+    const imported = await createPptxImportCandidate(baseSnapshot, payload, {
+      fileName: file.name,
+    });
+    if (!imported.ok) throw new Error(`PowerPoint import stopped: ${imported.error.message}`);
+    const packageDigest = await sha256Digest(payload);
+    const remoteDocument = nodeSlideSnapshotToPptxSyncDocument(imported.candidate.snapshot, {
+      documentId: `nodeslide-pptx-${deckId}`,
+      packageDigest,
+    });
+    return { candidate: imported.candidate, remoteDocument };
+  };
+
+  const linkOrPlanPptx = async (file: File) => {
+    if (!deckId || !ownerAccessKey) return;
+    setPptxBusy(pptxLink ? 'plan' : 'link');
+    setNotice(null);
+    try {
+      const { candidate, remoteDocument } = await readPptxSyncFile(file);
+      if (!pptxLink) {
+        await attachPptxBaseline({ deckId, ownerAccessKey, importedSnapshot: remoteDocument });
+        setNotice(
+          'PowerPoint linked from an exact semantic match. Future file changes now produce a three-way review plan.',
+        );
+        return;
+      }
+      const planned = await planPptxImport({
+        deckId,
+        ownerAccessKey,
+        expectedStateVersion: pptxLink.stateVersion,
+        expectedBaselineDigest: pptxLink.baselineDigest,
+        importedSnapshot: remoteDocument,
+      });
+      if (planned.status === 'conflict') {
+        setNotice(
+          `${planned.pendingPlan?.conflicts.length ?? 0} PowerPoint conflict${planned.pendingPlan?.conflicts.length === 1 ? '' : 's'} detected. Nothing was written.`,
+        );
+        return;
+      }
+      if ((planned.pendingPlan?.inbound.length ?? 0) > 0) {
+        await proposePptxPatch({
+          deckId: candidate.deckId,
+          ownerAccessKey,
+          baseDeckVersion: candidate.baseDeckVersion,
+          baseSlideVersions: candidate.baseSlideVersions,
+          baseElementVersions: candidate.baseElementVersions,
+          scope: candidate.scope,
+          operations: candidate.operations,
+          summary: `Synchronize reviewed changes from ${file.name}.`,
+        });
+      }
+      setNotice(
+        `${planned.pendingPlan?.inbound.length ?? 0} inbound and ${planned.pendingPlan?.outbound.length ?? 0} outbound PowerPoint change${(planned.pendingPlan?.inbound.length ?? 0) + (planned.pendingPlan?.outbound.length ?? 0) === 1 ? '' : 's'} prepared. Review NodeSlide changes before finalizing.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'PowerPoint sync could not be prepared.');
+    } finally {
+      setPptxBusy(null);
+    }
+  };
+
+  const verifyPptxFile = async (file: File) => {
+    if (!deckId || !ownerAccessKey || !pptxLink?.pendingPlanDigest) return;
+    setPptxBusy('verify');
+    setNotice(null);
+    try {
+      const { remoteDocument } = await readPptxSyncFile(file);
+      await verifyPptxOutbound({
+        deckId,
+        ownerAccessKey,
+        expectedStateVersion: pptxLink.stateVersion,
+        planDigest: pptxLink.pendingPlanDigest,
+        importedSnapshot: remoteDocument,
+      });
+      setNotice('The exported PowerPoint was re-imported and matched the reviewed outbound plan.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'PowerPoint verification failed.');
+    } finally {
+      setPptxBusy(null);
+    }
+  };
+
+  const finalizePptxSync = async () => {
+    if (!deckId || !ownerAccessKey || !pptxLink?.pendingPlanDigest) return;
+    setPptxBusy('finalize');
+    setNotice(null);
+    try {
+      await finalizePptxPlan({
+        deckId,
+        ownerAccessKey,
+        expectedStateVersion: pptxLink.stateVersion,
+        expectedBaselineDigest: pptxLink.baselineDigest,
+        planDigest: pptxLink.pendingPlanDigest,
+      });
+      setNotice('PowerPoint and NodeSlide now share a new verified three-way baseline.');
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'PowerPoint finalization failed. Accept inbound work or verify the export first.',
+      );
+    } finally {
+      setPptxBusy(null);
+    }
+  };
+
   const copyConfig = async () => {
     save();
     const env = Object.fromEntries(
@@ -196,6 +383,96 @@ function NodeSlideConnectionsDialogContent({
         </header>
 
         <div className="ns-connections-body">
+          <section className="ns-connection-section" aria-labelledby="ns-powerpoint-sync-title">
+            <div className="ns-connection-heading">
+              <span>
+                <Presentation size={14} /> PowerPoint
+              </span>
+              <small>
+                {pptxLink
+                  ? `${pptxLink.status.replaceAll('_', ' ')} · baseline v${pptxLink.baselineLocalDeckVersion}`
+                  : 'Review-gated three-way sync'}
+              </small>
+            </div>
+            <h2 id="ns-powerpoint-sync-title">Keep an editable PPTX linked to this deck</h2>
+            <p>
+              Link an exported semantic match once. Later imports are compared against the exact
+              shared baseline, so PowerPoint-only and NodeSlide-only edits become a bounded review
+              plan. Conflicts stop before mutation; outbound files must be re-imported and verified.
+            </p>
+            <div className="ns-google-sync-actions" data-testid="nodeslide-pptx-sync">
+              <label className="ns-connection-file-action">
+                <input
+                  type="file"
+                  hidden
+                  aria-label={pptxLink ? 'Import changed PowerPoint' : 'Link matching PowerPoint'}
+                  accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
+                  disabled={!deckWorkspace || pptxBusy !== null}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file) void linkOrPlanPptx(file);
+                  }}
+                />
+                <span>
+                  {pptxBusy === 'link' || pptxBusy === 'plan' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <Presentation size={13} />
+                  )}
+                  {pptxLink ? 'Import changed PPTX' : 'Link matching PPTX'}
+                </span>
+              </label>
+              {pptxLink?.status === 'awaiting_outbound_verification' ? (
+                <label className="ns-connection-file-action">
+                  <input
+                    type="file"
+                    hidden
+                    aria-label="Verify exported PowerPoint"
+                    accept="application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
+                    disabled={pptxBusy !== null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void verifyPptxFile(file);
+                    }}
+                  />
+                  <span>
+                    {pptxBusy === 'verify' ? (
+                      <LoaderCircle className="ns-spin" size={13} />
+                    ) : (
+                      <Check size={13} />
+                    )}
+                    Verify exported PPTX
+                  </span>
+                </label>
+              ) : null}
+              {pptxLink?.pendingPlanDigest &&
+              (pptxLink.status === 'awaiting_review' || pptxLink.status === 'ready_to_finalize') ? (
+                <button
+                  type="button"
+                  className="is-primary"
+                  disabled={pptxBusy !== null}
+                  onClick={() => void finalizePptxSync()}
+                >
+                  {pptxBusy === 'finalize' ? (
+                    <LoaderCircle className="ns-spin" size={13} />
+                  ) : (
+                    <Check size={13} />
+                  )}
+                  Finalize verified sync
+                </button>
+              ) : null}
+              {pptxLink?.pendingPlan ? (
+                <output>
+                  {pptxLink.pendingPlan.inbound.length} inbound ·{' '}
+                  {pptxLink.pendingPlan.outbound.length} outbound ·{' '}
+                  {pptxLink.pendingPlan.conflicts.length} conflicts
+                </output>
+              ) : null}
+            </div>
+          </section>
+
           <section
             className="ns-connection-section ns-google-connection-section"
             aria-labelledby="ns-google-slides-title"
@@ -214,23 +491,30 @@ function NodeSlideConnectionsDialogContent({
                       : 'Not connected'}
               </small>
             </div>
-            <h2 id="ns-google-slides-title">Authorize per-file Google Slides access</h2>
+            <h2 id="ns-google-slides-title">Authorize app-scoped Google Slides access</h2>
             <p>
-              Google asks for per-file Drive access. NodeSlide stores refresh credentials encrypted
-              on the server, never in browser storage or Trace. Authorization enables authenticated
-              planning; this release does not expose a Google Slides push or pull action.
+              NodeSlide requests Google&apos;s <code>drive.file</code> scope. It covers
+              presentations NodeSlide creates or that are explicitly opened with this app; it does
+              not make an arbitrary pasted Drive ID readable. An existing target can link only when
+              it is already app-authorized and is an exact semantic match for this deck. NodeSlide
+              then stores the exact three-way baseline server-side. Conflicts stop before any write,
+              and every remote write is read back and verified.
             </p>
             <div className="ns-google-connection-card" data-testid="nodeslide-google-connection">
               <div>
                 <strong>
                   {googleStatus?.connected
-                    ? 'OAuth authorized · planning available'
+                    ? googleRuntime
+                      ? `Linked · ${googleRuntime.status.replaceAll('_', ' ')}`
+                      : 'OAuth authorized · create or link a compatible target'
                     : 'Explicit Google consent'}
                 </strong>
                 <small>
                   {googleStatus?.connected
-                    ? 'NodeSlide can build guarded sync plans; it does not push or pull slides yet.'
-                    : 'NodeSlide requests the recommended drive.file scope—not access to all Drive files.'}
+                    ? googleRuntime
+                      ? `Baseline revision ${googleRuntime.baselineRemoteRevision}`
+                      : 'Create an app-owned blank target, or link an exact app-authorized match.'
+                    : 'drive.file is not broad Drive access and does not authorize arbitrary files.'}
                 </small>
               </div>
               {googleStatus?.connected ? (
@@ -262,6 +546,223 @@ function NodeSlideConnectionsDialogContent({
                 </button>
               )}
             </div>
+            {googleStatus?.connected ? (
+              <div className="ns-google-sync-workbench">
+                {!googleRuntime ? (
+                  <>
+                    <div className="ns-google-sync-actions">
+                      <button
+                        type="button"
+                        className="is-primary"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('create', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await createGooglePresentation({ deckId, ownerAccessKey });
+                          })
+                        }
+                      >
+                        {googleSyncBusy === 'create' ? (
+                          <LoaderCircle className="ns-spin" size={13} />
+                        ) : (
+                          <Presentation size={13} />
+                        )}
+                        Create compatible target
+                      </button>
+                    </div>
+                    <label>
+                      <span>Or link an exact, already app-authorized presentation</span>
+                      <span>
+                        <input
+                          value={googlePresentation}
+                          placeholder="Google Slides URL or presentation ID"
+                          onChange={(event) => setGooglePresentation(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          disabled={!googlePresentation.trim() || googleSyncBusy !== null}
+                          onClick={() =>
+                            void runGoogleSyncAction('attach', async () => {
+                              if (!deckId || !ownerAccessKey)
+                                throw new Error('Open an owned deck.');
+                              await attachGooglePresentation({
+                                deckId,
+                                ownerAccessKey,
+                                presentationId: googlePresentationId(googlePresentation),
+                              });
+                              return {};
+                            })
+                          }
+                        >
+                          {googleSyncBusy === 'attach' ? (
+                            <LoaderCircle className="ns-spin" size={13} />
+                          ) : (
+                            <Presentation size={13} />
+                          )}
+                          Link exact match
+                        </button>
+                      </span>
+                      <small>
+                        A URL or ID identifies the file; it does not grant <code>drive.file</code>
+                        access or establish a baseline by itself.
+                      </small>
+                    </label>
+                  </>
+                ) : (
+                  <div className="ns-google-sync-actions">
+                    <button
+                      type="button"
+                      disabled={googleSyncBusy !== null || !googleCanPlan}
+                      onClick={() =>
+                        void runGoogleSyncAction('pull', async () => {
+                          if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                          return await planGooglePull({ deckId, ownerAccessKey });
+                        })
+                      }
+                    >
+                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
+                        ? 'Re-plan Google pull'
+                        : 'Check Google changes'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={googleSyncBusy !== null || !googleCanPlan}
+                      onClick={() =>
+                        void runGoogleSyncAction('plan-push', async () => {
+                          if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                          return await planGooglePush({ deckId, ownerAccessKey });
+                        })
+                      }
+                    >
+                      {googleRuntime.status === 'conflict' || googleRuntime.status === 'error'
+                        ? 'Re-plan NodeSlide push'
+                        : 'Plan NodeSlide push'}
+                    </button>
+                    {googleRuntime.status === 'awaiting_pull_review' &&
+                    googleRuntime.pendingPlanDigest &&
+                    googleRuntime.pendingPatchStatus === 'accepted' ? (
+                      <button
+                        type="button"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('finalize-pull', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await finalizeGooglePull({
+                              deckId,
+                              ownerAccessKey,
+                              planDigest: googleRuntime.pendingPlanDigest as string,
+                            });
+                          })
+                        }
+                      >
+                        Verify accepted pull
+                      </button>
+                    ) : null}
+                    {googleRuntime.status === 'awaiting_pull_review' &&
+                    googleRuntime.pendingPatchStatus !== 'accepted' ? (
+                      <button
+                        type="button"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('cancel', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await cancelGooglePending({
+                              deckId,
+                              ownerAccessKey,
+                              expectedStateVersion: googleRuntime.stateVersion,
+                            });
+                          })
+                        }
+                      >
+                        {googleRuntime.pendingPatchStatus === 'rejected'
+                          ? 'Reset rejected pull'
+                          : googleRuntime.pendingPatchStatus === 'stale'
+                            ? 'Reset stale pull'
+                            : 'Cancel pull proposal'}
+                      </button>
+                    ) : null}
+                    {googleRuntime.status === 'awaiting_push_review' &&
+                    googleRuntime.pendingPlanDigest ? (
+                      <button
+                        type="button"
+                        className="is-primary"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('execute-push', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await executeGooglePush({
+                              deckId,
+                              ownerAccessKey,
+                              planDigest: googleRuntime.pendingPlanDigest as string,
+                            });
+                          })
+                        }
+                      >
+                        Push and verify
+                      </button>
+                    ) : null}
+                    {googleRuntime.status === 'awaiting_push_review' ? (
+                      <button
+                        type="button"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('cancel', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await cancelGooglePending({
+                              deckId,
+                              ownerAccessKey,
+                              expectedStateVersion: googleRuntime.stateVersion,
+                            });
+                          })
+                        }
+                      >
+                        Cancel pending push
+                      </button>
+                    ) : null}
+                    {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
+                      <button
+                        type="button"
+                        disabled={googleSyncBusy !== null}
+                        onClick={() =>
+                          void runGoogleSyncAction('reset', async () => {
+                            if (!deckId || !ownerAccessKey) throw new Error('Open an owned deck.');
+                            return await resetGoogleAttachment({
+                              deckId,
+                              ownerAccessKey,
+                              expectedStateVersion: googleRuntime.stateVersion,
+                            });
+                          })
+                        }
+                      >
+                        Reset attachment
+                      </button>
+                    ) : null}
+                    <a
+                      href={`https://docs.google.com/presentation/d/${encodeURIComponent(googleRuntime.remotePresentationId)}/edit`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open Google Slides <ExternalLink size={12} />
+                    </a>
+                    {googleRuntime.status === 'conflict' || googleRuntime.status === 'error' ? (
+                      <output role="alert">
+                        {googleRuntime.errorMessage ?? 'Re-plan required.'}
+                      </output>
+                    ) : null}
+                    {googleRuntime.status === 'awaiting_pull_review' &&
+                    googleRuntime.pendingPatchStatus !== 'accepted' ? (
+                      <output>
+                        {googleRuntime.pendingPatchStatus === 'rejected'
+                          ? 'The pull proposal was rejected. Reset it before planning again.'
+                          : googleRuntime.pendingPatchStatus === 'stale'
+                            ? 'The pull proposal became stale. Reset it before planning again.'
+                            : 'Review and accept the NodeSlide proposal before verification, or cancel it.'}
+                      </output>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </section>
 
           <section className="ns-connection-section" aria-labelledby="ns-byok-title">
@@ -413,6 +914,57 @@ function NodeSlideConnectionsDialogContent({
       </div>
     </dialog>
   );
+}
+
+function googlePresentationId(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/u);
+  return match?.[1] ?? trimmed;
+}
+
+async function sha256Digest(payload: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', payload);
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  );
+  return `sha256:${hex}`;
+}
+
+function googleSyncNotice(
+  action:
+    | 'create'
+    | 'attach'
+    | 'pull'
+    | 'finalize-pull'
+    | 'plan-push'
+    | 'execute-push'
+    | 'cancel'
+    | 'reset',
+  receipt: {
+    result?: string;
+    operationCount?: number;
+    verified?: boolean;
+    presentationUrl?: string;
+    cancelled?: boolean;
+    reset?: boolean;
+  },
+): string {
+  if (action === 'create') {
+    return 'Created an app-authorized blank Google Slides target. Plan a NodeSlide push to review its first write.';
+  }
+  if (action === 'attach') {
+    return 'Linked the already authorized, exact-match presentation with an exact baseline.';
+  }
+  if (receipt.cancelled) return 'Cancelled the pending review. You can plan again.';
+  if (receipt.reset)
+    return 'Reset the Google Slides attachment. Create or link a compatible target.';
+  if (receipt.verified) return 'Synchronization verified against NodeSlide and Google Slides.';
+  if (receipt.result === 'no_change') return 'Both versions are already synchronized.';
+  if (receipt.result === 'conflict') return 'A conflict was detected. Nothing was written.';
+  if (action === 'pull') {
+    return `${receipt.operationCount ?? 0} Google change${receipt.operationCount === 1 ? '' : 's'} prepared in NodeSlide for review.`;
+  }
+  return `${receipt.operationCount ?? 0} NodeSlide change${receipt.operationCount === 1 ? '' : 's'} prepared for Google Slides.`;
 }
 
 export function buildNodeSlideMcpJson(env: Record<string, string>, command = 'npx'): string {

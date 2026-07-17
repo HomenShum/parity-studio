@@ -31,4 +31,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  'check opted-in NodeSlide web sources',
+  { minutes: 15 },
+  internal.nodeslideSourceRefresh.scanDueInternal,
+  {},
+);
+
 export default crons;

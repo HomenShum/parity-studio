@@ -19,6 +19,8 @@ import {
 
 type PptxSlide = ReturnType<PptxGenJS['addSlide']>;
 
+export const NODESLIDE_PPTX_SLIDE_ID_PREFIX = 'nodeslide-slide-id:';
+
 interface PptxBox {
   x: number;
   y: number;
@@ -374,6 +376,18 @@ export async function buildPptx(snapshot: DeckSnapshot): Promise<PptxBinary> {
     pptxSlide.background = {
       color: colorToPptxHex(slide.background, snapshot.deck.theme.colors.canvas),
     };
+    // PowerPoint has no stable public slide object-name field. Keep a non-rendering marker in the
+    // package so NodeSlide exports can recover the canonical slide identity on re-import. The
+    // importer removes this marker before materializing editable slide elements.
+    pptxSlide.addShape(pptx.ShapeType.rect, {
+      x: 0,
+      y: 0,
+      w: 0.001,
+      h: 0.001,
+      objectName: `${NODESLIDE_PPTX_SLIDE_ID_PREFIX}${slide.id}`,
+      fill: { color: 'FFFFFF', transparency: 100 },
+      line: { color: 'FFFFFF', transparency: 100 },
+    });
     for (const element of orderedExportElements(snapshot, slide)) {
       addElement(pptx, pptxSlide, snapshot, element);
     }

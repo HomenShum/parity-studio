@@ -65,6 +65,37 @@ describe('NodeSlide durable job state', () => {
     expect(running.attempt).toBe(1);
   });
 
+  it('freezes exact memory ids and digests once a durable job binds retrieval', () => {
+    const bound = job({
+      memoryIds: ['memory_1'],
+      memoryDigests: ['digest_1'],
+    });
+    expect(() =>
+      advanceNodeSlideJob(
+        bound,
+        {
+          phase: 'planning',
+          progress: bound.progress,
+          memoryIds: ['memory_2'],
+          memoryDigests: ['digest_2'],
+        },
+        2_000,
+      ),
+    ).toThrow(/memory binding cannot change/i);
+    expect(() =>
+      advanceNodeSlideJob(
+        bound,
+        {
+          phase: 'planning',
+          progress: bound.progress,
+          memoryIds: ['memory_1'],
+          memoryDigests: ['digest_2'],
+        },
+        2_000,
+      ),
+    ).toThrow(/memory digest binding cannot change/i);
+  });
+
   it('makes cancel terminal so a late workflow completion cannot mutate the outcome', () => {
     const running = claimNodeSlideJobAttempt(job(), 2_000);
     const cancelled = cancelNodeSlideJob(running, 3_000);

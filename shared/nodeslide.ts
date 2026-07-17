@@ -613,6 +613,8 @@ export interface NodeSlideAgentRun {
   webResearch: boolean;
   /** Existing deck-scoped memory records retrieved for this durable run. */
   memoryIds?: string[];
+  /** Exact content digests for the memories bound to this run. */
+  memoryDigests?: string[];
   attempt: number;
   /** W3C-compatible 32-hex trace identifier for this durable run. */
   otelTraceId?: string;
@@ -1080,6 +1082,8 @@ export interface AgentEditRequest {
   webResearchConsent?: typeof NODESLIDE_WEB_RESEARCH_CONSENT;
   /** Durable deck memory is opt-in per request and defaults to off server-side. */
   memoryMode?: 'off' | 'relevant';
+  /** Exact monitored-source review binding; server rechecks it before provider egress. */
+  sourceRefreshBinding?: { proposalId: string; baseSnapshotDigest: string };
 }
 
 /** Explicit read authority is independent from PatchScope, which remains write authority. */

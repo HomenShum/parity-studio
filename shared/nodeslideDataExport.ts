@@ -1,4 +1,4 @@
-export const NODESLIDE_OWNER_DATA_EXPORT_SCHEMA_VERSION = 'nodeslide.owner-data-export/v2' as const;
+export const NODESLIDE_OWNER_DATA_EXPORT_SCHEMA_VERSION = 'nodeslide.owner-data-export/v3' as const;
 export const NODESLIDE_OWNER_DATA_EXPORT_REDACTION_VERSION =
   'nodeslide.secret-redaction/v1' as const;
 export const NODESLIDE_OWNER_DATA_EXPORT_MEDIA_TYPE = 'application/json' as const;
@@ -90,6 +90,12 @@ export interface NodeSlideOwnerDataExport {
       claimReceipts?: NodeSlideDataExportRecord[];
     };
     memories: NodeSlideDataExportRecord[];
+    /** Exact deck-scope memories only; shared workspace/project memories are outside this export. */
+    scopedMemories: NodeSlideDataExportRecord[];
+    sourceRefresh: {
+      schedules: NodeSlideDataExportRecord[];
+      proposals: NodeSlideDataExportRecord[];
+    };
     activity: {
       jobs: NodeSlideDataExportRecord[];
       durableSessions: NodeSlideDataExportRecord[];
@@ -103,6 +109,7 @@ export interface NodeSlideOwnerDataExport {
       executionTraces: NodeSlideDataExportRecord[];
       shadowComparisons: NodeSlideDataExportRecord[];
       validations: NodeSlideDataExportRecord[];
+      roleStages: NodeSlideDataExportRecord[];
     };
     budgets: {
       ledgers: NodeSlideDataExportRecord[];
@@ -111,6 +118,8 @@ export interface NodeSlideOwnerDataExport {
     };
     sync: {
       connections: NodeSlideDataExportRecord[];
+      googleStates: NodeSlideDataExportRecord[];
+      pptxLinks: NodeSlideDataExportRecord[];
     };
     delegation: {
       grants: NodeSlideDataExportRecord[];

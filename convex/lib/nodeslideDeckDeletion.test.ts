@@ -170,6 +170,7 @@ describe('deleteDeck', () => {
       .map((match) => match[1]);
     const expected = [
       ...deckBoundTables,
+      'nodeslide_scoped_memories',
       'nodeslide_signature_profiles',
       'nodeslide_taste_profiles',
     ].sort();
@@ -288,10 +289,26 @@ describe('deleteDeck', () => {
       const key =
         tableName === 'nodeslide_signature_profiles' || tableName === 'nodeslide_taste_profiles'
           ? 'tenantId'
-          : 'deckId';
+          : tableName === 'nodeslide_scoped_memories'
+            ? 'scopeKey'
+            : 'deckId';
       database.seed(tableName, {
         id: `${tableName}:target`,
-        [key]: key === 'tenantId' ? 'deck:target:tenant' : 'deck:target',
+        [key]:
+          key === 'tenantId'
+            ? 'deck:target:tenant'
+            : key === 'scopeKey'
+              ? 'nodeslide.scoped-memory%2Fv1/workspace/session%3Atarget/project/deck%3Atarget%3Atenant/deck/deck%3Atarget'
+              : 'deck:target',
+        ...(tableName === 'nodeslide_scoped_memories'
+          ? {
+              schemaVersion: 'nodeslide.scoped-memory/v1',
+              scopeKind: 'deck',
+              workspaceId: 'session:target',
+              projectId: 'deck:target:tenant',
+              deckId: 'deck:target',
+            }
+          : {}),
         ...(tableName === 'nodeslide_evidence_steps'
           ? { screenshotStorageId: 'storage:target' }
           : tableName === 'nodeslide_uploads'
@@ -300,7 +317,21 @@ describe('deleteDeck', () => {
       });
       database.seed(tableName, {
         id: `${tableName}:other`,
-        [key]: key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+        [key]:
+          key === 'tenantId'
+            ? 'deck:other:tenant'
+            : key === 'scopeKey'
+              ? 'nodeslide.scoped-memory%2Fv1/workspace/session%3Aother/project/deck%3Aother%3Atenant/deck/deck%3Aother'
+              : 'deck:other',
+        ...(tableName === 'nodeslide_scoped_memories'
+          ? {
+              schemaVersion: 'nodeslide.scoped-memory/v1',
+              scopeKind: 'deck',
+              workspaceId: 'session:other',
+              projectId: 'deck:other:tenant',
+              deckId: 'deck:other',
+            }
+          : {}),
         ...(tableName === 'nodeslide_evidence_steps'
           ? { screenshotStorageId: 'storage:other' }
           : tableName === 'nodeslide_uploads'
@@ -326,9 +357,15 @@ describe('deleteDeck', () => {
       const key =
         tableName === 'nodeslide_signature_profiles' || tableName === 'nodeslide_taste_profiles'
           ? 'tenantId'
-          : 'deckId';
+          : tableName === 'nodeslide_scoped_memories'
+            ? 'scopeKey'
+            : 'deckId';
       expect(database.rows(tableName).map((row) => row[key])).toEqual([
-        key === 'tenantId' ? 'deck:other:tenant' : 'deck:other',
+        key === 'tenantId'
+          ? 'deck:other:tenant'
+          : key === 'scopeKey'
+            ? 'nodeslide.scoped-memory%2Fv1/workspace/session%3Aother/project/deck%3Aother%3Atenant/deck/deck%3Aother'
+            : 'deck:other',
       ]);
     }
     expect(database.rows('nodeslide_decks')).toEqual([other.deck]);
@@ -336,6 +373,62 @@ describe('deleteDeck', () => {
     expect(database.rows('nodeslide_decks')).not.toContain(target.deck);
     expect(database.rows('projects')).not.toContain(target.project);
     expect(database.storageDeletes).toEqual(['storage:upload-target', 'storage:target']);
+  });
+
+  it('erases exact deck-scoped memories without deleting shared workspace or project memories', async () => {
+    const database = new MemoryDatabase();
+    seedDeck(database, {
+      deckId: 'deck:memory',
+      clientSessionId: 'workspace:shared',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+    const deckScopeKey = [
+      'nodeslide.scoped-memory/v1',
+      'workspace',
+      'workspace:shared',
+      'project',
+      'deck:memory:tenant',
+      'deck',
+      'deck:memory',
+    ]
+      .map(encodeURIComponent)
+      .join('/');
+    database.seed('nodeslide_scoped_memories', {
+      id: 'memory:deck',
+      schemaVersion: 'nodeslide.scoped-memory/v1',
+      scopeKind: 'deck',
+      scopeKey: deckScopeKey,
+      workspaceId: 'workspace:shared',
+      projectId: 'deck:memory:tenant',
+      deckId: 'deck:memory',
+    });
+    database.seed('nodeslide_scoped_memories', {
+      id: 'memory:workspace',
+      schemaVersion: 'nodeslide.scoped-memory/v1',
+      scopeKind: 'workspace',
+      scopeKey: 'nodeslide.scoped-memory%2Fv1/workspace/workspace%3Ashared',
+      workspaceId: 'workspace:shared',
+    });
+    database.seed('nodeslide_scoped_memories', {
+      id: 'memory:project',
+      schemaVersion: 'nodeslide.scoped-memory/v1',
+      scopeKind: 'project',
+      scopeKey:
+        'nodeslide.scoped-memory%2Fv1/workspace/workspace%3Ashared/project/deck%3Amemory%3Atenant',
+      workspaceId: 'workspace:shared',
+      projectId: 'deck:memory:tenant',
+    });
+
+    const result = await deleteDeckHandler(mutationContext(database), {
+      deckId: 'deck:memory',
+      ownerAccessKey: OWNER_ACCESS_KEY,
+    });
+
+    expect(result.deletedRecords).toBe(3);
+    expect(database.rows('nodeslide_scoped_memories').map((row) => row.id)).toEqual([
+      'memory:workspace',
+      'memory:project',
+    ]);
   });
 
   it('rejects an oversized record set before the first write', async () => {

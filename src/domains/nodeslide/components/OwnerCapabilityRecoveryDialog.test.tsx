@@ -1,5 +1,8 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type OwnerCapabilityRecovery,
   OwnerCapabilityRecoveryDialog,
@@ -11,28 +14,36 @@ const recovery: OwnerCapabilityRecovery = {
   ownerAccessKey: 'owner-secret-capability',
 };
 
+beforeAll(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = true;
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
+});
+
 describe('NodeSlide owner capability recovery dialog', () => {
   it('keeps the capability masked while explaining how to restore it', () => {
-    const markup = renderToStaticMarkup(
-      <OwnerCapabilityRecoveryDialog open recovery={recovery} onClose={() => undefined} />,
-    );
+    render(<OwnerCapabilityRecoveryDialog open recovery={recovery} onClose={() => undefined} />);
 
-    expect(markup).toContain('type="password"');
-    expect(markup).toContain('value="owner-secret-capability"');
-    expect(markup).toContain('grants full edit access');
-    expect(markup).toContain('paste it into this deck');
-    expect(markup).toContain('Copy recovery key');
+    expect(screen.getByLabelText('Owner recovery key')).toHaveAttribute('type', 'password');
+    expect(screen.getByLabelText('Owner recovery key')).toHaveValue('owner-secret-capability');
+    expect(screen.getByText(/grants full edit access/)).toBeInTheDocument();
+    expect(screen.getByText(/paste it into this deck/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copy recovery key/i })).toBeInTheDocument();
   });
 
   it('renders nothing when closed', () => {
-    expect(
-      renderToStaticMarkup(
-        <OwnerCapabilityRecoveryDialog
-          open={false}
-          recovery={recovery}
-          onClose={() => undefined}
-        />,
-      ),
-    ).toBe('');
+    const { container } = render(
+      <OwnerCapabilityRecoveryDialog open={false} recovery={recovery} onClose={() => undefined} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

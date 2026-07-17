@@ -45,6 +45,10 @@ import { applyDeckPatch } from '../../../shared/nodeslidePatch';
 import type { TasteProfile } from '../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../shared/nodeslideSignature';
 import { planSignatureApplication } from '../../../shared/nodeslideSignatureApply';
+import type {
+  NodeSlidePreparedSourceRefreshEdit,
+  NodeSlideSourceRefreshState,
+} from '../../../shared/nodeslideSourceMonitoring';
 import type { SlideVariation, VariationBatch } from '../../../shared/nodeslideVariation';
 import {
   getDeckOwnerAccessKey,
@@ -86,6 +90,10 @@ import {
   elementScope,
   runFocusedEditorMutation,
 } from './components/shell/editorActions';
+import {
+  nodeSlideComposerSessionKey,
+  setNodeSlideComposerSessionText,
+} from './composer/nodeSlideComposerSession';
 import { withNodeSlideDelegationDeadline } from './delegationClient';
 import {
   type EditorRequestToken,
@@ -188,6 +196,27 @@ interface EditorWriteContext {
 }
 
 interface NodeSlideGeneratedApi {
+  nodeslideSourceRefresh: {
+    list: PublicQuery<{ deckId: string; ownerAccessKey: string }, NodeSlideSourceRefreshState>;
+    configure: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        sourceId: string;
+        enabled: boolean;
+        intervalMinutes: number;
+      },
+      NodeSlideSourceRefreshState['schedules'][number]
+    >;
+    dismiss: PublicMutation<
+      { deckId: string; ownerAccessKey: string; proposalId: string },
+      NodeSlideSourceRefreshState['proposals'][number]
+    >;
+    prepareEdit: PublicMutation<
+      { deckId: string; ownerAccessKey: string; proposalId: string },
+      NodeSlidePreparedSourceRefreshEdit
+    >;
+  };
   nodeslideDeckCi: {
     evaluateLatest: PublicQuery<
       { deckId: string; ownerAccessKey: string; changedSourceIds?: string[] },
@@ -608,6 +637,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const [compareBlinkPaused, setCompareBlinkPaused] = useState(false);
   const [previewedPatchId, setPreviewedPatchId] = useState<string | null>(null);
   const [aiCommentContext, setAiCommentContext] = useState<AiCommentContext | null>(null);
+  const [sourceRefreshHandoff, setSourceRefreshHandoff] = useState<
+    Extract<NodeSlidePreparedSourceRefreshEdit, { status: 'prepared' }> | undefined
+  >();
   const [aiAgentActivity, setAiAgentActivity] = useState<AiAgentActivity | null>(null);
   const [traceTelemetryRunId, setTraceTelemetryRunId] = useState<string | null>(null);
   const [olderTelemetryByRun, setOlderTelemetryByRun] = useState<
@@ -926,6 +958,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const revokePublication = useMutation(nodeslideApi.nodeslide.revokePublication);
   const touchPresence = useMutation(nodeslideApi.nodeslide.touchPresence);
   const deleteDataSource = useMutation(nodeslideApi.nodeslide.deleteDataSource);
+  const configureSourceRefresh = useMutation(nodeslideApi.nodeslideSourceRefresh.configure);
+  const dismissSourceRefresh = useMutation(nodeslideApi.nodeslideSourceRefresh.dismiss);
+  const prepareSourceRefreshEdit = useMutation(nodeslideApi.nodeslideSourceRefresh.prepareEdit);
   const deleteDeck = useMutation(nodeslideApi.nodeslide.deleteDeck);
   const cancelAgentRun = useMutation(nodeslideApi.nodeslide.cancelAgentRun);
   const createAgentMemory = useMutation(nodeslideApi.nodeslideMemory.create);
@@ -962,6 +997,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   );
   const editorCapabilities = useQuery(
     nodeslideApi.nodeslide.getEditorCapabilities,
+    activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  const sourceRefreshState = useQuery(
+    nodeslideApi.nodeslideSourceRefresh.list,
     activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
   );
   const recoveredWorkspace = useQuery(
@@ -3283,6 +3322,60 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     if (deleted) setToast({ kind: 'success', message: 'Private uploaded source deleted.' });
   };
 
+  const updateSourceMonitoring = async (sourceId: string, enabled: boolean) => {
+    if (!ownerAccessKey) throw new Error('Open an owned deck before monitoring sources.');
+    await configureSourceRefresh({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      sourceId,
+      enabled,
+      intervalMinutes: 60,
+    });
+    setToast({
+      kind: 'success',
+      message: enabled
+        ? 'Source monitoring is on. Material changes will appear here for review.'
+        : 'Source monitoring paused.',
+    });
+  };
+
+  const prepareMonitoredSourceUpdate = async (proposalId: string) => {
+    if (!ownerAccessKey) throw new Error('Open an owned deck before preparing an update.');
+    const handoff = await prepareSourceRefreshEdit({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      proposalId,
+    });
+    if (handoff.status === 'stale') {
+      throw new Error('This source update is stale. Wait for the next monitoring check.');
+    }
+    setSourceRefreshHandoff(handoff);
+    if (handoff.affectedSlideIds.length > 0) {
+      setSelectedSlideIds(handoff.affectedSlideIds);
+      setActiveSlideId(handoff.affectedSlideIds[0] ?? null);
+      setSelectedElementIds([]);
+    }
+    setNodeSlideComposerSessionText(
+      nodeSlideComposerSessionKey('editor', workspace.deck.id),
+      handoff.instruction,
+    );
+    setActiveInspectorTab('ai');
+    setInspectorCollapsed(false);
+    setToast({
+      kind: 'success',
+      message: `Update prepared for ${handoff.affectedSlideIds.length} affected slide${handoff.affectedSlideIds.length === 1 ? '' : 's'}. Review the scope, then propose.`,
+    });
+  };
+
+  const dismissMonitoredSourceUpdate = async (proposalId: string) => {
+    if (!ownerAccessKey) throw new Error('Open an owned deck before dismissing an update.');
+    await dismissSourceRefresh({
+      deckId: workspace.deck.id,
+      ownerAccessKey,
+      proposalId,
+    });
+  };
+
   const cancelAiRun = async (runId: string) => {
     if (!ownerAccessKey) return;
     const durableJob = agentSessionState.activeJob;
@@ -3612,6 +3705,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     options: AiProposalOptions<NodeSlideEditorCommandId>,
   ) => {
     if (!ownerAccessKey) return;
+    if (options.sourceRefreshBinding) setSourceRefreshHandoff(undefined);
     const scopedSlideIds = 'slideIds' in scope ? scope.slideIds : [];
     const scopedElementIds = 'elementIds' in scope ? scope.elementIds : [];
     updateAgentSessionControls({
@@ -4424,6 +4518,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
             onLoadEvidenceCapture={loadEvidenceCapture}
             {...(agentTelemetry ? { agentTelemetry } : {})}
             aiCommentContext={aiCommentContext}
+            {...(sourceRefreshHandoff ? { sourceRefreshHandoff } : {})}
             previewedPatchId={previewedPatchId}
             activeTastePackId={activeTastePackId}
             activeProfileId={workspace.deck.activeSignatureProfileId ?? null}
@@ -4459,6 +4554,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
               await removeAgentMemory({ deckId: activeDeckId, ownerAccessKey, memoryId });
             }}
             onDeleteAiDataSource={deleteAiDataSource}
+            {...(sourceRefreshState ? { sourceRefresh: sourceRefreshState } : {})}
+            onConfigureSourceRefresh={updateSourceMonitoring}
+            onPrepareSourceRefresh={prepareMonitoredSourceUpdate}
+            onDismissSourceRefresh={dismissMonitoredSourceUpdate}
             onCancelAiRun={(runId) => void cancelAiRun(runId)}
             {...(activeSessionJob?.kind === 'edit_proposal' &&
             activeSessionJob.status === 'failed' &&

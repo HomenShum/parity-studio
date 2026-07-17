@@ -51,6 +51,10 @@ export function clearNodeSlideComposerSession(key: string): void {
   updateSession(key, EMPTY_SESSION);
 }
 
+export function setNodeSlideComposerSessionText(key: string, text: string): void {
+  updateSession(key, { ...ensureSession(key), text });
+}
+
 export function useNodeSlideComposerSession(
   key: string,
   initial: Partial<NodeSlideComposerSessionState> = EMPTY_SESSION,
