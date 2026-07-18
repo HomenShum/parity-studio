@@ -4,6 +4,7 @@ import {
   NODESLIDE_UI_CONTRACT_VERSION,
   publishNodeSlideUiContract,
   readNodeSlideUiContract,
+  resolveNodeSlideInitialTheme,
 } from './uiContract';
 
 describe('NodeSlide UI contract', () => {
@@ -55,5 +56,17 @@ describe('NodeSlide UI contract', () => {
     expect(root.getAttribute('data-ns-deck-id')).toBeNull();
     expect(root.getAttribute('data-ns-deck-version')).toBeNull();
     expect(root.getAttribute('data-ns-phase')).toBe('landing');
+  });
+
+  it('resolves the initial theme from the stored preference before the OS signal', () => {
+    window.localStorage.setItem('nodeslide.v3.theme', 'dark');
+    expect(resolveNodeSlideInitialTheme()).toBe('dark');
+    window.localStorage.setItem('nodeslide.v3.theme', 'light');
+    expect(resolveNodeSlideInitialTheme()).toBe('light');
+    // Junk values fall through to the OS signal (absent in jsdom) then light.
+    window.localStorage.setItem('nodeslide.v3.theme', 'sepia');
+    expect(resolveNodeSlideInitialTheme()).toBe('light');
+    window.localStorage.removeItem('nodeslide.v3.theme');
+    expect(resolveNodeSlideInitialTheme()).toBe('light');
   });
 });
