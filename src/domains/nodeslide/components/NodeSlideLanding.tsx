@@ -2,6 +2,7 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
+  FileUp,
   Globe2,
   Layers3,
   LoaderCircle,
@@ -50,6 +51,7 @@ interface NodeSlideLandingProps {
   onCancelCreate?: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
   onExploreSample: () => void;
+  onImportPptx?: (file: File) => void;
   onOpenDeck: (deckId: string) => void;
 }
 
@@ -83,6 +85,7 @@ export function NodeSlideLanding({
   onCancelCreate,
   onCreate,
   onExploreSample,
+  onImportPptx,
   onOpenDeck,
 }: NodeSlideLandingProps) {
   const agentSession = useAgentSession();
@@ -100,6 +103,7 @@ export function NodeSlideLanding({
   // Canon §0.5: the landing themes through the same data-ns-theme attribute as
   // the studio (stored preference, then OS preference) — never a media query.
   const [landingTheme] = useState<'light' | 'dark'>(() => resolveNodeSlideInitialTheme());
+  const pptxInputRef = useRef<HTMLInputElement | null>(null);
   // Agent-native UI contract: the landing is its own publishable phase.
   useEffect(() => {
     publishNodeSlideUiContract({ phase: 'landing', connection: 'ready', theme: landingTheme });
@@ -406,9 +410,33 @@ export function NodeSlideLanding({
             ))}
           </div>
 
-          <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
-            <Layers3 size={15} /> Explore the editable sample workspace
-          </button>
+          <div className="ns-landing-secondary">
+            <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
+              <Layers3 size={15} /> Explore the editable sample workspace
+            </button>
+            {onImportPptx ? (
+              <button
+                className="ns-landing-sample"
+                type="button"
+                onClick={() => pptxInputRef.current?.click()}
+              >
+                <FileUp size={15} /> Start from a PowerPoint file
+              </button>
+            ) : null}
+            <input
+              ref={pptxInputRef}
+              accept=".pptx"
+              aria-label="Import a PowerPoint file as a new deck"
+              data-testid="landing-pptx-input"
+              hidden
+              type="file"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                if (file) onImportPptx?.(file);
+              }}
+            />
+          </div>
 
           {recentDecks.length > 0 ? (
             <section className="ns-landing-recents" aria-labelledby="nodeslide-recent-title">

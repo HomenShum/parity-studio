@@ -12171,6 +12171,14 @@
   z-index: -1;
 }
 
+.nodeslide-studio .ns-landing-secondary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ns-space-2) var(--ns-space-4);
+  justify-content: center;
+}
+
 /* Two-column hero at desktop; display:contents keeps every narrower layout
    byte-identical to the pre-signature landing. */
 .nodeslide-studio .ns-landing-work {

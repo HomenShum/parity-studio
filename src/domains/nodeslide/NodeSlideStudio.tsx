@@ -487,6 +487,19 @@ interface NodeSlideGeneratedApi {
     createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
     proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, PatchReceipt>;
   };
+  nodeslidePptxCreate: {
+    importPptxAsNewDeck: PublicAction<
+      {
+        clientSessionId: string;
+        ownerAccessKey: string;
+        idempotencyKey: string;
+        fileName: string;
+        bytes: ArrayBuffer;
+      },
+      | { ok: true; deckId: string; slideCount: number; fidelityNotes: string[] }
+      | { ok: false; code: string; message: string; fidelityNotes: string[] }
+    >;
+  };
   nodeslideVariations: {
     generate: PublicAction<
       {
@@ -971,6 +984,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const startEditProposalJob = useMutation(nodeslideApi.nodeslideJobs.startEditProposal);
   const cancelDurableJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
   const retryDurableJob = useMutation(nodeslideApi.nodeslideJobs.retry);
+  const importPptxAsNewDeck = useAction(nodeslideApi.nodeslidePptxCreate.importPptxAsNewDeck);
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
   const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
   const rejectVariation = useMutation(nodeslideApi.nodeslideVariations.reject);
@@ -2120,6 +2134,37 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     writeDeckToUrl(deckId);
   }, []);
 
+  // D8 create=edit parity: seed a brand-new deck from a .pptx file. Failures
+  // surface through the landing's error channel, never as a fallback deck.
+  const startDeckFromPptxFile = useCallback(
+    async (file: File) => {
+      setProjectError(null);
+      try {
+        const bytes = await file.arrayBuffer();
+        const ownerKey = mintBrowserOwnerAccessKey();
+        const result = await importPptxAsNewDeck({
+          clientSessionId,
+          ownerAccessKey: ownerKey,
+          idempotencyKey: crypto.randomUUID(),
+          fileName: file.name,
+          bytes,
+        });
+        if (!result.ok) {
+          setProjectError(result.message);
+          return;
+        }
+        storeDeckOwnerAccessKey(result.deckId, ownerKey);
+        setKnownAccess(listStoredDeckAccess());
+        openOwnedDeck(result.deckId);
+      } catch (error) {
+        setProjectError(
+          error instanceof Error ? error.message : 'The PowerPoint file could not be imported.',
+        );
+      }
+    },
+    [clientSessionId, importPptxAsNewDeck, openOwnedDeck],
+  );
+
   const refreshVariationPreferences = useCallback(async () => {
     if (!workspace || !ownerAccessKey) return;
     try {
@@ -2942,6 +2987,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           onCancelCreate={() => void cancelCreateDeck()}
           onCreate={(request) => void createDeck(request)}
           onExploreSample={() => setSampleRequested(true)}
+          onImportPptx={(file) => void startDeckFromPptxFile(file)}
           onOpenDeck={openOwnedDeck}
         />
         {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
@@ -5245,6 +5291,15 @@ function editorValidationStatus(
   if (!validation.ok || !validation.publishOk) return 'classification_issue';
   if (!validation.cleanOk || validation.issues.length > 0) return 'needs_review';
   return 'verified';
+}
+
+/** Mints the same 43-char base64url owner capability format the server issues. */
+function mintBrowserOwnerAccessKey(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
 function readStudioPreference(key: 'theme'): string | null {

@@ -3387,6 +3387,64 @@ export const createFromBriefInternal = internalMutation({
   },
 });
 
+/**
+ * D8 create=edit parity: persists a server-imported PPTX snapshot as a brand-new
+ * deck through the same createWorkspaceRows path (validation, project row,
+ * initial version, creation trace) as a brief-created deck. Import-only caller:
+ * nodeslidePptxCreate.importPptxAsNewDeck.
+ */
+export const createImportedDeckInternal = internalMutation({
+  args: {
+    clientSessionId: v.string(),
+    ownerAccessKey: v.string(),
+    snapshot: v.any(),
+    fileName: v.string(),
+    fidelityNotes: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const snapshot = structuredClone(args.snapshot) as DeckSnapshot;
+    const existing = await findDeckRow(ctx, snapshot.deck.id);
+    if (existing) {
+      await requireOwnerAccess(ctx, snapshot.deck.id, args.ownerAccessKey);
+      return { deckId: snapshot.deck.id, reused: true };
+    }
+    const built = {
+      snapshot,
+      plan: [
+        `Imported ${args.fileName}`,
+        'Parsed slides, text, and native objects inside bounded import limits',
+        'Validated the imported structure before persisting',
+      ],
+      spec: {
+        title: snapshot.deck.title,
+        narrative: [`Imported from PowerPoint: ${args.fileName}`],
+        slides: [],
+      },
+    };
+    await createWorkspaceRows(ctx, {
+      clientSessionId: args.clientSessionId,
+      ownerAccessKey: args.ownerAccessKey,
+      built,
+      layoutBlockerPolicy: 'persist_with_findings',
+      trace: {
+        summary: `Imported ${args.fileName} as a new editable deck.`,
+        context: [
+          `Source file: ${args.fileName}`,
+          ...(args.fidelityNotes.length
+            ? args.fidelityNotes.map((note) => `Fidelity: ${note}`)
+            : ['Fidelity: full import, no recorded loss']),
+        ],
+        toolCalls: [
+          'Parsed PPTX archive server-side within hostile-input bounds',
+          'Imported slides and elements into the canonical snapshot',
+          'Validated snapshot',
+        ],
+      },
+    });
+    return { deckId: snapshot.deck.id, reused: false };
+  },
+});
+
 async function requireAgentSourceAuthorization(
   ctx: Pick<MutationCtx, 'db'>,
   deckId: string,
@@ -4506,6 +4564,13 @@ async function createWorkspaceRows(
     clientSessionId: string;
     ownerAccessKey: string;
     built: ReturnType<typeof buildGoldenNodeSlide>;
+    /**
+     * 'reject' (default, brief path): layout blockers abort with no persistence.
+     * 'persist_with_findings' (import path): the user's own file is the truth —
+     * it lands as a draft with its validation findings visible, and publication
+     * stays gated by validationAllowsPublication until they are repaired.
+     */
+    layoutBlockerPolicy?: 'reject' | 'persist_with_findings';
     trace: {
       summary: string;
       context: string[];
@@ -4536,7 +4601,7 @@ async function createWorkspaceRows(
     (issue) =>
       issue.severity === 'error' && (issue.code === 'collision' || issue.code === 'overflow'),
   );
-  if (layoutBlockers.length > 0) {
+  if (layoutBlockers.length > 0 && (args.layoutBlockerPolicy ?? 'reject') === 'reject') {
     throw new Error(
       `NodeSlide could not compose a safe first draft (${layoutBlockers.length} layout blocker${layoutBlockers.length === 1 ? '' : 's'}). No deck was persisted; revise or retry the brief.`,
     );
