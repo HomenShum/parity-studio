@@ -60,6 +60,13 @@ export interface NodeSlideJobRoutingReceipt {
       }
     | { kind: 'refused'; code: string; message: string };
   availabilityBasis: { windowMs: number; signalCount: number };
+  /**
+   * What the observed outcomes said about the REQUESTED route specifically:
+   * confirmed (fresh success), failed (fresh failure/fallback), none (cold —
+   * unknown is never treated as down). Optional because receipts persisted
+   * before this field exist; absence reads as 'none'.
+   */
+  requestedRouteSignal?: 'confirmed' | 'failed' | 'none';
   reasons: string[];
 }
 
@@ -157,6 +164,14 @@ export function buildNodeSlideCreateRoutingReceipt(args: {
       windowMs: NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS,
       signalCount: availability.length,
     },
+    requestedRouteSignal:
+      requested.mode === 'deterministic'
+        ? 'none'
+        : (() => {
+            const record = availability.find((entry) => entry.catalogModelId === requested.model);
+            if (!record) return 'none';
+            return record.available ? 'confirmed' : 'failed';
+          })(),
     reasons: decision.reasons.slice(0, ROUTING_REASON_LIMIT).map((reason) => reason.slice(0, 200)),
   };
 }
@@ -167,6 +182,8 @@ export function buildNodeSlideCreateRoutingReceipt(args: {
  * the run executes deterministically instead of dispatching a doomed external
  * call. Deterministic requests and selected routes pass through untouched.
  */
+const ENFORCEABLE_REFUSALS = new Set(['cost_cap_exceeded', 'reasoning_effort_unsupported']);
+
 export function resolveNodeSlideEnforcedCreateRequest<
   T extends {
     providerMode?: string;
@@ -175,13 +192,22 @@ export function resolveNodeSlideEnforcedCreateRequest<
     providerConsent?: string;
   },
 >(
-  receipt: Pick<NodeSlideJobRoutingReceipt, 'requested' | 'decision'> | undefined,
+  receipt:
+    | Pick<NodeSlideJobRoutingReceipt, 'requested' | 'decision' | 'requestedRouteSignal'>
+    | undefined,
   request: T,
 ): { request: T; enforced: boolean; reason?: string } {
   if (!receipt || receipt.requested.mode === 'deterministic') {
     return { request, enforced: false };
   }
   if (receipt.decision.kind === 'selected') return { request, enforced: false };
+  // Enforce only on NEGATIVE evidence: hard policy refusals, or a route the
+  // telemetry recently saw fail. Cold-start absence of signals stays advisory —
+  // unknown is never treated as down, or external routes could never bootstrap.
+  const enforceable =
+    ENFORCEABLE_REFUSALS.has(receipt.decision.code) ||
+    (receipt.decision.code === 'route_unavailable' && receipt.requestedRouteSignal === 'failed');
+  if (!enforceable) return { request, enforced: false };
   const {
     providerMode: _mode,
     providerModel: _model,

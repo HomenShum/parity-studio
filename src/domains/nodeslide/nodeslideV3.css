@@ -12242,12 +12242,20 @@
   padding: 2px 8px;
   text-transform: uppercase;
 }
-.nodeslide-studio .ns-run-status.is-succeeded { color: var(--ns-positive); }
-.nodeslide-studio .ns-run-status.is-awaiting_review { color: var(--ns-accent-dark); }
-.nodeslide-studio .ns-run-status.is-failed { color: var(--ns-danger); }
+.nodeslide-studio .ns-run-status.is-succeeded {
+  color: var(--ns-positive);
+}
+.nodeslide-studio .ns-run-status.is-awaiting_review {
+  color: var(--ns-accent-dark);
+}
+.nodeslide-studio .ns-run-status.is-failed {
+  color: var(--ns-danger);
+}
 .nodeslide-studio .ns-run-status.is-running,
 .nodeslide-studio .ns-run-status.is-queued,
-.nodeslide-studio .ns-run-status.is-retrying { color: var(--ns-ink2); }
+.nodeslide-studio .ns-run-status.is-retrying {
+  color: var(--ns-ink2);
+}
 
 .nodeslide-studio .ns-landing-secondary {
   align-items: center;

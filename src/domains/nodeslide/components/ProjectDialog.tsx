@@ -868,7 +868,10 @@ export function ProjectDialog({
                         {job.error ? <small className="ns-run-error"> — {job.error}</small> : null}
                       </span>
                       {job.resultDeckId ? (
-                        <button type="button" onClick={() => onOpenDeck(job.resultDeckId as string)}>
+                        <button
+                          type="button"
+                          onClick={() => onOpenDeck(job.resultDeckId as string)}
+                        >
                           Open deck
                         </button>
                       ) : null}

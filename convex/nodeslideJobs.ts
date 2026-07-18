@@ -59,6 +59,7 @@ import {
   NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS,
   NODESLIDE_ROUTE_SIGNAL_LIMIT,
   buildNodeSlideCreateRoutingReceipt,
+  resolveNodeSlideEnforcedCreateRequest,
 } from './lib/nodeslideRoutingReceipt';
 import {
   nodeslideCreatePublicError,
@@ -105,7 +106,51 @@ export const startCreateDeck = mutation({
     const ownerAccessKey = requiredOwnerAccessKey(args.ownerAccessKey);
     const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
     const idempotencyKey = requiredText(args.idempotencyKey, 'idempotencyKey', 160);
-    const request = nodeSlideCreateJobRequestFromArgs(args);
+    const requestedIntent = nodeSlideCreateJobRequestFromArgs(args);
+    // D7: routing decides at ADMISSION, before any digest or capability binds.
+    // Availability derives only from observed outcomes (fail closed per route);
+    // enforcement downgrades to deterministic only on NEGATIVE evidence — a
+    // hard policy refusal or a route the telemetry recently saw fail.
+    const admissionNow = Date.now();
+    const routeSignalRows = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_created', (q) =>
+        q.gt('createdAt', admissionNow - NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS),
+      )
+      .order('desc')
+      .take(NODESLIDE_ROUTE_SIGNAL_LIMIT);
+    const admissionReceipt = buildNodeSlideCreateRoutingReceipt({
+      providerMode: requestedIntent.providerMode,
+      providerModel: requestedIntent.providerModel,
+      providerEffort: requestedIntent.providerEffort,
+      briefCharacters: requestedIntent.brief.prompt.length,
+      attachmentCharacters: (requestedIntent.attachments ?? []).reduce(
+        (total, attachment) => total + attachment.content.length,
+        0,
+      ),
+      signals: routeSignalRows.flatMap((row) =>
+        row.provider && row.model
+          ? [
+              {
+                provider: row.provider,
+                model: row.model,
+                ok: row.status === 'completed' || row.status === 'awaiting_review',
+                at: row.completedAt ?? row.createdAt,
+              },
+            ]
+          : [],
+      ),
+      now: admissionNow,
+    });
+    const enforcement = resolveNodeSlideEnforcedCreateRequest(admissionReceipt, requestedIntent);
+    const request = enforcement.request;
+    const routingReceipt = enforcement.enforced
+      ? {
+          ...admissionReceipt,
+          enforcement: 'enforced_v1' as const,
+          reasons: [...admissionReceipt.reasons, `Enforced: ${enforcement.reason}`].slice(0, 8),
+        }
+      : admissionReceipt;
     const requestDigest = nodeSlideJobRequestDigest(request);
     const ownerDigest = nodeSlideJobOwnerDigest(ownerAccessKey);
     const existing = await ctx.db
@@ -191,39 +236,6 @@ export const startCreateDeck = mutation({
       },
     });
     const streamId = await streaming.createStream(ctx);
-    // Admission-time routing decision: availability is derived only from observed
-    // provider outcomes in the recent window (fail closed), never from a probe we
-    // did not run. The receipt is advisory_v1 and immutable for the job's lifetime.
-    const routeSignalRows = await ctx.db
-      .query('nodeslide_traces')
-      .withIndex('by_created', (q) =>
-        q.gt('createdAt', now - NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS),
-      )
-      .order('desc')
-      .take(NODESLIDE_ROUTE_SIGNAL_LIMIT);
-    const routingReceipt = buildNodeSlideCreateRoutingReceipt({
-      providerMode: request.providerMode,
-      providerModel: request.providerModel,
-      providerEffort: request.providerEffort,
-      briefCharacters: request.brief.prompt.length,
-      attachmentCharacters: (request.attachments ?? []).reduce(
-        (total, attachment) => total + attachment.content.length,
-        0,
-      ),
-      signals: routeSignalRows.flatMap((row) =>
-        row.provider && row.model
-          ? [
-              {
-                provider: row.provider,
-                model: row.model,
-                ok: row.status === 'completed' || row.status === 'awaiting_review',
-                at: row.completedAt ?? row.createdAt,
-              },
-            ]
-          : [],
-      ),
-      now,
-    });
     const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
       id: jobId,
       kind: 'create_deck',

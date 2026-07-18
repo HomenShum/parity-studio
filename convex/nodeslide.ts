@@ -104,6 +104,7 @@ import {
   validateNodeSlidePatch,
 } from './lib/nodeslidePatches';
 import { planNodeSlidePropagation } from './lib/nodeslidePropagation';
+import { decideNodeSlidePublishApproval } from './lib/nodeslidePublishApprovalPolicy';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   buildBriefNodeSlide,
@@ -1263,6 +1264,31 @@ export const publishDeck = mutation({
     if (!validationAllowsPublication(snapshot, validation)) {
       throw new Error('The current deck version must pass publish validation before sharing.');
     }
+
+    // D9 governance: when the approval gate is on, only an approver sign-off
+    // bound to this exact version + validation receipt authorizes publish.
+    const approvalRows = await ctx.db
+      .query('nodeslide_publish_approvals')
+      .withIndex('by_deck_version', (queryBuilder) =>
+        queryBuilder.eq('deckId', deckId).eq('deckVersion', snapshot.deck.version),
+      )
+      .collect();
+    const newestApproval =
+      approvalRows.sort((first, second) => second.approvedAt - first.approvedAt)[0] ?? null;
+    const approvalDecision = decideNodeSlidePublishApproval({
+      required: deckRow.publishApprovalRequired === true,
+      deckVersion: snapshot.deck.version,
+      validationId: validation.id,
+      approval: newestApproval
+        ? {
+            deckVersion: newestApproval.deckVersion,
+            validationId: newestApproval.validationId,
+            approverId: newestApproval.approverId,
+            approvedAt: newestApproval.approvedAt,
+          }
+        : null,
+    });
+    if (!approvalDecision.allowed) throw new Error(approvalDecision.message);
 
     const now = Date.now();
     const previous = await findLatestPublicationForDeck(ctx, deckId);

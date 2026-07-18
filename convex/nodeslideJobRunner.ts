@@ -11,7 +11,6 @@ import {
   nodeslideEditProposalJobRequestValidator,
 } from './lib/nodeslideJobValidators';
 import { runNodeSlideLiveRenderRepair } from './lib/nodeslideLiveRenderRepair';
-import { resolveNodeSlideEnforcedCreateRequest } from './lib/nodeslideRoutingReceipt';
 
 // Generated Convex references form a deliberate action -> mutation/action
 // boundary. All values still cross explicit validators.
@@ -45,7 +44,6 @@ export const executeCreateDeckInternal = internalAction({
       progress: number;
       createdAt: number;
       resultDeckId?: string;
-      routingReceipt?: Parameters<typeof resolveNodeSlideEnforcedCreateRequest>[0];
     };
     if (claimed.status === 'cancelled') throw new Error('NodeSlide job was cancelled.');
     await ctx.runMutation(jobsInternal.checkpointInternal, {
@@ -54,21 +52,14 @@ export const executeCreateDeckInternal = internalAction({
       phase: 'generating',
       progress: Math.max(claimed.progress, 35),
     });
-    // D7 enforcement: a refused external route executes deterministically
-    // instead of dispatching a doomed provider call; the receipt records it.
-    const enforcement = resolveNodeSlideEnforcedCreateRequest(claimed.routingReceipt, args.request);
-    if (enforcement.enforced && enforcement.reason) {
-      await ctx.runMutation(jobsInternal.markRoutingEnforcedInternal, {
-        jobId: args.jobId,
-        reason: enforcement.reason,
-      });
-    }
+    // D7 enforcement happens at ADMISSION (startCreateDeck): args.request is
+    // already the enforced request and the routing receipt on the job records it.
     const deckId = nodeslideStableId('deck_job', args.jobId);
     const projectId = nodeslideStableId('project_nodeslide_job', args.jobId);
     let resultDeckId = claimed.resultDeckId;
     if (!resultDeckId) {
       const result = (await ctx.runAction(nodeslideAgentPublic.createDeckFromBrief, {
-        ...enforcement.request,
+        ...args.request,
         durableJob: {
           jobId: args.jobId,
           deckId,

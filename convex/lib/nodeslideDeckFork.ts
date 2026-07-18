@@ -47,12 +47,14 @@ export function forkNodeSlideSnapshot(
       elementOrder: slide.elementOrder.map(mapElementId),
       version: 1,
     })),
-    elements: source.elements.map((element) => forkElement(element, args.deckId, {
-      mapElementId,
-      mapSlideId,
-      mapSourceId,
-      mapGroupId,
-    })),
+    elements: source.elements.map((element) =>
+      forkElement(element, args.deckId, {
+        mapElementId,
+        mapSlideId,
+        mapSourceId,
+        mapGroupId,
+      }),
+    ),
     sources: source.sources.map((record) => ({
       ...structuredClone(record),
       id: mapSourceId(record.id),

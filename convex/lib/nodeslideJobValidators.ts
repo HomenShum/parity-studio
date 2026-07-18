@@ -152,5 +152,10 @@ export const nodeslideJobRoutingReceiptValidator = v.object({
     }),
   ),
   availabilityBasis: v.object({ windowMs: v.number(), signalCount: v.number() }),
+  // Optional because receipts persisted before this field exist; absence reads
+  // as 'none' (advisory), never as negative evidence.
+  requestedRouteSignal: v.optional(
+    v.union(v.literal('confirmed'), v.literal('failed'), v.literal('none')),
+  ),
   reasons: v.array(v.string()),
 });
