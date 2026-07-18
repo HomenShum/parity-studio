@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Check,
   Clock3,
+  CopyPlus,
   FolderOpen,
   Layers3,
   LoaderCircle,
@@ -103,6 +104,15 @@ export interface RecentDeck {
   updatedAt: number;
 }
 
+export interface SessionRunReceipt {
+  jobId: string;
+  kind: 'create_deck' | 'edit_proposal';
+  status: string;
+  updatedAt: number;
+  error?: string;
+  resultDeckId?: string;
+}
+
 interface ProjectDialogProps {
   open: boolean;
   clientSessionId: string;
@@ -112,7 +122,10 @@ interface ProjectDialogProps {
   onClearError?: () => void;
   onClose: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
+  onDuplicateDeck?: (deckId: string) => void;
   onOpenDeck: (deckId: string) => void;
+  /** Secret-free run receipts for the returning-user dashboard (D11). */
+  sessionJobs?: readonly SessionRunReceipt[];
   initialDraft?: {
     title: string;
     prompt: string;
@@ -169,7 +182,9 @@ export function ProjectDialog({
   onClearError,
   onClose,
   onCreate,
+  onDuplicateDeck,
   onOpenDeck,
+  sessionJobs,
   initialDraft = null,
   initialMode = 'create',
   createEnabled = true,
@@ -808,23 +823,63 @@ export function ProjectDialog({
                 <small>{recentDecks.length}</small>
               </div>
               {recentDecks.map((deck) => (
-                <button type="button" key={deck.id} onClick={() => onOpenDeck(deck.id)}>
-                  <span className="ns-recent-deck-icon">
-                    <Layers3 size={16} />
-                  </span>
-                  <span>
-                    <strong>{deck.title}</strong>
-                    <small>
-                      <Clock3 size={11} /> v{deck.version} · {relativeDate(deck.updatedAt)}
-                    </small>
-                  </span>
-                  <ArrowRight size={14} />
-                </button>
+                <div className="ns-recent-deck-row" key={deck.id}>
+                  <button type="button" onClick={() => onOpenDeck(deck.id)}>
+                    <span className="ns-recent-deck-icon">
+                      <Layers3 size={16} />
+                    </span>
+                    <span>
+                      <strong>{deck.title}</strong>
+                      <small>
+                        <Clock3 size={11} /> v{deck.version} · {relativeDate(deck.updatedAt)}
+                      </small>
+                    </span>
+                    <ArrowRight size={14} />
+                  </button>
+                  {onDuplicateDeck ? (
+                    <button
+                      type="button"
+                      className="ns-recent-deck-duplicate"
+                      aria-label={`Duplicate ${deck.title}`}
+                      title="Duplicate this deck"
+                      onClick={() => onDuplicateDeck(deck.id)}
+                    >
+                      <CopyPlus size={14} />
+                    </button>
+                  ) : null}
+                </div>
               ))}
               {recentDecks.length === 0 ? (
                 <p>No owned decks are stored in this browser yet.</p>
               ) : null}
             </div>
+            {sessionJobs && sessionJobs.length > 0 ? (
+              <div className="ns-recent-runs" data-testid="session-runs-dashboard">
+                <div className="ns-form-section-heading">
+                  <span>Recent agent runs</span>
+                </div>
+                <ul>
+                  {sessionJobs.map((job) => (
+                    <li key={job.jobId}>
+                      <span className={`ns-run-status is-${job.status}`}>{job.status}</span>
+                      <span className="ns-run-kind">
+                        {job.kind === 'create_deck' ? 'Create deck' : 'Edit proposal'} ·{' '}
+                        {relativeDate(job.updatedAt)}
+                        {job.error ? <small className="ns-run-error"> — {job.error}</small> : null}
+                      </span>
+                      {job.resultDeckId ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDeck(job.resultDeckId as string)}
+                        >
+                          Open deck
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         )}
       </DialogContent>

@@ -127,7 +127,7 @@ export const nodeslideJobRenderRepairSummaryValidator = v.object({
 /** Immutable admission-time routing decision persisted on a durable job row. */
 export const nodeslideJobRoutingReceiptValidator = v.object({
   policyVersion: v.literal('nodeslide.auto-routing/v1'),
-  enforcement: v.literal('advisory_v1'),
+  enforcement: v.union(v.literal('advisory_v1'), v.literal('enforced_v1')),
   decidedAt: v.number(),
   task: v.literal('create_deck_from_brief'),
   requested: v.union(
@@ -152,5 +152,10 @@ export const nodeslideJobRoutingReceiptValidator = v.object({
     }),
   ),
   availabilityBasis: v.object({ windowMs: v.number(), signalCount: v.number() }),
+  // Optional because receipts persisted before this field exist; absence reads
+  // as 'none' (advisory), never as negative evidence.
+  requestedRouteSignal: v.optional(
+    v.union(v.literal('confirmed'), v.literal('failed'), v.literal('none')),
+  ),
   reasons: v.array(v.string()),
 });

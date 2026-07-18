@@ -79,6 +79,90 @@ describe('deriveNodeSlideRouteAvailability', () => {
   });
 });
 
+describe('resolveNodeSlideEnforcedCreateRequest', () => {
+  const externalRequest = {
+    providerMode: 'nebius',
+    providerModel: 'nebius/zai-org/GLM-5.2',
+    providerEffort: 'medium',
+    providerConsent: 'nebius_full_brief_v1',
+    brief: { prompt: 'x' },
+  };
+
+  it('downgrades on negative evidence (route recently failed) and strips consent', async () => {
+    const { resolveNodeSlideEnforcedCreateRequest } = await import('./nodeslideRoutingReceipt');
+    const outcome = resolveNodeSlideEnforcedCreateRequest(
+      {
+        requested: { mode: 'nebius', model: 'nebius/zai-org/GLM-5.2' },
+        decision: { kind: 'refused', code: 'route_unavailable', message: 'Route failed recently.' },
+        requestedRouteSignal: 'failed',
+      },
+      externalRequest,
+    );
+    expect(outcome.enforced).toBe(true);
+    expect(outcome.reason).toContain('route_unavailable');
+    expect(outcome.request.providerMode).toBe('deterministic');
+    expect(outcome.request.providerModel).toBeUndefined();
+    expect(outcome.request.providerConsent).toBeUndefined();
+    expect((outcome.request as { brief: { prompt: string } }).brief.prompt).toBe('x');
+  });
+
+  it('never enforces on cold-start absence of signals - unknown is not down', async () => {
+    const { resolveNodeSlideEnforcedCreateRequest } = await import('./nodeslideRoutingReceipt');
+    const coldStart = resolveNodeSlideEnforcedCreateRequest(
+      {
+        requested: { mode: 'nebius', model: 'nebius/zai-org/GLM-5.2' },
+        decision: { kind: 'refused', code: 'route_unavailable', message: 'No fresh signal.' },
+        requestedRouteSignal: 'none',
+      },
+      externalRequest,
+    );
+    expect(coldStart.enforced).toBe(false);
+    expect(coldStart.request).toEqual(externalRequest);
+
+    const hardPolicy = resolveNodeSlideEnforcedCreateRequest(
+      {
+        requested: { mode: 'nebius', model: 'nebius/zai-org/GLM-5.2' },
+        decision: { kind: 'refused', code: 'cost_cap_exceeded', message: 'Over budget.' },
+        requestedRouteSignal: 'none',
+      },
+      externalRequest,
+    );
+    expect(hardPolicy.enforced).toBe(true);
+  });
+
+  it('passes selected routes and deterministic requests through untouched', async () => {
+    const { resolveNodeSlideEnforcedCreateRequest } = await import('./nodeslideRoutingReceipt');
+    const selected = resolveNodeSlideEnforcedCreateRequest(
+      {
+        requested: { mode: 'nebius', model: 'nebius/zai-org/GLM-5.2' },
+        decision: {
+          kind: 'selected',
+          provider: 'nebius',
+          modelId: 'zai-org/GLM-5.2',
+          estimatedMicroUsd: 3810,
+          pricingSource: 'nodeslide-nebius-native-catalog',
+        },
+        requestedRouteSignal: 'confirmed',
+      },
+      externalRequest,
+    );
+    expect(selected).toEqual({ request: externalRequest, enforced: false });
+
+    const deterministic = resolveNodeSlideEnforcedCreateRequest(
+      {
+        requested: { mode: 'deterministic' },
+        decision: { kind: 'refused', code: 'invalid_input', message: 'n/a' },
+        requestedRouteSignal: 'none',
+      },
+      { providerMode: 'deterministic' },
+    );
+    expect(deterministic.enforced).toBe(false);
+
+    const missingReceipt = resolveNodeSlideEnforcedCreateRequest(undefined, externalRequest);
+    expect(missingReceipt.enforced).toBe(false);
+  });
+});
+
 describe('buildNodeSlideCreateRoutingReceipt', () => {
   it('selects the requested external route with a cost estimate when recently proven available', () => {
     const receipt = buildNodeSlideCreateRoutingReceipt({

@@ -59,6 +59,7 @@ import {
   NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS,
   NODESLIDE_ROUTE_SIGNAL_LIMIT,
   buildNodeSlideCreateRoutingReceipt,
+  resolveNodeSlideEnforcedCreateRequest,
 } from './lib/nodeslideRoutingReceipt';
 import {
   nodeslideCreatePublicError,
@@ -105,7 +106,51 @@ export const startCreateDeck = mutation({
     const ownerAccessKey = requiredOwnerAccessKey(args.ownerAccessKey);
     const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
     const idempotencyKey = requiredText(args.idempotencyKey, 'idempotencyKey', 160);
-    const request = nodeSlideCreateJobRequestFromArgs(args);
+    const requestedIntent = nodeSlideCreateJobRequestFromArgs(args);
+    // D7: routing decides at ADMISSION, before any digest or capability binds.
+    // Availability derives only from observed outcomes (fail closed per route);
+    // enforcement downgrades to deterministic only on NEGATIVE evidence — a
+    // hard policy refusal or a route the telemetry recently saw fail.
+    const admissionNow = Date.now();
+    const routeSignalRows = await ctx.db
+      .query('nodeslide_traces')
+      .withIndex('by_created', (q) =>
+        q.gt('createdAt', admissionNow - NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS),
+      )
+      .order('desc')
+      .take(NODESLIDE_ROUTE_SIGNAL_LIMIT);
+    const admissionReceipt = buildNodeSlideCreateRoutingReceipt({
+      providerMode: requestedIntent.providerMode,
+      providerModel: requestedIntent.providerModel,
+      providerEffort: requestedIntent.providerEffort,
+      briefCharacters: requestedIntent.brief.prompt.length,
+      attachmentCharacters: (requestedIntent.attachments ?? []).reduce(
+        (total, attachment) => total + attachment.content.length,
+        0,
+      ),
+      signals: routeSignalRows.flatMap((row) =>
+        row.provider && row.model
+          ? [
+              {
+                provider: row.provider,
+                model: row.model,
+                ok: row.status === 'completed' || row.status === 'awaiting_review',
+                at: row.completedAt ?? row.createdAt,
+              },
+            ]
+          : [],
+      ),
+      now: admissionNow,
+    });
+    const enforcement = resolveNodeSlideEnforcedCreateRequest(admissionReceipt, requestedIntent);
+    const request = enforcement.request;
+    const routingReceipt = enforcement.enforced
+      ? {
+          ...admissionReceipt,
+          enforcement: 'enforced_v1' as const,
+          reasons: [...admissionReceipt.reasons, `Enforced: ${enforcement.reason}`].slice(0, 8),
+        }
+      : admissionReceipt;
     const requestDigest = nodeSlideJobRequestDigest(request);
     const ownerDigest = nodeSlideJobOwnerDigest(ownerAccessKey);
     const existing = await ctx.db
@@ -191,39 +236,6 @@ export const startCreateDeck = mutation({
       },
     });
     const streamId = await streaming.createStream(ctx);
-    // Admission-time routing decision: availability is derived only from observed
-    // provider outcomes in the recent window (fail closed), never from a probe we
-    // did not run. The receipt is advisory_v1 and immutable for the job's lifetime.
-    const routeSignalRows = await ctx.db
-      .query('nodeslide_traces')
-      .withIndex('by_created', (q) =>
-        q.gt('createdAt', now - NODESLIDE_ROUTE_AVAILABILITY_WINDOW_MS),
-      )
-      .order('desc')
-      .take(NODESLIDE_ROUTE_SIGNAL_LIMIT);
-    const routingReceipt = buildNodeSlideCreateRoutingReceipt({
-      providerMode: request.providerMode,
-      providerModel: request.providerModel,
-      providerEffort: request.providerEffort,
-      briefCharacters: request.brief.prompt.length,
-      attachmentCharacters: (request.attachments ?? []).reduce(
-        (total, attachment) => total + attachment.content.length,
-        0,
-      ),
-      signals: routeSignalRows.flatMap((row) =>
-        row.provider && row.model
-          ? [
-              {
-                provider: row.provider,
-                model: row.model,
-                ok: row.status === 'completed' || row.status === 'awaiting_review',
-                at: row.completedAt ?? row.createdAt,
-              },
-            ]
-          : [],
-      ),
-      now,
-    });
     const rowId = await ctx.db.insert('nodeslide_agent_jobs', {
       id: jobId,
       kind: 'create_deck',
@@ -704,10 +716,35 @@ export const checkpointInternal = internalMutation({
   },
 });
 
+/**
+ * D11 retention: the returning user's run dashboard. Session-scoped, secret-free
+ * receipts (publicNodeSlideJob) for unfinished, failed, and recent runs so work
+ * can be found and resumed instead of vanishing. Bounded read: newest 40 of at
+ * most 200 scanned rows.
+ */
+export const listSessionJobs = query({
+  args: { clientSessionId: v.string() },
+  handler: async (ctx, args) => {
+    const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
+    const rows = await ctx.db
+      .query('nodeslide_agent_jobs')
+      .withIndex('by_session_idempotency', (queryBuilder) =>
+        queryBuilder.eq('clientSessionId', clientSessionId),
+      )
+      .take(200);
+    return rows
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 40)
+      .map((row) => publicNodeSlideJob(jobFromRow(row)));
+  },
+});
+
 export const recordRenderRepairInternal = internalMutation({
   args: {
     jobId: v.string(),
     renderRepair: nodeslideJobRenderRepairSummaryValidator,
+    /** Creation trace to surface the receipt trail in the Trace tab. */
+    traceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const row = await findJob(ctx, args.jobId);
@@ -717,6 +754,41 @@ export const recordRenderRepairInternal = internalMutation({
     if (row.renderRepair) return;
     await ctx.db.patch(row._id, {
       renderRepair: structuredClone(args.renderRepair),
+      updatedAt: Date.now(),
+    });
+    if (args.traceId) {
+      const traceRow = await ctx.db
+        .query('nodeslide_traces')
+        .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', args.traceId as string))
+        .unique();
+      if (traceRow) {
+        const lines = [
+          `Render repair: ${args.renderRepair.status} (${args.renderRepair.terminalReason}) in ${args.renderRepair.attempts} attempt${args.renderRepair.attempts === 1 ? '' : 's'}`,
+          ...args.renderRepair.receipts
+            .slice(0, 6)
+            .map((receipt) => `Repair attempt ${receipt.attempt}: ${receipt.status}`),
+        ];
+        await ctx.db.patch(traceRow._id, {
+          context: [...traceRow.context, ...lines].slice(0, 48),
+        });
+      }
+    }
+  },
+});
+
+/** D7: flips the routing receipt to enforced_v1 after the runner acts on a refusal. */
+export const markRoutingEnforcedInternal = internalMutation({
+  args: { jobId: v.string(), reason: v.string() },
+  handler: async (ctx, args) => {
+    const row = await findJob(ctx, args.jobId);
+    if (!row?.routingReceipt) return;
+    if (row.routingReceipt.enforcement === 'enforced_v1') return;
+    await ctx.db.patch(row._id, {
+      routingReceipt: {
+        ...structuredClone(row.routingReceipt),
+        enforcement: 'enforced_v1',
+        reasons: [...row.routingReceipt.reasons, `Enforced: ${args.reason}`].slice(0, 8),
+      },
       updatedAt: Date.now(),
     });
   },

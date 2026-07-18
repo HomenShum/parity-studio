@@ -52,6 +52,8 @@ export const executeCreateDeckInternal = internalAction({
       phase: 'generating',
       progress: Math.max(claimed.progress, 35),
     });
+    // D7 enforcement happens at ADMISSION (startCreateDeck): args.request is
+    // already the enforced request and the routing receipt on the job records it.
     const deckId = nodeslideStableId('deck_job', args.jobId);
     const projectId = nodeslideStableId('project_nodeslide_job', args.jobId);
     let resultDeckId = claimed.resultDeckId;
@@ -92,6 +94,7 @@ export const executeCreateDeckInternal = internalAction({
         await ctx.runMutation(jobsInternal.recordRenderRepairInternal, {
           jobId: args.jobId,
           renderRepair: repair.summary,
+          traceId: nodeSlideCreationTraceId(resultDeckId),
         });
       } catch {
         // The create result stands; absence of a renderRepair receipt is the

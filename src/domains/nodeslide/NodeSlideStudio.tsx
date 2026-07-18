@@ -252,6 +252,10 @@ interface NodeSlideGeneratedApi {
     >;
   };
   nodeslideJobs: {
+    listSessionJobs: PublicQuery<
+      { clientSessionId: string },
+      Array<AgentSessionJobReceipt & { createdAt: number }>
+    >;
     startCreateDeck: PublicMutation<
       CreateDeckAdmissionRequest & { ownerAccessKey: string; idempotencyKey: string },
       AgentSessionJobReceipt
@@ -346,6 +350,15 @@ interface NodeSlideGeneratedApi {
       boolean
     >;
     deleteDeck: PublicMutation<{ deckId: string; ownerAccessKey: string }, unknown>;
+    duplicateDeck: PublicMutation<
+      {
+        deckId: string;
+        ownerAccessKey: string;
+        newOwnerAccessKey: string;
+        clientSessionId: string;
+      },
+      { deckId: string; title: string }
+    >;
     listAgentRuns: PublicQuery<
       { deckId: string; ownerAccessKey: string; limit?: number },
       NodeSlideAgentRun[]
@@ -985,6 +998,11 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const cancelDurableJob = useMutation(nodeslideApi.nodeslideJobs.cancel);
   const retryDurableJob = useMutation(nodeslideApi.nodeslideJobs.retry);
   const importPptxAsNewDeck = useAction(nodeslideApi.nodeslidePptxCreate.importPptxAsNewDeck);
+  const duplicateDeckMutation = useMutation(nodeslideApi.nodeslide.duplicateDeck);
+  const sessionJobs = useQuery(
+    nodeslideApi.nodeslideJobs.listSessionJobs,
+    projectsOpen ? { clientSessionId } : 'skip',
+  );
   const generateVariations = useAction(nodeslideApi.nodeslideVariations.generate);
   const acceptVariation = useAction(nodeslideApi.nodeslideVariations.accept);
   const rejectVariation = useMutation(nodeslideApi.nodeslideVariations.reject);
@@ -2134,6 +2152,37 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     writeDeckToUrl(deckId);
   }, []);
 
+  // D11 retention: fork an owned deck under a fresh capability and open it.
+  const duplicateOwnedDeck = useCallback(
+    async (deckId: string) => {
+      const sourceKey = getDeckOwnerAccessKey(deckId);
+      if (!sourceKey) {
+        setToast({ kind: 'error', message: 'This browser no longer holds that deck’s owner key.' });
+        return;
+      }
+      try {
+        const newOwnerKey = mintBrowserOwnerAccessKey();
+        const result = await duplicateDeckMutation({
+          deckId,
+          ownerAccessKey: sourceKey,
+          newOwnerAccessKey: newOwnerKey,
+          clientSessionId,
+        });
+        storeDeckOwnerAccessKey(result.deckId, newOwnerKey);
+        setKnownAccess(listStoredDeckAccess());
+        setProjectsOpen(false);
+        openOwnedDeck(result.deckId);
+        setToast({ kind: 'success', message: `Duplicated as “${result.title}”.` });
+      } catch (error) {
+        setToast({
+          kind: 'error',
+          message: error instanceof Error ? error.message : 'The deck could not be duplicated.',
+        });
+      }
+    },
+    [clientSessionId, duplicateDeckMutation, openOwnedDeck],
+  );
+
   // D8 create=edit parity: seed a brand-new deck from a .pptx file. Failures
   // surface through the landing's error channel, never as a fallback deck.
   const startDeckFromPptxFile = useCallback(
@@ -2878,6 +2927,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       open={projectsOpen}
       clientSessionId={clientSessionId}
       recentDecks={recentDecks}
+      {...(sessionJobs ? { sessionJobs } : {})}
+      onDuplicateDeck={(deckId) => void duplicateOwnedDeck(deckId)}
       creating={creating}
       error={projectError}
       onClearError={() => setProjectError(null)}
