@@ -81,6 +81,7 @@ import {
   normalizeNodeSlideDataAttachment,
 } from './lib/nodeslideDataAttachment';
 import { deleteNodeSlideDeckRows } from './lib/nodeslideDeckDeletion';
+import { forkNodeSlideSnapshot } from './lib/nodeslideDeckFork';
 import {
   NODESLIDE_EXECUTION_TRACE_LIMIT_PER_DECK,
   type NodeSlideExecutionTrace,
@@ -3384,6 +3385,65 @@ export const createFromBriefInternal = internalMutation({
       });
     }
     return await ownerWorkspaceResponse(ctx, args.deckId, args.ownerAccessKey, Date.now());
+  },
+});
+
+/**
+ * D11 retention: duplicate an owned deck into a brand-new identity under a new
+ * owner capability. The fork is fully re-identified (no stable-id collisions),
+ * starts at version 1, and rides the same persistence, validation, and trace
+ * path as every other created deck. Findings persist visibly rather than
+ * blocking — the source deck's state is the truth being copied.
+ */
+export const duplicateDeck = mutation({
+  args: {
+    deckId: v.string(),
+    ownerAccessKey: v.string(),
+    newOwnerAccessKey: v.string(),
+    clientSessionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
+    if (!isOwnerAccessKey(args.newOwnerAccessKey)) {
+      throw new Error('Invalid NodeSlide owner access key for the duplicate.');
+    }
+    const source = await requireSnapshot(ctx, args.deckId);
+    const now = Date.now();
+    const forkDigest = nodeslideContentDigest(`${args.deckId}:${now}:${args.clientSessionId}`);
+    const deckId = nodeslideStableId('deck_fork', forkDigest);
+    const projectId = nodeslideStableId('project_fork', forkDigest);
+    const forked = forkNodeSlideSnapshot(source, { deckId, projectId, now });
+    await createWorkspaceRows(ctx, {
+      clientSessionId: args.clientSessionId,
+      ownerAccessKey: args.newOwnerAccessKey,
+      built: {
+        snapshot: forked,
+        plan: [
+          `Duplicated from "${source.deck.title}"`,
+          'Re-identified every slide, element, and source',
+          'Validated the duplicate before persisting',
+        ],
+        spec: {
+          title: forked.deck.title,
+          narrative: [`Duplicated from deck ${source.deck.id} at v${source.deck.version}`],
+          slides: [],
+        },
+      },
+      layoutBlockerPolicy: 'persist_with_findings',
+      trace: {
+        summary: `Duplicated "${source.deck.title}" as a new editable deck.`,
+        context: [
+          `Source deck: ${source.deck.id} at v${source.deck.version}`,
+          'Share links, publications, and signature bindings were not copied.',
+        ],
+        toolCalls: [
+          'Forked the canonical snapshot with fresh identities',
+          'Reset version clocks to v1',
+          'Validated snapshot',
+        ],
+      },
+    });
+    return { deckId, title: forked.deck.title };
   },
 });
 

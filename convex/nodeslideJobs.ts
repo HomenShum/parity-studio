@@ -704,6 +704,29 @@ export const checkpointInternal = internalMutation({
   },
 });
 
+/**
+ * D11 retention: the returning user's run dashboard. Session-scoped, secret-free
+ * receipts (publicNodeSlideJob) for unfinished, failed, and recent runs so work
+ * can be found and resumed instead of vanishing. Bounded read: newest 40 of at
+ * most 200 scanned rows.
+ */
+export const listSessionJobs = query({
+  args: { clientSessionId: v.string() },
+  handler: async (ctx, args) => {
+    const clientSessionId = requiredText(args.clientSessionId, 'clientSessionId', 256);
+    const rows = await ctx.db
+      .query('nodeslide_agent_jobs')
+      .withIndex('by_session_idempotency', (queryBuilder) =>
+        queryBuilder.eq('clientSessionId', clientSessionId),
+      )
+      .take(200);
+    return rows
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 40)
+      .map((row) => publicNodeSlideJob(jobFromRow(row)));
+  },
+});
+
 export const recordRenderRepairInternal = internalMutation({
   args: {
     jobId: v.string(),

@@ -12171,6 +12171,84 @@
   z-index: -1;
 }
 
+/* D11 retention surfaces: duplicate affordance + returning-user run dashboard. */
+.nodeslide-studio .ns-recent-deck-row {
+  align-items: stretch;
+  display: flex;
+  gap: var(--ns-space-2);
+}
+.nodeslide-studio .ns-recent-deck-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.nodeslide-studio .ns-recent-deck-duplicate {
+  align-items: center;
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-s, 6px);
+  color: var(--ns-ink2);
+  display: inline-flex;
+  justify-content: center;
+  min-width: 38px;
+}
+.nodeslide-studio .ns-recent-deck-duplicate:hover {
+  border-color: var(--ns-line-d);
+  color: var(--ns-ink);
+}
+.nodeslide-studio .ns-recent-runs {
+  border-top: 1px solid var(--ns-line-b);
+  margin-top: var(--ns-space-4);
+  padding-top: var(--ns-space-4);
+}
+.nodeslide-studio .ns-recent-runs ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-2);
+  list-style: none;
+  margin: var(--ns-space-2) 0 0;
+  padding: 0;
+}
+.nodeslide-studio .ns-recent-runs li {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: var(--ns-space-3);
+}
+.nodeslide-studio .ns-recent-runs li .ns-run-kind {
+  color: var(--ns-ink2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nodeslide-studio .ns-recent-runs li .ns-run-error {
+  color: var(--ns-danger);
+}
+.nodeslide-studio .ns-recent-runs li button {
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-b);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 3px 10px;
+}
+.nodeslide-studio .ns-run-status {
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+.nodeslide-studio .ns-run-status.is-succeeded { color: var(--ns-positive); }
+.nodeslide-studio .ns-run-status.is-awaiting_review { color: var(--ns-accent-dark); }
+.nodeslide-studio .ns-run-status.is-failed { color: var(--ns-danger); }
+.nodeslide-studio .ns-run-status.is-running,
+.nodeslide-studio .ns-run-status.is-queued,
+.nodeslide-studio .ns-run-status.is-retrying { color: var(--ns-ink2); }
+
 .nodeslide-studio .ns-landing-secondary {
   align-items: center;
   display: flex;
