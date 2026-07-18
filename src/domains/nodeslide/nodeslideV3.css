@@ -12276,6 +12276,116 @@
   color: var(--ns-muted);
 }
 
+/* D9 approver surface (?approve=): token-gated, read-only review + pinned sign-off. */
+.ns-approver-surface {
+  background: var(--ns-bg, #17150f);
+  color: var(--ns-ink);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.ns-approver-surface .ns-approver-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-4);
+  margin: auto;
+  max-width: 460px;
+  padding: var(--ns-space-6) var(--ns-space-4);
+}
+.ns-approver-surface .ns-approver-gate h1 {
+  font-size: 26px;
+  margin: 0;
+}
+.ns-approver-surface .ns-approver-gate form {
+  display: flex;
+  gap: var(--ns-space-2);
+}
+.ns-approver-surface .ns-approver-gate input {
+  flex: 1;
+  font: 12.5px ui-monospace, "JetBrains Mono", Consolas, monospace;
+}
+.ns-approver-surface .ns-approver-error {
+  color: var(--ns-trace-danger, #fb7185);
+}
+.ns-approver-surface .ns-approver-exit {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--ns-muted);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.ns-approver-surface .ns-approver-bar {
+  align-items: center;
+  border-bottom: 1px solid var(--ns-line-b);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ns-space-3);
+  justify-content: space-between;
+  padding: var(--ns-space-3) var(--ns-space-4);
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 2;
+}
+.ns-approver-surface .ns-approver-bar h1 {
+  font-size: 19px;
+  margin: 0;
+}
+.ns-approver-surface .ns-approver-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--ns-space-3);
+}
+.ns-approver-surface .ns-approver-pill {
+  border: 1px solid var(--ns-line-c);
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.ns-approver-surface .ns-approver-pill.is-validated {
+  border-color: color-mix(in srgb, var(--ns-positive) 32%, transparent);
+  color: var(--ns-positive);
+}
+.ns-approver-surface .ns-approver-pill.is-unvalidated {
+  border-color: color-mix(in srgb, var(--ns-trace-warning, #f6ad55) 32%, transparent);
+  color: var(--ns-trace-warning, #f6ad55);
+}
+.ns-approver-surface .ns-approver-pill.is-signed {
+  border-color: color-mix(in srgb, var(--ns-positive) 32%, transparent);
+  color: var(--ns-positive);
+  font-weight: 650;
+}
+.ns-approver-surface .ns-approver-banner {
+  align-items: center;
+  background: color-mix(in srgb, var(--ns-accent) 12%, transparent);
+  display: flex;
+  gap: var(--ns-space-3);
+  justify-content: center;
+  padding: var(--ns-space-2) var(--ns-space-4);
+}
+.ns-approver-surface .ns-approver-banner.is-error {
+  background: color-mix(in srgb, var(--ns-trace-danger, #fb7185) 14%, transparent);
+}
+.ns-approver-surface .ns-approver-slides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-5);
+  margin: 0 auto;
+  max-width: 960px;
+  padding: var(--ns-space-5) var(--ns-space-4) var(--ns-space-6);
+  width: 100%;
+}
+.ns-approver-surface .ns-approver-slide {
+  margin: 0;
+}
+.ns-approver-surface .ns-approver-slide figcaption {
+  color: var(--ns-muted);
+  font-size: 12.5px;
+  margin-bottom: var(--ns-space-2);
+}
+
 /* D11 retention surfaces: duplicate affordance + returning-user run dashboard. */
 .nodeslide-studio .ns-recent-deck-row {
   align-items: stretch;

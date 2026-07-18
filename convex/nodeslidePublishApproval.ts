@@ -152,6 +152,55 @@ export const approvePublication = mutation({
   },
 });
 
+/**
+ * The approver's own review surface: authenticated by TOKEN, never the owner key.
+ * Holding a live approver capability IS the right to review the deck before publish,
+ * so this returns the real slides — an approver who cannot see the content would be
+ * signing off on faith, which is governance theater, not review. Returns null (not
+ * a throw) for an unknown/revoked/mismatched token so the client renders an honest
+ * "capability not valid" state instead of a retry loop.
+ */
+export const getApproverReviewState = query({
+  args: { deckId: v.string(), approverToken: v.string() },
+  handler: async (ctx, args) => {
+    const token = args.approverToken.trim();
+    if (!token) return null;
+    const approver = await ctx.db
+      .query('nodeslide_publish_approvers')
+      .withIndex('by_token_digest', (queryBuilder) =>
+        queryBuilder.eq('tokenDigest', nodeslideContentDigest(token)),
+      )
+      .unique();
+    if (!approver || approver.deckId !== args.deckId || approver.revokedAt) return null;
+    const deckRow = await findDeckRow(ctx, args.deckId);
+    const snapshot = await loadNodeSlideSnapshot(ctx, args.deckId);
+    if (!deckRow || !snapshot) return null;
+    const validation = await findCurrentValidationRow(ctx, args.deckId, snapshot.deck.version);
+    const approvals = await ctx.db
+      .query('nodeslide_publish_approvals')
+      .withIndex('by_deck_version', (queryBuilder) =>
+        queryBuilder.eq('deckId', args.deckId).eq('deckVersion', snapshot.deck.version),
+      )
+      .collect();
+    return {
+      approverLabel: approver.label,
+      required: deckRow.publishApprovalRequired === true,
+      deckVersion: snapshot.deck.version,
+      validated: validation !== null,
+      alreadySignedOff: approvals.some((row) => row.approverId === approver.id),
+      workspace: {
+        deck: {
+          title: snapshot.deck.title,
+          theme: snapshot.deck.theme,
+          slideOrder: snapshot.deck.slideOrder,
+        },
+        slides: snapshot.slides,
+        elements: snapshot.elements,
+      },
+    };
+  },
+});
+
 /** Owner-visible approval state for the current version (drives the Share UI). */
 export const getPublishApprovalState = query({
   args: { deckId: v.string(), ownerAccessKey: v.string() },

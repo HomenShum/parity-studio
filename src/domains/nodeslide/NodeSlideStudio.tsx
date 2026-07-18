@@ -57,6 +57,7 @@ import {
   listStoredDeckAccess,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
+import { type ApproverReviewState, ApproverReviewView } from './components/ApproverReviewView';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
 import {
   type EditorCandidateReceipt,
@@ -530,6 +531,10 @@ interface NodeSlideGeneratedApi {
         currentVersionApprovals: Array<{ approverId: string; approvedAt: number }>;
       }
     >;
+    getApproverReviewState: PublicQuery<
+      { deckId: string; approverToken: string },
+      ApproverReviewState | null
+    >;
   };
   nodeslidePptxCreate: {
     importPptxAsNewDeck: PublicAction<
@@ -673,6 +678,15 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     () => new URLSearchParams(window.location.search).get('share'),
     [],
   );
+  // D9 approver surface: the deck id rides the URL, but the capability token NEVER does —
+  // it is pasted by the approver and lives only in memory for this tab.
+  const requestedApprove = useMemo(
+    () => new URLSearchParams(window.location.search).get('approve'),
+    [],
+  );
+  const [approverSessionToken, setApproverSessionToken] = useState<string | null>(null);
+  const [approverSignOffBusy, setApproverSignOffBusy] = useState(false);
+  const [approverSignOffError, setApproverSignOffError] = useState<string | null>(null);
   const [activeDeckId, setActiveDeckId] = useState<string | null>(requestedDeck);
   const [ownerAccessKey, setOwnerAccessKey] = useState<string | null>(() =>
     requestedDeck ? (getDeckOwnerAccessKey(requestedDeck) ?? null) : null,
@@ -1049,6 +1063,19 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const publishApprovalState = useQuery(
     nodeslideApi.nodeslidePublishApproval.getPublishApprovalState,
     shareOpen && activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
+  // A freshly-issued token is shown exactly once. If ANOTHER owner session flips the
+  // approval gate off, the token box unmounts; without this reactive clear, flipping it
+  // back on would re-render the plaintext secret and break the "shown once" promise.
+  // (The local toggle handler also clears it — this covers the concurrent-session path.)
+  useEffect(() => {
+    if (publishApprovalState && !publishApprovalState.required) setIssuedApproverToken(null);
+  }, [publishApprovalState]);
+  const approverReviewState = useQuery(
+    nodeslideApi.nodeslidePublishApproval.getApproverReviewState,
+    requestedApprove && approverSessionToken
+      ? { deckId: requestedApprove, approverToken: approverSessionToken }
+      : 'skip',
   );
   const sessionJobs = useQuery(
     nodeslideApi.nodeslideJobs.listSessionJobs,
@@ -3066,6 +3093,42 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       createEnabled={false}
     />
   );
+
+  if (requestedApprove) {
+    return (
+      <ApproverReviewView
+        state={approverSessionToken ? approverReviewState : undefined}
+        tokenSubmitted={approverSessionToken !== null}
+        busy={approverSignOffBusy}
+        error={approverSignOffError}
+        onSubmitToken={(token) => {
+          setApproverSignOffError(null);
+          setApproverSessionToken(token);
+        }}
+        onSignOff={(reviewedDeckVersion) => {
+          if (!approverSessionToken || approverSignOffBusy) return;
+          setApproverSignOffBusy(true);
+          setApproverSignOffError(null);
+          approvePublicationMutation({
+            deckId: requestedApprove,
+            approverToken: approverSessionToken,
+            reviewedDeckVersion,
+          })
+            .catch((error: unknown) =>
+              setApproverSignOffError(
+                error instanceof Error ? error.message : 'The sign-off could not be recorded.',
+              ),
+            )
+            .finally(() => setApproverSignOffBusy(false));
+        }}
+        onOpenApp={() => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('approve');
+          window.location.assign(url);
+        }}
+      />
+    );
+  }
 
   if (requestedShare) {
     if (sharedSnapshot === undefined) return <LoadingScreen title="Opening presentation…" />;
@@ -5086,24 +5149,39 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         open={shareOpen}
         {...(publishApprovalState ? { approval: publishApprovalState } : {})}
         issuedApproverToken={issuedApproverToken}
+        approverReviewUrl={
+          activeDeckId
+            ? (() => {
+                const url = new URL(window.location.origin + window.location.pathname);
+                url.searchParams.set('approve', activeDeckId);
+                return url.toString();
+              })()
+            : null
+        }
         onToggleApprovalRequired={(required) => {
           if (!activeDeckId || !ownerAccessKey) return;
           // A freshly-issued token is shown exactly once. Toggling the gate collapses and
           // re-mounts the section; clear the token here so re-checking the box can never
           // re-render a plaintext secret and break the on-screen "shown once" promise.
           setIssuedApproverToken(null);
-          void setPublishApprovalPolicy({ deckId: activeDeckId, ownerAccessKey, required }).catch(
-            (error: unknown) =>
+          // Handlers RETURN their chains so the dialog's per-action busy state spans the
+          // mutation — otherwise the buttons re-enable while the write is still in flight
+          // and a double-click double-issues.
+          return setPublishApprovalPolicy({ deckId: activeDeckId, ownerAccessKey, required })
+            .then(() => undefined)
+            .catch((error: unknown) =>
               setToast({
                 kind: 'error',
                 message: error instanceof Error ? error.message : 'Policy update failed.',
               }),
-          );
+            );
         }}
         onIssueApprover={(label) => {
           if (!activeDeckId || !ownerAccessKey) return;
-          void issuePublishApprover({ deckId: activeDeckId, ownerAccessKey, label })
-            .then((issued) => setIssuedApproverToken({ label: issued.label, token: issued.token }))
+          return issuePublishApprover({ deckId: activeDeckId, ownerAccessKey, label })
+            .then((issued) => {
+              setIssuedApproverToken({ label: issued.label, token: issued.token });
+            })
             .catch((error: unknown) =>
               setToast({
                 kind: 'error',
@@ -5113,17 +5191,18 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         }}
         onRevokeApprover={(approverId) => {
           if (!activeDeckId || !ownerAccessKey) return;
-          void revokePublishApprover({ deckId: activeDeckId, ownerAccessKey, approverId }).catch(
-            (error: unknown) =>
+          return revokePublishApprover({ deckId: activeDeckId, ownerAccessKey, approverId })
+            .then(() => undefined)
+            .catch((error: unknown) =>
               setToast({
                 kind: 'error',
                 message: error instanceof Error ? error.message : 'Approver could not be revoked.',
               }),
-          );
+            );
         }}
         onApproveWithToken={(approverToken, reviewedDeckVersion) => {
           if (!activeDeckId) return;
-          void approvePublicationMutation({
+          return approvePublicationMutation({
             deckId: activeDeckId,
             approverToken,
             reviewedDeckVersion,
