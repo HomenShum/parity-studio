@@ -990,7 +990,7 @@ function ImageAssetEditor({
   );
 }
 
-async function imageFileToEmbeddedWebp(file: File): Promise<string> {
+export async function imageFileToEmbeddedWebp(file: File): Promise<string> {
   if (file.size > 8_000_000) throw new Error('Choose an image smaller than 8 MB.');
   const bitmap = await createImageBitmap(file);
   try {

@@ -4,6 +4,7 @@ import { applyRepairPlan } from '../../src/domains/nodeslide/slidelang/repair';
 import { validateSnapshot } from '../../src/domains/nodeslide/slidelang/validation';
 import { nodeslideArtifactPresenceChecks } from './nodeslideArtifactPresence';
 import { nodeslideContentDigest } from './nodeslideIds';
+import type { NodeSlidePatchInput } from './nodeslidePatches';
 import { clocksForNodeSlideOperations } from './nodeslidePatches';
 import {
   type NodeSlideRenderRepairResult,
@@ -23,6 +24,20 @@ export interface NodeSlideJobRenderRepairSummary {
   baseSnapshotDigest: string;
   candidateSnapshotDigest: string;
   receipts: Array<{ attempt: number; status: string; summary: string }>;
+  /**
+   * The FIRST repair proposal only: it is the one clock-bound to the snapshot
+   * that was actually persisted (later proposals bind intermediate candidates
+   * that never left the loop). Applying it rides the normal human patch path,
+   * so review authority and CAS staleness checks stay intact.
+   */
+  proposal?: {
+    deckId: string;
+    baseDeckVersion: number;
+    baseSlideVersions: Record<string, number>;
+    baseElementVersions: Record<string, number>;
+    scope: NodeSlidePatchInput['scope'];
+    operations: PatchOperation[];
+  };
 }
 
 /**
@@ -177,12 +192,25 @@ export function deterministicRepairOperations(snapshot: DeckSnapshot): PatchOper
 }
 
 function summarize(result: NodeSlideRenderRepairResult): NodeSlideJobRenderRepairSummary {
+  const firstProposal = result.proposals[0];
   return {
     schemaVersion: 'nodeslide.live-render-repair/v1',
     status: result.status,
     terminalReason: result.terminalReason,
     attempts: result.usage.attempts,
     proposalOperationCount: result.operations.length,
+    ...(firstProposal && firstProposal.operations.length > 0
+      ? {
+          proposal: {
+            deckId: firstProposal.deckId,
+            baseDeckVersion: firstProposal.baseDeckVersion,
+            baseSlideVersions: structuredClone(firstProposal.baseSlideVersions),
+            baseElementVersions: structuredClone(firstProposal.baseElementVersions),
+            scope: structuredClone(firstProposal.scope),
+            operations: structuredClone(firstProposal.operations.slice(0, REPAIR_OPERATION_LIMIT)),
+          },
+        }
+      : {}),
     baseSnapshotDigest: result.baseSnapshotDigest,
     candidateSnapshotDigest: result.candidateSnapshotDigest,
     receipts: result.receipts.slice(0, RECEIPT_SUMMARY_LIMIT).map((receipt) => ({

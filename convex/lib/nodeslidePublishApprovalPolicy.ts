@@ -13,6 +13,40 @@ export type NodeSlidePublishApprovalDecision =
       message: string;
     };
 
+/**
+ * Hard ceiling on total approver rows per deck (active + revoked). Revoked rows are
+ * retained for audit but never evicted, so without a ceiling an owner who cycles
+ * issue -> revoke -> issue would grow the table (and every unbounded read of it) without
+ * limit. Capping total rows keeps every approver read bounded by construction, so a
+ * `.take(NODESLIDE_APPROVER_ROW_LIMIT)` is guaranteed to read the whole table.
+ */
+export const NODESLIDE_APPROVER_ROW_LIMIT = 64;
+
+/**
+ * Drop sign-offs from approvers the owner has since revoked. A revoked capability's
+ * prior sign-off is void — this is the single source of truth for "which approvals
+ * still count", shared by the publish gate and the owner-facing state so they can
+ * never disagree.
+ */
+export function activeApprovals<T extends { approverId: string }>(
+  approvals: readonly T[],
+  revokedApproverIds: ReadonlySet<string>,
+): T[] {
+  return approvals.filter((approval) => !revokedApproverIds.has(approval.approverId));
+}
+
+/** The newest still-valid sign-off (revoked approvers excluded), or null. */
+export function selectAuthorizingApproval<T extends { approverId: string; approvedAt: number }>(
+  approvals: readonly T[],
+  revokedApproverIds: ReadonlySet<string>,
+): T | null {
+  return (
+    activeApprovals(approvals, revokedApproverIds).sort(
+      (first, second) => second.approvedAt - first.approvedAt,
+    )[0] ?? null
+  );
+}
+
 export function decideNodeSlidePublishApproval(args: {
   required: boolean;
   deckVersion: number;

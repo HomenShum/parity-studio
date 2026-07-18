@@ -111,6 +111,20 @@ export interface SessionRunReceipt {
   updatedAt: number;
   error?: string;
   resultDeckId?: string;
+  /** D1: persisted render-repair evidence; proposal present = one-click applicable. */
+  renderRepair?: {
+    status: string;
+    terminalReason: string;
+    proposalOperationCount: number;
+    proposal?: {
+      deckId: string;
+      baseDeckVersion: number;
+      baseSlideVersions: Record<string, number>;
+      baseElementVersions: Record<string, number>;
+      scope: unknown;
+      operations: unknown[];
+    };
+  };
 }
 
 interface ProjectDialogProps {
@@ -122,6 +136,7 @@ interface ProjectDialogProps {
   onClearError?: () => void;
   onClose: () => void;
   onCreate: (request: CreateDeckAdmissionRequest) => void;
+  onApplyRepairs?: (job: SessionRunReceipt) => void;
   onDuplicateDeck?: (deckId: string) => void;
   onOpenDeck: (deckId: string) => void;
   /** Secret-free run receipts for the returning-user dashboard (D11). */
@@ -182,6 +197,7 @@ export function ProjectDialog({
   onClearError,
   onClose,
   onCreate,
+  onApplyRepairs,
   onDuplicateDeck,
   onOpenDeck,
   sessionJobs,
@@ -867,6 +883,25 @@ export function ProjectDialog({
                         {relativeDate(job.updatedAt)}
                         {job.error ? <small className="ns-run-error"> — {job.error}</small> : null}
                       </span>
+                      {job.renderRepair?.proposal && onApplyRepairs ? (
+                        <button
+                          type="button"
+                          title={
+                            job.renderRepair.proposalOperationCount >
+                            job.renderRepair.proposal.operations.length
+                              ? 'Applies the first directly-applicable batch of recorded repairs; the rest need a re-run on the updated deck'
+                              : 'Apply the automatic render repairs recorded for this run'
+                          }
+                          onClick={() => onApplyRepairs(job)}
+                        >
+                          Apply repairs ({job.renderRepair.proposal.operations.length}
+                          {job.renderRepair.proposalOperationCount >
+                          job.renderRepair.proposal.operations.length
+                            ? ` of ${job.renderRepair.proposalOperationCount}`
+                            : ''}
+                          )
+                        </button>
+                      ) : null}
                       {job.resultDeckId ? (
                         <button
                           type="button"

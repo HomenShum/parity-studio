@@ -12171,6 +12171,111 @@
   z-index: -1;
 }
 
+/* D9 governance surface inside the share dialog. */
+.nodeslide-studio .ns-share-approval {
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-m, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-3);
+  padding: var(--ns-space-4);
+}
+.nodeslide-studio .ns-share-approval-toggle {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--ns-space-3);
+}
+.nodeslide-studio .ns-share-approval-toggle input {
+  margin-top: 3px;
+}
+.nodeslide-studio .ns-share-approval-toggle strong {
+  display: block;
+  font-size: 13px;
+}
+.nodeslide-studio .ns-share-approval-toggle small {
+  color: var(--ns-muted);
+  display: block;
+  max-width: 52ch;
+}
+.nodeslide-studio .ns-share-approval-state {
+  color: var(--ns-accent-dark);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.nodeslide-studio .ns-share-approval-state.is-approved {
+  align-items: center;
+  color: var(--ns-positive);
+  display: inline-flex;
+  gap: 6px;
+}
+.nodeslide-studio .ns-share-approvers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nodeslide-studio .ns-share-approvers li {
+  align-items: center;
+  display: flex;
+  font-size: 12.5px;
+  gap: var(--ns-space-3);
+  justify-content: space-between;
+}
+.nodeslide-studio .ns-share-approvers li.is-revoked span {
+  color: var(--ns-faint);
+  text-decoration: line-through;
+}
+.nodeslide-studio .ns-share-approvers li button {
+  background: none;
+  border: 0;
+  color: var(--ns-danger);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.nodeslide-studio .ns-share-approval-row {
+  display: flex;
+  gap: var(--ns-space-2);
+}
+.nodeslide-studio .ns-share-approval-row input {
+  background: var(--ns-raised);
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-s, 6px);
+  flex: 1;
+  font-size: 12.5px;
+  min-width: 0;
+  padding: 7px 10px;
+}
+.nodeslide-studio .ns-share-approval-drift {
+  color: var(--ns-accent);
+  flex-basis: 100%;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.nodeslide-studio .ns-share-approval-token {
+  background: color-mix(in srgb, var(--ns-accent) 7%, var(--ns-surface));
+  border: 1px solid color-mix(in srgb, var(--ns-accent) 26%, var(--ns-line-c));
+  border-radius: var(--ns-radius-s, 6px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-2);
+  padding: var(--ns-space-3);
+}
+.nodeslide-studio .ns-share-approval-token strong {
+  font-size: 12px;
+}
+.nodeslide-studio .ns-share-approval-token input {
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-line-b);
+  border-radius: var(--ns-radius-s, 6px);
+  font: 11.5px ui-monospace, "JetBrains Mono", Consolas, monospace;
+  padding: 6px 9px;
+}
+.nodeslide-studio .ns-share-approval-token small {
+  color: var(--ns-muted);
+}
+
 /* D11 retention surfaces: duplicate affordance + returning-user run dashboard. */
 .nodeslide-studio .ns-recent-deck-row {
   align-items: stretch;
