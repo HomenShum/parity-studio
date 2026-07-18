@@ -247,9 +247,12 @@ export function NodeSlideLanding({
       </header>
 
       <section className="ns-landing-main" aria-labelledby="nodeslide-landing-title">
+        <div className="ns-landing-work">
         <div className="ns-landing-intro">
           <span className="ns-eyebrow">Decks that stay editable</span>
-          <h1 id="nodeslide-landing-title">What presentation should we build?</h1>
+          <h1 id="nodeslide-landing-title">
+            What presentation should we <em className="ns-hl">build</em>?
+          </h1>
           <p>
             Start with an idea, a structured spec, or evidence. NodeSlide turns it into a reviewable
             deck—not a stack of static images.
@@ -441,6 +444,36 @@ export function NodeSlideLanding({
             ) : null}
           </section>
         ) : null}
+        </div>
+
+        {/* Signature moment: the brief assembling itself into a governed deck.
+            Purely presentational; motion collapses to the settled final state
+            under prefers-reduced-motion. */}
+        <div className="ns-landing-stage" aria-hidden="true">
+          <div className="ns-stage-frame ns-stage-frame--past">
+            <span className="ns-stage-kicker" />
+            <span className="ns-stage-headline ns-stage-headline--short" />
+            <span className="ns-stage-line" />
+            <span className="ns-stage-line ns-stage-line--short" />
+            <span className="ns-stage-seal">✓ validated</span>
+          </div>
+          <div className="ns-stage-frame ns-stage-frame--chart">
+            <span className="ns-stage-kicker" />
+            <span className="ns-stage-headline" />
+            <span className="ns-stage-bars">
+              <i /><i /><i /><i />
+            </span>
+            <span className="ns-stage-seal">✓ validated</span>
+          </div>
+          <div className="ns-stage-frame ns-stage-frame--front">
+            <span className="ns-stage-kicker" />
+            <span className="ns-stage-headline" />
+            <span className="ns-stage-media" />
+            <span className="ns-stage-line" />
+            <span className="ns-stage-seal">✓ validated</span>
+          </div>
+          <span className="ns-stage-chip">v1 · Deck CI passed</span>
+        </div>
       </section>
 
       <footer className="ns-landing-footer">

@@ -117,7 +117,9 @@ describe('NodeSlide informed provider controls', () => {
     const markup = document.body.innerHTML;
 
     expect(markup).toContain('data-testid="nodeslide-landing"');
-    expect(markup).toContain('What presentation should we build?');
+    // The headline's key word carries the signature underline, so the accessible
+    // text is split across an inline emphasis element.
+    expect(markup).toContain('What presentation should we <em class="ns-hl">build</em>?');
     expect(markup).toContain('>GLM 5.2</span>');
     expect(markup).toContain('>Nebius</span>');
     expect(markup).toContain('data-testid="landing-effort-select"');
