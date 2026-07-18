@@ -37,6 +37,19 @@
     --ns-overlay-scrim: rgb(15 23 42 / 32%);
     --ns-overlay-shadow: -18px 0 54px rgb(15 23 42 / 18%);
     --ns-overlay-blur: 2px;
+    /* Canon v1 scales (docs/design/NODESLIDE_DESIGN_SYSTEM.md §1.1): new code
+       uses these; per-component literals migrate when touched. */
+    --ns-radius-s: 6px;
+    --ns-radius-m: 10px;
+    --ns-radius-l: 14px;
+    --ns-radius-pill: 999px;
+    --ns-space-1: 4px;
+    --ns-space-2: 8px;
+    --ns-space-3: 12px;
+    --ns-space-4: 16px;
+    --ns-space-5: 24px;
+    --ns-space-6: 32px;
+    --ns-space-7: 48px;
     --ns-font-caption: 10px;
     --ns-font-control: 11px;
     --ns-font-body: 12px;
@@ -2967,7 +2980,7 @@
 .ns-loading-screen .ns-loading-mark {
   align-items: center;
   background: var(--ns-ink);
-  border-radius: 12px;
+  border-radius: var(--ns-radius-l);
   color: white;
   display: flex;
   height: 44px;

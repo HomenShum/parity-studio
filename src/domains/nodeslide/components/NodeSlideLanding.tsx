@@ -30,7 +30,7 @@ import {
   useSessionExternalConsent,
 } from '../externalProviderConsent';
 import { useAgentSession } from '../session/AgentSessionProvider';
-import { publishNodeSlideUiContract } from '../uiContract';
+import { publishNodeSlideUiContract, resolveNodeSlideInitialTheme } from '../uiContract';
 import { NodeSlideConnectionsDialog } from './NodeSlideConnectionsDialog';
 import {
   type CreateDeckAdmissionRequest,
@@ -97,10 +97,13 @@ export function NodeSlideLanding({
   const [attachmentsSyncing, setAttachmentsSyncing] = useState(false);
   const [submissionPreparing, setSubmissionPreparing] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  // Canon §0.5: the landing themes through the same data-ns-theme attribute as
+  // the studio (stored preference, then OS preference) — never a media query.
+  const [landingTheme] = useState<'light' | 'dark'>(() => resolveNodeSlideInitialTheme());
   // Agent-native UI contract: the landing is its own publishable phase.
   useEffect(() => {
-    publishNodeSlideUiContract({ phase: 'landing', connection: 'ready', theme: 'light' });
-  }, []);
+    publishNodeSlideUiContract({ phase: 'landing', connection: 'ready', theme: landingTheme });
+  }, [landingTheme]);
   const [recentDecksExpanded, setRecentDecksExpanded] = useState(false);
   const handleAttachmentsChange = useCallback(() => {
     setAttachmentError(null);
@@ -229,6 +232,7 @@ export function NodeSlideLanding({
       data-app-id="nodeslide"
       data-agent-surface="prompt-first-deck-authoring"
       data-mcp-compat="stdio webmcp"
+      data-ns-theme={landingTheme}
     >
       <header className="ns-landing-header">
         <a className="ns-landing-brand" href="/" aria-label="NodeSlide home">
@@ -248,202 +252,204 @@ export function NodeSlideLanding({
 
       <section className="ns-landing-main" aria-labelledby="nodeslide-landing-title">
         <div className="ns-landing-work">
-        <div className="ns-landing-intro">
-          <span className="ns-eyebrow">Decks that stay editable</span>
-          <h1 id="nodeslide-landing-title">
-            What presentation should we <em className="ns-hl">build</em>?
-          </h1>
-          <p>
-            Start with an idea, a structured spec, or evidence. NodeSlide turns it into a reviewable
-            deck—not a stack of static images.
-          </p>
-        </div>
+          <div className="ns-landing-intro">
+            <span className="ns-eyebrow">Decks that stay editable</span>
+            <h1 id="nodeslide-landing-title">
+              What presentation should we <em className="ns-hl">build</em>?
+            </h1>
+            <p>
+              Start with an idea, a structured spec, or evidence. NodeSlide turns it into a
+              reviewable deck—not a stack of static images.
+            </p>
+          </div>
 
-        <NodeSlidePromptComposer
-          attachmentInputTestId="landing-file-input"
-          attachLabel="Attach data"
-          clearAttachmentsOnSubmit={false}
-          composerClassName="ns-landing-composer"
-          disabled={!canCreate}
-          effort={reasoningEffort}
-          effortLabel="Reasoning effort"
-          effortOptions={NODESLIDE_REASONING_EFFORTS.filter(
-            (effort) =>
-              generation !== 'deterministic' &&
-              nodeSlideModelSupportsReasoningEffort(generation, effort.id),
-          )}
-          effortTestId="landing-effort-select"
-          model={generation}
-          modelLabel="Generation model"
-          modelTestId="landing-model-select"
-          onAttachmentError={setAttachmentError}
-          onAttachmentSyncingChange={setAttachmentsSyncing}
-          onAttachmentsChange={handleAttachmentsChange}
-          onSubmissionPreparingChange={setSubmissionPreparing}
-          onEffortChange={(effort) => {
-            agentSession.updateControls({ effort });
-            onClearError?.();
-          }}
-          onModelChange={(model) => {
-            agentSession.updateControls({ model });
-            if (
-              model !== 'deterministic' &&
-              !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
-            ) {
-              agentSession.updateControls({ effort: 'high' });
+          <NodeSlidePromptComposer
+            attachmentInputTestId="landing-file-input"
+            attachLabel="Attach data"
+            clearAttachmentsOnSubmit={false}
+            composerClassName="ns-landing-composer"
+            disabled={!canCreate}
+            effort={reasoningEffort}
+            effortLabel="Reasoning effort"
+            effortOptions={NODESLIDE_REASONING_EFFORTS.filter(
+              (effort) =>
+                generation !== 'deterministic' &&
+                nodeSlideModelSupportsReasoningEffort(generation, effort.id),
+            )}
+            effortTestId="landing-effort-select"
+            model={generation}
+            modelLabel="Generation model"
+            modelTestId="landing-model-select"
+            onAttachmentError={setAttachmentError}
+            onAttachmentSyncingChange={setAttachmentsSyncing}
+            onAttachmentsChange={handleAttachmentsChange}
+            onSubmissionPreparingChange={setSubmissionPreparing}
+            onEffortChange={(effort) => {
+              agentSession.updateControls({ effort });
+              onClearError?.();
+            }}
+            onModelChange={(model) => {
+              agentSession.updateControls({ model });
+              if (
+                model !== 'deterministic' &&
+                !nodeSlideModelSupportsReasoningEffort(model, reasoningEffort)
+              ) {
+                agentSession.updateControls({ effort: 'high' });
+              }
+              onClearError?.();
+            }}
+            onSubmit={({ text, files }) => start(text, files)}
+            onTextChange={() => {
+              setStarterTitle(null);
+              setAttachmentError(null);
+              onClearError?.();
+            }}
+            placeholder="Describe the presentation you want to make…"
+            session={composerSession}
+            submissionRevision={submissionTrackerRef.current.revision}
+            status={
+              creating || submissionPreparing
+                ? 'submitted'
+                : error || attachmentError || requestedSlideCountIssue
+                  ? 'error'
+                  : 'ready'
             }
-            onClearError?.();
-          }}
-          onSubmit={({ text, files }) => start(text, files)}
-          onTextChange={() => {
-            setStarterTitle(null);
-            setAttachmentError(null);
-            onClearError?.();
-          }}
-          placeholder="Describe the presentation you want to make…"
-          session={composerSession}
-          submissionRevision={submissionTrackerRef.current.revision}
-          status={
-            creating || submissionPreparing
-              ? 'submitted'
-              : error || attachmentError || requestedSlideCountIssue
-                ? 'error'
-                : 'ready'
-          }
-          submitContent={
-            creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />
-          }
-          submitLabel="Create presentation"
-          textareaId="nodeslide-landing-prompt"
-          textareaLabel="Presentation brief"
-          textareaMaxLength={4000}
-          textareaRows={4}
-          tools={
-            <>
-              <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
-                <Globe2 size={13} aria-hidden="true" />
-                {providerDisplayName(providerMode)}
-              </span>
-              {providerMode !== 'deterministic' || externalConsent.granted ? (
-                <label
-                  className={`ns-session-consent-pill ${externalConsent.granted ? 'is-ready' : ''}`}
-                  htmlFor="nodeslide-landing-provider-consent"
-                  title="Allow selected external models and optional web research for this browser tab"
-                >
-                  <input
-                    id="nodeslide-landing-provider-consent"
-                    type="checkbox"
-                    aria-label="Allow prompt and files for this browser tab"
-                    data-testid="landing-provider-consent"
-                    checked={externalConsent.granted}
-                    onChange={(event) => {
-                      externalConsent.setGranted(event.currentTarget.checked);
-                      setAttachmentError(null);
-                    }}
-                  />
-                  <span>
-                    <ShieldCheck size={13} aria-hidden="true" />
+            submitContent={
+              creating ? <LoaderCircle className="ns-spin" size={18} /> : <ArrowRight size={18} />
+            }
+            submitLabel="Create presentation"
+            textareaId="nodeslide-landing-prompt"
+            textareaLabel="Presentation brief"
+            textareaMaxLength={4000}
+            textareaRows={4}
+            tools={
+              <>
+                <span className="ns-landing-web" data-active={providerMode !== 'deterministic'}>
+                  <Globe2 size={13} aria-hidden="true" />
+                  {providerDisplayName(providerMode)}
+                </span>
+                {providerMode !== 'deterministic' || externalConsent.granted ? (
+                  <label
+                    className={`ns-session-consent-pill ${externalConsent.granted ? 'is-ready' : ''}`}
+                    htmlFor="nodeslide-landing-provider-consent"
+                    title="Allow selected external models and optional web research for this browser tab"
+                  >
+                    <input
+                      id="nodeslide-landing-provider-consent"
+                      type="checkbox"
+                      aria-label="Allow prompt and files for this browser tab"
+                      data-testid="landing-provider-consent"
+                      checked={externalConsent.granted}
+                      onChange={(event) => {
+                        externalConsent.setGranted(event.currentTarget.checked);
+                        setAttachmentError(null);
+                      }}
+                    />
                     <span>
-                      {externalConsent.granted ? 'AI allowed this session' : 'Allow prompt + files'}
+                      <ShieldCheck size={13} aria-hidden="true" />
+                      <span>
+                        {externalConsent.granted
+                          ? 'AI allowed this session'
+                          : 'Allow prompt + files'}
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                ) : null}
+              </>
+            }
+          />
+          {creating ? (
+            <output
+              className="ns-landing-create-status"
+              aria-live="polite"
+              style={{ alignItems: 'center', display: 'flex', gap: 8 }}
+            >
+              <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating
+              your editable deck…
+              {activeCreateJob?.jobId ? (
+                <small>
+                  {activeCreateJob.phase} · {activeCreateJob.progress}%
+                </small>
               ) : null}
-            </>
-          }
-        />
-        {creating ? (
-          <output
-            className="ns-landing-create-status"
-            aria-live="polite"
-            style={{ alignItems: 'center', display: 'flex', gap: 8 }}
-          >
-            <LoaderCircle className="ns-spin" size={13} /> Planning, composing, and validating your
-            editable deck…
-            {activeCreateJob?.jobId ? (
-              <small>
-                {activeCreateJob.phase} · {activeCreateJob.progress}%
-              </small>
-            ) : null}
-            {activeCreateJob?.jobId && onCancelCreate ? (
-              <button
-                className="ns-button"
-                type="button"
-                onClick={onCancelCreate}
-                style={{ marginLeft: 'auto', minHeight: 28 }}
-              >
-                Cancel
+              {activeCreateJob?.jobId && onCancelCreate ? (
+                <button
+                  className="ns-button"
+                  type="button"
+                  onClick={onCancelCreate}
+                  style={{ marginLeft: 'auto', minHeight: 28 }}
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </output>
+          ) : error ? (
+            <output className="ns-landing-create-error" role="alert">
+              {error}
+            </output>
+          ) : requestedSlideCountIssue ? (
+            <output className="ns-landing-create-error" role="alert">
+              {requestedSlideCountIssue}
+            </output>
+          ) : null}
+          {attachmentError ? (
+            <output className="ns-landing-file-error" role="alert">
+              {attachmentError}
+            </output>
+          ) : null}
+
+          <div className="ns-landing-starters" aria-label="Presentation starters">
+            <span>Try an idea</span>
+            {starters.map((starter) => (
+              <button key={starter.label} type="button" onClick={() => applyStarter(starter)}>
+                {starter.label}
               </button>
-            ) : null}
-          </output>
-        ) : error ? (
-          <output className="ns-landing-create-error" role="alert">
-            {error}
-          </output>
-        ) : requestedSlideCountIssue ? (
-          <output className="ns-landing-create-error" role="alert">
-            {requestedSlideCountIssue}
-          </output>
-        ) : null}
-        {attachmentError ? (
-          <output className="ns-landing-file-error" role="alert">
-            {attachmentError}
-          </output>
-        ) : null}
+            ))}
+          </div>
 
-        <div className="ns-landing-starters" aria-label="Presentation starters">
-          <span>Try an idea</span>
-          {starters.map((starter) => (
-            <button key={starter.label} type="button" onClick={() => applyStarter(starter)}>
-              {starter.label}
-            </button>
-          ))}
-        </div>
+          <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
+            <Layers3 size={15} /> Explore the editable sample workspace
+          </button>
 
-        <button className="ns-landing-sample" type="button" onClick={onExploreSample}>
-          <Layers3 size={15} /> Explore the editable sample workspace
-        </button>
-
-        {recentDecks.length > 0 ? (
-          <section className="ns-landing-recents" aria-labelledby="nodeslide-recent-title">
-            <div>
-              <span className="ns-eyebrow" id="nodeslide-recent-title">
-                Recent decks
-              </span>
-            </div>
-            <ul>
-              {visibleRecentDecks.map((deck) => (
-                <li key={deck.id}>
-                  <button type="button" onClick={() => onOpenDeck(deck.id)}>
-                    <span>
-                      <strong>{deck.title}</strong>
-                      <small>Version {deck.version}</small>
-                    </span>
-                    <ArrowRight size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {hiddenRecentDeckCount > 0 ? (
-              <button
-                aria-expanded={recentDecksExpanded}
-                className="ns-landing-recents-toggle"
-                type="button"
-                onClick={() => setRecentDecksExpanded((expanded) => !expanded)}
-              >
-                {recentDecksExpanded ? (
-                  <>
-                    <ChevronUp size={14} /> Show fewer
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} /> Show {hiddenRecentDeckCount} more
-                  </>
-                )}
-              </button>
-            ) : null}
-          </section>
-        ) : null}
+          {recentDecks.length > 0 ? (
+            <section className="ns-landing-recents" aria-labelledby="nodeslide-recent-title">
+              <div>
+                <span className="ns-eyebrow" id="nodeslide-recent-title">
+                  Recent decks
+                </span>
+              </div>
+              <ul>
+                {visibleRecentDecks.map((deck) => (
+                  <li key={deck.id}>
+                    <button type="button" onClick={() => onOpenDeck(deck.id)}>
+                      <span>
+                        <strong>{deck.title}</strong>
+                        <small>Version {deck.version}</small>
+                      </span>
+                      <ArrowRight size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {hiddenRecentDeckCount > 0 ? (
+                <button
+                  aria-expanded={recentDecksExpanded}
+                  className="ns-landing-recents-toggle"
+                  type="button"
+                  onClick={() => setRecentDecksExpanded((expanded) => !expanded)}
+                >
+                  {recentDecksExpanded ? (
+                    <>
+                      <ChevronUp size={14} /> Show fewer
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} /> Show {hiddenRecentDeckCount} more
+                    </>
+                  )}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
         </div>
 
         {/* Signature moment: the brief assembling itself into a governed deck.
@@ -461,7 +467,10 @@ export function NodeSlideLanding({
             <span className="ns-stage-kicker" />
             <span className="ns-stage-headline" />
             <span className="ns-stage-bars">
-              <i /><i /><i /><i />
+              <i />
+              <i />
+              <i />
+              <i />
             </span>
             <span className="ns-stage-seal">✓ validated</span>
           </div>

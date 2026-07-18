@@ -104,3 +104,21 @@ export function readNodeSlideUiContract(): NodeSlideUiContract | undefined {
   if (typeof window === 'undefined') return undefined;
   return window.__NODESLIDE_UI_CONTRACT__;
 }
+
+/**
+ * The one theme resolution every surface shares (canon §0.5: the data-ns-theme
+ * attribute is the single dark-mode mechanism): stored studio preference first,
+ * then the OS preference, then light.
+ */
+export function resolveNodeSlideInitialTheme(): 'light' | 'dark' {
+  try {
+    const stored = window.localStorage.getItem('nodeslide.v3.theme');
+    if (stored === 'dark' || stored === 'light') return stored;
+  } catch {
+    // Storage may be unavailable (private mode); fall through to the OS signal.
+  }
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  }
+  return 'light';
+}

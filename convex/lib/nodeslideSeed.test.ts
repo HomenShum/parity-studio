@@ -12,6 +12,16 @@ import {
 import { validateNodeSlideSnapshot } from './nodeslideValidation';
 
 describe('NodeSlide seed', () => {
+  it('resolves one editorial-signal palette for both the registry and the light fallback', () => {
+    // Canon §0.5 drift-retirement: `editorial-signal` briefly existed with two
+    // palettes; the light fallback must stay identical to the registry entry.
+    const registry = nodeslideTheme('editorial-signal');
+    const fallback = nodeslideTheme('any-unrecognized-light-brief');
+    expect(fallback.colors).toEqual(registry.colors);
+    expect(fallback.typography).toEqual(registry.typography);
+    expect(fallback.mode).toBe('light');
+  });
+
   it('builds a clean canonical golden snapshot', () => {
     const snapshot = buildGoldenNodeSlide('theme-and-repair-test', 1_000).snapshot;
     const browserValidation = validateSnapshot(snapshot);

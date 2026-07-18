@@ -11004,27 +11004,25 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .nodeslide-studio.ns-landing {
-    --ns-ink: #f3f4ef;
-    --ns-ink2: #c6c9c4;
-    --ns-faint: #909691;
-    --ns-surface: #181b1c;
-    --ns-raised: #202426;
-    --ns-line-b: #2a2f31;
-    --ns-line-c: #363d3f;
-    --ns-line-d: #454d4f;
-    background: radial-gradient(circle at 50% -10%, rgb(217 119 87 / 13%), transparent 36%),
-      linear-gradient(180deg, #111415 0%, #151819 100%);
-  }
+/* Canon §0.5: one dark-mode mechanism — the data-ns-theme attribute the landing
+   root sets from resolveNodeSlideInitialTheme(). The former media query is
+   retired; the former dark chip override (#8fb5ec blue) is deleted outright —
+   the accent-family rule classifies external egress in both themes. */
+.nodeslide-studio.ns-landing[data-ns-theme="dark"] {
+  --ns-ink: #f3f4ef;
+  --ns-ink2: #c6c9c4;
+  --ns-faint: #909691;
+  --ns-surface: #181b1c;
+  --ns-raised: #202426;
+  --ns-line-b: #2a2f31;
+  --ns-line-c: #363d3f;
+  --ns-line-d: #454d4f;
+  background: radial-gradient(circle at 50% -10%, rgb(217 119 87 / 13%), transparent 36%),
+    linear-gradient(180deg, #111415 0%, #151819 100%);
+}
 
-  .nodeslide-studio.ns-landing::before {
-    background-image: radial-gradient(rgb(255 255 255 / 7%) 0.65px, transparent 0.65px);
-  }
-
-  .nodeslide-studio.ns-landing .ns-landing-composer .ns-landing-web[data-active="true"] {
-    color: #8fb5ec;
-  }
+.nodeslide-studio.ns-landing[data-ns-theme="dark"]::before {
+  background-image: radial-gradient(rgb(255 255 255 / 7%) 0.65px, transparent 0.65px);
 }
 
 /* Dialog runtime contract -------------------------------------------------
@@ -12067,29 +12065,61 @@
 }
 
 @keyframes ns-draft-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes ns-settle-in {
-  from { opacity: 0; transform: translateY(20px) scale(0.955) rotate(var(--ns-frame-tilt, 0deg)); }
-  to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--ns-frame-tilt, 0deg)); }
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.955) rotate(var(--ns-frame-tilt, 0deg));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(var(--ns-frame-tilt, 0deg));
+  }
 }
 @keyframes ns-seal-pop {
-  0% { opacity: 0; transform: scale(0.6); }
-  70% { transform: scale(1.06); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 @keyframes ns-bar-grow {
-  from { transform: scaleY(0.08); }
-  to { transform: scaleY(1); }
+  from {
+    transform: scaleY(0.08);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 @keyframes ns-underline-sweep {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 @keyframes ns-stage-drift {
-  from { transform: translateY(0) rotate(var(--ns-frame-tilt, 0deg)); }
-  to { transform: translateY(-5px) rotate(var(--ns-frame-tilt, 0deg)); }
+  from {
+    transform: translateY(0) rotate(var(--ns-frame-tilt, 0deg));
+  }
+  to {
+    transform: translateY(-5px) rotate(var(--ns-frame-tilt, 0deg));
+  }
 }
 
 /* Staged reveal: the page drafts itself in reading order. */
@@ -12102,12 +12132,24 @@
 .nodeslide-studio .ns-landing-recents {
   animation: ns-draft-in var(--ns-draft-ms) var(--ns-draft-ease) both;
 }
-.nodeslide-studio .ns-landing-intro h1 { animation-delay: 70ms; }
-.nodeslide-studio .ns-landing-intro p { animation-delay: 140ms; }
-.nodeslide-studio .ns-landing-composer { animation-delay: 230ms; }
-.nodeslide-studio .ns-landing-starters { animation-delay: 330ms; }
-.nodeslide-studio .ns-landing-sample { animation-delay: 400ms; }
-.nodeslide-studio .ns-landing-recents { animation-delay: 460ms; }
+.nodeslide-studio .ns-landing-intro h1 {
+  animation-delay: 70ms;
+}
+.nodeslide-studio .ns-landing-intro p {
+  animation-delay: 140ms;
+}
+.nodeslide-studio .ns-landing-composer {
+  animation-delay: 230ms;
+}
+.nodeslide-studio .ns-landing-starters {
+  animation-delay: 330ms;
+}
+.nodeslide-studio .ns-landing-sample {
+  animation-delay: 400ms;
+}
+.nodeslide-studio .ns-landing-recents {
+  animation-delay: 460ms;
+}
 
 /* The one word that carries the thesis gets the settle gesture. */
 .nodeslide-studio .ns-landing-intro h1 .ns-hl {
@@ -12131,8 +12173,12 @@
 
 /* Two-column hero at desktop; display:contents keeps every narrower layout
    byte-identical to the pre-signature landing. */
-.nodeslide-studio .ns-landing-work { display: contents; }
-.nodeslide-studio .ns-landing-stage { display: none; }
+.nodeslide-studio .ns-landing-work {
+  display: contents;
+}
+.nodeslide-studio .ns-landing-stage {
+  display: none;
+}
 
 @media (min-width: 1120px) {
   .nodeslide-studio .ns-landing-main {
@@ -12148,8 +12194,12 @@
     flex-direction: column;
     text-align: left;
   }
-  .nodeslide-studio .ns-landing-work .ns-landing-intro { text-align: left; }
-  .nodeslide-studio .ns-landing-work .ns-landing-intro h1 { text-wrap: balance; }
+  .nodeslide-studio .ns-landing-work .ns-landing-intro {
+    text-align: left;
+  }
+  .nodeslide-studio .ns-landing-work .ns-landing-intro h1 {
+    text-wrap: balance;
+  }
 
   .nodeslide-studio .ns-landing-stage {
     display: block;
@@ -12161,7 +12211,7 @@
     aspect-ratio: 16 / 10;
     background: var(--ns-surface);
     border: 1px solid var(--ns-line-c);
-    border-radius: 12px;
+    border-radius: var(--ns-radius-l);
     box-shadow: 0 2px 6px rgb(28 30 26 / 7%), 0 22px 48px rgb(28 30 26 / 13%);
     display: flex;
     flex-direction: column;
@@ -12190,8 +12240,8 @@
   }
   .nodeslide-studio .ns-stage-frame--front {
     --ns-frame-tilt: -1.2deg;
-    animation: ns-settle-in var(--ns-settle-ms) var(--ns-settle-ease) 1600ms both,
-      ns-stage-drift 5.2s ease-in-out 3.6s infinite alternate;
+    animation: ns-settle-in var(--ns-settle-ms) var(--ns-settle-ease) 1600ms both, ns-stage-drift
+      5.2s ease-in-out 3.6s infinite alternate;
     margin: 64px 30px 0 -10px;
     z-index: 3;
   }
@@ -12213,17 +12263,23 @@
     opacity: 0.88;
     width: 78%;
   }
-  .nodeslide-studio .ns-stage-headline--short { width: 56%; }
+  .nodeslide-studio .ns-stage-headline--short {
+    width: 56%;
+  }
   .nodeslide-studio .ns-stage-line {
     background: var(--ns-line-c);
     height: 8px;
     width: 88%;
   }
-  .nodeslide-studio .ns-stage-line--short { width: 62%; }
+  .nodeslide-studio .ns-stage-line--short {
+    width: 62%;
+  }
   .nodeslide-studio .ns-stage-media {
-    background: linear-gradient(135deg,
+    background: linear-gradient(
+      135deg,
       color-mix(in srgb, var(--ns-accent) 26%, var(--ns-surface)),
-      color-mix(in srgb, var(--ns-accent) 9%, var(--ns-surface)));
+      color-mix(in srgb, var(--ns-accent) 9%, var(--ns-surface))
+    );
     border-radius: 7px;
     flex: 1;
     min-height: 44px;
@@ -12244,30 +12300,50 @@
     flex: 1;
     transform-origin: bottom center;
   }
-  .nodeslide-studio .ns-stage-bars i:nth-child(1) { animation-delay: 1450ms; height: 42%; }
-  .nodeslide-studio .ns-stage-bars i:nth-child(2) { animation-delay: 1550ms; height: 60%; }
-  .nodeslide-studio .ns-stage-bars i:nth-child(3) { animation-delay: 1650ms; height: 78%; opacity: 0.86; }
-  .nodeslide-studio .ns-stage-bars i:nth-child(4) { animation-delay: 1750ms; height: 100%; opacity: 0.72; }
+  .nodeslide-studio .ns-stage-bars i:nth-child(1) {
+    animation-delay: 1450ms;
+    height: 42%;
+  }
+  .nodeslide-studio .ns-stage-bars i:nth-child(2) {
+    animation-delay: 1550ms;
+    height: 60%;
+  }
+  .nodeslide-studio .ns-stage-bars i:nth-child(3) {
+    animation-delay: 1650ms;
+    height: 78%;
+    opacity: 0.86;
+  }
+  .nodeslide-studio .ns-stage-bars i:nth-child(4) {
+    animation-delay: 1750ms;
+    height: 100%;
+    opacity: 0.72;
+  }
 
   .nodeslide-studio .ns-stage-seal {
     align-self: flex-end;
     animation: ns-seal-pop var(--ns-settle-ms) var(--ns-settle-ease) both;
     background: color-mix(in srgb, var(--ns-insight) 55%, var(--ns-surface));
-    border-radius: 999px;
+    border-radius: var(--ns-radius-pill);
     color: var(--ns-insight-ink, var(--ns-ink));
     font-size: 10px;
     font-weight: 680;
     letter-spacing: 0.03em;
     padding: 4px 9px;
   }
-  .nodeslide-studio .ns-stage-frame--past .ns-stage-seal { animation-delay: 950ms; }
-  .nodeslide-studio .ns-stage-frame--chart .ns-stage-seal { animation-delay: 1980ms; }
-  .nodeslide-studio .ns-stage-frame--front .ns-stage-seal { animation-delay: 2450ms; }
+  .nodeslide-studio .ns-stage-frame--past .ns-stage-seal {
+    animation-delay: 950ms;
+  }
+  .nodeslide-studio .ns-stage-frame--chart .ns-stage-seal {
+    animation-delay: 1980ms;
+  }
+  .nodeslide-studio .ns-stage-frame--front .ns-stage-seal {
+    animation-delay: 2450ms;
+  }
 
   .nodeslide-studio .ns-stage-chip {
     animation: ns-seal-pop var(--ns-settle-ms) var(--ns-settle-ease) 2850ms both;
     background: var(--ns-ink);
-    border-radius: 999px;
+    border-radius: var(--ns-radius-pill);
     bottom: 34px;
     box-shadow: 0 6px 18px rgb(28 30 26 / 22%);
     color: var(--ns-surface);

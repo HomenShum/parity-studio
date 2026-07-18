@@ -119,29 +119,9 @@ export interface BuildBriefDeckInput {
 
 const EDITABLE_CAPABILITIES = ['web_native', 'pptx_editable', 'google_importable'] as const;
 
-const FALLBACK_LIGHT_THEME: ThemeSpec = {
-  id: 'editorial-signal',
-  name: 'Editorial Signal',
-  mode: 'light',
-  colors: {
-    canvas: '#F5F1E8',
-    ink: '#14231C',
-    muted: '#5F6B64',
-    accent: '#B44A2D',
-    accentSoft: '#F8D8CC',
-    insight: '#DCEBDD',
-    insightInk: '#17442D',
-    trace: '#6B5BD2',
-    border: '#D8D1C5',
-  },
-  typography: {
-    display: 'Fraunces Variable',
-    body: 'Geist Variable',
-    data: 'JetBrains Mono Variable',
-  },
-  defaultRadius: 18,
-  spacingUnit: 8,
-};
+// Canon rule (docs/design/NODESLIDE_DESIGN_SYSTEM.md §0.5): `editorial-signal`
+// has exactly one palette — the registry entry. The light fallback aliases it
+// below the registry declarations; a second literal is drift.
 
 const FALLBACK_DARK_THEME: ThemeSpec = {
   id: 'midnight-signal',
@@ -244,6 +224,8 @@ const DESIGN_PROFILE_THEMES: Readonly<Record<string, ThemeSpec>> = {
   [THEME_QUIET_PRECISION.id]: THEME_QUIET_PRECISION,
   [THEME_NIGHT_BRIEFING.id]: THEME_NIGHT_BRIEFING,
 };
+
+const FALLBACK_LIGHT_THEME: ThemeSpec = THEME_EDITORIAL_SIGNAL;
 
 export function nodeslideTheme(themeId: string): ThemeSpec {
   const cleanId = nodeslideSlug(themeId);
