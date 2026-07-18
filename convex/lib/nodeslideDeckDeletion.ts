@@ -39,6 +39,8 @@ export const NODESLIDE_DECK_ERASURE_TABLES = [
   'nodeslide_shadow_comparisons',
   'nodeslide_exports',
   'nodeslide_publications',
+  'nodeslide_publish_approvers',
+  'nodeslide_publish_approvals',
   'nodeslide_preference_events',
   'nodeslide_signature_profiles',
   'nodeslide_taste_profiles',
@@ -359,6 +361,18 @@ export async function deleteNodeSlideDeckRows(
     await ctx.db
       .query('nodeslide_publications')
       .withIndex('by_deck_revision', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_publish_approvers')
+      .withIndex('by_deck', (query) => query.eq('deckId', deck.id))
+      .take(nextLimit()),
+  );
+  addGroup(
+    await ctx.db
+      .query('nodeslide_publish_approvals')
+      .withIndex('by_deck_version', (query) => query.eq('deckId', deck.id))
       .take(nextLimit()),
   );
   addGroup(

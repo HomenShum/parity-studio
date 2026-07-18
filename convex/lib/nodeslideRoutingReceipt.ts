@@ -39,11 +39,11 @@ export interface NodeSlideRouteOutcomeSignal {
 export interface NodeSlideJobRoutingReceipt {
   policyVersion: typeof NODESLIDE_ROUTING_POLICY_VERSION;
   /**
-   * advisory_v1: the receipt reports what the routing policy decided for the
-   * requested route; dispatch behavior is unchanged. A receipt may never claim
-   * enforcement the runtime does not perform.
+   * advisory_v1: the receipt reports the decision; dispatch was unchanged.
+   * enforced_v1: the runner acted on a refusal and executed deterministically.
+   * A receipt may never claim enforcement the runtime did not perform.
    */
-  enforcement: 'advisory_v1';
+  enforcement: 'advisory_v1' | 'enforced_v1';
   decidedAt: number;
   task: 'create_deck_from_brief';
   requested:
@@ -158,6 +158,41 @@ export function buildNodeSlideCreateRoutingReceipt(args: {
       signalCount: availability.length,
     },
     reasons: decision.reasons.slice(0, ROUTING_REASON_LIMIT).map((reason) => reason.slice(0, 200)),
+  };
+}
+
+/**
+ * D7 enforcement: when the admission-time routing decision REFUSED the requested
+ * external route (no fresh availability signal, cost cap, unsupported effort…),
+ * the run executes deterministically instead of dispatching a doomed external
+ * call. Deterministic requests and selected routes pass through untouched.
+ */
+export function resolveNodeSlideEnforcedCreateRequest<
+  T extends {
+    providerMode?: string;
+    providerModel?: string;
+    providerEffort?: string;
+    providerConsent?: string;
+  },
+>(
+  receipt: Pick<NodeSlideJobRoutingReceipt, 'requested' | 'decision'> | undefined,
+  request: T,
+): { request: T; enforced: boolean; reason?: string } {
+  if (!receipt || receipt.requested.mode === 'deterministic') {
+    return { request, enforced: false };
+  }
+  if (receipt.decision.kind === 'selected') return { request, enforced: false };
+  const {
+    providerMode: _mode,
+    providerModel: _model,
+    providerEffort: _effort,
+    providerConsent: _consent,
+    ...rest
+  } = request;
+  return {
+    request: { ...rest, providerMode: 'deterministic' } as T,
+    enforced: true,
+    reason: `${receipt.decision.code}: ${receipt.decision.message}`.slice(0, 300),
   };
 }
 

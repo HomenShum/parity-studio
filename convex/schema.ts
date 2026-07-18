@@ -745,6 +745,8 @@ export default defineSchema({
     workspaceId: v.optional(v.string()),
     workspaceProjectId: v.optional(v.string()),
     shareSlug: v.optional(v.string()),
+    /** D9 governance: when true, publishDeck requires an approver sign-off for the exact version. */
+    publishApprovalRequired: v.optional(v.boolean()),
     plan: v.array(v.string()),
     spec: v.any(),
     createdAt: v.number(),
@@ -2044,6 +2046,31 @@ export default defineSchema({
     .index('by_stable_id', ['id'])
     .index('by_deck_created', ['deckId', 'createdAt'])
     .index('by_deck_status_created', ['deckId', 'status', 'createdAt']),
+
+  /**
+   * D9 governance: approver capabilities for a deck. The token is a second,
+   * server-enforced role distinct from ownership — only its digest is stored.
+   */
+  nodeslide_publish_approvers: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    tokenDigest: v.string(),
+    label: v.string(),
+    issuedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_deck', ['deckId'])
+    .index('by_token_digest', ['tokenDigest']),
+
+  /** Append-only approver sign-offs bound to an exact deck version + validation. */
+  nodeslide_publish_approvals: defineTable({
+    id: v.string(),
+    deckId: v.string(),
+    deckVersion: v.number(),
+    validationId: v.string(),
+    approverId: v.string(),
+    approvedAt: v.number(),
+  }).index('by_deck_version', ['deckId', 'deckVersion']),
 
   nodeslide_publications: defineTable({
     id: v.string(),

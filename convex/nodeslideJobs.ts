@@ -731,6 +731,8 @@ export const recordRenderRepairInternal = internalMutation({
   args: {
     jobId: v.string(),
     renderRepair: nodeslideJobRenderRepairSummaryValidator,
+    /** Creation trace to surface the receipt trail in the Trace tab. */
+    traceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const row = await findJob(ctx, args.jobId);
@@ -740,6 +742,41 @@ export const recordRenderRepairInternal = internalMutation({
     if (row.renderRepair) return;
     await ctx.db.patch(row._id, {
       renderRepair: structuredClone(args.renderRepair),
+      updatedAt: Date.now(),
+    });
+    if (args.traceId) {
+      const traceRow = await ctx.db
+        .query('nodeslide_traces')
+        .withIndex('by_stable_id', (queryBuilder) => queryBuilder.eq('id', args.traceId as string))
+        .unique();
+      if (traceRow) {
+        const lines = [
+          `Render repair: ${args.renderRepair.status} (${args.renderRepair.terminalReason}) in ${args.renderRepair.attempts} attempt${args.renderRepair.attempts === 1 ? '' : 's'}`,
+          ...args.renderRepair.receipts
+            .slice(0, 6)
+            .map((receipt) => `Repair attempt ${receipt.attempt}: ${receipt.status}`),
+        ];
+        await ctx.db.patch(traceRow._id, {
+          context: [...traceRow.context, ...lines].slice(0, 48),
+        });
+      }
+    }
+  },
+});
+
+/** D7: flips the routing receipt to enforced_v1 after the runner acts on a refusal. */
+export const markRoutingEnforcedInternal = internalMutation({
+  args: { jobId: v.string(), reason: v.string() },
+  handler: async (ctx, args) => {
+    const row = await findJob(ctx, args.jobId);
+    if (!row?.routingReceipt) return;
+    if (row.routingReceipt.enforcement === 'enforced_v1') return;
+    await ctx.db.patch(row._id, {
+      routingReceipt: {
+        ...structuredClone(row.routingReceipt),
+        enforcement: 'enforced_v1',
+        reasons: [...row.routingReceipt.reasons, `Enforced: ${args.reason}`].slice(0, 8),
+      },
       updatedAt: Date.now(),
     });
   },
