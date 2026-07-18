@@ -233,7 +233,7 @@ describe('NodeSlide AI review inspector', () => {
     });
     expect(markup).toContain('data-testid="ai-attach-data"');
     expect(markup).toContain(
-      'accept=".csv,.json,.txt,.md,.pdf,text/csv,application/json,text/plain,text/markdown,application/pdf"',
+      'accept=".csv,.json,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif,text/csv,application/json,text/plain,text/markdown,application/pdf,image/png,image/jpeg,image/webp,image/gif"',
     );
     expect(markup).toContain('aria-label="Attach data file"');
   });

@@ -71,6 +71,7 @@ import {
   type CreateDeckAdmissionRequest,
   ProjectDialog,
   type RecentDeck,
+  type SessionRunReceipt,
 } from './components/ProjectDialog';
 import { PublicationDialog } from './components/PublicationDialog';
 import { SlideCanvas } from './components/SlideCanvas';
@@ -117,6 +118,7 @@ import type {
   AiReadReference,
   AiVariationRequest,
 } from './inspector/AiInspector';
+import { imageFileToEmbeddedWebp } from './inspector/DesignInspector';
 import type { JsonPatchProposalRequest } from './inspector/JsonInspector';
 import { nodeSlideScopeLabel } from './inspector/scopePresentation';
 import type { InspectorTab } from './inspector/types';
@@ -157,6 +159,8 @@ type PublicAction<Args, Result> = FunctionReference<'action', 'public', ConvexAr
 interface PatchReceipt {
   patch: DeckPatch;
   workspace?: NodeSlideWorkspace | null;
+  /** Present on a non-accepted commit; distinguishes a CAS/deck-change from a validation failure. */
+  staleReasons?: string[];
 }
 
 interface VariationGenerationReceipt {
@@ -499,6 +503,33 @@ interface NodeSlideGeneratedApi {
   nodeslideAgent: {
     createDeckFromBrief: PublicAction<CreateDeckAdmissionRequest, OwnerWorkspace>;
     proposeEdit: PublicAction<AgentEditRequest & { ownerAccessKey: string }, PatchReceipt>;
+  };
+  nodeslidePublishApproval: {
+    setPublishApprovalPolicy: PublicMutation<
+      { deckId: string; ownerAccessKey: string; required: boolean },
+      { required: boolean }
+    >;
+    issuePublishApprover: PublicMutation<
+      { deckId: string; ownerAccessKey: string; label: string },
+      { approverId: string; label: string; token: string }
+    >;
+    revokePublishApprover: PublicMutation<
+      { deckId: string; ownerAccessKey: string; approverId: string },
+      { approverId: string; revoked: boolean }
+    >;
+    approvePublication: PublicMutation<
+      { deckId: string; approverToken: string; reviewedDeckVersion: number },
+      { deckId: string; deckVersion: number; approverLabel: string; approvedAt: number }
+    >;
+    getPublishApprovalState: PublicQuery<
+      { deckId: string; ownerAccessKey: string },
+      {
+        required: boolean;
+        deckVersion: number;
+        approvers: Array<{ approverId: string; label: string; issuedAt: number; revoked: boolean }>;
+        currentVersionApprovals: Array<{ approverId: string; approvedAt: number }>;
+      }
+    >;
   };
   nodeslidePptxCreate: {
     importPptxAsNewDeck: PublicAction<
@@ -999,6 +1030,26 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
   const retryDurableJob = useMutation(nodeslideApi.nodeslideJobs.retry);
   const importPptxAsNewDeck = useAction(nodeslideApi.nodeslidePptxCreate.importPptxAsNewDeck);
   const duplicateDeckMutation = useMutation(nodeslideApi.nodeslide.duplicateDeck);
+  const setPublishApprovalPolicy = useMutation(
+    nodeslideApi.nodeslidePublishApproval.setPublishApprovalPolicy,
+  );
+  const issuePublishApprover = useMutation(
+    nodeslideApi.nodeslidePublishApproval.issuePublishApprover,
+  );
+  const revokePublishApprover = useMutation(
+    nodeslideApi.nodeslidePublishApproval.revokePublishApprover,
+  );
+  const approvePublicationMutation = useMutation(
+    nodeslideApi.nodeslidePublishApproval.approvePublication,
+  );
+  const [issuedApproverToken, setIssuedApproverToken] = useState<{
+    label: string;
+    token: string;
+  } | null>(null);
+  const publishApprovalState = useQuery(
+    nodeslideApi.nodeslidePublishApproval.getPublishApprovalState,
+    shareOpen && activeDeckId && ownerAccessKey ? { deckId: activeDeckId, ownerAccessKey } : 'skip',
+  );
   const sessionJobs = useQuery(
     nodeslideApi.nodeslideJobs.listSessionJobs,
     projectsOpen ? { clientSessionId } : 'skip',
@@ -2152,6 +2203,78 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     writeDeckToUrl(deckId);
   }, []);
 
+  // D1: apply a run's recorded render-repair proposal through the normal human
+  // patch path. CAS rejects stale clocks honestly if the deck moved on.
+  const applyRunRepairs = useCallback(
+    async (job: SessionRunReceipt) => {
+      const proposal = job.renderRepair?.proposal;
+      const deckId = job.resultDeckId;
+      if (!proposal || !deckId) return;
+      const key = getDeckOwnerAccessKey(deckId);
+      if (!key) {
+        setToast({ kind: 'error', message: 'This browser no longer holds that deck’s owner key.' });
+        return;
+      }
+      try {
+        const receipt = await applyPatchMutation({
+          deckId,
+          ownerAccessKey: key,
+          baseDeckVersion: proposal.baseDeckVersion,
+          baseSlideVersions: proposal.baseSlideVersions,
+          baseElementVersions: proposal.baseElementVersions,
+          scope: proposal.scope as ApplyPatchArgs['scope'],
+          operations: proposal.operations as ApplyPatchArgs['operations'],
+          summary: 'Applied automatic render repairs',
+        });
+        // commitPatch does NOT throw on a stale clock — it returns a status:'stale'
+        // receipt having committed nothing. Only 'accepted' means the repairs landed;
+        // anything else must report failure honestly rather than a false success. A 'stale'
+        // status has two distinct causes: a CAS clock mismatch (the deck really changed) or a
+        // candidate-validation failure on an UNCHANGED deck — report the actual one so the
+        // advice ("re-run for the current version") is not misdirection.
+        if (receipt.patch.status !== 'accepted') {
+          const validationFailure = (receipt.staleReasons ?? []).some((reason) =>
+            /validation/i.test(reason),
+          );
+          setToast({
+            kind: 'error',
+            message: validationFailure
+              ? 'These recorded repairs no longer pass the deck’s validation gate, so nothing was applied. Re-running the agent will regenerate repairs — the same issues may need a different fix.'
+              : 'The deck has changed since these repairs were recorded; they no longer apply. Re-run the agent to regenerate repairs against the current version.',
+          });
+          return;
+        }
+        setProjectsOpen(false);
+        openOwnedDeck(deckId);
+        // A multi-attempt repair records its total op count in proposalOperationCount, but
+        // only the first proposal (bound to the persisted base snapshot) is safely
+        // applicable — later proposals bind intermediate snapshots that never persisted.
+        // Disclose the residual honestly rather than implying the deck is fully repaired.
+        const applied = proposal.operations.length;
+        const recorded = job.renderRepair?.proposalOperationCount ?? applied;
+        const residual = Math.max(0, recorded - applied);
+        setToast({
+          kind: 'success',
+          message:
+            residual > 0
+              ? `Applied ${applied} of ${recorded} recorded repairs. The remaining ${residual} were recorded against a later intermediate version — re-run the agent on the updated deck to finish them.`
+              : `Applied ${applied} render repair${applied === 1 ? '' : 's'}.`,
+        });
+      } catch (error) {
+        setToast({
+          kind: 'error',
+          message:
+            error instanceof Error && /stale|changed from/i.test(error.message)
+              ? 'The deck has changed since these repairs were recorded; they no longer apply.'
+              : error instanceof Error
+                ? error.message
+                : 'The repairs could not be applied.',
+        });
+      }
+    },
+    [applyPatchMutation, openOwnedDeck],
+  );
+
   // D11 retention: fork an owned deck under a fresh capability and open it.
   const duplicateOwnedDeck = useCallback(
     async (deckId: string) => {
@@ -2928,6 +3051,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       clientSessionId={clientSessionId}
       recentDecks={recentDecks}
       {...(sessionJobs ? { sessionJobs } : {})}
+      onApplyRepairs={(job) => void applyRunRepairs(job)}
       onDuplicateDeck={(deckId) => void duplicateOwnedDeck(deckId)}
       creating={creating}
       error={projectError}
@@ -3359,11 +3483,80 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     })();
   };
 
+  // D8 image ingestion: client-compress to a bounded webp envelope and embed it directly
+  // in a self-contained image element (the proven DesignInspector embed path). The image
+  // is placed, never read (no OCR), so it deliberately does not become a read-context
+  // "source": making an un-read image factual evidence would force later text edits to
+  // cite it (false provenance) and would block metadata-only edits.
+  const attachAiImageFile = async (file: File): Promise<AiReadReference> => {
+    if (!ownerAccessKey || !activeSlide) {
+      throw new Error('Open an owned deck before attaching an image.');
+    }
+    // imageFileToEmbeddedWebp targets webp but silently yields a PNG data URL on browsers
+    // without webp canvas encoding. Embedding the returned data URL verbatim keeps the
+    // element MIME honest either way, and the element carries its own pixels so export
+    // never re-fetches a remote asset.
+    const dataUrl = await imageFileToEmbeddedWebp(file);
+    const label = file.name.replace(/\.[^.]+$/, '').slice(0, 120) || 'image';
+    const requestedDeckId = workspace.deck.id;
+    const element: SlideElement = {
+      id: `element-image-${Date.now().toString(36)}`,
+      slideId: activeSlide.id,
+      name: label,
+      kind: 'image',
+      role: 'image',
+      bbox: { x: 0.3, y: 0.28, width: 0.4, height: 0.44 },
+      rotation: 0,
+      style: { fill: workspace.deck.theme.colors.accentSoft },
+      // A concrete (non-placeholder) image. Setting `image` — mirroring the update_image
+      // path — is what keeps the PPTX/Google sync serializer emitting this compact object
+      // instead of falling through to the raw ~680 KB data URL string, which would blow
+      // the sync layer's per-property character cap and break every sync on the deck.
+      image: { placeholder: false },
+      imageUrl: dataUrl,
+      altText: label,
+      // No source binding: the image is a placed visual, not evidence for generated text,
+      // so recording a sourceId would be a false "grounded in this source" provenance claim.
+      sourceIds: [],
+      locked: false,
+      // Honest to the capability model: an embedded image is a static picture in PPTX and
+      // Google (not a data-editable primitive), so declare static_fallback, not pptx_editable.
+      exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      version: 1,
+    };
+    const accepted = await applyOperations(
+      [{ op: 'add_element', slideId: activeSlide.id, element }],
+      {
+        kind: 'elements',
+        deckId: requestedDeckId,
+        slideIds: [activeSlide.id],
+        elementIds: [element.id],
+        operationMode: 'unrestricted',
+      },
+      `Added image "${label}"`,
+    );
+    if (!accepted) {
+      // The add_element did not commit to the active context (the deck changed mid-flight
+      // or the write was rolled back). Returning a reference here would seat a chip for an
+      // element the server can never resolve, hard-failing every later AI request and
+      // wedging the composer. Surface an honest failure so no chip is added; a retry
+      // re-embeds cleanly. Safe to throw now that there is no upload/blob/source to unwind.
+      throw new Error('The image could not be placed on the current slide. Please try again.');
+    }
+    setSelectedElementIds([element.id]);
+    // Return an element reference (not a source): the image must not become a factual-
+    // evidence read-context chip that would flip later turns into source-binding mode.
+    return { id: element.id, kind: 'element', label };
+  };
+
   const attachAiDataFile = async (file: File): Promise<AiReadReference> => {
     if (!ownerAccessKey) throw new Error('Open an owned deck before attaching data.');
     const extension = file.name.split('.').pop()?.toLocaleLowerCase() ?? '';
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(extension)) {
+      return attachAiImageFile(file);
+    }
     if (!['csv', 'json', 'txt', 'md', 'pdf'].includes(extension)) {
-      throw new Error('Attach a CSV, JSON, TXT, Markdown, or PDF file.');
+      throw new Error('Attach a CSV, JSON, TXT, Markdown, PDF, or image file.');
     }
     if (file.size <= 0) throw new Error('The attached data file is empty.');
     const contentType = nodeSlideDataUploadContentType(extension);
@@ -3379,6 +3572,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     const idempotencyKey = `data:${contentDigest}:${idempotencyDigest.slice(0, 16)}`;
     let uploadId: string | null = null;
     let reference: AiReadReference | null = null;
+    let replayedExistingUpload = false;
     const ensureCurrent = () => {
       if (!requestGate.isCurrent(requestToken)) throw new Error('The active deck changed.');
     };
@@ -3395,6 +3589,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         idempotencyKey,
       });
       uploadId = prepared.upload.id;
+      // A replayed upload's stored blob is shared with a prior attach — this attempt
+      // owns nothing new, so its failure must not delete those shared resources.
+      replayedExistingUpload = prepared.replayed;
       ensureCurrent();
       if (prepared.upload.lifecycleStatus !== 'registered') {
         if (!prepared.uploadUrl) throw new Error('The upload URL was not created.');
@@ -3444,20 +3641,24 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       });
       return reference;
     } catch (error) {
-      if (reference) {
-        await deleteDataSource({
-          deckId: requestedDeckId,
-          ownerAccessKey: requestedOwnerAccessKey,
-          sourceId: reference.id,
-        }).catch(() => undefined);
-      }
-      if (uploadId) {
-        await deleteDataUpload({
-          deckId: requestedDeckId,
-          ownerAccessKey: requestedOwnerAccessKey,
-          clientSessionId,
-          uploadId,
-        }).catch(() => undefined);
+      // Only tear down what THIS attempt created; a replayed upload's blob is shared
+      // with a prior attach and must survive this attempt's failure.
+      if (!replayedExistingUpload) {
+        if (reference) {
+          await deleteDataSource({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+            sourceId: reference.id,
+          }).catch(() => undefined);
+        }
+        if (uploadId) {
+          await deleteDataUpload({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+            clientSessionId,
+            uploadId,
+          }).catch(() => undefined);
+        }
       }
       throw error;
     }
@@ -4883,6 +5084,63 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       ) : null}
       <PublicationDialog
         open={shareOpen}
+        {...(publishApprovalState ? { approval: publishApprovalState } : {})}
+        issuedApproverToken={issuedApproverToken}
+        onToggleApprovalRequired={(required) => {
+          if (!activeDeckId || !ownerAccessKey) return;
+          // A freshly-issued token is shown exactly once. Toggling the gate collapses and
+          // re-mounts the section; clear the token here so re-checking the box can never
+          // re-render a plaintext secret and break the on-screen "shown once" promise.
+          setIssuedApproverToken(null);
+          void setPublishApprovalPolicy({ deckId: activeDeckId, ownerAccessKey, required }).catch(
+            (error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: error instanceof Error ? error.message : 'Policy update failed.',
+              }),
+          );
+        }}
+        onIssueApprover={(label) => {
+          if (!activeDeckId || !ownerAccessKey) return;
+          void issuePublishApprover({ deckId: activeDeckId, ownerAccessKey, label })
+            .then((issued) => setIssuedApproverToken({ label: issued.label, token: issued.token }))
+            .catch((error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: error instanceof Error ? error.message : 'Approver could not be issued.',
+              }),
+            );
+        }}
+        onRevokeApprover={(approverId) => {
+          if (!activeDeckId || !ownerAccessKey) return;
+          void revokePublishApprover({ deckId: activeDeckId, ownerAccessKey, approverId }).catch(
+            (error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: error instanceof Error ? error.message : 'Approver could not be revoked.',
+              }),
+          );
+        }}
+        onApproveWithToken={(approverToken, reviewedDeckVersion) => {
+          if (!activeDeckId) return;
+          void approvePublicationMutation({
+            deckId: activeDeckId,
+            approverToken,
+            reviewedDeckVersion,
+          })
+            .then((signed) =>
+              setToast({
+                kind: 'success',
+                message: `v${signed.deckVersion} signed off by ${signed.approverLabel}.`,
+              }),
+            )
+            .catch((error: unknown) =>
+              setToast({
+                kind: 'error',
+                message: error instanceof Error ? error.message : 'Sign-off failed.',
+              }),
+            );
+        }}
         publication={workspace.publication}
         shareUrl={
           workspace.publication?.status === 'active'
@@ -4891,7 +5149,10 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         }
         currentDeckVersion={workspace.deck.version}
         busy={shareBusy}
-        onClose={() => setShareOpen(false)}
+        onClose={() => {
+          setIssuedApproverToken(null);
+          setShareOpen(false);
+        }}
         onCopy={() => {
           const publication = workspace.publication;
           if (!publication || publication.status !== 'active') return;

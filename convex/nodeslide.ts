@@ -104,7 +104,11 @@ import {
   validateNodeSlidePatch,
 } from './lib/nodeslidePatches';
 import { planNodeSlidePropagation } from './lib/nodeslidePropagation';
-import { decideNodeSlidePublishApproval } from './lib/nodeslidePublishApprovalPolicy';
+import {
+  NODESLIDE_APPROVER_ROW_LIMIT,
+  decideNodeSlidePublishApproval,
+  selectAuthorizingApproval,
+} from './lib/nodeslidePublishApprovalPolicy';
 import { NodeSlidePreviewQuotaError, consumePreviewQuotaBuckets } from './lib/nodeslideQuota';
 import {
   buildBriefNodeSlide,
@@ -1273,8 +1277,20 @@ export const publishDeck = mutation({
         queryBuilder.eq('deckId', deckId).eq('deckVersion', snapshot.deck.version),
       )
       .collect();
-    const newestApproval =
-      approvalRows.sort((first, second) => second.approvedAt - first.approvedAt)[0] ?? null;
+    // A revoked approver's sign-off is void — publishing must not proceed on the
+    // authority of a capability the owner has since rescinded. Exclude them before
+    // choosing the newest authorizing sign-off (fail-closed governance).
+    // Bounded read on the critical publish path: the approver table is capped at
+    // NODESLIDE_APPROVER_ROW_LIMIT on issue, so this take() reads the whole table without
+    // risking a Convex per-query read-limit failure at pathological row counts.
+    const approverRows = await ctx.db
+      .query('nodeslide_publish_approvers')
+      .withIndex('by_deck', (queryBuilder) => queryBuilder.eq('deckId', deckId))
+      .take(NODESLIDE_APPROVER_ROW_LIMIT);
+    const revokedApproverIds = new Set(
+      approverRows.filter((row) => row.revokedAt).map((row) => row.id),
+    );
+    const newestApproval = selectAuthorizingApproval(approvalRows, revokedApproverIds);
     const approvalDecision = decideNodeSlidePublishApproval({
       required: deckRow.publishApprovalRequired === true,
       deckVersion: snapshot.deck.version,
@@ -4208,6 +4224,13 @@ async function persistProposal(ctx: MutationCtx, args: PatchMutationArgs) {
   };
 }
 
+// Every accepted patch writes the ENTIRE deck snapshot — including every element's embedded
+// image data URL — into a single nodeslide_versions document, which Convex caps near 1 MiB.
+// This bound keeps the serialized snapshot safely under that ceiling (headroom left for the
+// version row's own metadata + encoding overhead) so a size-increasing edit is rejected with
+// an honest error rather than throwing an opaque 'document too large' at insert time.
+const NODESLIDE_VERSION_SNAPSHOT_BYTE_LIMIT = 950_000;
+
 async function commitPatch(
   ctx: MutationCtx,
   args: PatchMutationArgs,
@@ -4303,6 +4326,16 @@ async function commitPatch(
     };
   }
   const appliedSnapshot = candidate.snapshot;
+  // Bound the version-snapshot document before any write. Throw a clear, direct error (not a
+  // validation/stale receipt, which would surface as a misleading "changed elsewhere") so the
+  // owner learns the real cause — and the deck can never commit an unrecoverably oversized
+  // snapshot, since the over-limit edit is rejected and prior (in-limit) state is preserved.
+  const snapshotByteSize = new TextEncoder().encode(JSON.stringify(appliedSnapshot)).byteLength;
+  if (snapshotByteSize > NODESLIDE_VERSION_SNAPSHOT_BYTE_LIMIT) {
+    throw new Error(
+      `This edit would grow the saved deck version to ${Math.round(snapshotByteSize / 1024)} KB, over the ${Math.round(NODESLIDE_VERSION_SNAPSHOT_BYTE_LIMIT / 1024)} KB limit. Remove or shrink embedded images before saving.`,
+    );
+  }
   const validation = candidate.validation;
   const persistedCandidateValidation = existing?.candidateValidation ?? candidate.receipt;
   const accepted = patchRow(

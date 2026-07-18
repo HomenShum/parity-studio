@@ -6,6 +6,7 @@ import {
   nodeslideBriefValidator,
   nodeslideDesignBehaviorValidator,
   nodeslideEditorCommandIdValidator,
+  nodeslidePatchOperationValidator,
   nodeslidePatchScopeValidator,
   nodeslideProviderModeValidator,
   nodeslideReasoningEffortValidator,
@@ -122,6 +123,16 @@ export const nodeslideJobRenderRepairSummaryValidator = v.object({
   baseSnapshotDigest: v.string(),
   candidateSnapshotDigest: v.string(),
   receipts: v.array(v.object({ attempt: v.number(), status: v.string(), summary: v.string() })),
+  proposal: v.optional(
+    v.object({
+      deckId: v.string(),
+      baseDeckVersion: v.number(),
+      baseSlideVersions: nodeslideVersionClockValidator,
+      baseElementVersions: nodeslideVersionClockValidator,
+      scope: nodeslidePatchScopeValidator,
+      operations: v.array(nodeslidePatchOperationValidator),
+    }),
+  ),
 });
 
 /** Immutable admission-time routing decision persisted on a durable job row. */

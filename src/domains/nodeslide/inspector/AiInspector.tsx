@@ -1900,7 +1900,7 @@ export function AiInspector<CommandId extends string = string>({
             data-testid="ai-model-select" and data-testid="ai-data-file-input". */}
                 <NodeSlidePromptComposer
                   allowAttachments={Boolean(onAttachDataFile)}
-                  attachmentAccept=".csv,.json,.txt,.md,.pdf,text/csv,application/json,text/plain,text/markdown,application/pdf"
+                  attachmentAccept=".csv,.json,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif,text/csv,application/json,text/plain,text/markdown,application/pdf,image/png,image/jpeg,image/webp,image/gif"
                   attachmentInputTestId="ai-data-file-input"
                   attachmentMaxFiles={1}
                   submissionRevision={submissionRevisionRef.current}

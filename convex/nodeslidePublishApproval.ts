@@ -3,6 +3,10 @@ import type { DeckSnapshot } from '../shared/nodeslide';
 import { mutation, query } from './_generated/server';
 import { createOwnerAccessKey, requireOwnerAccess } from './lib/nodeslideAccess';
 import { findCurrentValidationRow, findDeckRow, loadNodeSlideSnapshot } from './lib/nodeslideData';
+import {
+  NODESLIDE_APPROVER_ROW_LIMIT,
+  activeApprovals,
+} from './lib/nodeslidePublishApprovalPolicy';
 
 async function requireSnapshot(
   ctx: { db: Parameters<typeof loadNodeSlideSnapshot>[0]['db'] },
@@ -47,6 +51,14 @@ export const issuePublishApprover = mutation({
     if (existing.filter((row) => !row.revokedAt).length >= APPROVER_LIMIT_PER_DECK) {
       throw new Error(`A deck supports at most ${APPROVER_LIMIT_PER_DECK} active approvers.`);
     }
+    // Retained revoked rows are never evicted, so bound the whole table (active + revoked)
+    // to keep every approver read bounded. Reaching this needs deliberate issue/revoke
+    // churn; normal decks stay far below it.
+    if (existing.length >= NODESLIDE_APPROVER_ROW_LIMIT) {
+      throw new Error(
+        'This deck has reached its approver-history limit. Revoked approvers are retained for audit; duplicate the deck to start a fresh approver history.',
+      );
+    }
     const token = createOwnerAccessKey();
     const now = Date.now();
     const id = nodeslideStableId('publish_approver', args.deckId, String(now), label);
@@ -82,7 +94,7 @@ export const revokePublishApprover = mutation({
  * sign-off is append-only and becomes stale the moment the deck changes.
  */
 export const approvePublication = mutation({
-  args: { deckId: v.string(), approverToken: v.string() },
+  args: { deckId: v.string(), approverToken: v.string(), reviewedDeckVersion: v.number() },
   handler: async (ctx, args) => {
     const approver = await ctx.db
       .query('nodeslide_publish_approvers')
@@ -94,6 +106,16 @@ export const approvePublication = mutation({
       throw new Error('This approver capability is not valid for the deck.');
     }
     const snapshot = await requireSnapshot(ctx, args.deckId);
+    // Bind the attestation to the EXACT version the approver was shown. If the deck advanced
+    // between that version being presented and this click landing on the server, reject — an
+    // approver must never sign off on a version they did not review. Without this CAS a
+    // concurrent owner edit could slide the sign-off onto unreviewed content, defeating the
+    // separation-of-duties guarantee the approver gate exists to provide.
+    if (snapshot.deck.version !== args.reviewedDeckVersion) {
+      throw new Error(
+        `The deck advanced to v${snapshot.deck.version} since v${args.reviewedDeckVersion} was presented for review. Reload and review the current version before signing off.`,
+      );
+    }
     const validation = await findCurrentValidationRow(ctx, args.deckId, snapshot.deck.version);
     if (!validation) {
       throw new Error('The current version has no validation receipt to approve.');
@@ -137,16 +159,23 @@ export const getPublishApprovalState = query({
     await requireOwnerAccess(ctx, args.deckId, args.ownerAccessKey);
     const deckRow = await findDeckRow(ctx, args.deckId);
     const snapshot = await requireSnapshot(ctx, args.deckId);
+    // Bounded read: the table is capped at NODESLIDE_APPROVER_ROW_LIMIT rows on issue, so
+    // this take() never truncates — it just makes the read bound explicit and query-limit safe.
     const approvers = await ctx.db
       .query('nodeslide_publish_approvers')
       .withIndex('by_deck', (queryBuilder) => queryBuilder.eq('deckId', args.deckId))
-      .collect();
+      .take(NODESLIDE_APPROVER_ROW_LIMIT);
     const approvals = await ctx.db
       .query('nodeslide_publish_approvals')
       .withIndex('by_deck_version', (queryBuilder) =>
         queryBuilder.eq('deckId', args.deckId).eq('deckVersion', snapshot.deck.version),
       )
       .collect();
+    // A revoked approver's prior sign-off no longer counts. Filter those out so the
+    // owner never sees a self-contradicting "signed off by X" while X reads "revoked".
+    const revokedApproverIds = new Set(
+      approvers.filter((row) => row.revokedAt).map((row) => row.id),
+    );
     return {
       required: deckRow?.publishApprovalRequired === true,
       deckVersion: snapshot.deck.version,
@@ -156,7 +185,7 @@ export const getPublishApprovalState = query({
         issuedAt: row.issuedAt,
         revoked: Boolean(row.revokedAt),
       })),
-      currentVersionApprovals: approvals.map((row) => ({
+      currentVersionApprovals: activeApprovals(approvals, revokedApproverIds).map((row) => ({
         approverId: row.approverId,
         approvedAt: row.approvedAt,
       })),

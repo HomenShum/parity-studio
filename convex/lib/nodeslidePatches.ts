@@ -20,6 +20,14 @@ import { nodeslideCleanText } from './nodeslideIds';
 import { boundingBoxesIntersect, isNormalizedBoundingBox } from './nodeslideValidation';
 
 const MAX_DECK_TITLE_LENGTH = 160;
+/**
+ * Total base64 characters of embedded (data:) image URLs allowed across one deck. Every
+ * accepted patch stores the full snapshot in a single Convex version document (hard 1 MiB
+ * cap), so the deck-wide embedded-image total must stay well under that with headroom for
+ * text, styles, and structure. One max-size (700 KB) image fits; a second large one that
+ * would overflow version storage is rejected at validation with an honest reason.
+ */
+export const NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET = 700_000;
 
 export interface NodeSlideCasResult {
   canCommit: boolean;
@@ -538,6 +546,22 @@ export function validateNodeSlidePatch(
     }
   }
 
+  // Cumulative embedded-image budget across the CANDIDATE deck. Every accepted patch
+  // stores the whole snapshot — including every element's base64 imageUrl — in a single
+  // version document, and Convex hard-caps documents at 1 MiB. The per-image 700 KB cap
+  // alone lets two near-cap images overflow that limit, which would make the commit throw
+  // an opaque error and progressively wedge the deck. Reject here instead, with an honest
+  // reason, before anything is committed.
+  let embeddedImageChars = 0;
+  for (const element of elements.values()) {
+    if (element.imageUrl?.startsWith('data:')) embeddedImageChars += element.imageUrl.length;
+  }
+  if (embeddedImageChars > NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET) {
+    errors.push(
+      `This deck's embedded images total ${Math.round(embeddedImageChars / 1024)} KB, over the ${Math.round(NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET / 1024)} KB deck budget that keeps version history storable. Remove or shrink an embedded image first.`,
+    );
+  }
+
   return [...new Set(errors)];
 }
 
@@ -921,6 +945,22 @@ function validateDeckTitle(value: string | undefined, errors: string[]): void {
   }
 }
 
+/**
+ * Whether an added image element's URL is one of the two legitimate contracts: an embedded
+ * data:image (<=700 KB, matching update_image and the D8 embed path) or a bounded https URL
+ * (<=2048 chars, matching the agent planner's own limit). Everything else — javascript:,
+ * http:, data:text/*, other schemes, or oversized strings — is rejected so an owner-authored
+ * or AI-emitted add_element can never seed a published deck with a viewer-tracking/exfil URL
+ * or a payload that overruns the downstream PPTX/Google sync serializer's character cap.
+ */
+export function isAllowedNodeSlideAddedImageUrl(imageUrl: string): boolean {
+  const embedded =
+    /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/iu.test(imageUrl) &&
+    imageUrl.length <= 700_000;
+  const remote = /^https:\/\/\S+$/iu.test(imageUrl) && imageUrl.length <= 2048;
+  return embedded || remote;
+}
+
 function validateAddedElement(
   element: SlideElement,
   scope: PatchScope,
@@ -935,6 +975,26 @@ function validateAddedElement(
   }
   if (scope.kind === 'bounding_box' && !boundingBoxesIntersect(element.bbox, scope.bbox)) {
     errors.push(`Added element ${element.id} is outside the bounding-box scope.`);
+  }
+  // Bound imageUrl on ANY added element, not only kind:'image'. The sync serializer emits
+  // element.imageUrl verbatim for any element whose `image` field is unset, so a text (or
+  // other) element carrying an oversized or hostile imageUrl would wedge sync/export just
+  // the same — the guard must key on the field's presence, exactly as the serializer does.
+  if (element.imageUrl && !isAllowedNodeSlideAddedImageUrl(element.imageUrl)) {
+    errors.push(
+      `Added element ${element.id} carries an image URL that must be an embedded data:image URL under 700 KB or an https URL under 2048 characters.`,
+    );
+  }
+  // An embedded (data:) image MUST carry image metadata. The PPTX/Google sync serializer emits
+  // the compact `image` object when present but otherwise falls through to the raw imageUrl
+  // string, which — for an embedded data URL — overruns the sync document's tight per-payload
+  // cap and wedges sync for the whole deck. D8 and update_image both set image; this rejects a
+  // raw/adversarial add_element that would embed bytes without it. (Remote https URLs are small
+  // and serialize fine without image metadata, so they are exempt.)
+  if (element.imageUrl && !element.image && /^data:image\//iu.test(element.imageUrl)) {
+    errors.push(
+      `Added element ${element.id} embeds an image but is missing its image metadata; embedded images must set image so exports and sync stay bounded.`,
+    );
   }
   for (const sourceId of element.sourceIds) {
     if (!sourceIds.has(sourceId)) {
