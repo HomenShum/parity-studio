@@ -271,4 +271,49 @@ describe('NodeSlide publication dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
     expect(onRevokeApprover).toHaveBeenCalledWith('approver:9');
   });
+
+  it('disables governance controls while an approval action is in flight so a double-click cannot double-issue', async () => {
+    const user = userEvent.setup();
+    let resolveIssue: () => void = () => undefined;
+    const onIssueApprover = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveIssue = resolve;
+        }),
+    );
+    renderDialog({
+      approval: awaitingApproval,
+      onToggleApprovalRequired: () => undefined,
+      onIssueApprover,
+    });
+
+    await user.type(screen.getByLabelText('New approver name'), 'Reviewer B');
+    const issueButton = screen.getByRole('button', { name: 'Issue approver' });
+    await user.click(issueButton);
+    // In flight: the button reports progress and every governance control is disabled —
+    // a second click (the double-issue path) must be impossible, not merely unlikely.
+    const busyButton = screen.getByRole('button', { name: 'Issuing…' });
+    expect(busyButton).toBeDisabled();
+    expect(screen.getByLabelText('Require approver sign-off before publishing')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeDisabled();
+    expect(onIssueApprover).toHaveBeenCalledTimes(1);
+
+    resolveIssue();
+    // Settled: controls re-arm for the next action.
+    expect(await screen.findByRole('button', { name: 'Issue approver' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Require approver sign-off before publishing')).toBeEnabled();
+  });
+
+  it('shows the approver review link beside the issued capability with a separate-channels warning', () => {
+    renderDialog({
+      approval: awaitingApproval,
+      onToggleApprovalRequired: () => undefined,
+      issuedApproverToken: { label: 'Reviewer A', token: 'capability-token' },
+      approverReviewUrl: 'https://example.com/?approve=deck%3A1',
+    });
+
+    const link = screen.getByTestId('approver-review-link');
+    expect(link).toHaveValue('https://example.com/?approve=deck%3A1');
+    expect(screen.getByTestId('issued-approver-token')).toHaveTextContent('separate channels');
+  });
 });

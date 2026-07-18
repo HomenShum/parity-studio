@@ -25,10 +25,12 @@ interface PublicationDialogProps {
   /** D9 governance state + actions; omitted while the approval query loads. */
   approval?: PublishApprovalView;
   issuedApproverToken?: { label: string; token: string } | null;
-  onToggleApprovalRequired?: (required: boolean) => void;
-  onIssueApprover?: (label: string) => void;
-  onRevokeApprover?: (approverId: string) => void;
-  onApproveWithToken?: (token: string, reviewedDeckVersion: number) => void;
+  /** Link to the dedicated non-owner review surface (?approve=<deckId>). */
+  approverReviewUrl?: string | null;
+  onToggleApprovalRequired?: (required: boolean) => Promise<void> | void;
+  onIssueApprover?: (label: string) => Promise<void> | void;
+  onRevokeApprover?: (approverId: string) => Promise<void> | void;
+  onApproveWithToken?: (token: string, reviewedDeckVersion: number) => Promise<void> | void;
   onClose: () => void;
   onCopy: () => void;
   onPublish: () => void;
@@ -43,6 +45,7 @@ export function PublicationDialog({
   busy,
   approval,
   issuedApproverToken = null,
+  approverReviewUrl = null,
   onToggleApprovalRequired,
   onIssueApprover,
   onRevokeApprover,
@@ -60,6 +63,22 @@ export function PublicationDialog({
   // concurrent owner edit advancing the deck silently re-targets the attestation to a newer,
   // unreviewed version and the server CAS (which compares against the current version) passes.
   const [reviewedVersion, setReviewedVersion] = useState<number | null>(null);
+  // One approval mutation in flight at a time. Every governance control disables while an
+  // action runs, so a double-click can never double-issue an approver (each success
+  // overwrites the shown-once token, orphaning the first) or double-submit a sign-off.
+  const [pendingApproval, setPendingApproval] = useState<
+    null | 'toggle' | 'issue' | 'revoke' | 'sign_off'
+  >(null);
+  const runApprovalAction = (
+    kind: 'toggle' | 'issue' | 'revoke' | 'sign_off',
+    action: () => Promise<void> | void,
+  ) => {
+    if (pendingApproval !== null) return;
+    setPendingApproval(kind);
+    void Promise.resolve()
+      .then(action)
+      .finally(() => setPendingApproval(null));
+  };
   // The dialog is never unmounted (only Radix's portal DOM toggles), so its local state
   // survives close/reopen and deck switches. Clear the pasted approver capability — a bearer
   // secret — plus the pinned version and draft name whenever the dialog closes, matching the
@@ -161,8 +180,11 @@ export function PublicationDialog({
                 <input
                   type="checkbox"
                   checked={approval.required}
-                  disabled={busy}
-                  onChange={(event) => onToggleApprovalRequired?.(event.currentTarget.checked)}
+                  disabled={busy || pendingApproval !== null}
+                  onChange={(event) => {
+                    const next = event.currentTarget.checked;
+                    runApprovalAction('toggle', () => onToggleApprovalRequired?.(next));
+                  }}
                   aria-label="Require approver sign-off before publishing"
                 />
                 <span>
@@ -199,10 +221,14 @@ export function PublicationDialog({
                         ) : (
                           <button
                             type="button"
-                            disabled={busy}
-                            onClick={() => onRevokeApprover?.(entry.approverId)}
+                            disabled={busy || pendingApproval !== null}
+                            onClick={() =>
+                              runApprovalAction('revoke', () =>
+                                onRevokeApprover?.(entry.approverId),
+                              )
+                            }
                           >
-                            Revoke
+                            {pendingApproval === 'revoke' ? 'Revoking…' : 'Revoke'}
                           </button>
                         )}
                       </li>
@@ -221,13 +247,16 @@ export function PublicationDialog({
                     <button
                       className="ns-button ns-button--quiet"
                       type="button"
-                      disabled={busy || approverName.trim().length === 0}
+                      disabled={
+                        busy || pendingApproval !== null || approverName.trim().length === 0
+                      }
                       onClick={() => {
-                        onIssueApprover?.(approverName.trim());
+                        const label = approverName.trim();
+                        runApprovalAction('issue', () => onIssueApprover?.(label));
                         setApproverName('');
                       }}
                     >
-                      Issue approver
+                      {pendingApproval === 'issue' ? 'Issuing…' : 'Issue approver'}
                     </button>
                   </div>
                   {issuedApproverToken ? (
@@ -244,6 +273,23 @@ export function PublicationDialog({
                         Share it with the approver over a trusted channel. Only its digest is
                         stored; this dialog will not show it again.
                       </small>
+                      {approverReviewUrl ? (
+                        <>
+                          <input
+                            type="text"
+                            readOnly
+                            value={approverReviewUrl}
+                            onFocus={(event) => event.currentTarget.select()}
+                            aria-label="Approver review link"
+                            data-testid="approver-review-link"
+                          />
+                          <small>
+                            Send this review link too — the approver reads the slides and signs off
+                            there, no owner access involved. Send link and capability through
+                            separate channels.
+                          </small>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
                   {!approvedForCurrent ? (
@@ -269,21 +315,23 @@ export function PublicationDialog({
                         type="button"
                         disabled={
                           busy ||
+                          pendingApproval !== null ||
                           approverToken.trim().length === 0 ||
                           (reviewedVersion !== null && reviewedVersion !== approval.deckVersion)
                         }
                         onClick={() => {
                           // Sign off the PINNED reviewed version, not the live query value, so the
                           // server rejects it if the deck advanced past what the approver reviewed.
-                          onApproveWithToken?.(
-                            approverToken.trim(),
-                            reviewedVersion ?? approval.deckVersion,
-                          );
+                          const token = approverToken.trim();
+                          const version = reviewedVersion ?? approval.deckVersion;
+                          runApprovalAction('sign_off', () => onApproveWithToken?.(token, version));
                           setApproverToken('');
                           setReviewedVersion(null);
                         }}
                       >
-                        Sign off v{reviewedVersion ?? approval.deckVersion}
+                        {pendingApproval === 'sign_off'
+                          ? 'Signing off…'
+                          : `Sign off v${reviewedVersion ?? approval.deckVersion}`}
                       </button>
                       {reviewedVersion !== null && reviewedVersion !== approval.deckVersion ? (
                         <small className="ns-share-approval-drift" role="alert">
