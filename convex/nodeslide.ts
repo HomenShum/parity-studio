@@ -4103,6 +4103,7 @@ function atomicVariationFromRow(row: Doc<'nodeslide_variations'>): SlideVariatio
     operations: row.operations,
     candidate: row.candidate,
     validation: row.validation,
+    ...(row.judge !== undefined ? { judge: row.judge } : {}),
     status: row.status,
     ...(row.selectedPatchId !== undefined ? { selectedPatchId: row.selectedPatchId } : {}),
     createdAt: row.createdAt,

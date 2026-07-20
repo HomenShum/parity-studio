@@ -2953,6 +2953,57 @@
   margin-left: 5px;
   pointer-events: auto;
 }
+.ns-deployment-update {
+  position: fixed;
+  z-index: 1000;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--ns-danger, #b42318) 42%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ns-surface, #fff) 96%, var(--ns-danger, #b42318));
+  box-shadow: 0 18px 45px rgb(24 24 27 / 20%);
+  color: var(--ns-ink, #20211f);
+}
+
+.ns-deployment-update > span {
+  display: grid;
+  gap: 3px;
+}
+
+.ns-deployment-update > span > span {
+  color: var(--ns-muted, #61635f);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.ns-deployment-update button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ns-ink, #20211f);
+  color: var(--ns-surface, #fff);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .ns-deployment-update {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .nodeslide-studio.ns-loading-screen {
   align-items: center;
   display: flex;

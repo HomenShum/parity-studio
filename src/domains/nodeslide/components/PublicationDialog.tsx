@@ -334,11 +334,11 @@ export function PublicationDialog({
                           : `Sign off v${reviewedVersion ?? approval.deckVersion}`}
                       </button>
                       {reviewedVersion !== null && reviewedVersion !== approval.deckVersion ? (
-                        <small className="ns-share-approval-drift" role="alert">
+                        <div className="ns-share-approval-drift" role="alert">
                           The deck advanced to v{approval.deckVersion} while you were reviewing v
                           {reviewedVersion}. Clear the token and re-review to sign off the current
                           version.
-                        </small>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

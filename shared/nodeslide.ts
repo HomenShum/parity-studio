@@ -344,6 +344,10 @@ export interface ImageData {
   placeholder: boolean;
   credit?: string;
   sourceId?: string;
+  /** How the raster fits its element bounds. Older snapshots default to cover. */
+  fit?: 'cover' | 'contain';
+  /** Normalized subject focus used by cover crops. Older snapshots default to center. */
+  focalPoint?: { x: number; y: number };
 }
 
 /** A first-class web video contract with an explicit non-native PowerPoint fallback. */
@@ -497,6 +501,8 @@ export type PatchOperation =
       altText: string;
       credit?: string;
       sourceIds?: string[];
+      fit?: 'cover' | 'contain';
+      focalPoint?: { x: number; y: number };
     }
   | { op: 'add_element'; slideId: string; element: SlideElement }
   | { op: 'remove_element'; slideId: string; elementId: string }

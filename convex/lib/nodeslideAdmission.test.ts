@@ -263,6 +263,62 @@ describe('NodeSlide create action admission boundary', () => {
       attachments: [{ title: 'world-cup.csv', format: 'csv', content: 'metric,value\ngoals,172' }],
     });
   });
+
+  it('runs and records a real second provider pass for the development-only chart-drop demo', async () => {
+    stubPreviewAdmission();
+    vi.stubEnv('NODESLIDE_RUNTIME_ENV', 'development');
+    vi.stubEnv('NODESLIDE_DEV_CREATION_FAULT', 'drop_requested_chart');
+    const providerSpec = syntheticRepairProviderSpec();
+    const providerResult = {
+      ok: true as const,
+      value: providerSpec,
+      telemetry: {
+        provider: 'openrouter',
+        model: 'anthropic/claude-sonnet-5',
+        costMicroUsd: 600,
+        inputTokens: 20,
+        outputTokens: 30,
+      },
+    };
+    vi.mocked(callNodeSlideFreeJson)
+      .mockResolvedValueOnce(providerResult)
+      .mockResolvedValueOnce(providerResult);
+    const workspace = { deck: { id: 'deck-created' } };
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce(workspace);
+    const args: CreateActionArgs = {
+      ...createActionArgs(PREVIEW_ACCESS_CODE),
+      brief: {
+        prompt:
+          'Build a seven-slide roadshow with a quarterly revenue chart using Q1 $120K, Q2 $180K, Q3 $260K, and Q4 $400K.',
+        audience: 'Seed-stage investors',
+        purpose: 'Win a second partner meeting',
+        successCriteria: ['Keep the quarterly chart auditable'],
+      },
+      providerMode: 'openrouter_free',
+      providerModel: 'anthropic/claude-sonnet-5',
+      providerConsent: NODESLIDE_OPENROUTER_BRIEF_CONSENT,
+    };
+
+    await expect(createDeckHandler({ runMutation }, args)).resolves.toBe(workspace);
+
+    expect(callNodeSlideFreeJson).toHaveBeenCalledTimes(2);
+    const revisionRequest = vi.mocked(callNodeSlideFreeJson).mock.calls[1]?.[0];
+    expect(revisionRequest?.systemPrompt).toContain('DEVELOPMENT REPAIR PASS');
+    expect(revisionRequest?.systemPrompt).toContain('"missingPrimitives":["chart"]');
+    expect(revisionRequest?.userText).toContain('Development-only synthetic fault placeholder');
+    const persistenceArgs = runMutation.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(persistenceArgs.spec).toBe(providerSpec);
+    expect(persistenceArgs).toMatchObject({
+      costMicroUsd: 1_200,
+      inputTokens: 40,
+      outputTokens: 60,
+    });
+    expect(persistenceArgs.traceSummary).toContain('Development-only synthetic fault');
+    expect(persistenceArgs.traceSummary).toContain('real revision restored the requested chart');
+  });
 });
 
 describe('NodeSlide create-deck bounds', () => {
@@ -561,6 +617,40 @@ function createActionArgs(accessCode: string | undefined): CreateActionArgs {
     themeId: 'editorial-signal',
     route: 'free',
     providerMode: 'deterministic',
+  };
+}
+
+function syntheticRepairProviderSpec() {
+  const layouts = [
+    'hero',
+    'comparison',
+    'contract',
+    'flow',
+    'split',
+    'evidence_board',
+    'decision',
+  ] as const;
+  return {
+    title: 'Roadshow',
+    narrative: ['Open', 'Build', 'Close'],
+    plan: ['1. Open', '2. Evidence', '3. Ask'],
+    slides: layouts.map((layout, index) => ({
+      title: `Slide ${index + 1}`,
+      section: `Act / 0${index + 1}`,
+      headline: `Grounded takeaway for act ${index + 1}.`,
+      body: 'Concise evidence-led copy that stays within the supplied brief.',
+      bullets: ['Grounded point one', 'Grounded point two'],
+      layout,
+      ...(index === 4
+        ? {
+            chart: {
+              labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+              values: [120, 180, 260, 400],
+              unit: '$K',
+            },
+          }
+        : {}),
+    })),
   };
 }
 

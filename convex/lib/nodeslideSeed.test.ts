@@ -41,8 +41,8 @@ describe('NodeSlide seed', () => {
       expect.arrayContaining(['text', 'shape', 'image', 'chart', 'math']),
     );
     expect(snapshot.elements.find((element) => element.kind === 'math')?.math).toMatchObject({
-      expression: 'authorized change = requested scope ∩ allowed scope',
-      syntax: 'plain',
+      expression: '\\text{authorized change} = \\text{requested scope} \\cap \\text{allowed scope}',
+      syntax: 'latex',
       displayMode: 'block',
     });
     expect(snapshot.elements.find((element) => element.kind === 'image')).toMatchObject({

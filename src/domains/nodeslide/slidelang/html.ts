@@ -309,8 +309,19 @@ function renderShape(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
 
 function renderImage(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
   const imageUrl = element.imageUrl?.trim();
-  if (imageUrl && (imageUrl.startsWith('https://') || isEmbeddedImageData(imageUrl))) {
-    return `<image x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" href="${escapeHtml(imageUrl)}" preserveAspectRatio="xMidYMid slice" opacity="${clamp(finite(element.style.opacity, 1), 0, 1)}"/>`;
+  if (imageUrl?.startsWith('https://')) {
+    const focalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
+    const horizontalAlignment =
+      focalPoint.x < 1 / 3 ? 'xMin' : focalPoint.x > 2 / 3 ? 'xMax' : 'xMid';
+    const verticalAlignment =
+      focalPoint.y < 1 / 3 ? 'YMin' : focalPoint.y > 2 / 3 ? 'YMax' : 'YMid';
+    const fit = element.image?.fit === 'contain' ? 'meet' : 'slice';
+    return `<image x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" href="${escapeHtml(imageUrl)}" preserveAspectRatio="${horizontalAlignment}${verticalAlignment} ${fit}" opacity="${clamp(finite(element.style.opacity, 1), 0, 1)}"/>`;
+  }
+  if (imageUrl && isEmbeddedImageData(imageUrl)) {
+    const focalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
+    const fit = element.image?.fit === 'contain' ? 'contain' : 'cover';
+    return `<foreignObject x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" opacity="${clamp(finite(element.style.opacity, 1), 0, 1)}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden"><img src="${escapeHtml(imageUrl)}" alt="" style="display:block;width:100%;height:100%;object-fit:${fit};object-position:${clamp(focalPoint.x, 0, 1) * 100}% ${clamp(focalPoint.y, 0, 1) * 100}%"/></div></foreignObject>`;
   }
   const fill = colorToHex(element.style.fill, snapshot.deck.theme.colors.accentSoft);
   const stroke = colorToHex(element.style.stroke, snapshot.deck.theme.colors.border);

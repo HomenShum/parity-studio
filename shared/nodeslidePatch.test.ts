@@ -320,6 +320,99 @@ describe('NodeSlide patch protocol', () => {
     });
   });
 
+  it('reframes an existing image without replacing its asset', () => {
+    const current = snapshot();
+    current.slides[0]?.elementOrder.push('portrait');
+    current.elements.push({
+      id: 'portrait',
+      slideId: 'slide-1',
+      name: 'Portrait',
+      kind: 'image',
+      bbox: { x: 0.08, y: 0.34, width: 0.84, height: 0.5 },
+      rotation: 0,
+      style: {},
+      imageUrl: 'https://images.example.test/portrait.webp',
+      altText: 'Mike Rubino, Head of Talent at AI Fund',
+      image: {
+        placeholder: false,
+        credit: 'AI Fund team page',
+        fit: 'cover',
+        focalPoint: { x: 0.5, y: 0.5 },
+      },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_static_fallback'],
+      version: 1,
+    });
+    const operations: PatchOperation[] = [
+      {
+        op: 'update_image',
+        slideId: 'slide-1',
+        elementId: 'portrait',
+        imageUrl: 'https://images.example.test/portrait.webp',
+        altText: 'Mike Rubino, Head of Talent at AI Fund',
+        credit: 'AI Fund team page',
+        fit: 'contain',
+        focalPoint: { x: 0.2, y: 0.8 },
+      },
+    ];
+
+    expect(validateNodeSlidePatch(current, serverPatch(current, operations))).toEqual([]);
+    const result = applyDeckPatch(current, {
+      baseDeckVersion: current.deck.version,
+      scope: { kind: 'deck', deckId: current.deck.id, operationMode: 'unrestricted' },
+      operations,
+    });
+
+    expect(result.snapshot.elements.find((element) => element.id === 'portrait')).toMatchObject({
+      imageUrl: 'https://images.example.test/portrait.webp',
+      image: {
+        placeholder: false,
+        credit: 'AI Fund team page',
+        fit: 'contain',
+        focalPoint: { x: 0.2, y: 0.8 },
+      },
+      version: 2,
+    });
+  });
+
+  it('rejects image focal points outside normalized bounds', () => {
+    const current = snapshot();
+    current.slides[0]?.elementOrder.push('portrait');
+    current.elements.push({
+      id: 'portrait',
+      slideId: 'slide-1',
+      name: 'Portrait',
+      kind: 'image',
+      bbox: { x: 0.08, y: 0.34, width: 0.84, height: 0.5 },
+      rotation: 0,
+      style: {},
+      imageUrl: 'data:image/webp;base64,UklGRgAAAAA=',
+      altText: 'Portrait',
+      image: { placeholder: false },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_static_fallback'],
+      version: 1,
+    });
+
+    expect(
+      validateNodeSlidePatch(
+        current,
+        serverPatch(current, [
+          {
+            op: 'update_image',
+            slideId: 'slide-1',
+            elementId: 'portrait',
+            imageUrl: 'data:image/webp;base64,UklGRgAAAAA=',
+            altText: 'Portrait',
+            focalPoint: { x: 1.2, y: -0.1 },
+          },
+        ]),
+      ),
+    ).toContain('update_image focal point must use normalized x/y values between 0 and 1.');
+  });
+
   it('rejects malformed chart data, remote image URLs, and wrong primitive kinds', () => {
     const current = snapshot();
     expect(

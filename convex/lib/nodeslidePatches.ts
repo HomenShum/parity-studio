@@ -463,14 +463,34 @@ export function validateNodeSlidePatch(
         const altText = operation.altText.replace(/\s+/gu, ' ').trim();
         const isEmbeddedImage =
           /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/iu.test(imageUrl);
-        if (!isEmbeddedImage || imageUrl.length > 700_000) {
-          errors.push('update_image requires an embedded PNG, JPEG, WebP, or GIF under 700 KB.');
+        const isUnchangedExistingRemote =
+          imageUrl === element.imageUrl &&
+          /^https:\/\/\S+$/iu.test(imageUrl) &&
+          imageUrl.length <= 2048;
+        const imageUrlAllowed =
+          (isEmbeddedImage && imageUrl.length <= 700_000) || isUnchangedExistingRemote;
+        if (!imageUrlAllowed) {
+          errors.push(
+            "update_image requires an embedded PNG, JPEG, WebP, or GIF under 700 KB, or the element's unchanged HTTPS URL for reframing.",
+          );
         }
         if (!altText || altText.length > 320) {
           errors.push('update_image requires alt text between 1 and 320 characters.');
         }
         if ((operation.credit?.length ?? 0) > 320) {
           errors.push('update_image credit cannot exceed 320 characters.');
+        }
+        const fit = operation.fit ?? element.image?.fit ?? 'cover';
+        const focalPoint = operation.focalPoint ?? element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
+        if (
+          !Number.isFinite(focalPoint.x) ||
+          !Number.isFinite(focalPoint.y) ||
+          focalPoint.x < 0 ||
+          focalPoint.x > 1 ||
+          focalPoint.y < 0 ||
+          focalPoint.y > 1
+        ) {
+          errors.push('update_image focal point must use normalized x/y values between 0 and 1.');
         }
         if (
           operation.sourceIds?.some((sourceId) => !sources.has(sourceId)) ||
@@ -479,17 +499,27 @@ export function validateNodeSlidePatch(
           errors.push('update_image contains an unknown or excessive source binding.');
         }
         if (
-          isEmbeddedImage &&
+          imageUrlAllowed &&
           altText &&
-          imageUrl.length <= 700_000 &&
           (operation.credit?.length ?? 0) <= 320 &&
+          Number.isFinite(focalPoint.x) &&
+          Number.isFinite(focalPoint.y) &&
+          focalPoint.x >= 0 &&
+          focalPoint.x <= 1 &&
+          focalPoint.y >= 0 &&
+          focalPoint.y <= 1 &&
           (operation.sourceIds?.length ?? 0) <= NODESLIDE_ELEMENT_SOURCE_LIMIT &&
           !operation.sourceIds?.some((sourceId) => !sources.has(sourceId))
         ) {
+          const currentFit = element.image?.fit ?? 'cover';
+          const currentFocalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
           const unchanged =
             imageUrl === (element.imageUrl ?? '') &&
             altText === (element.altText ?? '') &&
-            (operation.credit ?? '') === (element.image?.credit ?? '');
+            (operation.credit ?? '') === (element.image?.credit ?? '') &&
+            fit === currentFit &&
+            focalPoint.x === currentFocalPoint.x &&
+            focalPoint.y === currentFocalPoint.y;
           if (unchanged) {
             errors.push(`update_image must change element ${operation.elementId}.`);
           } else if (canMutate) {
@@ -499,6 +529,8 @@ export function validateNodeSlidePatch(
               placeholder: false,
               ...(operation.credit ? { credit: operation.credit.trim() } : {}),
               ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
+              fit,
+              focalPoint: { x: focalPoint.x, y: focalPoint.y },
             };
             element.exportCapabilities = [
               'web_native',

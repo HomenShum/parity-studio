@@ -28,6 +28,187 @@ interface PptxBox {
   h: number;
 }
 
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+function uint16BigEndian(bytes: Uint8Array, offset: number): number {
+  return ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
+}
+
+function uint16LittleEndian(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8);
+}
+
+function uint24LittleEndian(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8) | ((bytes[offset + 2] ?? 0) << 16);
+}
+
+function uint32BigEndian(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) * 0x1000000 +
+      ((bytes[offset + 1] ?? 0) << 16) +
+      ((bytes[offset + 2] ?? 0) << 8) +
+      (bytes[offset + 3] ?? 0)) >>>
+    0
+  );
+}
+
+function uint32LittleEndian(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset] ?? 0) |
+      ((bytes[offset + 1] ?? 0) << 8) |
+      ((bytes[offset + 2] ?? 0) << 16) |
+      ((bytes[offset + 3] ?? 0) << 24)) >>>
+    0
+  );
+}
+
+function ascii(bytes: Uint8Array, offset: number, length: number): string {
+  return String.fromCharCode(...bytes.subarray(offset, offset + length));
+}
+
+function positiveDimensions(width: number, height: number): ImageDimensions | null {
+  return Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0
+    ? { width, height }
+    : null;
+}
+
+function jpegDimensions(bytes: Uint8Array): ImageDimensions | null {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 8 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1] ?? 0;
+    offset += 2;
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    const segmentLength = uint16BigEndian(bytes, offset);
+    if (segmentLength < 2 || offset + segmentLength > bytes.length) return null;
+    const isStartOfFrame =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+    if (isStartOfFrame && segmentLength >= 7) {
+      return positiveDimensions(
+        uint16BigEndian(bytes, offset + 5),
+        uint16BigEndian(bytes, offset + 3),
+      );
+    }
+    offset += segmentLength;
+  }
+  return null;
+}
+
+function webpDimensions(bytes: Uint8Array): ImageDimensions | null {
+  if (ascii(bytes, 0, 4) !== 'RIFF' || ascii(bytes, 8, 4) !== 'WEBP') return null;
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const chunk = ascii(bytes, offset, 4);
+    const length = uint32LittleEndian(bytes, offset + 4);
+    const data = offset + 8;
+    if (data + length > bytes.length) return null;
+    if (chunk === 'VP8X' && length >= 10) {
+      return positiveDimensions(
+        uint24LittleEndian(bytes, data + 4) + 1,
+        uint24LittleEndian(bytes, data + 7) + 1,
+      );
+    }
+    if (chunk === 'VP8 ' && length >= 10 && ascii(bytes, data + 3, 3) === '\u009d\u0001\u002a') {
+      return positiveDimensions(
+        uint16LittleEndian(bytes, data + 6) & 0x3fff,
+        uint16LittleEndian(bytes, data + 8) & 0x3fff,
+      );
+    }
+    if (chunk === 'VP8L' && length >= 5 && bytes[data] === 0x2f) {
+      const b1 = bytes[data + 1] ?? 0;
+      const b2 = bytes[data + 2] ?? 0;
+      const b3 = bytes[data + 3] ?? 0;
+      const b4 = bytes[data + 4] ?? 0;
+      return positiveDimensions(
+        1 + (((b2 & 0x3f) << 8) | b1),
+        1 + (((b4 & 0x0f) << 10) | (b3 << 2) | ((b2 & 0xc0) >> 6)),
+      );
+    }
+    offset = data + length + (length % 2);
+  }
+  return null;
+}
+
+export function embeddedImageDimensions(dataUrl: string): ImageDimensions | null {
+  const encoded = /^[^,]+;base64,([A-Za-z0-9+/=\s]+)$/u.exec(dataUrl.trim())?.[1];
+  if (!encoded) return null;
+  try {
+    const binary = atob(encoded.replace(/\s+/gu, ''));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    if (
+      bytes.length >= 24 &&
+      bytes[0] === 0x89 &&
+      ascii(bytes, 1, 3) === 'PNG' &&
+      ascii(bytes, 12, 4) === 'IHDR'
+    ) {
+      return positiveDimensions(uint32BigEndian(bytes, 16), uint32BigEndian(bytes, 20));
+    }
+    if (
+      bytes.length >= 10 &&
+      (ascii(bytes, 0, 6) === 'GIF87a' || ascii(bytes, 0, 6) === 'GIF89a')
+    ) {
+      return positiveDimensions(uint16LittleEndian(bytes, 6), uint16LittleEndian(bytes, 8));
+    }
+    return jpegDimensions(bytes) ?? webpDimensions(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function imageSizing(
+  element: SlideElement,
+  box: PptxBox,
+): Pick<PptxBox, 'w' | 'h'> & {
+  sizing?: {
+    type: 'contain' | 'crop';
+    x?: number;
+    y?: number;
+    w: number;
+    h: number;
+  };
+} {
+  const dimensions = embeddedImageDimensions(element.imageUrl ?? '');
+  if (!dimensions) return { w: box.w, h: box.h };
+  const sourceAspect = dimensions.width / dimensions.height;
+  const frameAspect = box.w / box.h;
+  if (element.image?.fit === 'contain') {
+    return {
+      w: sourceAspect,
+      h: 1,
+      sizing: { type: 'contain', w: box.w, h: box.h },
+    };
+  }
+
+  const focalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
+  const cropWidth = sourceAspect > frameAspect ? frameAspect / sourceAspect : 1;
+  const cropHeight = sourceAspect < frameAspect ? sourceAspect / frameAspect : 1;
+  const left = clamp(focalPoint.x - cropWidth / 2, 0, 1 - cropWidth);
+  const top = clamp(focalPoint.y - cropHeight / 2, 0, 1 - cropHeight);
+  const virtualWidth = box.w / cropWidth;
+  const virtualHeight = box.h / cropHeight;
+  return {
+    w: virtualWidth,
+    h: virtualHeight,
+    sizing: {
+      type: 'crop',
+      x: left * virtualWidth,
+      y: top * virtualHeight,
+      w: box.w,
+      h: box.h,
+    },
+  };
+}
+
 function boxFor(element: SlideElement): PptxBox {
   const bbox = normalizeBoundingBox(element.bbox);
   return {
@@ -221,9 +402,13 @@ function addStaticImage(
     );
     return;
   }
+  const framing = imageSizing(element, box);
   pptxSlide.addImage({
     ...box,
+    w: framing.w,
+    h: framing.h,
     data: element.imageUrl.trim(),
+    ...(framing.sizing ? { sizing: framing.sizing } : {}),
     objectName: `${element.id} [static image fallback]`,
     altText: element.altText ?? `${element.name}; static image fallback`,
     rotate: clamp(finite(element.rotation, 0), -360, 360),

@@ -10,9 +10,11 @@ import { resolveSignatureTheme } from '../../shared/nodeslideSignatureApply';
 import {
   NODESLIDE_VARIANT_COUNT,
   NODESLIDE_VARIANT_OPERATION_LIMIT,
+  NODESLIDE_VARIATION_JUDGE_VERSION,
   NODESLIDE_VARIATION_SCHEMA_VERSION,
   type SlideVariation,
   type VariationAxes,
+  type VariationJudgeReceipt,
   type VariationOrigin,
   type VariationStatus,
 } from '../../shared/nodeslideVariation';
@@ -77,7 +79,14 @@ export class NodeSlideVariationError extends Error {
   }
 }
 
-export type VariationProviderOutcome = { ok: true; value: unknown } | { ok: false; reason: string };
+export type VariationProviderBranchOutcome =
+  | { axes: VariationAxes; ok: true; value: unknown }
+  | { axes: VariationAxes; ok: false; reason: string };
+
+export type VariationProviderOutcome =
+  | { ok: true; value: unknown }
+  | { ok: true; branches: VariationProviderBranchOutcome[] }
+  | { ok: false; reason: string };
 
 export interface VariationBuildResult {
   variations: SlideVariation[];
@@ -300,6 +309,73 @@ export function buildVariationProviderPrompt(
   };
 }
 
+export function buildVariationBranchProviderPrompt(
+  snapshot: DeckSnapshot,
+  slideId: string,
+  axes: VariationAxes,
+  signatureProfile?: SignatureProfile,
+): {
+  systemPrompt: string;
+  userText: string;
+} {
+  const setPrompt = buildVariationProviderPrompt(snapshot, slideId, signatureProfile);
+  const payload = JSON.parse(setPrompt.userText) as Record<string, unknown>;
+  const userText = JSON.stringify({
+    ...payload,
+    schema: {
+      exactShape: { variant: { axes: 'the requested tuple', operations: '1..8 operations' } },
+      allowedOperations: [...ALLOWED_OPERATION_NAMES],
+      forbidden: ['new IDs', 'new elements', 'removed elements', 'locked edits', 'other slides'],
+    },
+    axes: [axes],
+    branch: { id: axesKey(axes), independence: 'Generate only this branch.' },
+  });
+  if (userText.length > NODESLIDE_VARIATION_PROMPT_LIMIT) {
+    throw new NodeSlideVariationError(
+      'source_bounds',
+      'The bounded variation branch prompt is too large.',
+    );
+  }
+  return {
+    systemPrompt:
+      "You are one independent branch of NodeSlide's bounded slide-variation planner. Return strict JSON only in the supplied top-level shape, with exactly one variant for the one requested axis tuple. Preserve every supplied fact and source relationship. Use only replace_text, update_style, move, resize, and update_slide; use 1 to 8 operations. Target only the supplied slide and unlocked element IDs. When activeSignature is supplied, preserve existing colors, font-family values, font sizes, and slide background so role-specific on-brand mappings remain intact; vary weight, spacing, opacity, geometry, alignment, and grounded copy instead. Do not add or remove anything, invent claims or data, fetch URLs, coordinate with another branch, or include markdown or extra keys.",
+    userText,
+  };
+}
+
+export async function runIndependentVariationProviderBranches(args: {
+  snapshot: DeckSnapshot;
+  slideId: string;
+  signatureProfile?: SignatureProfile;
+  invoke: (
+    axes: VariationAxes,
+    prompt: { systemPrompt: string; userText: string },
+  ) => Promise<{ ok: true; value: unknown } | { ok: false; reason: string }>;
+}): Promise<VariationProviderBranchOutcome[]> {
+  return await Promise.all(
+    NODESLIDE_DEFAULT_VARIATION_AXES.map(async (axes): Promise<VariationProviderBranchOutcome> => {
+      const prompt = buildVariationBranchProviderPrompt(
+        args.snapshot,
+        args.slideId,
+        axes,
+        args.signatureProfile,
+      );
+      try {
+        const result = await args.invoke(axes, prompt);
+        return result.ok
+          ? { axes, ok: true, value: result.value }
+          : {
+              axes,
+              ok: false,
+              reason: cleanDiagnostic(result.reason || 'provider_branch_unavailable'),
+            };
+      } catch {
+        return { axes, ok: false, reason: 'provider_branch_unavailable' };
+      }
+    }),
+  );
+}
+
 export function buildSlideVariations(args: {
   snapshot: DeckSnapshot;
   slideId: string;
@@ -310,7 +386,9 @@ export function buildSlideVariations(args: {
 }): VariationBuildResult {
   assertVariationSourceBounds(args.snapshot, args.slideId);
   const parsed = args.provider.ok
-    ? parseProviderEnvelope(args.provider.value)
+    ? 'branches' in args.provider
+      ? parseIndependentProviderBranches(args.provider.branches)
+      : parseProviderEnvelope(args.provider.value)
     : {
         ok: false as const,
         reason: cleanDiagnostic(args.provider.reason || 'provider_unavailable'),
@@ -463,14 +541,15 @@ export function buildSlideVariations(args: {
       'The variation set did not satisfy exact-count and diversity bounds.',
     );
   }
-  const fallbackReasons = variations.flatMap((variation) =>
+  const judgedVariations = judgeSlideVariations(variations, args.createdAt);
+  const fallbackReasons = judgedVariations.flatMap((variation) =>
     variation.fallbackReason ? [variation.fallbackReason] : [],
   );
-  const origin = variations.every((variation) => variation.origin === 'free_route')
+  const origin = judgedVariations.every((variation) => variation.origin === 'free_route')
     ? 'free_route'
     : 'deterministic_fallback';
   return {
-    variations,
+    variations: judgedVariations,
     origin,
     ...(fallbackReasons.length > 0
       ? { fallbackReason: cleanDiagnostic([...new Set(fallbackReasons)].join('; ')) }
@@ -729,6 +808,157 @@ export function variationMaterializedFingerprint(candidate: SlideVariation['cand
   )}`;
 }
 
+export function variationJudgeComparisonDigest(variations: readonly SlideVariation[]): string {
+  return `judge-set-${nodeslideHash(
+    stableStringify(
+      [...variations]
+        .map((variation) => ({
+          id: variation.id,
+          operations: variationOperationFingerprint(variation.operations),
+          candidate: variationMaterializedFingerprint(variation.candidate),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
+    ),
+  )}`;
+}
+
+export function judgeSlideVariations(
+  variations: readonly SlideVariation[],
+  judgedAt: number,
+): SlideVariation[] {
+  if (
+    variations.length !== NODESLIDE_VARIANT_COUNT ||
+    new Set(variations.map((variation) => variation.id)).size !== NODESLIDE_VARIANT_COUNT
+  ) {
+    throw new NodeSlideVariationError(
+      'generation_failed',
+      'The variation judge requires exactly three distinct candidates.',
+    );
+  }
+  const comparisonDigest = variationJudgeComparisonDigest(variations);
+  const scored = variations.map((variation) => {
+    const metrics = variationJudgeMetrics(variation);
+    const score = metrics.validation + metrics.axisFit + metrics.coverage + metrics.restraint;
+    const operationTypes = new Set(variation.operations.map((operation) => operation.op)).size;
+    const elementTargets = new Set(
+      variation.operations.flatMap((operation) =>
+        'elementId' in operation ? [operation.elementId] : [],
+      ),
+    ).size;
+    return {
+      variation,
+      metrics,
+      score,
+      rationale: boundedText(
+        `Validation ${metrics.validation}/40; axis fit ${metrics.axisFit}/30; coverage ${metrics.coverage}/15; restraint ${metrics.restraint}/15. ${operationTypes} operation type${operationTypes === 1 ? '' : 's'} across ${elementTargets} element target${elementTargets === 1 ? '' : 's'}.`,
+        NODESLIDE_VARIATION_REASON_LIMIT,
+      ),
+    };
+  });
+  const ranked = [...scored].sort(
+    (left, right) =>
+      right.score - left.score ||
+      variationAxesRank(left.variation.axes) - variationAxesRank(right.variation.axes) ||
+      left.variation.id.localeCompare(right.variation.id),
+  );
+  const receiptByVariationId = new Map<string, VariationJudgeReceipt>();
+  for (const [index, entry] of ranked.entries()) {
+    const rank = (index + 1) as VariationJudgeReceipt['rank'];
+    receiptByVariationId.set(entry.variation.id, {
+      version: NODESLIDE_VARIATION_JUDGE_VERSION,
+      rank,
+      score: entry.score,
+      maxScore: 100,
+      candidateCount: NODESLIDE_VARIANT_COUNT,
+      branchId: axesKey(entry.variation.axes),
+      candidateDigest: variationMaterializedFingerprint(entry.variation.candidate),
+      comparisonDigest,
+      metrics: entry.metrics,
+      rationale: entry.rationale,
+      judgedAt,
+    });
+  }
+  return variations.map((variation) => {
+    const judge = receiptByVariationId.get(variation.id);
+    if (!judge) {
+      throw new NodeSlideVariationError('generation_failed', 'A judge receipt was not produced.');
+    }
+    return { ...variation, judge };
+  });
+}
+
+function variationJudgeMetrics(variation: SlideVariation): VariationJudgeReceipt['metrics'] {
+  const operationTypes = new Set(variation.operations.map((operation) => operation.op));
+  const targetIds = new Set(
+    variation.operations.flatMap((operation) =>
+      'elementId' in operation ? [operation.elementId] : [],
+    ),
+  );
+  const targetKinds = new Set(
+    variation.candidate.elements
+      .filter((element) => targetIds.has(element.id))
+      .map((element) => element.kind),
+  );
+  const hasGeometry = operationTypes.has('move') || operationTypes.has('resize');
+  const hasCopy = operationTypes.has('replace_text') || operationTypes.has('update_slide');
+  const hasStyle = operationTypes.has('update_style');
+
+  const validation =
+    (variation.validation.ok ? 20 : 0) +
+    (variation.validation.publishOk ? 10 : 0) +
+    (variation.validation.cleanOk ? 10 : 0);
+
+  let contentAngleFit = 0;
+  if (variation.axes.contentAngle === 'data_led') {
+    contentAngleFit = targetKinds.has('chart') ? 10 : hasGeometry || hasStyle ? 6 : 2;
+  } else if (variation.axes.contentAngle === 'narrative_led') {
+    contentAngleFit = hasCopy ? 10 : targetKinds.has('text') && hasStyle ? 7 : 2;
+  } else {
+    contentAngleFit = operationTypes.size >= 2 || targetIds.size >= 2 ? 10 : 6;
+  }
+
+  const operationCount = variation.operations.length;
+  const densityFit =
+    variation.axes.density === 'executive'
+      ? operationCount <= 3
+        ? 10
+        : operationCount <= 5
+          ? 7
+          : 3
+      : variation.axes.density === 'detail'
+        ? operationCount >= 4
+          ? 10
+          : operationCount >= 2
+            ? 7
+            : 3
+        : operationCount >= 2 && operationCount <= 5
+          ? 10
+          : 6;
+
+  let layoutFit = 0;
+  if (variation.axes.layoutArchetype === 'headline') {
+    layoutFit = hasCopy || (targetKinds.has('text') && hasStyle) ? 10 : hasGeometry ? 7 : 3;
+  } else if (variation.axes.layoutArchetype === 'split') {
+    layoutFit = hasGeometry && targetIds.size >= 2 ? 10 : targetIds.size >= 2 ? 7 : 3;
+  } else if (variation.axes.layoutArchetype === 'evidence') {
+    layoutFit = targetKinds.has('chart') ? 10 : hasGeometry || hasStyle ? 7 : 3;
+  } else {
+    layoutFit = targetIds.size >= 2 && hasGeometry ? 10 : targetIds.size >= 2 ? 7 : 3;
+  }
+
+  const coverage = Math.min(15, operationTypes.size * 3 + targetIds.size * 2);
+  const restraint =
+    (operationCount >= 1 && operationCount <= NODESLIDE_VARIANT_OPERATION_LIMIT ? 8 : 0) +
+    (operationCount <= 6 ? 4 : 2) +
+    (variation.validation.issues.some((issue) => issue.severity === 'error') ? 0 : 3);
+  return {
+    validation,
+    axisFit: contentAngleFit + densityFit + layoutFit,
+    coverage,
+    restraint,
+  };
+}
+
 export function boundVariationListByBytes(
   variations: readonly SlideVariation[],
   requestedLimit: number,
@@ -772,7 +1002,14 @@ export function planVariationGeneration(
   variations: readonly SlideVariation[],
 ): VariationDecisionTrace[] {
   return variations.map((variation) =>
-    variationTrace(variation, 'variation_generated', variation.createdAt),
+    variationTrace(
+      variation,
+      'variation_generated',
+      variation.createdAt,
+      variation.judge
+        ? `judge rank ${variation.judge.rank}/${variation.judge.candidateCount}; score ${variation.judge.score}/${variation.judge.maxScore}; ${variation.judge.rationale}`
+        : 'judge receipt unavailable for legacy variation',
+    ),
   );
 }
 
@@ -858,6 +1095,53 @@ export function cleanReasonText(value: string): string {
 
 export function cleanDiagnostic(value: string): string {
   return boundedText(value, NODESLIDE_VARIATION_DIAGNOSTIC_LIMIT) || 'provider_unavailable';
+}
+
+export function parseIndependentProviderBranches(
+  branches: readonly VariationProviderBranchOutcome[],
+): { ok: true; entries: ParsedProviderEntry[] } | { ok: false; reason: string } {
+  if (branches.length !== NODESLIDE_VARIANT_COUNT) {
+    return { ok: false, reason: 'partial_provider_branch_result' };
+  }
+  const branchKeys = branches.map((branch) => axesKey(branch.axes));
+  if (
+    new Set(branchKeys).size !== NODESLIDE_VARIANT_COUNT ||
+    NODESLIDE_DEFAULT_VARIATION_AXES.some((axes) => !branchKeys.includes(axesKey(axes)))
+  ) {
+    return { ok: false, reason: 'duplicate_or_missing_provider_branch' };
+  }
+  return {
+    ok: true,
+    entries: NODESLIDE_DEFAULT_VARIATION_AXES.map((requestedAxes) => {
+      const branch = branches.find((candidate) => sameAxes(candidate.axes, requestedAxes));
+      if (!branch) {
+        return { axes: requestedAxes, operations: null, reason: 'missing_provider_branch' };
+      }
+      if (!branch.ok) {
+        return {
+          axes: requestedAxes,
+          operations: null,
+          reason: cleanDiagnostic(branch.reason || 'provider_branch_unavailable'),
+        };
+      }
+      if (!isExactRecord(branch.value, ['variant'])) {
+        return {
+          axes: requestedAxes,
+          operations: null,
+          reason: 'malformed_provider_branch_json',
+        };
+      }
+      const entry = parseProviderEntry(branch.value['variant']);
+      if (!entry.axes || !sameAxes(entry.axes, requestedAxes)) {
+        return {
+          axes: requestedAxes,
+          operations: null,
+          reason: 'provider_branch_axis_mismatch',
+        };
+      }
+      return entry;
+    }),
+  };
 }
 
 function parseProviderEnvelope(
@@ -1403,6 +1687,11 @@ function axesKey(axes: VariationAxes): string {
 
 function sameAxes(left: VariationAxes, right: VariationAxes): boolean {
   return axesKey(left) === axesKey(right);
+}
+
+function variationAxesRank(axes: VariationAxes): number {
+  const rank = NODESLIDE_DEFAULT_VARIATION_AXES.findIndex((candidate) => sameAxes(candidate, axes));
+  return rank < 0 ? Number.MAX_SAFE_INTEGER : rank;
 }
 
 function tightenExistingCopy(value: string, max: number): string {

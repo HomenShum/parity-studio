@@ -357,10 +357,11 @@ export function buildGoldenNodeSlide(clientSessionId: string, now: number): Node
         body: 'The agent can reason broadly, but it may only write inside the explicit deck, slide, element, comment, or bounding-box scope.',
         bullets: ['Read context', 'Propose an inspectable patch', 'Validate and accept atomically'],
         formula: {
-          expression: 'authorized change = requested scope ∩ allowed scope',
+          expression:
+            '\\text{authorized change} = \\text{requested scope} \\cap \\text{allowed scope}',
           display: 'authorized change = requested scope ∩ allowed scope',
           variables: [],
-          syntax: 'plain',
+          syntax: 'latex',
           description:
             'The agent can only mutate the intersection of requested and authorized scope.',
         },

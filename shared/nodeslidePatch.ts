@@ -377,6 +377,16 @@ export function applyDeckPatch(
         placeholder: false,
         ...(operation.credit ? { credit: operation.credit } : {}),
         ...(element.image?.sourceId ? { sourceId: element.image.sourceId } : {}),
+        ...(operation.fit
+          ? { fit: operation.fit }
+          : element.image?.fit
+            ? { fit: element.image.fit }
+            : {}),
+        ...(operation.focalPoint
+          ? { focalPoint: structuredClone(operation.focalPoint) }
+          : element.image?.focalPoint
+            ? { focalPoint: structuredClone(element.image.focalPoint) }
+            : {}),
       };
       element.exportCapabilities = ['web_native', 'pptx_static_fallback', 'google_importable'];
       if (operation.sourceIds !== undefined) element.sourceIds = [...operation.sourceIds];

@@ -45,10 +45,11 @@ import {
   boundVariationListByBytes,
   boundedVariationListLimit,
   buildSlideVariations,
-  buildVariationProviderPrompt,
   cleanDiagnostic,
   planVariationGeneration,
   planVariationRejection,
+  runIndependentVariationProviderBranches,
+  variationJudgeComparisonDigest,
   variationMaterializedFingerprint,
   variationOperationFingerprint,
   variationPreviewQuotaBuckets,
@@ -155,23 +156,22 @@ export const generate = action({
     const batchId = startedBatch.id;
 
     try {
-      const prompt = buildVariationProviderPrompt(snapshot, args.slideId, signatureProfile);
       let provider: VariationProviderOutcome;
       if (providerChoice.providerMode === 'deterministic') {
         provider = { ok: false, reason: 'provider_not_requested' };
       } else {
-        try {
-          const result = (await ctx.runAction(variationProviderInternal.generateStrictJson, {
-            ...prompt,
-            model: providerChoice.providerModel,
-            reasoningEffort: providerChoice.providerEffort,
-          })) as VariationProviderOutcome;
-          provider = result?.ok
-            ? { ok: true, value: result.value }
-            : { ok: false, reason: cleanDiagnostic(result?.reason ?? 'provider_unavailable') };
-        } catch {
-          provider = { ok: false, reason: 'provider_unavailable' };
-        }
+        const branches = await runIndependentVariationProviderBranches({
+          snapshot,
+          slideId: args.slideId,
+          ...(signatureProfile ? { signatureProfile } : {}),
+          invoke: async (_axes, prompt) =>
+            (await ctx.runAction(variationProviderInternal.generateStrictJson, {
+              ...prompt,
+              model: providerChoice.providerModel,
+              reasoningEffort: providerChoice.providerEffort,
+            })) as { ok: true; value: unknown } | { ok: false; reason: string },
+        });
+        provider = { ok: true, branches };
       }
       const built = buildSlideVariations({
         snapshot,
@@ -243,6 +243,8 @@ export const list = query({
           (left, right) =>
             right.createdAt - left.createdAt ||
             right.batchId.localeCompare(left.batchId) ||
+            (left.judge?.rank ?? Number.MAX_SAFE_INTEGER) -
+              (right.judge?.rank ?? Number.MAX_SAFE_INTEGER) ||
             variationAxisRank(left) - variationAxisRank(right),
         );
       return boundVariationListByBytes(sorted, limit);
@@ -543,6 +545,9 @@ function assertPersistableVariationSet(args: {
   const axes = new Set<string>();
   const fingerprints = new Set<string>();
   const candidateFingerprints = new Set<string>();
+  const judgeRanks = new Set<number>();
+  const comparisonDigests = new Set<string>();
+  const expectedComparisonDigest = variationJudgeComparisonDigest(args.variations);
   const expectedOrigin = args.variations.every((variation) => variation.origin === 'free_route')
     ? 'free_route'
     : 'deterministic_fallback';
@@ -572,7 +577,8 @@ function assertPersistableVariationSet(args: {
       baseElementIds.some((elementId) => !candidateElementIds.has(elementId)) ||
       variation.candidate.elements.some((element) => element.slideId !== args.slideId) ||
       (variation.fallbackReason?.length ?? 0) > NODESLIDE_VARIATION_DIAGNOSTIC_LIMIT ||
-      (variation.origin === 'deterministic_fallback' && !variation.fallbackReason)
+      (variation.origin === 'deterministic_fallback' && !variation.fallbackReason) ||
+      !validVariationJudgeReceipt(variation, expectedComparisonDigest)
     ) {
       throw new NodeSlideVariationError(
         'generation_failed',
@@ -584,10 +590,51 @@ function assertPersistableVariationSet(args: {
     );
     fingerprints.add(variationOperationFingerprint(variation.operations));
     candidateFingerprints.add(variationMaterializedFingerprint(variation.candidate));
+    if (variation.judge) {
+      judgeRanks.add(variation.judge.rank);
+      comparisonDigests.add(variation.judge.comparisonDigest);
+    }
   }
-  if (axes.size !== 3 || fingerprints.size !== 3 || candidateFingerprints.size !== 3) {
+  if (
+    axes.size !== 3 ||
+    fingerprints.size !== 3 ||
+    candidateFingerprints.size !== 3 ||
+    judgeRanks.size !== 3 ||
+    comparisonDigests.size !== 1
+  ) {
     throw new NodeSlideVariationError('generation_failed', 'Variation diversity is not distinct.');
   }
+}
+
+function validVariationJudgeReceipt(
+  variation: SlideVariation,
+  expectedComparisonDigest: string,
+): boolean {
+  const judge = variation.judge;
+  if (!judge) return false;
+  const metricValues = Object.values(judge.metrics);
+  return (
+    judge.version === 'nodeslide.variation-judge/v1' &&
+    [1, 2, 3].includes(judge.rank) &&
+    judge.maxScore === 100 &&
+    judge.candidateCount === 3 &&
+    judge.branchId ===
+      `${variation.axes.contentAngle}:${variation.axes.density}:${variation.axes.layoutArchetype}` &&
+    judge.candidateDigest === variationMaterializedFingerprint(variation.candidate) &&
+    judge.comparisonDigest === expectedComparisonDigest &&
+    Number.isInteger(judge.score) &&
+    judge.score >= 0 &&
+    judge.score <= judge.maxScore &&
+    judge.score === metricValues.reduce((sum, value) => sum + value, 0) &&
+    metricValues.every((value) => Number.isInteger(value) && value >= 0) &&
+    judge.metrics.validation <= 40 &&
+    judge.metrics.axisFit <= 30 &&
+    judge.metrics.coverage <= 15 &&
+    judge.metrics.restraint <= 15 &&
+    judge.rationale.length > 0 &&
+    judge.rationale.length <= NODESLIDE_VARIATION_REASON_LIMIT &&
+    judge.judgedAt === variation.createdAt
+  );
 }
 
 async function pruneVariationState(
@@ -800,6 +847,7 @@ function variationFromRow(row: Doc<'nodeslide_variations'>): SlideVariation {
     operations: row.operations,
     candidate: row.candidate,
     validation: row.validation,
+    ...(row.judge !== undefined ? { judge: row.judge } : {}),
     status: row.status,
     ...(row.selectedPatchId !== undefined ? { selectedPatchId: row.selectedPatchId } : {}),
     createdAt: row.createdAt,
