@@ -550,15 +550,28 @@ export function validateNodeSlidePatch(
   // stores the whole snapshot — including every element's base64 imageUrl — in a single
   // version document, and Convex hard-caps documents at 1 MiB. The per-image 700 KB cap
   // alone lets two near-cap images overflow that limit, which would make the commit throw
-  // an opaque error and progressively wedge the deck. Reject here instead, with an honest
-  // reason, before anything is committed.
-  let embeddedImageChars = 0;
-  for (const element of elements.values()) {
-    if (element.imageUrl?.startsWith('data:')) embeddedImageChars += element.imageUrl.length;
-  }
-  if (embeddedImageChars > NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET) {
+  // an opaque error and progressively wedge the deck.
+  //
+  // Enforced as a RATCHET, not retroactively: a patch is rejected only when it GROWS the
+  // embedded total past the budget. A deck that already exceeds the budget (accumulated
+  // legally under the older per-image-only cap) must remain editable — blocking an
+  // unrelated text edit with an image-budget error would wedge the deck behind a message
+  // about something the patch never touched. Shrinking or equal totals always pass.
+  const embeddedChars = (all: Iterable<{ imageUrl?: string }>) => {
+    let total = 0;
+    for (const element of all) {
+      if (element.imageUrl?.startsWith('data:')) total += element.imageUrl.length;
+    }
+    return total;
+  };
+  const candidateEmbedded = embeddedChars(elements.values());
+  const baselineEmbedded = embeddedChars(snapshot.elements);
+  if (
+    candidateEmbedded > NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET &&
+    candidateEmbedded > baselineEmbedded
+  ) {
     errors.push(
-      `This deck's embedded images total ${Math.round(embeddedImageChars / 1024)} KB, over the ${Math.round(NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET / 1024)} KB deck budget that keeps version history storable. Remove or shrink an embedded image first.`,
+      `This patch would grow the deck's embedded images to ${Math.round(candidateEmbedded / 1024)} KB, over the ${Math.round(NODESLIDE_DECK_EMBEDDED_IMAGE_BUDGET / 1024)} KB deck budget that keeps version history storable. Remove or shrink an embedded image first.`,
     );
   }
 
