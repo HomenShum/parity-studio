@@ -664,6 +664,35 @@ describe('local SlideLangAdapter', () => {
     expect(notesXml?.match(/Citation: Internal adoption snapshot, Q4\./g)).toHaveLength(1);
   });
 
+  it('uses a portable PPTX face for the web-only Fraunces variable font', async () => {
+    const snapshot = cleanSnapshot();
+    const headline = snapshot.elements.find((element) => element.id === 'element:headline');
+    if (!headline) throw new Error('Missing headline fixture.');
+    headline.style.fontFamily = 'Fraunces Variable';
+
+    const binary = await adapter.buildPptx(snapshot);
+    const zip = await JSZip.loadAsync(binary);
+    const slideXml = await zip.file('ppt/slides/slide1.xml')?.async('string');
+    if (!slideXml) throw new Error('Missing exported slide XML.');
+
+    const headlineName = 'name="element:headline"';
+    const headlineNameIndex = slideXml.indexOf(headlineName);
+    const headlineStart = slideXml.lastIndexOf('<p:sp>', headlineNameIndex);
+    const headlineEnd = slideXml.indexOf('</p:sp>', headlineNameIndex) + '</p:sp>'.length;
+    expect(headlineNameIndex).toBeGreaterThanOrEqual(0);
+    expect(headlineStart).toBeGreaterThanOrEqual(0);
+    expect(headlineEnd).toBeGreaterThan(headlineStart);
+
+    const headlineXml = slideXml.slice(headlineStart, headlineEnd);
+    expect(headlineXml).toContain('<a:latin typeface="Georgia"');
+    expect(headlineXml).toContain('<a:normAutofit/>');
+    expect(headlineXml.match(/<a:t>Editable native headline<\/a:t>/g)).toHaveLength(1);
+    expect(headlineXml).not.toContain('Fraunces Variable');
+    expect(
+      snapshot.elements.find((element) => element.id === 'element:headline')?.style.fontFamily,
+    ).toBe('Fraunces Variable');
+  });
+
   it('omits hidden text and its provenance from PPTX while preserving visible object order', async () => {
     const snapshot = cleanSnapshot();
     const hidden = addHiddenTextElement(snapshot);
