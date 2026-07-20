@@ -98,8 +98,9 @@ describe('NodeSlide variation generation', () => {
     expect(
       result.variations.every(
         (variation) =>
-          variation.judge?.score ===
-          Object.values(variation.judge.metrics).reduce((sum, value) => sum + value, 0),
+          variation.judge !== undefined &&
+          variation.judge.score ===
+            Object.values(variation.judge.metrics).reduce((sum, value) => sum + value, 0),
       ),
     ).toBe(true);
     expect(
@@ -178,7 +179,7 @@ describe('NodeSlide variation generation', () => {
     const started: string[] = [];
     let active = 0;
     let maxActive = 0;
-    let release = () => undefined;
+    let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
