@@ -46,6 +46,7 @@ test.describe('NodeSlide landing and start-flow control matrix', () => {
       'Create presentation',
       ...LANDING_STARTERS.map(({ label }) => label),
       'Explore the editable sample workspace',
+      'Start from a PowerPoint file',
     ]);
 
     const prompt = page.getByLabel('Presentation brief');
