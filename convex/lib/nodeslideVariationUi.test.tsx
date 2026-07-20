@@ -20,6 +20,20 @@ describe('NodeSlide variation inspector states', () => {
     expect(markup).toContain('Return to original');
     expect(markup).toContain('aria-pressed="true"');
     expect(markup).toContain('Validation clean');
+    expect(markup).toContain('Judge #1');
+    expect(markup).toContain('Why the judge ranked this #1');
+    expect(markup).toContain('Validation ');
+  });
+
+  it('labels legacy saved directions honestly when no judge receipt exists', () => {
+    const { snapshot, variations } = fixture();
+    const legacy = variations.map((variation) => {
+      const { judge, ...copy } = structuredClone(variation);
+      if (!judge) throw new Error('Fixture should include a judge receipt.');
+      return copy;
+    });
+
+    expect(renderInspector(snapshot, legacy)).toContain('Legacy direction · not ranked');
   });
 
   it('renders loading, error, stale, and all-rejected states accessibly', () => {

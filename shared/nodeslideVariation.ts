@@ -1,6 +1,7 @@
 import type { PatchOperation, Slide, SlideElement, ValidationResult } from './nodeslide';
 
 export const NODESLIDE_VARIATION_SCHEMA_VERSION = 'nodeslide.variation/v1' as const;
+export const NODESLIDE_VARIATION_JUDGE_VERSION = 'nodeslide.variation-judge/v1' as const;
 export const NODESLIDE_VARIANT_COUNT = 3 as const;
 export const NODESLIDE_VARIANT_OPERATION_LIMIT = 8 as const;
 
@@ -14,6 +15,25 @@ export interface VariationAxes {
   contentAngle: VariationContentAngle;
   density: VariationDensity;
   layoutArchetype: VariationLayoutArchetype;
+}
+
+export interface VariationJudgeReceipt {
+  version: typeof NODESLIDE_VARIATION_JUDGE_VERSION;
+  rank: 1 | 2 | 3;
+  score: number;
+  maxScore: 100;
+  candidateCount: 3;
+  branchId: string;
+  candidateDigest: string;
+  comparisonDigest: string;
+  metrics: {
+    validation: number;
+    axisFit: number;
+    coverage: number;
+    restraint: number;
+  };
+  rationale: string;
+  judgedAt: number;
 }
 
 export interface SlideVariation {
@@ -31,6 +51,8 @@ export interface SlideVariation {
   operations: PatchOperation[];
   candidate: { slide: Slide; elements: SlideElement[] };
   validation: ValidationResult;
+  /** Deterministic, bounded comparative evaluation. It never applies the candidate. */
+  judge?: VariationJudgeReceipt;
   status: VariationStatus;
   selectedPatchId?: string;
   createdAt: number;

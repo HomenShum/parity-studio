@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/nodeslide';
 import { createHostedSlideLangAdapter } from './hosted';
 import { createLocalSlideLangAdapter } from './localAdapter';
+import { embeddedImageDimensions } from './pptx';
 import { importPptxSnapshot } from './pptxImport';
 
 const HIDDEN_ELEMENT_ID = 'element:hidden-export-sentinel';
@@ -207,6 +208,18 @@ function addHiddenTextElement(snapshot: DeckSnapshot): SlideElement {
 describe('local SlideLangAdapter', () => {
   const adapter = createLocalSlideLangAdapter();
 
+  it('reads bounded PNG and WebP dimensions for deterministic PPTX framing', () => {
+    expect(
+      embeddedImageDimensions(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      ),
+    ).toEqual({ width: 1, height: 1 });
+    expect(
+      embeddedImageDimensions('data:image/webp;base64,UklGRhYAAABXRUJQVlA4WAoAAAAAAAAAPwEAswAA'),
+    ).toEqual({ width: 320, height: 180 });
+    expect(embeddedImageDimensions('data:image/png;base64,not-base64')).toBeNull();
+  });
+
   it('returns a clean, deterministic success contract for a golden-ish snapshot', () => {
     const snapshot = cleanSnapshot();
     const first = adapter.validate(snapshot);
@@ -215,6 +228,52 @@ describe('local SlideLangAdapter', () => {
     expect(first).toEqual(second);
     expect(first).toMatchObject({ ok: true, publishOk: true, cleanOk: true, issues: [] });
     expect(first.checkedAt).toBe(snapshot.deck.updatedAt);
+  });
+
+  it('preserves image fit and focal intent in web and PowerPoint exports', async () => {
+    const snapshot = cleanSnapshot();
+    const slide = snapshot.slides[0];
+    if (!slide) throw new Error('Missing slide fixture.');
+    const image: SlideElement = {
+      id: 'element:framed-image',
+      slideId: slide.id,
+      name: 'Framed harbor',
+      kind: 'image',
+      bbox: { x: 0.67, y: 0.38, width: 0.25, height: 0.42 },
+      rotation: 0,
+      style: {},
+      imageUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      altText: 'A calm harbor',
+      image: { placeholder: false, fit: 'contain', focalPoint: { x: 0.2, y: 0.8 } },
+      sourceIds: [],
+      locked: false,
+      exportCapabilities: ['web_native', 'pptx_static_fallback', 'google_importable'],
+      version: 1,
+    };
+    snapshot.elements.push(image);
+    slide.elementOrder.push(image.id);
+
+    const html = adapter.renderSlideHtml(snapshot, slide.id);
+    expect(html).toContain('object-fit:contain');
+    expect(html).toContain('object-position:20% 80%');
+
+    const containBinary = await adapter.buildPptx(snapshot);
+    const containZip = await JSZip.loadAsync(containBinary);
+    const containXml = await containZip.file('ppt/slides/slide1.xml')?.async('string');
+    if (!containXml) throw new Error('Missing contain-mode slide XML.');
+    expect(containXml).toContain('element:framed-image [static image fallback]');
+
+    const coverSnapshot = structuredClone(snapshot);
+    const coverImage = coverSnapshot.elements.find((element) => element.id === image.id);
+    if (!coverImage?.image) throw new Error('Missing cloned image fixture.');
+    coverImage.image.fit = 'cover';
+    const coverBinary = await adapter.buildPptx(coverSnapshot);
+    const coverZip = await JSZip.loadAsync(coverBinary);
+    const coverXml = await coverZip.file('ppt/slides/slide1.xml')?.async('string');
+    if (!coverXml) throw new Error('Missing cover-mode slide XML.');
+
+    expect(coverXml).not.toBe(containXml);
   });
 
   it('matches server readability policy for footer and page-number chrome', () => {
@@ -705,7 +764,7 @@ describe('PPTX native artifact presence', () => {
     const snapshot = cleanSnapshot();
     const chartElement = snapshot.elements.find((element) => element.kind === 'chart');
     if (!chartElement) throw new Error('Missing chart fixture.');
-    delete chartElement.chart;
+    Reflect.deleteProperty(chartElement, 'chart');
 
     const { slideXml, chartParts } = await exportedPackage(snapshot);
     expect(chartParts).toHaveLength(0);

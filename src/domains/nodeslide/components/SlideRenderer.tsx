@@ -104,6 +104,10 @@ function ElementContent({ element, theme }: { element: SlideElement; theme: Them
         src={element.imageUrl}
         alt={element.altText ?? element.name}
         draggable={false}
+        style={{
+          objectFit: element.image?.fit ?? 'cover',
+          objectPosition: `${(element.image?.focalPoint?.x ?? 0.5) * 100}% ${(element.image?.focalPoint?.y ?? 0.5) * 100}%`,
+        }}
       />
     ) : (
       <div

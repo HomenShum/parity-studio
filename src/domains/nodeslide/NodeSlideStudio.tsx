@@ -57,8 +57,13 @@ import {
   listStoredDeckAccess,
   storeDeckOwnerAccessKey,
 } from '../../lib/sessionIdentity';
+import { generateSessionIllustrativeImage } from '../../lib/sessionImageGeneration';
 import { type ApproverReviewState, ApproverReviewView } from './components/ApproverReviewView';
 import { CommandPalette, type StudioCommand } from './components/CommandPalette';
+import {
+  DeploymentUpdateBoundary,
+  useDeploymentActionMonitor,
+} from './components/DeploymentUpdateBoundary';
 import {
   type EditorCandidateReceipt,
   type EditorCanvasMode,
@@ -651,14 +656,17 @@ function mergeAgentTelemetryPages(
 export function NodeSlideStudio() {
   const clientSessionId = useMemo(() => getOrCreateSessionId(), []);
   return (
-    <AgentSessionProvider clientSessionId={clientSessionId}>
-      <NodeSlideStudioSession clientSessionId={clientSessionId} />
-    </AgentSessionProvider>
+    <DeploymentUpdateBoundary>
+      <AgentSessionProvider clientSessionId={clientSessionId}>
+        <NodeSlideStudioSession clientSessionId={clientSessionId} />
+      </AgentSessionProvider>
+    </DeploymentUpdateBoundary>
   );
 }
 
 function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }) {
   const convex = useConvex();
+  const monitorDeploymentAction = useDeploymentActionMonitor();
   const {
     state: agentSessionState,
     setSurface: setAgentSessionSurface,
@@ -2341,13 +2349,15 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       try {
         const bytes = await file.arrayBuffer();
         const ownerKey = mintBrowserOwnerAccessKey();
-        const result = await importPptxAsNewDeck({
-          clientSessionId,
-          ownerAccessKey: ownerKey,
-          idempotencyKey: crypto.randomUUID(),
-          fileName: file.name,
-          bytes,
-        });
+        const result = await monitorDeploymentAction(
+          importPptxAsNewDeck({
+            clientSessionId,
+            ownerAccessKey: ownerKey,
+            idempotencyKey: crypto.randomUUID(),
+            fileName: file.name,
+            bytes,
+          }),
+        );
         if (!result.ok) {
           setProjectError(result.message);
           return;
@@ -2361,7 +2371,7 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
         );
       }
     },
-    [clientSessionId, importPptxAsNewDeck, openOwnedDeck],
+    [clientSessionId, importPptxAsNewDeck, monitorDeploymentAction, openOwnedDeck],
   );
 
   const refreshVariationPreferences = useCallback(async () => {
@@ -3695,8 +3705,8 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
       };
       reference =
         extension === 'pdf'
-          ? await materializePdfUpload(materializeArgs)
-          : await materializeDataUpload(materializeArgs);
+          ? await monitorDeploymentAction(materializePdfUpload(materializeArgs))
+          : await monitorDeploymentAction(materializeDataUpload(materializeArgs));
       ensureCurrent();
       setToast({
         kind: 'success',
@@ -4285,12 +4295,14 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
     setVariationGenerating(true);
     void (async () => {
       try {
-        const receipt = await generateVariations({
-          deckId: requestedDeckId,
-          ownerAccessKey: requestedOwnerAccessKey,
-          slideId: requestedSlideId,
-          ...providerRequest,
-        });
+        const receipt = await monitorDeploymentAction(
+          generateVariations({
+            deckId: requestedDeckId,
+            ownerAccessKey: requestedOwnerAccessKey,
+            slideId: requestedSlideId,
+            ...providerRequest,
+          }),
+        );
         if (!requestGate.isCurrent(requestToken)) return;
         if (receipt.variations.length !== 3) {
           throw new Error('The variation service did not return exactly three directions.');
@@ -4360,11 +4372,13 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
           return false;
         }
         try {
-          const receipt = await acceptVariation({
-            deckId: requestedDeckId,
-            ownerAccessKey: currentOwnerAccessKey,
-            variationId: variation.id,
-          });
+          const receipt = await monitorDeploymentAction(
+            acceptVariation({
+              deckId: requestedDeckId,
+              ownerAccessKey: currentOwnerAccessKey,
+              variationId: variation.id,
+            }),
+          );
           if (!requestGate.isCurrent(requestToken)) return false;
           setPreviewedVariation(null);
           setCanvasMode('edit');
@@ -5058,6 +5072,9 @@ function NodeSlideStudioSession({ clientSessionId }: { clientSessionId: string }
                 summary,
               );
             }}
+            onGenerateImage={(prompt, aspect) =>
+              generateSessionIllustrativeImage({ prompt, aspect })
+            }
             onProposeJsonPatch={proposeJsonOperations}
             onImportSourceFile={proposeSourceImport}
             onAddComment={(text, anchor) =>

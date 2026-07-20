@@ -10,6 +10,7 @@ import {
 
 const FREE_ROUTE_TOTAL_DEADLINE_MS = 30_000;
 const MAX_PROMPT_CHARS = 100_000;
+const BRANCH_MAX_TOKENS = 2_400;
 
 export const generateStrictJson = internalAction({
   args: {
@@ -32,7 +33,7 @@ export const generateStrictJson = internalAction({
       {
         systemPrompt,
         userText,
-        maxTokens: 6_000,
+        maxTokens: BRANCH_MAX_TOKENS,
         model,
         reasoningEffort,
       },

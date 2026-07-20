@@ -497,7 +497,14 @@ export function AiInspector<CommandId extends string = string>({
   );
   const latestBatchId = variations[0]?.batchId;
   const directions = useMemo(
-    () => variations.filter((variation) => variation.batchId === latestBatchId),
+    () =>
+      variations
+        .filter((variation) => variation.batchId === latestBatchId)
+        .sort(
+          (left, right) =>
+            (left.judge?.rank ?? Number.MAX_SAFE_INTEGER) -
+            (right.judge?.rank ?? Number.MAX_SAFE_INTEGER),
+        ),
     [latestBatchId, variations],
   );
   const previewedVariation = directions.find(
@@ -1449,7 +1456,8 @@ export function AiInspector<CommandId extends string = string>({
                     <div className="ns-variation-loading" aria-live="polite">
                       <LoaderCircle className="ns-spin" size={16} />
                       <span>
-                        Generating, materializing, and validating three bounded directions...
+                        Generating, materializing, and validating three independent branches, then
+                        judging the bounded directions...
                       </span>
                     </div>
                   ) : variationsLoading ? (
@@ -2295,7 +2303,26 @@ function VariationCard({
               : 'Validation clean'
             : 'Validation blocked'}
         </span>
+        <span
+          className={variation.judge ? 'is-valid' : 'is-invalid'}
+          data-testid="variation-judge-score"
+        >
+          {variation.judge
+            ? `Judge #${variation.judge.rank} · ${variation.judge.score}/${variation.judge.maxScore}`
+            : 'Legacy direction · not ranked'}
+        </span>
       </div>
+      {variation.judge ? (
+        <Collapsible className="ns-variation-validation-details">
+          <CollapsibleTrigger>Why the judge ranked this #{variation.judge.rank}</CollapsibleTrigger>
+          <CollapsibleContent>
+            <p>{variation.judge.rationale}</p>
+            <small>
+              Receipt {variation.judge.candidateDigest} · branch {variation.judge.branchId}
+            </small>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
       {validationNotes.length > 0 ? (
         <Collapsible className="ns-variation-validation-details">
           <CollapsibleTrigger>View validation notes</CollapsibleTrigger>

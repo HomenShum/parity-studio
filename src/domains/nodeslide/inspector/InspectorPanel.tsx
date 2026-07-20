@@ -69,7 +69,7 @@ import {
 } from './AiInspector';
 import { CommentsInspector } from './CommentsInspector';
 import { DataInspector } from './DataInspector';
-import { DesignInspector } from './DesignInspector';
+import { DesignInspector, type DesignInspectorGenerateImageHandler } from './DesignInspector';
 import { JsonInspector, type JsonPatchProposalCallback } from './JsonInspector';
 import { TraceInspector } from './TraceInspector';
 import { VersionsInspector } from './VersionsInspector';
@@ -171,6 +171,7 @@ export interface InspectorPanelProps<CommandId extends string = string> {
   onEvictTasteSignal?: (signalId: string) => void;
   onOpenPreferenceEvidence?: (eventId: string) => void;
   onApplyDesignPatch: (operations: PatchOperation[], summary: string) => void;
+  onGenerateImage?: DesignInspectorGenerateImageHandler;
   onProposeJsonPatch?: JsonPatchProposalCallback;
   onImportSourceFile?: (file: File, kind: 'json' | 'pptx') => Promise<string>;
   onAddComment: (text: string, anchor: CommentAnchor) => void;
@@ -288,6 +289,7 @@ export function InspectorPanel<CommandId extends string = string>({
   onEvictTasteSignal,
   onOpenPreferenceEvidence,
   onApplyDesignPatch,
+  onGenerateImage,
   onProposeJsonPatch,
   onImportSourceFile,
   onAddComment,
@@ -603,6 +605,7 @@ export function InspectorPanel<CommandId extends string = string>({
                   onOpenPreferenceEvidence={onOpenPreferenceEvidence}
                   onClearTastePack={onClearTastePack}
                   onApplyPatch={onApplyDesignPatch}
+                  {...(onGenerateImage ? { onGenerateImage } : {})}
                 />
               </InspectorTabPanel>
             ) : null}

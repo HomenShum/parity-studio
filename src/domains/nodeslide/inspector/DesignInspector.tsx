@@ -28,6 +28,11 @@ import { useId, useRef, useState } from 'react';
 import type { PatchOperation, Slide, SlideElement, ThemeSpec } from '../../../../shared/nodeslide';
 import type { TasteProfile } from '../../../../shared/nodeslidePreference';
 import type { SignatureProfile } from '../../../../shared/nodeslideSignature';
+import {
+  type NodeSlideImageAspect,
+  type SessionIllustrativeImage,
+  nodeSlideImageAspect,
+} from '../../../lib/sessionImageGeneration';
 import { NODESLIDE_TASTE_PACKS, type NodeSlideTastePackId } from '../signature/packs/index';
 import { TasteProfileCard } from './TasteProfileCard';
 
@@ -51,7 +56,13 @@ interface DesignInspectorProps {
   onOpenPreferenceEvidence: ((eventId: string) => void) | undefined;
   onClearTastePack: () => void;
   onApplyPatch: (operations: PatchOperation[], summary: string) => unknown;
+  onGenerateImage?: DesignInspectorGenerateImageHandler;
 }
+
+export type DesignInspectorGenerateImageHandler = (
+  prompt: string,
+  aspect: NodeSlideImageAspect,
+) => Promise<SessionIllustrativeImage>;
 
 export type DesignInspectorSectionId = 'content' | 'data' | 'appearance' | 'advanced';
 
@@ -105,6 +116,7 @@ export function DesignInspector({
   onOpenPreferenceEvidence,
   onClearTastePack,
   onApplyPatch,
+  onGenerateImage,
 }: DesignInspectorProps) {
   const [openSections, setOpenSections] = useState(initialDesignInspectorSections);
   const [contentMutationError, setContentMutationError] = useState<string | null>(null);
@@ -395,6 +407,7 @@ export function DesignInspector({
             element={primary}
             slideElements={slideElements}
             onApplyPatch={onApplyPatch}
+            onGenerateImage={onGenerateImage}
           />
         ) : null}
       </CollapsibleInspectorSection>
@@ -903,17 +916,90 @@ function ChartDataEditor({
   );
 }
 
+function buildImageReplacementOperations({
+  element,
+  slideElements,
+  imageUrl,
+  altText,
+  credit,
+}: {
+  element: SlideElement;
+  slideElements: readonly SlideElement[];
+  imageUrl: string;
+  altText: string;
+  credit: string;
+}): PatchOperation[] {
+  const operations: PatchOperation[] = [
+    {
+      op: 'update_image',
+      slideId: element.slideId,
+      elementId: element.id,
+      imageUrl,
+      altText,
+      ...(credit ? { credit } : {}),
+    },
+  ];
+  const creditElement = slideElements.find(
+    (candidate) =>
+      candidate.kind === 'text' &&
+      !candidate.locked &&
+      (candidate.name.toLowerCase().includes('image credit') || candidate.role === 'caption'),
+  );
+  if (credit && creditElement && creditElement.content !== credit) {
+    operations.push({
+      op: 'replace_text',
+      slideId: creditElement.slideId,
+      elementId: creditElement.id,
+      text: credit,
+    });
+  }
+  return operations;
+}
+
 function ImageAssetEditor({
   element,
   slideElements,
   onApplyPatch,
+  onGenerateImage,
 }: {
   element: SlideElement;
   slideElements: readonly SlideElement[];
   onApplyPatch: DesignInspectorProps['onApplyPatch'];
+  onGenerateImage: DesignInspectorProps['onGenerateImage'];
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generationPrompt, setGenerationPrompt] = useState('');
+  const [generationBusy, setGenerationBusy] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  const runIllustrativeGeneration = () => {
+    const prompt = generationPrompt.replace(/\s+/gu, ' ').trim();
+    if (!onGenerateImage || !prompt || generationBusy) return;
+    setGenerationBusy(true);
+    setGenerationError(null);
+    onGenerateImage(prompt, nodeSlideImageAspect(element.bbox.width, element.bbox.height))
+      .then((result) => {
+        const altText = `Illustrative image: ${prompt}`.slice(0, 320);
+        const credit = `AI-generated illustrative image · OpenAI ${result.model} · user-supplied key`;
+        onApplyPatch(
+          buildImageReplacementOperations({
+            element,
+            slideElements,
+            imageUrl: result.imageUrl,
+            altText,
+            credit,
+          }),
+          `Inserted an explicitly labeled illustrative image generated with ${result.model}`,
+        );
+      })
+      .catch((cause) =>
+        setGenerationError(
+          cause instanceof Error ? cause.message : 'The illustrative image could not be generated.',
+        ),
+      )
+      .finally(() => setGenerationBusy(false));
+  };
 
   return (
     <InspectorGroup icon={<ImageUp size={14} />} title="Image asset">
@@ -948,32 +1034,16 @@ function ImageAssetEditor({
               setBusy(true);
               void imageFileToEmbeddedWebp(file)
                 .then((imageUrl) => {
-                  const operations: PatchOperation[] = [
-                    {
-                      op: 'update_image',
-                      slideId: element.slideId,
-                      elementId: element.id,
+                  onApplyPatch(
+                    buildImageReplacementOperations({
+                      element,
+                      slideElements,
                       imageUrl,
                       altText,
-                      ...(credit ? { credit } : {}),
-                    },
-                  ];
-                  const creditElement = slideElements.find(
-                    (candidate) =>
-                      candidate.kind === 'text' &&
-                      !candidate.locked &&
-                      (candidate.name.toLowerCase().includes('image credit') ||
-                        candidate.role === 'caption'),
+                      credit,
+                    }),
+                    `Replaced image asset for ${element.name}`,
                   );
-                  if (credit && creditElement && creditElement.content !== credit) {
-                    operations.push({
-                      op: 'replace_text',
-                      slideId: creditElement.slideId,
-                      elementId: creditElement.id,
-                      text: credit,
-                    });
-                  }
-                  onApplyPatch(operations, `Replaced image asset for ${element.name}`);
                 })
                 .catch((cause) =>
                   setError(cause instanceof Error ? cause.message : 'The image could not be read.'),
@@ -986,7 +1056,128 @@ function ImageAssetEditor({
         <small>PNG, JPEG, WebP, or GIF. NodeSlide embeds a compressed copy in the deck.</small>
         {error ? <output role="alert">{error}</output> : null}
       </form>
+      {element.imageUrl ? (
+        <ImageFramingControls element={element} onApplyPatch={onApplyPatch} />
+      ) : null}
+      {onGenerateImage ? (
+        <div className="ns-primitive-editor" data-testid="illustrative-image-generation">
+          <label>
+            <span>Generate illustrative image</span>
+            <textarea
+              value={generationPrompt}
+              maxLength={2_000}
+              rows={3}
+              placeholder="Describe a non-factual visual direction"
+              data-testid="illustrative-image-prompt"
+              disabled={generationBusy}
+              onChange={(event) => setGenerationPrompt(event.currentTarget.value)}
+            />
+          </label>
+          <small>
+            Clicking Generate sends this prompt directly from your browser to OpenAI using the
+            session-only key in Connections. OpenAI bills the request. The result is labeled
+            illustrative and is not evidence.
+          </small>
+          <button
+            type="button"
+            className="ns-button ns-button--quiet"
+            data-testid="illustrative-image-generate-button"
+            disabled={generationBusy || !generationPrompt.trim()}
+            onClick={runIllustrativeGeneration}
+          >
+            <ImageUp size={13} aria-hidden="true" />
+            {generationBusy ? 'Generating…' : 'Generate with OpenAI'}
+          </button>
+          {generationError ? <output role="alert">{generationError}</output> : null}
+        </div>
+      ) : null}
     </InspectorGroup>
+  );
+}
+
+function ImageFramingControls({
+  element,
+  onApplyPatch,
+}: {
+  element: SlideElement;
+  onApplyPatch: DesignInspectorProps['onApplyPatch'];
+}) {
+  const fit = element.image?.fit ?? 'cover';
+  const focalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
+  const applyFraming = (
+    nextFit: 'cover' | 'contain',
+    nextFocalPoint: { x: number; y: number },
+    summary: string,
+  ) => {
+    if (!element.imageUrl || element.locked) return;
+    onApplyPatch(
+      [
+        {
+          op: 'update_image',
+          slideId: element.slideId,
+          elementId: element.id,
+          imageUrl: element.imageUrl,
+          altText: element.altText?.trim() || element.name,
+          ...(element.image?.credit ? { credit: element.image.credit } : {}),
+          fit: nextFit,
+          focalPoint: nextFocalPoint,
+        },
+      ],
+      summary,
+    );
+  };
+
+  return (
+    <div className="ns-primitive-editor" data-testid="image-framing-controls">
+      <label>
+        <span>Aspect handling</span>
+        <select
+          key={`${element.id}-${element.version}-fit`}
+          defaultValue={fit}
+          disabled={element.locked}
+          data-testid="image-fit-select"
+          onChange={(event) => {
+            const nextFit = event.currentTarget.value === 'contain' ? 'contain' : 'cover';
+            applyFraming(nextFit, focalPoint, `Changed ${element.name} framing to ${nextFit}`);
+          }}
+        >
+          <option value="cover">Crop to fill</option>
+          <option value="contain">Fit whole image</option>
+        </select>
+      </label>
+      <small>
+        Crop to fill preserves the frame and uses the focal point. Fit whole image preserves every
+        edge and may leave breathing room.
+      </small>
+      <div className="ns-field-grid ns-field-grid--two">
+        <NumberField
+          label="Focus X"
+          value={focalPoint.x * 100}
+          suffix="%"
+          disabled={element.locked || fit === 'contain'}
+          onCommit={(value) =>
+            applyFraming(
+              fit,
+              { x: clampPercent(value), y: focalPoint.y },
+              `Moved ${element.name} horizontal focal point`,
+            )
+          }
+        />
+        <NumberField
+          label="Focus Y"
+          value={focalPoint.y * 100}
+          suffix="%"
+          disabled={element.locked || fit === 'contain'}
+          onCommit={(value) =>
+            applyFraming(
+              fit,
+              { x: focalPoint.x, y: clampPercent(value) },
+              `Moved ${element.name} vertical focal point`,
+            )
+          }
+        />
+      </div>
+    </div>
   );
 }
 

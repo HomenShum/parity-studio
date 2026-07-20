@@ -446,6 +446,8 @@ export const nodeslideImageDataValidator = v.object({
   placeholder: v.boolean(),
   credit: v.optional(v.string()),
   sourceId: v.optional(v.string()),
+  fit: v.optional(v.union(v.literal('cover'), v.literal('contain'))),
+  focalPoint: v.optional(v.object({ x: v.number(), y: v.number() })),
 });
 
 export const nodeslideVideoDataValidator = v.object({
@@ -695,6 +697,8 @@ export const nodeslidePatchOperationValidator = v.union(
     altText: v.string(),
     credit: v.optional(v.string()),
     sourceIds: v.optional(v.array(v.string())),
+    fit: v.optional(v.union(v.literal('cover'), v.literal('contain'))),
+    focalPoint: v.optional(v.object({ x: v.number(), y: v.number() })),
   }),
   v.object({
     op: v.literal('add_element'),
@@ -991,6 +995,25 @@ export const nodeslideVariationCandidateValidator = v.object({
   elements: v.array(nodeslideElementValidator),
 });
 
+export const nodeslideVariationJudgeReceiptValidator = v.object({
+  version: v.literal('nodeslide.variation-judge/v1'),
+  rank: v.union(v.literal(1), v.literal(2), v.literal(3)),
+  score: v.number(),
+  maxScore: v.literal(100),
+  candidateCount: v.literal(3),
+  branchId: v.string(),
+  candidateDigest: v.string(),
+  comparisonDigest: v.string(),
+  metrics: v.object({
+    validation: v.number(),
+    axisFit: v.number(),
+    coverage: v.number(),
+    restraint: v.number(),
+  }),
+  rationale: v.string(),
+  judgedAt: v.number(),
+});
+
 export const nodeslideVariationValidator = v.object({
   schemaVersion: v.literal('nodeslide.variation/v1'),
   id: v.string(),
@@ -1006,6 +1029,7 @@ export const nodeslideVariationValidator = v.object({
   operations: v.array(nodeslidePatchOperationValidator),
   candidate: nodeslideVariationCandidateValidator,
   validation: nodeslideValidationResultValidator,
+  judge: v.optional(nodeslideVariationJudgeReceiptValidator),
   status: nodeslideVariationStatusValidator,
   selectedPatchId: v.optional(v.string()),
   createdAt: v.number(),

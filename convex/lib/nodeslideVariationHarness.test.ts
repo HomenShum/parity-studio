@@ -17,12 +17,15 @@ import {
   boundVariationListByBytes,
   boundedVariationListLimit,
   buildSlideVariations,
+  buildVariationBranchProviderPrompt,
   buildVariationProviderPrompt,
   deterministicVariationOperations,
+  parseIndependentProviderBranches,
   parseProviderVariationSet,
   planVariationAcceptance,
   planVariationGeneration,
   planVariationRejection,
+  runIndependentVariationProviderBranches,
   variationIntroducesTextOverflow,
   variationIntroducesUnsupportedFactualAdditions,
   variationMaterializedFingerprint,
@@ -64,6 +67,143 @@ describe('NodeSlide variation generation', () => {
       ),
     );
     expect(snapshot).toEqual(before);
+  });
+
+  it('materializes three independent provider branches and records a transparent judge ranking', () => {
+    const snapshot = isolatedGoldenSlide();
+    const target = unlockedElement(snapshot);
+    const branches = NODESLIDE_DEFAULT_VARIATION_AXES.map((axes, index) => ({
+      axes,
+      ok: true as const,
+      value: {
+        variant: {
+          axes,
+          operations: [styleOperation(target, 0.91 + index * 0.01)],
+        },
+      },
+    }));
+
+    expect(parseIndependentProviderBranches(branches).ok).toBe(true);
+    const result = buildSlideVariations({
+      snapshot,
+      slideId: target.slideId,
+      batchId: 'batch-independent-branches',
+      createdAt: 1_100,
+      provider: { ok: true, branches },
+    });
+
+    expect(result.origin).toBe('free_route');
+    expect(result.variations.every((variation) => variation.origin === 'free_route')).toBe(true);
+    expect(result.variations.map((variation) => variation.judge?.rank).sort()).toEqual([1, 2, 3]);
+    expect(
+      result.variations.every(
+        (variation) =>
+          variation.judge?.score ===
+          Object.values(variation.judge.metrics).reduce((sum, value) => sum + value, 0),
+      ),
+    ).toBe(true);
+    expect(
+      result.variations.every((variation) => variation.judge?.rationale.includes('axis fit')),
+    ).toBe(true);
+    expect(
+      new Set(result.variations.map((variation) => variation.judge?.comparisonDigest)).size,
+    ).toBe(1);
+    expect(
+      result.variations.every((variation) =>
+        variation.judge?.candidateDigest.startsWith('candidate-'),
+      ),
+    ).toBe(true);
+    expect(planVariationGeneration(result.variations)[0]?.reason).toContain('judge rank');
+  });
+
+  it('fails a malformed independent branch closed without discarding clean sibling branches', () => {
+    const snapshot = isolatedGoldenSlide();
+    const target = unlockedElement(snapshot);
+    const branches = NODESLIDE_DEFAULT_VARIATION_AXES.map((axes, index) =>
+      index === 1
+        ? { axes, ok: false as const, reason: 'provider_timeout' }
+        : {
+            axes,
+            ok: true as const,
+            value: {
+              variant: {
+                axes,
+                operations: [styleOperation(target, 0.91 + index * 0.01)],
+              },
+            },
+          },
+    );
+    const result = buildSlideVariations({
+      snapshot,
+      slideId: target.slideId,
+      batchId: 'batch-one-branch-failed',
+      createdAt: 1_200,
+      provider: { ok: true, branches },
+    });
+
+    expect(result.variations.filter((variation) => variation.origin === 'free_route')).toHaveLength(
+      2,
+    );
+    const fallback = result.variations.find(
+      (variation) => variation.axes.contentAngle === 'narrative_led',
+    );
+    expect(fallback?.origin).toBe('deterministic_fallback');
+    expect(fallback?.fallbackReason).toContain('provider_timeout');
+    expect(result.variations.every((variation) => variation.judge)).toBe(true);
+  });
+
+  it('builds one bounded, axis-specific prompt for each independent branch', () => {
+    const snapshot = isolatedGoldenSlide();
+    const slideId = snapshot.slides[0]?.id ?? '';
+    const prompts = NODESLIDE_DEFAULT_VARIATION_AXES.map((axes) => {
+      const prompt = buildVariationBranchProviderPrompt(snapshot, slideId, axes);
+      return { axes, prompt, payload: JSON.parse(prompt.userText) as Record<string, unknown> };
+    });
+
+    expect(new Set(prompts.map(({ prompt }) => prompt.userText)).size).toBe(3);
+    for (const { axes, prompt, payload } of prompts) {
+      expect(payload.axes).toEqual([axes]);
+      expect(payload.branch).toEqual({
+        id: `${axes.contentAngle}:${axes.density}:${axes.layoutArchetype}`,
+        independence: 'Generate only this branch.',
+      });
+      expect(prompt.systemPrompt).toContain('one independent branch');
+      expect(prompt.systemPrompt).toContain('exactly one variant');
+    }
+  });
+
+  it('starts all three provider branches independently through a deterministic async seam', async () => {
+    const snapshot = isolatedGoldenSlide();
+    const target = unlockedElement(snapshot);
+    const started: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    let release = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = runIndependentVariationProviderBranches({
+      snapshot,
+      slideId: target.slideId,
+      invoke: async (axes) => {
+        started.push(`${axes.contentAngle}:${axes.density}:${axes.layoutArchetype}`);
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await gate;
+        active -= 1;
+        return {
+          ok: true as const,
+          value: { variant: { axes, operations: [styleOperation(target, 0.91 + active * 0.01)] } },
+        };
+      },
+    });
+
+    await Promise.resolve();
+    expect(started).toHaveLength(3);
+    expect(new Set(started).size).toBe(3);
+    expect(maxActive).toBe(3);
+    release();
+    expect(await pending).toHaveLength(3);
   });
 
   it('rejects garbage, partial envelopes, and extra keys with honest deterministic fallback', () => {
@@ -578,6 +718,7 @@ describe('NodeSlide variation generation', () => {
         axes: variation.axes,
         operations: variation.operations,
         fingerprint: variationOperationFingerprint(variation.operations),
+        judge: variation.judge,
       })),
     ).toEqual(
       second.variations.map((variation) => ({
@@ -585,6 +726,7 @@ describe('NodeSlide variation generation', () => {
         axes: variation.axes,
         operations: variation.operations,
         fingerprint: variationOperationFingerprint(variation.operations),
+        judge: variation.judge,
       })),
     );
   });
