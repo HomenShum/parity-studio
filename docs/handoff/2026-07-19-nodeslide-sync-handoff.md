@@ -15,13 +15,13 @@ canonical NodeSlide `docs/NEXT_SESSION.md`, `docs/CAPABILITY_PLAN.md`, and
   `5d5e2035944b04fcedfa43610883d0b683190167`. Production is
   https://nodeslide.vercel.app with Convex `agile-stoat-411`.
 - NodeRoom product-code baseline:
-  `4a4a3c259ddfa96e51b8194685a7c3b9ff56c384`; final main with the corrected
-  v3 proof handoff is `332149ef4ac945546479d08d328d3f43378b3831`.
+  `4a4a3c259ddfa96e51b8194685a7c3b9ff56c384`; the v3 proof-contract
+  checkpoint is `332149ef4ac945546479d08d328d3f43378b3831`.
   Its packed-consumer proof harness is operation-v1-only; the legacy-v0 bridge
   is removed and the fixture authorizer fails closed on invalid call shapes.
   Proof vocabulary is literal: same-instance in-memory reread and ledger, plus
-  a portable snapshot; durable persistence and package-reload proof remain
-  false.
+  a portable snapshot JSON round-trip; durable persistence and package-reload
+  proof remain false.
 - The primary parity-studio worktree deliberately retains an untracked `NUL`
   entry. Preserve it while fast-forwarding main; do not describe that tree as
   clean.
