@@ -228,7 +228,12 @@ function transparency(element: SlideElement): number {
 }
 
 function safeFontFamily(value: string): string {
-  return value.replace(/[;'"{}<>]/g, '').trim() || 'Aptos';
+  const cleaned = value.replace(/[;'"{}<>]/g, '').trim() || 'Aptos';
+  // PowerPoint can mis-measure an unavailable variable font during normAutofit,
+  // including duplicating the word at a line-wrap boundary. Keep the web face
+  // intact in the snapshot while using a portable serif fallback in PPTX.
+  if (/^Fraunces(?: Variable)?$/i.test(cleaned)) return 'Georgia';
+  return cleaned;
 }
 
 function sourceNoteLines(reference: SlideSourceReference): string[] {
