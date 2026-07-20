@@ -1,43 +1,75 @@
-# 2026-07-19 — NodeSlide sync handoff (parity-studio side)
+# 2026-07-19 — NodeSlide sync handoff (updated 2026-07-20)
 
-Short pointer handoff. **Canonical next-session instructions live in the
-product repo**: `HomenShum/nodeslide` → `docs/NEXT_SESSION.md` (updated this
-session) + `docs/CAPABILITY_PLAN.md`. Read those first if you're touching
-NodeSlide capability/product work.
+This is the parity-studio pointer, not a second source of truth. Read the
+canonical NodeSlide `docs/NEXT_SESSION.md`, `docs/CAPABILITY_PLAN.md`, and
+`docs/EXTRACTION_BOUNDARY.md` before changing NodeSlide product behavior.
 
 ## State at this handoff
 
-- **parity-studio** `main` = `96c6e45` — clean, level with origin. This is the
-  **dev monorepo**; the NodeSlide product runs from the `nodeslide` repo
-  (prod: https://nodeslide.vercel.app, Convex `agile-stoat-411`).
-- **nodeslide** `main` = `0f3726a` — clean, level with origin, prod verified live.
+- parity-studio code baseline: `de4a67585f9040db95b2af7caeae69c92894e4e5`
+  before this docs-only handoff commit. The full mirrored suite passed:
+  **1,494 tests across 198 files**, plus release and UI gates.
+- NodeSlide product-code baseline: `12a8527cb99adf5e80af2302a53332509ce7c283`
+  (merged PR #23 and manually deployed to production Convex). Final NodeSlide
+  main with the docs-only deployment proof is
+  `5d5e2035944b04fcedfa43610883d0b683190167`. Production is
+  https://nodeslide.vercel.app with Convex `agile-stoat-411`.
+- NodeRoom product-code baseline:
+  `4a4a3c259ddfa96e51b8194685a7c3b9ff56c384`; final main with the corrected
+  canonical handoff is `e698802d64e18c4e75d38b65dde2d0b4056c30b5`.
+  Its packed-consumer proof harness is operation-v1-only; the legacy-v0 bridge
+  is removed and the fixture authorizer fails closed on invalid call shapes.
+- The primary parity-studio worktree deliberately retains an untracked `NUL`
+  entry. Preserve it while fast-forwarding main; do not describe that tree as
+  clean.
 
-## Mirror rule (do not drop)
+## Mirror rule
 
-Every change under `src/domains/nodeslide/` or `convex/` lands in **both** repos
-in the same session. Both repos' governance/D9/D8 code is currently in sync.
+Mirror shared product behavior in `shared/`, `src/domains/nodeslide/`, and
+relevant application Convex code. Do not mechanically mirror NodeSlide-owned
+`packages/`, `mcp/`, production workflows/probes, registry/installer assets,
+isolated component-install material, or product-specific deployment adapters.
 
-## What this session landed here
+Behavior parity is the contract. The two repos can have different module seams
+where their application shells differ; every port still needs the smallest
+equivalent regression and the full relevant parity gate.
 
-- **Project-dialog centering + body-collapse fix** (`src/domains/nodeslide/nodeslide.css`,
-  `.ns-project-dialog`): native `<dialog>` resolves to `position:absolute` so the
-  backdrop's flex centering never applied (pinned top-left), and a content-sized
-  dialog collapsed its `minmax(0,1fr)` body row to 0 (clipped list). Fixed with
-  `inset:0; margin:auto` + definite `height`. Mirror of the nodeslide fix, which
-  was deployed to prod and live-verified (computed geometry `centeredX/Y:true`).
-  Reuse this pattern for any future modal.
-- Earlier this session: the DEPTH-finish D9 approver / D8 image-ingest / D1
-  apply-repairs work + 4 latent-defect backports merged to main (PR #54).
+## Mirrored product behavior now present here
 
-## Open PRs to triage (do not blind-merge)
+- Judged variations (B5), the dev-only B6 creation-fault seed, typeset-math/C4
+  seed behavior, BYOK image generation (E2), crop/focal controls (E3), and the
+  stale-redeploy reload experience.
+- Portable PPTX display-font handling: Fraunces remains canonical in the deck
+  model/browser, while PowerPoint export maps the display face to Georgia at
+  the PPTX boundary. The exact headline-shaped regression prevents duplicate
+  wrapping and snapshot mutation.
+- The earlier project-dialog centering/body-collapse repair remains mirrored:
+  native `<dialog>` needs `inset: 0; margin: auto` plus a definite height so its
+  `minmax(0,1fr)` body row does not collapse.
 
-- parity-studio: draft PR #18 "external interoperability" (Codex), PR #17
-  nodeslide README docs (OPEN since 07-14 — review or close).
-- nodeslide: draft PR #5 "injectable core boundary" (Codex).
+## Intentionally NodeSlide-owned
 
-## House rules (unchanged)
+NodeSlide package extraction, MCP, production workflows/probes, registry and
+installer assets, isolated component-install material, repository
+authorization-spine adapters, and product deployment configuration are not
+mechanical parity-studio copies. Mirror only application behavior that crosses
+the bounded rule above.
 
-Analyst root-cause before fixing · live-DOM verify prod after deploy (assert a
-concrete signal, never claim by log) · loop adversarial-verify until clean ·
-honest checkmarks only · gates green per commit
-(`npx tsc --noEmit`, `npx tsc -p convex --noEmit`, `npx vitest run`, `npx biome check`).
+## Preserved work and PR truth
+
+- NodeSlide has zero open PRs; parity-studio should have zero after this handoff
+  PR merges.
+- NodeRoom intentionally retains unrelated draft PRs #182, #190, and #219.
+- Five unmerged parity-studio remote branches remain for deliberate triage:
+  `codex/archive-ai-elements-composer-wip-20260716`,
+  `codex/nodeslide-integration-all`, `codex/nodeslide-openui-quality-v2`,
+  `docs/nodeslide-readme`, and `feat/ai-elements-on-integration`. Do not delete
+  them as cleanup without reviewing their unique commits.
+
+## House rules
+
+Root-cause before fixing; live-DOM verify production after deploy; assert a
+concrete signal rather than trusting a log or caption; keep checkmarks literal;
+and run the full relevant gates per behavior-mirror commit. The standalone
+NodeSlide deployment is the canonical live product. parity-studio remains the
+dev-monorepo behavior mirror, not an alternate production demo.
