@@ -2551,10 +2551,17 @@
   box-shadow: var(--ns-shadow-lg);
   display: grid;
   grid-template-rows: 68px 40px minmax(0, 1fr);
-  max-height: min(760px, calc(100dvh - 48px));
+  /* Definite height (not just max-height): a content-sized dialog inside an
+     align-items:center backdrop leaves no free space, so the minmax(0,1fr) body
+     row collapses to 0 and the deck list/form gets clipped. A bounded height gives
+     the body row space to fill and scroll internally. */
+  height: min(760px, calc(100dvh - 48px));
   overflow: hidden;
-  inset: auto;
-  margin: 0;
+  /* inset:0 + margin:auto centers the box whether the native <dialog> resolves to
+     position:absolute (UA) — where flex centering does not apply — or to the
+     authored position:relative in-flow flex child. Robust in both cases. */
+  inset: 0;
+  margin: auto;
   padding: 0;
   position: relative;
   width: min(760px, 100%);
@@ -3621,7 +3628,7 @@
   }
   .ns-project-dialog {
     border-radius: 12px;
-    max-height: calc(100dvh - 20px);
+    height: calc(100dvh - 20px);
   }
   .ns-project-form-scroll {
     display: block;
