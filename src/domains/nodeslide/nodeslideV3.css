@@ -12236,6 +12236,9 @@
 }
 .nodeslide-studio .ns-share-approval-row {
   display: flex;
+  /* The full-width drift notice (flex-basis: 100%) needs a wrappable row — without this
+     it gets crushed into a sliver beside the token input instead of its own line. */
+  flex-wrap: wrap;
   gap: var(--ns-space-2);
 }
 .nodeslide-studio .ns-share-approval-row input {

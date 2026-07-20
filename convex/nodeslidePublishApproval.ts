@@ -8,6 +8,31 @@ import {
   activeApprovals,
 } from './lib/nodeslidePublishApprovalPolicy';
 
+/**
+ * Whether a validation receipt can actually authorize publication — the same bar the
+ * publish gate applies (validationAllowsPublication in nodeslide.ts): the receipt must
+ * match this exact deck version AND toolchain AND carry publishOk. The approver surface
+ * and sign-off must use THIS definition of "validated"; a mere receipt-exists check lets
+ * an approver attest a version the publish gate will reject, drifting the two surfaces.
+ */
+function nodeSlideValidationAuthorizesPublish(
+  snapshot: DeckSnapshot,
+  validation: {
+    deckId: string;
+    deckVersion: number;
+    toolchainVersion: string;
+    publishOk: boolean;
+  } | null,
+): boolean {
+  return Boolean(
+    validation &&
+      validation.deckId === snapshot.deck.id &&
+      validation.deckVersion === snapshot.deck.version &&
+      validation.toolchainVersion === snapshot.deck.toolchainVersion &&
+      validation.publishOk,
+  );
+}
+
 async function requireSnapshot(
   ctx: { db: Parameters<typeof loadNodeSlideSnapshot>[0]['db'] },
   deckId: string,
@@ -61,7 +86,11 @@ export const issuePublishApprover = mutation({
     }
     const token = createOwnerAccessKey();
     const now = Date.now();
-    const id = nodeslideStableId('publish_approver', args.deckId, String(now), label);
+    // Derive the approver id from the TOKEN digest, which is unique per issued capability
+    // by construction. A timestamp-based id lets two same-millisecond issues with the same
+    // label mint two rows sharing one id — two bearer tokens collapsing into one governance
+    // identity, where revoking "the approver" leaves the twin token alive.
+    const id = nodeslideStableId('publish_approver', args.deckId, nodeslideContentDigest(token));
     await ctx.db.insert('nodeslide_publish_approvers', {
       id,
       deckId: args.deckId,
@@ -120,6 +149,15 @@ export const approvePublication = mutation({
     if (!validation) {
       throw new Error('The current version has no validation receipt to approve.');
     }
+    // A sign-off must bind a receipt that can actually authorize publication. The publish
+    // gate additionally requires publishOk and a toolchain match (validationAllowsPublication);
+    // accepting a sign-off on a weaker receipt would record an attestation that can never
+    // publish — governance theater with an honest-looking success.
+    if (!nodeSlideValidationAuthorizesPublish(snapshot, validation)) {
+      throw new Error(
+        'The current version has validation blockers, so it cannot be approved for publishing yet. Ask the owner to resolve them and re-validate first.',
+      );
+    }
     const now = Date.now();
     const id = nodeslideStableId(
       'publish_approval',
@@ -133,7 +171,16 @@ export const approvePublication = mutation({
         queryBuilder.eq('deckId', args.deckId).eq('deckVersion', snapshot.deck.version),
       )
       .collect();
-    if (!previous.some((row) => row.id === id)) {
+    const existing = previous.find((row) => row.id === id);
+    if (existing) {
+      // Re-signing the same version must REFRESH the binding, not silently no-op. The
+      // "current" validation receipt for a version can change (deck creation writes an
+      // 'initial'-scheme receipt while a no-edit re-validate writes a versioned-scheme
+      // one with a newer checkedAt); if we skipped here, the stored sign-off would keep
+      // pointing at the dead receipt, publish would stay blocked with approval_stale, and
+      // this mutation would still report success — a fabricated 2xx over a deadlock.
+      await ctx.db.patch(existing._id, { validationId: validation.id, approvedAt: now });
+    } else {
       await ctx.db.insert('nodeslide_publish_approvals', {
         id,
         deckId: args.deckId,
@@ -186,7 +233,7 @@ export const getApproverReviewState = query({
       approverLabel: approver.label,
       required: deckRow.publishApprovalRequired === true,
       deckVersion: snapshot.deck.version,
-      validated: validation !== null,
+      validated: nodeSlideValidationAuthorizesPublish(snapshot, validation),
       alreadySignedOff: approvals.some((row) => row.approverId === approver.id),
       workspace: {
         deck: {
