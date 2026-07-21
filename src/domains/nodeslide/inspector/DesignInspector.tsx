@@ -1181,24 +1181,34 @@ function ImageFramingControls({
   );
 }
 
+const MAX_EMBEDDED_IMAGE_DATA_URL_CHARS = 680_000;
+const ACCEPTED_EMBEDDED_IMAGE_TYPE = /^image\/(?:png|jpeg|webp|gif)$/iu;
+
 export async function imageFileToEmbeddedWebp(file: File): Promise<string> {
   if (file.size > 8_000_000) throw new Error('Choose an image smaller than 8 MB.');
+  if (!ACCEPTED_EMBEDDED_IMAGE_TYPE.test(file.type)) {
+    throw new Error('Choose a PNG, JPEG, WebP, or GIF image.');
+  }
+
   const bitmap = await createImageBitmap(file);
   try {
     const maxEdge = 1_100;
-    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const initialScale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('This browser cannot prepare image uploads.');
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    let dataUrl = canvas.toDataURL('image/webp', 0.8);
-    if (dataUrl.length > 680_000) dataUrl = canvas.toDataURL('image/webp', 0.58);
-    if (dataUrl.length > 680_000) {
-      throw new Error('This image remains too large after compression. Choose a smaller image.');
+    const qualities = [0.82, 0.66, 0.5, 0.38];
+    for (let resizePass = 0; resizePass < 6; resizePass += 1) {
+      const scale = initialScale * 0.8 ** resizePass;
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('This browser cannot prepare image uploads.');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      for (const quality of qualities) {
+        const dataUrl = canvas.toDataURL('image/webp', quality);
+        if (dataUrl.length <= MAX_EMBEDDED_IMAGE_DATA_URL_CHARS) return dataUrl;
+      }
     }
-    return dataUrl;
+    throw new Error('This image remains too large after bounded compression.');
   } finally {
     bitmap.close();
   }

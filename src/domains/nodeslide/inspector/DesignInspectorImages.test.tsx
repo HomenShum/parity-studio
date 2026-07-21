@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildGoldenNodeSlide } from '../../../../convex/lib/nodeslideSeed';
 import type { PatchOperation } from '../../../../shared/nodeslide';
-import { DesignInspector } from './DesignInspector';
+import { DesignInspector, imageFileToEmbeddedWebp } from './DesignInspector';
 
 afterEach(cleanup);
 
@@ -55,6 +55,57 @@ function renderImageInspector(options: {
 }
 
 describe('Design inspector image generation and framing', () => {
+  it('keeps image ingestion within the patch envelope by resizing before accepting', async () => {
+    const close = vi.fn();
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 2_000, height: 1_000, close }),
+    );
+    const drawImage = vi.fn();
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
+    const oversized = `data:image/webp;base64,${'A'.repeat(680_000)}`;
+    const bounded = 'data:image/webp;base64,UklGRg==';
+    const toDataUrl = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValueOnce(oversized)
+      .mockReturnValueOnce(oversized)
+      .mockReturnValueOnce(oversized)
+      .mockReturnValueOnce(oversized)
+      .mockReturnValueOnce(bounded);
+
+    try {
+      const result = await imageFileToEmbeddedWebp(
+        new File([new Uint8Array([1, 2, 3])], 'oversized.png', { type: 'image/png' }),
+      );
+
+      expect(result).toBe(bounded);
+      expect(result.length).toBeLessThanOrEqual(680_000);
+      expect(toDataUrl).toHaveBeenCalledTimes(5);
+      expect(drawImage).toHaveBeenCalledTimes(2);
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      getContext.mockRestore();
+      toDataUrl.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects unsupported image input before rasterization', async () => {
+    const createBitmap = vi.fn();
+    vi.stubGlobal('createImageBitmap', createBitmap);
+
+    try {
+      await expect(
+        imageFileToEmbeddedWebp(new File(['<svg/>'], 'vector.svg', { type: 'image/svg+xml' })),
+      ).rejects.toThrow('Choose a PNG, JPEG, WebP, or GIF image.');
+      expect(createBitmap).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('labels BYOK-generated assets as illustrative and non-evidentiary', async () => {
     const user = userEvent.setup();
     const onApplyPatch = vi.fn<(operations: PatchOperation[], summary: string) => void>();

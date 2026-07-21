@@ -58,6 +58,13 @@ authorization-spine adapters, and product deployment configuration are not
 mechanical parity-studio copies. Mirror only application behavior that crosses
 the bounded rule above.
 
+NodeSlide's licensed Openverse search is not present in parity-studio at this
+checkpoint: there is no search handler, result contract, or remote-URL fallback
+seam to patch here. The shared, actively used image-ingestion seam does mirror
+the bounded multi-pass raster compression and accepted MIME envelope, so image
+uploads and attached AI-read images now shrink until they fit the patch limit
+or fail closed with an explicit error.
+
 ## Preserved work and PR truth
 
 - NodeSlide has zero open PRs; parity-studio should have zero after this handoff
