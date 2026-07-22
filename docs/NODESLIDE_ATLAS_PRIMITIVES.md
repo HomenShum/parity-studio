@@ -112,10 +112,40 @@ export produces.
    waterfall fails the topology gate rather than passing as evidence.
 2. Wire a real OTel span source so trace slides can pass `evidencePassed` instead of disclosing
    illustrative timing.
-3. Build the shared layout pass (ELK) once, and emit both web SVG and editable PPTX shapes from it.
+3. Compile per target from one specification — see the council correction below. Do **not** build a
+   single shared final layout and emit both surfaces from it.
 4. Register each adopted library as an `AtlasSourcePolicy` before use. Nothing is ingested on the
    strength of "it's open source" — licence, redistribution, retrieval-indexing and training
    rights are separate questions and are asked separately.
+
+## Council review (2026-07-22, `graph-hop` → Slide AI Collaboration thread)
+
+Two answers from the design thread corrected this plan. Recorded here so the corrections do not
+live only in a chat log.
+
+### Q2 — Honest V3 PowerPoint capability tier
+
+The measured Atlas v3 deck is **`editable-geometry` (`vector-flattened`), not `editable`**. All 43
+slides are native autoshapes and text boxes, so they are shape-editable and not rasterised — but
+they preserve **no chart, table, equation, or connector semantics**: no Edit Data, no series, no
+axis, no OMML, no round-trip from structured input. A recipe backing a v3 slide must therefore
+either declare `capability.pptx: 'vector-flattened'` honestly, or its required-native artifact
+resolves to `violation` (see `resolveRequirementVerdict`). Claiming `editable` for these slides is
+the exact rationalization the gate now blocks.
+
+### Q3 — "Layout once, emit twice" does not survive as a universal architecture
+
+The rejected shape was: run one shared ELK layout pass and emit both web SVG and PPTX shapes from
+that single final geometry. The flaw: web and PowerPoint have different text metrics, wrapping,
+DPI, and shape models, so one frozen layout is correct on at most one surface. The replacement
+principle:
+
+> **Specify once. Share constraints where appropriate. Compile per target. Validate per target.**
+
+So: one semantic spec + shared constraints (reading order, node set, hierarchy) → a **separate**
+compile+layout per surface → the topology/fidelity gate runs **per rendered target**. Shared layout
+remains valid only where the geometry is genuinely surface-independent (e.g. a fixed grid of KPI
+tiles), not for text-driven diagrams or charts.
 
 ## Sources
 
