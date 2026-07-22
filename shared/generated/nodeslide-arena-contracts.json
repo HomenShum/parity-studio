@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "nodeslide.contract-projection/v1",
+  "sourceRepository": "nodeslide",
+  "schemaIds": [
+    "nodeslide.artifact-atlas/v1",
+    "nodeslide.artifact-arena-harness/v1",
+    "nodeslide.artifact-arena-candidate/v1",
+    "nodeslide.artifact-arena-matrix/v1",
+    "nodeslide.artifact-showcase-receipt/v1",
+    "nodeslide.model-compare/v1",
+    "nodeslide.harness-compare/v1",
+    "nodeslide.artifact-gallery/v1",
+    "nodeslide.artifact-arena-coverage/v1"
+  ],
+  "receiptGates": [
+    "briefAdherence",
+    "visualPassed",
+    "evidencePassed",
+    "exportPassed",
+    "artifactTypeMatched",
+    "editabilityPassed"
+  ],
+  "arenaOmissionReasons": [
+    "fixture_filter",
+    "model_filter",
+    "direction_filter",
+    "budget_limit",
+    "unsupported_capability",
+    "not_scheduled"
+  ],
+  "gateStates": [
+    "pass",
+    "fail",
+    "not-run"
+  ],
+  "receiptStatuses": [
+    "eligible",
+    "failed"
+  ],
+  "crossAxisPolicy": {
+    "representable": false,
+    "errorName": "InvalidArenaComparisonError",
+    "codes": [
+      "cross_axis_comparison",
+      "no_harness_change"
+    ]
+  },
+  "sourceFiles": [
+    "scripts/lib/artifact-atlas-core.mjs",
+    "scripts/lib/artifact-atlas-coverage.mjs"
+  ],
+  "meta": {
+    "sourceCommit": "d7bde65af9dd915d97ade18a3fcc655839d23191",
+    "sha256": "sha256:91d99792f481bfb3ff44af163e8307d80ee97a335953ee31d0f16a4e025fc637"
+  }
+}

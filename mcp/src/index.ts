@@ -44,6 +44,7 @@ import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
 import { ensureDashboard } from './dashboard/server.js';
 import { buildAgentRuntimeMetadata } from './lib/agentRuntime.js';
 import { applyApprovedDesign } from './lib/applyApprovedDesign.js';
+import { registerAtlasTools } from './lib/atlasTools.js';
 import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
 import {
@@ -1936,6 +1937,8 @@ async function main() {
   });
 
   registerNodeSlideTools(server, convexCall);
+  // Atlas tools are static and owner-free, so both the nodeslide and parity-studio profiles get them.
+  registerAtlasTools(server);
   if (nodeSlideOnly) {
     await connectMcpServer(server);
     return;
