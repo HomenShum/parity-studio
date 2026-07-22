@@ -1,0 +1,648 @@
+import {
+  type AtlasArchetype,
+  type AtlasArtifactFamily,
+  type AtlasSourcePolicy,
+  NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+} from './nodeslideAtlas';
+
+/**
+ * The archetype taxonomy. Each entry names the narrative job and the artifact that must actually
+ * exist on the slide. `forbiddenSubstitutes` records the specific near-miss the harness has
+ * observed models produce, so the topology gate can reject it by name rather than by taste.
+ */
+export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.freeze([
+  {
+    id: 'narrative.hero-thesis',
+    family: 'narrative',
+    title: 'Hero thesis',
+    narrativeJob: 'State the single claim the whole deck defends.',
+    requiredArtifactKinds: ['text'],
+    forbiddenSubstitutes: ['agenda-list-as-thesis', 'multi-claim-stack'],
+  },
+  {
+    id: 'narrative.section-opener',
+    family: 'narrative',
+    title: 'Section opener',
+    narrativeJob: 'Mark a change of subject and set the next question.',
+    requiredArtifactKinds: ['text'],
+    forbiddenSubstitutes: ['content-slide-with-large-title'],
+  },
+  {
+    id: 'narrative.problem',
+    family: 'narrative',
+    title: 'Problem',
+    narrativeJob: 'Make the reader feel a specific cost before any solution appears.',
+    requiredArtifactKinds: ['text', 'evidence'],
+    forbiddenSubstitutes: ['generic-market-size-as-problem'],
+  },
+  {
+    id: 'narrative.insight',
+    family: 'narrative',
+    title: 'Insight',
+    narrativeJob: 'Show the non-obvious thing the evidence implies.',
+    requiredArtifactKinds: ['text', 'evidence'],
+    forbiddenSubstitutes: ['restated-problem-as-insight'],
+  },
+  {
+    id: 'narrative.big-metric',
+    family: 'narrative',
+    title: 'Big metric',
+    narrativeJob: 'Anchor one number the audience should remember.',
+    requiredArtifactKinds: ['text', 'evidence'],
+    forbiddenSubstitutes: ['unsourced-headline-number'],
+  },
+  {
+    id: 'narrative.quote',
+    family: 'narrative',
+    title: 'Quote',
+    narrativeJob: 'Let a named source say the thing in their own words.',
+    requiredArtifactKinds: ['text', 'evidence'],
+    forbiddenSubstitutes: ['unattributed-quote'],
+  },
+  {
+    id: 'narrative.conclusion',
+    family: 'narrative',
+    title: 'Conclusion',
+    narrativeJob: 'Close the loop opened by the thesis.',
+    requiredArtifactKinds: ['text'],
+    forbiddenSubstitutes: ['summary-of-slide-titles'],
+  },
+  {
+    id: 'narrative.call-to-action',
+    family: 'narrative',
+    title: 'Call to action',
+    narrativeJob: 'Name the next action and its owner.',
+    requiredArtifactKinds: ['text'],
+    forbiddenSubstitutes: ['thank-you-slide-as-cta'],
+  },
+
+  {
+    id: 'data.kpi-strip',
+    family: 'data',
+    title: 'KPI strip',
+    narrativeJob: 'Show the small set of numbers that define current state.',
+    requiredArtifactKinds: ['table', 'chart'],
+    forbiddenSubstitutes: ['bullet-list-of-numbers'],
+  },
+  {
+    id: 'data.bar-comparison',
+    family: 'data',
+    title: 'Bar comparison',
+    narrativeJob: 'Compare magnitude across a small number of categories.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['chart-as-flat-image', 'table-instead-of-chart'],
+  },
+  {
+    id: 'data.trend-line',
+    family: 'data',
+    title: 'Trend over time',
+    narrativeJob: 'Show direction and rate of change.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['chart-as-flat-image', 'category-axis-for-time'],
+  },
+  {
+    id: 'data.multi-series',
+    family: 'data',
+    title: 'Multi-series comparison',
+    narrativeJob: 'Contrast several series against a shared scale.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['dual-axis-without-disclosure', 'chart-as-flat-image'],
+  },
+  {
+    id: 'data.distribution',
+    family: 'data',
+    title: 'Distribution or scatter',
+    narrativeJob: 'Show spread, clustering or correlation rather than a single average.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['average-only-summary'],
+  },
+  {
+    id: 'data.waterfall',
+    family: 'data',
+    title: 'Waterfall bridge',
+    narrativeJob: 'Explain how a starting value became an ending value.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['stacked-bar-as-bridge'],
+  },
+  {
+    id: 'data.funnel',
+    family: 'data',
+    title: 'Funnel',
+    narrativeJob: 'Show stage-to-stage conversion and where volume is lost.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['decorative-funnel-shape-without-values'],
+  },
+  {
+    id: 'data.table',
+    family: 'data',
+    title: 'Structured table',
+    narrativeJob: 'Let the reader look up exact values.',
+    requiredArtifactKinds: ['table'],
+    forbiddenSubstitutes: ['table-as-flat-image'],
+  },
+  {
+    id: 'data.forecast-vs-actual',
+    family: 'data',
+    title: 'Forecast versus actual',
+    narrativeJob: 'Separate what was predicted from what happened.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['single-series-labelled-forecast'],
+  },
+  {
+    id: 'data.uncertainty-range',
+    family: 'data',
+    title: 'Uncertainty range',
+    narrativeJob: 'Show the band, not just the point estimate.',
+    requiredArtifactKinds: ['chart'],
+    forbiddenSubstitutes: ['point-estimate-without-band'],
+  },
+
+  {
+    id: 'systems.process-flow',
+    family: 'systems',
+    title: 'Process flow',
+    narrativeJob: 'Show ordered steps and their hand-offs.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['prose-as-architecture', 'ascii-arrows', 'numbered-bullet-list'],
+  },
+  {
+    id: 'systems.architecture',
+    family: 'systems',
+    title: 'Architecture diagram',
+    narrativeJob: 'Show components, their relationships and one trust boundary.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['prose-as-architecture', 'ascii-arrows', 'logo-collage'],
+  },
+  {
+    id: 'systems.node-edge-graph',
+    family: 'systems',
+    title: 'Node-edge graph',
+    narrativeJob: 'Show a relationship structure that is not a simple sequence.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['prose-as-architecture', 'ascii-arrows'],
+  },
+  {
+    id: 'systems.sequence',
+    family: 'systems',
+    title: 'Sequence diagram',
+    narrativeJob: 'Show ordered messages between participants over time.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['prose-as-architecture', 'flowchart-instead-of-sequence'],
+  },
+  {
+    id: 'systems.comparison-matrix',
+    family: 'systems',
+    title: 'Comparison matrix',
+    narrativeJob: 'Compare options against shared criteria.',
+    requiredArtifactKinds: ['table'],
+    forbiddenSubstitutes: ['two-column-pros-cons-prose'],
+  },
+  {
+    id: 'systems.tradeoff',
+    family: 'systems',
+    title: 'Two-sided tradeoff',
+    narrativeJob: 'Make the cost of each direction explicit.',
+    requiredArtifactKinds: ['diagram', 'table'],
+    forbiddenSubstitutes: ['one-sided-benefit-list'],
+  },
+  {
+    id: 'systems.hierarchy',
+    family: 'systems',
+    title: 'Hierarchy',
+    narrativeJob: 'Show containment or reporting structure.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['indented-bullet-list-as-hierarchy'],
+  },
+
+  {
+    id: 'progression.timeline',
+    family: 'progression',
+    title: 'Timeline',
+    narrativeJob: 'Place events on a shared time axis.',
+    requiredArtifactKinds: ['timeline'],
+    forbiddenSubstitutes: ['date-prefixed-bullet-list'],
+  },
+  {
+    id: 'progression.roadmap',
+    family: 'progression',
+    title: 'Roadmap',
+    narrativeJob: 'Show planned work in sequence with its dependencies.',
+    requiredArtifactKinds: ['timeline'],
+    forbiddenSubstitutes: ['undated-wish-list'],
+  },
+  {
+    id: 'progression.milestones',
+    family: 'progression',
+    title: 'Milestones',
+    narrativeJob: 'Show which gates are passed and which remain.',
+    requiredArtifactKinds: ['timeline'],
+    forbiddenSubstitutes: ['all-green-status-without-evidence'],
+  },
+  {
+    id: 'progression.before-after',
+    family: 'progression',
+    title: 'Before and after',
+    narrativeJob: 'Show the same subject in two states.',
+    requiredArtifactKinds: ['screenshot', 'chart', 'diagram'],
+    forbiddenSubstitutes: ['after-only-with-claimed-improvement'],
+  },
+  {
+    id: 'progression.maturity',
+    family: 'progression',
+    title: 'Maturity progression',
+    narrativeJob: 'Show levels and what changes between them.',
+    requiredArtifactKinds: ['diagram', 'table'],
+    forbiddenSubstitutes: ['level-names-without-criteria'],
+  },
+  {
+    id: 'progression.scrollytelling',
+    family: 'progression',
+    title: 'Scrollytelling scene',
+    narrativeJob: 'Reveal one pinned visual in stages as the narrative advances.',
+    requiredArtifactKinds: ['scrollytelling'],
+    forbiddenSubstitutes: ['static-slide-labelled-interactive'],
+  },
+
+  {
+    id: 'product-evidence.screenshot',
+    family: 'product-evidence',
+    title: 'Product screenshot',
+    narrativeJob: 'Show the real interface rather than describing it.',
+    requiredArtifactKinds: ['screenshot'],
+    forbiddenSubstitutes: ['mockup-presented-as-product', 'stock-illustration-as-product'],
+  },
+  {
+    id: 'product-evidence.screenshot-callouts',
+    family: 'product-evidence',
+    title: 'Screenshot with callouts',
+    narrativeJob: 'Direct attention to the specific regions that matter.',
+    requiredArtifactKinds: ['screenshot'],
+    forbiddenSubstitutes: ['uncallouted-screenshot-with-caption'],
+  },
+  {
+    id: 'product-evidence.interaction-clip',
+    family: 'product-evidence',
+    title: 'Interaction clip',
+    narrativeJob: 'Show the behaviour actually running.',
+    requiredArtifactKinds: ['media'],
+    forbiddenSubstitutes: ['still-image-labelled-demo'],
+  },
+  {
+    id: 'product-evidence.claim-lineage',
+    family: 'product-evidence',
+    title: 'Claim-to-source lineage',
+    narrativeJob: 'Connect each claim to the record that supports it.',
+    requiredArtifactKinds: ['evidence'],
+    forbiddenSubstitutes: ['citation-list-without-claim-mapping', 'fabricated-citation'],
+  },
+  {
+    id: 'product-evidence.citation-card',
+    family: 'product-evidence',
+    title: 'Citation card',
+    narrativeJob: 'Show the source, its date and the exact supported statement.',
+    requiredArtifactKinds: ['evidence'],
+    forbiddenSubstitutes: ['url-only-footnote', 'fabricated-citation'],
+  },
+  {
+    id: 'product-evidence.deck-ci-receipt',
+    family: 'product-evidence',
+    title: 'Deck CI receipt',
+    narrativeJob: 'Show which gates ran and what they returned.',
+    requiredArtifactKinds: ['evidence', 'table'],
+    forbiddenSubstitutes: ['all-pass-badge-without-run-reference'],
+  },
+
+  {
+    id: 'technical.equation',
+    family: 'technical',
+    title: 'Equation',
+    narrativeJob: 'State a relationship precisely enough to be checked.',
+    requiredArtifactKinds: ['equation'],
+    forbiddenSubstitutes: ['equation-as-flat-image', 'equation-as-plain-text'],
+  },
+  {
+    id: 'technical.algorithm',
+    family: 'technical',
+    title: 'Algorithm explanation',
+    narrativeJob: 'Show the steps and their cost.',
+    requiredArtifactKinds: ['code', 'diagram'],
+    forbiddenSubstitutes: ['prose-summary-without-steps'],
+  },
+  {
+    id: 'technical.benchmark',
+    family: 'technical',
+    title: 'Benchmark comparison',
+    narrativeJob: 'Compare systems on a stated task with stated conditions.',
+    requiredArtifactKinds: ['chart', 'table'],
+    forbiddenSubstitutes: ['scores-without-task-definition', 'cherry-picked-single-run'],
+  },
+  {
+    id: 'technical.code-and-result',
+    family: 'technical',
+    title: 'Code plus runtime result',
+    narrativeJob: 'Show the code and what it actually produced.',
+    requiredArtifactKinds: ['code', 'evidence'],
+    forbiddenSubstitutes: ['code-without-output', 'claimed-output-without-run'],
+  },
+  {
+    id: 'technical.contract',
+    family: 'technical',
+    title: 'API or tool contract',
+    narrativeJob: 'Show the exact interface a consumer must satisfy.',
+    requiredArtifactKinds: ['code', 'table'],
+    forbiddenSubstitutes: ['prose-description-of-schema'],
+  },
+  {
+    id: 'technical.trace-waterfall',
+    family: 'technical',
+    title: 'Trace waterfall',
+    narrativeJob: 'Show where time actually went across nested spans of one run.',
+    requiredArtifactKinds: ['diagram', 'evidence'],
+    forbiddenSubstitutes: [
+      'illustrative-timing-presented-as-observed',
+      'span-bars-without-trace-id',
+      'chart-as-flat-image',
+    ],
+  },
+  {
+    id: 'technical.state-machine',
+    family: 'technical',
+    title: 'State machine',
+    narrativeJob: 'Show states, transitions and terminal conditions.',
+    requiredArtifactKinds: ['diagram'],
+    forbiddenSubstitutes: ['prose-as-architecture', 'ascii-arrows'],
+  },
+
+  {
+    id: 'media.image',
+    family: 'media',
+    title: 'Rights-cleared image',
+    narrativeJob: 'Carry meaning the text cannot carry alone.',
+    requiredArtifactKinds: ['media'],
+    forbiddenSubstitutes: ['decorative-stock-without-rights', 'unlicensed-scraped-image'],
+  },
+  {
+    id: 'media.generated-illustration',
+    family: 'media',
+    title: 'Generated illustration',
+    narrativeJob: 'Illustrate a concept that has no photograph.',
+    requiredArtifactKinds: ['media'],
+    forbiddenSubstitutes: ['generated-image-presented-as-photograph'],
+  },
+  {
+    id: 'media.video',
+    family: 'media',
+    title: 'Video',
+    narrativeJob: 'Show motion that a still cannot express.',
+    requiredArtifactKinds: ['media'],
+    forbiddenSubstitutes: ['video-without-poster-frame-fallback'],
+  },
+
+  {
+    id: 'decision.options',
+    family: 'decision',
+    title: 'Options',
+    narrativeJob: 'Lay out the genuinely available choices.',
+    requiredArtifactKinds: ['table', 'diagram'],
+    forbiddenSubstitutes: ['single-option-presented-as-choice'],
+  },
+  {
+    id: 'decision.risk-matrix',
+    family: 'decision',
+    title: 'Risk matrix',
+    narrativeJob: 'Place risks by likelihood and impact.',
+    requiredArtifactKinds: ['chart', 'table'],
+    forbiddenSubstitutes: ['risk-list-without-severity'],
+  },
+  {
+    id: 'decision.recommendation',
+    family: 'decision',
+    title: 'Recommendation',
+    narrativeJob: 'Name one choice and the reason it wins.',
+    requiredArtifactKinds: ['text'],
+    forbiddenSubstitutes: ['balanced-summary-without-recommendation'],
+  },
+  {
+    id: 'decision.cost-quality',
+    family: 'decision',
+    title: 'Cost versus quality',
+    narrativeJob: 'Show what is bought and what is given up at each level.',
+    requiredArtifactKinds: ['chart', 'table'],
+    forbiddenSubstitutes: ['price-list-without-quality-axis'],
+  },
+  {
+    id: 'decision.go-no-go',
+    family: 'decision',
+    title: 'Go / no-go gate',
+    narrativeJob: 'State the criteria that decide, before the decision is taken.',
+    requiredArtifactKinds: ['table'],
+    forbiddenSubstitutes: ['decision-without-stated-criteria'],
+  },
+  {
+    id: 'decision.investment-ask',
+    family: 'decision',
+    title: 'Investment ask',
+    narrativeJob: 'State the amount, the use and the milestone it buys.',
+    requiredArtifactKinds: ['text', 'table'],
+    forbiddenSubstitutes: ['amount-without-use-of-funds'],
+  },
+]);
+
+/**
+ * Seed source policies, one per lane. These are the reviewed starting set; new sources are added
+ * through the same contract and default to `pending-review`, which the usage gate denies.
+ */
+export const NODESLIDE_ATLAS_SOURCE_POLICIES: readonly AtlasSourcePolicy[] = Object.freeze([
+  {
+    schemaVersion: NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+    id: 'nodeslide-owned',
+    name: 'NodeSlide-authored artifacts',
+    canonicalUrl: 'https://nodeslide.vercel.app/atlas',
+    accessMode: 'mirror',
+    licenseId: 'NodeSlide-Owned',
+    permissions: {
+      download: true,
+      cache: true,
+      displayThumbnail: true,
+      redistributeOriginal: true,
+      redistributeModified: true,
+      commercialUse: true,
+      ragIndexing: true,
+      embeddingIndex: true,
+      modelTraining: true,
+      fineTuning: true,
+    },
+    attributionRequired: false,
+    competitiveUseRestricted: false,
+    reviewedAt: '2026-07-22',
+    reviewedBy: 'homen',
+    status: 'approved',
+  },
+  {
+    schemaVersion: NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+    id: 'uiverse',
+    name: 'Uiverse community elements',
+    canonicalUrl: 'https://uiverse.io/',
+    accessMode: 'mirror',
+    licenseId: 'MIT',
+    termsUrl: 'https://uiverse.io/license',
+    permissions: {
+      download: true,
+      cache: true,
+      displayThumbnail: true,
+      redistributeOriginal: true,
+      redistributeModified: true,
+      commercialUse: true,
+      ragIndexing: true,
+      embeddingIndex: true,
+      modelTraining: false,
+      fineTuning: false,
+    },
+    attributionRequired: true,
+    competitiveUseRestricted: false,
+    reviewedAt: '2026-07-22',
+    reviewedBy: 'homen',
+    status: 'approved',
+  },
+  {
+    schemaVersion: NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+    id: 'mobbin',
+    name: 'Mobbin product references',
+    canonicalUrl: 'https://mobbin.com/',
+    accessMode: 'remote-mcp',
+    termsUrl: 'https://mobbin.com/terms',
+    permissions: {
+      download: false,
+      cache: false,
+      displayThumbnail: true,
+      redistributeOriginal: false,
+      redistributeModified: false,
+      commercialUse: true,
+      ragIndexing: false,
+      embeddingIndex: false,
+      modelTraining: false,
+      fineTuning: false,
+    },
+    attributionRequired: true,
+    competitiveUseRestricted: true,
+    reviewedAt: '2026-07-22',
+    reviewedBy: 'homen',
+    status: 'approved',
+  },
+  {
+    schemaVersion: NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+    id: 'workspace-private',
+    name: 'Organisation-owned imported assets',
+    canonicalUrl: 'https://nodeslide.vercel.app/atlas/private',
+    accessMode: 'private-import',
+    permissions: {
+      download: true,
+      cache: true,
+      displayThumbnail: true,
+      redistributeOriginal: false,
+      redistributeModified: false,
+      commercialUse: true,
+      ragIndexing: true,
+      embeddingIndex: true,
+      modelTraining: false,
+      fineTuning: false,
+    },
+    attributionRequired: false,
+    competitiveUseRestricted: true,
+    reviewedAt: '2026-07-22',
+    reviewedBy: 'homen',
+    status: 'approved',
+  },
+  {
+    schemaVersion: NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+    id: 'commercial-template-library',
+    name: 'Commercial template libraries',
+    canonicalUrl: 'https://nodeslide.vercel.app/atlas/reference-only',
+    accessMode: 'reference-link-only',
+    permissions: {
+      download: false,
+      cache: false,
+      displayThumbnail: false,
+      redistributeOriginal: false,
+      redistributeModified: false,
+      commercialUse: false,
+      ragIndexing: false,
+      embeddingIndex: false,
+      modelTraining: false,
+      fineTuning: false,
+    },
+    attributionRequired: true,
+    competitiveUseRestricted: true,
+    reviewedAt: '2026-07-22',
+    reviewedBy: 'homen',
+    status: 'restricted',
+  },
+]);
+
+const ARCHETYPES_BY_ID = new Map(
+  NODESLIDE_ATLAS_ARCHETYPES.map((archetype) => [archetype.id, archetype]),
+);
+const SOURCE_POLICIES_BY_ID = new Map(
+  NODESLIDE_ATLAS_SOURCE_POLICIES.map((policy) => [policy.id, policy]),
+);
+
+export function findAtlasArchetype(id: string): AtlasArchetype | undefined {
+  return ARCHETYPES_BY_ID.get(id);
+}
+
+export function findAtlasSourcePolicy(id: string): AtlasSourcePolicy | undefined {
+  return SOURCE_POLICIES_BY_ID.get(id);
+}
+
+export function atlasArchetypesByFamily(family: AtlasArtifactFamily): readonly AtlasArchetype[] {
+  return NODESLIDE_ATLAS_ARCHETYPES.filter((archetype) => archetype.family === family);
+}
+
+export interface AtlasArchetypeQuery {
+  family?: AtlasArtifactFamily;
+  text?: string;
+  requiresArtifactKind?: string;
+  limit?: number;
+}
+
+/**
+ * Kept comfortably above the taxonomy so an unfiltered browse returns everything. A cap below the
+ * registry size would silently hide archetypes, which reads as "the Atlas has no such pattern".
+ */
+export const MAX_ATLAS_QUERY_RESULTS = 200;
+
+/**
+ * Lexical archetype search. Ranking is deterministic — title match, then narrative-job match,
+ * then id — so an agent asking the same question twice gets the same ordering.
+ */
+export function searchAtlasArchetypes(query: AtlasArchetypeQuery): readonly AtlasArchetype[] {
+  const needle = query.text?.trim().toLowerCase() ?? '';
+  const limit = Math.min(
+    Math.max(1, Math.trunc(query.limit ?? MAX_ATLAS_QUERY_RESULTS)),
+    MAX_ATLAS_QUERY_RESULTS,
+  );
+  const scored: { archetype: AtlasArchetype; score: number }[] = [];
+  for (const archetype of NODESLIDE_ATLAS_ARCHETYPES) {
+    if (query.family && archetype.family !== query.family) continue;
+    if (
+      query.requiresArtifactKind &&
+      !archetype.requiredArtifactKinds.includes(query.requiresArtifactKind as never)
+    ) {
+      continue;
+    }
+    let score = 0;
+    if (needle) {
+      const inTitle = archetype.title.toLowerCase().includes(needle);
+      const inJob = archetype.narrativeJob.toLowerCase().includes(needle);
+      const inId = archetype.id.toLowerCase().includes(needle);
+      if (!inTitle && !inJob && !inId) continue;
+      score = (inTitle ? 4 : 0) + (inJob ? 2 : 0) + (inId ? 1 : 0);
+    }
+    scored.push({ archetype, score });
+  }
+  scored.sort((left, right) => {
+    if (left.score !== right.score) return right.score - left.score;
+    return left.archetype.id < right.archetype.id ? -1 : 1;
+  });
+  return scored.slice(0, limit).map((entry) => entry.archetype);
+}

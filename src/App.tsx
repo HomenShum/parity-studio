@@ -18,6 +18,12 @@ const NodeSlideStudio = lazy(() =>
   })),
 );
 
+const AtlasGallery = lazy(() =>
+  import('./domains/nodeslide/atlas/AtlasGallery').then(({ AtlasGallery: Gallery }) => ({
+    default: Gallery,
+  })),
+);
+
 /**
  * App shell — reference layout (docs/plans/2026-04-28-shell-revamp-from-reference.md).
  *
@@ -44,6 +50,13 @@ export default function App() {
         : configuredDomain === 'parity' && parityEnabled
           ? 'parity'
           : 'nodeslide';
+  if (urlDomain === 'atlas') {
+    return (
+      <Suspense fallback={<NodeSlideBootScreen />}>
+        <AtlasGallery />
+      </Suspense>
+    );
+  }
   return domain === 'parity' ? (
     <ParityApp />
   ) : (

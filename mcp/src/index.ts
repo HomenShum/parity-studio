@@ -63,6 +63,7 @@ import {
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
+import { registerAtlasTools } from './lib/atlasTools.js';
 import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
@@ -1936,6 +1937,8 @@ async function main() {
   });
 
   registerNodeSlideTools(server, convexCall);
+  // Atlas tools are static and owner-free, so both the nodeslide and parity-studio profiles get them.
+  registerAtlasTools(server);
   if (nodeSlideOnly) {
     await connectMcpServer(server);
     return;
