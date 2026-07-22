@@ -92,13 +92,5 @@
     "vite": "^6.0.0",
     "vitest": "^2.1.0",
     "zod": "^4.3.6"
-  },
-  "pnpm": {
-    "overrides": {
-      "@protobufjs/utf8": "^1.1.2",
-      "dompurify": "^3.4.11",
-      "protobufjs": "7.6.5",
-      "ws": "^8.21.0"
-    }
   }
 }
