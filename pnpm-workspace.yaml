@@ -1,0 +1,8 @@
+packages:
+  - .
+
+overrides:
+  '@protobufjs/utf8': ^1.1.2
+  dompurify: ^3.4.12
+  protobufjs: 7.6.5
+  ws: ^8.21.0
