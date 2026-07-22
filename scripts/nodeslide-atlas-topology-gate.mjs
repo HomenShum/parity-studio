@@ -208,8 +208,8 @@ async function main() {
       ? JSON.parse(await readFile(path.resolve(flags.get('map')), 'utf8'))
       : {};
 
-  let fixturesByTitle = new Map();
-  let fixturesBySlide = new Map();
+  const fixturesByTitle = new Map();
+  const fixturesBySlide = new Map();
   if (typeof flags.get('fixtures') === 'string') {
     const fixtureDoc = JSON.parse(await readFile(path.resolve(flags.get('fixtures')), 'utf8'));
     for (const fixture of fixtureDoc.fixtures ?? []) {
@@ -219,7 +219,9 @@ async function main() {
     }
   }
 
-  const slides = groupRecordsBySlide((await readFile(path.resolve(inspectPath), 'utf8')).split('\n'));
+  const slides = groupRecordsBySlide(
+    (await readFile(path.resolve(inspectPath), 'utf8')).split('\n'),
+  );
 
   const results = [];
   for (const slide of slides) {
@@ -377,7 +379,9 @@ async function main() {
           ? [
               '',
               '  Indeterminate (needs richer inspection than shape counts):',
-              ...indeterminate.map((entry) => `    slide ${entry.slide} "${entry.title}" — ${entry.archetypeId}`),
+              ...indeterminate.map(
+                (entry) => `    slide ${entry.slide} "${entry.title}" — ${entry.archetypeId}`,
+              ),
             ]
           : []),
       ].join('\n'),
@@ -388,6 +392,9 @@ async function main() {
   process.exit(violated.length > 0 ? 1 : 0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/') || process.argv[1]?.endsWith('nodeslide-atlas-topology-gate.mjs')) {
+if (
+  import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/') ||
+  process.argv[1]?.endsWith('nodeslide-atlas-topology-gate.mjs')
+) {
   await main();
 }

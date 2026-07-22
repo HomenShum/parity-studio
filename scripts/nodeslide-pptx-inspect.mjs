@@ -180,7 +180,15 @@ export function observeSlideXml(xml, { hasChartRelationship = false } = {}) {
   return {
     kinds: [...kinds].sort(),
     evidence,
-    counts: { textRuns, equations, tables, graphicFrames, connectors, shapes, pictures: alts.length },
+    counts: {
+      textRuns,
+      equations,
+      tables,
+      graphicFrames,
+      connectors,
+      shapes,
+      pictures: alts.length,
+    },
   };
 }
 

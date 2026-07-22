@@ -22,7 +22,11 @@ type AtlasMode = 'gallery' | 'model-compare' | 'harness-compare';
 const MODES: readonly { id: AtlasMode; label: string; hint: string }[] = [
   { id: 'gallery', label: 'Artifact Gallery', hint: 'Browse every archetype the Atlas catalogues' },
   { id: 'model-compare', label: 'Model Compare', hint: 'One brief, several models, side by side' },
-  { id: 'harness-compare', label: 'Harness Compare', hint: 'Did the model improve, or the harness?' },
+  {
+    id: 'harness-compare',
+    label: 'Harness Compare',
+    hint: 'Did the model improve, or the harness?',
+  },
 ];
 
 const FAMILY_LABELS: Record<AtlasArtifactFamily, string> = {
@@ -107,9 +111,7 @@ export function AtlasGallery() {
               <select
                 value={family}
                 data-testid="atlas-family"
-                onChange={(event) =>
-                  setFamily(event.target.value as AtlasArtifactFamily | 'all')
-                }
+                onChange={(event) => setFamily(event.target.value as AtlasArtifactFamily | 'all')}
               >
                 <option value="all">All families</option>
                 {ATLAS_ARTIFACT_FAMILIES.map((entry) => (

@@ -1,6 +1,6 @@
 import {
-  ATLAS_ACCESS_MODE_CEILING,
   ATLAS_ACCESS_MODES,
+  ATLAS_ACCESS_MODE_CEILING,
   ATLAS_ARTIFACT_KINDS,
   ATLAS_CAPABILITY_LEVELS,
   ATLAS_MATURITY_ORDER,
@@ -11,11 +11,11 @@ import {
   type AtlasReuseMode,
   type AtlasShowcaseReceipt,
   type AtlasSourcePermissions,
-  atlasMaturityRank,
-  earnedAtlasMaturity,
   NODESLIDE_ATLAS_RECEIPT_VERSION,
   NODESLIDE_ATLAS_SCHEMA_VERSION,
   NODESLIDE_ATLAS_SOURCE_POLICY_VERSION,
+  atlasMaturityRank,
+  earnedAtlasMaturity,
 } from './nodeslideAtlas';
 import { findAtlasArchetype, findAtlasSourcePolicy } from './nodeslideAtlasRegistry';
 
@@ -182,7 +182,10 @@ function validateInputContract(value: unknown, errors: string[]): void {
       ['minimum', minimum],
       ['maximum', maximum],
     ] as const) {
-      if (bound !== undefined && (typeof bound !== 'number' || !Number.isFinite(bound) || bound < 0)) {
+      if (
+        bound !== undefined &&
+        (typeof bound !== 'number' || !Number.isFinite(bound) || bound < 0)
+      ) {
         errors.push(`${path}.${label} must be a non-negative finite number when present.`);
       }
     }
@@ -313,7 +316,9 @@ export function validateAtlasArtifactRecipe(value: unknown): AtlasValidationResu
       const required = REUSE_MODE_REQUIREMENTS[reuseMode as AtlasReuseMode];
       for (const permission of required) {
         if (policy.permissions[permission] !== true) {
-          errors.push(`reuseMode ${String(reuseMode)} needs ${permission} from source ${sourceId}.`);
+          errors.push(
+            `reuseMode ${String(reuseMode)} needs ${permission} from source ${sourceId}.`,
+          );
         }
       }
       if (reuseMode === 'reimplement' && policy.competitiveUseRestricted) {
@@ -402,7 +407,9 @@ export function validateAtlasShowcaseReceipt(value: unknown): AtlasValidationRes
       isRecord(editability) &&
       (editability['pptx'] === 'editable' || editability['pptx'] === 'native')
     ) {
-      errors.push('editability.pptx may not claim editable output when the export gate did not pass.');
+      errors.push(
+        'editability.pptx may not claim editable output when the export gate did not pass.',
+      );
     }
   }
 
@@ -439,7 +446,10 @@ export function validateAtlasMaturityClaim(
   const claimedRank = atlasMaturityRank(recipe.maturity);
   const earnedRank = atlasMaturityRank(earned);
   if (claimedRank === -1) {
-    return { ok: false, errors: [`Recipe ${recipe.id} claims unknown maturity ${recipe.maturity}.`] };
+    return {
+      ok: false,
+      errors: [`Recipe ${recipe.id} claims unknown maturity ${recipe.maturity}.`],
+    };
   }
   if (claimedRank > earnedRank) {
     return {

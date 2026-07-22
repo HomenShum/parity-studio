@@ -99,8 +99,7 @@ try {
       const results = registry.searchAtlasArchetypes({
         text: text || undefined,
         family: typeof flags.get('family') === 'string' ? flags.get('family') : undefined,
-        requiresArtifactKind:
-          typeof flags.get('kind') === 'string' ? flags.get('kind') : undefined,
+        requiresArtifactKind: typeof flags.get('kind') === 'string' ? flags.get('kind') : undefined,
         limit: Number.isFinite(limitFlag) ? limitFlag : 20,
       });
       if (results.length === 0) exitCode = 1;
@@ -122,8 +121,10 @@ try {
       const archetype = id ? registry.findAtlasArchetype(id) : undefined;
       if (!archetype) {
         exitCode = 1;
-        emit(json, { error: `Unknown archetype ${id ?? '<missing>'}.` }, () =>
-          `Unknown archetype ${id ?? '<missing>'}.`,
+        emit(
+          json,
+          { error: `Unknown archetype ${id ?? '<missing>'}.` },
+          () => `Unknown archetype ${id ?? '<missing>'}.`,
         );
         break;
       }
@@ -160,8 +161,10 @@ try {
       const policy = id ? registry.findAtlasSourcePolicy(id) : undefined;
       if (!policy) {
         exitCode = 1;
-        emit(json, { error: `Unknown source ${id ?? '<missing>'}.` }, () =>
-          `Unknown source ${id ?? '<missing>'}. Unreviewed sources are denied by default.`,
+        emit(
+          json,
+          { error: `Unknown source ${id ?? '<missing>'}.` },
+          () => `Unknown source ${id ?? '<missing>'}. Unreviewed sources are denied by default.`,
         );
         break;
       }
@@ -258,7 +261,10 @@ try {
           failures.length === 0
             ? `Atlas registry is valid: ${registry.NODESLIDE_ATLAS_ARCHETYPES.length} archetypes, ${registry.NODESLIDE_ATLAS_SOURCE_POLICIES.length} source policies.`
             : failures
-                .map((failure) => `${failure.subject}\n${failure.errors.map((e) => `  - ${e}`).join('\n')}`)
+                .map(
+                  (failure) =>
+                    `${failure.subject}\n${failure.errors.map((e) => `  - ${e}`).join('\n')}`,
+                )
                 .join('\n\n'),
       );
       break;
@@ -273,8 +279,11 @@ try {
       })).filter((entry) => !entry.result.ok);
       if (invalid.length > 0) {
         exitCode = 1;
-        emit(json, { error: 'Refusing to export an invalid registry.', invalid }, () =>
-          `Refusing to export: ${invalid.map((entry) => entry.id).join(', ')} failed validation.`,
+        emit(
+          json,
+          { error: 'Refusing to export an invalid registry.', invalid },
+          () =>
+            `Refusing to export: ${invalid.map((entry) => entry.id).join(', ')} failed validation.`,
         );
         break;
       }
@@ -300,7 +309,11 @@ try {
       await writeFile(outPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
       emit(
         json,
-        { written: outPath, archetypes: payload.archetypes.length, sources: payload.sourcePolicies.length },
+        {
+          written: outPath,
+          archetypes: payload.archetypes.length,
+          sources: payload.sourcePolicies.length,
+        },
         () =>
           `Exported ${payload.archetypes.length} archetypes and ${payload.sourcePolicies.length} source policies to ${path.relative(rootDirectory, outPath)}.`,
       );
@@ -314,7 +327,9 @@ try {
   }
 } catch (error) {
   exitCode = 1;
-  process.stderr.write(`nodeslide atlas failed: ${error instanceof Error ? error.message : error}\n`);
+  process.stderr.write(
+    `nodeslide atlas failed: ${error instanceof Error ? error.message : error}\n`,
+  );
 } finally {
   await vite.close();
 }

@@ -152,6 +152,9 @@ export function resolveArchetypeId(artifactType, mapping) {
   if (typeof artifactType !== 'string' || artifactType.length === 0) return null;
   const direct = mapping[artifactType];
   if (direct) return direct;
-  const normalized = artifactType.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  const normalized = artifactType
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
   return mapping[normalized] ?? null;
 }

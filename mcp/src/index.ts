@@ -44,6 +44,7 @@ import { dashboardMode, openDashboardOnce } from './dashboard/openBrowser.js';
 import { ensureDashboard } from './dashboard/server.js';
 import { buildAgentRuntimeMetadata } from './lib/agentRuntime.js';
 import { applyApprovedDesign } from './lib/applyApprovedDesign.js';
+import { registerAtlasTools } from './lib/atlasTools.js';
 import { localByokStatus, requireLocalKeys } from './lib/byok.js';
 import { collectCodeContext } from './lib/codeContext.js';
 import {
@@ -63,7 +64,6 @@ import {
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
 import { callByModel } from './lib/llmClient.js';
-import { registerAtlasTools } from './lib/atlasTools.js';
 import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';

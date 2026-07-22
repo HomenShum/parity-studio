@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  artifactTypeFromTitle,
   DETECTABLE_ARTIFACT_KINDS,
+  artifactTypeFromTitle,
   groupRecordsBySlide,
   producedArtifactKindsFromRecords,
 } from '../nodeslide-atlas-topology-gate.mjs';

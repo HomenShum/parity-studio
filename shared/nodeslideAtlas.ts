@@ -87,13 +87,7 @@ export const ATLAS_ACCESS_MODES: readonly AtlasAccessMode[] = Object.freeze([
 ]);
 
 /** How a recipe derived from a source may be used downstream. */
-export type AtlasReuseMode =
-  | 'reference'
-  | 'copy'
-  | 'wrap'
-  | 'adapt'
-  | 'reimplement'
-  | 'benchmark';
+export type AtlasReuseMode = 'reference' | 'copy' | 'wrap' | 'adapt' | 'reimplement' | 'benchmark';
 
 export const ATLAS_REUSE_MODES: readonly AtlasReuseMode[] = Object.freeze([
   'reference',

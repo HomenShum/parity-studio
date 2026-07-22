@@ -18,6 +18,8 @@
       "artifacts/nodeslide-three-deck-launch-final-v22",
       "convex/_generated",
       "mcp/dist",
+      "mcp/src/generated",
+      "shared/generated",
       "node_modules",
       "playwright-report",
       "runs",
