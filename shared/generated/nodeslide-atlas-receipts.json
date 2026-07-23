@@ -1,0 +1,3605 @@
+{
+  "schemaVersion": "nodeslide.atlas-receipt-projection/v1",
+  "sourceRepository": "nodeslide",
+  "receiptSchema": "nodeslide.atlas-showcase-receipt/v1",
+  "runId": "artifact-atlas-v1",
+  "totals": {
+    "receipts": 84,
+    "recipes": 12,
+    "modelReceipts": 72,
+    "baselineReceipts": 12,
+    "unmappedArtifactTypes": []
+  },
+  "recipes": [
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.architecture-diagram",
+      "artifactType": "architecture-diagram",
+      "archetypeId": "systems.architecture",
+      "narrativeJob": "Make the portable protocol boundary and backend-specific responsibilities immediately inspectable.",
+      "receiptIds": [
+        "system-architecture__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "system-architecture__evidence-editorial__anthropic-claude-sonnet-5",
+        "system-architecture__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "system-architecture__evidence-editorial__moonshotai-kimi-k3",
+        "system-architecture__expressive-technical__anthropic-claude-sonnet-5",
+        "system-architecture__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "system-architecture__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.claim-source-lineage",
+      "artifactType": "claim-source-lineage",
+      "archetypeId": "product-evidence.claim-lineage",
+      "narrativeJob": "Let a reviewer trace one headline claim through source, extraction, validation, and slide usage.",
+      "receiptIds": [
+        "claim-source-lineage__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "claim-source-lineage__evidence-editorial__anthropic-claude-sonnet-5",
+        "claim-source-lineage__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "claim-source-lineage__evidence-editorial__moonshotai-kimi-k3",
+        "claim-source-lineage__expressive-technical__anthropic-claude-sonnet-5",
+        "claim-source-lineage__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "claim-source-lineage__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.code-runtime-proof",
+      "artifactType": "code-runtime-proof",
+      "archetypeId": "technical.code-and-result",
+      "narrativeJob": "Pair a small API contract with measured runtime behavior so code and evidence reinforce each other.",
+      "receiptIds": [
+        "code-runtime-proof__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "code-runtime-proof__evidence-editorial__anthropic-claude-sonnet-5",
+        "code-runtime-proof__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "code-runtime-proof__evidence-editorial__moonshotai-kimi-k3",
+        "code-runtime-proof__expressive-technical__anthropic-claude-sonnet-5",
+        "code-runtime-proof__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "code-runtime-proof__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.hero-thesis",
+      "artifactType": "hero-thesis",
+      "archetypeId": "narrative.hero-thesis",
+      "narrativeJob": "Establish one memorable, evidence-bounded thesis before the detailed argument begins.",
+      "receiptIds": [
+        "hero-thesis__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "hero-thesis__evidence-editorial__anthropic-claude-sonnet-5",
+        "hero-thesis__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "hero-thesis__evidence-editorial__moonshotai-kimi-k3",
+        "hero-thesis__expressive-technical__anthropic-claude-sonnet-5",
+        "hero-thesis__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "hero-thesis__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.katex-equation",
+      "artifactType": "katex-equation",
+      "archetypeId": "technical.equation",
+      "narrativeJob": "Explain the cost-adjusted quality measure and connect every symbol to the supplied experiment table.",
+      "receiptIds": [
+        "quality-cost-equation__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "quality-cost-equation__evidence-editorial__anthropic-claude-sonnet-5",
+        "quality-cost-equation__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "quality-cost-equation__evidence-editorial__moonshotai-kimi-k3",
+        "quality-cost-equation__expressive-technical__anthropic-claude-sonnet-5",
+        "quality-cost-equation__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "quality-cost-equation__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.kpi-strip",
+      "artifactType": "kpi-strip",
+      "archetypeId": "data.kpi-strip",
+      "narrativeJob": "Make the operating verdict scannable while preserving comparison context for every metric.",
+      "receiptIds": [
+        "kpi-strip__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "kpi-strip__evidence-editorial__anthropic-claude-sonnet-5",
+        "kpi-strip__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "kpi-strip__evidence-editorial__moonshotai-kimi-k3",
+        "kpi-strip__expressive-technical__anthropic-claude-sonnet-5",
+        "kpi-strip__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "kpi-strip__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.multi-series-chart",
+      "artifactType": "multi-series-chart",
+      "archetypeId": "data.multi-series",
+      "narrativeJob": "Reveal divergence between related series without inventing a cause for the observed pattern.",
+      "receiptIds": [
+        "multi-series-trend__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "multi-series-trend__evidence-editorial__anthropic-claude-sonnet-5",
+        "multi-series-trend__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "multi-series-trend__evidence-editorial__moonshotai-kimi-k3",
+        "multi-series-trend__expressive-technical__anthropic-claude-sonnet-5",
+        "multi-series-trend__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "multi-series-trend__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.risk-matrix",
+      "artifactType": "risk-matrix",
+      "archetypeId": "decision.risk-matrix",
+      "narrativeJob": "Prioritize operating risks by likelihood and impact instead of presenting an unlabeled list.",
+      "receiptIds": [
+        "risk-matrix__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "risk-matrix__evidence-editorial__anthropic-claude-sonnet-5",
+        "risk-matrix__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "risk-matrix__evidence-editorial__moonshotai-kimi-k3",
+        "risk-matrix__expressive-technical__anthropic-claude-sonnet-5",
+        "risk-matrix__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "risk-matrix__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.screenshot-callouts",
+      "artifactType": "screenshot-callouts",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "narrativeJob": "Connect visible product controls to the claimed reviewable-generation workflow without fabricating UI evidence.",
+      "receiptIds": [
+        "screenshot-callouts__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "screenshot-callouts__evidence-editorial__anthropic-claude-sonnet-5",
+        "screenshot-callouts__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "screenshot-callouts__evidence-editorial__moonshotai-kimi-k3",
+        "screenshot-callouts__expressive-technical__anthropic-claude-sonnet-5",
+        "screenshot-callouts__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "screenshot-callouts__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.sequence-diagram",
+      "artifactType": "sequence-diagram",
+      "archetypeId": "systems.sequence",
+      "narrativeJob": "Expose ordering, review custody, and failure boundaries across one request lifecycle.",
+      "receiptIds": [
+        "request-sequence__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "request-sequence__evidence-editorial__anthropic-claude-sonnet-5",
+        "request-sequence__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "request-sequence__evidence-editorial__moonshotai-kimi-k3",
+        "request-sequence__expressive-technical__anthropic-claude-sonnet-5",
+        "request-sequence__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "request-sequence__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.timeline",
+      "artifactType": "timeline",
+      "archetypeId": "progression.timeline",
+      "narrativeJob": "Show the progression from research question to evidence-backed decision with honest stage timing.",
+      "receiptIds": [
+        "research-timeline__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "research-timeline__evidence-editorial__anthropic-claude-sonnet-5",
+        "research-timeline__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "research-timeline__evidence-editorial__moonshotai-kimi-k3",
+        "research-timeline__expressive-technical__anthropic-claude-sonnet-5",
+        "research-timeline__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "research-timeline__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    },
+    {
+      "schemaVersion": "nodeslide.atlas/v1",
+      "id": "nodeslide.arena.uncertainty-range",
+      "artifactType": "uncertainty-range",
+      "archetypeId": "data.uncertainty-range",
+      "narrativeJob": "Show a forecast and its uncertainty honestly instead of presenting one modeled value as certain.",
+      "receiptIds": [
+        "uncertainty-range__deterministic-baseline__nodeslide-artifact-builder-v1",
+        "uncertainty-range__evidence-editorial__anthropic-claude-sonnet-5",
+        "uncertainty-range__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+        "uncertainty-range__evidence-editorial__moonshotai-kimi-k3",
+        "uncertainty-range__expressive-technical__anthropic-claude-sonnet-5",
+        "uncertainty-range__expressive-technical__google-gemma-4-26b-a4b-it-free",
+        "uncertainty-range__expressive-technical__moonshotai-kimi-k3"
+      ],
+      "modelReceiptCount": 6,
+      "baselineReceiptCount": 1
+    }
+  ],
+  "receipts": [
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/system-architecture__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691303370,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/system-architecture__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008709,
+      "latencyMs": 6979,
+      "humanPreferred": null,
+      "producedAt": 1784691308005,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/system-architecture__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 12426,
+      "humanPreferred": null,
+      "producedAt": 1784691307960,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/system-architecture__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001368,
+      "latencyMs": 14910,
+      "humanPreferred": null,
+      "producedAt": 1784691306361,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/system-architecture__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008791,
+      "latencyMs": 7296,
+      "humanPreferred": null,
+      "producedAt": 1784691332267,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/system-architecture__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 17959,
+      "humanPreferred": null,
+      "producedAt": 1784691334190,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "system-architecture__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.architecture-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.architecture",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "architecture-contract"
+      ],
+      "referenceIds": [
+        "systems-layered-boundary"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/system-architecture__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/system-architecture__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/system-architecture__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001296,
+      "latencyMs": 14905,
+      "humanPreferred": null,
+      "producedAt": 1784691328900,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691525680,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008688,
+      "latencyMs": 7121,
+      "humanPreferred": null,
+      "producedAt": 1784691550669,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 15792,
+      "humanPreferred": null,
+      "producedAt": 1784691551153,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001337,
+      "latencyMs": 20831,
+      "humanPreferred": null,
+      "producedAt": 1784691525916,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.009111,
+      "latencyMs": 7628,
+      "humanPreferred": null,
+      "producedAt": 1784691552077,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 18075,
+      "humanPreferred": null,
+      "producedAt": 1784691576187,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "claim-source-lineage__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.claim-source-lineage",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.claim-lineage",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "journey-receipt"
+      ],
+      "referenceIds": [
+        "evidence-claim-lineage"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/claim-source-lineage__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/claim-source-lineage__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/claim-source-lineage__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001498,
+      "latencyMs": 19389,
+      "humanPreferred": null,
+      "producedAt": 1784691551450,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691627073,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.005315,
+      "latencyMs": 7870,
+      "humanPreferred": null,
+      "producedAt": 1784691629699,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 11501,
+      "humanPreferred": null,
+      "producedAt": 1784691630818,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001429,
+      "latencyMs": 15901,
+      "humanPreferred": null,
+      "producedAt": 1784691628515,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008964,
+      "latencyMs": 8721,
+      "humanPreferred": null,
+      "producedAt": 1784691654505,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 22085,
+      "humanPreferred": null,
+      "producedAt": 1784691655867,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "code-runtime-proof__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.code-runtime-proof",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.code-and-result",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "adapter-interface",
+        "adapter-benchmark"
+      ],
+      "referenceIds": [
+        "technical-code-runtime-pair"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/code-runtime-proof__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/code-runtime-proof__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/code-runtime-proof__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001298,
+      "latencyMs": 21057,
+      "humanPreferred": null,
+      "producedAt": 1784691652734,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691120440,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008504,
+      "latencyMs": 8338,
+      "humanPreferred": null,
+      "producedAt": 1784691120223,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 16610,
+      "humanPreferred": null,
+      "producedAt": 1784691120482,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001106,
+      "latencyMs": 15191,
+      "humanPreferred": null,
+      "producedAt": 1784691120555,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008626,
+      "latencyMs": 7910,
+      "humanPreferred": null,
+      "producedAt": 1784691146822,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 8915,
+      "humanPreferred": null,
+      "producedAt": 1784691147152,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "hero-thesis__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.hero-thesis",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "narrative.hero-thesis",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "hero-workflow"
+      ],
+      "referenceIds": [
+        "narrative-hero-focal"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/hero-thesis__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/hero-thesis__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/hero-thesis__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001077,
+      "latencyMs": 14258,
+      "humanPreferred": null,
+      "producedAt": 1784691146281,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691576785,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008024,
+      "latencyMs": 10101,
+      "humanPreferred": null,
+      "producedAt": 1784691578282,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 28411,
+      "humanPreferred": null,
+      "producedAt": 1784691601788,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.00128,
+      "latencyMs": 15492,
+      "humanPreferred": null,
+      "producedAt": 1784691577474,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008476,
+      "latencyMs": 6804,
+      "humanPreferred": null,
+      "producedAt": 1784691603546,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 21041,
+      "humanPreferred": null,
+      "producedAt": 1784691604549,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "quality-cost-equation__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.katex-equation",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "technical.equation",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "retrieval-result"
+      ],
+      "referenceIds": [
+        "technical-equation-annotated"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/quality-cost-equation__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/quality-cost-equation__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/quality-cost-equation__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001356,
+      "latencyMs": 15564,
+      "humanPreferred": null,
+      "producedAt": 1784691602688,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691147322,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.009689,
+      "latencyMs": 8799,
+      "humanPreferred": null,
+      "producedAt": 1784691173449,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 15433,
+      "humanPreferred": null,
+      "producedAt": 1784691173924,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001552,
+      "latencyMs": 22841,
+      "humanPreferred": null,
+      "producedAt": 1784691172676,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.010091,
+      "latencyMs": 8756,
+      "humanPreferred": null,
+      "producedAt": 1784691199318,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 14064,
+      "humanPreferred": null,
+      "producedAt": 1784691200432,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "kpi-strip__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.kpi-strip",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.kpi-strip",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-kpis"
+      ],
+      "referenceIds": [
+        "data-kpi-verdict"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/kpi-strip__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/kpi-strip__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/kpi-strip__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001208,
+      "latencyMs": 19670,
+      "humanPreferred": null,
+      "producedAt": 1784691174254,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691201161,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008384,
+      "latencyMs": 8012,
+      "humanPreferred": null,
+      "producedAt": 1784691225473,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 9348,
+      "humanPreferred": null,
+      "producedAt": 1784691226899,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001194,
+      "latencyMs": 10320,
+      "humanPreferred": null,
+      "producedAt": 1784691201692,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008016,
+      "latencyMs": 8373,
+      "humanPreferred": null,
+      "producedAt": 1784691228288,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 17567,
+      "humanPreferred": null,
+      "producedAt": 1784691251298,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "multi-series-trend__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.multi-series-chart",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.multi-series",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "ridership-series"
+      ],
+      "referenceIds": [
+        "data-direct-label-trend"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/multi-series-trend__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/multi-series-trend__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/multi-series-trend__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001226,
+      "latencyMs": 12831,
+      "humanPreferred": null,
+      "producedAt": 1784691227887,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691656782,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.00501,
+      "latencyMs": 7424,
+      "humanPreferred": null,
+      "producedAt": 1784691680321,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 31902,
+      "humanPreferred": null,
+      "producedAt": 1784691681760,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001261,
+      "latencyMs": 16696,
+      "humanPreferred": null,
+      "producedAt": 1784691678102,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.007916,
+      "latencyMs": 6212,
+      "humanPreferred": null,
+      "producedAt": 1784691703219,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 29194,
+      "humanPreferred": null,
+      "producedAt": 1784691732373,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "risk-matrix__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.risk-matrix",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "decision.risk-matrix",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "q2-risks"
+      ],
+      "referenceIds": [
+        "decisions-labeled-risk-matrix"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/risk-matrix__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/risk-matrix__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/risk-matrix__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001152,
+      "latencyMs": 17943,
+      "humanPreferred": null,
+      "producedAt": 1784691682585,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691473598,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.010196,
+      "latencyMs": 8740,
+      "humanPreferred": null,
+      "producedAt": 1784691499383,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": false,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 9418,
+      "humanPreferred": null,
+      "producedAt": 1784691782773,
+      "status": "failed"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001328,
+      "latencyMs": 23062,
+      "humanPreferred": null,
+      "producedAt": 1784691499378,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008969,
+      "latencyMs": 7338,
+      "humanPreferred": null,
+      "producedAt": 1784691525432,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 15152,
+      "humanPreferred": null,
+      "producedAt": 1784691525118,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "screenshot-callouts__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.screenshot-callouts",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "product-evidence.screenshot-callouts",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "screenshot-absence"
+      ],
+      "referenceIds": [
+        "product-large-screenshot-callouts"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "grouped-editable"
+      },
+      "evaluation": {
+        "briefAdherence": false,
+        "visualPassed": true,
+        "evidencePassed": false,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/screenshot-callouts__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/screenshot-callouts__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/screenshot-callouts__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001429,
+      "latencyMs": 24680,
+      "humanPreferred": null,
+      "producedAt": 1784691782740,
+      "status": "failed"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/request-sequence__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691334168,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/request-sequence__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008941,
+      "latencyMs": 8543,
+      "humanPreferred": null,
+      "producedAt": 1784691358002,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/request-sequence__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 21840,
+      "humanPreferred": null,
+      "producedAt": 1784691360537,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/request-sequence__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001205,
+      "latencyMs": 16502,
+      "humanPreferred": null,
+      "producedAt": 1784691354346,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/request-sequence__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008974,
+      "latencyMs": 7885,
+      "humanPreferred": null,
+      "producedAt": 1784691379844,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/request-sequence__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 18461,
+      "humanPreferred": null,
+      "producedAt": 1784691383415,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "request-sequence__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.sequence-diagram",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "systems.sequence",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "sequence-events"
+      ],
+      "referenceIds": [
+        "systems-sequence-lifelines"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/request-sequence__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/request-sequence__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/request-sequence__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001189,
+      "latencyMs": 15806,
+      "humanPreferred": null,
+      "producedAt": 1784691360483,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/research-timeline__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691386380,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/research-timeline__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.009049,
+      "latencyMs": 10822,
+      "humanPreferred": null,
+      "producedAt": 1784691405029,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/research-timeline__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 11473,
+      "humanPreferred": null,
+      "producedAt": 1784691408720,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/research-timeline__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001344,
+      "latencyMs": 19820,
+      "humanPreferred": null,
+      "producedAt": 1784691386245,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/research-timeline__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.008441,
+      "latencyMs": 8008,
+      "humanPreferred": null,
+      "producedAt": 1784691473427,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/research-timeline__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 18970,
+      "humanPreferred": null,
+      "producedAt": 1784691473578,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "research-timeline__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.timeline",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "progression.timeline",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "research-dates"
+      ],
+      "referenceIds": [
+        "time-proportional-milestones"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/research-timeline__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/research-timeline__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/research-timeline__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.0013,
+      "latencyMs": 16211,
+      "humanPreferred": null,
+      "producedAt": 1784691473514,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__deterministic-baseline__nodeslide-artifact-builder-v1",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "nodeslide-artifact-builder-v1",
+        "role": "geometry-and-export-control"
+      },
+      "candidateKind": "deterministic-baseline",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__deterministic-baseline__nodeslide-artifact-builder-v1/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__deterministic-baseline__nodeslide-artifact-builder-v1/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__deterministic-baseline__nodeslide-artifact-builder-v1/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 0,
+      "humanPreferred": null,
+      "producedAt": 1784691253204,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__evidence-editorial__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__evidence-editorial__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__evidence-editorial__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__evidence-editorial__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.009716,
+      "latencyMs": 9226,
+      "humanPreferred": null,
+      "producedAt": 1784691254716,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__evidence-editorial__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__evidence-editorial__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__evidence-editorial__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__evidence-editorial__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 15219,
+      "humanPreferred": null,
+      "producedAt": 1784691277767,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__evidence-editorial__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__evidence-editorial__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__evidence-editorial__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__evidence-editorial__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001412,
+      "latencyMs": 16722,
+      "humanPreferred": null,
+      "producedAt": 1784691254252,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__expressive-technical__anthropic-claude-sonnet-5",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "anthropic/claude-sonnet-5",
+        "role": "story-framing-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__expressive-technical__anthropic-claude-sonnet-5/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__expressive-technical__anthropic-claude-sonnet-5/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__expressive-technical__anthropic-claude-sonnet-5/artifact.pptx"
+      },
+      "costUsd": 0.010269,
+      "latencyMs": 9717,
+      "humanPreferred": null,
+      "producedAt": 1784691281358,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__expressive-technical__google-gemma-4-26b-a4b-it-free",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "google/gemma-4-26b-a4b-it:free",
+        "role": "zero-cost-bounded-generator-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__expressive-technical__google-gemma-4-26b-a4b-it-free/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__expressive-technical__google-gemma-4-26b-a4b-it-free/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__expressive-technical__google-gemma-4-26b-a4b-it-free/artifact.pptx"
+      },
+      "costUsd": 0,
+      "latencyMs": 13650,
+      "humanPreferred": null,
+      "producedAt": 1784691281377,
+      "status": "eligible"
+    },
+    {
+      "schemaVersion": "nodeslide.atlas-showcase-receipt/v1",
+      "id": "uncertainty-range__expressive-technical__moonshotai-kimi-k3",
+      "recipeId": "nodeslide.arena.uncertainty-range",
+      "recipeVersion": "artifact-arena-v1",
+      "archetypeId": "data.uncertainty-range",
+      "model": {
+        "id": "moonshotai/kimi-k3",
+        "role": "structured-execution-candidate"
+      },
+      "candidateKind": "model",
+      "harnessVersion": "artifact-arena-v1",
+      "sourceIds": [
+        "forecast-range-data"
+      ],
+      "referenceIds": [
+        "data-uncertainty-band"
+      ],
+      "editability": {
+        "web": "native",
+        "pptx": "native"
+      },
+      "evaluation": {
+        "briefAdherence": true,
+        "visualPassed": true,
+        "evidencePassed": true,
+        "exportPassed": true,
+        "repairCount": 0
+      },
+      "outputs": {
+        "browserRenderRef": "runs/uncertainty-range__expressive-technical__moonshotai-kimi-k3/browser.png",
+        "pptxRenderRef": "runs/uncertainty-range__expressive-technical__moonshotai-kimi-k3/pptx-rendered/slide-1.png",
+        "pptxFileRef": "runs/uncertainty-range__expressive-technical__moonshotai-kimi-k3/artifact.pptx"
+      },
+      "costUsd": 0.001433,
+      "latencyMs": 22217,
+      "humanPreferred": null,
+      "producedAt": 1784691280175,
+      "status": "eligible"
+    }
+  ],
+  "meta": {
+    "sourceFile": "artifacts/deck-gym/artifact-atlas-v1/receipts.json",
+    "sourceCommit": "3264995baa98130e2245ff57111afe0324018fde",
+    "sha256": "sha256:33c6b81a033b10303f3c8e9e9f1734c9464e01d96222f2e829e47ca29cb12f0e"
+  }
+}
