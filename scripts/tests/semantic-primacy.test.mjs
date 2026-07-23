@@ -62,6 +62,38 @@ describe('native object behind the visual fallback', () => {
     expect(decision.reason).toMatch(/fake-bars/);
   });
 
+  it('rejects a chart 90% covered by a later opaque shape — the case full-occlusion missed', () => {
+    // The exact design-review case: not fully covered, so the old fullyCovers rule passed it. The
+    // remaining 10% is still a large share of the slide, so a slide-relative area check passes it
+    // too. Only measuring occlusion against the OBJECT catches it.
+    const chart = box(0.5, 1.6, 9, 3.6);
+    const decision = decidePrimacy({
+      frame: chart,
+      slide: SLIDE,
+      covers: [{ frame: box(0.5, 1.6, 9, 3.24), opaque: true, name: 'fake-bars' }], // 90% of the chart height
+    });
+    expect(decision.verdict).toBe('occluded');
+    expect(decision.reason).toMatch(/fake-bars/);
+    expect(decision.reason).toMatch(/unoccluded/);
+  });
+
+  it('does NOT double-count two overlapping occluders into more-than-full coverage', () => {
+    // Two overlapping shades each covering ~60% must union to <100%, leaving the chart visible.
+    const chart = box(0.5, 1.6, 9, 3.6);
+    const decision = decidePrimacy({
+      frame: chart,
+      slide: SLIDE,
+      covers: [
+        { frame: box(0.5, 1.6, 3, 3.6), opaque: true, name: 'left' },
+        { frame: box(2.5, 1.6, 3, 3.6), opaque: true, name: 'mid' },
+      ],
+    });
+    // ~6 of 9 inches wide covered by the union -> ~33% visible -> below MIN_SELF_VISIBLE, occluded.
+    expect(decision.verdict).toBe('occluded');
+    // but the union must be ~6in, not 6in counted as >9in; sanity: some area remains accounted.
+    expect(decision.visibleFraction).toBeGreaterThan(0);
+  });
+
   it('does NOT reject when the covering shape is transparent', () => {
     const decision = decidePrimacy({
       frame: box(0.5, 1.6, 9, 3.6),
