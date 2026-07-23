@@ -231,3 +231,73 @@ describe('motion gate: helpers', () => {
     expect(transitionsOf(slideXml())).toHaveLength(4);
   });
 });
+
+/**
+ * Gaming routes 4 and 6 from the design review, plus G's missing visibility half.
+ *
+ * All three share a shape: the scene satisfies every existing check and still does not stage the
+ * narrative it claims. Distinct signatures and a clean progression cannot see any of them.
+ */
+describe('motion gate: staging the scene, not just touching the roles', () => {
+  it('I — FAILS one click that reveals three roles at once (gaming route 6)', () => {
+    // Four advances over five states, every signature distinct, every transition touching a
+    // required role — and the whole scene lands in two clicks.
+    const xml = slideXml({ transitionTargets: [3, 4, 5, 6] }).replace(
+      '<p:spTgt spid="4"/>',
+      '<p:spTgt spid="4"/><p:spTgt spid="5"/><p:spTgt spid="6"/>',
+    );
+    const result = verifyMotionScene({ xml, expectation });
+    expect(result.checks.I_oneStatePerAdvance.pass).toBe(false);
+    expect(result.checks.I_oneStatePerAdvance.detail).toMatch(/more than one required role/);
+  });
+
+  it('I — passes a scene that advances exactly one role per click', () => {
+    expect(run().checks.I_oneStatePerAdvance.pass).toBe(true);
+  });
+
+  it('J — FAILS the canonical roles played out of order (gaming route 4)', () => {
+    // source -> slide-element -> fact -> capture -> claim. Five distinct signatures, wrong scene.
+    const result = run({ transitionTargets: [6, 4, 3, 5] });
+    expect(result.checks.J_declaredOrder.pass).toBe(false);
+    expect(result.checks.J_declaredOrder.detail).toMatch(/declared .* but revealed /);
+  });
+
+  it('J — passes the declared causal order', () => {
+    const result = run();
+    expect(result.checks.J_declaredOrder.pass).toBe(true);
+    expect(result.checks.J_declaredOrder.detail).toMatch(/capture -> fact -> claim/);
+  });
+
+  it('G — FAILS a pinned object that survives every state off-slide', () => {
+    // Survival was the whole of G. A pinned visual parked outside the canvas satisfied it while
+    // the audience saw no pinned visual at all.
+    const xml = slideXml().replace(
+      `<p:cNvPr id="1" name="${expectation.pinnedObject}"/>`,
+      `<p:sp><p:cNvPr id="1" name="${expectation.pinnedObject}"/><a:off x="12801600" y="8229600"/><a:ext cx="914400" cy="914400"/></p:sp>`,
+    );
+    const result = verifyMotionScene({
+      xml,
+      expectation,
+      slideSize: { cx: 9_144_000, cy: 5_143_500 },
+    });
+    expect(result.checks.G_pinnedVisual.pass).toBe(false);
+    expect(result.checks.G_pinnedVisual.detail).toMatch(/survives every state but is not visible/);
+  });
+
+  it('G — passes a pinned object that is genuinely on show', () => {
+    const xml = slideXml().replace(
+      `<p:cNvPr id="1" name="${expectation.pinnedObject}"/>`,
+      `<p:sp><p:cNvPr id="1" name="${expectation.pinnedObject}"/><a:off x="457200" y="1371600"/><a:ext cx="4572000" cy="2743200"/></p:sp>`,
+    );
+    const result = verifyMotionScene({
+      xml,
+      expectation,
+      slideSize: { cx: 9_144_000, cy: 5_143_500 },
+    });
+    expect(result.checks.G_pinnedVisual.pass).toBe(true);
+  });
+
+  it('G — says plainly when no geometry was supplied, rather than implying it checked', () => {
+    expect(run().checks.G_pinnedVisual.detail).toMatch(/visibility is unchecked/);
+  });
+});
