@@ -239,20 +239,73 @@ describe('motion gate: helpers', () => {
  * narrative it claims. Distinct signatures and a clean progression cannot see any of them.
  */
 describe('motion gate: staging the scene, not just touching the roles', () => {
-  it('I — FAILS one click that reveals three roles at once (gaming route 6)', () => {
-    // Four advances over five states, every signature distinct, every transition touching a
-    // required role — and the whole scene lands in two clicks.
+  it('I — FAILS one click doing two states’ work (gaming route 6)', () => {
+    // Four advances over five states whose canonical boundaries each add ONE role; the first click
+    // reveals three roles at once, so it crosses more boundary than its state declares.
     const xml = slideXml({ transitionTargets: [3, 4, 5, 6] }).replace(
       '<p:spTgt spid="4"/>',
       '<p:spTgt spid="4"/><p:spTgt spid="5"/><p:spTgt spid="6"/>',
     );
     const result = verifyMotionScene({ xml, expectation });
-    expect(result.checks.I_oneStatePerAdvance.pass).toBe(false);
-    expect(result.checks.I_oneStatePerAdvance.detail).toMatch(/more than one required role/);
+    expect(result.checks.I_stateBoundary.pass).toBe(false);
+    expect(result.checks.I_stateBoundary.detail).toMatch(/canonical state boundary adds/);
   });
 
-  it('I — passes a scene that advances exactly one role per click', () => {
-    expect(run().checks.I_oneStatePerAdvance.pass).toBe(true);
+  it('I — passes the staircase where each boundary adds exactly one role', () => {
+    expect(run().checks.I_stateBoundary.pass).toBe(true);
+  });
+
+  /**
+   * The correction the design review forced: the rule is one canonical state BOUNDARY per advance,
+   * not one role. A legitimate compound state — a fact card and the connector that binds it revealed
+   * together — must pass. The earlier one-role-per-advance rule rejected exactly this, which would
+   * have pressured the compiler to split a coherent reveal into half-steps to satisfy the inspector.
+   * This is the honest-work positive fixture the gate was missing.
+   */
+  it('I — passes a legitimate compound reveal where one state adds two roles', () => {
+    // A three-state scene: state 2 reveals BOTH `capture` and `fact` as one boundary.
+    const compoundRoles = ['source', 'capture', 'fact'];
+    const compound = {
+      sceneId: SCENE,
+      declaredTransition: 'scrub',
+      pinnedObject: expectation.pinnedObject,
+      requiredRoles: compoundRoles,
+      states: [
+        {
+          stateId: 'state-1',
+          object: `ns:motion:${SCENE}:state-1:source`,
+          visibleRoles: ['source'],
+        },
+        {
+          stateId: 'state-2',
+          object: `ns:motion:${SCENE}:state-2:capture`,
+          // One boundary, two roles.
+          visibleRoles: ['source', 'capture', 'fact'],
+        },
+      ],
+    };
+    // Shapes: 1 pinned, 2 source, 3 capture, 4 fact. One advance reveals 3 and 4 together.
+    const xml = `<p:sld><p:cSld><p:spTree>${[
+      `<p:cNvPr id="1" name="${expectation.pinnedObject}"/>`,
+      `<p:cNvPr id="2" name="ns:motion:${SCENE}:state-1:source"/>`,
+      `<p:cNvPr id="3" name="ns:motion:${SCENE}:state-2:capture"/>`,
+      `<p:cNvPr id="4" name="ns:motion:${SCENE}:state-2:fact"/>`,
+      '<p:cNvPr id="90" name="Title 1"/>',
+    ].join(
+      '',
+    )}</p:spTree></p:cSld><p:timing><p:tnLst><p:par><p:cTn id="1" nodeType="tmRoot"><p:childTnLst><p:seq><p:cTn id="2" nodeType="mainSeq"><p:childTnLst><p:par><p:cTn id="10" fill="hold" nodeType="clickEffect"><p:set><p:cBhvr><p:cTn id="50" dur="1"/><p:tgtEl><p:spTgt spid="3"/></p:tgtEl></p:cBhvr></p:set><p:set><p:cBhvr><p:cTn id="51" dur="1"/><p:tgtEl><p:spTgt spid="4"/></p:tgtEl></p:cBhvr></p:set></p:cTn></p:par></p:childTnLst></p:cTn></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing></p:sld>`;
+    const result = verifyMotionScene({ xml, expectation: compound });
+    expect(result.checks.I_stateBoundary.pass, result.checks.I_stateBoundary.detail).toBe(true);
+  });
+
+  it('I — reports honestly when the expectation carries no visibleRoles', () => {
+    const noSets = {
+      ...expectation,
+      states: expectation.states.map(({ visibleRoles, ...rest }) => rest),
+    };
+    const result = verifyMotionScene({ xml: slideXml(), expectation: noSets });
+    expect(result.checks.I_stateBoundary.pass).toBe(false);
+    expect(result.checks.I_stateBoundary.detail).toMatch(/no per-state visibleRoles/);
   });
 
   it('J — FAILS the canonical roles played out of order (gaming route 4)', () => {
