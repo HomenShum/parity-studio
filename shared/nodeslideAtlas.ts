@@ -236,8 +236,12 @@ export const ATLAS_CAPABILITY_LEVELS: readonly AtlasCapabilityLevel[] = Object.f
  * Whether a capability level survives being opened somewhere other than PowerPoint.
  *
  * `editable` was written as a property of the file. It is not — it is a property of the file *in a
- * given renderer*, and the two diverge on exactly two object classes. Anything not measured is
- * `unmeasured`, never assumed portable.
+ * given renderer*. Anything not measured is `unmeasured`, never assumed portable.
+ *
+ * This table has been re-measured once, and it moved: equations were recorded `powerpoint-only`
+ * until the emitter wrapped its OMML in `<a14:m>`, after which they survive intact. The only
+ * divergence left is the chart-to-workbook link, so "Edit Data" is PowerPoint-only while the
+ * plotted values travel. Facts here follow the instrument, not the other way round.
  */
 export type AtlasRendererPortability = 'portable' | 'powerpoint-only' | 'unmeasured';
 
