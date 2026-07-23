@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { scanAssetMetadata, sha256, verifyEmbeddedAssets } from '../lib/asset-provenance.mjs';
+import {
+  resolveSlideImagePairs,
+  scanAssetMetadata,
+  sha256,
+  verifyEmbeddedAssets,
+} from '../lib/asset-provenance.mjs';
 
 /**
  * Embedding a real product screenshot ships whatever was on screen. These tests exist to prove the
@@ -67,6 +72,56 @@ describe('asset gate: provenance', () => {
 });
 
 describe('asset gate: pair honesty', () => {
+  /**
+   * The pair check went silently blank when byte-identical media parts were deduplicated: it read
+   * slide membership off the writer's `image-<slide>-<n>.png` filenames, and dedup repointed every
+   * slide at a canonical part with a different name. 2 pairs became 0 pairs, which the summary
+   * reported the same way it reports "nothing to check". Relationships are the authority.
+   */
+  describe('resolving pairs from relationships, not from filenames', () => {
+    it('finds the pair even after dedup renamed the parts out of the slide-5 convention', () => {
+      const pairs = resolveSlideImagePairs({
+        5: '<Relationship Target="../media/image-26-1.png"/><Relationship Target="../media/image-21-1.png"/>',
+      });
+      expect(pairs).toHaveLength(1);
+      expect(pairs[0].parts).toEqual(['ppt/media/image-26-1.png', 'ppt/media/image-21-1.png']);
+      expect(pairs[0].label).toMatch(/slide 5/);
+    });
+
+    it('keeps a repeated reference as two entries, so one-image-twice still fails', () => {
+      // Deduplicating here would turn the exact false claim being hunted into "not a pair".
+      const pairs = resolveSlideImagePairs({
+        7: '<Relationship Target="../media/image-1-1.png"/><Relationship Target="../media/image-1-1.png"/>',
+      });
+      expect(pairs[0].parts).toEqual(['ppt/media/image-1-1.png', 'ppt/media/image-1-1.png']);
+    });
+
+    it('reads absolute targets as well as relative ones', () => {
+      const pairs = resolveSlideImagePairs({
+        3: '<Relationship Target="/ppt/media/a.png"/><Relationship Target="../media/b.png"/>',
+      });
+      expect(pairs[0].parts).toEqual(['ppt/media/a.png', 'ppt/media/b.png']);
+    });
+
+    it('ignores slides that are not two-image states', () => {
+      expect(
+        resolveSlideImagePairs({
+          1: '<Relationship Target="../media/only.png"/>',
+          2: '<Relationship Target="../slideLayouts/slideLayout1.xml"/>',
+          4: '<Relationship Target="../media/a.png"/><Relationship Target="../media/b.png"/><Relationship Target="../media/c.png"/>',
+        }),
+      ).toEqual([]);
+    });
+
+    it('does not mistake a chart or layout relationship for an image', () => {
+      expect(
+        resolveSlideImagePairs({
+          9: '<Relationship Target="../charts/chart1.xml"/><Relationship Target="../slideLayouts/slideLayout2.xml"/>',
+        }),
+      ).toEqual([]);
+    });
+  });
+
   it('FAILS a two-state pair that is the same image twice', () => {
     const report = verifyEmbeddedAssets({
       embedded: [

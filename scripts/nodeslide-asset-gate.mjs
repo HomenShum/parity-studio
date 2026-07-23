@@ -14,7 +14,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
-import { verifyEmbeddedAssets } from './lib/asset-provenance.mjs';
+import { resolveSlideImagePairs, verifyEmbeddedAssets } from './lib/asset-provenance.mjs';
 
 function parseArgs(argv) {
   const flags = new Map();
@@ -53,18 +53,17 @@ for (const part of Object.keys(zip.files).filter((p) =>
   embedded.push({ part, buffer: await zip.file(part).async('nodebuffer') });
 }
 
-// Images on the same slide that a before/after archetype presents as two states.
-const pairs = [];
-const bySlide = new Map();
-for (const item of embedded) {
-  const slide = (item.part.match(/image-(\d+)-\d+\./) ?? [])[1];
-  if (!slide) continue;
-  if (!bySlide.has(slide)) bySlide.set(slide, []);
-  bySlide.get(slide).push(item.part);
+// Images a before/after archetype presents as two states, resolved from each slide's own
+// relationships rather than from the writer's filename convention. See resolveSlideImagePairs.
+const relsBySlide = {};
+for (const relsPath of Object.keys(zip.files).filter((p) =>
+  /^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(p),
+)) {
+  relsBySlide[relsPath.match(/slide(\d+)\.xml\.rels$/)[1]] = await zip
+    .file(relsPath)
+    .async('string');
 }
-for (const [slide, parts] of bySlide) {
-  if (parts.length === 2) pairs.push({ label: `slide ${slide} two-state pair`, parts });
-}
+const pairs = resolveSlideImagePairs(relsBySlide);
 
 const report = verifyEmbeddedAssets({ embedded, manifest, pairs });
 
