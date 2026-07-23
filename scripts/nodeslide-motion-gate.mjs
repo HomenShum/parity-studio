@@ -17,6 +17,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 import { verifyMotionScene } from './lib/motion-gate.mjs';
+import { deriveMotionOracle, reconcileMotionManifest } from './lib/motion-oracle.mjs';
 
 function parseArgs(argv) {
   const flags = new Map();
@@ -53,6 +54,33 @@ const zip = await JSZip.loadAsync(await readFile(path.resolve(pptxPath)));
 const expectations = await readJson(expectPath);
 const captures =
   typeof flags.get('captures') === 'string' ? await readJson(flags.get('captures')) : null;
+
+/**
+ * Reconcile the compiler's manifest against the canonical fixtures BEFORE judging anything.
+ *
+ * Check D compares the emitted OOXML with `motion-expectations.json`, and the compiler writes that
+ * file from the same objects it used to name the shapes — so detector and compiler agree by
+ * construction, and a scene miscompiled consistently passes. The canonical atlas is the only
+ * description of these scenes the compiler did not author.
+ *
+ * Optional flag rather than required, because the gate must stay runnable against a deck whose
+ * fixtures are not to hand. When it IS supplied and disagrees, that is fatal: judging the OOXML
+ * against an expectation already known to be wrong produces a verdict about nothing.
+ */
+let oracleReport = null;
+if (typeof flags.get('canonical') === 'string') {
+  const canonical = await readJson(flags.get('canonical'));
+  oracleReport = reconcileMotionManifest(
+    deriveMotionOracle(canonical.fixtures ?? []),
+    expectations,
+  );
+  if (oracleReport.verdict === 'disagree') {
+    process.stderr.write(
+      `Motion manifest disagrees with the canonical fixtures — refusing to judge the deck against an expectation the compiler wrote for itself:\n${oracleReport.problems.map((p) => `  ${p}`).join('\n')}\n`,
+    );
+    process.exit(1);
+  }
+}
 
 const slidePaths = Object.keys(zip.files)
   .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
