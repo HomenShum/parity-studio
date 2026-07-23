@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roleOf, transitionsOf, verifyMotionScene } from '../lib/motion-gate.mjs';
+import { ancestorGroupsOf, roleOf, transitionsOf, verifyMotionScene } from '../lib/motion-gate.mjs';
 
 /**
  * These are adversarial by design. A gate that only proves the happy path is a gate that can be
@@ -299,5 +299,53 @@ describe('motion gate: staging the scene, not just touching the roles', () => {
 
   it('G — says plainly when no geometry was supplied, rather than implying it checked', () => {
     expect(run().checks.G_pinnedVisual.detail).toMatch(/visibility is unchecked/);
+  });
+});
+
+/**
+ * Gaming route 7. The shipped deck uses no shape groups at all, so this is not exploitable today —
+ * it is one compiler change away, and a check that only exists after the exploit is worth less.
+ */
+describe('motion gate: K — an ancestor group can hide a role that behaved perfectly', () => {
+  /** Wrap the state shapes in a group, and optionally animate the group itself. */
+  function groupedSlide({ animateGroup }) {
+    const inner = ROLES.map(
+      (role, i) =>
+        `<p:sp><p:cNvPr id="${i + 2}" name="ns:motion:${SCENE}:state-${i + 1}:${role}"/></p:sp>`,
+    ).join('');
+    const shapes = `<p:sp><p:cNvPr id="1" name="${expectation.pinnedObject}"/></p:sp><p:grpSp><p:cNvPr id="70" name="stage-group"/>${inner}</p:grpSp><p:sp><p:cNvPr id="90" name="Title 1"/></p:sp>`;
+    const targets = animateGroup ? [3, 4, 5, 70] : [3, 4, 5, 6];
+    const steps = targets
+      .map(
+        (spid, i) =>
+          `<p:par><p:cTn id="${10 + i}" fill="hold" nodeType="clickEffect"><p:set><p:cBhvr><p:cTn id="${50 + i}" dur="1"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:set></p:cTn></p:par>`,
+      )
+      .join('');
+    return `<p:sld><p:cSld><p:spTree>${shapes}</p:spTree></p:cSld><p:timing><p:tnLst><p:par><p:cTn id="1" nodeType="tmRoot"><p:childTnLst><p:seq><p:cTn id="2" nodeType="mainSeq"><p:childTnLst>${steps}</p:childTnLst></p:cTn></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing></p:sld>`;
+  }
+
+  it('resolves ancestor groups, outermost first, without tripping on nesting', () => {
+    const nested =
+      '<p:grpSp><p:cNvPr id="10"/><p:grpSp><p:cNvPr id="20"/><p:sp><p:cNvPr id="30"/></p:sp></p:grpSp></p:grpSp>';
+    expect(ancestorGroupsOf(nested).get('30')).toEqual(['10', '20']);
+  });
+
+  it('reports no ancestors for a shape at the top level', () => {
+    expect(ancestorGroupsOf('<p:sp><p:cNvPr id="5"/></p:sp>').get('5')).toEqual([]);
+  });
+
+  it('FAILS when a required role sits inside an animated group', () => {
+    const result = verifyMotionScene({ xml: groupedSlide({ animateGroup: true }), expectation });
+    expect(result.checks.K_noAnimatedAncestor.pass).toBe(false);
+    expect(result.checks.K_noAnimatedAncestor.detail).toMatch(/regardless of their own state/);
+  });
+
+  it('passes when the group exists but is never animated', () => {
+    const result = verifyMotionScene({ xml: groupedSlide({ animateGroup: false }), expectation });
+    expect(result.checks.K_noAnimatedAncestor.pass).toBe(true);
+  });
+
+  it('passes the ungrouped deck this repo actually ships', () => {
+    expect(run().checks.K_noAnimatedAncestor.pass).toBe(true);
   });
 });
