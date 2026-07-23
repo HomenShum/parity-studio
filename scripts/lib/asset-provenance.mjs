@@ -49,6 +49,34 @@ export function scanAssetMetadata(buffer) {
 }
 
 /**
+ * Which media parts each slide actually references, read from its relationships.
+ *
+ * `relsBySlide` : { "<slide number>": "<contents of slideN.xml.rels>" }
+ *
+ * This used to be inferred from the writer's `image-<slide>-<n>.png` filename convention. That is
+ * a proxy for slide membership, and it silently stopped being true the moment byte-identical media
+ * parts were deduplicated and repointed: every declared pair disappeared from the gate while the
+ * deck was unchanged and still correct. A vanishing check reads exactly like a passing one.
+ *
+ * Relationships are the authority, and they survive renaming. Entries are deliberately NOT
+ * deduplicated — a slide referencing the same part twice is a before/after showing one image
+ * twice, which is the false claim the pair check exists to catch.
+ */
+export function resolveSlideImagePairs(relsBySlide) {
+  const pairs = [];
+  for (const [slide, rels] of Object.entries(relsBySlide ?? {})) {
+    const parts = [...String(rels).matchAll(/Target="([^"]*media\/[^"]+)"/g)].map((match) =>
+      // Targets are relative ('../media/x.png') or absolute ('/ppt/media/x.png').
+      match[1]
+        .replace(/^\.\.\//, 'ppt/')
+        .replace(/^\//, ''),
+    );
+    if (parts.length === 2) pairs.push({ label: `slide ${slide} two-state pair`, parts });
+  }
+  return pairs;
+}
+
+/**
  * Verify every embedded image against the manifest.
  *
  * `embedded`  : [{ part, buffer }]
