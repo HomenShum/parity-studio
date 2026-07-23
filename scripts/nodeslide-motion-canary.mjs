@@ -98,6 +98,9 @@ for (const scene of expectations.scenes ?? []) {
       sceneId: scene.sceneId,
       slide: Number(p.match(/(\d+)/)[1]),
       states: scene.states.length,
+      // Normalised rectangles the canary measures per frame — this is what turns "five distinct
+      // frames" into "frame N shows exactly states 0..N-1".
+      regions: scene.states.map((s) => s.region).filter(Boolean),
     });
     break;
   }

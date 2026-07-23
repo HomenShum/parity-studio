@@ -128,27 +128,89 @@ describe('motion gate: adversarial cases it must catch', () => {
   });
 });
 
-describe('motion gate: runtime playback (H)', () => {
-  it('passes only when a canary supplies one distinct capture per state', () => {
-    const captures = ROLES.map((_, i) => ({ signature: `s${i}` }));
-    const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
+/**
+ * A staircase: region s sits at its baseline until frame s, then rises and stays up. This is what
+ * a real build sequence measures like, taken from an actual PowerPoint capture.
+ */
+function staircaseCaptures({
+  baselines = [0.03, 0.027, 0.005, 0.007, 0.014],
+  revealFactor = 3,
+} = {}) {
+  return baselines.map((_, frame) => ({
+    signature: `frame-${frame}`,
+    regions: baselines.map((base, state) => ({
+      stateIndex: state,
+      ink: state <= frame ? Number((base * revealFactor + 0.02).toFixed(4)) : base,
+    })),
+  }));
+}
+
+describe('motion gate: runtime playback (H) — state correspondence', () => {
+  it('passes when each state appears on exactly its own frame and stays', () => {
+    const result = verifyMotionScene({
+      xml: slideXml(),
+      expectation,
+      runtimeCaptures: staircaseCaptures(),
+    });
     expect(result.runtimePlayback).toBe('pass');
     expect(result.overall).toBe('pass');
   });
 
-  it('fails when the canary captured identical frames — nothing actually advanced', () => {
-    const captures = ROLES.map(() => ({ signature: 'same' }));
+  // The exact gaming example from the design review: one small element changing four times
+  // produces five distinct frames while showing none of the intended states.
+  it('FAILS five distinct frames where only one dot keeps changing', () => {
+    const captures = [0, 1, 2, 3, 4].map((frame) => ({
+      signature: `distinct-${frame}`,
+      regions: [0.03, 0.027, 0.005, 0.007, 0.014].map((base, state) => ({
+        stateIndex: state,
+        // Only region 0 varies; states 2..5 never appear.
+        ink: state === 0 ? base + frame * 0.05 : base,
+      })),
+    }));
     const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
     expect(result.runtimePlayback).toBe('fail');
+    expect(result.stateCorrespondence.problems.join(' ')).toMatch(/did not appear/);
   });
 
-  it('fails when the canary captured too few states', () => {
-    const result = verifyMotionScene({
-      xml: slideXml(),
-      expectation,
-      runtimeCaptures: [{ signature: 'a' }, { signature: 'b' }],
-    });
+  it('FAILS when a state is on screen before its turn', () => {
+    const captures = staircaseCaptures();
+    // State 4 reveals at frame 4; make it visible at frame 2. Frame 0 is the baseline, so the
+    // perturbation has to land on a later pre-reveal frame to be a genuine early appearance.
+    captures[1].regions[3].ink = 0.4;
+    const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
     expect(result.runtimePlayback).toBe('fail');
+    expect(result.stateCorrespondence.problems.join(' ')).toMatch(/before its turn/);
+  });
+
+  it('FAILS when a revealed state disappears again', () => {
+    const captures = staircaseCaptures();
+    captures[4].regions[1].ink = 0.001; // state 2 vanishes by the last frame
+    const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
+    expect(result.runtimePlayback).toBe('fail');
+    expect(result.stateCorrespondence.problems.join(' ')).toMatch(/disappeared/);
+  });
+
+  it('FAILS when frames carry no region measurements — distinctness alone is not proof', () => {
+    const captures = ROLES.map((_, i) => ({ signature: `s${i}` }));
+    const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
+    expect(result.runtimePlayback).toBe('fail');
+    expect(result.stateCorrespondence.measured).toBe(false);
+  });
+
+  it('FAILS identical frames — nothing actually advanced', () => {
+    const captures = staircaseCaptures().map((c) => ({ ...c, signature: 'same' }));
+    expect(
+      verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures })
+        .runtimePlayback,
+    ).toBe('fail');
+  });
+
+  it('a canary that RAN and disagreed is a failure, not an unknown', () => {
+    const captures = staircaseCaptures();
+    captures[0].regions[3].ink = 0.4;
+    const result = verifyMotionScene({ xml: slideXml(), expectation, runtimeCaptures: captures });
+    expect(result.overall).toBe('fail');
+    expect(result.overall).not.toBe('indeterminate-for-native-playback');
   });
 });
 

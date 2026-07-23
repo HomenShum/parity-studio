@@ -19,6 +19,19 @@
 
 const BEHAVIOR = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/;
 
+/**
+ * A revealed state is detected by a JUMP in its own region's ink, not by an absolute level.
+ *
+ * An absolute threshold is wrong here and measurably so: a hidden region still carries residual
+ * ink from whatever the pinned visual puts behind it, and that residual differs per region. The
+ * invariant that actually holds is a staircase — each region sits flat at its own baseline, rises
+ * sharply on the frame that reveals it, and stays up. Self-calibrating per region, so it works
+ * whatever the slide is composed of.
+ */
+const REVEAL_RATIO = 1.4; // revealed ink must exceed its own baseline by this factor
+const REVEAL_MARGIN = 0.008; // ...and by this absolute amount, so noise cannot trip it
+const FLAT_TOLERANCE = 1.25; // an unrevealed region may drift by this much and still count as flat
+
 /** Shapes on the slide, by cNvPr id -> name. */
 export function slideObjects(xml) {
   const byId = new Map();
@@ -152,19 +165,88 @@ export function verifyMotionScene({ xml, expectation, runtimeCaptures = null }) 
   };
 
   // H — topology is not playback. Without a canary this stays honestly unproven.
+  //
+  // Distinct frames are NECESSARY but NOT SUFFICIENT: one dot changing colour four times produces
+  // five distinct frames while showing none of the intended states. So each frame is also checked
+  // for STATE CORRESPONDENCE — frame N must show states 0..N-1 and must NOT yet show the rest,
+  // measured as ink density inside each state's own rectangle.
   const topologyPass = Object.values(checks).every((c) => c.pass);
   let runtimePlayback = 'not-run';
+  let correspondence = null;
   if (Array.isArray(runtimeCaptures)) {
     const signatures = new Set(runtimeCaptures.map((c) => c.signature));
-    runtimePlayback =
-      runtimeCaptures.length === stateCount && signatures.size === stateCount ? 'pass' : 'fail';
+    const countOk = runtimeCaptures.length === stateCount;
+    const distinctOk = signatures.size === stateCount;
+
+    const problems = [];
+    const measured = runtimeCaptures.some((f) => Array.isArray(f.regions) && f.regions.length > 0);
+    if (measured) {
+      const inkAt = (frameIndex, stateIndex) =>
+        Number(
+          (runtimeCaptures[frameIndex]?.regions ?? []).find((r) => r.stateIndex === stateIndex)
+            ?.ink,
+        );
+
+      for (let state = 0; state < stateCount; state += 1) {
+        // Baseline: this region before it could possibly have been revealed. State 0 is visible at
+        // slide entry, so it has no hidden phase to measure and is checked only for presence.
+        const baseline = inkAt(0, state);
+        if (!Number.isFinite(baseline)) continue;
+        if (state === 0) continue;
+
+        for (let frame = 1; frame < state; frame += 1) {
+          const ink = inkAt(frame, state);
+          if (Number.isFinite(ink) && ink > baseline * FLAT_TOLERANCE + REVEAL_MARGIN) {
+            problems.push(
+              `frame ${frame + 1}: state ${state + 1} brightened before its turn (${baseline.toFixed(3)} -> ${ink.toFixed(3)})`,
+            );
+          }
+        }
+
+        const revealed = inkAt(state, state);
+        if (!Number.isFinite(revealed)) {
+          problems.push(`state ${state + 1} was never measured on the frame that reveals it`);
+        } else if (revealed < baseline * REVEAL_RATIO || revealed - baseline < REVEAL_MARGIN) {
+          problems.push(
+            `frame ${state + 1}: state ${state + 1} did not appear — its region barely changed (${baseline.toFixed(3)} -> ${revealed.toFixed(3)})`,
+          );
+        }
+
+        // Once revealed it must stay revealed; a state that vanishes again is not a build.
+        for (let frame = state + 1; frame < stateCount; frame += 1) {
+          const ink = inkAt(frame, state);
+          if (Number.isFinite(ink) && Number.isFinite(revealed) && ink < baseline * REVEAL_RATIO) {
+            problems.push(
+              `frame ${frame + 1}: state ${state + 1} disappeared after being revealed`,
+            );
+          }
+        }
+      }
+
+      correspondence = {
+        measured: true,
+        pass: problems.length === 0,
+        problems,
+      };
+    } else {
+      correspondence = {
+        measured: false,
+        pass: false,
+        problems: [
+          'frames carry no per-state region measurements, so only distinctness could be checked',
+        ],
+      };
+    }
+    runtimePlayback = countOk && distinctOk && correspondence.pass ? 'pass' : 'fail';
   }
   checks.H_runtimePlayback = {
     pass: runtimePlayback === 'pass',
     detail:
       runtimePlayback === 'not-run'
         ? 'no PowerPoint runtime available; playback not proven by this inspection'
-        : `${runtimeCaptures?.length ?? 0} captured states, ${runtimePlayback}`,
+        : correspondence?.pass
+          ? `${runtimeCaptures.length} frames, each showing exactly the states revealed so far`
+          : `${runtimeCaptures?.length ?? 0} frames captured — ${(correspondence?.problems ?? ['distinctness failed']).slice(0, 3).join('; ')}`,
   };
 
   return {
@@ -172,13 +254,17 @@ export function verifyMotionScene({ xml, expectation, runtimeCaptures = null }) 
     declaredTransition: expectation.declaredTransition,
     topology: topologyPass ? 'pass' : 'fail',
     runtimePlayback,
-    // Native PLAYBACK is never claimed from bytes alone. Even a perfect topology leaves the
-    // native-playback claim indeterminate until a canary runs.
+    stateCorrespondence: correspondence,
+    // Native PLAYBACK is never claimed from bytes alone. A canary that RAN and disagreed is a
+    // FAILURE, not an unknown — only `not-run` leaves the claim indeterminate. Collapsing those
+    // two would let a proven-broken animation report the same verdict as an unmeasured one.
     overall: !topologyPass
       ? 'fail'
       : runtimePlayback === 'pass'
         ? 'pass'
-        : 'indeterminate-for-native-playback',
+        : runtimePlayback === 'fail'
+          ? 'fail'
+          : 'indeterminate-for-native-playback',
     checks,
   };
 }
