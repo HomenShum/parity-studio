@@ -68,7 +68,7 @@ Browser sees real-time updates via Convex queries
 
 ## NodeSlide domain architecture
 
-NodeSlide is an additive domain, not a replacement for the original Parity pipeline. `src/App.tsx` selects NodeSlide by default and preserves the existing application behind `?domain=parity`.
+NodeSlide is an additive domain, not a replacement for the original Parity pipeline. `src/App.tsx` selects NodeSlide by default and preserves the existing application behind `?domain=parity`, which additionally requires `VITE_ENABLE_PARITY_DOMAIN=true` at build time. That variable is absent from the deployed environment — verified in the shipped bundle, where the inlined env object is empty — so on the deployed site the deep link renders a notice naming the missing variable instead of silently serving NodeSlide.
 
 The canonical runtime record is a `DeckSnapshot`:
 
