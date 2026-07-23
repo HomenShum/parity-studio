@@ -86,6 +86,14 @@ const slidePaths = Object.keys(zip.files)
   .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
   .sort((a, b) => Number(a.match(/(\d+)/)[1]) - Number(b.match(/(\d+)/)[1]));
 
+// Slide dimensions, so G can check the pinned object is VISIBLE rather than merely un-animated.
+// Without these it reports honestly that visibility went unchecked.
+const presentationFile = zip.file('ppt/presentation.xml');
+const sldSz = presentationFile
+  ? /<p:sldSz\s+cx="(\d+)"\s+cy="(\d+)"/.exec(await presentationFile.async('string'))
+  : null;
+const slideSize = sldSz ? { cx: Number(sldSz[1]), cy: Number(sldSz[2]) } : null;
+
 const results = [];
 for (const scene of expectations.scenes ?? []) {
   // Find the slide that actually carries this scene's pinned object.
@@ -115,6 +123,7 @@ for (const scene of expectations.scenes ?? []) {
       xml: sceneXml,
       expectation: scene,
       runtimeCaptures: captures?.[scene.sceneId] ?? null,
+      slideSize,
     }),
   });
 }

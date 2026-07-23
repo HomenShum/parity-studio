@@ -17,6 +17,8 @@
  *   H  runtime playback       — not run unless a canary supplies real screenshots
  */
 
+import { decidePrimacy, parseFrame } from './semantic-primacy.mjs';
+
 const BEHAVIOR = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/;
 
 /**
@@ -31,6 +33,14 @@ const BEHAVIOR = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\
 const REVEAL_RATIO = 1.4; // revealed ink must exceed its own baseline by this factor
 const REVEAL_MARGIN = 0.008; // ...and by this absolute amount, so noise cannot trip it
 const FLAT_TOLERANCE = 1.25; // an unrevealed region may drift by this much and still count as flat
+
+/** The <p:sp> block for a named shape, so its geometry can be read. */
+export function shapeBlockFor(xml, name) {
+  for (const match of xml.matchAll(/<p:(sp|pic|graphicFrame)\b[\s\S]*?<\/p:\1>/g)) {
+    if (match[0].includes(`name="${name}"`)) return match[0];
+  }
+  return null;
+}
 
 /** Shapes on the slide, by cNvPr id -> name. */
 export function slideObjects(xml) {
@@ -66,7 +76,7 @@ export function roleOf(name) {
  * Verify one motion scene. `expectation` is the compiler's declared intent — treated as a claim to
  * falsify, never as evidence. `runtimeCaptures` is only supplied by a real playback canary.
  */
-export function verifyMotionScene({ xml, expectation, runtimeCaptures = null }) {
+export function verifyMotionScene({ xml, expectation, runtimeCaptures = null, slideSize = null }) {
   const checks = {};
   const objects = slideObjects(xml);
   const transitions = transitionsOf(xml);
@@ -151,17 +161,83 @@ export function verifyMotionScene({ xml, expectation, runtimeCaptures = null }) 
           : `${inertTransitions} transition(s) touch only titles or decoration`,
   };
 
-  // G — the pinned object must exist and never be animated away.
+  // G — the pinned object must exist, never be animated away, and actually be VISIBLE.
+  //
+  // Survival is not visibility. A pinned shape can survive every transition while sitting
+  // off-slide, at zero size, or behind an opaque rectangle, and the audience sees no pinned visual
+  // at all. When slide geometry is available this measures it; without geometry it falls back to
+  // the survival test and says so, rather than implying it checked something it did not.
   const pinnedPresent = presentNames.has(expectation.pinnedObject);
   const pinnedId = [...objects.keys()].find((id) => objects.get(id) === expectation.pinnedObject);
   const pinnedAnimated = pinnedId ? allTargets.includes(pinnedId) : false;
+  const pinnedPrimacy =
+    pinnedPresent && slideSize
+      ? decidePrimacy({
+          frame: parseFrame(shapeBlockFor(xml, expectation.pinnedObject) ?? ''),
+          slide: slideSize,
+          covers: [],
+        })
+      : null;
+  const pinnedHidden = pinnedPrimacy ? pinnedPrimacy.verdict !== 'visible' : false;
   checks.G_pinnedVisual = {
-    pass: pinnedPresent && !pinnedAnimated,
-    detail: pinnedPresent
-      ? pinnedAnimated
+    pass: pinnedPresent && !pinnedAnimated && !pinnedHidden,
+    detail: !pinnedPresent
+      ? `pinned object ${expectation.pinnedObject} is absent`
+      : pinnedAnimated
         ? 'pinned object is animated, so it does not persist across states'
-        : 'pinned object present through all states'
-      : `pinned object ${expectation.pinnedObject} is absent`,
+        : pinnedHidden
+          ? `pinned object survives every state but is not visible: ${pinnedPrimacy.reason}`
+          : pinnedPrimacy
+            ? `pinned object present and visible through all states (${pinnedPrimacy.reason})`
+            : 'pinned object present through all states (no slide geometry supplied, so visibility is unchecked)',
+  };
+
+  // I — one user advance must advance exactly ONE semantic state.
+  //
+  // Gaming route 6: a single click that reveals three required roles at once still produces
+  // distinct signatures and a clean progression, while the narrative the scene claims to stage
+  // never actually stages. N-1 transitions over N states only means one-per-click if each
+  // transition moves one.
+  const multiRoleTransitions = transitions.filter(
+    (t) =>
+      new Set(t.targets.map((id) => namedRoles.get(id)?.role).filter((r) => required.has(r))).size >
+      1,
+  ).length;
+  checks.I_oneStatePerAdvance = {
+    pass: transitions.length > 0 && multiRoleTransitions === 0,
+    detail:
+      transitions.length === 0
+        ? 'no transitions to evaluate'
+        : multiRoleTransitions === 0
+          ? 'every advance reveals exactly one required role'
+          : `${multiRoleTransitions} advance(s) reveal more than one required role at once, so the staging is coarser than the scene claims`,
+  };
+
+  // J — the roles must appear in the ORDER the scene declares.
+  //
+  // Gaming route 4: all five required roles appear and every signature is distinct, but the
+  // sequence runs source -> slide -> fact -> capture -> claim. Distinctness cannot see this;
+  // a causal scene played out of order is a different scene.
+  const declaredOrder = expectation.states
+    .map((state) => roleOf(state.object)?.role)
+    .filter((role) => role && required.has(role));
+  const revealedOrder = [];
+  for (const transition of transitions) {
+    for (const id of transition.targets) {
+      const role = namedRoles.get(id)?.role;
+      if (role && required.has(role) && !revealedOrder.includes(role)) revealedOrder.push(role);
+    }
+  }
+  // The first declared state is visible at slide entry, so the transitions carry the rest.
+  const expectedReveals = declaredOrder.slice(1);
+  const orderMatches =
+    revealedOrder.length === expectedReveals.length &&
+    revealedOrder.every((role, index) => role === expectedReveals[index]);
+  checks.J_declaredOrder = {
+    pass: expectedReveals.length === 0 || orderMatches,
+    detail: orderMatches
+      ? `roles reveal in the declared order: ${expectedReveals.join(' -> ')}`
+      : `declared ${expectedReveals.join(' -> ') || '(none)'} but revealed ${revealedOrder.join(' -> ') || '(none)'}`,
   };
 
   // H — topology is not playback. Without a canary this stays honestly unproven.
