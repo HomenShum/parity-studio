@@ -219,7 +219,11 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Timeline',
     narrativeJob: 'Place events on a shared time axis.',
-    requiredArtifactKinds: ['timeline'],
+    // PowerPoint has no timeline primitive. Its native realization of a time axis is a chart with
+    // editable start/duration data, which satisfies the job fully — so requiring only `timeline`
+    // made this archetype unsatisfiable in PPTX by construction. The real failure this archetype
+    // guards against is still caught by `date-prefixed-bullet-list`.
+    requiredArtifactKinds: ['timeline', 'chart'],
     forbiddenSubstitutes: ['date-prefixed-bullet-list'],
   },
   {
@@ -227,7 +231,8 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Roadmap',
     narrativeJob: 'Show planned work in sequence with its dependencies.',
-    requiredArtifactKinds: ['timeline'],
+    // See progression.timeline: a native Gantt-style chart is PowerPoint's time axis.
+    requiredArtifactKinds: ['timeline', 'chart'],
     forbiddenSubstitutes: ['undated-wish-list'],
   },
   {
@@ -235,7 +240,8 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Milestones',
     narrativeJob: 'Show which gates are passed and which remain.',
-    requiredArtifactKinds: ['timeline'],
+    // See progression.timeline. A table of gates with pass/fail is equally native and auditable.
+    requiredArtifactKinds: ['timeline', 'chart', 'table'],
     forbiddenSubstitutes: ['all-green-status-without-evidence'],
   },
   {

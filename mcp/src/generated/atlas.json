@@ -405,7 +405,8 @@
       "title": "Timeline",
       "narrativeJob": "Place events on a shared time axis.",
       "requiredArtifactKinds": [
-        "timeline"
+        "timeline",
+        "chart"
       ],
       "forbiddenSubstitutes": [
         "date-prefixed-bullet-list"
@@ -417,7 +418,8 @@
       "title": "Roadmap",
       "narrativeJob": "Show planned work in sequence with its dependencies.",
       "requiredArtifactKinds": [
-        "timeline"
+        "timeline",
+        "chart"
       ],
       "forbiddenSubstitutes": [
         "undated-wish-list"
@@ -429,7 +431,9 @@
       "title": "Milestones",
       "narrativeJob": "Show which gates are passed and which remain.",
       "requiredArtifactKinds": [
-        "timeline"
+        "timeline",
+        "chart",
+        "table"
       ],
       "forbiddenSubstitutes": [
         "all-green-status-without-evidence"
