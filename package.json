@@ -30,6 +30,7 @@
     "atlas:export": "node scripts/nodeslide-atlas.mjs export",
     "atlas:topology-gate": "node scripts/nodeslide-atlas-topology-gate.mjs --map scripts/lib/atlas-vocabulary-atlas-v2.json",
     "atlas:motion-gate": "node scripts/nodeslide-motion-gate.mjs",
+    "atlas:motion-canary": "node scripts/nodeslide-motion-canary.mjs",
     "test:atlas": "vitest run shared/nodeslideAtlas.test.ts scripts/tests/nodeslide-atlas-topology-gate.test.mjs scripts/tests/motion-gate.test.mjs mcp/src/lib/atlasTools.test.ts src/domains/nodeslide/atlas/AtlasGallery.test.tsx",
     "nodeslide:bench": "node scripts/nodeslide-benchmark-gate.mjs --mode evidence",
     "nodeslide:bench:pr": "node scripts/nodeslide-benchmark-gate.mjs --mode pr",

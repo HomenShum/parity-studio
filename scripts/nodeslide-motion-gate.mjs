@@ -44,12 +44,15 @@ if (typeof pptxPath !== 'string' || typeof expectPath !== 'string') {
   process.exit(1);
 }
 
+/** Windows tooling writes UTF-8 with a BOM, which JSON.parse rejects. Strip it defensively. */
+async function readJson(file) {
+  return JSON.parse((await readFile(path.resolve(file), 'utf8')).replace(/^﻿/, ''));
+}
+
 const zip = await JSZip.loadAsync(await readFile(path.resolve(pptxPath)));
-const expectations = JSON.parse(await readFile(path.resolve(expectPath), 'utf8'));
+const expectations = await readJson(expectPath);
 const captures =
-  typeof flags.get('captures') === 'string'
-    ? JSON.parse(await readFile(path.resolve(flags.get('captures')), 'utf8'))
-    : null;
+  typeof flags.get('captures') === 'string' ? await readJson(flags.get('captures')) : null;
 
 const slidePaths = Object.keys(zip.files)
   .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
