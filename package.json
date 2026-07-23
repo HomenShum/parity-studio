@@ -29,7 +29,11 @@
     "atlas:validate": "node scripts/nodeslide-atlas.mjs validate",
     "atlas:export": "node scripts/nodeslide-atlas.mjs export",
     "atlas:topology-gate": "node scripts/nodeslide-atlas-topology-gate.mjs --map scripts/lib/atlas-vocabulary-atlas-v2.json",
-    "test:atlas": "vitest run shared/nodeslideAtlas.test.ts scripts/tests/nodeslide-atlas-topology-gate.test.mjs mcp/src/lib/atlasTools.test.ts src/domains/nodeslide/atlas/AtlasGallery.test.tsx",
+    "atlas:motion-gate": "node scripts/nodeslide-motion-gate.mjs",
+    "atlas:motion-canary": "node scripts/nodeslide-motion-canary.mjs",
+    "atlas:fidelity-gate": "node scripts/nodeslide-artifact-fidelity-gate.mjs",
+    "atlas:asset-gate": "node scripts/nodeslide-asset-gate.mjs",
+    "test:atlas": "vitest run shared/nodeslideAtlas.test.ts scripts/tests/nodeslide-atlas-topology-gate.test.mjs scripts/tests/motion-gate.test.mjs scripts/tests/artifact-fidelity.test.mjs scripts/tests/asset-provenance.test.mjs scripts/tests/artifact-distinctness.test.mjs mcp/src/lib/atlasTools.test.ts src/domains/nodeslide/atlas/AtlasGallery.test.tsx",
     "nodeslide:bench": "node scripts/nodeslide-benchmark-gate.mjs --mode evidence",
     "nodeslide:bench:pr": "node scripts/nodeslide-benchmark-gate.mjs --mode pr",
     "nodeslide:bench:evidence": "node scripts/nodeslide-benchmark-gate.mjs --mode evidence",
@@ -46,7 +50,8 @@
     "lint:fix": "biome check --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "atlas:distinctness-gate": "node scripts/nodeslide-artifact-distinctness-gate.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "0.14.26",

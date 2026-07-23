@@ -429,7 +429,8 @@
       "title": "Milestones",
       "narrativeJob": "Show which gates are passed and which remain.",
       "requiredArtifactKinds": [
-        "timeline"
+        "timeline",
+        "table"
       ],
       "forbiddenSubstitutes": [
         "all-green-status-without-evidence"

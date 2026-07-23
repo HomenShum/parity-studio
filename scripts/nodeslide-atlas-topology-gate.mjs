@@ -65,6 +65,11 @@ export const DEEP_DETECTABLE_ARTIFACT_KINDS = Object.freeze([
   'equation',
   'code',
   'screenshot',
+  // Engineered primitives — see nodeslide-pptx-inspect.mjs. `timeline` is a real c:dateAx time
+  // axis; `evidence` is a claim hyperlinked to an external source relationship. Both were
+  // previously undetectable, which made their archetypes unsatisfiable rather than merely unmet.
+  'timeline',
+  'evidence',
 ]);
 
 /** Minimum drawn shapes before geometry is treated as a relationship artifact. */
@@ -202,6 +207,7 @@ async function main() {
     await readFile(path.join(rootDirectory, 'mcp', 'src', 'generated', 'atlas.json'), 'utf8'),
   );
   const gates = createAtlasGates(atlas);
+  const archetypeIds = new Set(atlas.archetypes.map((entry) => entry.id));
 
   const mapping =
     typeof flags.get('map') === 'string'
@@ -230,8 +236,15 @@ async function main() {
       producedArtifactKindsFromRecords(slide.records);
     const fixture =
       fixturesByTitle.get(slide.title.trim().toLowerCase()) ?? fixturesBySlide.get(slide.slide);
+    // The vocabulary map is keyed on short names ('hero-thesis'), but the v3 compiler emits fully
+    // qualified ids ('narrative.hero-thesis'). Neither is wrong; nothing joined them, so every
+    // slide fell to `ungated` — which reads as "no opinion" and is how 38 unjudged slides could
+    // look like a clean run. An artifactType that IS a known archetype id needs no mapping.
+    const knownArchetype = (value) =>
+      typeof value === 'string' && archetypeIds.has(value) ? value : null;
     const archetypeId =
       resolveArchetypeId(fixture?.artifactType, mapping) ??
+      knownArchetype(fixture?.artifactType) ??
       resolveArchetypeId(artifactTypeFromTitle(slide.title), mapping) ??
       null;
 
@@ -254,6 +267,29 @@ async function main() {
     const detectable = observed.direct ? DEEP_DETECTABLE_ARTIFACT_KINDS : DETECTABLE_ARTIFACT_KINDS;
     const observable = archetype.requiredArtifactKinds.filter((kind) => detectable.includes(kind));
     if (observable.length === 0) {
+      // Some artifacts cannot exist in PowerPoint at all — a scroll-driven scene has no OOXML
+      // representation, so "richer inspection" would never help. For those the honest outcome is
+      // not indeterminate forever: it is an accepted fallback, PROVIDED the recipe declared one in
+      // advance AND the deck actually ships it (a real poster frame on the slide, not a promise).
+      const undetectableFallback = fixture?.declaredFallback ?? null;
+      // The deck must actually SHIP whatever it declared. A poster-frame fallback needs a real
+      // image; a native-step-build fallback needs a real p:timing sequence. A slide that declares
+      // either and ships neither is still a violation.
+      const shipped =
+        undetectableFallback?.capability === 'native-step-build'
+          ? observed.kinds.includes('step-build')
+          : observed.images > 0;
+      if (undetectableFallback && shipped) {
+        results.push({
+          slide: slide.slide,
+          title: slide.title,
+          archetypeId,
+          status: 'fallback-accepted',
+          observed,
+          reason: `${archetype.requiredArtifactKinds.join(' or ')} has no PowerPoint representation. The recipe declared a ${undetectableFallback.capability} fallback in advance and the slide ships it: ${undetectableFallback.behavior}`,
+        });
+        continue;
+      }
       results.push({
         slide: slide.slide,
         title: slide.title,

@@ -219,6 +219,9 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Timeline',
     narrativeJob: 'Place events on a shared time axis.',
+    // Satisfied by a real OOXML time axis (<c:dateAx> with date-serial categories) — see the
+    // timeline primitive in scripts/nodeslide-pptx-inspect.mjs. A plain category-axis chart does
+    // NOT satisfy it: opaque string categories carry no time semantics.
     requiredArtifactKinds: ['timeline'],
     forbiddenSubstitutes: ['date-prefixed-bullet-list'],
   },
@@ -227,6 +230,7 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Roadmap',
     narrativeJob: 'Show planned work in sequence with its dependencies.',
+    // See progression.timeline — a real c:dateAx time axis, not a category axis.
     requiredArtifactKinds: ['timeline'],
     forbiddenSubstitutes: ['undated-wish-list'],
   },
@@ -235,7 +239,8 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Milestones',
     narrativeJob: 'Show which gates are passed and which remain.',
-    requiredArtifactKinds: ['timeline'],
+    // A real time axis, or a native table of gates with pass/fail — both are auditable.
+    requiredArtifactKinds: ['timeline', 'table'],
     forbiddenSubstitutes: ['all-green-status-without-evidence'],
   },
   {

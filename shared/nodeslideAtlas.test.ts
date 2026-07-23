@@ -5,6 +5,8 @@ import {
   crossAxisComparisonRepresentable,
 } from './nodeslideArenaContracts';
 import {
+  ATLAS_ARTIFACT_KINDS,
+  ATLAS_ARTIFACT_PORTABILITY,
   ATLAS_CAPABILITY_LEVELS,
   ATLAS_USAGE_INTENTS,
   type AtlasArtifactRecipe,
@@ -14,6 +16,7 @@ import {
   NODESLIDE_ATLAS_SCHEMA_VERSION,
   earnedAtlasMaturity,
   evaluateAtlasUsage,
+  rendererScopedCapability,
   resolveRequirementVerdict,
 } from './nodeslideAtlas';
 import {
@@ -78,6 +81,7 @@ function receipt(overrides: Partial<AtlasShowcaseReceipt> = {}): AtlasShowcaseRe
     recipeVersion: '4.0.0',
     archetypeId: 'systems.architecture',
     model: { id: 'kimi-k3', role: 'executor' },
+    candidateKind: 'model',
     harnessVersion: 'harness/v5',
     sourceIds: ['nodeslide-owned'],
     referenceIds: [],
@@ -659,6 +663,47 @@ describe('Maturity: what a listing may claim about itself', () => {
     expect(claim.errors.join(' ')).toMatch(/claims certified but its receipts only earn vetted/);
   });
 
+  /**
+   * The ladder is read as a claim about models, so it has to be scored against models. Our own
+   * compiler replaying the fixture the gates were authored from passes every gate by construction;
+   * treating that as `proven` made a zero-model run indistinguishable from a paid one.
+   */
+  it('caps a deterministic-baseline receipt at vetted no matter how clean it is', () => {
+    const baseline = receipt({
+      id: 'r-baseline',
+      model: { id: 'nodeslide-artifact-builder-v1', role: 'geometry-and-export-control' },
+      candidateKind: 'deterministic-baseline',
+      costUsd: 0,
+      latencyMs: 0,
+    });
+    const recipe = architectureRecipe({ maturity: 'proven', receiptIds: ['r-baseline'] });
+    expect(earnedAtlasMaturity(recipe, [baseline])).toBe('vetted');
+    // Even a human preference cannot lift it: nothing generative was demonstrated.
+    expect(earnedAtlasMaturity(recipe, [{ ...baseline, humanPreferred: true }])).toBe('vetted');
+    expect(validateAtlasMaturityClaim(recipe, [baseline]).ok).toBe(false);
+  });
+
+  it('fails closed on a receipt written before candidateKind existed', () => {
+    const legacy = receipt({ id: 'r-legacy' });
+    // biome-ignore lint/performance/noDelete: modelling a receipt that predates the field.
+    delete (legacy as { candidateKind?: unknown }).candidateKind;
+    const recipe = architectureRecipe({ maturity: 'proven', receiptIds: ['r-legacy'] });
+    expect(earnedAtlasMaturity(recipe, [legacy])).toBe('vetted');
+  });
+
+  it('lets one model receipt carry the recipe past a pile of baselines', () => {
+    const baselines = [1, 2, 3].map((n) =>
+      receipt({ id: `r-base-${n}`, candidateKind: 'deterministic-baseline' }),
+    );
+    const model = receipt({ id: 'r-model', candidateKind: 'model' });
+    const recipe = architectureRecipe({
+      maturity: 'proven',
+      receiptIds: [...baselines.map((r) => r.id), 'r-model'],
+    });
+    expect(earnedAtlasMaturity(recipe, baselines)).toBe('vetted');
+    expect(earnedAtlasMaturity(recipe, [...baselines, model])).toBe('proven');
+  });
+
   it('ignores receipts belonging to a different recipe', () => {
     const foreign = receipt({ id: 'someone-elses' });
     const recipe = architectureRecipe({ maturity: 'proven', receiptIds: ['r-mine'] });
@@ -704,6 +749,72 @@ describe('Topology gate: the slide that describes a diagram instead of drawing o
     expect(
       atlasTopologyViolations({ archetypeId: 'made.up', producedArtifactKinds: ['diagram'] }),
     ).toEqual(['Unknown archetype made.up.']);
+  });
+});
+
+/**
+ * Measured by round-tripping the real deck through LibreOffice twice (pptx->pptx and
+ * pptx->odp->pptx, which agreed). The interesting result is how narrow the loss is: the tier was
+ * overstated on exactly one object class, not on native artifacts generally.
+ */
+describe('Renderer portability: `editable` is a property of file-plus-renderer', () => {
+  it('keeps the declared capability inside PowerPoint', () => {
+    const scoped = rendererScopedCapability({
+      artifactKind: 'equation',
+      declared: 'editable',
+      renderer: 'powerpoint',
+    });
+    expect(scoped.capability).toBe('editable');
+    expect(scoped.downgraded).toBe(false);
+  });
+
+  it('downgrades an equation to unsupported outside PowerPoint, because the OMML is deleted', () => {
+    const scoped = rendererScopedCapability({
+      artifactKind: 'equation',
+      declared: 'editable',
+      renderer: 'other',
+    });
+    expect(scoped.capability).toBe('unsupported');
+    expect(scoped.downgraded).toBe(true);
+    expect(scoped.reason).toMatch(/m:oMath/);
+  });
+
+  it('does NOT downgrade charts, tables, diagrams or timelines — those genuinely travel', () => {
+    for (const kind of ['chart', 'table', 'diagram', 'timeline'] as const) {
+      const scoped = rendererScopedCapability({
+        artifactKind: kind,
+        declared: 'editable',
+        renderer: 'other',
+      });
+      expect(scoped.capability, kind).toBe('editable');
+      expect(scoped.downgraded, kind).toBe(false);
+    }
+  });
+
+  it('degrades an unmeasured kind rather than letting it pass as portable', () => {
+    const scoped = rendererScopedCapability({
+      artifactKind: 'evidence',
+      declared: 'editable',
+      renderer: 'other',
+    });
+    expect(ATLAS_ARTIFACT_PORTABILITY.evidence.portability).toBe('unmeasured');
+    expect(scoped.capability).toBe('unsupported');
+  });
+
+  it('never upgrades: a portable fact cannot lift a recipe above its own claim', () => {
+    const scoped = rendererScopedCapability({
+      artifactKind: 'chart',
+      declared: 'rendered-image',
+      renderer: 'other',
+    });
+    expect(scoped.capability).toBe('rendered-image');
+    expect(scoped.downgraded).toBe(false);
+  });
+
+  it('records a measurement for every artifact kind, so silence is never mistaken for proof', () => {
+    for (const kind of ATLAS_ARTIFACT_KINDS) {
+      expect(ATLAS_ARTIFACT_PORTABILITY[kind]?.measurement, kind).toBeTruthy();
+    }
   });
 });
 

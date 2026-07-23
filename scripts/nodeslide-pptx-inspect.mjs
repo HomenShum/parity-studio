@@ -117,7 +117,10 @@ function countMatches(xml, pattern) {
  * Observe one slide. Returns the artifact kinds the markup directly evidences, each with the
  * signal that justified it, so a reviewer can check the claim rather than trust it.
  */
-export function observeSlideXml(xml, { hasChartRelationship = false } = {}) {
+export function observeSlideXml(
+  xml,
+  { hasChartRelationship = false, chartHasDateAxis = false, externalSourceLinks = 0 } = {},
+) {
   const evidence = [];
   const kinds = new Set();
 
@@ -143,6 +146,58 @@ export function observeSlideXml(xml, { hasChartRelationship = false } = {}) {
   if (hasChartRelationship) {
     kinds.add('chart');
     evidence.push({ kind: 'chart', signal: 'slide references a native chart part' });
+  }
+
+  // The timeline primitive. PowerPoint has no <a:timeline>, but OOXML *does* have a real time
+  // axis: <c:dateAx>, whose categories are date serials rather than opaque strings. A chart built
+  // on one genuinely places events on a shared, editable time axis — which is exactly the job
+  // `progression.timeline` describes. Detecting it is what makes the archetype satisfiable in
+  // PowerPoint at all, instead of unsatisfiable by construction.
+  if (chartHasDateAxis) {
+    kinds.add('timeline');
+    evidence.push({
+      kind: 'timeline',
+      signal: 'chart part uses a real c:dateAx time axis with date-serial categories',
+    });
+  }
+
+  // The evidence primitive. "Evidence" is not a visual style — it is a claim you can follow back to
+  // its source. In OOXML that is a run carrying <a:hlinkClick> bound to an external relationship,
+  // which is machine-checkable: the target either resolves to a real source or it does not. A
+  // citation rendered as decorative grey text carries no such link and is correctly NOT evidence.
+  if (externalSourceLinks > 0) {
+    kinds.add('evidence');
+    evidence.push({
+      kind: 'evidence',
+      signal: `${externalSourceLinks} claim(s) hyperlinked to an external source relationship`,
+    });
+  }
+
+  // The motion primitive. Calling scroll-driven scenes "impossible in PowerPoint" was wrong:
+  // OOXML carries a full animation model in <p:timing>. A scrollytelling scene is one pinned
+  // visual revealed in stages, which is exactly a click-triggered build sequence.
+  //
+  // The anti-gaming rule: a single fade-in is not a scene. Require at least two `clickEffect`
+  // build steps targeting DISTINCT shape ids — that is a staged reveal, not decoration. A slide
+  // that merely animates one title still reports no scrollytelling.
+  const buildSteps = [
+    ...xml.matchAll(/<p:cTn\b[^>]*nodeType="clickEffect"[\s\S]*?<p:spTgt spid="(\d+)"/g),
+  ].map((match) => match[1]);
+  const distinctTargets = new Set(buildSteps);
+  // A transition must carry a genuine animation behavior; a bare <p:cTn> is not animation.
+  const hasRealBehavior = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/.test(
+    xml,
+  );
+  if (/<p:timing>/.test(xml) && distinctTargets.size >= 2 && hasRealBehavior) {
+    // Deliberately NOT `scrollytelling`. PowerPoint advances on user click — discrete steps — so
+    // this is a step-build. Scroll-linked scrubbing is continuous and genuinely unsupported.
+    // Calling a step-build "scrub" would be the same overclaim as calling autoshapes a chart, so
+    // the archetype is satisfied only via a declared fallback, never as a native pass.
+    kinds.add('step-build');
+    evidence.push({
+      kind: 'step-build',
+      signal: `p:timing sequence: ${buildSteps.length} user-advance transitions over ${distinctTargets.size} distinct shapes (${distinctTargets.size + 1} observable states; first visible at slide entry)`,
+    });
   }
 
   const connectors = countMatches(xml, /<p:cxnSp\b/g);
@@ -222,7 +277,34 @@ export async function inspectPptx(buffer) {
     const rels = relsFile ? await relsFile.async('string') : '';
     const hasChartRelationship = /charts?\/chart\d*\.xml/i.test(rels);
 
-    const observation = observeSlideXml(xml, { hasChartRelationship });
+    // Open the referenced chart part(s) — the time axis lives there, not in the slide.
+    let chartHasDateAxis = false;
+    for (const match of rels.matchAll(/Target="([^"]*charts?\/chart\d*\.xml)"/gi)) {
+      // Targets appear in three forms across writers: "../charts/chart1.xml" (relative),
+      // "/ppt/charts/chart1.xml" (absolute) and "charts/chart1.xml". Normalise all of them.
+      const target = match[1].replace(/^\.\.\//, '').replace(/^\//, '');
+      const chartPath = target.startsWith('ppt/') ? target : `ppt/${target}`;
+      const chartFile = zip.file(chartPath);
+      if (!chartFile) continue;
+      if (/<c:dateAx>/.test(await chartFile.async('string'))) {
+        chartHasDateAxis = true;
+        break;
+      }
+    }
+
+    // An external hyperlink relationship is only evidence if the slide actually references it.
+    const externalIds = new Set(
+      [...rels.matchAll(/Id="([^"]+)"[^>]*TargetMode="External"/g)].map((m) => m[1]),
+    );
+    const externalSourceLinks = [...xml.matchAll(/<a:hlinkClick[^>]*r:id="([^"]+)"/g)].filter((m) =>
+      externalIds.has(m[1]),
+    ).length;
+
+    const observation = observeSlideXml(xml, {
+      hasChartRelationship,
+      chartHasDateAxis,
+      externalSourceLinks,
+    });
     const runs = slideTextRuns(xml);
     slides.push({
       slide: slideNumberFromPath(slidePath),
