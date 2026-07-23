@@ -9,6 +9,11 @@ import {
   evaluateAtlasUsage,
 } from '../../../../shared/nodeslideAtlas';
 import {
+  NODESLIDE_ATLAS_RECEIPT_PROJECTION,
+  atlasProjectedReceipts,
+  atlasRecipeStandings,
+} from '../../../../shared/nodeslideAtlasReceipts';
+import {
   type AtlasArchetypeQuery,
   MAX_ATLAS_QUERY_RESULTS,
   NODESLIDE_ATLAS_ARCHETYPES,
@@ -280,25 +285,92 @@ function ArchetypeDetail({ archetype }: { archetype: AtlasArchetype }) {
 }
 
 /**
- * Both compare modes read from arena receipts. None have been recorded yet, so this states that
- * plainly instead of rendering placeholder candidates that would read as real results.
+ * Both compare modes read the same 84 arena receipts, and only one of them has anything to say.
+ *
+ * Model Compare varies the producer: 3 models plus the deterministic baseline, so there is a real
+ * comparison to draw. Harness Compare varies the harness and every receipt carries the same
+ * `artifact-arena-v1`, so it still reports nothing — but for the true reason rather than the
+ * blanket "no receipts recorded yet" this surface used to show while 84 sat in the same repo.
  */
 function CompareMode({ mode }: { mode: Exclude<AtlasMode, 'gallery'> }) {
   const isModel = mode === 'model-compare';
+  const standings = useMemo(() => atlasRecipeStandings(), []);
+  const { totals, meta } = NODESLIDE_ATLAS_RECEIPT_PROJECTION;
+  const harnessVersions = useMemo(
+    () => new Set(atlasProjectedReceipts().map((receipt) => receipt.harnessVersion)),
+    [],
+  );
+
+  // Harness Compare needs at least two harness versions to compare. One is not a comparison.
+  if (!isModel || standings.length === 0) {
+    return (
+      <section className="atlas__empty" data-testid={`atlas-empty-${mode}`}>
+        <h2>{isModel ? 'Model Compare' : 'Harness Compare'}</h2>
+        <p className="atlas__empty-status" data-testid="atlas-empty-status">
+          {isModel
+            ? 'No arena receipts recorded yet.'
+            : `All ${totals.receipts} receipts come from one harness version (${[...harnessVersions].join(', ')}), so there is nothing to hold constant against.`}
+        </p>
+        <p>
+          {isModel
+            ? 'This view compares candidates for one brief across the model fleet, with each candidate’s rendered output, gate results, repair count, cost and latency.'
+            : 'This view holds the model constant and varies the harness version, so an improvement can be attributed to the system rather than the model.'}
+        </p>
+        <p className="atlas__note">
+          It populates from <code>planArenaCoverage</code> runs. Until a second harness version
+          writes receipts, this surface reports nothing rather than showing a comparison that has
+          not been produced.
+        </p>
+      </section>
+    );
+  }
+
   return (
-    <section className="atlas__empty" data-testid={`atlas-empty-${mode}`}>
-      <h2>{isModel ? 'Model Compare' : 'Harness Compare'}</h2>
-      <p className="atlas__empty-status" data-testid="atlas-empty-status">
-        No arena receipts recorded yet.
+    <section data-testid="atlas-model-compare">
+      <h2>Model Compare</h2>
+      <p className="atlas__empty-status" data-testid="atlas-receipt-summary">
+        {totals.receipts} receipts across {totals.recipes} recipes — {totals.modelReceipts} from
+        models, {totals.baselineReceipts} from the deterministic baseline.
       </p>
-      <p>
-        {isModel
-          ? 'This view compares candidates for one brief across the model fleet, with each candidate’s rendered output, gate results, repair count, cost and latency.'
-          : 'This view holds the model constant and varies the harness version, so an improvement can be attributed to the system rather than the model.'}
+
+      <table className="atlas__licence" data-testid="atlas-standings-table">
+        <thead>
+          <tr>
+            <th scope="col">Archetype</th>
+            <th scope="col">Earned</th>
+            <th scope="col">Model</th>
+            <th scope="col">Baseline</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((standing) => (
+            <tr key={standing.recipeId}>
+              <th scope="row">{standing.archetypeId}</th>
+              {/* The reason is the tooltip because the rung alone invites the wrong conclusion. */}
+              <td
+                className={standing.modelReceiptCount > 0 ? 'atlas__allow' : 'atlas__deny'}
+                data-testid={`atlas-maturity-${standing.recipeId}`}
+                title={standing.reason}
+              >
+                {standing.earned}
+              </td>
+              <td>{standing.modelReceiptCount}</td>
+              <td>{standing.baselineReceiptCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <p className="atlas__note" data-testid="atlas-certified-note">
+        Nothing here reaches <code>certified</code>: that rung needs a human blind preference and
+        none has been run, so <code>humanPreferred</code> is null on all {totals.receipts} receipts.
+        Maturity is derived from the receipts on every render — the projection ships no maturity
+        field of its own, so a claim cannot arrive pre-graded.
       </p>
-      <p className="atlas__note">
-        It populates from <code>planArenaCoverage</code> runs. Until a run writes receipts, this
-        surface reports nothing rather than showing an example that has not been produced.
+      <p className="atlas__note" data-testid="atlas-projection-provenance">
+        Source: <code>{meta.sourceFile}</code> at commit{' '}
+        <code>{meta.sourceCommit?.slice(0, 12) ?? 'unknown'}</code>, content{' '}
+        <code>{meta.sha256.slice(0, 19)}…</code>
       </p>
     </section>
   );
