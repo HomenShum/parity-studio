@@ -26,5 +26,6 @@
     "exactOptionalPropertyTypes": true
   },
   "include": ["src", "shared"],
-  "exclude": ["node_modules", "dist"]
+  "_comment": "Tests are excluded from the app/Vercel build: they may import from packages absent in the Vercel upload (e.g. mcp/, which .vercelignore drops), and are typechecked by vitest instead. Compiling them here made `tsc -b` fail on Vercel while `tsc --noEmit` passed in CI, where mcp/ is present.",
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
 }
