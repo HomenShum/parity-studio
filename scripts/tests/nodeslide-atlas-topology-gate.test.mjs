@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DETECTABLE_ARTIFACT_KINDS,
   artifactTypeFromTitle,
+  directObservation,
   groupRecordsBySlide,
   producedArtifactKindsFromRecords,
 } from '../nodeslide-atlas-topology-gate.mjs';
@@ -111,5 +112,70 @@ describe('Artifact type recovered from a chapter-prefixed slide title', () => {
     expect(artifactTypeFromTitle('   ')).toBeNull();
     expect(artifactTypeFromTitle(undefined)).toBeNull();
     expect(artifactTypeFromTitle('···')).toBeNull();
+  });
+});
+
+/**
+ * The hidden semantic decoy, guarded at the WIRING level.
+ *
+ * scripts/tests/semantic-primacy.test.mjs proves the geometry decision is right. This proves the
+ * gate acts on it — which is the half that would silently regress, because the inspector could go
+ * on emitting perfect primacy verdicts that nothing reads.
+ *
+ * Verified end-to-end before this test existed: a deck with a genuine 1x1in chart at x=14in on a
+ * 10in slide, plus 49 autoshapes drawing the visible chart, scored `1 passed, 0 violated,
+ * 100% decided`. It now scores 1 violated.
+ */
+describe('primacy: a present-but-invisible object must not satisfy an archetype', () => {
+  const artifact = (artifactKind, primacy) => ({
+    kind: 'artifact',
+    artifactKind,
+    signal: `primacy: ${primacy}`,
+    ...(primacy ? { primacy } : {}),
+  });
+
+  it('withdraws a chart the inspection measured as off-slide', () => {
+    const observation = directObservation([
+      artifact('chart'),
+      artifact('chart', 'off-slide'),
+      artifact('text'),
+    ]);
+    expect(observation.kinds).not.toContain('chart');
+    expect(observation.withdrawnForPrimacy).toEqual(['chart']);
+    // The evidence still records what was seen — withdrawal is a verdict, not an erasure.
+    expect(observation.evidence.join(' ')).toMatch(/off-slide/);
+  });
+
+  it('withdraws an occluded or negligible object too', () => {
+    expect(directObservation([artifact('table', 'occluded')]).kinds).not.toContain('table');
+    expect(directObservation([artifact('chart', 'negligible')]).kinds).not.toContain('chart');
+  });
+
+  it('keeps a kind when at least one instance is genuinely visible', () => {
+    // A real chart plus a stray off-slide one is still an honest slide.
+    const observation = directObservation([
+      artifact('chart', 'off-slide'),
+      artifact('chart', 'visible'),
+    ]);
+    expect(observation.kinds).toContain('chart');
+    expect(observation.withdrawnForPrimacy).toEqual([]);
+  });
+
+  it('leaves unmeasured kinds alone rather than quietly deciding them', () => {
+    // No primacy field means the instrument did not look; that must not become a withdrawal.
+    const observation = directObservation([artifact('equation'), artifact('diagram')]);
+    expect(observation.kinds).toEqual(['diagram', 'equation']);
+    expect(observation.withdrawnForPrimacy).toEqual([]);
+  });
+
+  it('withdraws on indeterminate too, because unreadable geometry cannot show primacy', () => {
+    // Deliberately fail-closed, and the narrower call of the two. Elsewhere this gate refuses to
+    // accuse a slide its instrument cannot see — but that rule is about kinds it never looks for.
+    // Here the object IS being examined and its position will not parse, which is both rare in a
+    // well-formed package and exactly what a decoy hiding behind malformed geometry would look
+    // like. The evidence line still states the reason, so the withdrawal is auditable.
+    const observation = directObservation([artifact('chart', 'indeterminate')]);
+    expect(observation.withdrawnForPrimacy).toEqual(['chart']);
+    expect(observation.kinds).not.toContain('chart');
   });
 });

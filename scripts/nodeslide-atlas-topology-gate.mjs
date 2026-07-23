@@ -182,9 +182,30 @@ export function groupRecordsBySlide(lines) {
 export function directObservation(records, counts) {
   const artifactRecords = records.filter((record) => record.kind === 'artifact');
   if (artifactRecords.length === 0) return null;
-  const kinds = [...new Set(artifactRecords.map((record) => record.artifactKind))].sort();
+
+  // Presence and primacy are separate claims. A semantic object the inspection measured as
+  // off-slide, negligible or fully occluded is present in the FILE and absent from the SLIDE, so
+  // it must not satisfy an archetype — that is the hidden-decoy attack: a genuine 1x1 chart parked
+  // at x=14in while 49 autoshapes draw the chart the audience actually sees. Only a kind whose
+  // primacy was measured and failed is withdrawn; an unmeasured kind is left alone, because this
+  // check must not silently start deciding kinds it cannot see.
+  const hidden = new Map();
+  for (const record of artifactRecords) {
+    if (!record.primacy) continue;
+    const current = hidden.get(record.artifactKind);
+    // Any visible instance of a kind rescues it — a real chart plus a stray decoy is still a pass.
+    if (record.primacy === 'visible') hidden.set(record.artifactKind, false);
+    else if (current !== false) hidden.set(record.artifactKind, true);
+  }
+
+  const kinds = [...new Set(artifactRecords.map((record) => record.artifactKind))]
+    .filter((kind) => hidden.get(kind) !== true)
+    .sort();
+  const withdrawn = [...hidden.entries()].filter(([, isHidden]) => isHidden).map(([kind]) => kind);
+
   return {
     kinds,
+    withdrawnForPrimacy: withdrawn,
     evidence: artifactRecords.map((record) => `${record.artifactKind}: ${record.signal}`),
     textShapes: counts?.textRuns ?? 0,
     drawnShapes: counts?.shapes ?? 0,
