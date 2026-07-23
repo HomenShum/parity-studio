@@ -24,6 +24,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
+import { decidePrimacy, parseFrame } from './lib/semantic-primacy.mjs';
 
 const MONOSPACE_FACES = [
   'consolas',
@@ -119,7 +120,12 @@ function countMatches(xml, pattern) {
  */
 export function observeSlideXml(
   xml,
-  { hasChartRelationship = false, chartHasDateAxis = false, externalSourceLinks = 0 } = {},
+  {
+    hasChartRelationship = false,
+    chartHasDateAxis = false,
+    externalSourceLinks = 0,
+    slideSize = null,
+  } = {},
 ) {
   const evidence = [];
   const kinds = new Set();
@@ -146,6 +152,23 @@ export function observeSlideXml(
   if (hasChartRelationship) {
     kinds.add('chart');
     evidence.push({ kind: 'chart', signal: 'slide references a native chart part' });
+  }
+
+  // Primacy, checked separately from presence. An object that is off-slide, negligible or fully
+  // covered is reported as such, so the topology gate can refuse to count it as the artifact.
+  if (slideSize) {
+    const { objects, paintOrder } = semanticObjectsOf(xml);
+    for (const object of objects) {
+      const index = paintOrder.findIndex((entry) => entry.id === object.id);
+      const covers = index === -1 ? [] : paintOrder.slice(index + 1);
+      const decision = decidePrimacy({ frame: object.frame, slide: slideSize, covers });
+      evidence.push({
+        kind: object.artifactKind,
+        signal: `primacy: ${decision.verdict} — ${decision.reason}`,
+        primacy: decision.verdict,
+        visibleFraction: decision.visibleFraction ?? null,
+      });
+    }
   }
 
   // The timeline primitive. PowerPoint has no <a:timeline>, but OOXML *does* have a real time
@@ -263,11 +286,49 @@ function parseArgs(argv) {
   return flags;
 }
 
+/**
+ * Semantic objects on a slide, WITH their geometry and paint order.
+ *
+ * Presence alone cannot answer "is the native chart the chart I am looking at". A genuine 1x1 inch
+ * chart parked at x=14in on a 10in slide is present, valid, and invisible — and the topology gate
+ * passed exactly that fixture before this existed. Geometry is what turns presence into primacy.
+ */
+function semanticObjectsOf(xml) {
+  const objects = [];
+  const paintOrder = [];
+  // <p:sp>, <p:graphicFrame>, <p:cxnSp> and <p:pic> paint in document order; later covers earlier.
+  for (const match of xml.matchAll(/<p:(sp|graphicFrame|cxnSp|pic)\b[\s\S]*?<\/p:\1>/g)) {
+    const block = match[0];
+    const tag = match[1];
+    const id = (/<p:cNvPr id="(\d+)"/.exec(block) ?? [])[1] ?? null;
+    const name = (/<p:cNvPr id="\d+" name="([^"]*)"/.exec(block) ?? [])[1] ?? '';
+    const frame = parseFrame(block);
+    // A shape with a solid fill and no alpha hides whatever it fully covers.
+    const opaque = /<a:solidFill>/.test(block) && !/<a:alpha val="(?!100000)/.test(block);
+    paintOrder.push({ id, name, frame, opaque });
+
+    if (tag !== 'graphicFrame') continue;
+    const artifactKind = /<c:chart\b|graphicframe.*chart/i.test(block)
+      ? 'chart'
+      : /<a:tbl\b/.test(block)
+        ? 'table'
+        : null;
+    if (artifactKind) objects.push({ id, name, artifactKind, frame });
+  }
+  return { objects, paintOrder };
+}
+
 export async function inspectPptx(buffer) {
   const zip = await JSZip.loadAsync(buffer);
   const slidePaths = Object.keys(zip.files)
     .filter((entry) => /^ppt\/slides\/slide\d+\.xml$/i.test(entry))
     .sort((left, right) => slideNumberFromPath(left) - slideNumberFromPath(right));
+
+  // Slide dimensions live in the presentation part, not in any slide.
+  const presentationFile = zip.file('ppt/presentation.xml');
+  const presentationXml = presentationFile ? await presentationFile.async('string') : '';
+  const sldSz = /<p:sldSz\s+cx="(\d+)"\s+cy="(\d+)"/.exec(presentationXml);
+  const slideSize = sldSz ? { cx: Number(sldSz[1]), cy: Number(sldSz[2]) } : null;
 
   const slides = [];
   for (const slidePath of slidePaths) {
@@ -304,6 +365,7 @@ export async function inspectPptx(buffer) {
       hasChartRelationship,
       chartHasDateAxis,
       externalSourceLinks,
+      slideSize,
     });
     const runs = slideTextRuns(xml);
     slides.push({
