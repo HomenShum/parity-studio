@@ -42,3 +42,4 @@ mcp/node_modules/
 # Local launch recordings and live log captures
 artifacts/nodeslide-three-deck-launch-final-v22/
 convex-logs-*.txt
+.knockout-work/
