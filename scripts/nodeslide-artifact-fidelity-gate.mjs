@@ -58,6 +58,18 @@ const zip = await JSZip.loadAsync(await readFile(path.resolve(pptxPath)));
 const atlas = await readJson(atlasPath);
 const slideMap = await readJson(fixturesPath);
 
+/**
+ * Declared payload overrides, applied over the upstream Atlas spec before the diff.
+ *
+ * Some archetypes share one stub payload upstream, so the live deck declares its own. Those
+ * declarations are a committed file, NOT something the compiler emits — if the answer key came
+ * out of the same build, this gate would only ever confirm itself.
+ */
+const overrides =
+  typeof flags.get('overrides') === 'string'
+    ? ((await readJson(flags.get('overrides'))).overrides ?? {})
+    : {};
+
 // Slide order in the emitted deck matches the fixtures doc order (both come from the compiler).
 const fixtureByTitle = new Map(
   atlas.fixtures.map((f) => [String(f.title).trim().toLowerCase(), f]),
@@ -81,8 +93,12 @@ async function chartXmlForSlide(slidePath) {
 
 const results = [];
 for (const entry of slideMap.fixtures ?? []) {
-  const fixture = fixtureByTitle.get(String(entry.title).trim().toLowerCase());
-  if (!fixture) continue;
+  const upstream = fixtureByTitle.get(String(entry.title).trim().toLowerCase());
+  if (!upstream) continue;
+  const override = overrides[entry.artifactType];
+  const fixture = override
+    ? { ...upstream, artifactSpec: { ...upstream.artifactSpec, payload: override } }
+    : upstream;
   const expected = expectedContent(fixture);
   const slidePath = slidePaths[Number(entry.number) - 1];
   if (!slidePath) continue;

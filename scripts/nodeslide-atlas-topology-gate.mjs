@@ -207,6 +207,7 @@ async function main() {
     await readFile(path.join(rootDirectory, 'mcp', 'src', 'generated', 'atlas.json'), 'utf8'),
   );
   const gates = createAtlasGates(atlas);
+  const archetypeIds = new Set(atlas.archetypes.map((entry) => entry.id));
 
   const mapping =
     typeof flags.get('map') === 'string'
@@ -235,8 +236,15 @@ async function main() {
       producedArtifactKindsFromRecords(slide.records);
     const fixture =
       fixturesByTitle.get(slide.title.trim().toLowerCase()) ?? fixturesBySlide.get(slide.slide);
+    // The vocabulary map is keyed on short names ('hero-thesis'), but the v3 compiler emits fully
+    // qualified ids ('narrative.hero-thesis'). Neither is wrong; nothing joined them, so every
+    // slide fell to `ungated` — which reads as "no opinion" and is how 38 unjudged slides could
+    // look like a clean run. An artifactType that IS a known archetype id needs no mapping.
+    const knownArchetype = (value) =>
+      typeof value === 'string' && archetypeIds.has(value) ? value : null;
     const archetypeId =
       resolveArchetypeId(fixture?.artifactType, mapping) ??
+      knownArchetype(fixture?.artifactType) ??
       resolveArchetypeId(artifactTypeFromTitle(slide.title), mapping) ??
       null;
 
