@@ -52,7 +52,8 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "atlas:distinctness-gate": "node scripts/nodeslide-artifact-distinctness-gate.mjs",
-    "claim-gate": "node scripts/nodeslide-claim-gate.mjs --manifest qa/claims/coding-agent-builds-slides.json"
+    "claim-gate": "node scripts/nodeslide-claim-gate.mjs --manifest qa/claims/coding-agent-builds-slides.json",
+    "atlas:knockout-canary": "node scripts/nodeslide-knockout-canary.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "0.14.26",
