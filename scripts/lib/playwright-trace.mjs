@@ -7,17 +7,25 @@
  * success caption still shipped. Two adversarial rounds confirmed it — every fix closed one fixture
  * while the class ("the producer authors the record the check reads") stayed open one level up.
  *
- * A class like that does not close by adding checks that read the self-authored artifact. It closes
- * by making the artifact come from somewhere the producer cannot author. A Playwright trace is that
- * somewhere: the browser writes it, every action is a matched before/after pair with real
- * monotonic timing, and each screenshot is stored under a filename carrying its own capture
- * timestamp in epoch milliseconds. You cannot hand-write a coherent trace with 101 paired actions,
- * consistent timing and real JPEG bytes any more easily than you can hand-write the deck it proves.
+ * This module DERIVES the record from a trace.zip instead of accepting producer JSON: actions are
+ * matched before/after pairs, screenshots carry their own epoch-ms capture time in the filename,
+ * and a context clock anchor puts both on one wall clock. That derivation is correct and useful.
  *
- * So this reads a real trace.zip and derives the run record FROM it. Nothing here is caller-
- * supplied: the actions, the viewport, the screenshot timestamps all come out of the trace bytes.
- * The gate then reconciles the compiler's DECLARATION (authored before the run) against this
- * derived record — declaration and evidence from two different authors, which is the whole point.
+ * CORRECTION (round-3 re-attack, 2026-07-23). An earlier version of this header claimed a trace
+ * "cannot be hand-written" and is "an artifact the producer did not author". THAT IS FALSE, and it
+ * was a false security claim in code. A trace.zip is NDJSON text plus files named
+ * `page@<hex>-<epoch>.jpeg`; a producer forged a passing one in ~40 lines with no browser, and
+ * deleting a single `error` line flips a REFUSED verdict to CORROBORATED. A trace is an independent
+ * oracle ONLY when its PROVENANCE is trusted — produced by a CI Playwright step the producer cannot
+ * touch, or otherwise attested. This module does not establish that provenance and MUST NOT be
+ * treated as if it does.
+ *
+ * What this correctly provides: derivation, and a check that can FAIL — a trace missing an action,
+ * carrying a failed expect, lacking a clock anchor or a screenshot is refused. What it does NOT
+ * provide, and what the caller must enforce before trusting any verdict here: (1) authenticity of
+ * the trace's origin, and (2) reconciliation on kind/expected/route/viewport, not selector presence
+ * alone. Until the gate enforces both, a `--trace` file is exactly as forgeable as the `--records`
+ * JSON it replaced. See parity task: "Enforce trace provenance in the capture gate."
  */
 
 import { readFile } from 'node:fs/promises';
