@@ -70,8 +70,6 @@ export const DEEP_DETECTABLE_ARTIFACT_KINDS = Object.freeze([
   // previously undetectable, which made their archetypes unsatisfiable rather than merely unmet.
   'timeline',
   'evidence',
-  // A p:timing staged build sequence — PowerPoint's own animation model, not a static slide.
-  'scrollytelling',
 ]);
 
 /** Minimum drawn shapes before geometry is treated as a relationship artifact. */
@@ -266,8 +264,14 @@ async function main() {
       // not indeterminate forever: it is an accepted fallback, PROVIDED the recipe declared one in
       // advance AND the deck actually ships it (a real poster frame on the slide, not a promise).
       const undetectableFallback = fixture?.declaredFallback ?? null;
-      const posterFramePresent = observed.images > 0;
-      if (undetectableFallback && posterFramePresent) {
+      // The deck must actually SHIP whatever it declared. A poster-frame fallback needs a real
+      // image; a native-step-build fallback needs a real p:timing sequence. A slide that declares
+      // either and ships neither is still a violation.
+      const shipped =
+        undetectableFallback?.capability === 'native-step-build'
+          ? observed.kinds.includes('step-build')
+          : observed.images > 0;
+      if (undetectableFallback && shipped) {
         results.push({
           slide: slide.slide,
           title: slide.title,

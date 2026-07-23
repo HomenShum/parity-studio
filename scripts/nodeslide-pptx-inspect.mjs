@@ -184,11 +184,17 @@ export function observeSlideXml(
     (match) => match[1],
   );
   const distinctTargets = new Set(buildSteps);
-  if (/<p:timing>/.test(xml) && distinctTargets.size >= 2) {
-    kinds.add('scrollytelling');
+  // A transition must carry a genuine animation behavior; a bare <p:cTn> is not animation.
+  const hasRealBehavior = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/.test(xml);
+  if (/<p:timing>/.test(xml) && distinctTargets.size >= 2 && hasRealBehavior) {
+    // Deliberately NOT `scrollytelling`. PowerPoint advances on user click — discrete steps — so
+    // this is a step-build. Scroll-linked scrubbing is continuous and genuinely unsupported.
+    // Calling a step-build "scrub" would be the same overclaim as calling autoshapes a chart, so
+    // the archetype is satisfied only via a declared fallback, never as a native pass.
+    kinds.add('step-build');
     evidence.push({
-      kind: 'scrollytelling',
-      signal: `p:timing build sequence with ${buildSteps.length} click-triggered steps over ${distinctTargets.size} distinct shapes`,
+      kind: 'step-build',
+      signal: `p:timing sequence: ${buildSteps.length} user-advance transitions over ${distinctTargets.size} distinct shapes (${distinctTargets.size + 1} observable states; first visible at slide entry)`,
     });
   }
 
