@@ -1,5 +1,5 @@
 /**
- * Motion scene verifier — checks A..H.
+ * Motion scene verifier — checks A..K.
  *
  * A byte inspection can prove that native animation TOPOLOGY exists. It cannot prove PowerPoint
  * plays it. This module keeps those two claims apart on purpose: `topology` is decided from the
@@ -13,8 +13,13 @@
  *   D  semantic state mapping — declared roles cross-checked against real named objects
  *   E  distinct signatures    — simulating the transitions yields N distinct semantic digests
  *   F  semantic progression   — every transition changes a REQUIRED role, not a title or accent
- *   G  pinned visual          — a declared pinned object survives every state
+ *   G  pinned visual          — a declared pinned object survives every state AND is visible
  *   H  runtime playback       — not run unless a canary supplies real screenshots
+ *
+ * Added after a second review found the scene could satisfy A-H and still not stage its narrative:
+ *   I  one state per advance  — a click that reveals three roles lands the scene in two clicks
+ *   J  declared order         — five distinct signatures in the wrong sequence is another scene
+ *   K  no animated ancestor   — a group animation hides children whatever their own state says
  */
 
 import { decidePrimacy, parseFrame } from './semantic-primacy.mjs';
@@ -40,6 +45,43 @@ export function shapeBlockFor(xml, name) {
     if (match[0].includes(`name="${name}"`)) return match[0];
   }
   return null;
+}
+
+/**
+ * For each shape id, the ids of the <p:grpSp> groups it sits inside, outermost first.
+ *
+ * Gaming route 7: a required role's shape is revealed on cue and never touched again, while an
+ * ancestor group is animated away — the child's own state is irrelevant once its parent is hidden,
+ * so the role "appears" and nothing shows. Every per-shape check passes because every per-shape
+ * check is looking at the wrong shape.
+ *
+ * Scanned by walking the tag stream rather than by regex-matching whole blocks, because groups
+ * nest and a non-greedy block match closes at the first </p:grpSp> rather than the matching one.
+ */
+export function ancestorGroupsOf(xml) {
+  const ancestors = new Map();
+  const stack = [];
+  const token = /<p:grpSp>|<\/p:grpSp>|<p:cNvPr id="(\d+)"[^>]*\/?>/g;
+  let match = token.exec(xml);
+  let pendingGroup = false;
+  while (match !== null) {
+    if (match[0] === '<p:grpSp>') {
+      // The group's own cNvPr is the next id seen; mark that we are waiting for it.
+      pendingGroup = true;
+      stack.push(null);
+    } else if (match[0] === '</p:grpSp>') {
+      stack.pop();
+    } else if (match[1]) {
+      if (pendingGroup) {
+        stack[stack.length - 1] = match[1];
+        pendingGroup = false;
+      } else {
+        ancestors.set(match[1], stack.filter(Boolean));
+      }
+    }
+    match = token.exec(xml);
+  }
+  return ancestors;
 }
 
 /** Shapes on the slide, by cNvPr id -> name. */
@@ -238,6 +280,32 @@ export function verifyMotionScene({ xml, expectation, runtimeCaptures = null, sl
     detail: orderMatches
       ? `roles reveal in the declared order: ${expectedReveals.join(' -> ')}`
       : `declared ${expectedReveals.join(' -> ') || '(none)'} but revealed ${revealedOrder.join(' -> ') || '(none)'}`,
+  };
+
+  // K — no required role may sit inside an animated ancestor group.
+  //
+  // Gaming route 7. A group animation overrides whatever its children are doing, so a role that is
+  // revealed on cue and never touched again still shows nothing if its parent group is hidden. The
+  // per-shape checks all pass because they are all looking at the wrong shape. Animating a group
+  // that contains a required role is not automatically an attack — but it makes every other check
+  // in this file unable to speak, so the gate refuses to certify it rather than guess.
+  const ancestors = ancestorGroupsOf(xml);
+  const animatedTargets = new Set(allTargets);
+  const captured = [];
+  for (const [id, parsed] of namedRoles) {
+    if (!required.has(parsed.role)) continue;
+    const animatedAncestor = (ancestors.get(id) ?? []).find((groupId) =>
+      animatedTargets.has(groupId),
+    );
+    if (animatedAncestor)
+      captured.push(`${parsed.role} (inside animated group ${animatedAncestor})`);
+  }
+  checks.K_noAnimatedAncestor = {
+    pass: captured.length === 0,
+    detail:
+      captured.length === 0
+        ? 'no required role sits inside an animated group'
+        : `${captured.length} required role(s) can be hidden by an ancestor regardless of their own state: ${captured.join(', ')}`,
   };
 
   // H — topology is not playback. Without a canary this stays honestly unproven.
