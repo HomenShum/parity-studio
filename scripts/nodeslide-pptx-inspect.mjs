@@ -180,12 +180,14 @@ export function observeSlideXml(
   // The anti-gaming rule: a single fade-in is not a scene. Require at least two `clickEffect`
   // build steps targeting DISTINCT shape ids — that is a staged reveal, not decoration. A slide
   // that merely animates one title still reports no scrollytelling.
-  const buildSteps = [...xml.matchAll(/<p:cTn\b[^>]*nodeType="clickEffect"[\s\S]*?<p:spTgt spid="(\d+)"/g)].map(
-    (match) => match[1],
-  );
+  const buildSteps = [
+    ...xml.matchAll(/<p:cTn\b[^>]*nodeType="clickEffect"[\s\S]*?<p:spTgt spid="(\d+)"/g),
+  ].map((match) => match[1]);
   const distinctTargets = new Set(buildSteps);
   // A transition must carry a genuine animation behavior; a bare <p:cTn> is not animation.
-  const hasRealBehavior = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/.test(xml);
+  const hasRealBehavior = /<p:(set|anim|animEffect|animMotion|animScale|animRot|animClr)\b/.test(
+    xml,
+  );
   if (/<p:timing>/.test(xml) && distinctTargets.size >= 2 && hasRealBehavior) {
     // Deliberately NOT `scrollytelling`. PowerPoint advances on user click — discrete steps — so
     // this is a step-build. Scroll-linked scrubbing is continuous and genuinely unsupported.
