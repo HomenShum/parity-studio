@@ -57,12 +57,47 @@ export default function App() {
       </Suspense>
     );
   }
+  // Asking for a disabled surface and not asking at all used to render the same screen: the
+  // request was discarded in silence, so `?domain=parity` on production looked like NodeSlide
+  // simply being the default. README.md and docs/ARCHITECTURE.md both document the deep link as
+  // working, and the shipped bundle proves it does not — VITE_ENABLE_PARITY_DOMAIN is unset there.
+  // A refusal that says why is the difference between a flag and a bug.
+  if (urlDomain === 'parity' && !parityEnabled) {
+    return <ParityDomainDisabled />;
+  }
   return domain === 'parity' ? (
     <ParityApp />
   ) : (
     <Suspense fallback={<NodeSlideBootScreen />}>
       <NodeSlideStudio />
     </Suspense>
+  );
+}
+
+/**
+ * The Parity surface is compiled into this very bundle — it is gated, not absent. Saying so, and
+ * naming the one variable that gates it, costs a few lines and stops the deep link reading as
+ * broken to anyone following the docs.
+ */
+function ParityDomainDisabled() {
+  return (
+    <main className="domain-notice" data-testid="parity-domain-disabled">
+      <h1>Parity Studio is not enabled on this deployment</h1>
+      <p data-testid="parity-domain-reason">
+        You asked for <code>?domain=parity</code>. The surface is built into this bundle, but it
+        stays behind <code>VITE_ENABLE_PARITY_DOMAIN</code>, which is not set to <code>true</code>{' '}
+        here — so rendering NodeSlide instead would be answering a different question than the one
+        you asked.
+      </p>
+      <p>
+        Set <code>VITE_ENABLE_PARITY_DOMAIN=true</code> in the deployment environment and rebuild,
+        or run it locally with that variable set.
+      </p>
+      <nav>
+        <a href="?domain=nodeslide">Open NodeSlide</a>
+        <a href="?domain=atlas">Open the Atlas gallery</a>
+      </nav>
+    </main>
   );
 }
 

@@ -6,7 +6,7 @@ Parity Studio also works as a design-staging layer for real codebases. Before a 
 
 ## NodeSlide domain
 
-This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain; open the original Parity Studio surface with `?domain=parity`.
+This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain. The original Parity Studio surface opens at `?domain=parity`, but only where `VITE_ENABLE_PARITY_DOMAIN=true` is set at build time — it is **not** set on the deployed site, so that deep link shows an explanatory notice there rather than the legacy shell. The Atlas gallery is ungated and live at [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas).
 
 **Launch posture (2026-07-10): GO for a controlled anonymous private preview; NO-GO for a public multi-tenant launch.** Editor access is protected by a 256-bit owner capability stored in the creating browser, and read-only presentation links use separate unguessable capabilities. This is a materially safer preview boundary than raw deck IDs, but it is not account authentication, tenant isolation, share revocation, or an enterprise access-control system.
 
