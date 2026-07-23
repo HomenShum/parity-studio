@@ -234,25 +234,51 @@ export function verifyMotionScene({ xml, expectation, runtimeCaptures = null, sl
             : 'pinned object present through all states (no slide geometry supplied, so visibility is unchecked)',
   };
 
-  // I — one user advance must advance exactly ONE semantic state.
+  // I — each advance must reveal exactly the roles ITS canonical state boundary adds.
   //
-  // Gaming route 6: a single click that reveals three required roles at once still produces
-  // distinct signatures and a clean progression, while the narrative the scene claims to stage
-  // never actually stages. N-1 transitions over N states only means one-per-click if each
-  // transition moves one.
-  const multiRoleTransitions = transitions.filter(
-    (t) =>
-      new Set(t.targets.map((id) => namedRoles.get(id)?.role).filter((r) => required.has(r))).size >
-      1,
-  ).length;
-  checks.I_oneStatePerAdvance = {
-    pass: transitions.length > 0 && multiRoleTransitions === 0,
+  // An earlier version of this check required exactly one role per advance. That was wrong, and the
+  // design review caught it: one legitimate canonical state may reveal several roles together — a
+  // fact card plus the connector that binds it plus the source node it points at can be a single
+  // state. A cardinality-of-one rule rejects that and would force the compiler to split a coherent
+  // reveal into meaningless half-steps purely to satisfy the inspector, which is the gate distorting
+  // the artifact instead of judging it.
+  //
+  // The rule that actually holds: the required roles an advance reveals must EQUAL the set the next
+  // canonical state adds over the current one — no more (gaming route 6: one click doing two states'
+  // work), no fewer, and no different roles. Cardinality is whatever the canonical fixture declares.
+  // The per-state visible-role sets are what make the boundary computable. Without them the check
+  // cannot form a delta, and saying so is honest; failing every transition would be a false accusation.
+  const hasVisibleRoleSets = expectation.states.some((state) => Array.isArray(state.visibleRoles));
+  const requiredRolesVisibleAt = (index) =>
+    new Set((expectation.states[index]?.visibleRoles ?? []).filter((role) => required.has(role)));
+  const boundaryMismatches = [];
+  transitions.forEach((transition, step) => {
+    // Transition `step` advances from canonical state `step` into state `step + 1`.
+    const before = requiredRolesVisibleAt(step);
+    const after = requiredRolesVisibleAt(step + 1);
+    const expectedDelta = new Set([...after].filter((role) => !before.has(role)));
+    const actualDelta = new Set(
+      transition.targets.map((id) => namedRoles.get(id)?.role).filter((role) => required.has(role)),
+    );
+    const sameSet =
+      expectedDelta.size === actualDelta.size &&
+      [...actualDelta].every((role) => expectedDelta.has(role));
+    if (!sameSet) {
+      boundaryMismatches.push(
+        `advance ${step + 1}: revealed {${[...actualDelta].sort().join(', ') || '∅'}} but its canonical state boundary adds {${[...expectedDelta].sort().join(', ') || '∅'}}`,
+      );
+    }
+  });
+  checks.I_stateBoundary = {
+    pass: transitions.length > 0 && hasVisibleRoleSets && boundaryMismatches.length === 0,
     detail:
       transitions.length === 0
         ? 'no transitions to evaluate'
-        : multiRoleTransitions === 0
-          ? 'every advance reveals exactly one required role'
-          : `${multiRoleTransitions} advance(s) reveal more than one required role at once, so the staging is coarser than the scene claims`,
+        : !hasVisibleRoleSets
+          ? 'the expectation carries no per-state visibleRoles, so canonical state boundaries cannot be computed'
+          : boundaryMismatches.length === 0
+            ? 'every advance reveals exactly the roles its canonical state boundary adds'
+            : boundaryMismatches.slice(0, 3).join('; '),
   };
 
   // J — the roles must appear in the ORDER the scene declares.
