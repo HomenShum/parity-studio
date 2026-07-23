@@ -219,11 +219,10 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Timeline',
     narrativeJob: 'Place events on a shared time axis.',
-    // PowerPoint has no timeline primitive. Its native realization of a time axis is a chart with
-    // editable start/duration data, which satisfies the job fully — so requiring only `timeline`
-    // made this archetype unsatisfiable in PPTX by construction. The real failure this archetype
-    // guards against is still caught by `date-prefixed-bullet-list`.
-    requiredArtifactKinds: ['timeline', 'chart'],
+    // Satisfied by a real OOXML time axis (<c:dateAx> with date-serial categories) — see the
+    // timeline primitive in scripts/nodeslide-pptx-inspect.mjs. A plain category-axis chart does
+    // NOT satisfy it: opaque string categories carry no time semantics.
+    requiredArtifactKinds: ['timeline'],
     forbiddenSubstitutes: ['date-prefixed-bullet-list'],
   },
   {
@@ -231,8 +230,8 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Roadmap',
     narrativeJob: 'Show planned work in sequence with its dependencies.',
-    // See progression.timeline: a native Gantt-style chart is PowerPoint's time axis.
-    requiredArtifactKinds: ['timeline', 'chart'],
+    // See progression.timeline — a real c:dateAx time axis, not a category axis.
+    requiredArtifactKinds: ['timeline'],
     forbiddenSubstitutes: ['undated-wish-list'],
   },
   {
@@ -240,8 +239,8 @@ export const NODESLIDE_ATLAS_ARCHETYPES: readonly AtlasArchetype[] = Object.free
     family: 'progression',
     title: 'Milestones',
     narrativeJob: 'Show which gates are passed and which remain.',
-    // See progression.timeline. A table of gates with pass/fail is equally native and auditable.
-    requiredArtifactKinds: ['timeline', 'chart', 'table'],
+    // A real time axis, or a native table of gates with pass/fail — both are auditable.
+    requiredArtifactKinds: ['timeline', 'table'],
     forbiddenSubstitutes: ['all-green-status-without-evidence'],
   },
   {

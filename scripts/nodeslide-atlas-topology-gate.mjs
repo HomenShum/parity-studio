@@ -65,6 +65,11 @@ export const DEEP_DETECTABLE_ARTIFACT_KINDS = Object.freeze([
   'equation',
   'code',
   'screenshot',
+  // Engineered primitives — see nodeslide-pptx-inspect.mjs. `timeline` is a real c:dateAx time
+  // axis; `evidence` is a claim hyperlinked to an external source relationship. Both were
+  // previously undetectable, which made their archetypes unsatisfiable rather than merely unmet.
+  'timeline',
+  'evidence',
 ]);
 
 /** Minimum drawn shapes before geometry is treated as a relationship artifact. */
@@ -254,6 +259,23 @@ async function main() {
     const detectable = observed.direct ? DEEP_DETECTABLE_ARTIFACT_KINDS : DETECTABLE_ARTIFACT_KINDS;
     const observable = archetype.requiredArtifactKinds.filter((kind) => detectable.includes(kind));
     if (observable.length === 0) {
+      // Some artifacts cannot exist in PowerPoint at all — a scroll-driven scene has no OOXML
+      // representation, so "richer inspection" would never help. For those the honest outcome is
+      // not indeterminate forever: it is an accepted fallback, PROVIDED the recipe declared one in
+      // advance AND the deck actually ships it (a real poster frame on the slide, not a promise).
+      const undetectableFallback = fixture?.declaredFallback ?? null;
+      const posterFramePresent = observed.images > 0;
+      if (undetectableFallback && posterFramePresent) {
+        results.push({
+          slide: slide.slide,
+          title: slide.title,
+          archetypeId,
+          status: 'fallback-accepted',
+          observed,
+          reason: `${archetype.requiredArtifactKinds.join(' or ')} has no PowerPoint representation. The recipe declared a ${undetectableFallback.capability} fallback in advance and the slide ships it: ${undetectableFallback.behavior}`,
+        });
+        continue;
+      }
       results.push({
         slide: slide.slide,
         title: slide.title,
