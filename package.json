@@ -33,7 +33,7 @@
     "atlas:motion-canary": "node scripts/nodeslide-motion-canary.mjs",
     "atlas:fidelity-gate": "node scripts/nodeslide-artifact-fidelity-gate.mjs",
     "atlas:asset-gate": "node scripts/nodeslide-asset-gate.mjs",
-    "test:atlas": "vitest run shared/nodeslideAtlas.test.ts shared/nodeslideClaimProof.test.ts scripts/tests/nodeslide-atlas-topology-gate.test.mjs scripts/tests/motion-gate.test.mjs scripts/tests/artifact-fidelity.test.mjs scripts/tests/asset-provenance.test.mjs scripts/tests/artifact-distinctness.test.mjs mcp/src/lib/atlasTools.test.ts src/domains/nodeslide/atlas/AtlasGallery.test.tsx",
+    "test:atlas": "vitest run shared/nodeslideAtlas.test.ts shared/nodeslideClaimProof.test.ts scripts/tests/nodeslide-atlas-topology-gate.test.mjs scripts/tests/motion-gate.test.mjs scripts/tests/motion-oracle.test.mjs scripts/tests/semantic-primacy.test.mjs scripts/tests/evidence-binding.test.mjs scripts/tests/artifact-fidelity.test.mjs scripts/tests/asset-provenance.test.mjs scripts/tests/artifact-distinctness.test.mjs mcp/src/lib/atlasTools.test.ts src/domains/nodeslide/atlas/AtlasGallery.test.tsx",
     "nodeslide:bench": "node scripts/nodeslide-benchmark-gate.mjs --mode evidence",
     "nodeslide:bench:pr": "node scripts/nodeslide-benchmark-gate.mjs --mode pr",
     "nodeslide:bench:evidence": "node scripts/nodeslide-benchmark-gate.mjs --mode evidence",
