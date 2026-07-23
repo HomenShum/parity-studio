@@ -1,0 +1,105 @@
+{
+  "_comment": "Claim manifest for the NodeSlide launch post. Authored as JSON rather than YAML because this repo ships no YAML parser and adding a dependency for one file is not worth the supply-chain surface — the schema is the substance. Each entry quotes the post VERBATIM so drift between the copy and what is actually proven stays visible in a diff. Statuses live in the receipt beside this file, never here: a manifest that carried its own verdicts would be a claim travelling with its own evidence.",
+  "schemaVersion": "nodeslide.claim-proof/v1",
+  "claimSet": "coding-agent-builds-slides",
+  "scenarioId": "claude-code-consumer-repo",
+  "requiredScenarios": ["founder", "researcher"],
+  "autonomyBudget": {
+    "maxHumanSteeringMessages": 3,
+    "maxManualFileEdits": 0,
+    "maxManualSlideEdits": 0
+  },
+  "_autonomyNote": "Three permitted human actions: the initial brief, one aesthetic or narrative correction, and final acceptance. Tool-call count is deliberately not a criterion — it measures how chatty the harness is, not who did the work. The question is whether the human had to rescue the run.",
+  "claims": [
+    {
+      "id": "agent-builds-deck",
+      "statement": "Let your coding agent (Claude Code, Codex) to build your slides with you.",
+      "proof": "live",
+      "required": true,
+      "requiredEvidence": [
+        "agent-transcript",
+        "playwright-trace",
+        "generated-deck",
+        "source-commit"
+      ]
+    },
+    {
+      "id": "mostly-autonomous",
+      "statement": "It is developed mostly autonomously, with a lot of steering.",
+      "proof": "live",
+      "required": true,
+      "requiredEvidence": ["autonomy-receipt", "agent-transcript"]
+    },
+    {
+      "id": "visual-self-critique",
+      "statement": "self-evaluated and self-improved to critique against visual complexities.",
+      "proof": "live",
+      "required": true,
+      "requiredEvidence": ["render-before", "critique-findings", "typed-repair", "render-after"]
+    },
+    {
+      "id": "harness-self-improvement",
+      "statement": "self-improved to critique against visual complexities with historical human made artifacts.",
+      "proof": "benchmark",
+      "required": false,
+      "requiredEvidence": ["harness-a-run", "harness-b-run", "blind-preference"],
+      "_note": "Cannot be shown by one recording. Needs the same model, brief and budget across two harness versions."
+    },
+    {
+      "id": "open-reference-integration",
+      "statement": "getting integrated with open source deck templates / references to further enhance the prettiness and taste.",
+      "proof": "benchmark",
+      "required": false,
+      "requiredEvidence": ["reference-ids", "reference-vs-noreference"],
+      "_note": "Watching the agent retrieve references proves retrieval happened, not that it improved anything."
+    },
+    {
+      "id": "clarifies-agent-built-apps",
+      "statement": "It helps to bring clarity for any agent made applications before presenting to stakeholders, judges, or investors.",
+      "proof": "live",
+      "required": true,
+      "requiredEvidence": ["consumer-repo-deck", "human-review", "source-bound-claims"]
+    },
+    {
+      "id": "editable-pptx",
+      "statement": "spec-driven foundation that helps to present graphs/charts/technical visuals.",
+      "proof": "artifact",
+      "required": true,
+      "requiredEvidence": ["pptx-topology", "pptx-digest"],
+      "requiredTopology": { "nativeCharts": 1, "nativeConnectors": 1 }
+    },
+    {
+      "id": "researchers-and-founders",
+      "statement": "Originally intended for academics and researchers, expanded to make founders life easier.",
+      "proof": "scenario",
+      "required": false,
+      "requiredEvidence": ["generated-deck"],
+      "_note": "A founder deck establishes the founder case only. The researcher canary needs its own run, and the healthcare variant must visibly REFUSE unsupported clinical claims."
+    },
+    {
+      "id": "nodekit-consumer-setup",
+      "statement": "All part of the in-progress NodeKit ecosystem ... Made to be set up with agent too.",
+      "proof": "consumer",
+      "required": false,
+      "requiredEvidence": ["fresh-repo-install", "no-repo-local-imports", "exported-deck"],
+      "_note": "Until a non-NodeSlide repository installs and runs it with no copy-paste and no prepared database, this is 'in progress', not 'ready-made'."
+    },
+    {
+      "id": "grant-and-batch-positioning",
+      "statement": "Positioned for people pursuing the Anthropic $50K grant for healthcare life science researchers and the YC S26 batch.",
+      "proof": "positioning",
+      "required": false,
+      "requiredEvidence": [],
+      "_note": "Market framing, and neither organisation has endorsed anything. The evaluator has no code path that returns a proof verdict for this class, so it cannot be presented as a technical result even by mistake."
+    }
+  ],
+  "requiredArtifactKinds": ["screenshot", "chart", "diagram", "evidence", "code"],
+  "disqualifiers": [
+    "a required artifact is missing",
+    "a screenshot is a placeholder",
+    "a caption describes an interaction that did not occur",
+    "the exported artifact is flattened when native semantics were required",
+    "a source or claim cannot be verified",
+    "the deck has not been inspected as rendered pixels"
+  ]
+}
