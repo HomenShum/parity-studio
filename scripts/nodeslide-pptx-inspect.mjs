@@ -173,6 +173,25 @@ export function observeSlideXml(
     });
   }
 
+  // The motion primitive. Calling scroll-driven scenes "impossible in PowerPoint" was wrong:
+  // OOXML carries a full animation model in <p:timing>. A scrollytelling scene is one pinned
+  // visual revealed in stages, which is exactly a click-triggered build sequence.
+  //
+  // The anti-gaming rule: a single fade-in is not a scene. Require at least two `clickEffect`
+  // build steps targeting DISTINCT shape ids — that is a staged reveal, not decoration. A slide
+  // that merely animates one title still reports no scrollytelling.
+  const buildSteps = [...xml.matchAll(/<p:cTn\b[^>]*nodeType="clickEffect"[\s\S]*?<p:spTgt spid="(\d+)"/g)].map(
+    (match) => match[1],
+  );
+  const distinctTargets = new Set(buildSteps);
+  if (/<p:timing>/.test(xml) && distinctTargets.size >= 2) {
+    kinds.add('scrollytelling');
+    evidence.push({
+      kind: 'scrollytelling',
+      signal: `p:timing build sequence with ${buildSteps.length} click-triggered steps over ${distinctTargets.size} distinct shapes`,
+    });
+  }
+
   const connectors = countMatches(xml, /<p:cxnSp\b/g);
   const shapes = countMatches(xml, /<p:sp\b/g);
   if (connectors > 0) {

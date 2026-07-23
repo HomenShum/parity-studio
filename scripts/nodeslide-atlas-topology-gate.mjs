@@ -70,6 +70,8 @@ export const DEEP_DETECTABLE_ARTIFACT_KINDS = Object.freeze([
   // previously undetectable, which made their archetypes unsatisfiable rather than merely unmet.
   'timeline',
   'evidence',
+  // A p:timing staged build sequence — PowerPoint's own animation model, not a static slide.
+  'scrollytelling',
 ]);
 
 /** Minimum drawn shapes before geometry is treated as a relationship artifact. */
