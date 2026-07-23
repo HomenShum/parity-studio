@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { earnedAtlasMaturity } from './nodeslideAtlas';
 import {
@@ -31,6 +32,36 @@ describe('the projection carries the real run, not a summary of it', () => {
     expect(meta.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
     expect(meta.sha256).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(NODESLIDE_ATLAS_RECEIPT_PROJECTION.sourceRepository).toBe('nodeslide');
+  });
+
+  /**
+   * The digest is only worth carrying if it can catch a hand-edit. This recomputes it the way the
+   * emitter does — sorted keys, `meta` excluded entirely — so a receipt quietly flipped to passing
+   * in this repo, without regenerating upstream, fails here rather than silently raising a
+   * recipe's maturity.
+   */
+  it('the content digest still matches the data it claims to cover', () => {
+    const stable = (value: unknown): string => {
+      if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+      if (value && typeof value === 'object') {
+        return `{${Object.keys(value as object)
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${stable((value as Record<string, unknown>)[k])}`)
+          .join(',')}}`;
+      }
+      return JSON.stringify(value ?? null);
+    };
+    const { meta, ...body } = NODESLIDE_ATLAS_RECEIPT_PROJECTION;
+    const recomputed = `sha256:${createHash('sha256').update(stable(body)).digest('hex')}`;
+    expect(recomputed).toBe(meta.sha256);
+  });
+
+  it('points at the commit that introduced the receipts, not at whatever HEAD was', () => {
+    // A HEAD-derived commit makes the projection non-reproducible: it changes on every unrelated
+    // commit, so `--check` fails as a drift gate and two copies disagree by timing alone.
+    expect(NODESLIDE_ATLAS_RECEIPT_PROJECTION.meta.sourceCommit).toBe(
+      'd53f1dca0df0a39ca9c2fbf8e4f9d145225e2bcd',
+    );
   });
 
   it('ships no maturity field — the claim must not travel beside its own evidence', () => {

@@ -3599,7 +3599,7 @@
   ],
   "meta": {
     "sourceFile": "artifacts/deck-gym/artifact-atlas-v1/receipts.json",
-    "sourceCommit": "3264995baa98130e2245ff57111afe0324018fde",
-    "sha256": "sha256:33c6b81a033b10303f3c8e9e9f1734c9464e01d96222f2e829e47ca29cb12f0e"
+    "sourceCommit": "d53f1dca0df0a39ca9c2fbf8e4f9d145225e2bcd",
+    "sha256": "sha256:2bb11f08c03b7d3bf3ce4542db82f49ed9616500f0f461c352cab569e40ca0e0"
   }
 }
