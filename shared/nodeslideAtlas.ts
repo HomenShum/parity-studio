@@ -233,6 +233,127 @@ export const ATLAS_CAPABILITY_LEVELS: readonly AtlasCapabilityLevel[] = Object.f
 ]);
 
 /**
+ * Whether a capability level survives being opened somewhere other than PowerPoint.
+ *
+ * `editable` was written as a property of the file. It is not — it is a property of the file *in a
+ * given renderer*, and the two diverge on exactly two object classes. Anything not measured is
+ * `unmeasured`, never assumed portable.
+ */
+export type AtlasRendererPortability = 'portable' | 'powerpoint-only' | 'unmeasured';
+
+export interface AtlasPortabilityFact {
+  portability: AtlasRendererPortability;
+  /** What the artifact actually degrades to once opened outside PowerPoint. */
+  nonPowerPointCapability: AtlasCapabilityLevel;
+  measurement: string;
+}
+
+/**
+ * Measured by round-tripping the Atlas deck through LibreOffice headless — both pptx→pptx and
+ * pptx→odp→pptx, which agreed, so these are document-model facts and not one filter's quirk
+ * (2026-07-22).
+ *
+ * The headline is that the portability worry was mostly unfounded: charts stay real chart parts
+ * with their series, caches and both date axes; tables, connector bindings and the whole animation
+ * tree all survive. Equations do not survive at all — the OMML is deleted outright, leaving a
+ * shape that still advertises an equation and shows nothing, which is worse than a rasterised
+ * fallback because it is silent.
+ */
+export const ATLAS_ARTIFACT_PORTABILITY: Readonly<Record<AtlasArtifactKind, AtlasPortabilityFact>> =
+  Object.freeze({
+    chart: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement:
+        '10/10 chart parts, 17/17 c:ser, 19/19 c:numCache and both c:dateAx survived; only the c:externalData workbook link was severed, so values stay editable but "Edit Data" is PowerPoint-only.',
+    },
+    table: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement: '5/5 a:tbl survived the round trip with their rows intact.',
+    },
+    diagram: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement: '28/28 connectors survived with all 28 a:stCxn and 28 a:endCxn bindings intact.',
+    },
+    timeline: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement: 'Both engineered c:dateAx axes survived as real date axes.',
+    },
+    equation: {
+      portability: 'powerpoint-only',
+      nonPowerPointCapability: 'unsupported',
+      measurement:
+        'm:oMath 1->0 and m:oMathPara 1->0: all 10 m:t runs deleted with no fallback, leaving a shape that renders blank.',
+    },
+    text: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement: 'Text bodies survived; LibreOffice stamps explicit fonts but keeps the runs.',
+    },
+    code: {
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
+      measurement: 'Code panels are text bodies and survived as text.',
+    },
+    screenshot: {
+      portability: 'portable',
+      nonPowerPointCapability: 'rendered-image',
+      measurement: 'Every media part round-tripped sha256 bit-identical to its source.',
+    },
+    media: {
+      portability: 'portable',
+      nonPowerPointCapability: 'rendered-image',
+      measurement: 'Every media part round-tripped sha256 bit-identical to its source.',
+    },
+    evidence: {
+      portability: 'unmeasured',
+      nonPowerPointCapability: 'unsupported',
+      measurement: 'Hyperlink relationship survival outside PowerPoint has not been measured.',
+    },
+    scrollytelling: {
+      portability: 'unmeasured',
+      nonPowerPointCapability: 'unsupported',
+      measurement: 'Has no PowerPoint-native form to carry, so nothing was measured.',
+    },
+  });
+
+/**
+ * Capability honestly claimable for one artifact kind in one renderer.
+ *
+ * PowerPoint gets the declared level. Everywhere else gets the measured level, and `unmeasured`
+ * degrades rather than passing through — the point of the function is that an unverified claim
+ * must not read the same as a verified one.
+ */
+export function rendererScopedCapability(input: {
+  artifactKind: AtlasArtifactKind;
+  declared: AtlasCapabilityLevel;
+  renderer: 'powerpoint' | 'other';
+}): { capability: AtlasCapabilityLevel; downgraded: boolean; reason: string } {
+  const { artifactKind, declared, renderer } = input;
+  const fact = ATLAS_ARTIFACT_PORTABILITY[artifactKind];
+  if (renderer === 'powerpoint' || !fact) {
+    return { capability: declared, downgraded: false, reason: 'Declared capability applies.' };
+  }
+  // Never upgrade: a portable fact cannot lift a recipe above what it claimed for itself.
+  const level =
+    ATLAS_CAPABILITY_LEVELS.indexOf(fact.nonPowerPointCapability) >
+    ATLAS_CAPABILITY_LEVELS.indexOf(declared)
+      ? fact.nonPowerPointCapability
+      : declared;
+  return {
+    capability: level,
+    downgraded: level !== declared,
+    reason:
+      level === declared
+        ? `${artifactKind} is ${fact.portability} outside PowerPoint. ${fact.measurement}`
+        : `${artifactKind} claims ${declared} but is ${fact.portability}: ${fact.measurement}`,
+  };
+}
+
+/**
  * What an inspection actually saw. This is an observation, never a compliance verdict — the two
  * are orthogonal, and collapsing them is what let a flattened deck read as passing.
  */
@@ -362,6 +483,19 @@ export interface AtlasArtifactRecipe {
   knownLimitations: readonly string[];
 }
 
+/**
+ * What actually produced a receipt.
+ *
+ * `deterministic-baseline` is our own compiler replaying the fixture it was written against. It
+ * always passes, because the gates were authored to describe it. `model` is an outside generator
+ * that had to hit the bar without being the thing the bar was measured from.
+ *
+ * This exists because the maturity ladder could not tell them apart: `model: {id, role}` is a free
+ * string, so `nodeslide-artifact-builder-v1` scored identically to a paid model call. Absent means
+ * a receipt predates this field — treated as unknown, never as `model`.
+ */
+export type AtlasCandidateKind = 'model' | 'deterministic-baseline';
+
 export interface AtlasShowcaseReceipt {
   schemaVersion: typeof NODESLIDE_ATLAS_RECEIPT_VERSION;
   id: string;
@@ -369,6 +503,8 @@ export interface AtlasShowcaseReceipt {
   recipeVersion: string;
   archetypeId: string;
   model: { id: string; role: string };
+  /** Absent on receipts written before the distinction existed; those cannot earn `proven`. */
+  candidateKind?: AtlasCandidateKind;
   harnessVersion: string;
   sourceIds: readonly string[];
   referenceIds: readonly string[];
@@ -462,6 +598,13 @@ export function atlasCompetitiveUseBlocked(policy: AtlasSourcePolicy | undefined
 /**
  * Maturity a recipe has actually earned from its receipts, independent of what it claims.
  * Claimed maturity above the earned level is a validation error, not a rounding difference.
+ *
+ * The ladder's top two rungs are claims about GENERATIVE reproducibility — "a model can hit this
+ * bar" — so they require at least one `model` receipt. A deterministic-baseline receipt is our own
+ * compiler re-emitting the fixture the gates were written against; it proves the recipe is
+ * well-formed and gate-clean, which is exactly `vetted`, and nothing beyond it. Without this cap
+ * a run with zero model calls scored `certified`, which was true about the pipeline and false
+ * about the sentence a reader takes from the word.
  */
 export function earnedAtlasMaturity(
   recipe: Pick<AtlasArtifactRecipe, 'maturity' | 'receiptIds'>,
@@ -480,7 +623,10 @@ export function earnedAtlasMaturity(
       receipt.evaluation.exportPassed,
   );
   if (fullyPassing.length === 0) return 'vetted';
-  if (fullyPassing.some((receipt) => receipt.humanPreferred === true)) return 'certified';
+  // Fail-closed on the missing field: an unlabelled receipt is not evidence of a model.
+  const passingModelReceipts = fullyPassing.filter((receipt) => receipt.candidateKind === 'model');
+  if (passingModelReceipts.length === 0) return 'vetted';
+  if (passingModelReceipts.some((receipt) => receipt.humanPreferred === true)) return 'certified';
   return 'proven';
 }
 
