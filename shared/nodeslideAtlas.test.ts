@@ -768,15 +768,24 @@ describe('Renderer portability: `editable` is a property of file-plus-renderer',
     expect(scoped.downgraded).toBe(false);
   });
 
-  it('downgrades an equation to unsupported outside PowerPoint, because the OMML is deleted', () => {
+  /**
+   * This assertion used to be the opposite, and the flip is the point. The first measurement found
+   * the OMML annihilated; the emitter was then fixed to wrap it in <a14:m>, a re-measurement on
+   * 2026-07-23 found all 10 runs intact, and the recorded fact followed the instrument rather than
+   * the other way round. What survives is the wrapper's doing, and the measurement string still
+   * carries the bare-oMath result so the reason is not lost.
+   */
+  it('no longer downgrades an equation, because the wrapped OMML now survives', () => {
     const scoped = rendererScopedCapability({
       artifactKind: 'equation',
       declared: 'editable',
       renderer: 'other',
     });
-    expect(scoped.capability).toBe('unsupported');
-    expect(scoped.downgraded).toBe(true);
-    expect(scoped.reason).toMatch(/m:oMath/);
+    expect(scoped.capability).toBe('editable');
+    expect(scoped.downgraded).toBe(false);
+    expect(ATLAS_ARTIFACT_PORTABILITY.equation.measurement).toMatch(/<a14:m>/);
+    // The failure mode that made the wrapper necessary stays on the record.
+    expect(ATLAS_ARTIFACT_PORTABILITY.equation.measurement).toMatch(/annihilated/);
   });
 
   it('does NOT downgrade charts, tables, diagrams or timelines — those genuinely travel', () => {
