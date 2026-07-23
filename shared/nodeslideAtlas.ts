@@ -265,7 +265,7 @@ export const ATLAS_ARTIFACT_PORTABILITY: Readonly<Record<AtlasArtifactKind, Atla
       portability: 'portable',
       nonPowerPointCapability: 'editable',
       measurement:
-        '10/10 chart parts, 17/17 c:ser, 19/19 c:numCache and both c:dateAx survived; only the c:externalData workbook link was severed, so values stay editable but "Edit Data" is PowerPoint-only.',
+        '10/10 chart parts, 18/18 c:ser, 20/20 c:numCache and both c:dateAx survived; only the c:externalData workbook link was severed (10 -> 0, with all 11 embeddings dropped), so values stay editable but "Edit Data" is PowerPoint-only.',
     },
     table: {
       portability: 'portable',
@@ -275,7 +275,7 @@ export const ATLAS_ARTIFACT_PORTABILITY: Readonly<Record<AtlasArtifactKind, Atla
     diagram: {
       portability: 'portable',
       nonPowerPointCapability: 'editable',
-      measurement: '28/28 connectors survived with all 28 a:stCxn and 28 a:endCxn bindings intact.',
+      measurement: '38/38 connectors survived with all 38 a:stCxn and 38 a:endCxn bindings intact.',
     },
     timeline: {
       portability: 'portable',
@@ -283,10 +283,12 @@ export const ATLAS_ARTIFACT_PORTABILITY: Readonly<Record<AtlasArtifactKind, Atla
       measurement: 'Both engineered c:dateAx axes survived as real date axes.',
     },
     equation: {
-      portability: 'powerpoint-only',
-      nonPowerPointCapability: 'unsupported',
+      // Re-measured 2026-07-23 after the emitter was fixed, and the answer flipped. Recording the
+      // old result would now be the stale claim, so the fact follows the measurement.
+      portability: 'portable',
+      nonPowerPointCapability: 'editable',
       measurement:
-        'm:oMath 1->0 and m:oMathPara 1->0: all 10 m:t runs deleted with no fallback, leaving a shape that renders blank.',
+        'm:oMath 1->1 with all 10 m:t runs intact, once the OMML is wrapped in <a14:m>. A BARE <m:oMath> sitting directly inside <a:p> is annihilated (1->0, every run deleted, leaving a shape that still advertises an equation and renders blank) — so this rung belongs to the wrapper, not to equations in general.',
     },
     text: {
       portability: 'portable',
