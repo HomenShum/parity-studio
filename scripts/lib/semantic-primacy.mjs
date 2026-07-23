@@ -68,7 +68,54 @@ export function fullyCovers(cover, target) {
 }
 
 /**
- * Decide primacy for one semantic object.
+ * At least this fraction of the object's own on-slide area must remain unoccluded. A chart 90%
+ * covered by a later opaque shape is not the primary artifact even though its remaining 10% can
+ * still be a large share of the slide — the design review's exact case. Measuring occlusion against
+ * the OBJECT, not the slide, is what catches it.
+ */
+export const MIN_SELF_VISIBLE = 0.5;
+
+const right2 = (f) => f.x + f.cx;
+const bottom2 = (f) => f.y + f.cy;
+
+/**
+ * Exact union area of a set of rectangles, by coordinate compression. Overlapping occluders must
+ * not be double-counted, or a chart covered by two overlapping shapes would read as more-than-fully
+ * hidden. Exact rather than approximate because a primacy verdict turns on it.
+ */
+export function unionArea(rects) {
+  if (rects.length === 0) return 0;
+  const xs = [...new Set(rects.flatMap((r) => [r.x, right2(r)]))].sort((a, b) => a - b);
+  const ys = [...new Set(rects.flatMap((r) => [r.y, bottom2(r)]))].sort((a, b) => a - b);
+  let area = 0;
+  for (let i = 0; i < xs.length - 1; i += 1) {
+    for (let j = 0; j < ys.length - 1; j += 1) {
+      const cx = (xs[i] + xs[i + 1]) / 2;
+      const cy = (ys[j] + ys[j + 1]) / 2;
+      if (rects.some((r) => cx >= r.x && cx < right2(r) && cy >= r.y && cy < bottom2(r))) {
+        area += (xs[i + 1] - xs[i]) * (ys[j + 1] - ys[j]);
+      }
+    }
+  }
+  return area;
+}
+
+/** Intersect two boxes, or null when they do not overlap. */
+function intersectBox(a, b) {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const r = Math.min(right2(a), right2(b));
+  const bo = Math.min(bottom2(a), bottom2(b));
+  return r > x && bo > y ? { x, y, cx: r - x, cy: bo - y } : null;
+}
+
+/**
+ * Decide primacy for one semantic object — Stage 0 of the causal-primacy gate.
+ *
+ * This is the REGION admission check: is the native object plausibly where the artifact lives, and
+ * enough of it actually on show? It is necessary, not sufficient — it cannot prove the object is
+ * what the audience SEES (a flattened duplicate underneath passes geometry). That is the knockout
+ * render's job. Here the only question is effective visible area AFTER occlusion.
  *
  * `frame`   — the object's box, or null if geometry could not be read
  * `slide`   — { cx, cy } slide dimensions in EMU
@@ -84,8 +131,8 @@ export function decidePrimacy({ frame, slide, covers = [] }) {
   }
 
   const slideBox = { x: 0, y: 0, cx: slide.cx, cy: slide.cy };
-  const onSlide = intersectionArea(frame, slideBox);
-  if (onSlide === 0) {
+  const onSlideBox = intersectBox(frame, slideBox);
+  if (!onSlideBox) {
     const inches = (v) => (v / EMU_PER_INCH).toFixed(2);
     return {
       verdict: 'off-slide',
@@ -94,30 +141,40 @@ export function decidePrimacy({ frame, slide, covers = [] }) {
     };
   }
 
-  const fraction = onSlide / (slide.cx * slide.cy);
-  if (fraction < MIN_AREA_FRACTION) {
-    return {
-      verdict: 'negligible',
-      reason: `only ${(fraction * 100).toFixed(3)}% of the slide is covered by this object, below the ${(MIN_AREA_FRACTION * 100).toFixed(1)}% needed to be the artifact rather than a token of one.`,
-      visibleFraction: fraction,
-    };
-  }
+  const onSlideArea = onSlideBox.cx * onSlideBox.cy;
+  // Occlusion measured as the UNION of every later opaque shape clipped to the object's on-slide
+  // box — not "is it fully covered", which a 90%-cover defeats.
+  const clippedCovers = covers
+    .filter((cover) => cover.opaque && cover.frame)
+    .map((cover) => ({ name: cover.name, box: intersectBox(cover.frame, onSlideBox) }))
+    .filter((cover) => cover.box);
+  const occludedArea = unionArea(clippedCovers.map((cover) => cover.box));
+  const effectiveVisible = Math.max(0, onSlideArea - occludedArea);
+  const effectiveSlideFraction = effectiveVisible / (slide.cx * slide.cy);
+  const selfVisible = onSlideArea > 0 ? effectiveVisible / onSlideArea : 0;
 
-  // Later in the shape tree paints on top. A single opaque shape that fully contains this one
-  // hides it completely, which is the "native object behind the visual fallback" route.
-  const blocker = covers.find((cover) => cover.opaque && fullyCovers(cover.frame, frame));
-  if (blocker) {
+  if (effectiveVisible <= 0 || selfVisible < MIN_SELF_VISIBLE) {
+    // Name the largest occluder, so a failure points at the shape doing the hiding.
+    const dominant = clippedCovers
+      .slice()
+      .sort((a, b) => b.box.cx * b.box.cy - a.box.cx * a.box.cy)[0];
     return {
       verdict: 'occluded',
-      reason: `fully covered by a later opaque shape${blocker.name ? ` (${blocker.name})` : ''} — on-slide but not visible.`,
-      visibleFraction: fraction,
+      reason: `only ${(selfVisible * 100).toFixed(1)}% of the object is unoccluded${dominant?.name ? ` — a later opaque shape (${dominant.name}) covers the rest` : ' — later opaque shapes cover the rest'}, so it is not the artifact the audience sees.`,
+      visibleFraction: effectiveSlideFraction,
     };
   }
-
+  if (effectiveSlideFraction < MIN_AREA_FRACTION) {
+    return {
+      verdict: 'negligible',
+      reason: `its effective visible area is ${(effectiveSlideFraction * 100).toFixed(3)}% of the slide, below the ${(MIN_AREA_FRACTION * 100).toFixed(1)}% needed to be the artifact rather than a token of one.`,
+      visibleFraction: effectiveSlideFraction,
+    };
+  }
   return {
     verdict: 'visible',
-    reason: `occupies ${(fraction * 100).toFixed(1)}% of the slide and nothing opaque covers it.`,
-    visibleFraction: fraction,
+    reason: `${(selfVisible * 100).toFixed(0)}% unoccluded and occupying ${(effectiveSlideFraction * 100).toFixed(1)}% of the slide.`,
+    visibleFraction: effectiveSlideFraction,
   };
 }
 
