@@ -91,21 +91,41 @@ the product.
 Accepting one is durable. The version badge moves v1 → v2, and Versions records
 `Variation balanced/detail/split: Restyle element_7b69…; Restyle element_c19e…` as `v2 · Agent`.
 
-### But durable is not governing
+### Is it governing? Yes — and my test said no, wrongly
 
 The thread set the test: after choosing A, does an edit that is *legitimate under B* get flagged as
 violating A? It also named the trap — do not test with an obviously bad edit, because a generic
 quality check would catch that without remembering any choice.
 
-The `DECK DIRECTION` panel answers this in its own words:
+I ran it on production, saw no active direction after reload, and reported **state A: the choice is
+recorded but not enforced**. That was wrong, and the thread caught it by pointing at the repository.
 
-> Independent NodeSlide defaults with source-backed rules. **Applying one creates a normal,
-> reversible deck version.**
+The enforcement is real and it is server-side:
 
-A version is a past event. Nothing in the running product names an *active* direction after reload —
-the word "direction" survives only in the generator's own heading and its fallback banner. So a
-chosen direction is recorded, and it is not enforced. By the thread's own criteria that is state A,
-and the first work is making the commitment observable, not generating more directions.
+| Piece | Where |
+|---|---|
+| commitment fields on the deck | `activeSignatureProfileId`, `activeSignatureProfileDigest` — `shared/nodeslide.ts:597`, `convex/schema.ts:267` |
+| the transition that creates it | `activateProfile` — writes id + source digest, bumps `deck.version`, validates the snapshot against the profile |
+| **enforcement on later edits** | `convex/nodeslide.ts:943` — if a deck has an active profile, the patch is previewed and the *result* is validated against that profile before it may commit |
+
+And the refusal message is the thread's step 5, already written:
+
+> This direction conflicts with the active signature profile. Generate new directions and review again.
+
+**Why my test could not have found this.** I applied a *slide variation* and never applied a deck
+signature. So `activeSignatureProfileId` was never set, the guard at `nodeslide.ts:943` was skipped
+entirely, and I read the resulting silence as absence. Wrong instrument, then a conclusion drawn from
+a code path that never ran.
+
+### The real gap is observability, not enforcement
+
+What remains true from the test: after reload the running product **never names the active
+direction**. The word "direction" survives only in the generator's heading and its fallback banner.
+So the commitment exists, is bound to an immutable digest, and blocks conflicting edits — and a
+person looking at the deck cannot tell any of that.
+
+That is a much narrower piece of work than "build the commitment", and it is the piece worth doing:
+surface the active direction, and surface the refusal when one is hit.
 
 ## A test that proved nothing, and nearly became a finding
 
@@ -121,12 +141,30 @@ a user closing a tab actually does — the workspace reopened at v2 with the cho
 Worth recording as a product fact too: a raw deck id grants nothing, and the refusal page says so
 plainly and offers recovery.
 
+## The error class, five times now
+
+Every wrong claim in this document has the same shape. I look for a thing, fail to find it *where I
+looked*, and report the thing as absent.
+
+| # | Claim | Reality | What I actually searched |
+|---|---|---|---|
+| 1 | `DeckDirection` absent | ships as `SignatureProfile` | the identifier |
+| 2 | Evidence tab absent | ships, labelled Evidence, coded `data` | the label in source |
+| 3 | three-direction selection absent | ships as `Generate 3 directions` | source, not the app |
+| 4 | that button closes the deck-direction gap | wrong scope — it is slide-level | the app, not the scope |
+| 5 | the choice is not enforced | enforced at `convex/nodeslide.ts:943` | a code path I never triggered |
+
+Note the drift. Fixing #1–#3 by "check the running product" produced #4 and #5, which are errors of
+*checking the wrong thing carefully*. The rule is not "prefer the app to the source". The rule is:
+**name the exact mechanism you expect, then confirm you actually exercised it.** My last test
+concluded from a guard that never ran.
+
 ## What this changes
 
 Before building any part of Room-Ready or direction selection, check these against the running app:
 
-1. Deck direction already ships as `SignatureProfile` signatures with Preview and Apply. The gap is
-   enforcement, not generation.
+1. Deck direction already ships as `SignatureProfile` signatures with Preview and Apply, **and is
+   already enforced on later edits**. The gap is that none of it is visible.
 2. The Evidence tab already exists. Room-Ready's proof obligations may belong there, not in a new tab.
 3. `Versions` already handles revisions and proposals, and is where an applied direction lands
    today — so it overlaps whatever a selection receipt would record.
