@@ -150,6 +150,24 @@ What is genuinely wrong is that it happens in silence:
 > The behavior is internally correct but can still be operationally silent because the commitment is
 > not prominently visible.
 
+## What applying a direction looked like before the change
+
+Measured on production by actually applying `Finance reporting` to the demo deck, rather than by
+reading the component:
+
+![Before — an unnamed pill](evidence/before-direction-applied.png)
+
+The deck genuinely becomes governed. The panel grows a `Checks active` pill, the `Finance reporting`
+card is highlighted, its button changes to `Reapply`, and `Clear on-brand checks` appears. So the
+state was never invisible — it was **unnamed**. The pill does not say which direction, which version
+of it, or what being governed costs you. Reloading and searching the whole page for any sentence
+naming the active direction returned nothing.
+
+There was also a real defect underneath. The card was marked active by profile **id alone**, while
+the server resolves the active profile by **id AND digest** — its storage key is
+`${stableId}_${digest}`. A profile edited after it was applied would therefore be drawn as active,
+with `Reapply` on it, while a *different version of it* was the thing actually being enforced.
+
 ## The work this audit actually justifies
 
 Both sources agree on two small pieces, and on what not to build:
