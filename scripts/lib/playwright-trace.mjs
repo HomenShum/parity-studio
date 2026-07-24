@@ -22,10 +22,17 @@
  *
  * What this correctly provides: derivation, and a check that can FAIL — a trace missing an action,
  * carrying a failed expect, lacking a clock anchor or a screenshot is refused. What it does NOT
- * provide, and what the caller must enforce before trusting any verdict here: (1) authenticity of
- * the trace's origin, and (2) reconciliation on kind/expected/route/viewport, not selector presence
- * alone. Until the gate enforces both, a `--trace` file is exactly as forgeable as the `--records`
- * JSON it replaced. See parity task: "Enforce trace provenance in the capture gate."
+ * provide is authenticity of the trace's origin. That is `trace-provenance.mjs`, whose decision this
+ * module attaches to every record it returns as `provenance` and `usableAsEvidence`.
+ *
+ * ENFORCEMENT (2026-07-24). Attaching a verdict is not enforcing one, and for a while nothing read
+ * these fields: `nodeslide-claim-gate.mjs` decided claims from a producer-written receipt whose
+ * evidence list merely contained the string `"playwright-trace"`. A receipt asserting a trace that
+ * did not exist printed PROVEN and exited 0. `claim-trace-binding.mjs` closes it — a trace-backed
+ * evidence kind now survives only against a supplied file whose provenance is oracle-grade.
+ *
+ * Still not enforced here: reconciliation on kind/expected/route/viewport rather than selector
+ * presence alone. A trace can be authentic and still be a recording of the wrong thing.
  */
 
 import { readFile } from 'node:fs/promises';

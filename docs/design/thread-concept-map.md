@@ -71,19 +71,38 @@ to identifiers rather than ideas.
 Partial anchors only: `stakeholder` appears in `nodeslideSeed.ts`; `decision` appears in
 `nodeslideCreationCritique.ts` and `nodeslideStoryBench.ts` — neither is a decision *sentence*.
 
-## The correction the thread's UI sketch needs
+## The thread's UI sketch — corrected against the running app
 
 Turn 19 sketches a right sidebar of `AI · Story · Room · Evidence · Rehearse · Trace`.
 
-The shipped union is:
+**An earlier version of this section said only `ai` and `trace` overlap. That was wrong**, and I
+reported it to the owner and to the thread. `Evidence` overlaps too. The tab ships; the interface
+calls it **Evidence** while the code calls it `data` (`[data-testid="inspector-tab-data"]`, panel
+heading `EVIDENCE LAYER`). I searched the source for `Evidence`, did not find it, and declared the
+concept missing — the same identifier-versus-concept error as `DeckDirection`, made twice more in
+this very document.
 
-```ts
-InspectorTab = 'ai' | 'design' | 'comments' | 'versions' | 'data' | 'json' | 'trace'
-```
+Measured from production (see `product-surface-audit.md`):
 
-Only `ai` and `trace` overlap. **The sketch silently drops five shipped tabs** — `design`,
-`comments`, `versions`, `data`, `json`. Building to that diagram literally would delete working
-surfaces. Treat it as a proposal for *additions*, never as the target state.
+| Thread's sketch | Ships today? |
+|---|---|
+| AI | yes — `inspector-tab-ai` |
+| Evidence | **yes** — `inspector-tab-data`, labelled Evidence |
+| Trace | yes — `inspector-tab-trace` |
+| Story | no |
+| Room | no |
+| Rehearse | no |
+
+The sketch still omits four shipped tabs — `design`, `comments`, `versions`, `json` — so it remains
+a proposal for *additions*, never the target state. But three of its six entries already exist, not
+two.
+
+## `Generate 3 directions` already ships
+
+The production AI panel carries a **`Generate 3 directions`** button, beside `Sharpen the story` and
+`Reduce density`. That is the three-candidate selection step turn 17 describes as missing, and which
+this map previously implied was unbuilt. Before proposing to build direction selection, find out
+what that button already generates.
 
 ## Room-Ready's five tests, mapped
 
