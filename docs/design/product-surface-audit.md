@@ -127,6 +127,43 @@ person looking at the deck cannot tell any of that.
 That is a much narrower piece of work than "build the commitment", and it is the piece worth doing:
 surface the active direction, and surface the refusal when one is hit.
 
+### What Restore does, read twice and independently
+
+I read the restore path from the code; the design thread was answering the same question at the same
+time without seeing my read. Both reads agree on the mechanism:
+
+`restoredSnapshot` (`convex/nodeslide.ts:5035`) clones `target.deck` wholesale and overrides only
+identity and new-write fields — id, projectId, createdAt, updatedAt, version, status, shareSlug. The
+signature binding is **not** in that list, so the target version's binding — or its absence — is what
+survives. `writeNodeSlideSnapshot` then patches those same two fields onto the deck row.
+
+So restoring a version from before an activation removes the deck's governance.
+
+My instinct was that this is a defect: a bypass, since you could reach a forbidden state by restoring
+to it instead of editing to it. The thread supplied the reasoning I was missing, and it is right —
+restore must carry governance with content, because preserving the *current* signature over
+*restored* content would produce a hybrid state that never historically existed. Old versions stay
+accurate about what governed at their point in time.
+
+What is genuinely wrong is that it happens in silence:
+
+> The behavior is internally correct but can still be operationally silent because the commitment is
+> not prominently visible.
+
+## The work this audit actually justifies
+
+Both sources agree on two small pieces, and on what not to build:
+
+1. **A persistent indicator in the Design tab**, rendered directly from the current snapshot's
+   `activeSignatureProfileId` and `activeSignatureProfileDigest` — the same fields the server already
+   enforces on. **Add no new persistent state**: a second store could disagree with the deck row, and
+   then the visible answer and the enforced answer differ, which is worse than showing nothing.
+2. **A governance diff in the restore confirmation**, disclosing that restoring a pre-activation
+   version drops the active direction, *before* the restore is accepted.
+
+Versions is the wrong primary surface. It answers "what happened at a prior version"; the indicator
+must answer "what governs this deck now".
+
 ## A test that proved nothing, and nearly became a finding
 
 The first run of this test loaded the deck in a brand-new browser context and reported that no
