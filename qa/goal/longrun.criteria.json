@@ -1,0 +1,56 @@
+{
+  "_comment": "Default-FAIL contract for the autonomous long-running loop (pattern: anthropics/cwc-long-running-agents). EVERY criterion starts false and may only be flipped by a FRESH-CONTEXT evaluator that has no Write/Edit tools and did not see the build. The agent that did the work never grades it — this session produced 27 confirmed holes in work that passed its own author's tests, so self-grading is the failure mode this file exists to prevent. `evidence` must name a command whose real output a reader can re-run.",
+  "schemaVersion": "nodeslide.longrun-goal/v1",
+  "goal": "Close the open verification work, then map and build the product surface the design thread says is missing — without any criterion passing on self-assessment.",
+  "rules": {
+    "defaultFail": true,
+    "graderMustBeFreshContext": true,
+    "graderMayWrite": false,
+    "selfAssessmentCountsAsFail": true,
+    "absenceIsNotRun": "A criterion with no evidence is not-run, never passed. not-run and passed must never render the same."
+  },
+  "criteria": [
+    {
+      "id": "C1-knockout-merged",
+      "status": false,
+      "statement": "The causal-primacy knockout runner (parity #79) is merged to main and its tests pass on main.",
+      "evidence": null,
+      "verifyBy": "gh pr view 79 --json state; npx vitest run scripts/tests/knockout-primacy.test.mjs scripts/tests/knockout-surgery.test.mjs"
+    },
+    {
+      "id": "C2-concept-map",
+      "status": false,
+      "statement": "Every concept the design thread proposes (StorySpec extension, DeckDirection, ExperienceSpec, Room-Ready, the tab set) is mapped to a real symbol in the codebase or explicitly recorded as absent — no proposal reported without checking whether it exists.",
+      "evidence": null,
+      "verifyBy": "read docs/design/thread-concept-map.md and spot-check 3 claims with grep"
+    },
+    {
+      "id": "C3-council-hop",
+      "status": false,
+      "statement": "A council hop across BOTH design threads has run, and the contradiction between turn-17 Deck Direction and turn-19 Room-Ready (who owns deck-level decisions) is resolved with a recorded verdict.",
+      "evidence": null,
+      "verifyBy": "graph-hop ledger node updated with both threads and the resolution"
+    },
+    {
+      "id": "C4-storyspec-extension",
+      "status": false,
+      "statement": "Room-Ready ships as an EXTENSION of the existing NodeSlideStorySpec (decision sentence, room map, objection, one-slide, rehearsal), not a second schema owner, with scenario tests including the honest-work positive.",
+      "evidence": null,
+      "verifyBy": "grep for a second canonical owner must find none; run the new test file"
+    },
+    {
+      "id": "C5-trace-provenance",
+      "status": false,
+      "statement": "The capture gate no longer treats a producer-supplied trace as an independent oracle: it either runs the browser itself or requires attested provenance, and a forged trace is refused.",
+      "evidence": null,
+      "verifyBy": "replay the forged-trace exploit; it must exit non-zero"
+    },
+    {
+      "id": "C6-no-regression",
+      "status": false,
+      "statement": "Both repos: full test suite and lint are green (excluding the known pre-existing GitHub Actions policy failure and untracked WIP), and the real Atlas deck still gates clean.",
+      "evidence": null,
+      "verifyBy": "npx vitest run; npx biome check .; atlas topology + distinctness gates"
+    }
+  ]
+}

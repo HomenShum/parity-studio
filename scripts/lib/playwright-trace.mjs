@@ -30,6 +30,7 @@
 
 import { readFile } from 'node:fs/promises';
 import JSZip from 'jszip';
+import { decideTraceProvenance } from './trace-provenance.mjs';
 
 /** Playwright serialises each trace event as one NDJSON line inside a `*.trace` entry. */
 function parseTraceEvents(text) {
@@ -146,9 +147,13 @@ function screenshotsOf(zip) {
  * Returns null-ish structure only when the archive carries no trace stream at all, which is itself
  * reportable (a "trace" with no events is not evidence of a run).
  */
-export async function deriveRunRecordFromTrace(bufferOrPath) {
+export async function deriveRunRecordFromTrace(bufferOrPath, provenanceInput = {}) {
   const buffer = typeof bufferOrPath === 'string' ? await readFile(bufferOrPath) : bufferOrPath;
   const zip = await JSZip.loadAsync(buffer);
+  // Provenance is decided from the same bytes we are about to parse, and travels WITH the record.
+  // A caller cannot end up holding a derived record without also holding the verdict on whether it
+  // may be believed — which is how the forged trace got scored the first time.
+  const provenance = decideTraceProvenance({ buffer, ...provenanceInput });
 
   const traceEntries = Object.keys(zip.files).filter((name) => /\.trace$/.test(name));
   const events = [];
@@ -189,6 +194,12 @@ export async function deriveRunRecordFromTrace(bufferOrPath) {
     // Cheap integrity signal: a hand-forged record tends to have unmatched or zero-duration actions.
     incompleteActions: actions.filter((action) => !action.completed).length,
     hasEvidence: events.length > 0 && actions.length > 0,
+    // Content is what the trace SAYS; provenance is why we believe it. Separate claims, both
+    // reported. `usableAsEvidence` is the one a gate must consult before scoring anything.
+    provenance: provenance.provenance,
+    provenanceReason: provenance.reason,
+    traceDigest: provenance.digest ?? null,
+    usableAsEvidence: Boolean(provenance.oracleGrade) && events.length > 0 && actions.length > 0,
   };
 }
 
