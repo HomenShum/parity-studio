@@ -9,9 +9,15 @@
  * Usage:
  *   node scripts/capture-ui.mjs --url http://localhost:5180/?domain=nodeslide --out shot.png
  *                               [--click <testid>] [--wait <testid>] [--width 1440] [--height 900]
+ *                               [--measure <css selector>]
  *
  * The exit code is 1 when a wait target never appears. A capture of the wrong screen is worse than
  * no capture, so this fails instead of writing a picture of something else.
+ *
+ * `--measure` prints the geometry and type scale of one element. A screenshot shows that a layout
+ * changed; it does not say by how much, and "looks centred" is not a fact. Design review kept
+ * turning into opinion because the numbers were never on the table — this puts them there, so
+ * "the palette is pinned to the corner at 9px type" is a reading rather than an impression.
  */
 
 import { chromium } from 'playwright';
@@ -28,6 +34,7 @@ const out = flag('out', 'shot.png');
 const clickTarget = flag('click');
 const clickText = flag('clickText');
 const waitTarget = flag('wait');
+const measureTarget = flag('measure');
 const width = Number(flag('width', 1440));
 const height = Number(flag('height', 900));
 
@@ -66,6 +73,41 @@ try {
   // Let fonts and any entry animation settle, so two captures are comparable.
   await page.waitForTimeout(900);
   await page.screenshot({ path: out, fullPage: false });
+
+  if (typeof measureTarget === 'string') {
+    const measured = await page.evaluate((selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return null;
+      const box = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return {
+        left: Math.round(box.left),
+        top: Math.round(box.top),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+        // Positive means it sits right of centre, negative left. Zero is centred, and says so
+        // without anyone having to judge a screenshot.
+        centreOffsetPx: Math.round(box.left + box.width / 2 - window.innerWidth / 2),
+        fontSize: style.fontSize,
+        // Every distinct text size inside, smallest first. A scale with an 8px floor under a 31px
+        // icon reads as noise no matter how the individual rules look in isolation.
+        textSizes: [
+          ...new Set(
+            [...node.querySelectorAll('*')]
+              .filter((child) => child.textContent?.trim())
+              .map((child) => getComputedStyle(child).fontSize),
+          ),
+        ].sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b)),
+      };
+    }, measureTarget);
+
+    process.stdout.write(
+      measured
+        ? `measured ${measureTarget}\n${JSON.stringify(measured, null, 2)}\n`
+        : `measured ${measureTarget}: NOT FOUND\n`,
+    );
+    if (!measured) process.exitCode = 1;
+  }
 
   process.stdout.write(
     `captured ${out} at ${width}x${height}\n` +

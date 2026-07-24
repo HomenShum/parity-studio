@@ -224,6 +224,41 @@ Before building any part of Room-Ready or direction selection, check these again
 3. `Versions` already handles revisions and proposals, and is where an applied direction lands
    today — so it overlaps whatever a selection receipt would record.
 
+## The type scale, measured across every section
+
+Three design complaints arrived at once — a composer that was not at the bottom, a command palette
+pinned to a corner, and a Design tab nobody would open. Each had its own cause and each is fixed.
+But "the text looks goofy, not like Linear" is not a component bug, so it needed measuring rather
+than opinion. `scripts/ui-section-sweep.mjs` walks every section and reports what type sizes it
+actually renders.
+
+| Section | Sizes | Min | Max | Scale |
+|---|---|---|---|---|
+| landing | 9 | 8px | 56px | `8×1 10×181 11×65 12×24 13×1 15×14 16×4 44×1 56×1` |
+| inspector · design | 8 | 8px | 19px | `8×5 9×5 10×7 11×16 11.5×2 13×4 18.7×1 19×2` |
+| inspector · trace | 8 | 8.5px | 16px | `8.5×7 9×4 10×11 10.5×4 11×12 12×1 12.5×1 16×1` |
+| inspector · ai | 7 | 9px | 14px | `9×3 10×4 10.5×7 11×14 12×1 12.5×1 14×14` |
+| workspace top bar | 6 | 10px | 16px | `10×1 11×1 12×1 13×6 14×1 16×1` |
+| left rail | 5 | 9px | 13px | `9×7 10×21 11×9 12.5×3 13×7` |
+| inspector · comments / versions / data / json | 5 | 9px | 19px | — |
+
+**The finding is the landing row: the dominant body size is 10px, used 181 times.** The next most
+common is 11px. So the product's running text sits at 10–11px, where the applications it is being
+compared against run 14–15px for body and treat 12px as a caption. Every surface is roughly three
+to four pixels under the reference, which is why no single component looked broken and the whole
+thing still read wrong.
+
+The second finding is `inspector · design` — eight distinct sizes between 8px and 19px inside a
+344px column. Eight sizes is not a scale, it is an accumulation. That is the tab the owner said he
+would not bother opening.
+
+### One caveat, recorded because it nearly became the headline
+
+The first run reported the left rail using **20** sizes down to **0.89px**. That is not a defect: it
+is a slide's own headline drawn at thumbnail scale, working exactly as designed. The sweep now
+excludes slide content, and the rail measures 5 sizes. A tool whose loudest row is a false positive
+teaches people to ignore the tool.
+
 ## How to reproduce this audit
 
 ```bash
