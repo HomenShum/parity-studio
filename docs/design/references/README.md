@@ -124,6 +124,28 @@ node scripts/ui-section-sweep.mjs
 node scripts/capture-ui.mjs --url <url> --out shot.png --measure ".ns-command-palette"
 ```
 
+## Evidence is now enforced, not remembered
+
+The `before-after-proof` skill states the rule: capture the observable BEFORE the edit, for every
+change, including pure backend ones (captured command output, a timing, a log diff, a schema dump).
+
+A skill only runs when the model reaches for it, which makes "always capture a before" a habit — and
+habits lapse exactly when a change looks too small to bother with. So it is wired to a `PreToolUse`
+hook on `Edit|Write|NotebookEdit|MultiEdit`:
+
+- `~/.claude/hooks/before-after-proof.mjs`
+- registered in `~/.claude/settings.json`
+
+It injects one reminder per session per repository, at the first edit, and then stays quiet. It does
+not block. A hard deny on every edit would make trivial work miserable and would get the hook
+switched off, which is worse than not having it; and a reminder that fires on every edit is noise,
+which is how a real warning gets missed.
+
+Its first version called `require()` inside an `.mjs` file, threw, and exited silently on every
+edit — looking exactly like a hook that had chosen to stay quiet. It was caught by piping a fake
+payload through it, not by reading it. Same lesson as the CSS above: the rule you wrote is not the
+behaviour you get.
+
 ## Related documents
 
 - `../product-surface-audit.md` — what already ships, and five wrong "absent" reports
