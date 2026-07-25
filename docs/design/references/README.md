@@ -91,6 +91,24 @@ This is the sixth time in one session that a concept was nearly reported absent 
 aimed at the wrong thing. The standing rule is in project memory as
 `arm-the-sensor-before-reporting-absence`.
 
+### The scale shipped once without working
+
+nodeslide #66 added the scale and predicted the Design tab would fall from eight sizes to four. The
+production sweep afterwards said otherwise — still eight, `8px×1 9px×5 10px×4 11px×16 11.5px×2
+12px×2 13px×7 15px×3`. The maximum came down from 19px and 13/15 appeared, so something landed, but
+the tail survived.
+
+Cause: the block sat at `nodeslide.css:1622` under a comment asserting it would win "on source
+order". Two things beat it at equal specificity and later position — the `--ns-chrome-min-font`
+clamp lists at `:1963` and `:3647`, and **all of `nodeslideV3.css`**, which `NodeSlideStudio.tsx`
+imports after `nodeslide.css`. Being after the section rules is not the same as being last.
+
+nodeslide #67 moves it to the end of the last-loaded sheet. Verified in a harness loading both
+sheets in the real import order before shipping: **4 distinct sizes — 11×6, 12×2, 13×5, 15×1.**
+
+The general lesson, and the reason the sweep is worth keeping: a CSS claim is not verified by reading
+the rule you wrote. Only by measuring the rendered result.
+
 ### The type-scale carve-out
 
 nodeslide #66 adds the token scale, raises the floor from 9px to 11px, and scopes the inspector to
