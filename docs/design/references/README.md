@@ -70,6 +70,35 @@ Captured from production before any of this work, with `scripts/ui-section-sweep
 
 Reference targets: body 13–14px, caption 12px, floor 11px.
 
+## Status of the five proposals
+
+| # | Proposal | State |
+|---|---|---|
+| 1 | Speaker notes strip under the canvas | **Not built.** Located and specified — task #19. |
+| 2 | Inspector down to a small fixed scale | **Built** — nodeslide #66. |
+| 3 | Collapsible panels to attack the 44% | **Already shipped.** See below. |
+| 4 | Regroup the seven tabs | **Not built.** Needs a shape decision — task #20. |
+| 5 | Global type scale | **Partly built** — nodeslide #66. See the carve-out. |
+
+### Collapse already exists — the sixth false "absent"
+
+Both `Collapse slide navigator` and `Collapse inspector` ship, with correct `aria-label`s. A first
+probe clicked the wrong button, saw the width unchanged, and nearly filed collapse as missing. It is
+not: **44% chrome is the default, not a ceiling.** Whether that default is right is a behavioural
+decision, not a styling one, and is deliberately left alone.
+
+This is the sixth time in one session that a concept was nearly reported absent because the check was
+aimed at the wrong thing. The standing rule is in project memory as
+`arm-the-sensor-before-reporting-absence`.
+
+### The type-scale carve-out
+
+nodeslide #66 adds the token scale, raises the floor from 9px to 11px, and scopes the inspector to
+four steps. It deliberately does **not** touch the 21 hardcoded `font-size: 10px` and 15 `11px`
+declarations elsewhere in `nodeslide.css`. A blind find-and-replace across a stylesheet is how
+layouts break silently — fixed row heights, truncation, wrapping — so those need a per-surface pass
+with visual checks rather than a regex.
+
 ## Reproducing any of it
 
 ```bash
