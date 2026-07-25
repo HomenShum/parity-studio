@@ -41,6 +41,38 @@ twice, and now print the family a person would name.
 Linear's Properties panel agrees on the underlying rule: label and value render at **one size**, and
 the label is distinguished by *colour*, never by being smaller.
 
+## Gamma, the closest competitor, keeps almost no chrome
+
+Gamma is an AI presentation maker — the same product category as NodeSlide. Its editor:
+
+- **Top bar:** `Theme · Share · ✨Agent ⌄ · ▶ Present ⌄ · ⋯ · avatar`. Six controls, nothing else.
+- **Left:** the slide thumbnails are a **floating panel with a close button**, overlaying the canvas.
+  Not a permanent rail.
+- **Right:** a **vertical strip of unlabelled icons** — search, text, image, layout, chart, table,
+  edit. No panel is open until you choose one.
+- **Canvas:** everything else.
+
+**AI is a top-bar action, not a sidebar tab.** `✨ Agent` sits beside Share and Present. In
+NodeSlide, AI is one of seven tabs inside a permanent 340px column.
+
+### The measurement that follows from this
+
+NodeSlide at 1440px, measured on production:
+
+| | px | share |
+|---|---|---|
+| left rail | 300 | |
+| inspector | 340 | |
+| **chrome total** | **640** | **44%** |
+| canvas | 800 | 56% |
+
+**Forty-four per cent of the window is permanently spent on chrome**, before a user opens anything.
+Gamma spends roughly an icon strip. Figma Slides keeps a fixed rail and panel, but its panel is
+narrower and carries two tabs instead of seven.
+
+This is the structural version of the same complaint about the Design tab: the cost is paid up
+front, permanently, whether or not the panel is being used.
+
 ## Section by section
 
 | Section | Reference | Verdict |
