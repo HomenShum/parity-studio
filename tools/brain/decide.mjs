@@ -55,6 +55,8 @@ if (!Number.isFinite(ageHours)) {
 if (ageHours < -0.25) {
   process.stderr.write(
     `Snapshot is stamped ${Math.abs(ageHours).toFixed(1)}h in the FUTURE. Refusing to rank.\n` +
+      `  capturedAt  ${snapshot.capturedAt}\n` +
+      `  now         ${new Date().toISOString()}\n` +
       `A future timestamp means the staleness check can never fire, so the queue would look fresh forever. Fix capturedAt in notion-snapshot.json.\n`,
   );
   process.exit(1);
