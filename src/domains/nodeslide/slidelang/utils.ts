@@ -1,9 +1,11 @@
 import {
   type BoundingBox,
+  type Deck,
   type DeckSnapshot,
   NODESLIDE_MIN_READABLE_FONT_SIZE,
   type Slide,
   type SlideElement,
+  type SourceRecord,
 } from '../../../../shared/nodeslide';
 
 export const SVG_WIDTH = 1600;
@@ -48,7 +50,20 @@ export function isEmbeddedImageData(value: string | undefined): value is string 
   return typeof value === 'string' && DATA_IMAGE_PATTERN.test(value.trim());
 }
 
-export function orderedSlides(snapshot: DeckSnapshot): Slide[] {
+/**
+ * The snapshot fields every SlideLang export path actually reads. A published
+ * snapshot carries the same slides, elements, and sources but omits the
+ * owner-only deck context (project, brief, share capability), so export helpers
+ * accept this shape and a full `DeckSnapshot` still satisfies it.
+ */
+export interface ExportableSnapshot {
+  deck: Pick<Deck, 'toolchainVersion' | 'id' | 'title' | 'theme' | 'slideOrder'>;
+  slides: Slide[];
+  elements: SlideElement[];
+  sources: SourceRecord[];
+}
+
+export function orderedSlides(snapshot: ExportableSnapshot): Slide[] {
   const byId = new Map(snapshot.slides.map((slide) => [slide.id, slide]));
   const ordered = snapshot.deck.slideOrder.flatMap((slideId) => {
     const slide = byId.get(slideId);
@@ -58,7 +73,7 @@ export function orderedSlides(snapshot: DeckSnapshot): Slide[] {
   return [...ordered, ...snapshot.slides.filter((slide) => !seen.has(slide.id))];
 }
 
-export function orderedElements(snapshot: DeckSnapshot, slide: Slide): SlideElement[] {
+export function orderedElements(snapshot: ExportableSnapshot, slide: Slide): SlideElement[] {
   const candidates = snapshot.elements.filter((element) => element.slideId === slide.id);
   const byId = new Map(candidates.map((element) => [element.id, element]));
   const ordered = slide.elementOrder.flatMap((elementId) => {
@@ -70,7 +85,7 @@ export function orderedElements(snapshot: DeckSnapshot, slide: Slide): SlideElem
 }
 
 /** Non-mutating element view shared by every SlideLang export path. */
-export function orderedExportElements(snapshot: DeckSnapshot, slide: Slide): SlideElement[] {
+export function orderedExportElements(snapshot: ExportableSnapshot, slide: Slide): SlideElement[] {
   return orderedElements(snapshot, slide).filter((element) => element.visible !== false);
 }
 

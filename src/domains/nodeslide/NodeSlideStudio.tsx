@@ -5655,13 +5655,16 @@ async function shareDeck(shareSlug: string) {
   await navigator.clipboard.writeText(publishedDeckUrl(shareSlug));
 }
 
+/**
+ * The shared address is the server-rendered projection at `/s/<slug>`, not the
+ * `?share=` query on this SPA. A query-param link returns an empty shell to
+ * every reader that does not run JavaScript — a link preview, a mail client, a
+ * crawler, an agent — so the artifact that gets shared proved nothing. The
+ * projection page renders the published snapshot as HTML and links back into
+ * the interactive presenter, which still lives on `?share=`.
+ */
 function publishedDeckUrl(shareSlug: string): string {
-  const url = new URL(window.location.href);
-  url.searchParams.delete('deck');
-  url.searchParams.delete('slide');
-  url.searchParams.set('share', shareSlug);
-  url.searchParams.set('present', '1');
-  return url.toString();
+  return new URL(`/s/${encodeURIComponent(shareSlug)}`, window.location.origin).toString();
 }
 
 function isEditableTarget(target: EventTarget | null) {

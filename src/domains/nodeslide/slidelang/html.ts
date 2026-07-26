@@ -1,6 +1,7 @@
-import type { ChartData, DeckSnapshot, Slide, SlideElement } from '../../../../shared/nodeslide';
+import type { ChartData, Slide, SlideElement } from '../../../../shared/nodeslide';
 import { type SlideSourceReference, elementSourceIds, slideSourceReferences } from './provenance';
 import {
+  type ExportableSnapshot,
   SVG_HEIGHT,
   SVG_WIDTH,
   clamp,
@@ -226,7 +227,7 @@ function renderSemanticSource(reference: SlideSourceReference): string {
 }
 
 function renderSemanticSlide(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   slide: Slide,
   index: number,
   total: number,
@@ -253,9 +254,9 @@ function serializeJsonForHtml(value: unknown): string {
 }
 
 function exportedSourceRecords(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   slides: readonly Slide[],
-): DeckSnapshot['sources'] {
+): ExportableSnapshot['sources'] {
   const sourceIds = new Set<string>();
   for (const slide of slides) {
     for (const element of orderedExportElements(snapshot, slide)) {
@@ -266,7 +267,7 @@ function exportedSourceRecords(
 }
 
 function renderTextBox(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   element: SlideElement,
   box: SvgBox,
   content = element.content ?? '',
@@ -294,7 +295,7 @@ function renderTextBox(
   return `<foreignObject x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;display:flex;flex-direction:column;align-items:${alignItems};justify-content:${justifyContent};overflow:hidden;padding:${padding}px;color:${color};font-family:${safeFontFamily(fontFamily)};font-size:${fontSize}px;font-weight:${fontWeight};line-height:${lineHeight};letter-spacing:${letterSpacing}px;text-align:${align};white-space:pre-wrap;overflow-wrap:anywhere">${textHtml(content)}</div></foreignObject>`;
 }
 
-function renderShape(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+function renderShape(snapshot: ExportableSnapshot, element: SlideElement, box: SvgBox): string {
   const fill = colorToHex(element.style.fill, 'transparent');
   const stroke = colorToHex(element.style.stroke, snapshot.deck.theme.colors.border);
   const strokeWidth = clamp(finite(element.style.strokeWidth, element.style.stroke ? 1 : 0), 0, 40);
@@ -307,7 +308,7 @@ function renderShape(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
   return `${rect}${content}`;
 }
 
-function renderImage(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+function renderImage(snapshot: ExportableSnapshot, element: SlideElement, box: SvgBox): string {
   const imageUrl = element.imageUrl?.trim();
   if (imageUrl?.startsWith('https://')) {
     const focalPoint = element.image?.focalPoint ?? { x: 0.5, y: 0.5 };
@@ -337,14 +338,14 @@ function chartRange(chart: ChartData): { minimum: number; maximum: number } {
   return minimum === maximum ? { minimum, maximum: minimum + 1 } : { minimum, maximum };
 }
 
-function chartColor(snapshot: DeckSnapshot, seriesIndex: number, explicit?: string): string {
+function chartColor(snapshot: ExportableSnapshot, seriesIndex: number, explicit?: string): string {
   return colorToHex(
     explicit,
     CHART_COLORS[seriesIndex % CHART_COLORS.length] ?? snapshot.deck.theme.colors.accent,
   );
 }
 
-function renderCartesianChart(snapshot: DeckSnapshot, chart: ChartData, box: SvgBox): string {
+function renderCartesianChart(snapshot: ExportableSnapshot, chart: ChartData, box: SvgBox): string {
   const left = box.x + box.width * 0.08;
   const top = box.y + box.height * 0.08;
   const width = box.width * 0.86;
@@ -410,7 +411,7 @@ function renderCartesianChart(snapshot: DeckSnapshot, chart: ChartData, box: Svg
   return parts.join('');
 }
 
-function renderDonutChart(snapshot: DeckSnapshot, chart: ChartData, box: SvgBox): string {
+function renderDonutChart(snapshot: ExportableSnapshot, chart: ChartData, box: SvgBox): string {
   const values = chart.series[0]?.values.map((value) => Math.max(0, value)) ?? [];
   const total = values.reduce((sum, value) => sum + value, 0) || 1;
   const radius = Math.max(1, Math.min(box.width, box.height) * 0.3);
@@ -434,7 +435,7 @@ function renderDonutChart(snapshot: DeckSnapshot, chart: ChartData, box: SvgBox)
   return parts.join('');
 }
 
-function renderChart(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+function renderChart(snapshot: ExportableSnapshot, element: SlideElement, box: SvgBox): string {
   if (!element.chart) {
     return renderImage(snapshot, { ...element, altText: 'Chart data unavailable' }, box);
   }
@@ -444,7 +445,7 @@ function renderChart(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
     : renderCartesianChart(snapshot, chart, box);
 }
 
-function renderMath(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+function renderMath(snapshot: ExportableSnapshot, element: SlideElement, box: SvgBox): string {
   const expression = element.math?.expression ?? element.content ?? 'Formula unavailable';
   return renderTextBox(snapshot, element, box, expression);
 }
@@ -455,7 +456,7 @@ function mediaFragmentUrl(url: string, start?: number, end?: number): string {
   return `${url.split('#')[0]}#${fragment}`;
 }
 
-function renderVideo(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox): string {
+function renderVideo(snapshot: ExportableSnapshot, element: SlideElement, box: SvgBox): string {
   const video = element.video;
   if (!video?.url.trim()) {
     return renderImage(snapshot, { ...element, altText: 'Video unavailable' }, box);
@@ -469,7 +470,7 @@ function renderVideo(snapshot: DeckSnapshot, element: SlideElement, box: SvgBox)
 }
 
 function renderConnector(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   element: SlideElement,
   box: SvgBox,
   markerId: string,
@@ -480,7 +481,11 @@ function renderConnector(
   return `<line x1="${box.x}" y1="${y}" x2="${box.x + box.width}" y2="${y}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" marker-end="url(#${markerId})"/>`;
 }
 
-function renderElement(snapshot: DeckSnapshot, element: SlideElement, markerId: string): string {
+function renderElement(
+  snapshot: ExportableSnapshot,
+  element: SlideElement,
+  markerId: string,
+): string {
   const box = svgBox(element);
   let body: string;
   if (element.kind === 'text') body = renderTextBox(snapshot, element, box);
@@ -498,7 +503,7 @@ function renderElement(snapshot: DeckSnapshot, element: SlideElement, markerId: 
 }
 
 function renderSlideSection(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   slide: Slide,
   index: number,
   total: number,
@@ -517,7 +522,7 @@ function renderSlideSection(
   return `<section data-slide-id="${escapeHtml(slide.id)}" data-slide-index="${index}"${sourceIdsAttribute(sourceReferences.map((reference) => reference.id))} role="region" aria-labelledby="${semanticHeadingId}" style="position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:${background};box-shadow:0 24px 80px rgba(0,0,0,.35)">${semantics}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SVG_WIDTH} ${SVG_HEIGHT}" width="100%" height="100%" data-slide-visual aria-hidden="true" focusable="false" style="display:block;background:${background}"><title>Visual rendering of ${escapeHtml(slide.title)}</title><defs><marker id="${markerId}" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="${colorToHex(snapshot.deck.theme.colors.trace, '#7dd3fc')}"/></marker></defs>${elements}</svg>${notes}</section>`;
 }
 
-export function renderSlideHtml(snapshot: DeckSnapshot, slideId: string): string {
+export function renderSlideHtml(snapshot: ExportableSnapshot, slideId: string): string {
   const slides = orderedSlides(snapshot);
   const index = slides.findIndex((slide) => slide.id === slideId);
   const slide = slides[index];
@@ -525,7 +530,7 @@ export function renderSlideHtml(snapshot: DeckSnapshot, slideId: string): string
   return renderSlideSection(snapshot, slide, index, slides.length);
 }
 
-export function renderDeckHtml(snapshot: DeckSnapshot): string {
+export function renderDeckHtml(snapshot: ExportableSnapshot): string {
   const slides = orderedSlides(snapshot);
   const renderedSlides = slides
     .map((slide, index) => renderSlideSection(snapshot, slide, index, slides.length))

@@ -1,5 +1,5 @@
-import type { DeckSnapshot, Slide, SlideElement, SourceRecord } from '../../../../shared/nodeslide';
-import { orderedExportElements } from './utils';
+import type { Slide, SlideElement, SourceRecord } from '../../../../shared/nodeslide';
+import { type ExportableSnapshot, orderedExportElements } from './utils';
 
 export interface SlideSourceReference {
   id: string;
@@ -15,7 +15,7 @@ export function elementSourceIds(element: SlideElement): string[] {
 }
 
 export function slideSourceReferences(
-  snapshot: DeckSnapshot,
+  snapshot: ExportableSnapshot,
   slide: Slide,
 ): SlideSourceReference[] {
   const sourcesById = new Map(snapshot.sources.map((source) => [source.id, source]));

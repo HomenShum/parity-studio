@@ -37,7 +37,7 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof Publication
     <PublicationDialog
       open
       publication={publication}
-      shareUrl="https://example.com/?share=share-private&present=1"
+      shareUrl="https://example.com/s/share-private"
       currentDeckVersion={5}
       busy={false}
       onClose={() => undefined}
@@ -156,7 +156,7 @@ describe('NodeSlide publication dialog', () => {
     const baseProps = {
       open: true as const,
       publication,
-      shareUrl: 'https://example.com/?share=share-private&present=1',
+      shareUrl: 'https://example.com/s/share-private',
       currentDeckVersion: 5,
       busy: false,
       approval: awaitingApproval,
@@ -193,7 +193,7 @@ describe('NodeSlide publication dialog', () => {
     const baseProps = {
       open: true as const,
       publication,
-      shareUrl: 'https://example.com/?share=share-private&present=1',
+      shareUrl: 'https://example.com/s/share-private',
       currentDeckVersion: 5,
       busy: false,
       approval: awaitingApproval,
