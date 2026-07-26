@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "brain.required-state-capture/v1",
+  "note": "The render half of nodekit frontend benchmark. Not a benchmark: that additionally requires an independent review receipt and criticIndependent, which is a schema constant of true and cannot be honestly asserted by the agent that authored the change.",
+  "target": "https://nodeslide.vercel.app",
+  "capturedAt": "2026-07-26T07:45:16.780Z",
+  "requiredStateIds": [
+    "first_arrival",
+    "loading",
+    "populated",
+    "exception",
+    "proposal",
+    "conflict",
+    "failed_safe",
+    "completed",
+    "mobile"
+  ],
+  "renderedStates": [
+    {
+      "stateId": "first_arrival",
+      "screenshot": "outputs\\required-states\\first_arrival.png",
+      "digest": "sha256:d01c012f47d200f5f8b29cf45aaab79df319dff19309ce6cf781c6dcab23d008"
+    },
+    {
+      "stateId": "loading",
+      "screenshot": "outputs\\required-states\\loading.png",
+      "digest": "sha256:651b52084381388f2c22f3b02c0dd00f496a88ef41f238cd42dc642e668ec29e"
+    },
+    {
+      "stateId": "populated",
+      "screenshot": "outputs\\required-states\\populated.png",
+      "digest": "sha256:bbac0227e9b249c0229df11cd4b4835a951b2b69d8e44f054bcb7400b5d949b0"
+    },
+    {
+      "stateId": "proposal",
+      "screenshot": "outputs\\required-states\\proposal.png",
+      "digest": "sha256:99d14bb2bd5b615137f429c17fd56b9d4975a26a8db4f2b5ff284b795cc6116f"
+    },
+    {
+      "stateId": "failed_safe",
+      "screenshot": "outputs\\required-states\\failed_safe.png",
+      "digest": "sha256:99d14bb2bd5b615137f429c17fd56b9d4975a26a8db4f2b5ff284b795cc6116f"
+    },
+    {
+      "stateId": "completed",
+      "screenshot": "outputs\\required-states\\completed.png",
+      "digest": "sha256:681b55a1da0ece173a8aa4413e5d21e4bb723edb591808530a9a4187e02af1a1"
+    },
+    {
+      "stateId": "mobile",
+      "screenshot": "outputs\\required-states\\mobile.png",
+      "digest": "sha256:fdaaf5879cbaa69df2ffb7a3e47973cff60a87eb9f1ed703fd61c49bc5de4fbd"
+    }
+  ],
+  "missedStates": [
+    {
+      "stateId": "exception",
+      "reason": "the assertion for this state did not become true"
+    },
+    {
+      "stateId": "conflict",
+      "reason": "the assertion for this state did not become true"
+    }
+  ],
+  "coverage": "7/9"
+}
