@@ -1,0 +1,79 @@
+schemaVersion: nodekit.repo/v1
+repository: HomenShum/parity-studio
+lifecycle: preview
+support: active
+role: domain-application
+commandProfile: application
+
+# Why this file exists.
+#
+# The ecosystem dashboard scored NodeSlide 6/8, lowest of thirteen repositories, and that score is
+# honest about `HomenShum/NodeSlide` and silent about this one. A cross-source sweep on 2026-07-25
+# found the Notion board asserting three P1 absences — a PPTX importer, a deleteDeck mutation, and
+# export-my-data — while all three exist here: src/domains/nodeslide/slidelang/pptxImport.ts is
+# 2,330 lines and wired at NodeSlideStudio.tsx:2721, convex/nodeslide.ts:855 exports deleteDeck, and
+# src/domains/nodeslide/inspector/ExportMyDataAction.tsx ships with a test.
+#
+# None of that was measurable, because `ls parity-studio/nodekit.yaml` returned nothing and
+# `grep parity node-platform/repositories.yaml` returned nothing. A repository the measurement layer
+# cannot see is a repository whose work cannot be credited or audited, and it is why three port
+# tasks were ranked as build tasks.
+#
+# This declares only what is true today. Where a command does not exist it is omitted rather than
+# named, because a declared command that does not run is the same false claim the gates exist to
+# catch.
+
+canonicalFor:
+  - nodeslide.atlas
+  - nodeslide.claim-proof
+
+consumes:
+  - nodeplatform.repo-contract
+  - nodeslide.deck
+  - nodeslide.deck-patch
+
+commands:
+  dev: { script: dev, mode: service }
+  check: { script: test, mode: finite }
+
+# Deliberately not declared: demo, doctor, proof.
+#
+# `npm run demo`, `npm run doctor` and `npm run proof` do not exist in package.json. They are absent
+# rather than broken. Naming them here to satisfy the application profile would make this file
+# assert a capability that is not there — the failure mode this repository's own claim gate refuses
+# for receipts, applied to a repo contract instead.
+
+proof:
+  command: null
+  receiptSchema: null
+  disclosure: >-
+    This repository runs fail-closed gates rather than a single proof command: atlas:topology-gate,
+    atlas:motion-gate, atlas:fidelity-gate, atlas:asset-gate, atlas:distinctness-gate and
+    claim-gate. They emit findings and exit non-zero, but no unified receipt artifact is produced,
+    so no receipt schema is declared.
+
+noKey:
+  status: partial
+  command: npm run dev
+  externalAccountsRequired: 1
+  disclosure: >-
+    The landing surface and the Atlas gallery render without keys. The editable workspace requires a
+    Convex deployment, and local Convex access is currently failing with "You don't have access to
+    the selected project", which is why verification in this repo runs against production.
+
+contractDeclarations:
+  - concept: nodeslide.atlas
+    signature: nodeslide-atlas-registry
+    path: shared/nodeslideAtlas.ts
+    mode: canonical
+  - concept: nodeslide.claim-proof
+    signature: nodeslide-claim-proof
+    path: shared/nodeslideClaimProof.ts
+    mode: canonical
+
+architectureExceptions:
+  - concept: nodeslide.deck
+    reason: >-
+      This repository holds a working copy of the NodeSlide application source, including
+      slidelang/pptxImport.ts, which HomenShum/NodeSlide does not yet carry. The deck contracts stay
+      canonical in HomenShum/NodeSlide; the divergence here is a pending port, not a second owner.

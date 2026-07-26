@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "brain.notion-snapshot/v1",
+  "source": "Notion · NodeSlide Roadmap & Findings (collection://3737b0fc-fdd7-4659-ad27-e2310aff14d4)",
+  "capturedAt": "2026-07-25T16:10:00-07:00",
+  "capturedBy": "notion-query-database-view via MCP",
+  "note": "Refresh by re-querying the view and rewriting this file. decide.mjs refuses to rank on a snapshot older than its staleness budget, because ranking on a stale board is how a 13-day-overdue P0 stays invisible.",
+  "rows": [
+    { "item": "AI Fund submission — reply to Mike Rubino + grant reviewer access",
+      "type": "Roadmap", "status": "Blocked", "priority": "P0", "dim": "—",
+      "deadline": "2026-07-12", "blockedOnHuman": true,
+      "note": "Draft paste-ready since 07-18; all links re-verified 200 on 07-25. Waiting on a human to send." },
+
+    { "item": "P0: JSON / Source inspector tab", "type": "Roadmap", "status": "Done", "priority": "P0",
+      "dim": "D5 · integration", "note": "Verified shipped in production 07-25; board reconciled." },
+
+    { "item": "P1: Real PPTX importer (.pptx → DeckSnapshot, honest fidelity report)",
+      "type": "Roadmap", "status": "Todo", "priority": "P1", "dim": "integration",
+      "note": "Import is ABSENT — export is strictly one-way." },
+
+    { "item": "Design: horizontal overflow clips the page left at narrow widths",
+      "type": "Finding", "status": "In Progress", "priority": "P1", "dim": "B9 · A5" },
+
+    { "item": "Data-rights: no deleteDeck mutation exists",
+      "type": "Finding", "status": "Todo", "priority": "P1", "dim": "D5" },
+
+    { "item": "Merge codex/nodeslide-agentic-authoring → main",
+      "type": "Roadmap", "status": "Todo", "priority": "P1", "dim": "—",
+      "note": "Feature branch 44 commits ahead of main." },
+
+    { "item": "Deploy Convex Nebius backend + run live consented edit proof",
+      "type": "Roadmap", "status": "Todo", "priority": "P1", "dim": "D2 · B2" },
+
+    { "item": "Ship deck deletion + export-my-data",
+      "type": "Roadmap", "status": "Todo", "priority": "P1", "dim": "D5" },
+
+    { "item": "Design: small text (8–11px) across editor + inspector",
+      "type": "Finding", "status": "In Progress", "priority": "P2", "dim": "B9 · A5",
+      "loggedAt": "2026-07-13",
+      "note": "Rediscovered from scratch 07-25 by measuring production. Token scale shipped; still short of its own 12/14/16 baseline." },
+
+    { "item": "Design: Design inspector is an overwhelming long scroll",
+      "type": "Finding", "status": "In Progress", "priority": "P2", "dim": "B9",
+      "loggedAt": "2026-07-13" },
+
+    { "item": "Design: editor canvas floats in large empty gray dead-space",
+      "type": "Finding", "status": "Todo", "priority": "P2", "dim": "B9",
+      "note": "Measured 07-25: chrome is 44% of a 1440px window by default." },
+
+    { "item": "Design: chart data edited as raw comma-strings, not a cell grid",
+      "type": "Finding", "status": "Todo", "priority": "P2", "dim": "B9" },
+
+    { "item": "Design: unlabeled Appearance steppers (18 / 100)",
+      "type": "Finding", "status": "Todo", "priority": "P2", "dim": "B9 · B10" },
+
+    { "item": "Design: floating object toolbar has a horizontal scrollbar",
+      "type": "Finding", "status": "Todo", "priority": "P2", "dim": "B9" },
+
+    { "item": "P2: Google Slides API integration", "type": "Roadmap", "status": "Todo", "priority": "P2",
+      "dim": "integration · D9", "note": "Do NOT build until P0/P1 land — multiplies consent + fidelity surface." },
+
+    { "item": "Revamp B6 latency/status + B8 agent-operability",
+      "type": "Roadmap", "status": "Todo", "priority": "P2", "dim": "B6 · B8" },
+
+    { "item": "Full BYOK + MCP implementation", "type": "Roadmap", "status": "Todo", "priority": "P2", "dim": "D12" },
+
+    { "item": "Re-verify D-tier findings + re-score Bar & Depth",
+      "type": "Roadmap", "status": "Todo", "priority": "P2", "dim": "Bar/Depth" },
+
+    { "item": "Record narrated voiceover over the 3-deck demo",
+      "type": "Roadmap", "status": "Todo", "priority": "P2", "dim": "—" }
+  ]
+}

@@ -1,0 +1,683 @@
+{
+  "generatedAt": "2026-07-26T00:54:32.651Z",
+  "counts": {
+    "nodes": 51,
+    "edges": 52,
+    "sessions": 4613,
+    "evolutionEvents": 22,
+    "evolutionDrafts": 16,
+    "severed": 2
+  },
+  "nodes": [
+    {
+      "id": "core",
+      "label": "second brain",
+      "group": "core",
+      "status": "live",
+      "size": 34,
+      "note": "Six sources. The store existed before it was ever read first."
+    },
+    {
+      "id": "threads",
+      "label": "ChatGPT",
+      "group": "source",
+      "status": "live",
+      "size": 20,
+      "note": "graph-hop ledger — months of design reasoning"
+    },
+    {
+      "id": "t:042526-interviews",
+      "label": "042526-interviews",
+      "group": "thread",
+      "status": "stale",
+      "size": 15.5,
+      "note": "32 turns at last read · 2026-07-23"
+    },
+    {
+      "id": "t:nk-moms-biz",
+      "label": "nk-moms-biz",
+      "group": "thread",
+      "status": "stale",
+      "size": 12.5,
+      "note": "18 turns at last read · 2026-07-24"
+    },
+    {
+      "id": "t:nk-yc-s26",
+      "label": "nk-yc-s26",
+      "group": "thread",
+      "status": "stale",
+      "size": 9.25,
+      "note": "5 turns at last read · 2026-07-24"
+    },
+    {
+      "id": "t:nodekit",
+      "label": "nodekit",
+      "group": "thread",
+      "status": "stale",
+      "size": 13.75,
+      "note": "23 turns at last read · 2026-07-24"
+    },
+    {
+      "id": "t:slide-ai-collaboration",
+      "label": "slide-ai-collaboration",
+      "group": "thread",
+      "status": "stale",
+      "size": 8,
+      "note": "0 turns at last read · ?"
+    },
+    {
+      "id": "sessions",
+      "label": "Claude Code",
+      "group": "source",
+      "status": "live",
+      "size": 20,
+      "note": "4613 sessions on disk"
+    },
+    {
+      "id": "s:C--Users-hshum--claude-mem-observer-sessions",
+      "label": "C--Users-hshum--claude-mem-o",
+      "group": "session",
+      "status": "live",
+      "size": 12.666666666666668,
+      "note": "4580 sessions · last active today"
+    },
+    {
+      "id": "s:C--Users-hshum--codex-skills-agentic-ui-qa",
+      "label": "C--Users-hshum--codex-skills",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 12d ago"
+    },
+    {
+      "id": "s:C--Users-hshum--codex-worktrees-3270-noderoom",
+      "label": "C--Users-hshum--codex-worktr",
+      "group": "session",
+      "status": "cold",
+      "size": 6.666666666666667,
+      "note": "2 sessions · last active 22d ago"
+    },
+    {
+      "id": "s:C--Users-hshum-Downloads-Interview-items",
+      "label": "C--Users-hshum-Downloads-Int",
+      "group": "session",
+      "status": "live",
+      "size": 7,
+      "note": "3 sessions · last active today"
+    },
+    {
+      "id": "m:C--Users-hshum-Downloads-Interview-items",
+      "label": "7 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 6.75,
+      "note": "claim-attribution-corrections · github-profile-thesis · homen-background · homen-job-search · job-board-profile-surfaces · positioning-current-state"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-node-platform",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "live",
+      "size": 6.333333333333333,
+      "note": "1 session · last active today"
+    },
+    {
+      "id": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-node-platform",
+      "label": "7 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 6.75,
+      "note": "chatgpt-effort-routing · nodeagent-kit-verdict · nodekit-atlas-state · nodekit-build-order · nodekit-builder-journey · skill-distribution"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-nodebench-ai",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "stale",
+      "size": 6.666666666666667,
+      "note": "2 sessions · last active 3d ago"
+    },
+    {
+      "id": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-nodebench-ai",
+      "label": "50 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 17.5,
+      "note": "agent-run-verdict-workflow · agentic-reliability · agent_coordination_ledger · agent_harness_runtime · ai_elements_scaffold · architecture_alignment_audit"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "stale",
+      "size": 9.333333333333334,
+      "note": "10 sessions · last active 6d ago"
+    },
+    {
+      "id": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom",
+      "label": "72 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 23,
+      "note": "agent-governed-columns · agent-managed-file-topic · always-run-playwright-e2e · artifact-visibility-model · attention-overlay-standard · b1-two-phase-artifact-version-bump"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-brave-einstein-e177ab",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-charming-lumiere-1a943f",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-cool-wilson-72960e",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-determined-engelbart-d0517e",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-inspiring-newton-187f71",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-magical-yonath-86a48c",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-serene-tu-147900",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-suspicious-gould-49b889",
+      "label": "cafecorner-nodebench-nodeben",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 8d ago"
+    },
+    {
+      "id": "s:D--VSCode-Projects-local-collab-mvp-3-",
+      "label": "local-collab-mvp-3-",
+      "group": "session",
+      "status": "cold",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 13d ago"
+    },
+    {
+      "id": "m:D--VSCode-Projects-local-collab-mvp-3-",
+      "label": "2 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 5.5,
+      "note": "room-os-project · room-os-repo"
+    },
+    {
+      "id": "s:D--VSCode-Projects-NodeVideo",
+      "label": "NodeVideo",
+      "group": "session",
+      "status": "stale",
+      "size": 6.333333333333333,
+      "note": "1 session · last active 6d ago"
+    },
+    {
+      "id": "m:D--VSCode-Projects-NodeVideo",
+      "label": "3 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 5.75,
+      "note": "nodevideo-codex-stack · nodevideo-evidence-and-build · nodevideo-practice-mode-p0"
+    },
+    {
+      "id": "s:D--VSCode-Projects-parity-studio",
+      "label": "parity-studio",
+      "group": "session",
+      "status": "live",
+      "size": 7.333333333333333,
+      "note": "4 sessions · last active today"
+    },
+    {
+      "id": "m:D--VSCode-Projects-parity-studio",
+      "label": "21 memories",
+      "group": "memory",
+      "status": "live",
+      "size": 10.25,
+      "note": "aifund-slidelang-eir-process · always-reanchor-graph-hop · arm-the-sensor-before-reporting-absence · atlas-frozen-vs-live-source · fable-builds-design-codex-repo-only · nodeslide-agent-kimi-k3-fix"
+    },
+    {
+      "id": "repos",
+      "label": "Repositories",
+      "group": "source",
+      "status": "live",
+      "size": 20,
+      "note": "the code half"
+    },
+    {
+      "id": "r:node-platform",
+      "label": "node-platform",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "platform · preview · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:NodeAgent",
+      "label": "NodeAgent",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "runtime · production · P0 7/8 · proof 0"
+    },
+    {
+      "id": "r:NodeRoom",
+      "label": "NodeRoom",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "domain-application · production · P0 7/8 · proof 0"
+    },
+    {
+      "id": "r:NodeSlide",
+      "label": "NodeSlide",
+      "group": "repo",
+      "status": "blocked",
+      "size": 13,
+      "note": "domain-application · preview · P0 6/8 · proof 0"
+    },
+    {
+      "id": "r:NodeVideo",
+      "label": "NodeVideo",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "domain-application · preview · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:NodeVoice",
+      "label": "NodeVoice",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "domain-application · preview · P0 7/8 · proof 0"
+    },
+    {
+      "id": "r:NodeTrace",
+      "label": "NodeTrace",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "standalone-package · preview · P0 7/8 · proof 0"
+    },
+    {
+      "id": "r:NodeMem",
+      "label": "NodeMem",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "standalone-package · preview · P0 7/8 · proof 0"
+    },
+    {
+      "id": "r:NodeProof",
+      "label": "NodeProof",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "certification-harness · production · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:agentic-ui-qa",
+      "label": "agentic-ui-qa",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "qa-protocol · production · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:NodeTasks",
+      "label": "NodeTasks",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "evaluation-corpus · preview · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:BetterPRHandoff",
+      "label": "BetterPRHandoff",
+      "group": "repo",
+      "status": "live",
+      "size": 15,
+      "note": "handoff-protocol · production · P0 8/8 · proof 0"
+    },
+    {
+      "id": "r:FeatureClipStudio",
+      "label": "FeatureClipStudio",
+      "group": "repo",
+      "status": "stale",
+      "size": 14,
+      "note": "presentation-evidence-tool · preview · P0 7/8 · proof 0"
+    },
+    {
+      "id": "evolution",
+      "label": "Evolution ledger",
+      "group": "source",
+      "status": "live",
+      "size": 20,
+      "note": "22 events · 16 drafts · append-only, delete prohibited"
+    },
+    {
+      "id": "graph",
+      "label": "Knowledge graph",
+      "group": "join",
+      "status": "blocked",
+      "size": 18,
+      "note": "initialized · import blocked on a stale code graph"
+    },
+    {
+      "id": "notion",
+      "label": "Notion",
+      "group": "source",
+      "status": "stale",
+      "size": 18,
+      "note": "not readable from this collector — needs an authenticated call"
+    },
+    {
+      "id": "gmail",
+      "label": "Gmail",
+      "group": "source",
+      "status": "missing",
+      "size": 14,
+      "note": "no connector — the one named source still unwired"
+    }
+  ],
+  "edges": [
+    {
+      "source": "core",
+      "target": "threads",
+      "kind": "source"
+    },
+    {
+      "source": "threads",
+      "target": "t:042526-interviews",
+      "kind": "has"
+    },
+    {
+      "source": "threads",
+      "target": "t:nk-moms-biz",
+      "kind": "has"
+    },
+    {
+      "source": "threads",
+      "target": "t:nk-yc-s26",
+      "kind": "has"
+    },
+    {
+      "source": "threads",
+      "target": "t:nodekit",
+      "kind": "has"
+    },
+    {
+      "source": "threads",
+      "target": "t:slide-ai-collaboration",
+      "kind": "has"
+    },
+    {
+      "source": "core",
+      "target": "sessions",
+      "kind": "source"
+    },
+    {
+      "source": "sessions",
+      "target": "s:C--Users-hshum--claude-mem-observer-sessions",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:C--Users-hshum--codex-skills-agentic-ui-qa",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:C--Users-hshum--codex-worktrees-3270-noderoom",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:C--Users-hshum-Downloads-Interview-items",
+      "kind": "has"
+    },
+    {
+      "source": "s:C--Users-hshum-Downloads-Interview-items",
+      "target": "m:C--Users-hshum-Downloads-Interview-items",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-node-platform",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-node-platform",
+      "target": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-node-platform",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-nodebench-ai",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-nodebench-ai",
+      "target": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-nodebench-ai",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom",
+      "target": "m:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-brave-einstein-e177ab",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-charming-lumiere-1a943f",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-cool-wilson-72960e",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-determined-engelbart-d0517e",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-inspiring-newton-187f71",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-magical-yonath-86a48c",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-serene-tu-147900",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-cafecorner-nodebench-nodebench-ai4-noderoom--claude-worktrees-suspicious-gould-49b889",
+      "kind": "has"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-local-collab-mvp-3-",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-local-collab-mvp-3-",
+      "target": "m:D--VSCode-Projects-local-collab-mvp-3-",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-NodeVideo",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-NodeVideo",
+      "target": "m:D--VSCode-Projects-NodeVideo",
+      "kind": "remembers"
+    },
+    {
+      "source": "sessions",
+      "target": "s:D--VSCode-Projects-parity-studio",
+      "kind": "has"
+    },
+    {
+      "source": "s:D--VSCode-Projects-parity-studio",
+      "target": "m:D--VSCode-Projects-parity-studio",
+      "kind": "remembers"
+    },
+    {
+      "source": "core",
+      "target": "repos",
+      "kind": "source"
+    },
+    {
+      "source": "repos",
+      "target": "r:node-platform",
+      "kind": "has"
+    },
+    {
+      "source": "r:node-platform",
+      "target": "evolution",
+      "kind": "owns"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeAgent",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeRoom",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeSlide",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeVideo",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeVoice",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeTrace",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeMem",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeProof",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:agentic-ui-qa",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:NodeTasks",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:BetterPRHandoff",
+      "kind": "has"
+    },
+    {
+      "source": "repos",
+      "target": "r:FeatureClipStudio",
+      "kind": "has"
+    },
+    {
+      "source": "core",
+      "target": "evolution",
+      "kind": "source"
+    },
+    {
+      "source": "core",
+      "target": "graph",
+      "kind": "join"
+    },
+    {
+      "source": "graph",
+      "target": "repos",
+      "kind": "severed"
+    },
+    {
+      "source": "core",
+      "target": "notion",
+      "kind": "source"
+    },
+    {
+      "source": "core",
+      "target": "gmail",
+      "kind": "severed"
+    }
+  ]
+}

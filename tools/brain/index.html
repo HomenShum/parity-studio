@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Brain — live</title>
+<style>
+  :root{
+    --bg:#080d10;--panel:#0f181d;--ink:#e6eef2;--ink2:#9fb3bd;--ink3:#66798400;
+    --line:#1d2a31;--core:#3fb6cc;
+    --live:#57b98a;--stale:#d8a35c;--blocked:#e0837a;--cold:#4a5b64;--missing:#5d707a;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
+  #stage{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  .hud{position:fixed;top:14px;left:14px;background:rgba(15,24,29,.9);border:1px solid var(--line);
+       border-radius:10px;padding:11px 14px;backdrop-filter:blur(6px);max-width:320px}
+  .hud h1{margin:0 0 3px;font-size:14px;letter-spacing:-.01em}
+  .hud .t{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+  .hud .pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);
+       margin-right:6px;animation:p 2s ease-in-out infinite}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
+  .counts{display:flex;gap:11px;margin-top:8px;flex-wrap:wrap}
+  .counts b{font-family:var(--mono);font-size:15px;display:block;line-height:1.1}
+  .counts span{font-size:10px;color:var(--ink2)}
+  .legend{position:fixed;bottom:14px;left:14px;display:flex;gap:12px;flex-wrap:wrap;
+       background:rgba(15,24,29,.9);border:1px solid var(--line);border-radius:10px;padding:9px 13px;
+       font-size:11px;color:var(--ink2);backdrop-filter:blur(6px)}
+  .k{display:flex;align-items:center;gap:5px}
+  .d{width:8px;height:8px;border-radius:50%}
+  .card{position:fixed;top:14px;right:14px;width:290px;background:rgba(15,24,29,.94);
+       border:1px solid var(--line);border-radius:10px;padding:14px 16px;backdrop-filter:blur(6px)}
+  .card h2{margin:0 0 2px;font-size:15px;letter-spacing:-.01em}
+  .card .g{font-family:var(--mono);font-size:10.5px;color:var(--core);letter-spacing:.09em;
+       text-transform:uppercase;margin-bottom:8px}
+  .card p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.5}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+
+<div class="hud">
+  <h1><span class="pulse"></span>Second brain — live</h1>
+  <div class="t" id="stamp">loading…</div>
+  <div class="counts" id="counts"></div>
+</div>
+
+<div class="card" id="card">
+  <h2 id="cт">hover a node</h2>
+  <div class="g" id="cg">the graph re-reads itself every 5s</div>
+  <p id="cn">Nodes are read from disk each poll: thread ledger, memory stores, session files, the repo registry, and the evolution ledger. Nothing here is remembered.</p>
+</div>
+
+<div class="legend">
+  <span class="k"><i class="d" style="background:var(--live)"></i>live</span>
+  <span class="k"><i class="d" style="background:var(--stale)"></i>stale</span>
+  <span class="k"><i class="d" style="background:var(--blocked)"></i>blocked</span>
+  <span class="k"><i class="d" style="background:var(--cold)"></i>cold</span>
+  <span class="k"><i class="d" style="background:var(--missing)"></i>missing</span>
+  <span class="k" style="color:#7d8f99">dashed = severed link</span>
+</div>
+
+<script>
+const C = { live:"#57b98a", stale:"#d8a35c", blocked:"#e0837a", cold:"#4a5b64", missing:"#5d707a" };
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+let W=0,H=0,DPR=1;
+function size(){ DPR=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener("resize", size); size();
+
+let P=new Map(), E=[], hover=null;
+
+// Positions persist across polls, so a refresh nudges the layout instead of throwing it away.
+async function poll(){
+  try{
+    const g = await (await fetch("./graph.json?t="+Date.now())).json();
+    const seen=new Set();
+    for(const n of g.nodes){
+      seen.add(n.id);
+      const p = P.get(n.id) ?? {
+        x: W/2 + (Math.random()-.5)*Math.min(W,H)*.55,
+        y: H/2 + (Math.random()-.5)*Math.min(W,H)*.55, vx:0, vy:0 };
+      Object.assign(p, { id:n.id, label:n.label, group:n.group, status:n.status,
+        r: Math.max(5, (n.size??8)*0.72), note:n.note??"" });
+      P.set(n.id, p);
+    }
+    for(const id of [...P.keys()]) if(!seen.has(id)) P.delete(id);
+    E = g.edges.filter(e=>P.has(e.source)&&P.has(e.target));
+    document.getElementById("stamp").textContent =
+      new Date(g.generatedAt).toLocaleTimeString() + " · " + g.counts.nodes + " nodes";
+    document.getElementById("counts").innerHTML = [
+      ["sessions", g.counts.sessions], ["events", g.counts.evolutionEvents],
+      ["drafts", g.counts.evolutionDrafts], ["severed", g.counts.severed],
+    ].map(([k,v])=>`<div><b style="color:${k==="severed"&&v?C.blocked:"#e6eef2"}">${v}</b><span>${k}</span></div>`).join("");
+  }catch(err){ document.getElementById("stamp").textContent = "collector not run yet"; }
+}
+poll(); setInterval(poll, 5000);
+
+function step(){
+  const A=[...P.values()];
+  // repulsion
+  for(let i=0;i<A.length;i++) for(let j=i+1;j<A.length;j++){
+    const a=A[i],b=A[j]; let dx=b.x-a.x, dy=b.y-a.y; let d2=dx*dx+dy*dy||1;
+    if(d2>90000) continue;
+    const f=2600/d2, d=Math.sqrt(d2); const fx=dx/d*f, fy=dy/d*f;
+    a.vx-=fx; a.vy-=fy; b.vx+=fx; b.vy+=fy;
+  }
+  // springs
+  for(const e of E){
+    const a=P.get(e.source), b=P.get(e.target);
+    let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+    const rest = e.kind==="source"?150:e.kind==="severed"?190:96;
+    const f=(d-rest)*0.012, fx=dx/d*f, fy=dy/d*f;
+    a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy;
+  }
+  const cx=W/2, cy=H/2;
+  for(const p of A){
+    if(p.id==="core"){ p.x+=(cx-p.x)*.12; p.y+=(cy-p.y)*.12; p.vx=p.vy=0; continue; }
+    p.vx+=(cx-p.x)*0.0016; p.vy+=(cy-p.y)*0.0016;
+    p.vx*=0.86; p.vy*=0.86;
+    p.x=Math.max(p.r+8,Math.min(W-p.r-8,p.x+p.vx));
+    p.y=Math.max(p.r+8,Math.min(H-p.r-8,p.y+p.vy));
+  }
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(const e of E){
+    const a=P.get(e.source), b=P.get(e.target);
+    ctx.beginPath();
+    ctx.setLineDash(e.kind==="severed"?[4,5]:[]);
+    ctx.strokeStyle = e.kind==="severed" ? "#e0837a88"
+      : e.kind==="source" ? "#3fb6cc55" : "#1d2a31";
+    ctx.lineWidth = e.kind==="source"?1.4:1;
+    ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for(const p of P.values()){
+    const col=C[p.status]??C.missing;
+    if(p.id==="core"||p.group==="source"){
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r+7,0,7); ctx.fillStyle=col+"22"; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7);
+    ctx.fillStyle=col; ctx.globalAlpha=hover&&hover!==p.id?.4:.92; ctx.fill();
+    ctx.globalAlpha=1;
+    if(p.r>9||hover===p.id){
+      ctx.fillStyle=hover===p.id?"#e6eef2":"#9fb3bd";
+      ctx.font=(p.group==="source"||p.id==="core"?"600 12px ":"11px ")+
+        'system-ui,-apple-system,"Segoe UI",sans-serif';
+      ctx.textAlign="center"; ctx.fillText(p.label, p.x, p.y+p.r+13);
+    }
+  }
+  step(); requestAnimationFrame(draw);
+}
+draw();
+
+cv.addEventListener("mousemove", (ev)=>{
+  const x=ev.clientX,y=ev.clientY; hover=null;
+  for(const p of P.values()) if(Math.hypot(p.x-x,p.y-y)<p.r+7){ hover=p.id;
+    document.getElementById("cт").textContent=p.label;
+    document.getElementById("cg").textContent=p.group+" · "+p.status;
+    document.getElementById("cn").textContent=p.note; break; }
+});
+</script>
+</body>
+</html>
