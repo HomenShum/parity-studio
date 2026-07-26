@@ -71,9 +71,13 @@ contractDeclarations:
     path: shared/nodeslideClaimProof.ts
     mode: canonical
 
-architectureExceptions:
-  - concept: nodeslide.deck
-    reason: >-
-      This repository holds a working copy of the NodeSlide application source, including
-      slidelang/pptxImport.ts, which HomenShum/NodeSlide does not yet carry. The deck contracts stay
-      canonical in HomenShum/NodeSlide; the divergence here is a pending port, not a second owner.
+# An exception entry is { rule, path } — not { concept, reason }. The first version of this file
+# used the contractDeclarations shape here, and `nodekit repo check` died on
+# normalizePath(undefined) instead of reporting a malformed manifest. Left empty rather than
+# guessing a rule id: an exception that names no real rule suppresses nothing and lies about it.
+#
+# The divergence worth recording in prose: this repository holds a working copy of the NodeSlide
+# application source, including slidelang/pptxImport.ts, which HomenShum/NodeSlide does not yet
+# carry. The deck contracts stay canonical in HomenShum/NodeSlide. That is a pending port, not a
+# second owner.
+architectureExceptions: []
