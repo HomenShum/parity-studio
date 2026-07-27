@@ -119,6 +119,16 @@ Build `scripts/port-audit.mjs`:
 **Exit:** audit green at destination HEAD, red at pre-port commit, wired into parity CI as a
 required check on any PR that deletes nodeslide files.
 
+**Status: built, widened, wired (d231635).** 2,349 items; 1,162 missing, so red by design. Probes:
+self-audit exits 0 (PASS is reachable), `--against 90dbd47` exits 1, a stale exemption exits 2.
+
+**Known blind spot — do not treat a green audit as sufficient on its own.** Equivalence is tested
+by symbol name, and that has already produced one false PORTED: `NodeSlideConnectionsDialog.tsx` is
+1,034 lines with 148 Google references here and 309 lines with none in the destination. Same
+exported names, scored ported. The audit proves a *name* exists at the destination, not that the
+behaviour came with it. Any cluster the triage marks as a three-way merge needs a human diff before
+its deletion is allowed, regardless of what the gate says.
+
 ### Phase 3 — Eviction (½ day)
 - Tag parity (`pre-eviction`) for rollback.
 - Delete `src/domains/nodeslide`, nodeslide scripts, nodeslide CI jobs from parity, in one PR,
@@ -184,6 +194,9 @@ registry agree with disk.
 | deleteDeck migration corrupts prod data | MED | Migration tested on seeded copy; never run against prod by an agent |
 | Gates lose meaning in transit (CI jobs left behind) | MED | Jobs move in the same PR as scripts; parity Quality job retired explicitly |
 | Old links break silently | LOW | Redirect + a link-checker pass over docs/PRD |
+| Audit says PORTED on a name match while the behaviour stayed behind | HIGH | Symbol-name equality is the audit's known weakness (§Phase 2). Every three-way-merge cluster in `docs/PORT_TRIAGE.md` needs a read diff before deletion |
+| `atlas`/`claim-proof` evicted despite parity declaring itself canonical for them | MED | `nodekit.yaml` here names six of those gates by npm script. Phase 3's blanket removal must exclude them until the registry question in the triage is answered |
+| A moved gate keeps passing while pointed at a surface that no longer exists | MED | Two moved gates were found asserting a `first-run-dialog` the product deliberately replaced. Every moved gate must be run against live production in its new home, not merely imported |
 
 ## 8. The three decisions, and how they were made
 
