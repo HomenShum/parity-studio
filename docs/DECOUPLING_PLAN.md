@@ -90,10 +90,19 @@ Largest unported units the hand list omitted entirely:
 Each of these needs its own port decision — some may be dead code that should be deleted rather
 than moved, which the audit cannot tell you. That triage is Phase 1's real first task.
 
-**Progress, 2026-07-27.** Landed on nodeslide main: the PPTX importer and the conformance receipt
-(#73, b946412), the share-link route (#74, a8ae541), and 31 of 34 gate scripts with their four CI
-jobs (#75, 3d89185). Three gates were deliberately left in parity with reasons recorded. The
-data-rights port and two stale-gate fixes are in flight.
+**Progress, 2026-07-27 — six pull requests, all on nodeslide main and all deployed.** The PPTX
+importer and conformance receipt (#73), the share-link route (#74), 31 of 34 gate scripts with
+their four CI jobs (#75), the first-run gate re-pointing (#76), the share-route crash fix (#77),
+and the data-rights surface (#78, main d41bf77). Three gates were deliberately left in parity with
+reasons recorded.
+
+The audit against nodeslide `origin/main` closes the day at **1,139 missing of 2,349**, down from
+1,162. Twenty-three items moved. Most of the day went into building the thing that can count, and
+into discovering the count had been measuring a third of the surface.
+
+Verified on the deployed URL at sha d41bf77, not from build logs: `/s/<unknown>` returns 404 with
+1,980 bytes of rendered refusal, `/s/<invalid>` returns 400, neither crashes, and the two testids
+#76 added are present in the production bundle while `first-run-dialog` and `ns-first-run` are gone.
 
 **And the lesson that cost the most.** #74 merged with five green checks, including a test that
 drove the real handler over a real local socket and measured 14,930 bytes of output. The deployed
