@@ -15,6 +15,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # NodeSlide ships from its own repo. A change made here does not reach the deployed product, and
+  # the two copies drift silently because both test suites are repo-local. Deletions are allowed —
+  # the decoupling plan's exit is a large one, and a gate that blocks its own exit is unsatisfiable.
+  nodeslide_freeze:
+    name: NodeSlide feature freeze
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # The gate diffs against the merge base, which a shallow clone does not contain.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Refuse new NodeSlide work in parity-studio
+        run: |
+          node scripts/nodeslide-freeze-gate.mjs \
+            --base "origin/${{ github.base_ref }}" \
+            ${{ contains(github.event.pull_request.labels.*.name, 'freeze-exempt') && '--exempt' || '' }}
+
   quality:
     name: Quality
     runs-on: ubuntu-latest
