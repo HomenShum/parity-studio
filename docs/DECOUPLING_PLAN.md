@@ -1,0 +1,206 @@
+# NodeSlide / parity-studio decoupling — engineering plan
+
+| | |
+|---|---|
+| Status | IN EXECUTION — Phase 0 landing, Phase 2 gate built and red. D1/D2/D3 decided by the agent (§8) because execution was authorised with the owner out of the loop; all three are reversible and each records what would change if reversed. |
+| Owner | Homen Shum |
+| Author | Claude (session 47c22c0d), from measured state, 2026-07-27 |
+| Repos | `HomenShum/parity-studio` (dev monorepo) · `HomenShum/NodeSlide` (live product) · `node-platform` (registry) |
+| Reviewers | node-platform session owns registry edits; NodeSlide session owns product-repo review |
+
+## 1. Problem statement
+
+parity-studio began as a UI-parity/design-run tool (`ParityApp`: AgentRail, CanvasPanel,
+ParityPanel, Convex `runs`/`parityReports`). NodeSlide grew inside it as `?domain=nodeslide`, then
+graduated to its own repo and deployment (`nodeslide.vercel.app`) — but development never fully
+moved. The result is a two-home product with unmanaged drift, and the drift is measured, not
+suspected:
+
+- Three Notion P1 rows asserted the PPTX importer, `deleteDeck`, and export-my-data **did not
+  exist** while all three sat in parity-studio, unported (`pptxImport.ts` alone is 2,330 lines).
+- Convex schemas have diverged: 43 tables (parity) vs 32 (nodeslide); parity has a workspace layer
+  the product repo never grew.
+- 37 `nodeslide-*` verification scripts live in parity/scripts and gate a product that ships from a
+  different repo.
+- Both test suites were green for months while the repos diverged, because both are repo-local.
+  Green in parity says nothing about `nodeslide.vercel.app`.
+
+Every false-absence incident this week traces to this split. The cost is not hypothetical; it is
+misallocated roadmap rank, rediscovered work, and a board that lies in both directions.
+
+## 2. Goals
+
+1. `HomenShum/NodeSlide` is the **only** home of NodeSlide code, tests, and gates.
+2. parity-studio returns to its original product, deployed with the parity domain as default.
+3. Nothing is deleted from parity until a **derived** audit proves the port is complete.
+4. The regression net spans the seam: behavior is asserted against **live URLs**, not just suites.
+
+## 3. Non-goals
+
+- No Next.js migration (explicitly never decided; direction is against it). Public-surface
+  rendering ships via the existing `renderDeckHtml` route work (PR #83), framework unchanged.
+- No redesign of either product during the move. Mechanical relocation only.
+- No npm publishing decisions (blocked on licence — owner's call, §8).
+
+## 4. Current state (verified, with probes)
+
+| Fact | Probe |
+|---|---|
+| NodeSlide has its own repo + deploy | `nodeslide.vercel.app` serves `nodeslide-build-sha` = repo main HEAD |
+| ~Importer ported~ **CORRECTED** | It was on branch `docs/operate-with-coding-agent`, which nothing merged. PR #71 had been merged *into that branch*, not into main, so the conformance receipt was unshipped too. `gh pr list` showed zero open PRs the whole time. Re-opened as nodeslide #73. The row below was written from a file existing on disk, which is not the same as it shipping. |
+| ParityApp alive behind flag | `src/App.tsx:44` `VITE_ENABLE_PARITY_DOMAIN`, unset in prod; components exist and wire Convex queries |
+| Importer ported | nodeslide `slidelang/pptxImport*` — 4 test failures on port were the live repo's **stricter** evidence gate; fixtures raised to contract |
+| deleteDeck/export NOT portable as copy | references `workspaceId`/`by_project_id`/`runs` — absent from nodeslide schema |
+| Open PRs against parity | #82 (ranker guard), #83 (share-link HTML, +1236/−34) — both must land or port before any freeze |
+| parity main is red | 10 fixable Biome errors in `tools/brain/*` since `1c4ce7f` |
+| parity auto-deploy off | `git.deploymentEnabled: false` — resurfacing requires re-enabling deliberately |
+
+## 5. Phased plan
+
+Sequencing rule: **nothing is removed until the phase that proves it is elsewhere has exited.**
+Each phase has a mechanical exit criterion; "looks done" does not exit a phase.
+
+### Phase 0 — Stabilize (½ day)
+- Fix red main: `pnpm exec biome check --fix tools/brain`, commit.
+- Land or explicitly close #82, #83 in parity. Fix #72's welded assertion in nodeslide
+  (scope to non-zero count / testid), then merge #71, #72.
+- Declare feature freeze for `src/domains/nodeslide` in parity (docs + PR template note).
+
+**Exit:** parity CI green on main; zero open parity PRs touching nodeslide domain code.
+
+### Phase 1 — Complete the ports (revised: the hand-written list below was wrong)
+
+**Measured 2026-07-27 by `scripts/port-audit.mjs`, which enumerates with the TypeScript compiler
+rather than by hand: 780 items (746 exported symbols + 34 gate scripts), of which 409 symbols
+across 51 files and 33 of the 34 scripts are absent from the destination.** The four numbered
+items below were written from memory and account for a minority of the real surface. The audit's
+receipt (`artifacts/port-audit/port-audit.json`) is the authority; this list is not.
+
+Largest unported units the hand list omitted entirely:
+
+| Area | Missing symbols |
+|---|---|
+| `session/**` — the whole agent-session layer | 79 |
+| `integrations/googleSlides/**` | 78 |
+| `integrations/` sync-contract layer | 44 |
+| `slidelang/jsonSpec.ts` + `jsonEdit.ts` | 30 |
+| `inspector/traceTelemetry.ts`, `TraceWaterfall*` | 31 |
+| `openui/visualMaterials*` | 13 |
+
+Each of these needs its own port decision — some may be dead code that should be deleted rather
+than moved, which the audit cannot tell you. That triage is Phase 1's real first task.
+
+The originally-listed items, which remain correct as far as they go:
+
+1. **Share-link HTML** → port/merge #83's route into nodeslide. `html.ts` differs (651 vs 562
+   lines): this is a merge with tests carried, not a copy.
+2. **deleteDeck + export-my-data** → schema-migration path (owner decision D1, §8): either
+   nodeslide grows the workspace layer, or the features are rewritten against its flat model.
+   Migration test: seed prod-shaped data, run migration, assert the erasure contract — with the
+   table list **derived from `schema.ts`**, which already caught 3 tables a hand-list missed.
+3. **Gates** → move the 37 `nodeslide-*` scripts + their `scripts/tests` into nodeslide. CI jobs
+   move with them (parity's Quality/E2E jobs stop exercising NodeSlide the moment scripts leave —
+   green must not become decorative).
+4. **tools/brain** → node-platform (second-brain concern; that repo owns it). Coordinate via the
+   node-platform session; registry rules say propose, don't push.
+
+**Exit:** carried test suites green in destination; every intentional behavior delta from stricter
+gates documented in the PR that introduced it.
+
+### Phase 2 — Port-audit gate (1 day; blocks everything after)
+Build `scripts/port-audit.mjs`:
+- Enumerates every export of parity `src/domains/nodeslide/**` and every `nodeslide-*` script
+  **mechanically** (no hand list).
+- Asserts an equivalent exists in the destination repo (same symbol or a mapped rename table that
+  is itself reviewed).
+- **Revert probe built in:** run against a destination commit from before Phase 1 and confirm it
+  FAILS. An audit that can't fail is not a gate.
+
+**Exit:** audit green at destination HEAD, red at pre-port commit, wired into parity CI as a
+required check on any PR that deletes nodeslide files.
+
+### Phase 3 — Eviction (½ day)
+- Tag parity (`pre-eviction`) for rollback.
+- Delete `src/domains/nodeslide`, nodeslide scripts, nodeslide CI jobs from parity, in one PR,
+  with the port-audit as the merge gate.
+- Golden-master run before and after against `nodeslide.vercel.app`: nine-state capture (exit 3 on
+  miss), section sweep, share-link byte count keyed to `nodeslide-build-sha`. The live product must
+  be **bit-identical in behavior** across this phase — eviction touches parity only.
+
+**Exit:** parity builds green with no nodeslide references (`grep -ri nodeslide src/` = docs only);
+golden-master deltas = zero.
+
+### Phase 4 — Resurface parity (1 day; the unknowns resolved)
+- **Vitality check — done 2026-07-27, verdict ALIVE.** Every Convex function ParityApp calls still
+  exists, every table it reads is still in `schema.ts` (the growth to ~60 tables was purely
+  additive; the parity tables sit above the `nodeslide_*` block untouched), and read-only queries
+  against production returned real data: 44 runs spanning April–May 2026, and `parityReports`
+  rows with the 16-check shape `ParityPanel` expects. Props and imports all still line up.
+
+  Two config blockers, neither of them rot:
+  1. `vercel.json` sets `git.deploymentEnabled: false`. A required step, not a footnote.
+  2. `.env.local` points at `dev:secret-vulture-733`, which no longer exists — it 404s. Local
+     work needs `npx convex dev` or `VITE_CONVEX_URL` repointed at `blissful-pig-998`.
+
+  Both products share the one production deployment (`blissful-pig-998`), confirmed by
+  `projects.list` returning NodeSlide projects from July beside parity runs from April.
+
+  Not established: nobody has booted the app or exercised a mutation. Queries only, deliberately —
+  calling `runs.start` or `chat.send` would write to production. The smoke step below is still owed.
+- Set `VITE_ENABLE_PARITY_DOMAIN=true`, make `parity` the default domain, remove the disabled
+  interstitial, re-enable deployments, deploy.
+- **Redirect:** `?domain=nodeslide` and `?share=` links exist in PRD, docs, and old messages —
+  301 to `nodeslide.vercel.app`, kept ≥ 90 days (owner decision D3).
+- Smoke: boot flag-on build, execute one real run query, screenshot the three-panel shell.
+
+**Exit:** `parity-studio.vercel.app` serves ParityApp by default (live-DOM check for a
+Parity-specific testid, not build logs); redirect verified with a real old link.
+
+### Phase 5 — Truth reconciliation (½ day)
+- `repositories.yaml`: parity's entry re-described to its real product (registry edit proposed to
+  node-platform session, not pushed).
+- Update PRD/TDD links, the memory note claiming "both in sync," and the Notion rows.
+- Evolution draft recording the eviction (via `draftEvolutionEvent`, not hand-written status).
+
+**Exit:** `recall.mjs "nodeslide"` returns only product-repo paths for product code; board and
+registry agree with disk.
+
+## 6. Test strategy (cross-cutting)
+
+| Layer | Mechanism | Integrity rule |
+|---|---|---|
+| Function (ports) | carry source tests to destination; classify failures as contract-drift vs defect | fixtures rise to the shipped contract, never the reverse |
+| Migration (schema) | seeded prod-shaped data + erasure contract | expected set **derived from schema.ts** |
+| Regression (seam) | golden master vs live URLs before/after each phase | keyed to `nodeslide-build-sha`; green CI ≠ live change |
+| Audit (deletion) | port-audit derived enumeration | must fail on pre-port commit (revert probe) |
+| Sensors | all new assertions | non-zero counts / specific testids; cross-state screenshot digests must differ (welded-sensor lesson) |
+
+## 7. Risks
+
+| Risk | Sev | Mitigation |
+|---|---|---|
+| Delete-before-port strands work permanently | HIGH | Phase 2 gate is a required CI check; tag before eviction |
+| Parity Convex is dead → resurfacing stalls | MED | Vitality check is the *first* step of Phase 4, not the last |
+| deleteDeck migration corrupts prod data | MED | Migration tested on seeded copy; never run against prod by an agent |
+| Gates lose meaning in transit (CI jobs left behind) | MED | Jobs move in the same PR as scripts; parity Quality job retired explicitly |
+| Old links break silently | LOW | Redirect + a link-checker pass over docs/PRD |
+
+## 8. The three decisions, and how they were made
+
+Execution was authorised with the owner out of the loop, so these were decided rather than left
+blocking. Each is reversible; each records the cost of reversing it.
+
+- **D1 — deleteDeck/export: rewrite against nodeslide's flat model.** Growing an eleven-table
+  workspace layer to serve a delete button imports parity-specific complexity into a repo that
+  never had it, and every table added is a table the erasure contract must then cover. Reversing
+  this means the migration is larger, not that work is thrown away.
+- **D2 — npm licence: out of scope.** It blocks publishing, not decoupling, and it is a legal
+  choice an agent should not make. Left for the owner.
+- **D3 — redirect lifetime: 90 days.** Old `?domain=nodeslide` and `?share=` links appear in the
+  PRD, in docs, and in sent messages. Reversing this is editing one number.
+
+## 9. What agents will not do in this plan
+
+Merge to either main without review; run migrations against production; edit node-platform's
+registry directly; claim any phase exited without its mechanical check passing. Every "done" in
+this plan is a command output, and each phase's exit criterion names the command.
