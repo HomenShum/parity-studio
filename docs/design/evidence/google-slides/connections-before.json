@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "brain.capability-state/v1",
+  "capability": "nodeslide.google-slides-sync",
+  "label": "before",
+  "target": "https://nodeslide.vercel.app",
+  "buildSha": "d41bf77738b6cfab0d15492e3d7d774d996b309c",
+  "capturedAt": "2026-07-27T23:12:17.340Z",
+  "offersGoogleInVisibleText": false,
+  "bundleReferencesRuntime": false,
+  "screenshot": "docs\\design\\evidence\\google-slides\\connections-before.png",
+  "digest": "sha256:b4aec1d3eb09161be4aae948795b7efd73f16096bfef83a2aad7a01bc8c49cd0"
+}
