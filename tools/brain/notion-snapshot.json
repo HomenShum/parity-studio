@@ -1,9 +1,9 @@
 {
   "schemaVersion": "brain.notion-snapshot/v1",
   "source": "Notion · NodeSlide Roadmap & Findings (collection://3737b0fc-fdd7-4659-ad27-e2310aff14d4)",
-  "capturedAt": "2026-07-25T16:10:00-07:00",
-  "capturedBy": "notion-query-database-view via MCP",
-  "note": "Refresh by re-querying the view and rewriting this file. decide.mjs refuses to rank on a snapshot older than its staleness budget, because ranking on a stale board is how a 13-day-overdue P0 stays invisible.",
+  "capturedAt": "2026-07-27T13:35:00-07:00",
+  "capturedBy": "Claude (session 47c22c0d), via the Notion MCP data-source query",
+  "note": "A faithful mirror of the board, not a corrected one. One row is known to be behind reality at capture time and is recorded here exactly as Notion holds it, because a snapshot that quietly fixes its source hides the fact that the source is wrong: the PPTX importer port shipped on nodeslide main as b946412 while the board still reads Todo. Correcting the board is the owner's action. Refresh by re-querying the data source and rewriting this file; decide.mjs refuses to rank on a snapshot older than its staleness budget.",
   "rows": [
     {
       "item": "AI Fund submission — reply to Mike Rubino + grant reviewer access",
@@ -13,43 +13,40 @@
       "dim": "—",
       "deadline": "2026-07-12",
       "blockedOnHuman": true,
-      "note": "Draft paste-ready since 07-18; all links re-verified 200 on 07-25. Waiting on a human to send."
+      "note": "Draft paste-ready at nodeslide/docs/SUBMISSION_REPLY.md since 07-18; links re-verified 200 on 07-25. Blocked only on a human pressing send. An agent will not send outbound mail on the user's behalf."
     },
-
     {
-      "item": "P0: JSON / Source inspector tab",
-      "type": "Roadmap",
-      "status": "Done",
-      "priority": "P0",
-      "dim": "D5 · integration",
-      "note": "Verified shipped in production 07-25; board reconciled."
-    },
-
-    {
-      "item": "P1: Real PPTX importer (.pptx → DeckSnapshot, honest fidelity report)",
+      "item": "P1: PORT the PPTX importer from parity-studio → nodeslide",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P1",
       "dim": "integration",
-      "note": "Import is ABSENT — export is strictly one-way."
+      "note": "BOARD IS BEHIND: this shipped on nodeslide main as b946412 (PR #73) on 2026-07-27 with the four source files, the wiring and the tests. Mark Done."
     },
-
+    {
+      "item": "Data-rights: PORT deleteDeck from parity-studio → nodeslide",
+      "type": "Finding",
+      "status": "Todo",
+      "priority": "P1",
+      "dim": "D5",
+      "note": "Not a copy: it references workspaceId / by_project_id / runs, none of which exist in the nodeslide schema. Decision D1 taken 2026-07-27 — rewrite against the flat model rather than grow an 11-table workspace layer. Pairs with the export-my-data row; one pass."
+    },
+    {
+      "item": "PORT deck deletion + export-my-data from parity-studio → nodeslide",
+      "type": "Roadmap",
+      "status": "Todo",
+      "priority": "P1",
+      "dim": "D5",
+      "note": "Same surface as the deleteDeck row. The migration test must derive its expected table set from schema.ts; a hand-written list already missed three tables once."
+    },
     {
       "item": "Design: horizontal overflow clips the page left at narrow widths",
       "type": "Finding",
       "status": "In Progress",
       "priority": "P1",
-      "dim": "B9 · A5"
+      "dim": "B9 · A5",
+      "note": "Branch-only. Verify no page-level overflow at any width on the merged build."
     },
-
-    {
-      "item": "Data-rights: no deleteDeck mutation exists",
-      "type": "Finding",
-      "status": "Todo",
-      "priority": "P1",
-      "dim": "D5"
-    },
-
     {
       "item": "Merge codex/nodeslide-agentic-authoring → main",
       "type": "Roadmap",
@@ -58,114 +55,149 @@
       "dim": "—",
       "note": "Feature branch 44 commits ahead of main."
     },
-
     {
       "item": "Deploy Convex Nebius backend + run live consented edit proof",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P1",
-      "dim": "D2 · B2"
+      "dim": "D2 · B2",
+      "note": "Verify the LIVE trace state: real tokens and cost plus a signable seal. Only the deterministic path is verified so far."
     },
-
-    {
-      "item": "Ship deck deletion + export-my-data",
-      "type": "Roadmap",
-      "status": "Todo",
-      "priority": "P1",
-      "dim": "D5"
-    },
-
     {
       "item": "Design: small text (8–11px) across editor + inspector",
       "type": "Finding",
       "status": "In Progress",
       "priority": "P2",
       "dim": "B9 · A5",
-      "loggedAt": "2026-07-13",
-      "note": "Rediscovered from scratch 07-25 by measuring production. Token scale shipped; still short of its own 12/14/16 baseline."
+      "note": "Inspector scroll body is down to four sizes, measured on production. Still short of the row's own 12/14/16 baseline: the tag step is 11px and the landing page is untouched, where 10px still appears 181 times."
     },
-
     {
       "item": "Design: Design inspector is an overwhelming long scroll",
       "type": "Finding",
       "status": "In Progress",
       "priority": "P2",
       "dim": "B9",
-      "loggedAt": "2026-07-13"
+      "note": "Tabs now group author versus review and the prose is cut, but the panel is still one long scroll and the named stack is unchanged in order."
     },
-
     {
       "item": "Design: editor canvas floats in large empty gray dead-space",
       "type": "Finding",
       "status": "Todo",
       "priority": "P2",
       "dim": "B9",
-      "note": "Measured 07-25: chrome is 44% of a 1440px window by default."
+      "note": "Slide at 65% Fit sits in a large empty middle area."
     },
-
     {
       "item": "Design: chart data edited as raw comma-strings, not a cell grid",
       "type": "Finding",
       "status": "Todo",
       "priority": "P2",
-      "dim": "B9"
+      "dim": "B9",
+      "note": "Labels and values are comma-separated text inputs. A small editable label/value table would be the fix."
     },
-
     {
       "item": "Design: unlabeled Appearance steppers (18 / 100)",
       "type": "Finding",
       "status": "Todo",
       "priority": "P2",
-      "dim": "B9 · B10"
+      "dim": "B9 · B10",
+      "note": "Two numeric steppers with no labels; recurs across the chart and image editors."
     },
-
     {
       "item": "Design: floating object toolbar has a horizontal scrollbar",
       "type": "Finding",
       "status": "Todo",
       "priority": "P2",
-      "dim": "B9"
+      "dim": "B9",
+      "note": "The toolbar shows scroll arrows instead of fitting or wrapping."
     },
-
     {
-      "item": "P2: Google Slides API integration",
+      "item": "P2: Google Slides API integration (presentations.batchUpdate + OAuth)",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P2",
       "dim": "integration · D9",
-      "note": "Do NOT build until P0/P1 land — multiplies consent + fidelity surface."
+      "note": "The board calls this zero-integration and labels-only. The port triage found 100 live symbols in parity with 21 registered Convex functions and UI bound at NodeSlideConnectionsDialog.tsx:115-128. One of the two is wrong, and the disagreement is itself the finding — see docs/PORT_TRIAGE.md."
     },
-
     {
       "item": "Revamp B6 latency/status + B8 agent-operability",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P2",
-      "dim": "B6 · B8"
+      "dim": "B6 · B8",
+      "note": "Lowest Bar dimensions, both scored 1."
     },
-
     {
       "item": "Full BYOK + MCP implementation",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P2",
-      "dim": "D12"
+      "dim": "D12",
+      "note": "Entry shipped; Codex prompt handed off. Governance-parity invariant."
     },
-
     {
       "item": "Re-verify D-tier findings + re-score Bar & Depth",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P2",
-      "dim": "Bar/Depth"
+      "dim": "Bar/Depth",
+      "note": "Several D findings likely resolved by recent shipments."
     },
-
     {
       "item": "Record narrated voiceover over the 3-deck demo",
       "type": "Roadmap",
       "status": "Todo",
       "priority": "P2",
-      "dim": "—"
+      "dim": "—",
+      "note": "2:03 silent 1920x1080 video ready."
+    },
+    {
+      "item": "Agentic-depth baseline (single-shot vs tool-loop)",
+      "type": "Finding",
+      "status": "Todo",
+      "priority": "P2",
+      "dim": "D-tier",
+      "note": "Governance, retention and tool-loop depth."
+    },
+    {
+      "item": "No unit test for proposeEdit throw→fallback convergence",
+      "type": "Finding",
+      "status": "Todo",
+      "priority": "P2",
+      "dim": "test",
+      "note": "Harness on the Codex branch; deferred."
+    },
+    {
+      "item": "P0: JSON / Source inspector tab (see · copy · download · edit deck JSON)",
+      "type": "Roadmap",
+      "status": "Done",
+      "priority": "P0",
+      "dim": "D5 · integration",
+      "note": "Verified shipped in production 2026-07-25 by clicking it, not by reading source."
+    },
+    {
+      "item": "Raw Convex Server Error string leaks on hard-fail",
+      "type": "Finding",
+      "status": "Done",
+      "priority": "P2",
+      "dim": "B5",
+      "note": "Closed 2026-07-13."
+    },
+    {
+      "item": "Capability-honest labeling: 'Web' vs real search",
+      "type": "Finding",
+      "status": "Done",
+      "priority": "P1",
+      "dim": "D2",
+      "note": "Closed 2026-07-13."
+    },
+    {
+      "item": "Design: composer input not the focal element (\"where do I type?\")",
+      "type": "Finding",
+      "status": "Done",
+      "priority": "P1",
+      "dim": "B9 · B11",
+      "note": "Fixed in demo-v2; the text input is now dominant."
     }
   ]
 }
