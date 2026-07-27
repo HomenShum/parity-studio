@@ -54,7 +54,7 @@ if (!Number.isFinite(ageHours)) {
 // Small tolerance for genuine clock skew between machines, then refuse.
 if (ageHours < -0.25) {
   process.stderr.write(
-    `Snapshot is stamped ${Math.abs(ageHours).toFixed(1)}h in the FUTURE. Refusing to rank.\nA future timestamp means the staleness check can never fire, so the queue would look fresh forever. Fix capturedAt in notion-snapshot.json.\n`,
+    `Snapshot is stamped ${Math.abs(ageHours).toFixed(1)}h in the FUTURE. Refusing to rank.\n  capturedAt  ${snapshot.capturedAt}\n  now         ${new Date().toISOString()}\nA future timestamp means the staleness check can never fire, so the queue would look fresh forever. Fix capturedAt in notion-snapshot.json.\n`,
   );
   process.exit(1);
 }
