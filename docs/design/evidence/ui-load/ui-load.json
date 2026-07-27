@@ -1,0 +1,245 @@
+{
+  "schemaVersion": "brain.ui-load/v1",
+  "target": "https://nodeslide.vercel.app",
+  "buildSha": "d41bf77738b6cfab0d15492e3d7d774d996b309c",
+  "capturedAt": "2026-07-27T23:23:24.509Z",
+  "steps": [
+    {
+      "id": "landing",
+      "what": "first arrival, before anything is chosen",
+      "reached": true,
+      "page": {
+        "controls": 14,
+        "words": 154,
+        "typeSizes": [
+          "10px",
+          "11px",
+          "12px",
+          "13px",
+          "15px",
+          "16px",
+          "56px",
+          "8px"
+        ],
+        "typeSizeCount": 8
+      },
+      "inspector": null
+    },
+    {
+      "id": "workspace",
+      "what": "the sample deck open, nothing selected",
+      "reached": true,
+      "page": {
+        "controls": 82,
+        "words": 757,
+        "typeSizes": [
+          "0.890625px",
+          "1.083px",
+          "1.15781px",
+          "1.197px",
+          "1.24688px",
+          "1.33594px",
+          "1.425px",
+          "1.51406px",
+          "1.69219px",
+          "10.5px",
+          "10px",
+          "11.5px",
+          "11px",
+          "12.5px",
+          "12px",
+          "13px",
+          "14px",
+          "16px",
+          "19.0031px",
+          "2.394px",
+          "3.23297px",
+          "3.38438px",
+          "3.82969px",
+          "3.95898px",
+          "4.275px",
+          "4.9875px",
+          "5.14668px",
+          "5.93848px",
+          "6.33437px",
+          "7.52207px",
+          "9px"
+        ],
+        "typeSizeCount": 31
+      },
+      "inspector": {
+        "controls": 18,
+        "words": 116,
+        "typeSizes": [
+          "10.5px",
+          "10px",
+          "11px",
+          "13px"
+        ],
+        "typeSizeCount": 4
+      }
+    },
+    {
+      "id": "inspector-ai",
+      "what": "the AI tab, where a change is asked for",
+      "reached": true,
+      "page": {
+        "controls": 82,
+        "words": 757,
+        "typeSizes": [
+          "0.890625px",
+          "1.083px",
+          "1.15781px",
+          "1.197px",
+          "1.24688px",
+          "1.33594px",
+          "1.425px",
+          "1.51406px",
+          "1.69219px",
+          "10.5px",
+          "10px",
+          "11.5px",
+          "11px",
+          "12.5px",
+          "12px",
+          "13px",
+          "14px",
+          "16px",
+          "19.0031px",
+          "2.394px",
+          "3.23297px",
+          "3.38438px",
+          "3.82969px",
+          "3.95898px",
+          "4.275px",
+          "4.9875px",
+          "5.14668px",
+          "5.93848px",
+          "6.33437px",
+          "7.52207px",
+          "9px"
+        ],
+        "typeSizeCount": 31
+      },
+      "inspector": {
+        "controls": 18,
+        "words": 116,
+        "typeSizes": [
+          "10.5px",
+          "10px",
+          "11px",
+          "13px"
+        ],
+        "typeSizeCount": 4
+      }
+    },
+    {
+      "id": "inspector-design",
+      "what": "the Design tab — the one called too technical to bother with",
+      "reached": true,
+      "page": {
+        "controls": 72,
+        "words": 808,
+        "typeSizes": [
+          "0.890625px",
+          "1.083px",
+          "1.15781px",
+          "1.197px",
+          "1.24688px",
+          "1.33594px",
+          "1.425px",
+          "1.51406px",
+          "1.69219px",
+          "10px",
+          "11.5px",
+          "11px",
+          "12.5px",
+          "12px",
+          "13px",
+          "14px",
+          "15px",
+          "16px",
+          "19.0031px",
+          "2.394px",
+          "3.23297px",
+          "3.38438px",
+          "3.82969px",
+          "3.95898px",
+          "4.275px",
+          "4.9875px",
+          "5.14668px",
+          "5.93848px",
+          "6.33437px",
+          "7.52207px",
+          "9px"
+        ],
+        "typeSizeCount": 31
+      },
+      "inspector": {
+        "controls": 8,
+        "words": 167,
+        "typeSizes": [
+          "11px",
+          "12px",
+          "13px",
+          "15px"
+        ],
+        "typeSizeCount": 4
+      }
+    },
+    {
+      "id": "inspector-data",
+      "what": "the Evidence tab, where a claim is checked",
+      "reached": true,
+      "page": {
+        "controls": 110,
+        "words": 1118,
+        "typeSizes": [
+          "0.890625px",
+          "1.083px",
+          "1.15781px",
+          "1.197px",
+          "1.24688px",
+          "1.33594px",
+          "1.425px",
+          "1.51406px",
+          "1.69219px",
+          "10px",
+          "11.5px",
+          "11px",
+          "12.5px",
+          "12px",
+          "13px",
+          "14px",
+          "15px",
+          "16px",
+          "19.0031px",
+          "2.394px",
+          "3.23297px",
+          "3.38438px",
+          "3.82969px",
+          "3.95898px",
+          "4.275px",
+          "4.9875px",
+          "5.14668px",
+          "5.93848px",
+          "6.33437px",
+          "7.52207px",
+          "9px"
+        ],
+        "typeSizeCount": 31
+      },
+      "inspector": {
+        "controls": 46,
+        "words": 477,
+        "typeSizes": [
+          "11px",
+          "12px",
+          "13px",
+          "15px"
+        ],
+        "typeSizeCount": 4
+      }
+    }
+  ]
+}
