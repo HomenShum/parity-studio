@@ -68,31 +68,41 @@ if (ageHours > maxAgeHours) {
 }
 
 /** Objective gaps the dashboard measured, which the board does not know about. */
-const status = await readFile(path.join(PLATFORM, 'docs/ECOSYSTEM_STATUS.md'), 'utf8').catch(() => '');
+const status = await readFile(path.join(PLATFORM, 'docs/ECOSYSTEM_STATUS.md'), 'utf8').catch(
+  () => '',
+);
 const measured = [];
 for (const row of status.split('\n')) {
-  const m = row.match(/^\|\s*NodeSlide\s*\|\s*(\w+)\s*\|\s*([\w-]+)\s*\|.*?\|\s*(\w[\w-]*)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\/8/);
+  const m = row.match(
+    /^\|\s*NodeSlide\s*\|\s*(\w+)\s*\|\s*([\w-]+)\s*\|.*?\|\s*(\w[\w-]*)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\/8/,
+  );
   if (!m) continue;
   const [, , , noKey, proof, , p0] = m;
   if (Number(p0) < 8) {
     measured.push({
       item: `NodeSlide P0 contract is ${p0}/8 — lowest of 13 repos`,
       why: 'nodekit dashboard, regenerated from each repo nodekit.yaml',
-      priority: 'P0', status: 'Todo', source: 'measured',
+      priority: 'P0',
+      status: 'Todo',
+      source: 'measured',
     });
   }
   if (/missing/i.test(proof)) {
     measured.push({
       item: 'NodeSlide proof schema is MISSING',
       why: 'every 8/8 repo declares one; NodeSlide does not',
-      priority: 'P1', status: 'Todo', source: 'measured',
+      priority: 'P1',
+      status: 'Todo',
+      source: 'measured',
     });
   }
   if (/partial/i.test(noKey)) {
     measured.push({
       item: 'NodeSlide key-free certification is only partial',
       why: 'ten of thirteen repos are certified',
-      priority: 'P1', status: 'Todo', source: 'measured',
+      priority: 'P1',
+      status: 'Todo',
+      source: 'measured',
     });
   }
 }
@@ -104,7 +114,8 @@ const rows = [...snapshot.rows.map((r) => ({ ...r, source: 'notion' })), ...meas
     const overdueDays = r.deadline ? Math.floor((today - Date.parse(r.deadline)) / 864e5) : 0;
     // Aging is capped. An old item should shout, but it should never drown out a live P0.
     const aging = 1 + Math.min(overdueDays, 30) / 10;
-    const score = (PRIORITY[r.priority] ?? 5) * (STATUS[r.status] ?? 1) * (overdueDays > 0 ? aging : 1);
+    const score =
+      (PRIORITY[r.priority] ?? 5) * (STATUS[r.status] ?? 1) * (overdueDays > 0 ? aging : 1);
     return { ...r, overdueDays, score: Math.round(score) };
   })
   .sort((a, b) => b.score - a.score || a.item.localeCompare(b.item));
@@ -113,14 +124,20 @@ const humanBlocked = rows.filter((r) => r.blockedOnHuman);
 const agentWork = rows.filter((r) => !r.blockedOnHuman);
 
 if (asJson) {
-  process.stdout.write(`${JSON.stringify({ snapshotAgeHours: Number(ageHours.toFixed(1)), humanBlocked, agentWork }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ snapshotAgeHours: Number(ageHours.toFixed(1)), humanBlocked, agentWork }, null, 2)}\n`,
+  );
 } else {
   const lines = [`Decision queue — snapshot ${ageHours.toFixed(1)}h old`, ''];
   if (humanBlocked.length > 0) {
-    lines.push('WAITING ON A HUMAN — an agent cannot advance these, and working around them is working on the wrong thing:');
+    lines.push(
+      'WAITING ON A HUMAN — an agent cannot advance these, and working around them is working on the wrong thing:',
+    );
     for (const r of humanBlocked) {
       lines.push(`  ${String(r.score).padStart(4)}  ${r.item}`);
-      lines.push(`        ${r.overdueDays > 0 ? `${r.overdueDays} days past its deadline. ` : ''}${r.note ?? ''}`);
+      lines.push(
+        `        ${r.overdueDays > 0 ? `${r.overdueDays} days past its deadline. ` : ''}${r.note ?? ''}`,
+      );
     }
     lines.push('');
   }
@@ -129,6 +146,9 @@ if (asJson) {
     lines.push(`  ${String(r.score).padStart(4)}  [${r.priority}] ${r.item}`);
     if (r.source === 'measured') lines.push(`        measured — ${r.why}`);
   }
-  lines.push('', `  ${agentWork.length} open items · ${measured.length} from measurement the board does not carry`);
+  lines.push(
+    '',
+    `  ${agentWork.length} open items · ${measured.length} from measurement the board does not carry`,
+  );
   process.stdout.write(`${lines.join('\n')}\n`);
 }

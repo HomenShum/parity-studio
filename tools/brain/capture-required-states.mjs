@@ -17,10 +17,10 @@
  * Usage: node tools/brain/capture-required-states.mjs [--url <base>] [--out <dir>]
  */
 
-import { chromium } from 'playwright';
-import { mkdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { chromium } from 'playwright';
 
 const flag = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -41,7 +41,11 @@ const STATES = [
     viewport: { width: 1440, height: 900 },
     async reach(page) {
       await page.goto(BASE, { waitUntil: 'networkidle', timeout: 45_000 });
-      await page.getByText('Explore the editable sample workspace').first().click().catch(() => {});
+      await page
+        .getByText('Explore the editable sample workspace')
+        .first()
+        .click()
+        .catch(() => {});
       await page.waitForTimeout(8000);
       return page.locator('[data-testid="inspector-tab-ai"]').isVisible();
     },
@@ -56,7 +60,14 @@ const STATES = [
       await page.waitForTimeout(900);
       await page.getByText('Generate 3 directions', { exact: false }).first().click();
       for (let i = 0; i < 20; i += 1) {
-        if (await page.getByText(/Generating/i).first().isVisible().catch(() => false)) return true;
+        if (
+          await page
+            .getByText(/Generating/i)
+            .first()
+            .isVisible()
+            .catch(() => false)
+        )
+          return true;
         await page.waitForTimeout(400);
       }
       return false;
@@ -68,7 +79,10 @@ const STATES = [
     async reach(page) {
       await page.locator('[data-testid="inspector-tab-data"]').click();
       await page.waitForTimeout(2000);
-      return page.getByText(/Data & sources|EVIDENCE LAYER/i).first().isVisible();
+      return page
+        .getByText(/Data & sources|EVIDENCE LAYER/i)
+        .first()
+        .isVisible();
     },
   },
   {
@@ -79,7 +93,10 @@ const STATES = [
       // selectable and to say so. If the product never surfaces that, the state is unreachable.
       await page.locator('[data-testid="inspector-tab-data"]').click();
       await page.waitForTimeout(1500);
-      return page.getByText(/no evidence|not attached|unsourced|0 sources/i).first().isVisible();
+      return page
+        .getByText(/no evidence|not attached|unsourced|0 sources/i)
+        .first()
+        .isVisible();
     },
   },
   {
@@ -89,7 +106,14 @@ const STATES = [
       await page.locator('[data-testid="inspector-tab-ai"]').click();
       await page.waitForTimeout(1200);
       for (let i = 0; i < 30; i += 1) {
-        if (await page.getByRole('button', { name: /Accept/i }).first().isVisible().catch(() => false)) return true;
+        if (
+          await page
+            .getByRole('button', { name: /Accept/i })
+            .first()
+            .isVisible()
+            .catch(() => false)
+        )
+          return true;
         await page.waitForTimeout(2000);
       }
       return false;
@@ -127,7 +151,11 @@ const STATES = [
       await accept.click();
       await page.waitForTimeout(6000);
       // The deck version advancing is the proof the change landed.
-      return page.getByText(/\bv[2-9]\b/).first().isVisible().catch(() => false);
+      return page
+        .getByText(/\bv[2-9]\b/)
+        .first()
+        .isVisible()
+        .catch(() => false);
     },
   },
   {
@@ -167,7 +195,9 @@ for (const state of STATES) {
     const file = path.join(OUT, `${state.id}.png`);
     await page.screenshot({ path: file });
     const { readFile } = await import('node:fs/promises');
-    const digest = `sha256:${createHash('sha256').update(await readFile(file)).digest('hex')}`;
+    const digest = `sha256:${createHash('sha256')
+      .update(await readFile(file))
+      .digest('hex')}`;
     rendered.push({ stateId: state.id, screenshot: path.relative(process.cwd(), file), digest });
     process.stdout.write(`  REACHED      ${state.id}\n`);
   } else {
@@ -180,8 +210,7 @@ await browser.close();
 
 const receipt = {
   schemaVersion: 'brain.required-state-capture/v1',
-  note:
-    'The render half of nodekit frontend benchmark. Not a benchmark: that additionally requires an independent review receipt and criticIndependent, which is a schema constant of true and cannot be honestly asserted by the agent that authored the change.',
+  note: 'The render half of nodekit frontend benchmark. Not a benchmark: that additionally requires an independent review receipt and criticIndependent, which is a schema constant of true and cannot be honestly asserted by the agent that authored the change.',
   target: BASE,
   capturedAt: new Date().toISOString(),
   requiredStateIds: STATES.map((s) => s.id),
@@ -191,5 +220,7 @@ const receipt = {
 };
 
 await writeFile(path.join(OUT, 'capture-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
-process.stdout.write(`\ncoverage ${receipt.coverage} · receipt ${path.join(OUT, 'capture-receipt.json')}\n`);
+process.stdout.write(
+  `\ncoverage ${receipt.coverage} · receipt ${path.join(OUT, 'capture-receipt.json')}\n`,
+);
 process.exitCode = missed.length > 0 ? 3 : 0;
