@@ -65,7 +65,39 @@ if (ageHours > maxAgeHours) {
   process.exit(1);
 }
 
-/** Objective gaps the dashboard measured, which the board does not know about. */
+/**
+ * Objective gaps the dashboard measured, which the board does not know about.
+ *
+ * Trusted less than it used to be. On 2026-07-27 the dashboard's NodeSlide row was found to
+ * describe `nodebench_ai4/NodeSlide`, a checkout sitting on branch codex/injectable-core, 130
+ * commits behind the repo that actually deploys. Its manifest says `receiptSchema: null`; the live
+ * one says `nodeslide.conformance/v1`. The dashboard was right about the copy it read and wrong
+ * about NodeSlide — and this ranker promoted the resulting P0 above every P1 on the board.
+ *
+ * So each measured claim is now checked against the shipping repo before it is allowed to rank.
+ * A claim the live manifest contradicts is dropped and reported, rather than being carried at the
+ * top of the queue because it arrived with the word "measured" attached.
+ */
+const LIVE_NODESLIDE = 'D:/VSCode Projects/nodeslide';
+const liveManifest = await readFile(path.join(LIVE_NODESLIDE, 'nodekit.yaml'), 'utf8').catch(
+  () => null,
+);
+const contradicted = [];
+
+/**
+ * True when the live manifest positively disproves the claim. Returns false when the manifest
+ * could not be read: an unreadable file is not evidence of anything, and silently dropping a real
+ * P0 because a path moved would be the same failure in the other direction.
+ */
+function liveRepoContradicts(claim) {
+  if (liveManifest === null) return false;
+  if (claim === 'proofReceipt') {
+    const declared = liveManifest.match(/^\s*receiptSchema:\s*(.+)$/m)?.[1]?.trim();
+    return Boolean(declared) && declared !== 'null' && declared !== '~';
+  }
+  return false;
+}
+
 const status = await readFile(path.join(PLATFORM, 'docs/ECOSYSTEM_STATUS.md'), 'utf8').catch(
   () => '',
 );
@@ -86,13 +118,19 @@ for (const row of status.split('\n')) {
     });
   }
   if (/missing/i.test(proof)) {
-    measured.push({
-      item: 'NodeSlide proof schema is MISSING',
-      why: 'every 8/8 repo declares one; NodeSlide does not',
-      priority: 'P1',
-      status: 'Todo',
-      source: 'measured',
-    });
+    if (liveRepoContradicts('proofReceipt')) {
+      contradicted.push(
+        'dashboard says NodeSlide has no proof schema; the live repo declares one in nodekit.yaml',
+      );
+    } else {
+      measured.push({
+        item: 'NodeSlide proof schema is MISSING',
+        why: 'every 8/8 repo declares one; NodeSlide does not',
+        priority: 'P1',
+        status: 'Todo',
+        source: 'measured',
+      });
+    }
   }
   if (/partial/i.test(noKey)) {
     measured.push({
@@ -148,5 +186,13 @@ if (asJson) {
     '',
     `  ${agentWork.length} open items · ${measured.length} from measurement the board does not carry`,
   );
+  if (contradicted.length > 0) {
+    lines.push(
+      '',
+      'DROPPED — the dashboard and the shipping repo disagree, and the repo wins:',
+      ...contradicted.map((reason) => `  ${reason}`),
+      '  Regenerate the dashboard against the repo that deploys, or it will keep ranking work that is already done.',
+    );
+  }
   process.stdout.write(`${lines.join('\n')}\n`);
 }
