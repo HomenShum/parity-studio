@@ -1,0 +1,418 @@
+<title>UI load and the reference pipeline</title>
+
+<style>
+  :root {
+    --ink: #241d19;
+    --ink-2: #5c4f47;
+    --ink-3: #8a7a70;
+    --ground: #fbf9f7;
+    --ground-2: #f3efec;
+    --rule: #e2dad4;
+    --accent: #a8583f;
+    --accent-soft: #f0e2dc;
+    --ok: #3f6b52;
+    --warn: #8a6321;
+    --stop: #97402f;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Inter, Helvetica, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #f0eae6;
+      --ink-2: #bdb0a8;
+      --ink-3: #8d8078;
+      --ground: #14100e;
+      --ground-2: #1e1815;
+      --rule: #332a26;
+      --accent: #df8e70;
+      --accent-soft: #33231d;
+      --ok: #7fb094;
+      --warn: #d3a659;
+      --stop: #e08b74;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #f0eae6;
+    --ink-2: #bdb0a8;
+    --ink-3: #8d8078;
+    --ground: #14100e;
+    --ground-2: #1e1815;
+    --rule: #332a26;
+    --accent: #df8e70;
+    --accent-soft: #33231d;
+    --ok: #7fb094;
+    --warn: #d3a659;
+    --stop: #e08b74;
+  }
+
+  :root[data-theme="light"] {
+    --ink: #241d19;
+    --ink-2: #5c4f47;
+    --ink-3: #8a7a70;
+    --ground: #fbf9f7;
+    --ground-2: #f3efec;
+    --rule: #e2dad4;
+    --accent: #a8583f;
+    --accent-soft: #f0e2dc;
+    --ok: #3f6b52;
+    --warn: #8a6321;
+    --stop: #97402f;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    margin: 0;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  .wrap { max-width: 62rem; margin: 0 auto; display: flex; flex-direction: column; gap: 3.5rem; }
+
+  header { display: flex; flex-direction: column; gap: 0.75rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 600; font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+    line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .standfirst { font-size: 1.05rem; color: var(--ink-2); max-width: 44rem; margin: 0; }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: var(--serif); font-size: 1.45rem; font-weight: 600; margin: 0;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule); text-wrap: balance;
+  }
+  h3 { font-size: 0.95rem; font-weight: 650; margin: 0.5rem 0 0; }
+  p { margin: 0; max-width: 46rem; color: var(--ink-2); }
+  p strong { color: var(--ink); font-weight: 650; }
+
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; min-width: 34rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-bottom: 1px solid var(--rule); }
+  th {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+  }
+  td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; padding-right: 1.4rem; }
+  th.n { text-align: right; padding-right: 1.4rem; }
+  tr.flag td { color: var(--ink); }
+  tr.flag td.n { color: var(--stop); font-weight: 650; }
+
+  .cuts { display: flex; flex-direction: column; gap: 0; }
+  .cut {
+    display: grid; grid-template-columns: 2.2rem 1fr; gap: 0 1rem;
+    padding: 1rem 0; border-bottom: 1px solid var(--rule); align-items: start;
+  }
+  .cut:last-child { border-bottom: none; }
+  .rank {
+    font-family: var(--mono); font-size: 1.1rem; color: var(--accent);
+    font-variant-numeric: tabular-nums; line-height: 1.3;
+  }
+  .cut-body { display: flex; flex-direction: column; gap: 0.35rem; }
+  .cut-title { font-weight: 650; color: var(--ink); }
+  .cut-why { font-size: 0.9rem; color: var(--ink-2); }
+  .measure {
+    font-family: var(--mono); font-size: 0.76rem; color: var(--ink-3);
+    background: var(--ground-2); border-left: 2px solid var(--accent);
+    padding: 0.35rem 0.6rem; align-self: start; max-width: 100%; overflow-x: auto;
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.2rem; font-size: 0.78rem; color: var(--ink-2); }
+  .key { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .swatch { width: 0.85rem; height: 0.85rem; border-radius: 2px; flex: none; }
+  .s-ship { background: var(--ok); }
+  .s-part { background: var(--warn); }
+  .s-block { background: var(--stop); }
+  .s-none { background: transparent; border: 1px dashed var(--ink-3); }
+
+  pre.mermaid {
+    background: var(--ground-2); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 1.2rem; overflow-x: auto; margin: 0;
+  }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 0.9rem 1.1rem; font-size: 0.92rem; color: var(--ink);
+    display: flex; flex-direction: column; gap: 0.4rem;
+  }
+  .note .lede { font-weight: 650; }
+
+  footer {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--ink-3);
+    border-top: 1px solid var(--rule); padding-top: 1.2rem; line-height: 1.7;
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Measured on nodeslide.vercel.app · build d41bf77 · 2026-07-27</div>
+  <h1>What the interface asks for, and where the reference pipeline stops</h1>
+  <p class="standfirst">
+    Two questions, one answer each. Which UI complexity can go — measured, not guessed. And whether a
+    graph helps the meta-process — it does, in exactly one place, and that place is currently blocked
+    on a sign-in.
+  </p>
+</header>
+
+<section>
+  <h2>1. The measurement</h2>
+  <p>
+    “The design tab is confusing, too much to read, too technical” was a judgement. Judgements cannot
+    be tracked across releases. This is the same statement as a number, taken from the deployed build
+    by <span class="measure" style="display:inline;padding:0.1rem 0.35rem;">tools/brain/measure-ui-load.mjs</span>.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th class="n">Controls</th>
+          <th class="n">Words</th>
+          <th class="n">Type sizes</th>
+          <th class="n">Words per control<br>(inspector)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Landing</td><td class="n">14</td><td class="n">154</td><td class="n">8</td><td class="n">—</td></tr>
+        <tr><td>Workspace</td><td class="n">82</td><td class="n">757</td><td class="n">31</td><td class="n">6.4</td></tr>
+        <tr><td>AI tab</td><td class="n">82</td><td class="n">757</td><td class="n">31</td><td class="n">6.4</td></tr>
+        <tr class="flag"><td>Design tab</td><td class="n">72</td><td class="n">808</td><td class="n">31</td><td class="n">20.9</td></tr>
+        <tr class="flag"><td>Evidence tab</td><td class="n">110</td><td class="n">1118</td><td class="n">31</td><td class="n">10.4</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    <strong>The Design tab is not busier. It is wordier.</strong> Inside the inspector column it asks
+    for 20.9 words of reading per available action, against 6.4 on the AI tab — 3.3&times;. Nobody skips
+    a tab because it has too many buttons; they skip it because it reads like documentation.
+  </p>
+  <p>
+    <strong>The four-size type scale holds in one column and nowhere else.</strong> It is exactly 4
+    inside <code>.ns-inspector-scroll</code>. Discounting the sub-pixel sizes produced by scaled slide
+    thumbnails, the rest of the application still renders 11 distinct chrome sizes, including 9px and
+    10.5px. The scale shipped to the column it was written for and was reported as shipped.
+  </p>
+</section>
+
+<section>
+  <h2>2. What to remove, in order</h2>
+  <p>Each is tied to the measurement that justifies it. Anything I could not measure is not on this list.</p>
+
+  <div class="cuts">
+    <div class="cut">
+      <div class="rank">01</div>
+      <div class="cut-body">
+        <div class="cut-title">Cut the Design tab’s prose, not its controls</div>
+        <div class="cut-why">
+          It has 8 inspector controls and 167 inspector words. Halving the words would bring it to the
+          AI tab’s ratio without removing a single capability. Explanatory sentences in persistent
+          chrome are read once and occupy space forever — the product design contract already forbids
+          them, and this is where the rule is being broken hardest.
+        </div>
+        <div class="measure">20.9 words/control → target 6.4 · no control removed</div>
+      </div>
+    </div>
+
+    <div class="cut">
+      <div class="rank">02</div>
+      <div class="cut-body">
+        <div class="cut-title">Extend the type scale past the inspector</div>
+        <div class="cut-why">
+          11 chrome sizes outside one column. The landing page alone still has 10px in 181 places. This
+          is hierarchy asserted by shrinking rather than by colour, which the contract names as a
+          defect. It is not a regex job: 21 hardcoded 10px and 15 hardcoded 11px declarations need a
+          per-surface pass.
+        </div>
+        <div class="measure">11 sizes → 4 · 9px and 10.5px eliminated</div>
+      </div>
+    </div>
+
+    <div class="cut">
+      <div class="rank">03</div>
+      <div class="cut-body">
+        <div class="cut-title">Split the Evidence tab’s 46 controls into a summary and a detail</div>
+        <div class="cut-why">
+          The heaviest surface in the product: 110 page controls and 1,118 words. The job there is
+          “check what backs this claim”, which is a reading task, and 46 simultaneous affordances is a
+          triage task placed in front of it. Surface the verdict first; put the bindings behind it.
+        </div>
+        <div class="measure">46 inspector controls · 477 words · heaviest measured step</div>
+      </div>
+    </div>
+
+    <div class="cut">
+      <div class="rank">04</div>
+      <div class="cut-body">
+        <div class="cut-title">Make the three unreachable states reachable — or delete them from the contract</div>
+        <div class="cut-why">
+          <code>exception</code>, <code>conflict</code> and <code>failed_safe</code> cannot be reached on
+          the deployed product. Two of them were scoring as reached until the sensors were unwelded
+          today. Either the states are real and the UI must be able to show them, or the contract is
+          asking for states this product does not have. Both are fixes; pretending is not.
+        </div>
+        <div class="measure">required-state coverage 6/9 · exit 3</div>
+      </div>
+    </div>
+
+    <div class="cut">
+      <div class="rank">05</div>
+      <div class="cut-body">
+        <div class="cut-title">The popover that cannot be closed</div>
+        <div class="cut-why">
+          At 1512&times;812 the advanced-controls popover renders beneath the toolbar. Its close button is
+          present and enabled but pointer-intercepted, and Escape does not dismiss. This is not
+          complexity to simplify — it is a trap, and it outranks every taste question on this page.
+        </div>
+        <div class="measure">filed · needs a test that asserts dismissal, not presence</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Where a graph actually helps</h2>
+  <p>
+    Not everywhere. Most of this work is a list, and a list drawn as boxes is a worse list. A graph
+    earns its place where <strong>the failure is a missing edge rather than a missing node</strong> —
+    where each piece exists, and what is broken is the handoff between them. That is precisely the
+    reference pipeline: nearly every stage is built, and it produces nothing, because two edges are
+    missing and one is legally constrained.
+  </p>
+
+  <div class="legend">
+    <span class="key"><span class="swatch s-ship"></span> shipped and verified</span>
+    <span class="key"><span class="swatch s-part"></span> partial</span>
+    <span class="key"><span class="swatch s-block"></span> blocked — needs you</span>
+    <span class="key"><span class="swatch s-none"></span> not built</span>
+  </div>
+
+<pre class="mermaid">
+graph LR
+  subgraph SRC["Sources — annotations only, never pixels"]
+    MOB["Mobbin<br/>product UX refs"]:::blocked
+    PITCH["Pitch · Beautiful.ai<br/>deck refs"]:::none
+    ALT["Canva · Gamma<br/>Pageflows"]:::none
+  end
+
+  CAP["Capture flow<br/>link + annotation record"]:::none
+  CORP["Seed corpus<br/>50 assets · salon vertical"]:::none
+
+  ARCH["Archetype classifier<br/>17-value enum"]:::ship
+  RET["Per-archetype retrieval<br/>3–10 refs each"]:::part
+  SCORE["Four-level scoring<br/>0–4 named criteria"]:::ship
+  REPAIR["Bounded repair loop<br/>max 3 · exhausted is honest"]:::ship
+  BENCH["Frontend benchmark<br/>criticIndependent: true"]:::blocked
+
+  MOB --> CAP
+  PITCH --> CAP
+  ALT --> CAP
+  CAP --> CORP
+  CORP --> RET
+  ARCH --> RET
+  RET --> SCORE
+  SCORE --> REPAIR
+  REPAIR --> BENCH
+
+  classDef ship fill:#3f6b52,stroke:#2c4b3a,color:#ffffff;
+  classDef part fill:#8a6321,stroke:#614517,color:#ffffff;
+  classDef blocked fill:#97402f,stroke:#6d2d21,color:#ffffff;
+  classDef none fill:transparent,stroke:#8a7a70,stroke-dasharray:4 3,color:#8a7a70;
+</pre>
+
+  <p>
+    Read left to right: <strong>the scoring machinery is built and the fuel is not.</strong> Archetype
+    classification, four-level scoring and the bounded repair loop all shipped. Retrieval is partial
+    because it has almost nothing to retrieve — <code>docs/design/references/</code> contains a README
+    and no reference records. Everything downstream of an empty corpus runs, and grades against
+    nothing.
+  </p>
+</section>
+
+<section>
+  <h2>4. The three blockers, and which are yours</h2>
+
+  <div class="note">
+    <div class="lede">Mobbin needs your sign-in.</div>
+    <div>
+      The Mobbin MCP server is registered but unauthorised, and this session cannot run an OAuth flow.
+      Until it is authorised from an interactive session, the automated capture path does not exist —
+      not slowly, at all. This is the single edge that unblocks the most downstream work.
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="lede">“50-asset seed corpus” collides with the licensing rule, and the collision is fixable.</div>
+    <div>
+      The standing doctrine is that the checked-in pack stores <strong>annotations and links only,
+      never scraped screenshots</strong>. So a corpus of 50 <em>assets</em> cannot mean 50 images in the
+      repo. It should mean 50 <em>records</em> — source URL, archetype, and the named observation that
+      makes it worth keeping. That is more useful anyway: a screenshot shows what something looked
+      like, an annotation says what it did well, and only the second is retrievable by a model.
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="lede">The benchmark cannot be produced by the agent that made the change.</div>
+    <div>
+      <code>criticIndependent</code> is a schema constant of <code>true</code>. An agent that prompts
+      its own reviewer, on its own model, in its own session, cannot honestly assert it. The render
+      half is produced today and the benchmark deliberately is not. This is structural, not a task —
+      it needs a second party, and no amount of engineering removes that.
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>5. The meta-loop the graph is really for</h2>
+  <p>
+    The reason to draw this at all: every failure today was an edge, not a node. The importer existed
+    and was not merged. The gates existed and pointed at a surface that had moved. The share route
+    existed and could not resolve its own imports. The dashboard existed and measured a different
+    repository. In each case every box was green and the arrow between two of them was broken.
+  </p>
+
+<pre class="mermaid">
+graph LR
+  DECIDE["Decide<br/>OpportunityContract"]:::ship
+  BUILD["Build<br/>the change"]:::ship
+  LOCAL["Local checks<br/>lint · types · tests"]:::ship
+  CI["CI<br/>required checks"]:::ship
+  DEPLOY["Deploy"]:::ship
+  LIVE["Observe the deployed URL"]:::ship
+  MEASURE["Measure<br/>ui-load · state coverage · port audit"]:::ship
+
+  DECIDE --> BUILD --> LOCAL --> CI --> DEPLOY --> LIVE --> MEASURE
+  MEASURE -.->|"the edge that was missing"| DECIDE
+  LOCAL -.->|"green here proves nothing there"| LIVE
+
+  classDef ship fill:#3f6b52,stroke:#2c4b3a,color:#ffffff;
+</pre>
+
+  <p>
+    The dotted edges are the two lessons. <strong>Green locally proves nothing about the deployed
+    artifact</strong> — a socket-level test measured 14,930 bytes of correct output while the deployed
+    function returned 500 to every request. And <strong>measurement has to feed back into deciding</strong>,
+    or it becomes a number nobody acts on: the UI-load figures above only matter if the next design
+    decision has to beat them.
+  </p>
+</section>
+
+<footer>
+  Sources — every number on this page is reproducible.<br>
+  tools/brain/measure-ui-load.mjs · docs/design/evidence/ui-load/ui-load.json @ d41bf77<br>
+  tools/brain/capture-required-states.mjs · outputs/required-states-unwelded/capture-receipt.json<br>
+  scripts/port-audit.mjs · artifacts/port-audit/port-audit-endofday.json<br>
+  doctrine — docs/specs/nodeslide-reference-trained-taste.md (W6)
+</footer>
+
+</div>
