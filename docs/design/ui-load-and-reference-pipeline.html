@@ -342,22 +342,42 @@ graph LR
   <h2>4. The three blockers, and which are yours</h2>
 
   <div class="note">
-    <div class="lede">Mobbin needs your sign-in.</div>
+    <div class="lede">Sign in to Mobbin — but it unblocks less than the plan assumes.</div>
     <div>
-      The Mobbin MCP server is registered but unauthorised, and this session cannot run an OAuth flow.
-      Until it is authorised from an interactive session, the automated capture path does not exist —
-      not slowly, at all. This is the single edge that unblocks the most downstream work.
+      The MCP server is registered and unauthorised, and this session cannot run an OAuth flow, so
+      authorise it from claude.ai → Settings → Connectors (or <code>claude mcp</code> in an interactive
+      terminal). That enables live lookup. It does <strong>not</strong> enable a stored corpus, because
+      your own approved source policy forbids one.
     </div>
   </div>
 
   <div class="note">
-    <div class="lede">“50-asset seed corpus” collides with the licensing rule, and the collision is fixable.</div>
+    <div class="lede">The licence that already exists in your repo settles the corpus question.</div>
     <div>
-      The standing doctrine is that the checked-in pack stores <strong>annotations and links only,
-      never scraped screenshots</strong>. So a corpus of 50 <em>assets</em> cannot mean 50 images in the
-      repo. It should mean 50 <em>records</em> — source URL, archetype, and the named observation that
-      makes it worth keeping. That is more useful anyway: a screenshot shows what something looked
-      like, an annotation says what it did well, and only the second is retrievable by a model.
+      <code>shared/nodeslideAtlasRegistry.ts:512-536</code> — the <code>mobbin</code> source policy,
+      reviewed by you on 2026-07-22 and marked approved:
+      <div class="measure" style="margin-top:0.5rem;">
+download: false · cache: false · ragIndexing: false · embeddingIndex: false<br>
+displayThumbnail: true · accessMode: 'remote-mcp'<br>
+attributionRequired: true · competitiveUseRestricted: true
+      </div>
+      <div style="margin-top:0.5rem;">
+        So Mobbin content may be <em>displayed live, with attribution, and never downloaded, cached, or
+        indexed</em>. A 50-asset Mobbin corpus in the repo is not a licensing risk to be managed — it is
+        already forbidden by a policy you approved, and the Atlas gate enforces it.
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="lede">So “50-asset seed corpus” has to mean 50 records, from the two sources that permit storage.</div>
+    <div>
+      Only <code>nodeslide-owned</code> and <code>workspace-private</code> carry
+      <code>cache: true</code>. Everything else — Mobbin, Uiverse, commercial template libraries — is
+      look-up only. The corpus is therefore <strong>50 annotation records</strong>: source URL,
+      archetype, and the named observation that makes it worth keeping. That is the more useful
+      artifact regardless, because a model can retrieve an observation and cannot retrieve a
+      screenshot.
     </div>
   </div>
 
