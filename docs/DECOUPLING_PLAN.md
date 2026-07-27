@@ -90,6 +90,22 @@ Largest unported units the hand list omitted entirely:
 Each of these needs its own port decision — some may be dead code that should be deleted rather
 than moved, which the audit cannot tell you. That triage is Phase 1's real first task.
 
+**Progress, 2026-07-27.** Landed on nodeslide main: the PPTX importer and the conformance receipt
+(#73, b946412), the share-link route (#74, a8ae541), and 31 of 34 gate scripts with their four CI
+jobs (#75, 3d89185). Three gates were deliberately left in parity with reasons recorded. The
+data-rights port and two stale-gate fixes are in flight.
+
+**And the lesson that cost the most.** #74 merged with five green checks, including a test that
+drove the real handler over a real local socket and measured 14,930 bytes of output. The deployed
+function returns HTTP 500 on every request: `Cannot find module '/var/task/convex/_generated/api'`.
+The handler is correct; the deployed bundle cannot resolve its own imports, because `"type":
+"module"` makes Node ESM require explicit file extensions and every test ran in-process where the
+bundler resolves what the runtime will not.
+
+So: **no port is done until its behaviour is observed on the deployed URL.** Not the build log, not
+CI, not an in-process integration test — that last one is the most dangerous of the three, because
+it looks like end-to-end verification. Add the live check to each port's definition of done.
+
 The originally-listed items, which remain correct as far as they go:
 
 1. **Share-link HTML** → port/merge #83's route into nodeslide. `html.ts` differs (651 vs 562
