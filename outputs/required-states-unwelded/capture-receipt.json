@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "brain.required-state-capture/v1",
+  "note": "The render half of nodekit frontend benchmark. Not a benchmark: that additionally requires an independent review receipt and criticIndependent, which is a schema constant of true and cannot be honestly asserted by the agent that authored the change.",
+  "target": "https://nodeslide.vercel.app",
+  "capturedAt": "2026-07-27T20:53:44.392Z",
+  "requiredStateIds": [
+    "first_arrival",
+    "loading",
+    "populated",
+    "exception",
+    "proposal",
+    "conflict",
+    "failed_safe",
+    "completed",
+    "mobile"
+  ],
+  "renderedStates": [
+    {
+      "stateId": "first_arrival",
+      "screenshot": "outputs\\required-states-unwelded\\first_arrival.png",
+      "digest": "sha256:d01c012f47d200f5f8b29cf45aaab79df319dff19309ce6cf781c6dcab23d008"
+    },
+    {
+      "stateId": "loading",
+      "screenshot": "outputs\\required-states-unwelded\\loading.png",
+      "digest": "sha256:651b52084381388f2c22f3b02c0dd00f496a88ef41f238cd42dc642e668ec29e"
+    },
+    {
+      "stateId": "populated",
+      "screenshot": "outputs\\required-states-unwelded\\populated.png",
+      "digest": "sha256:6191363ae1ff8dd63caee24e5a2ea805be1beafeafb3df4dab1c91774ff37c79"
+    },
+    {
+      "stateId": "proposal",
+      "screenshot": "outputs\\required-states-unwelded\\proposal.png",
+      "digest": "sha256:99d14bb2bd5b615137f429c17fd56b9d4975a26a8db4f2b5ff284b795cc6116f"
+    },
+    {
+      "stateId": "completed",
+      "screenshot": "outputs\\required-states-unwelded\\completed.png",
+      "digest": "sha256:8833c1d14a09ff1a1cede659cc14fa1029ff8081e9f8cd49d9ec5c1156a711d6"
+    },
+    {
+      "stateId": "mobile",
+      "screenshot": "outputs\\required-states-unwelded\\mobile.png",
+      "digest": "sha256:c02e43a7a9ef2b7d791001b4633a7528bd0e07b68d4840881ae63653dc60e3cb"
+    }
+  ],
+  "missedStates": [
+    {
+      "stateId": "exception",
+      "reason": "the assertion for this state did not become true"
+    },
+    {
+      "stateId": "conflict",
+      "reason": "the assertion for this state did not become true"
+    },
+    {
+      "stateId": "failed_safe",
+      "reason": "filed a screenshot byte-identical to proposal (sha256:99d14bb2bd5b6…), so this state was not distinctly reached"
+    }
+  ],
+  "coverage": "6/9"
+}
