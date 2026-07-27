@@ -48,6 +48,25 @@ const SOURCE_DOMAIN_ROOT = 'src/domains/nodeslide';
 const SOURCE_SCRIPT_PREFIX = 'nodeslide-';
 
 /**
+ * NodeSlide code that does NOT live under the domain root.
+ *
+ * The first version audited the domain directory and the gate scripts, and reported 780 items. The
+ * triage then found 46 `shared/nodeslide*.ts` and 49 `convex/nodeslide*.ts` modules — the job
+ * runner, the session store, the uploads path, the data export — that the audit had never looked
+ * at. It could therefore have gone green while the backend behind half the interface was still
+ * stranded here.
+ *
+ * That is the same defect this gate exists to prevent, one layer up: a check whose scope is
+ * narrower than the claim it is used to support. The scope is now derived from the naming
+ * convention rather than from a directory I happened to think of.
+ */
+const SOURCE_PREFIXED_ROOTS = [
+  { root: 'shared', prefix: 'nodeslide' },
+  { root: 'convex', prefix: 'nodeslide' },
+  { root: 'mcp/src', prefix: 'nodeslide' },
+];
+
+/**
  * Where a ported symbol is allowed to land in the destination.
  *
  * Broader than the source root on purpose: a port is free to move a file. Narrowing this to
@@ -74,6 +93,25 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
  */
 const RENAMES = [];
 
+/**
+ * Source items that must NOT move, with the reason each one stays.
+ *
+ * This is not a waiver list for things that are merely inconvenient to port. Every entry has to be
+ * something whose correct home is parity, so that "MISSING from nodeslide" is the right answer
+ * rather than a finding. The audit prints these separately from PORTED so that a reader can see
+ * what was exempted and argue with it — an exemption folded into the pass count is indistinguishable
+ * from a port that happened.
+ *
+ * Keep this short. A growing list here means the audit is being negotiated with.
+ */
+const STAYS_IN_PARITY = [
+  {
+    id: 'script:nodeslide-freeze-gate.mjs',
+    reason:
+      "It is parity's own gate: it refuses new NodeSlide work in this repo. Moving it to nodeslide would delete the freeze it enforces, and the audit would have been the thing that asked for it.",
+  },
+];
+
 const { flags, showHelp } = parseArgs(process.argv.slice(2));
 if (showHelp) {
   process.stdout.write(`${readUsage()}\n`);
@@ -98,15 +136,36 @@ const sourceItems = await collectSourceItems();
 const destinationIndex = await buildDestinationIndex(destinationTree);
 const renameIndex = buildRenameIndex();
 
-const items = sourceItems.map((item) => decide(item, destinationIndex, renameIndex));
+const staysIndex = new Map(STAYS_IN_PARITY.map((entry) => [entry.id, entry.reason]));
+const items = sourceItems.map((item) => {
+  const decided = decide(item, destinationIndex, renameIndex);
+  const reason = staysIndex.get(item.id);
+  // STAYS is applied only where the item would otherwise read MISSING. If something on this list
+  // has in fact been ported, that is worth seeing, not overwriting with an exemption.
+  if (reason && decided.status === 'MISSING') return { ...decided, status: 'STAYS', reason };
+  return decided;
+});
 const counts = {
   total: items.length,
   ported: items.filter((item) => item.status === 'PORTED').length,
   renamed: items.filter((item) => item.status === 'RENAMED').length,
+  stays: items.filter((item) => item.status === 'STAYS').length,
   missing: items.filter((item) => item.status === 'MISSING').length,
   symbols: items.filter((item) => item.kind === 'symbol').length,
   scripts: items.filter((item) => item.kind === 'script').length,
 };
+
+// An exemption that names nothing is a stale exemption, and a stale exemption is how a real
+// MISSING gets silenced later. Fail rather than carry one quietly.
+const unusedExemptions = STAYS_IN_PARITY.filter(
+  (entry) => !items.some((item) => item.id === entry.id),
+);
+if (unusedExemptions.length > 0) {
+  process.stderr.write(
+    `STAYS_IN_PARITY names ${unusedExemptions.length} item(s) that do not exist in the source:\n${unusedExemptions.map((e) => `  ${e.id}`).join('\n')}\nRemove them, or fix the id. An exemption for something that is not there can only hide a future finding.\n`,
+  );
+  process.exit(2);
+}
 
 const receipt = {
   schemaVersion: RECEIPT_SCHEMA_VERSION,
@@ -119,6 +178,7 @@ const receipt = {
   },
   destination: destinationTree.provenance,
   renames: RENAMES,
+  staysInParity: STAYS_IN_PARITY,
   counts,
   verdict: counts.missing === 0 ? 'PASS' : 'FAIL',
   items,
@@ -145,6 +205,27 @@ async function collectSourceItems() {
     const text = await readFile(absolute, 'utf8');
     for (const name of collectExportedNames(relative, text)) {
       items.push({ kind: 'symbol', id: `symbol:${relative}#${name}`, name, sourcePath: relative });
+    }
+  }
+
+  // The NodeSlide modules that live outside the domain root, found by naming convention rather
+  // than by a directory list. Missing these is what let the first version of this gate report a
+  // number that felt complete while the Convex layer went uncounted.
+  for (const { root, prefix } of SOURCE_PREFIXED_ROOTS) {
+    const files = await walkFiles(path.join(rootDirectory, root));
+    for (const absolute of files.sort()) {
+      const relative = toPosix(path.relative(rootDirectory, absolute));
+      if (!isParseableSource(relative)) continue;
+      if (!path.basename(relative).toLowerCase().startsWith(prefix)) continue;
+      const text = await readFile(absolute, 'utf8');
+      for (const name of collectExportedNames(relative, text)) {
+        items.push({
+          kind: 'symbol',
+          id: `symbol:${relative}#${name}`,
+          name,
+          sourcePath: relative,
+        });
+      }
     }
   }
 
