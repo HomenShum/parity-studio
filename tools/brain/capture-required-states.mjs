@@ -89,14 +89,20 @@ const STATES = [
     id: 'exception',
     viewport: { width: 1440, height: 900 },
     async reach(page) {
-      // A claim with nothing bound to it. Requires an element whose sourceIds are empty to be
-      // selectable and to say so. If the product never surfaces that, the state is unreachable.
+      // A claim with nothing bound to it.
+      //
+      // The first version asserted getByText(/unsourced/i). nodeslide #72 renders the word
+      // "Unsourced" as a chip LABEL, unconditionally, so that assertion was true on every deck
+      // forever — including a deck where the state is impossible. It filed a screenshot reading
+      // "Unsourced 0", a picture of the state's absence, as proof the state was reached. A sensor
+      // that cannot read zero is welded open.
+      //
+      // Assert on an actual unsourced ELEMENT instead. The count testid would still be present at
+      // zero; only the per-element testid requires the state to genuinely exist.
       await page.locator('[data-testid="inspector-tab-data"]').click();
       await page.waitForTimeout(1500);
-      return page
-        .getByText(/no evidence|not attached|unsourced|0 sources/i)
-        .first()
-        .isVisible();
+      const unsourced = page.locator('[data-testid="evidence-unsourced-element"]');
+      return (await unsourced.count()) > 0 && unsourced.first().isVisible();
     },
   },
   {
@@ -135,6 +141,14 @@ const STATES = [
     async reach(page) {
       // The product does surface this: when the external model cannot supply every direction it
       // labels the deterministic fallback rather than presenting it as a model result.
+      //
+      // Previously this ran with no navigation of its own, so it inherited whatever the `proposal`
+      // state had left on screen. Both states then filed byte-identical screenshots — same sha256
+      // — which is the tell: two "different" states cannot look the same. It was scoring the
+      // previous state's frame. Assert the fallback label specifically, and let the digest
+      // uniqueness check below catch any recurrence.
+      await page.locator('[data-testid="inspector-tab-ai"]').click();
+      await page.waitForTimeout(1500);
       return page
         .getByText(/deterministic fallback|could not safely supply|Fallback reason/i)
         .first()
@@ -208,15 +222,39 @@ for (const state of STATES) {
 
 await browser.close();
 
+// Two states that file the same bytes are not two states. On the first run `proposal` and
+// `failed_safe` both filed sha256:99d14bb2… because the second assertion never navigated and read
+// the frame the first had left behind. Coverage said 7/9 while only 6 distinct frames existed.
+// A duplicate digest is downgraded to a miss rather than reported, because the alternative is a
+// coverage number that counts the same screenshot twice.
+const byDigest = new Map();
+for (const entry of rendered) {
+  const prior = byDigest.get(entry.digest);
+  if (prior) {
+    missed.push({
+      stateId: entry.stateId,
+      reason: `filed a screenshot byte-identical to ${prior} (${entry.digest.slice(0, 20)}…), so this state was not distinctly reached`,
+    });
+  } else {
+    byDigest.set(entry.digest, entry.stateId);
+  }
+}
+const distinct = rendered.filter((entry) => byDigest.get(entry.digest) === entry.stateId);
+if (distinct.length !== rendered.length) {
+  process.stdout.write(
+    `\n  ${rendered.length - distinct.length} state(s) demoted: duplicate screenshot digest\n`,
+  );
+}
+
 const receipt = {
   schemaVersion: 'brain.required-state-capture/v1',
   note: 'The render half of nodekit frontend benchmark. Not a benchmark: that additionally requires an independent review receipt and criticIndependent, which is a schema constant of true and cannot be honestly asserted by the agent that authored the change.',
   target: BASE,
   capturedAt: new Date().toISOString(),
   requiredStateIds: STATES.map((s) => s.id),
-  renderedStates: rendered,
+  renderedStates: distinct,
   missedStates: missed,
-  coverage: `${rendered.length}/${STATES.length}`,
+  coverage: `${distinct.length}/${STATES.length}`,
 };
 
 await writeFile(path.join(OUT, 'capture-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
