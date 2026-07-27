@@ -37,6 +37,52 @@ jobs:
             --base "origin/${{ github.base_ref }}" \
             ${{ contains(github.event.pull_request.labels.*.name, 'freeze-exempt') && '--exempt' || '' }}
 
+  # The Phase 3 gate. It runs only on pull requests that DELETE NodeSlide files, because that is the
+  # only moment its answer can prevent harm: once the code is gone, an audit saying it was not ported
+  # is a post-mortem. Deliberately not run on every PR — a check that is red for months on unrelated
+  # work stops being read, and the audit is red today by design (1,162 items still unported).
+  port_audit:
+    name: Port audit (runs only on deletions)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Does this pull request delete NodeSlide files?
+        id: scope
+        run: |
+          deleted=$(git diff --name-status --diff-filter=D "origin/${{ github.base_ref }}...HEAD" \
+            | grep -cE 'src/domains/nodeslide/|scripts/nodeslide-|shared/nodeslide|convex/nodeslide' || true)
+          echo "deleted=$deleted" >> "$GITHUB_OUTPUT"
+          echo "$deleted NodeSlide file(s) deleted by this pull request."
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        if: steps.scope.outputs.deleted != '0'
+        with:
+          repository: HomenShum/NodeSlide
+          path: .destination
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        if: steps.scope.outputs.deleted != '0'
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.scope.outputs.deleted != '0'
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: steps.scope.outputs.deleted != '0'
+      - name: Prove nothing being deleted is stranded
+        if: steps.scope.outputs.deleted != '0'
+        run: node scripts/port-audit.mjs --destination .destination
+      - name: Upload the audit receipt
+        if: always() && steps.scope.outputs.deleted != '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: port-audit-${{ github.run_id }}
+          path: artifacts/port-audit/
+
   quality:
     name: Quality
     runs-on: ubuntu-latest
