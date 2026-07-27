@@ -54,17 +54,13 @@ if (!Number.isFinite(ageHours)) {
 // Small tolerance for genuine clock skew between machines, then refuse.
 if (ageHours < -0.25) {
   process.stderr.write(
-    `Snapshot is stamped ${Math.abs(ageHours).toFixed(1)}h in the FUTURE. Refusing to rank.\n` +
-      `  capturedAt  ${snapshot.capturedAt}\n` +
-      `  now         ${new Date().toISOString()}\n` +
-      `A future timestamp means the staleness check can never fire, so the queue would look fresh forever. Fix capturedAt in notion-snapshot.json.\n`,
+    `Snapshot is stamped ${Math.abs(ageHours).toFixed(1)}h in the FUTURE. Refusing to rank.\n  capturedAt  ${snapshot.capturedAt}\n  now         ${new Date().toISOString()}\nA future timestamp means the staleness check can never fire, so the queue would look fresh forever. Fix capturedAt in notion-snapshot.json.\n`,
   );
   process.exit(1);
 }
 if (ageHours > maxAgeHours) {
   process.stderr.write(
-    `Snapshot is ${ageHours.toFixed(1)}h old, budget is ${maxAgeHours}h. Refusing to rank.\n` +
-      `Re-query the Notion view and rewrite notion-snapshot.json. A queue built on a stale board hides exactly the item that has been sitting longest.\n`,
+    `Snapshot is ${ageHours.toFixed(1)}h old, budget is ${maxAgeHours}h. Refusing to rank.\nRe-query the Notion view and rewrite notion-snapshot.json. A queue built on a stale board hides exactly the item that has been sitting longest.\n`,
   );
   process.exit(1);
 }
