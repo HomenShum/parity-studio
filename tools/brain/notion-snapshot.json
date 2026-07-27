@@ -117,7 +117,7 @@
       "status": "Todo",
       "priority": "P2",
       "dim": "integration · D9",
-      "note": "The board calls this zero-integration and labels-only. The port triage found 100 live symbols in parity with 21 registered Convex functions and UI bound at NodeSlideConnectionsDialog.tsx:115-128. One of the two is wrong, and the disagreement is itself the finding — see docs/PORT_TRIAGE.md."
+      "note": "BOARD IS WRONG, resolved 2026-07-27 by reading the code. This row says zero integration and capability labels only. The code makes real calls to https://slides.googleapis.com/v1/presentations under the narrow drive.file scope, ships an OAuth runtime, and binds seven Convex actions into the connections dialog at NodeSlideConnectionsDialog.tsx:118-127. Owner decided to KEEP it; the port to nodeslide is in flight. Rewrite this row: it is not a P2 build task, it is a port of a working capability that this row nearly got deleted."
     },
     {
       "item": "Revamp B6 latency/status + B8 agent-operability",
