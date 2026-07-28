@@ -240,7 +240,38 @@ This one directly contradicts the plan's §3 non-goal "**mechanical relocation o
 
 ## 6. `openui/visualMaterials*`
 
-**Verdict: PORT** · **13 symbols** (`visualMaterials.ts` 10, `VisualMaterialWorkbench.tsx` 3)
+**Verdict: ~~PORT~~ → DECIDE, corrected 2026-07-27 by attempting the port.** · **13 symbols**
+
+The PORT verdict below was reached from reachability alone, and reachability was confirmed — the
+chain crosses two dynamic `import()` edges and the Workbench is genuinely openable from a live menu
+item at `AiInspector.tsx:2146`. It is not dead. It is also not portable as-is, for three reasons the
+first pass did not weigh:
+
+1. **A name collision the audit cannot see.** The destination already has a `VisualMaterial` family —
+   `NodeSlideVisualMaterial`, `NodeSlideVisualMaterialKind` (11 kinds), `NodeSlideVisualMaterialStatus`,
+   `NodeSlideVisualMaterialInventory` in `convex/lib/nodeslideStoryContext.ts`, consumed by
+   `nodeslideDesignPlan.ts`. It models *evidence available to build a deck from*; parity's
+   `VisualMaterialSpec` models *a renderable slide spec*. Different concerns, overlapping names and
+   provenance vocabulary. The audit scored these MISSING because it matches exact names within scoped
+   paths, so the collision is invisible to it — the same blind-spot class as the
+   `NodeSlideConnectionsDialog` false-PORTED.
+2. **"Self-contained" was wrong.** The real cost is `@openuidev/react-lang@0.2.8` (a 0.x third-party
+   DSL renderer, pulls `@openuidev/lang-core`, peer-deps the MCP SDK) plus `@radix-ui/react-collapsible`
+   — neither installed in the destination — plus 36 `ns-openui-*` CSS rules and merges into both
+   `AiInspector.tsx` (2,333 lines vs 3,115) and `InspectorPanel.tsx`. Adding a 0.x dependency to the
+   shipped runtime bundle is a supply-chain decision, and it contradicts §3's "mechanical relocation only".
+3. **The content is a self-described unverified demo.** `VisualMaterialWorkbench` renders exactly one
+   hardcoded spec, `AI2027_TRANSFORMATION_LADDER`, labelled "OpenUI Phase 0 fixture" with
+   `verification: 'unverified_scenario'`. There is no authoring path for a second spec, the validator's
+   chart branch is unreachable from the shipped path, and its four testids have zero consumers in
+   either repo. Neither `nodekit.yaml` declares an openui concept.
+
+A core-only port (`validateVisualMaterialSpec`, `compileVisualMaterialProposal`) is possible with zero
+new dependencies, since `visualMaterials.ts` imports only `shared/nodeslide`. But that splits the
+cluster across two repos without letting parity delete anything, which does not advance the plan.
+
+**Owner decision required:** does NodeSlide ship the OpenUI lab at all, and which `VisualMaterial`
+naming wins? Until answered, this cluster blocks Phase 3 for its files and should not be ported.
 
 Evidence:
 
@@ -315,7 +346,32 @@ against nodeslide's flat model. Note that `shared/nodeslideDataExport.ts` and
 
 ## 9. `uiContract.ts`
 
-**Verdict: PORT** · **8 symbols**
+**Verdict: PORT, but NOT as a second version constant. Corrected 2026-07-27.** · **8 symbols**
+
+Two findings from attempting it.
+
+**It has already been ported, on a branch nobody has pushed.** Commit `4941d4d` on local-only branch
+`port/slidelang` adds `uiContract.ts` byte-identical to parity's. It is **unwired** — `git grep
+publishNodeSlideUiContract` on that branch returns the file and its test and no callers. A contract
+with no consumer is the unarmed-sensor failure this document warns about, shipped as a port.
+
+**The destination did not drop this; it solved it differently, and its version is armed.** There is
+no `NODESLIDE_UI_CONTRACT_VERSION` equivalent and `uiContract.ts` was never in nodeslide's history.
+Instead the studio root publishes agent-readable state as DOM attributes at `NodeSlideStudio.tsx:2921`
+— `data-app-id`, `data-agent-surface`, `data-screen-state`, `data-mcp-compat`, `data-ns-theme` — and
+those have real consumers: `scripts/nodeslide-agent-ui-linter.mjs:35-44` gates on three of them, and
+`capture-gap-closure-ui-qa.mjs:171` fails a run on a `data-ns-theme` mismatch.
+
+**The concrete collision.** `publishNodeSlideUiContract` writes `data-ns-theme` to
+`document.documentElement`; the destination writes it to `.nodeslide-studio`, keys all its theme CSS
+off `.nodeslide-studio[data-ns-theme="dark"]`, and reads it there in the QA gate. Wiring the ported
+file unchanged gives the product two writers of the same attribute on different nodes, free to
+disagree. Note that parity carries both mechanisms already, and no CSS in either repo keys off
+`html[data-ns-theme]` — so the `<html>` copy is redundant in parity too.
+
+The contract does carry information the DOM surface lacks (phase, connection, loading stage and
+elapsed, deck id and version, job status and routing), so this is not pure duplication. It should
+land as **one** channel wired into the existing linter gate, not as a second unwired constant.
 
 ```
 src/App.tsx:16 -> NodeSlideStudio.tsx:148 -> uiContract.ts   // publishNodeSlideUiContract
@@ -473,10 +529,10 @@ Atlas decks, which is a **different concern** from parity's Atlas contract gates
 | 3 | `slidelang/jsonSpec.ts` + `jsonEdit.ts` | PORT | 30 | — |
 | 4 | Trace + PDF-evidence (merge) | PORT | 37 | — |
 | 5 | Inspector shell / tab model | **DECIDE** | 10 | — |
-| 6 | `openui/visualMaterials*` | PORT | 13 | — |
+| 6 | `openui/visualMaterials*` | **DECIDE** (was PORT) | 13 | 0.x dep + name collision + unverified demo |
 | 7 | Agent thread (rename → `AgentThread.tsx`) | PORT | 5 | — |
 | 8 | DeleteDeck / ExportMyData / export | PORT | 11 | — |
-| 9 | `uiContract.ts` | PORT | 8 | — |
+| 9 | `uiContract.ts` | PORT (one channel, wired) | 8 | already on unpushed `port/slidelang`, unwired |
 | 10 | Editor shell refactor (merge) | PORT | 25 | — |
 | 11 | Composer + live singletons | PORT | 35 | — |
 | 12 | `atlas/AtlasGallery.tsx` | **DECIDE** | 1 | — |
