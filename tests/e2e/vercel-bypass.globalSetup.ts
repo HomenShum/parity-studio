@@ -22,8 +22,10 @@ export default async function vercelBypassGlobalSetup(
   try {
     const response = await getSameOriginBypassResponse(bypassRequest, baseURL);
     const body = await response.text();
-    if (!response.ok() || !/nodeslide/i.test(body)) {
-      throw new Error('The protected preview bypass did not return the NodeSlide application.');
+    if (!response.ok() || !servedTheApplication(body)) {
+      throw new Error(
+        'The protected preview bypass did not return the application shell; it most likely returned the deployment protection page.',
+      );
     }
     const savedState = await bypassRequest.storageState({ path: storageState });
     if (savedState.cookies.length === 0) {
@@ -39,6 +41,20 @@ export default async function vercelBypassGlobalSetup(
   return async () => {
     await rm(storageState, { force: true });
   };
+}
+
+/**
+ * What this preflight has to prove is that the bypass secret got us past Vercel's deployment
+ * protection and to the app — not which app it is. It used to test the body for the string
+ * "nodeslide", which was the `<title>`, so renaming the product in Phase 4 of the decoupling plan
+ * failed a check about authentication. A sensor that a rename can break was never measuring the
+ * thing it was named after.
+ *
+ * The application shell is a Vite SPA: an empty root element plus a module script. Vercel's
+ * protection page is server-rendered and has neither.
+ */
+function servedTheApplication(body: string): boolean {
+  return /<div\s+id="root"/i.test(body) && /<script[^>]+type="module"/i.test(body);
 }
 
 async function getSameOriginBypassResponse(

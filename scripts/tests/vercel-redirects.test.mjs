@@ -36,6 +36,7 @@ function resolve(rawUrl) {
     if (rule.source !== url.pathname) continue;
     const captures = {};
     const matched = (rule.has ?? []).every((condition) => {
+      if (condition.type === 'host') return new RegExp(`^${condition.value}$`).test(url.host);
       if (condition.type !== 'query') return false;
       const value = url.searchParams.get(condition.key);
       if (value === null) return false;
@@ -100,6 +101,17 @@ describe('old public links survive the NodeSlide split', () => {
         statusCode: 301,
       });
     }
+  });
+
+  it('fires only on the production host, so preview deployments still serve NodeSlide', () => {
+    // Without this, every preview URL would 301 parity's own NodeSlide E2E journeys onto
+    // nodeslide.vercel.app — and that suite runs with NODESLIDE_E2E_MUTATIONS=1, so a test
+    // meant for a throwaway preview would have been writing to the live product. Old public
+    // links only ever pointed at the production host; nothing else needs the redirect.
+    const preview = 'https://parity-studio-pplmk1aw2-hshum2018-gmailcoms-projects.vercel.app';
+    expect(resolve(`${preview}/?domain=nodeslide`)).toBeNull();
+    expect(resolve(`${preview}/?share=${realShareSlug('a1b2c3')}`)).toBeNull();
+    expect(resolve('http://localhost:5180/?domain=nodeslide')).toBeNull();
   });
 
   it('cannot loop: no destination this deployment serves matches a rule again', () => {

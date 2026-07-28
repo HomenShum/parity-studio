@@ -7,6 +7,7 @@
     {
       "source": "/",
       "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
         { "type": "query", "key": "share", "value": "^(?<shareSlug>[a-z0-9]+(?:-[a-z0-9]+)*)$" }
       ],
       "destination": "https://nodeslide.vercel.app/s/:shareSlug",
@@ -14,13 +15,19 @@
     },
     {
       "source": "/",
-      "has": [{ "type": "query", "key": "share" }],
+      "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
+        { "type": "query", "key": "share" }
+      ],
       "destination": "/link-moved.html",
       "statusCode": 301
     },
     {
       "source": "/",
-      "has": [{ "type": "query", "key": "domain", "value": "nodeslide" }],
+      "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
+        { "type": "query", "key": "domain", "value": "nodeslide" }
+      ],
       "destination": "https://nodeslide.vercel.app/",
       "statusCode": 301
     }

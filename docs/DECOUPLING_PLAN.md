@@ -206,6 +206,19 @@ carried. A `share` value outside `/^[a-z0-9]+(?:-[a-z0-9]+)*$/` — the shape
 well-formed slug for a deck that was unpublished lands on NodeSlide's own rendered refusal, which
 already explains itself in 1,980 bytes. All rules are rooted at `/` so the explainer cannot loop.
 
+Every rule is also scoped to `host = parity-studio.vercel.app`, and that scoping is not tidiness.
+Unscoped, the rules fire on preview deployments too, which would have sent parity's own NodeSlide
+E2E journeys onto `nodeslide.vercel.app` — a suite that runs with `NODESLIDE_E2E_MUTATIONS=1`, so
+tests written for a throwaway preview would have been writing to the live product. Old public links
+only ever named the production host; nothing else needs the redirect. The one cost is that a future
+custom domain must be added to the `has` conditions or its old links will not redirect.
+
+The same CI run caught a second welded sensor. `tests/e2e/vercel-bypass.globalSetup.ts` proved the
+deployment-protection bypass had worked by testing the response body for the string `nodeslide` —
+which was the `<title>`. Renaming the product failed a check about authentication. It now asserts
+the Vite shell (`<div id="root">` plus a module script), which is what "we got the app and not the
+protection page" actually means, and which a rename cannot break.
+
 **Exit (still owed):** `parity-studio.vercel.app` serves ParityApp by default (live-DOM check for
 `parity-shell`, not build logs); redirect verified with a real old link against the deployed URL.
 Both are blocked on the pull request merging, since `deploymentEnabled` was `false` until it does.

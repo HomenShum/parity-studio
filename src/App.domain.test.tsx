@@ -44,9 +44,15 @@ async function renderAt(search: string, env: Record<string, string> = {}) {
 /**
  * The parity branch is the only one that needs the real provider tree — the NodeSlide and Atlas
  * stubs both render without one — so reaching it at all is part of the assertion.
+ *
+ * It also needs `VITE_CONVEX_URL`: `ParityApp` calls `convexHttpUrl()` during render, and that
+ * helper throws rather than falling back to production. Stubbing it here is deliberate. Left to
+ * the ambient environment these tests pass on a developer machine that has `.env.local` and fail
+ * in CI, which is the worst of both — a green suite locally and a red one where it matters.
  */
 async function renderParityAt(search: string, env: Record<string, string> = {}) {
   vi.resetModules();
+  vi.stubEnv('VITE_CONVEX_URL', 'https://example-deployment.convex.cloud');
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
   window.history.replaceState(null, '', `/${search}`);
   const [{ default: App }, { I18nProvider }] = await Promise.all([
