@@ -188,7 +188,7 @@ golden-master deltas = zero.
   301 to `nodeslide.vercel.app`, kept ≥ 90 days (owner decision D3).
 - Smoke: boot flag-on build, execute one real run query, screenshot the three-panel shell.
 
-**Executed 2026-07-27 on branch `feat/phase4-resurface-parity` — repo side done, exit criterion
+**Executed 2026-07-27 on branch `feat/phase4-resurface-parity-only` — repo side done, exit criterion
 NOT yet met.** `VITE_ENABLE_PARITY_DOMAIN` inverted to a kill switch (on unless explicitly
 `false`), `parity` made the default domain, `ParityDomainDisabled` deleted, `data-testid=
 "parity-shell"` added as the thing the live-DOM check greps for, `git.deploymentEnabled` flipped to
