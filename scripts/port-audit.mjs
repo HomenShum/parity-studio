@@ -24,11 +24,18 @@
  * to fail: point it at a destination commit from before the ports landed and it must go red. An
  * audit that cannot fail is not a gate, so the revert probe is part of the contract, not a bonus.
  *
- * The default is the destination *working tree*, deliberately. NodeSlide PR #73 carries the PPTX
- * importer and is not on main yet, so an audit against `main` today reports the importer MISSING
- * and would be telling the truth about main while lying about the port. The receipt therefore
- * always records which tree was read — ref, resolved sha, and whether it was dirty — so no reader
- * can mistake one run for another.
+ * The default reads the destination working tree, but REFUSES it unless that tree is a clean
+ * checkout of main. Pass --allow-working-tree to grade an in-flight port deliberately.
+ *
+ * That refusal exists because the permissive version produced a false PASS. On 2026-07-27 this
+ * audit reported the agent-session cluster as 0 MISSING / 79 PORTED. It had read the shared
+ * nodeslide checkout, which a concurrent agent had left dirty on a feature branch carrying an
+ * unmerged copy of exactly those files. Measured against origin/main, all 79 were absent. The gate
+ * was not wrong about what it read — it read something nobody ships, which is worse, because the
+ * number looked like good news.
+ *
+ * The receipt always records which tree was read — ref, resolved sha, branch, dirty, and whether a
+ * flag waived the check — so no reader can mistake one run for another.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -130,6 +137,8 @@ const receiptPath = path.resolve(
     : 'artifacts/port-audit/port-audit.json',
 );
 const emitJson = flags.get('json') === true;
+/** Opt in to grading an unclean or off-main destination checkout. See resolveDestinationTree. */
+const allowWorkingTree = flags.get('allow-working-tree') === true;
 
 const destinationTree = await resolveDestinationTree(destinationRoot, against);
 const sourceItems = await collectSourceItems();
@@ -332,6 +341,32 @@ async function resolveDestinationTree(repository, ref) {
 
   if (ref === null) {
     const status = gitCapture(repository, ['status', '--porcelain']) ?? '';
+    const dirty = status.trim().length > 0;
+
+    // Refuse to grade a working tree that is not a clean checkout of the shipping branch.
+    //
+    // This cost a real false PASS. On 2026-07-27 the audit reported the agent-session cluster as
+    // 0 MISSING / 79 PORTED. It had read the shared nodeslide checkout, which a concurrent agent
+    // had dirty on a feature branch carrying an unmerged copy of exactly those files. Against
+    // origin/main all 79 were genuinely missing. The gate did not lie about what it read; it read
+    // something nobody ships.
+    //
+    // A dirty or off-branch tree must never satisfy this check. It stays available behind an
+    // explicit --allow-working-tree, because inspecting an in-flight port is a real use — but it
+    // has to be asked for, so a receipt can never quietly describe someone else's uncommitted work.
+    if (!allowWorkingTree) {
+      const reasons = [];
+      if (dirty)
+        reasons.push(`it has uncommitted changes (${status.trim().split('\n').length} paths)`);
+      if (branch !== 'main')
+        reasons.push(`it is on branch '${branch ?? 'detached HEAD'}', not main`);
+      if (reasons.length > 0) {
+        fail(
+          `Refusing to audit the working tree of ${repository}: ${reasons.join(', ')}.\nGrading a tree nobody ships produces a number nobody can act on — this exact case once reported 79 ported symbols that were entirely absent from main.\nUse --against origin/main to grade what ships, or --allow-working-tree to grade this tree deliberately.`,
+        );
+      }
+    }
+
     return {
       repository,
       readFile: async (relative) => readFile(path.join(repository, relative), 'utf8'),
@@ -342,7 +377,8 @@ async function resolveDestinationTree(repository, ref) {
         ref: null,
         resolved: head,
         branch,
-        dirty: status.trim().length > 0,
+        dirty,
+        allowedByFlag: allowWorkingTree,
       },
     };
   }
