@@ -795,3 +795,38 @@ Everything else is heavy two-way divergence: `NodeSlideStudio.tsx` 2320/939, `Ai
 `convex/` at all. Convex-side test files are therefore checked by **neither** oracle. A test passed
 tsc and then failed at runtime with `captureWebSourcesBestEffort is not a function` for exactly this
 reason.
+
+## §12 — The compiler is blind to `(internal as any)` dependencies
+
+Found 2026-07-27 while porting `convex/nodeslideJobRunner`. It **compiled green and was still
+broken**: it launders every cross-module call through `(internal as any).nodeslideJobs`, so its
+dependency on the table-blocked `nodeslideJobs` produces **zero TypeScript errors**.
+`nodeslidePptxCreate` has the same shape via `internal.nodeslide.createImportedDeckInternal`.
+
+Neither oracle would ever have caught these. Both were backed out.
+
+This is the ninth instance of one bug class today and the deepest, because it defeats the rule the
+whole port was being run on:
+
+    a word's presence is not its role
+    an exit code's value is not its cause
+    a turn count is not an identity
+    a repository name is not a version
+    a test's pass is not its claim
+    an error list is a floor, not a total
+    THE COMPILER IS THE ORACLE — except where a cast erases the dependency
+
+`(internal as any)` is a deliberate Convex idiom for breaking circular module references, so it is
+not a defect in itself. But it means **type-level verification of a Convex module's dependencies is
+incomplete by construction**, and a port that relies on tsc alone will land modules that fail only
+at runtime.
+
+**Mitigation used:** after each batch, grep the landed tree for `(internal as any)` /
+`(api as any)`, extract the module names being reached, and confirm each target file exists.
+Audited across everything landed tonight — 6 occurrences reaching 5 modules
+(`nodeslide`, `nodeslideMemory`, `nodeslideGoogleSlidesRuntime`, `nodeslideVariations`,
+`nodeslideVariationProvider`), **all present**. Nothing landed carries a dangling reference.
+
+**Related, unfixed:** `convex/_generated/api.d.ts` is checked in and does not enumerate 22
+previously-ported lib modules. A module absent from that file is unreachable at runtime regardless
+of whether it compiles.
