@@ -1,0 +1,84 @@
+{
+  "id": "obs-nodeslide-landing-1",
+  "source": {
+    "url": "https://nodeslide.vercel.app",
+    "app": "NodeSlide",
+    "surface": "first-arrival landing",
+    "capturedVia": "chrome-live",
+    "sourcePolicyId": "nodeslide-owned"
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "surface",
+      "property": "interactive-controls",
+      "value": 14,
+      "unit": "controls",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "inspector",
+      "property": "top-level-tabs",
+      "value": 0,
+      "unit": "tabs",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "page",
+      "property": "distinct-font-sizes-at-or-above-8px",
+      "value": 8,
+      "unit": "sizes",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f4",
+      "kind": "timing",
+      "subject": "motion-token",
+      "property": "--duration-fast",
+      "value": ".18s",
+      "unit": null,
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "page",
+      "property": "elements-with-infinite-animation",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f6",
+      "kind": "count",
+      "subject": "artifact",
+      "property": "canvas-elements-matching-known-selectors",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the page as a whole"
+    }
+  ],
+  "problemTags": [
+    "first-run-orientation",
+    "route-disclosure-before-egress"
+  ],
+  "intentTags": [
+    "state-a-goal",
+    "choose-a-model"
+  ],
+  "layoutTags": [
+    "three-panel",
+    "persistent-inspector"
+  ],
+  "interactionTags": [
+    "tab-switching",
+    "direct-edit"
+  ]
+}

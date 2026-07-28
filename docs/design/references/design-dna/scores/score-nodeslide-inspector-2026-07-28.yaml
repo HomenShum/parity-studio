@@ -1,0 +1,85 @@
+id: score-nodeslide-inspector-2026-07-28
+surface: NodeSlide inspector column, workspace and evidence tabs
+target: https://nodeslide.vercel.app
+buildSha: d41bf77
+scoredAt: 2026-07-28
+
+# A score exists to be argued with, so every number below names the fact that produced it. A score
+# nobody can trace back to a measurement is the thing this whole record format exists to refuse.
+
+criteria:
+  - criterionId: label-value-differentiation
+    designRuleId: rule-inspector-hierarchy-1
+    score: 0
+    citedFacts:
+      - obs-nodeslide-workspace-1/label-and-value.differentiated-by
+      - obs-nodeslide-inspector-evidence-1/label-and-value.differentiated-by
+    observed: neither size nor colour
+    judgment: >-
+      Bottom of the rubric, on both tabs, measured independently. This was not on any finding list
+      before today — the design work had been arguing about whether hierarchy came from size or
+      colour, and the measurement says it comes from neither.
+
+  - criterionId: inspector-type-scale-count
+    designRuleId: rule-inspector-hierarchy-1
+    score: 4
+    citedFacts:
+      - obs-nodeslide-workspace-1/inspector.distinct-font-sizes
+    observed: 4 distinct sizes
+    judgment: >-
+      The four-size cap holds inside .ns-inspector-scroll. This is the one thing that is fully
+      correct, and it is worth recording as a pass so the corpus is not only failures.
+
+  - criterionId: minimum-persistent-text
+    score: 2
+    citedFacts:
+      - obs-nodeslide-workspace-1/inspector.smallest-persistent-text
+      - obs-nodeslide-inspector-evidence-1/inspector.smallest-persistent-text
+    observed: 10px on the workspace tab, 11px on the evidence tab
+    judgment: >-
+      The shipped design system sets an 11px chrome floor. The evidence tab meets it; the workspace
+      tab does not. Same column, same build, two different answers — which means the floor is
+      applied per-component rather than enforced at the scale.
+
+  - criterionId: page-wide-type-discipline
+    score: 1
+    citedFacts:
+      - obs-nodeslide-workspace-1/page.distinct-font-sizes-at-or-above-8px
+    observed: 11 distinct sizes page-wide against 4 inside the inspector
+    judgment: >-
+      The scale was written for one column and shipped to one column. Everywhere else still renders
+      eleven sizes. Reported as done because the place it was tested was the place it applied.
+
+  - criterionId: artifact-dominance
+    score: 2
+    citedFacts:
+      - obs-nodeslide-workspace-1/artifact.share-of-viewport-width
+    observed: 56 per cent of a 1440px viewport
+    judgment: >-
+      Chrome takes 44 per cent. The product design contract predicted this exact number and expected
+      an independent benchmark to say so; this is that measurement, arrived at separately.
+      Deliberately NOT scored 0 — the contract states artifact dominance as an intent, not a
+      threshold, and a score against an unstated threshold would be invented rigour.
+
+  - criterionId: motion-restraint
+    score: 4
+    citedFacts:
+      - obs-nodeslide-workspace-1/page.elements-with-infinite-animation
+    observed: 0 elements with infinite animation
+    judgment: >-
+      Meets the motion ladder's hard number of zero unguarded infinite loops, on every surface
+      measured.
+
+humanReview:
+  decision: pending
+  reason: >-
+    No human has reviewed this score. It is recorded as pending rather than accepted, because the
+    agent that produced the measurements also wrote the rubric and applied it — which is the
+    criticIndependent problem in miniature. The facts are reproducible by anyone; the four scores
+    are one party's reading of them.
+
+provenanceCaveat: >-
+  Every cited fact comes from our own application. Under the approved source policy, nodeslide-owned
+  permits storage; Mobbin and Uiverse are live-inspection-only. So this score compares NodeSlide to
+  a rule derived from NodeSlide, which is circular and is stated here rather than hidden. The corpus
+  needs external observations before any score here means more than internal consistency.

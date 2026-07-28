@@ -1,0 +1,111 @@
+{
+  "id": "obs-nodeslide-workspace-1",
+  "source": {
+    "url": "https://nodeslide.vercel.app",
+    "app": "NodeSlide",
+    "surface": "deck open, nothing selected",
+    "capturedVia": "chrome-live",
+    "sourcePolicyId": "nodeslide-owned"
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "surface",
+      "property": "interactive-controls",
+      "value": 82,
+      "unit": "controls",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "inspector",
+      "property": "top-level-tabs",
+      "value": 7,
+      "unit": "tabs",
+      "locatorDescription": "upper right of the viewport, reading \"AI\""
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "inspector",
+      "property": "distinct-font-sizes",
+      "value": 4,
+      "unit": "sizes",
+      "locatorDescription": "upper right of the viewport, reading \"ContextRead context · locked write\""
+    },
+    {
+      "id": "f4",
+      "kind": "measurement",
+      "subject": "inspector",
+      "property": "smallest-persistent-text",
+      "value": 10,
+      "unit": "px",
+      "locatorDescription": "upper right of the viewport, reading \"ContextRead context · locked write\""
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "page",
+      "property": "distinct-font-sizes-at-or-above-8px",
+      "value": 11,
+      "unit": "sizes",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "label-and-value",
+      "property": "differentiated-by",
+      "value": "neither size nor colour",
+      "unit": null,
+      "locatorDescription": "upper right of the viewport, reading \"Share\""
+    },
+    {
+      "id": "f7",
+      "kind": "timing",
+      "subject": "motion-token",
+      "property": "--duration-fast",
+      "value": ".18s",
+      "unit": null,
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f8",
+      "kind": "count",
+      "subject": "page",
+      "property": "elements-with-infinite-animation",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the page as a whole"
+    },
+    {
+      "id": "f9",
+      "kind": "measurement",
+      "subject": "artifact",
+      "property": "share-of-viewport-width",
+      "value": 56,
+      "unit": "percent",
+      "locatorDescription": "upper left of the viewport, reading \"Slide 1 Stories with structure Liv\""
+    }
+  ],
+  "problemTags": [
+    "artifact-dominance",
+    "three-panel-orientation"
+  ],
+  "intentTags": [
+    "read-the-slide",
+    "reach-the-agent"
+  ],
+  "layoutTags": [
+    "three-panel",
+    "persistent-inspector"
+  ],
+  "interactionTags": [
+    "tab-switching",
+    "direct-edit"
+  ]
+}
