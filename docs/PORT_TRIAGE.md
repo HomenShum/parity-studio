@@ -614,3 +614,45 @@ Stated plainly, because a named DECIDE beats a guessed PORT:
   (`feat/public-share-projection`). All rename and equivalence checks in this document were done
   against `origin/main` instead, which is the stricter and more honest comparison — but it means the
   audit's 409 and this document's rename findings are keyed to two different destination commits.
+
+## §10 — Cross-session territory split, agreed 2026-07-27
+
+Two Claude Code sessions were porting the same files into the same repository concurrently. The
+collision was found by a third party auditing `git worktree list` on the destination, not by either
+session noticing. Recorded here because the split is only durable if it is written down.
+
+| territory | owner |
+|---|---|
+| `convex/**`, `shared/**` | node-platform session (worktrees `wt-convexlib`, `wt-convexns`, `wt-sharedns`) |
+| `src/domains/nodeslide/**` — UI, slidelang, inspector, openui, session | the parallel session (`wt-session`, `wt-jsonspec`, `wt-trace`) |
+
+**Already landed by node-platform before the split was agreed, so the other session should NOT
+re-port these:** `src/domains/nodeslide/session/**` (79 items, with both carried tests) and
+`src/domains/nodeslide/composer/nodeSlideComposerSession.ts`, on branch
+`port/google-slides-durable-session`. `composer/NodeSlidePromptComposer.tsx` was deliberately NOT
+landed — the destination's `@/components/ai-elements/prompt-input` has diverged and lacks the
+`clearOnSubmit` and `portalContainer` props, so it is a MERGE.
+
+**Branches now on origin** (all four were local-only until this was flagged, which is the same
+shape of loss that stranded seven commits and a 2,330-line importer earlier the same day):
+`port/convex-lib`, `port/convexns`, `port/sharedns`, `port/slidelang`.
+
+### The defect that motivated the split
+
+`port/slidelang` commit `4941d4d` ported `uiContract.ts` byte-identical and unwired —
+`git grep publishNodeSlideUiContract` returns the file, its test, and no callers.
+
+The destination did not drop this capability; it solved it differently and its version has live
+consumers. NodeSlide publishes agent-readable state as DOM attributes on the studio root
+(`NodeSlideStudio.tsx:2921`); `scripts/nodeslide-agent-ui-linter.mjs:35-44` gates on three of them,
+and `capture-gap-closure-ui-qa.mjs:171` fails a run on a `data-ns-theme` mismatch.
+
+Wiring the port as-is would create two writers of one attribute on different nodes:
+`publishNodeSlideUiContract` writes `data-ns-theme` to `document.documentElement`, while the
+destination writes it to `.nodeslide-studio`, keys its theme CSS off that node, and reads it there
+in the QA gate. No CSS in either repository keys off `html[data-ns-theme]`, so the `<html>` copy is
+redundant even in parity.
+
+The contract does carry information the DOM surface lacks — phase, connection, loading stage and
+elapsed, deck id and version, job status, routing — so it is worth landing. It must land as ONE
+channel wired into the existing linter gate, never as a second unwired version constant. See §9.
