@@ -11,16 +11,7 @@
       "page": {
         "controls": 14,
         "words": 154,
-        "typeSizes": [
-          "10px",
-          "11px",
-          "12px",
-          "13px",
-          "15px",
-          "16px",
-          "56px",
-          "8px"
-        ],
+        "typeSizes": ["10px", "11px", "12px", "13px", "15px", "16px", "56px", "8px"],
         "typeSizeCount": 8
       },
       "inspector": null
@@ -70,12 +61,7 @@
       "inspector": {
         "controls": 18,
         "words": 116,
-        "typeSizes": [
-          "10.5px",
-          "10px",
-          "11px",
-          "13px"
-        ],
+        "typeSizes": ["10.5px", "10px", "11px", "13px"],
         "typeSizeCount": 4
       }
     },
@@ -124,12 +110,7 @@
       "inspector": {
         "controls": 18,
         "words": 116,
-        "typeSizes": [
-          "10.5px",
-          "10px",
-          "11px",
-          "13px"
-        ],
+        "typeSizes": ["10.5px", "10px", "11px", "13px"],
         "typeSizeCount": 4
       }
     },
@@ -178,12 +159,7 @@
       "inspector": {
         "controls": 8,
         "words": 167,
-        "typeSizes": [
-          "11px",
-          "12px",
-          "13px",
-          "15px"
-        ],
+        "typeSizes": ["11px", "12px", "13px", "15px"],
         "typeSizeCount": 4
       }
     },
@@ -232,12 +208,7 @@
       "inspector": {
         "controls": 46,
         "words": 477,
-        "typeSizes": [
-          "11px",
-          "12px",
-          "13px",
-          "15px"
-        ],
+        "typeSizes": ["11px", "12px", "13px", "15px"],
         "typeSizeCount": 4
       }
     }

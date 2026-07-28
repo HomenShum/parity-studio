@@ -65,20 +65,8 @@
       "locatorDescription": "the page as a whole"
     }
   ],
-  "problemTags": [
-    "first-run-orientation",
-    "route-disclosure-before-egress"
-  ],
-  "intentTags": [
-    "state-a-goal",
-    "choose-a-model"
-  ],
-  "layoutTags": [
-    "three-panel",
-    "persistent-inspector"
-  ],
-  "interactionTags": [
-    "tab-switching",
-    "direct-edit"
-  ]
+  "problemTags": ["first-run-orientation", "route-disclosure-before-egress"],
+  "intentTags": ["state-a-goal", "choose-a-model"],
+  "layoutTags": ["three-panel", "persistent-inspector"],
+  "interactionTags": ["tab-switching", "direct-edit"]
 }
