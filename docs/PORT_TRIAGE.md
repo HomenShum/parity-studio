@@ -142,7 +142,32 @@ This DELETE holds regardless of how 2a is decided; if 2a is PORT, the barrels ar
 
 ## 3. `slidelang/jsonSpec.ts` + `jsonEdit.ts`
 
-**Verdict: PORT** · **30 symbols** (jsonSpec 22, jsonEdit 8)
+**Verdict: PORT — confirmed and DONE (nodeslide #82), with two divergences left open.** · **30 symbols**
+
+The verdict held, but the reason was wrong in an instructive way. The destination was not missing a
+JSON tab; it ships the whole thing — testid, "Deck as code" eyebrow, the `nodeslide.slidelang/v1`
+view, four view modes, its own element diff. What it lacked was a **versioned envelope, schema
+validation of a snapshot, and snapshot-to-snapshot diff**. The destination covers *displaying* deck
+as code; these modules cover *validating and re-ingesting* it. Same noun, different verb.
+
+Two divergences were deliberately NOT resolved by the port, and both are product calls:
+
+- **`exportNodeSlideJson` vs `downloadDeckJson`.** These overlap and look like a rename. They are
+  not one, and the audit's `RENAMES` table must stay empty of them: the destination's symbol is the
+  **weaker** of the two — no envelope, no validation — while carrying an
+  `assertNodeSlideArtifactCompilation` gate parity's version lacks. Neither supersedes the other.
+  Recording it as a rename would mark the item PORTED and silence a real capability gap. Swapping
+  the shipped export to the envelope would also be a wire-format break for anyone holding an
+  exported file, in exchange for a re-import path this repo does not yet have.
+- **`diffSelectedElementJson` vs `synthesizeElementOps`.** Two independent solutions to the same
+  problem with different rules. Both now exist in the destination. Picking one is a product call;
+  `diffSelectedElementJson` has no non-test consumer in either repo.
+
+Two incidental findings from the port: `zod` was being imported by `src/` while resolved only
+transitively, so it is now declared; and parity's `slidelang/index.ts` star-exports `jsonSpec`,
+which pulls zod into the eager chunk and defeats the `await import('./slidelang/jsonSpec')`
+code-split its own consumer is written for. That barrel export was deliberately not carried over —
+it is a latent bug here, not a feature to replicate.
 
 Evidence:
 
