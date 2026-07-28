@@ -222,6 +222,94 @@ const STAYS_IN_PARITY = [
   },
 ];
 
+/**
+ * Files whose absence from the destination is a DECISION, not a gap.
+ *
+ * SUPERSEDED is not STAYS and not PORTED. STAYS means the correct home is parity. SUPERSEDED means
+ * the destination looked at the same need and deliberately solved it another way — or deliberately
+ * deleted the need — so porting the file would re-introduce something the product removed on
+ * purpose. Deleting these from parity strands nothing, because there is nothing waiting for them.
+ *
+ * Every entry names its evidence: the destination decision it defers to, and where that decision is
+ * recorded. File-level on purpose — these were decided as surfaces, not symbol by symbol, and a
+ * symbol-level list here would be forty lines of the same reason wearing different names.
+ *
+ * The same integrity rules as STAYS apply: an entry whose file has in fact been ported is reported,
+ * not silenced, and an entry naming a file that no longer exists fails the run. A superseded row in
+ * the receipt is an argument a reader can check, never a waiver.
+ */
+const SUPERSEDED_BY_DESTINATION = [
+  {
+    sourcePath: 'src/domains/nodeslide/externalProviderConsent.ts',
+    reason:
+      'The destination deleted the session-consent control in the zero-friction consent redesign — naming an external model and sending IS the consent (AiInspector, "providerConsent = true"). Machine-readable posture ships as data-agent-web-consent="per-send" on the research toggle (nodeslide PR #93). Porting this file would reinstate a control the product removed on purpose.',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/composer/NodeSlidePromptComposer.tsx',
+    reason:
+      'Its only consumer wires the session-consent checkbox through `tools` — the control the destination deleted. Landing it means either a second unmounted composer or re-introducing the deleted control. Recorded in nodeslide PR #93; prerequisites for a future port listed there.',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/inspector/NodeSlideAgentThread.tsx',
+    reason:
+      "Direction: the destination's AgentThread is live post-fork work (assistant-stream projector, data-decision states from the trust-surfaces fix); parity's version needs @assistant-ui/react, absent there. Landing it means a second unmounted thread or replacing a shipped surface (nodeslide PR #99).",
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/components/FirstRunDialog.tsx',
+    reason:
+      'Deleted from the destination deliberately (nodeslide PR #76) after being proven dead: unreferenced in source and tree-shaken out of the production bundle. A test asserts its absence.',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/components/shell/EditorNavigator.tsx',
+    reason:
+      'Zero-behaviour extraction bound to a destination-only studioShell API that took a different shape. Nothing consumes the parity version (nodeslide PR #99 refusal list).',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/components/shell/EditorProjectDialogs.tsx',
+    reason:
+      "The destination's retentionSafe erasure flow (atomic envelope, blobs-before-rows, stranded-row backstops) supersedes the dialog flow these symbols front (nodeslide PRs #95, #96, #97).",
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/delegationClient.ts',
+    reason:
+      'No consumer in either repo: zero references to the nodeslideDeckGrants surface it fronts in destination src/. The grants module itself carries a written note that its public caller was never ported. If grants ship, this returns as a port with a consumer, not before.',
+  },
+  {
+    sourcePath: 'convex/lib/nodeslideScopeAccess.ts',
+    reason:
+      'D1 flat rewrite (DECOUPLING_PLAN.md §8): the workspace>project>deck scope tree was re-rooted at the deck as nodeslideDeckScopeAccess.ts. The renamed survivors are in RENAMES; the residue here is the workspace-model half that was deleted, not renamed — resurrecting it would rebuild the model D1 removed.',
+  },
+  {
+    sourcePath: 'convex/nodeslideWorkspaceAccess.ts',
+    reason:
+      'D1 flat rewrite: workspace-level access endpoints have no workspace to govern in the flat model. Deck-level access shipped in their place (nodeslide PR #96).',
+  },
+  {
+    sourcePath: 'convex/nodeslide.ts',
+    reason:
+      'The residue here is workspace/project lifecycle (createWorkspace-family), deleted by D1 rather than renamed — verified against the RENAMES docstring, which records these exact symbols as deleted-not-renamed.',
+  },
+  {
+    sourcePath: 'convex/lib/nodeslideSeed.ts',
+    reason:
+      'Seeds the workspace/project tables the flat model does not have. The destination seeds decks directly.',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/components/ProjectDialog.tsx',
+    reason: 'Fronts the project layer D1 removed. No project exists to dialog about.',
+  },
+  {
+    sourcePath: 'src/domains/nodeslide/NodeSlideStudio.tsx',
+    reason:
+      "The two residual symbols are workspace-model plumbing; the destination's studio (14 post-fork commits) mounts the flat model. Everything portable from this file moved additively in PRs #81 and #99.",
+  },
+  {
+    sourcePath: 'convex/lib/nodeslideDeckDeletion.ts',
+    reason:
+      "Superseded by the destination's erasure contract: schema-derived table classification, atomic envelope, blobs-before-rows, and stranded-row backstops (PRs #78, #95, #96, #97) — a strictly stronger deletion path than the one these symbols implement.",
+  },
+];
+
 const { flags, showHelp } = parseArgs(process.argv.slice(2));
 if (showHelp) {
   process.stdout.write(`${readUsage()}\n`);
@@ -249,12 +337,20 @@ const destinationIndex = await buildDestinationIndex(destinationTree);
 const renameIndex = buildRenameIndex();
 
 const staysIndex = new Map(STAYS_IN_PARITY.map((entry) => [entry.id, entry.reason]));
+const supersededIndex = new Map(
+  SUPERSEDED_BY_DESTINATION.map((entry) => [entry.sourcePath, entry.reason]),
+);
 const items = sourceItems.map((item) => {
   const decided = decide(item, destinationIndex, renameIndex);
   const reason = staysIndex.get(item.id);
   // STAYS is applied only where the item would otherwise read MISSING. If something on this list
   // has in fact been ported, that is worth seeing, not overwriting with an exemption.
   if (reason && decided.status === 'MISSING') return { ...decided, status: 'STAYS', reason };
+  const supersededReason = item.sourcePath && supersededIndex.get(item.sourcePath);
+  // Same rule as STAYS: only a would-be MISSING becomes SUPERSEDED. A ported symbol in a
+  // superseded file is a contradiction worth surfacing, not smoothing.
+  if (supersededReason && decided.status === 'MISSING')
+    return { ...decided, status: 'SUPERSEDED', reason: supersededReason };
   return decided;
 });
 const counts = {
@@ -262,6 +358,7 @@ const counts = {
   ported: items.filter((item) => item.status === 'PORTED').length,
   renamed: items.filter((item) => item.status === 'RENAMED').length,
   stays: items.filter((item) => item.status === 'STAYS').length,
+  superseded: items.filter((item) => item.status === 'SUPERSEDED').length,
   missing: items.filter((item) => item.status === 'MISSING').length,
   symbols: items.filter((item) => item.kind === 'symbol').length,
   scripts: items.filter((item) => item.kind === 'script').length,
@@ -269,6 +366,16 @@ const counts = {
 
 // An exemption that names nothing is a stale exemption, and a stale exemption is how a real
 // MISSING gets silenced later. Fail rather than carry one quietly.
+const unusedSuperseded = SUPERSEDED_BY_DESTINATION.filter(
+  (entry) => !items.some((item) => item.sourcePath === entry.sourcePath),
+);
+if (unusedSuperseded.length > 0) {
+  process.stderr.write(
+    `SUPERSEDED_BY_DESTINATION names ${unusedSuperseded.length} file(s) with no audited symbols:\n${unusedSuperseded.map((e) => `  ${e.sourcePath}`).join('\n')}\nRemove them, or fix the path. A superseded entry for a file that is not there can only hide a future finding.\n`,
+  );
+  process.exit(2);
+}
+
 const unusedExemptions = STAYS_IN_PARITY.filter(
   (entry) => !items.some((item) => item.id === entry.id),
 );
@@ -686,8 +793,19 @@ function report(result) {
   process.stdout.write(`Port audit — destination ${destination.repository}, ${tree}\n`);
   process.stdout.write(
     `  ${counts.total} items (${counts.symbols} symbols, ${counts.scripts} scripts): ` +
-      `${counts.ported} PORTED, ${counts.renamed} RENAMED, ${counts.missing} MISSING\n`,
+      `${counts.ported} PORTED, ${counts.renamed} RENAMED, ${counts.superseded} SUPERSEDED, ${counts.missing} MISSING\n`,
   );
+
+  // Superseded files print as one line per file, not per symbol — they were decided as surfaces,
+  // and forty identical reasons would bury the MISSING list that still needs action.
+  const supersededFiles = new Map();
+  for (const item of result.items) {
+    if (item.status === 'SUPERSEDED')
+      supersededFiles.set(item.sourcePath, (supersededFiles.get(item.sourcePath) ?? 0) + 1);
+  }
+  for (const [file, n] of supersededFiles) {
+    process.stdout.write(`  SUPERSEDED  ${file}  (${n} symbol${n === 1 ? '' : 's'})\n`);
+  }
 
   for (const item of result.items) {
     if (item.status !== 'MISSING') continue;
