@@ -656,3 +656,75 @@ redundant even in parity.
 The contract does carry information the DOM surface lacks — phase, connection, loading stage and
 elapsed, deck id and version, job status, routing — so it is worth landing. It must land as ONE
 channel wired into the existing linter gate, never as a second unwired version constant. See §9.
+
+## §11 — Handoff to the session owning `src/domains/nodeslide/**`
+
+Produced by a node-platform agent before the territory split (§10) took effect. It reverted all four
+of its commits — `port/slidelang` is now byte-identical to baseline `79ae98f` — but these findings
+cost real compiler time and will reproduce exactly. Every verdict below was checked in the
+DESTINATION, not in parity.
+
+### A NEW VARIANT OF THE BUG CLASS: the compiler is necessary but NOT sufficient
+
+`slidelang/jsonEdit.test.ts`, last case. **tsc passes and the test fails at runtime.** It exercises
+`./download`, not `./jsonEdit`. The destination's `downloadDeckJson` gates on
+`assertNodeSlideArtifactCompilation` from `shared/nodeslideArtifactSpec` — a module that **does not
+exist in parity at all** — and writes the bare snapshot. Parity routes through `exportNodeSlideJson`
+and writes a `{format: nodeslide.deck-snapshot, version, snapshot}` envelope.
+
+Symbol names matched, the compiler was satisfied, only the assertion caught it. Our rule "the
+compiler is the oracle, not the symbol name" was itself incomplete: the compiler is a *stronger*
+oracle than the symbol name, and still not sufficient. **Run the tests, and read what they actually
+exercise.** Note also that the destination is the side that moved FORWARD here.
+
+### MERGE verdicts, each with the exact error
+
+**`components/FirstRunDialog.tsx`**
+`TS2322: Property 'overlayClassName' does not exist on type '... DialogContentProps ...'`.
+The destination's `@/components/ui/dialog` lacks it; parity's has it (`dialog.tsx:46,51,56`).
+Same shape as the prompt-input incident.
+
+**`components/shell/EditorNavigator.tsx`**
+`TS2305: Module "../SlideNavigator" has no exported member 'normalizeSelectedSlideIds'`.
+The destination never got multi-select AND carries 224 lines parity lacks. Overwriting deletes
+shipped code.
+
+**`components/shell/EditorProjectDialogs.tsx`**
+`TS2724: ... no exported member named 'removeDeckOwnerAccessKey'. Did you mean 'storeDeckOwnerAccessKey'?`
+Both repositories independently solved deck-capability forgetting over the same two localStorage
+keys, with different failure semantics: destination `forgetDeckOwnerAccessKey(deckId): void`,
+parity `removeDeckOwnerAccessKey(deckId): boolean`. Adding parity's alongside leaves two competing
+contracts.
+
+### DEPENDENCY-BLOCKED, not diverged — do not read these as forks
+
+The destination has **zero** references to `assistant-ui`, `openuidev` or `pdfjs` anywhere in
+`src`/`convex`/`shared`/`packages`, and none are installed. Its `AgentThread.tsx` and
+`TraceWaterfall.tsx` are hand-rolled, framework-free reimplementations — a deliberate divergence,
+not an omission.
+
+Blocked: `inspector/traceTelemetry.ts` (type-only `SpanData`), `inspector/TraceWaterfall.tsx`
+(also needs `@assistant-ui/store` runtime values), `NodeSlideAgentThread.tsx`,
+`PdfEvidencePage.tsx` / `pdfEvidenceRuntime.ts`, `openui/VisualMaterialWorkbench.tsx`.
+
+Pins if anyone decides to install: `@assistant-ui/react-o11y@0.0.25`, `@assistant-ui/react@0.14.26`,
+`@openuidev/react-lang@0.2.8`, `pdfjs-dist@^6.1.200`. Note `zod@^4.3.6` was reachable through the
+lockfile as a transitive but **not declared** — resolvable is not the same as declared.
+
+`inspector/DeckCiStatus.tsx` is blocked outside this tree, on `convex/lib/nodeslideDeckCi`.
+
+### Additive vs two-way, measured (parity-only / destination-only lines)
+
+Only two files are safe appends: `editorShellResponsive.ts` (1 / 0) and `editorStateIntegrity.ts`
+(`candidateSlideIdForPatch` only, otherwise byte-identical).
+
+Everything else is heavy two-way divergence: `NodeSlideStudio.tsx` 2320/939, `AiInspector.tsx`
+1944/1162, `ProjectDialog.tsx` 508/391, `InspectorPanel.tsx` 491/310, `TraceInspector.tsx` 239/115,
+`JsonInspector.tsx` 188/40, `DesignInspector.tsx` 105/321.
+
+### Gate gap that affects the convex side too
+
+`convex/tsconfig.json` excludes `**/*.test.ts`, and the root `tsconfig.json` does not include
+`convex/` at all. Convex-side test files are therefore checked by **neither** oracle. A test passed
+tsc and then failed at runtime with `captureWebSourcesBestEffort is not a function` for exactly this
+reason.
