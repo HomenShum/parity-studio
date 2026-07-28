@@ -77,7 +77,7 @@
       "id": "f8",
       "kind": "count",
       "subject": "page",
-      "property": "elements-with-infinite-animation",
+      "property": "painted-elements-with-infinite-animation",
       "value": 0,
       "unit": "elements",
       "locatorDescription": "the page as a whole"
