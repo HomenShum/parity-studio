@@ -1,0 +1,165 @@
+{
+  "id": "obs-github-pr-files-changed-1",
+  "source": {
+    "url": "https://mobbin.com/screens/bfd88cf5-a95a-444c-a520-3bd191335344",
+    "app": "GitHub",
+    "surface": "pull request Files changed tab, unified diff with an inline review comment composer open",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "diff-review",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Start a review, and Review changes in the header",
+    "acceptControlTreatment": "solid green fill with a white label",
+    "rejectControlTreatment": "Cancel, set as unfilled label text; Add single comment sits between them as an outlined control with no fill",
+    "undecidedContainerTreatment": "the diff hunk carries pale green and pale red row bands, but those bands encode added and removed CONTENT, not decision state; the review itself is undecided while they are painted",
+    "verdict": "Green appears twice on one screen with two unrelated meanings and stays legible because the two uses are structurally different: content-green is a low-saturation band spanning a full row behind monospace text with a leading plus sign, decision-green is a saturated fill on a small control with a white label. Hue alone does not identify the decision colour; the pairing of saturation, area, and control type does."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "pull-request-header",
+      "property": "tabs",
+      "value": 4,
+      "unit": "tabs",
+      "locatorDescription": "beneath the title \"Updated css #1\", reading Conversation / Commits / Checks / Files changed"
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "pull-request-tabs",
+      "property": "carry",
+      "value": "a numeric count badge on each tab (Conversation 1, Commits 1, Checks 0, Files changed 2)",
+      "unit": null,
+      "locatorDescription": "the tab strip beneath the title \"Updated css #1\""
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "change-size",
+      "property": "expressed-as",
+      "value": "a signed line-count pair plus a five-segment bar coloured by proportion",
+      "unit": null,
+      "locatorDescription": "right end of the tab strip, reading \"+49 −1\" followed by a small segmented bar"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "review-progress",
+      "property": "expressed-as",
+      "value": "a fraction of files marked as read",
+      "unit": null,
+      "locatorDescription": "above the first file, reading \"0 / 2 files viewed\""
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "per-file-header",
+      "property": "carries",
+      "value": "a change count, a proportion bar, the filename, and an individual Viewed checkbox",
+      "unit": null,
+      "locatorDescription": "the bar reading \"2\" then a segmented bar then \"index.html\", with a checkbox labelled \"Viewed\" at the right"
+    },
+    {
+      "id": "f6",
+      "kind": "count",
+      "subject": "diff-hunk",
+      "property": "line-number-gutters",
+      "value": 2,
+      "unit": "gutters",
+      "locatorDescription": "left of the code text; the old-file and new-file numbers are printed in adjacent columns, and a removed line shows a number in the left gutter only"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "removed-line",
+      "property": "treatment",
+      "value": "a pale red band spanning the full row, a leading minus sign, and a darker red inline patch over the changed substring",
+      "unit": null,
+      "locatorDescription": "line 5 of index.html, the row containing href=\"style1.css\""
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "added-line",
+      "property": "treatment",
+      "value": "a pale green band spanning the full row and a leading plus sign",
+      "unit": null,
+      "locatorDescription": "the row beneath the comment composer containing href=\"style.css\""
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "hunk-boundary",
+      "property": "labelled-by",
+      "value": "a literal range header printed in the code column",
+      "unit": null,
+      "locatorDescription": "the row reading \"@@ -2,7 +2,7 @@\" at the top of the hunk"
+    },
+    {
+      "id": "f10",
+      "kind": "count",
+      "subject": "inline-comment-composer",
+      "property": "dispositions",
+      "value": 3,
+      "unit": "controls",
+      "locatorDescription": "bottom of the composer, reading Cancel / Add single comment / Start a review"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "inline-comment-composer-dispositions",
+      "property": "weight-ordering",
+      "value": "unfilled text, then outlined with no fill, then solid green fill — weight increases left to right toward the committing action",
+      "unit": null,
+      "locatorDescription": "bottom of the composer, comparing Cancel, Add single comment, and Start a review"
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "inline-comment-composer",
+      "property": "mode-switching",
+      "value": "two tabs, Write and Preview, sit at the top left of the composer with a formatting-glyph toolbar occupying the rest of that row",
+      "unit": null,
+      "locatorDescription": "the row spanning the top of the composer, reading \"Write\" and \"Preview\" at the left"
+    },
+    {
+      "id": "f13",
+      "kind": "relationship",
+      "subject": "inline-comment-composer",
+      "property": "placement",
+      "value": "injected between two diff rows, displacing the code downward rather than floating over it",
+      "unit": null,
+      "locatorDescription": "the composer sitting between the removed line 5 and the added line 5 of index.html"
+    },
+    {
+      "id": "f14",
+      "kind": "relationship",
+      "subject": "merge-state",
+      "property": "expressed-as",
+      "value": "a filled pill carrying both an icon and the word Merged, adjacent to a one-sentence provenance line naming who merged what into which branch and when",
+      "unit": null,
+      "locatorDescription": "beneath the title, the pill reading \"Merged\" followed by \"jdoemobbin merged 1 commit into main from contactpage 2 minutes ago\""
+    }
+  ],
+  "problemTags": [
+    "review-a-change-before-committing",
+    "two-meanings-of-one-hue",
+    "track-review-progress-across-files"
+  ],
+  "intentTags": ["read-every-changed-line", "comment-in-place", "submit-a-verdict"],
+  "layoutTags": ["unified-diff", "per-file-accordion", "injected-composer"],
+  "interactionTags": ["mark-file-viewed", "comment-anchored-to-line", "escalating-button-weight"]
+}

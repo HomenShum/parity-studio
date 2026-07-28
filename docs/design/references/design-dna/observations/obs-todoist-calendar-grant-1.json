@@ -1,0 +1,111 @@
+{
+  "id": "obs-todoist-calendar-grant-1",
+  "source": {
+    "url": "https://mobbin.com/screens/00369fd1-e98e-4ff1-8bdd-dbdb9ca05bd4",
+    "app": "Todoist",
+    "surface": "minimal integration permission grant, two scopes listed, not yet agreed",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "consent",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Agree",
+    "acceptControlTreatment": "solid red-orange fill with a white label — the product's own brand hue, not a semantic green",
+    "rejectControlTreatment": "Cancel, a pale grey filled control of equal size with a dark label",
+    "undecidedContainerTreatment": "no card and no border; the scope list sits directly on the page background with no tint at all",
+    "verdict": "Proof that the accept colour is brand-relative rather than semantic. Here the committing control is RED, a hue that in a diff surface would mean deletion and in an error surface would mean failure. Any check that tries to detect acceptance styling by hue would both miss this and misfire elsewhere; what identifies the decision control is that it is the only element carrying a saturated solid fill."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "scope-list",
+      "property": "scopes",
+      "value": 2,
+      "unit": "bullets",
+      "locatorDescription": "the bulleted lines reading \"View your user info\" and \"Read and write your app data, including projects, tasks, notes, labels, and filters\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "grantee",
+      "property": "named-in",
+      "value": "the lead sentence, in bold, before the scopes are listed",
+      "unit": null,
+      "locatorDescription": "the sentence beginning \"Google Calendar will be able to receive the following permissions:\" with the product name emphasised"
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "scope-wording",
+      "property": "enumerates-data-classes",
+      "value": "the write scope lists the five concrete object types it covers rather than saying \"your data\"",
+      "unit": null,
+      "locatorDescription": "the second bullet, reading \"projects, tasks, notes, labels, and filters\""
+    },
+    {
+      "id": "f4",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "beneath the bullets, reading \"Cancel\" and \"Agree\""
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions-carrying-a-saturated-fill",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "the right-hand control labelled \"Agree\"; \"Cancel\" is a pale grey block"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "accept-control-hue",
+      "property": "value",
+      "value": "red-orange, matching the product's brand mark rather than a green success token",
+      "unit": null,
+      "locatorDescription": "the \"Agree\" button, compared against the Todoist logo in the attribution bar"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "surface",
+      "property": "chrome",
+      "value": "no card, no border, no illustration; the entire consent occupies a narrow centred column of text and two buttons",
+      "unit": null,
+      "locatorDescription": "the centre of the viewport, from the lead sentence down to the button row"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "escape-hatch",
+      "property": "offered-as",
+      "value": "a support link below a horizontal rule, separated from the two dispositions",
+      "unit": null,
+      "locatorDescription": "beneath the rule under the buttons, reading \"Need additional help? Contact Todoist Support\""
+    }
+  ],
+  "problemTags": [
+    "data-egress-consent",
+    "accept-colour-is-brand-relative",
+    "minimal-consent-chrome"
+  ],
+  "intentTags": ["understand-what-leaves", "grant-or-refuse"],
+  "layoutTags": ["narrow-centred-column", "no-card"],
+  "interactionTags": ["binary-grant", "single-filled-action"]
+}

@@ -1,0 +1,172 @@
+{
+  "id": "obs-grammarly-suggestion-review-1",
+  "source": {
+    "url": "https://mobbin.com/screens/5fb58d62-0fff-43de-9686-2cfbfe5c5ed3",
+    "app": "Grammarly",
+    "surface": "document editor with Review-suggestions side panel, one suggestion expanded and undecided",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "additionalScreenUrls": ["https://mobbin.com/screens/82d0d01f-8aa2-4fe4-a658-1498c92fb1ae"],
+    "attribution": "Screens curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "proposal",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Accept",
+    "acceptControlTreatment": "solid filled green rectangle, white label",
+    "rejectControlTreatment": "unfilled label text on the panel background, no border, no fill",
+    "undecidedContainerTreatment": "same white as the surrounding panel, no tint, no border emphasis",
+    "documentTreatment": "the proposed wording is not written into the document while pending; the original wording stays and is marked with an underline",
+    "verdict": "The accept colour is confined to the Accept control. The undecided suggestion card carries none of it."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "review-panel",
+      "property": "category-tabs",
+      "value": 5,
+      "unit": "tabs",
+      "locatorDescription": "right-hand panel, the row directly under the heading \"Review suggestions\", reading Correctness / Clarity / Engagement / Delivery / Style guide"
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "review-panel-category-tab",
+      "property": "differentiated-by",
+      "value": "a short coloured rule above each label, one hue per category",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the horizontal bars sitting immediately above the words Correctness, Clarity, Engagement, Delivery, Style guide"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "review-panel",
+      "property": "suggestions-listed",
+      "value": 6,
+      "unit": "suggestions",
+      "locatorDescription": "right-hand panel; the count is also printed as a badge beside the heading \"Review suggestions\""
+    },
+    {
+      "id": "f4",
+      "kind": "count",
+      "subject": "review-panel",
+      "property": "suggestions-expanded-to-show-decision-controls",
+      "value": 1,
+      "unit": "suggestions",
+      "locatorDescription": "right-hand panel, the topmost suggestion reading \"Clarity · Remove the phrase\"; the five below it are single-line rows"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "decision-controls",
+      "property": "exposed-on",
+      "value": "the expanded suggestion only; the five collapsed rows expose no Accept and no Dismiss",
+      "unit": null,
+      "locatorDescription": "right-hand panel, compare the top suggestion against the rows beneath it reading \"Use our best version\", \"Change the wording\", \"Rephrase sentence\""
+    },
+    {
+      "id": "f6",
+      "kind": "count",
+      "subject": "expanded-suggestion",
+      "property": "explicit-dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "right-hand panel, the action row reading \"Accept\" and \"Dismiss\", followed by a separate \"...\" overflow glyph"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "accept-control",
+      "property": "fill-treatment",
+      "value": "solid green fill with a white label",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the button labelled \"Accept\" in the expanded suggestion's action row"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "dismiss-control",
+      "property": "fill-treatment",
+      "value": "no fill and no border; dark label text sitting directly on the panel background",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the word \"Dismiss\" immediately to the right of the Accept button"
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "undecided-suggestion-card",
+      "property": "background-relative-to-panel",
+      "value": "identical; no green tint, no success-coloured border",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the area bounded by the label \"Clarity · Remove the phrase\" and the Accept/Dismiss row"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "suggestion-preview",
+      "property": "renders-change-as",
+      "value": "an ellipsis-truncated excerpt of the sentence with the phrase to be removed struck through in place",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the line reading \"...Decide where you'd like to start your...\" above the Accept button"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "suggestion-category",
+      "property": "conveyed-by",
+      "value": "a coloured dot AND a written category name, not colour alone",
+      "unit": null,
+      "locatorDescription": "right-hand panel, the caption line reading \"Clarity · Remove the phrase\""
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "alternative-word-chip",
+      "property": "selected-state-treatment",
+      "value": "green border with a pale green fill on the selected chip; grey border and no fill on the unselected chip",
+      "unit": null,
+      "locatorDescription": "screen 82d0d01f, right-hand panel, the two chips reading \"straightforward\" and \"transparent\" above the Accept button"
+    },
+    {
+      "id": "f13",
+      "kind": "relationship",
+      "subject": "alternative-word-chip-tint",
+      "property": "signifies",
+      "value": "which alternative is selected, not that the edit has been applied; the Accept button beneath it is still undecided",
+      "unit": null,
+      "locatorDescription": "screen 82d0d01f, right-hand panel, the tinted chip \"straightforward\" sitting directly above an unpressed Accept button"
+    },
+    {
+      "id": "f14",
+      "kind": "relationship",
+      "subject": "document-body",
+      "property": "state-while-suggestion-pending",
+      "value": "original wording retained and underlined; the proposed wording is not written into the document",
+      "unit": null,
+      "locatorDescription": "left two thirds of the viewport, the underlined span \"you'd like\" inside the sentence beginning \"Choose Your Space\""
+    },
+    {
+      "id": "f15",
+      "kind": "relationship",
+      "subject": "document-header",
+      "property": "carries",
+      "value": "a single numeric quality readout beside the document title",
+      "unit": null,
+      "locatorDescription": "top of the viewport, reading \"95 Overall score\" next to \"Goals\""
+    }
+  ],
+  "problemTags": ["pending-decision-legibility", "many-proposals-one-at-a-time", "edit-in-context"],
+  "intentTags": ["decide-per-suggestion", "keep-reading-the-document"],
+  "layoutTags": ["persistent-right-panel", "collapsed-list-with-one-expansion"],
+  "interactionTags": ["accept-reject", "expand-on-focus", "inline-strikethrough-preview"]
+}

@@ -1,0 +1,140 @@
+{
+  "id": "obs-mercor-cookie-purposes-1",
+  "source": {
+    "url": "https://mobbin.com/screens/13bb934d-26a4-4286-81d4-12dafb1d6da3",
+    "app": "Mercor",
+    "surface": "personal-information consent modal blocking the page, purposes listed with their toggles already on",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "consent",
+  "recordedAs": "counter-instance",
+  "decisionColour": {
+    "carrier": "button-and-pre-set-controls",
+    "acceptControl": "Accept All at the top, Confirm at the bottom",
+    "acceptControlTreatment": "solid violet fill with a white label, on both controls",
+    "rejectControlTreatment": "Reject All, outlined with no fill, placed immediately left of Accept All and offered only at the top of the modal",
+    "undecidedContainerTreatment": "the modal body is white, but the two optional purpose toggles are already painted in the enabled violet before the user has decided anything",
+    "optionalGrantDefault": "on — Analytics and Targeted Advertising both render in their granted state on arrival",
+    "verdict": "Recorded as a COUNTER-INSTANCE. The accept hue does not sit only on the button: it is already painted on the purpose toggles, which are the controls that carry the actual grant. A surface that arrives with the decision colour on the undecided controls has answered the question before the reader reached it."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "consent-modal",
+      "property": "purpose-rows",
+      "value": 3,
+      "unit": "rows",
+      "locatorDescription": "under the heading \"Purposes\", reading Analytics / Essential Services / Targeted Advertising"
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "purpose-rows",
+      "property": "optional-purposes-rendered-in-the-granted-state",
+      "value": 2,
+      "unit": "rows",
+      "locatorDescription": "the toggles at the right of the Analytics row and the Targeted Advertising row, both shown to the right of their track and filled"
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "essential-purpose",
+      "property": "control-state",
+      "value": "labelled \"Always Active\" with a greyed, unmovable toggle beside it, so the non-negotiable grant is visually distinct from the negotiable ones",
+      "unit": null,
+      "locatorDescription": "the row reading \"Essential Services\", right side"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "purpose-row",
+      "property": "expansion-affordance",
+      "value": "a leading chevron; the Analytics row is expanded to show its description and the other two are collapsed",
+      "unit": null,
+      "locatorDescription": "the chevrons at the left of Analytics, Essential Services, and Targeted Advertising"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "expanded-purpose",
+      "property": "describes-use-as",
+      "value": "a sentence naming the concrete business uses rather than a category name alone",
+      "unit": null,
+      "locatorDescription": "under Analytics, the paragraph beginning \"Collection and analysis of personal data to further our business goals\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "third-parties",
+      "property": "disclosed-as",
+      "value": "a counted, navigable link rather than a prose mention",
+      "unit": null,
+      "locatorDescription": "under the heading \"Purposes\", the row reading \"Vendors 3\" with a trailing arrow"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "consent-modal",
+      "property": "controls-that-can-conclude-the-decision",
+      "value": 3,
+      "unit": "controls",
+      "locatorDescription": "\"Reject All\" and \"Accept All\" in the row beneath \"Purposes\", and \"Confirm\" at the bottom of the modal"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "reject-all",
+      "property": "availability",
+      "value": "present only in the upper action pair; the bottom of the modal offers Confirm with no reject counterpart beside it",
+      "unit": null,
+      "locatorDescription": "compare the row containing \"Reject All\" and \"Accept All\" against the single \"Confirm\" button at the modal's bottom edge"
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "accept-all-and-reject-all",
+      "property": "differentiated-by",
+      "value": "fill; Accept All is solid violet with a white label and Reject All is outlined with a dark label, at equal size",
+      "unit": null,
+      "locatorDescription": "the two adjacent controls in the row beneath \"Purposes\""
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "consent-modal",
+      "property": "blocks",
+      "value": "the whole page; the opportunity listings behind the modal are dimmed and the modal has no close glyph",
+      "unit": null,
+      "locatorDescription": "the dimmed \"Explore opportunities\" listing grid visible around the modal edges"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "policy-reference",
+      "property": "placement",
+      "value": "an inline link inside the opening paragraph rather than in a footer",
+      "unit": null,
+      "locatorDescription": "the words \"Privacy Policy\" inside the paragraph beginning \"Welcome! We're glad you're here\""
+    }
+  ],
+  "problemTags": [
+    "data-egress-consent",
+    "pre-granted-default-as-a-dark-pattern",
+    "decision-colour-on-an-undecided-control"
+  ],
+  "intentTags": ["grant-refuse-or-tune", "get-back-to-the-page"],
+  "layoutTags": ["blocking-modal", "expandable-purpose-rows", "duplicated-action-rows"],
+  "interactionTags": ["per-purpose-toggle", "pre-granted-defaults", "asymmetric-disposition-weight"]
+}

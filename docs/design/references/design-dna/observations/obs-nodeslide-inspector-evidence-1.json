@@ -9,6 +9,13 @@
   },
   "firstSeenAt": "2026-07-28",
   "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "silver",
+    "level": "M2",
+    "basis": "live-shipped-product-observation",
+    "rationale": "Measured against the live deployment at nodeslide.vercel.app with a real browser, so the numbers describe what shipped rather than what a gallery curated. It is not gold/M3 because no audience outcome is attached to any of these facts.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
   "facts": [
     {
       "id": "f1",

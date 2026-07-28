@@ -1,0 +1,144 @@
+{
+  "id": "obs-air-duplicate-asset-conflict-1",
+  "source": {
+    "url": "https://mobbin.com/screens/ac2d76ce-872c-4bfc-959f-38c97719f1c1",
+    "app": "Air",
+    "surface": "duplicate-filename conflict on upload, three resolutions offered, one pre-selected and not yet confirmed",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "conflict",
+  "recordedAs": "counter-instance",
+  "decisionColour": {
+    "carrier": "button-and-container",
+    "acceptControl": "Confirm",
+    "acceptControlTreatment": "solid blue fill with a white label",
+    "rejectControlTreatment": "none as a button; the only refusal is the close glyph at the top right, or choosing the third option, \"Cancel upload for this item\"",
+    "undecidedContainerTreatment": "the pre-selected option's ENTIRE ROW carries a blue border and a filled blue radio, while the two unselected rows carry grey borders — the decision hue is painted on a container before the user has confirmed anything",
+    "verdict": "Recorded as a COUNTER-INSTANCE and the closest external match to the defect we fixed in our own product this week. The same blue that fills Confirm also outlines the option container that has not been confirmed. A reader glancing at this modal sees a resolution already dressed as chosen; only the Confirm button distinguishes selected from settled."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "conflict-modal",
+      "property": "resolution-options",
+      "value": 3,
+      "unit": "rows",
+      "locatorDescription": "reading \"Stack as new version\", \"Upload as separate item\", \"Cancel upload for this item\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "resolution-options",
+      "property": "include-a-refusal",
+      "value": "yes; the third option abandons the upload, so refusing is inside the same list as the two accepting resolutions rather than in the button row",
+      "unit": null,
+      "locatorDescription": "the third row, reading \"Cancel upload for this item\", carrying a cross glyph"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "resolution-options",
+      "property": "options-pre-selected-on-arrival",
+      "value": 1,
+      "unit": "rows",
+      "locatorDescription": "the first row, \"Stack as new version\", whose radio is filled while the other two are empty circles"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "selected-option-row",
+      "property": "border-treatment",
+      "value": "blue, matching the Confirm button's fill hue",
+      "unit": null,
+      "locatorDescription": "the outline of the first row, compared against the outlines of the two rows beneath it"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "unselected-option-rows",
+      "property": "border-treatment",
+      "value": "neutral grey, no fill",
+      "unit": null,
+      "locatorDescription": "the outlines of the rows \"Upload as separate item\" and \"Cancel upload for this item\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "option-row",
+      "property": "carries",
+      "value": "a leading radio, a distinguishing glyph, and a verb-first label describing the outcome",
+      "unit": null,
+      "locatorDescription": "any of the three rows; each has a circle, then an icon, then its text"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "conflict-statement",
+      "property": "names-the-colliding-object",
+      "value": "the exact filename is quoted in the body sentence rather than described generically",
+      "unit": null,
+      "locatorDescription": "beneath the title, reading \"6.png already exist. How would you like to handle this duplicate?\""
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "modal-title",
+      "property": "states-the-condition-not-the-remedy",
+      "value": "\"Duplicate asset name found\" describes what happened; the remedies are left to the option rows",
+      "unit": null,
+      "locatorDescription": "top left of the modal"
+    },
+    {
+      "id": "f9",
+      "kind": "count",
+      "subject": "conflict-modal",
+      "property": "buttons-in-the-action-row",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "bottom right of the modal, the single control labelled \"Confirm\""
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "conflict-modal",
+      "property": "blocks",
+      "value": "the whole board; the asset grid behind the modal is dimmed",
+      "unit": null,
+      "locatorDescription": "the dimmed \"Brand 1\" board visible around the modal"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "no-preview-of-either-side",
+      "property": "value",
+      "value": "the modal shows neither the incoming file nor the existing one; the decision is made from the filename alone",
+      "unit": null,
+      "locatorDescription": "the modal body between the title and the option rows"
+    }
+  ],
+  "problemTags": [
+    "version-conflict-resolution",
+    "decision-colour-on-an-undecided-container",
+    "pre-selected-default-on-a-conflict",
+    "decide-without-seeing-either-side"
+  ],
+  "intentTags": ["resolve-a-collision", "avoid-losing-either-file"],
+  "layoutTags": ["blocking-modal", "bordered-option-rows"],
+  "interactionTags": [
+    "radio-then-confirm",
+    "pre-selected-default",
+    "refusal-inside-the-option-list"
+  ]
+}

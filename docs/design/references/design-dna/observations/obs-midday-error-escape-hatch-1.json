@@ -1,0 +1,120 @@
+{
+  "id": "obs-midday-error-escape-hatch-1",
+  "source": {
+    "url": "https://mobbin.com/screens/714dca41-18a7-4547-9ac8-5cd92acde43c",
+    "app": "Midday",
+    "surface": "full-page unexpected-error state offering retry and a human escalation",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "failed-state",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Contact us",
+    "acceptControlTreatment": "solid black fill with a white label",
+    "rejectControlTreatment": "Try again, an outlined control of equal height with no fill, placed to its left",
+    "undecidedContainerTreatment": "plain white page, no tinted banner, no card, no coloured rule",
+    "verdict": "The filled control is the ESCALATION, not the retry. The product weights the human path above the mechanical one on a failure it describes as unexpected, which is the inverse of the PayPal and Threads pattern where retry carries the fill."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "recovery-actions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "centre of the page, reading \"Try again\" and \"Contact us\""
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "recovery-actions-carrying-a-solid-fill",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "the right-hand control labelled \"Contact us\""
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "filled-recovery-action",
+      "property": "is",
+      "value": "the escalation to a human, not the retry",
+      "unit": null,
+      "locatorDescription": "comparing the filled \"Contact us\" against the outlined \"Try again\" beside it"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "explanation-sentence",
+      "property": "names-the-condition-for-escalating",
+      "value": "yes; it tells the reader when to stop retrying and contact support",
+      "unit": null,
+      "locatorDescription": "beneath the heading, reading \"An unexpected error has occurred. Please try again or contact support if the issue persists.\""
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "elements-with-a-spinner-or-progress-animation",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the entire viewport"
+    },
+    {
+      "id": "f6",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "illustrations-or-glyphs",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the entire viewport; the page is a heading, two lines of body text, and two buttons"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "failure-page",
+      "property": "site-chrome",
+      "value": "absent; no header bar, no navigation, no footer survives the failure",
+      "unit": null,
+      "locatorDescription": "the empty margins above and below the centred content"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "failure-page",
+      "property": "carries-a-cause-or-identifier",
+      "value": "no; there is no error code and no correlation id for the reader to quote to support",
+      "unit": null,
+      "locatorDescription": "the body text between the heading and the buttons"
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "heading-and-body",
+      "property": "type-scale-relationship",
+      "value": "the heading is set only slightly larger than the body and both are centred; emphasis comes from weight rather than size",
+      "unit": null,
+      "locatorDescription": "the heading \"Something went wrong\" against the two body lines beneath it"
+    }
+  ],
+  "problemTags": [
+    "failure-must-not-read-as-loading",
+    "when-to-stop-retrying",
+    "escalation-path-weighted-above-retry"
+  ],
+  "intentTags": ["try-again", "reach-a-human"],
+  "layoutTags": ["centred-failure-column", "chrome-removed"],
+  "interactionTags": ["retry-or-escalate", "static-failure-no-motion", "fill-on-the-escalation"]
+}

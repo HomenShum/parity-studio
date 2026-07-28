@@ -1,0 +1,98 @@
+{
+  "id": "obs-threads-ai-summary-1",
+  "source": {
+    "url": "https://mobbin.com/screens/7b6b480c-a227-4cd0-afe7-866d52ad1e22",
+    "app": "Threads",
+    "surface": "generated conversation summary awaiting a decision to publish it as a thread",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "proposal",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Convert to thread",
+    "acceptControlTreatment": "solid violet fill with a white label and a white leading glyph",
+    "rejectControlTreatment": "no reject control is offered; the two non-committing actions are Regenerate response and Copy text, both unfilled",
+    "undecidedContainerTreatment": "plain white card with a hairline border on the page background; no tint of the commit hue",
+    "verdict": "Exactly one of the three actions carries the fill, and it is the one that publishes. The undecided summary card itself is neutral."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "generated-summary-card",
+      "property": "bullet-lines",
+      "value": 4,
+      "unit": "bullets",
+      "locatorDescription": "centre of the viewport, the white card whose first bullet reads \"Jane invited Jon to join a chat and shared a recording of an initial chat\""
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "actions",
+      "value": 3,
+      "unit": "controls",
+      "locatorDescription": "directly beneath the summary card, reading Regenerate response / Copy text / Convert to thread"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "actions-carrying-a-solid-fill",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "the rightmost control, labelled \"Convert to thread\""
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "filled-action",
+      "property": "is",
+      "value": "the committing one; the two reversible actions are unfilled icon-plus-label controls",
+      "unit": null,
+      "locatorDescription": "compare \"Convert to thread\" against \"Regenerate response\" and \"Copy text\" in the same row"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "action-row",
+      "property": "placement-relative-to-card",
+      "value": "outside the card, on the page background, separated by vertical space",
+      "unit": null,
+      "locatorDescription": "the gap between the bottom edge of the white card and the row of three controls"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "undecided-summary-card",
+      "property": "background-relative-to-page",
+      "value": "white card on a near-white page, separated by a hairline border only; no violet tint anywhere on the card",
+      "unit": null,
+      "locatorDescription": "centre of the viewport, the bounded region containing the four bullets"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "surface",
+      "property": "dismiss-affordances",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "top right corner of the viewport, a circular close glyph; it is the only way to leave without acting"
+    }
+  ],
+  "problemTags": ["pending-decision-legibility", "one-committing-action-among-several"],
+  "intentTags": ["publish-or-discard-a-generated-artifact"],
+  "layoutTags": ["centred-card", "actions-outside-the-card"],
+  "interactionTags": ["commit-or-regenerate", "single-filled-action"]
+}

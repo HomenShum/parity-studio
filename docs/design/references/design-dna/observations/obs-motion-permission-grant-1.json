@@ -1,0 +1,108 @@
+{
+  "id": "obs-motion-permission-grant-1",
+  "source": {
+    "url": "https://mobbin.com/screens/0c8f5852-5996-4614-ad84-59b20aed9fcf",
+    "app": "Motion",
+    "surface": "onboarding permission request for calendar, email, and contacts",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "consent",
+  "recordedAs": "counter-instance",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "OK, Continue",
+    "acceptControlTreatment": "solid blue fill with a white label",
+    "rejectControlTreatment": "none — no decline, cancel, skip, or back control is present anywhere on the screen",
+    "undecidedContainerTreatment": "plain white card, no tint",
+    "verdict": "Recorded as a COUNTER-INSTANCE on a different axis from Mercor. The decision colour is correctly confined to the button, but there is only one button. A consent surface with exactly one disposition is not a decision surface; getting the colour right on the sole option does not make the moment informed."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "permission-card",
+      "property": "scope-rows",
+      "value": 3,
+      "unit": "rows",
+      "locatorDescription": "the card beneath the heading, reading Calendar / Email / Contacts"
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "scope-row",
+      "property": "describes",
+      "value": "what the product will DO with the access, as a list of concrete verbs, rather than naming the data class alone",
+      "unit": null,
+      "locatorDescription": "the Calendar row, reading \"Schedule and move tasks, create meetings, share availabilities, sync events, and block out times\""
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "calendar-scope-description",
+      "property": "distinct-actions-enumerated",
+      "value": 5,
+      "unit": "actions",
+      "locatorDescription": "the Calendar row: schedule and move tasks, create meetings, share availabilities, sync events, block out times"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "scope-row",
+      "property": "control-affordance",
+      "value": "none; the rows are descriptive text with a leading glyph and carry no toggle, checkbox, or chevron",
+      "unit": null,
+      "locatorDescription": "the three rows of the card; nothing sits at their right edge"
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "surface",
+      "property": "dispositions",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "the only control on the page, labelled \"OK, Continue\", beneath the right edge of the card"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "heading",
+      "property": "frames-the-grant-as",
+      "value": "a product requirement rather than a user choice",
+      "unit": null,
+      "locatorDescription": "the two-line heading reading \"We need a few permissions to make Motion work\""
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "surface",
+      "property": "policy-or-revocation-reference",
+      "value": "absent; no privacy policy link, no statement of how to revoke, no mention of third parties",
+      "unit": null,
+      "locatorDescription": "the full viewport, from the heading to the button"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "accept-control",
+      "property": "size-relative-to-card",
+      "value": "small; the button is narrower than a single scope row's text block and sits below the card's right corner",
+      "unit": null,
+      "locatorDescription": "the button \"OK, Continue\" compared with the card above it"
+    }
+  ],
+  "problemTags": ["data-egress-consent", "consent-with-no-refusal-path", "purpose-stated-as-verbs"],
+  "intentTags": ["understand-what-the-product-will-do", "proceed"],
+  "layoutTags": ["centred-onboarding-card", "single-action"],
+  "interactionTags": ["acknowledge-only", "no-decline-affordance"]
+}
