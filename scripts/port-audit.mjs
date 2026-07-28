@@ -107,6 +107,19 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
  * precisely the failure mode named above. Partial overlap belongs in docs/PORT_TRIAGE.md as a
  * divergence, not here as an equivalence.
  */
+/**
+ * Symbols that moved under a different name. A rename is only legitimate when the destination
+ * genuinely EXPORTS the target — otherwise the entry marks a dropped symbol as ported, which is the
+ * one thing this audit exists to prevent.
+ *
+ * Every entry below was verified twice before landing: the target must appear in an `export`
+ * statement in a NON-TEST module of the destination. A first mechanical Workspace->Deck substitution
+ * produced 20 candidates; 7 of them named symbols that were DELETED rather than renamed
+ * (createWorkspace, createProject, getWorkspace, getProject, attachDeck, NodeSlideWorkspaceSummary,
+ * NodeSlideWorkspaceProjectSummary) and would have inflated the pass count. One candidate,
+ * `createDeck`, matched an unrelated pre-existing symbol in a test file — a word's presence is not
+ * its role, and a grep for a bare name is not proof of an export.
+ */
 const RENAMES = [
   // OpenUI visual-material lab (docs/PORT_TRIAGE.md §6, owner decision 2026-07-28: "we keeping
   // openui"). Hazard 1 of that section is a name collision the audit is structurally blind to:
@@ -150,7 +163,44 @@ const RENAMES = [
     reason:
       'OpenUI port: destination already owns a VisualMaterial family for deck-building evidence; the incoming renderable-spec family takes the OpenUi prefix',
   })),
-];
+
+  // D1 flat rewrite (DECOUPLING_PLAN.md §8): no workspace or project exists in the destination, so
+  // the workspace>project>deck scope tree was re-rooted at the deck. Source module
+  // convex/lib/nodeslideScopeAccess.ts became convex/lib/nodeslideDeckScopeAccess.ts.
+  ...[
+    ['NodeSlideWorkspaceRole', 'NodeSlideDeckRole'],
+    ['NodeSlideWorkspaceCapability', 'NodeSlideDeckCapability'],
+    ['NodeSlideWorkspaceAccessPolicy', 'NodeSlideDeckAccessPolicy'],
+    ['NodeSlideWorkspaceAccessRequest', 'NodeSlideDeckAccessRequest'],
+    ['NodeSlideWorkspaceAccessDecision', 'NodeSlideDeckAccessDecision'],
+    ['normalizeNodeSlideWorkspaceAccessPolicy', 'normalizeNodeSlideDeckAccessPolicy'],
+    ['isNodeSlideWorkspaceAccessPolicy', 'isNodeSlideDeckAccessPolicy'],
+    ['narrowNodeSlideWorkspaceAccessPolicy', 'narrowNodeSlideDeckAccessPolicy'],
+    ['evaluateNodeSlideWorkspaceAccess', 'evaluateNodeSlideDeckAccess'],
+    ['nodeSlideWorkspaceCapabilitiesForRole', 'nodeSlideDeckCapabilitiesForRole'],
+  ].map(([from, to]) => ({
+    from: `symbol:convex/lib/nodeslideScopeAccess.ts#${from}`,
+    to,
+    reason: 'D1 flat rewrite: no workspace exists; scope re-rooted at the deck',
+  })),
+
+  // convex/nodeslideWorkspaceAccess.ts became convex/nodeslideDeckGrants.ts. Grant issuance,
+  // revocation and listing survived; workspace and project CRUD was dropped, not renamed.
+  {
+    from: 'symbol:convex/nodeslideWorkspaceAccess.ts#NodeSlideWorkspaceGrantSummary',
+    to: 'NodeSlideDeckGrantSummary',
+    reason: 'D1 flat rewrite: grants are deck-scoped',
+  },
+  {
+    from: 'symbol:convex/nodeslideWorkspaceAccess.ts#NodeSlideAttachedDeckSummary',
+    to: 'NodeSlideGrantedDeckSummary',
+    reason: 'D1 flat rewrite: a deck is granted, not attached to a project',
+  },
+  {
+    from: 'symbol:convex/nodeslideWorkspaceAccess.ts#getAttachedDeck',
+    to: 'getGrantedDeck',
+    reason: 'D1 flat rewrite: a deck is granted, not attached to a project',
+  },];
 
 /**
  * Source items that must NOT move, with the reason each one stays.
@@ -548,12 +598,23 @@ function buildRenameIndex() {
 function decide(item, index, renames) {
   const rename = renames.get(item.id);
   if (rename) {
+    // A rename is satisfied by EITHER name. Looking only for the new one broke the self-audit
+    // probe: auditing parity against itself, a declared Workspace->Deck rename sent the audit
+    // hunting for names only the destination has, and `--destination parity-studio` went from
+    // exit 0 to FAIL on 13 items. The plan requires that probe to pass. "An audit that cannot
+    // fail is not a gate" has a twin: an audit that cannot PASS is not a gate either.
+    //
+    // Accepting either name is also the honest semantics. The obligation is that the symbol has a
+    // home, not that it has a particular spelling — if the destination still carries the original
+    // name, the item is ported and the rename simply has not been applied there.
     const found =
       item.kind === 'script'
         ? index.files.has(rename.to)
           ? [rename.to]
-          : []
-        : (index.byName.get(rename.to) ?? []);
+          : index.files.has(item.name)
+            ? [item.name]
+            : []
+        : (index.byName.get(rename.to) ?? index.byName.get(item.name) ?? []);
     if (found.length > 0) {
       return {
         ...item,
