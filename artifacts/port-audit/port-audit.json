@@ -1,9 +1,9 @@
 {
   "schemaVersion": "parity.port-audit/v1",
-  "generatedAt": "2026-07-28T01:35:25.061Z",
+  "generatedAt": "2026-07-28T01:49:13.591Z",
   "source": {
     "repository": "D:\\VSCode Projects\\parity-studio",
-    "head": "8981264dff3371571138ec003f5dbbb65227da10",
+    "head": "15a16556516410d8400009ed2769083b273efd7f",
     "domainRoot": "src/domains/nodeslide",
     "scriptPrefix": "scripts/nodeslide-*"
   },
@@ -11,7 +11,7 @@
     "repository": "D:\\VSCode Projects\\nodeslide",
     "mode": "ref",
     "ref": "origin/main",
-    "resolved": "429ccea51e7679b30456eaec73b6db855fec0881",
+    "resolved": "b54f7be72f17489ba947b4c298504446103117c7",
     "branch": null,
     "dirty": false
   },
@@ -24,10 +24,10 @@
   ],
   "counts": {
     "total": 2349,
-    "ported": 1326,
+    "ported": 1374,
     "renamed": 0,
     "stays": 1,
-    "missing": 1022,
+    "missing": 974,
     "symbols": 2315,
     "scripts": 34
   },
@@ -2410,20 +2410,24 @@
       "id": "symbol:src/domains/nodeslide/inspector/PdfEvidencePage.tsx#PdfEvidencePage",
       "name": "PdfEvidencePage",
       "sourcePath": "src/domains/nodeslide/inspector/PdfEvidencePage.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "PdfEvidencePage",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/PdfEvidencePage.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/PdfEvidencePage.tsx#PdfEvidencePageProps",
       "name": "PdfEvidencePageProps",
       "sourcePath": "src/domains/nodeslide/inspector/PdfEvidencePage.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "PdfEvidencePageProps",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/PdfEvidencePage.tsx"
+      ]
     },
     {
       "kind": "symbol",
@@ -2726,100 +2730,120 @@
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TRACE_FIXTURE_ROOT_SPAN_ID",
       "name": "TRACE_FIXTURE_ROOT_SPAN_ID",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TRACE_FIXTURE_ROOT_SPAN_ID",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TRACE_FIXTURE_STARTED_AT",
       "name": "TRACE_FIXTURE_STARTED_AT",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TRACE_FIXTURE_STARTED_AT",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TRACE_FIXTURE_TRACE_ID",
       "name": "TRACE_FIXTURE_TRACE_ID",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TRACE_FIXTURE_TRACE_ID",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TRACE_SCALE_DOM_NODE_BUDGET",
       "name": "TRACE_SCALE_DOM_NODE_BUDGET",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TRACE_SCALE_DOM_NODE_BUDGET",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TRACE_SCALE_INTERACTION_BUDGET_MS",
       "name": "TRACE_SCALE_INTERACTION_BUDGET_MS",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TRACE_SCALE_INTERACTION_BUDGET_MS",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TraceWaterfallFixture",
       "name": "TraceWaterfallFixture",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceWaterfallFixture",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#TraceWaterfallFixtureOptions",
       "name": "TraceWaterfallFixtureOptions",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceWaterfallFixtureOptions",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts#createTraceWaterfallFixture",
       "name": "createTraceWaterfallFixture",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createTraceWaterfallFixture",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.fixture.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#TraceMiniMapBucket",
       "name": "TraceMiniMapBucket",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceMiniMapBucket",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#TraceTreeKeyboardAction",
       "name": "TraceTreeKeyboardAction",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceTreeKeyboardAction",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
@@ -2838,10 +2862,12 @@
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#TraceWaterfallGroup",
       "name": "TraceWaterfallGroup",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceWaterfallGroup",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
@@ -2860,40 +2886,48 @@
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#WaterfallGrouping",
       "name": "WaterfallGrouping",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "WaterfallGrouping",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#buildGroupedWaterfallRows",
       "name": "buildGroupedWaterfallRows",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "buildGroupedWaterfallRows",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#buildMiniMapBuckets",
       "name": "buildMiniMapBuckets",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "buildMiniMapBuckets",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#buildWaterfallGroups",
       "name": "buildWaterfallGroups",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "buildWaterfallGroups",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
@@ -2912,40 +2946,48 @@
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#collapsibleSpanIds",
       "name": "collapsibleSpanIds",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "collapsibleSpanIds",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#defaultCollapsedSpanIds",
       "name": "defaultCollapsedSpanIds",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "defaultCollapsedSpanIds",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#isNormalizedEvidenceBox",
       "name": "isNormalizedEvidenceBox",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isNormalizedEvidenceBox",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/TraceWaterfall.tsx#traceTreeKeyboardAction",
       "name": "traceTreeKeyboardAction",
       "sourcePath": "src/domains/nodeslide/inspector/TraceWaterfall.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "traceTreeKeyboardAction",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/TraceWaterfall.tsx"
+      ]
     },
     {
       "kind": "symbol",
@@ -2964,20 +3006,24 @@
       "id": "symbol:src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts#PdfEvidenceRuntime",
       "name": "PdfEvidenceRuntime",
       "sourcePath": "src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "PdfEvidenceRuntime",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts#loadPdfEvidenceRuntime",
       "name": "loadPdfEvidenceRuntime",
       "sourcePath": "src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "loadPdfEvidenceRuntime",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/pdfEvidenceRuntime.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -3258,120 +3304,144 @@
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#TraceProofSummary",
       "name": "TraceProofSummary",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceProofSummary",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#TraceTimingState",
       "name": "TraceTimingState",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceTimingState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#TraceWindowMetrics",
       "name": "TraceWindowMetrics",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "TraceWindowMetrics",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#isHumanWaitSpan",
       "name": "isHumanWaitSpan",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isHumanWaitSpan",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#numericAttribute",
       "name": "numericAttribute",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "numericAttribute",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#spanDurationMs",
       "name": "spanDurationMs",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "spanDurationMs",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#spanEndTime",
       "name": "spanEndTime",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "spanEndTime",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#spanTimingState",
       "name": "spanTimingState",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "spanTimingState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#spanType",
       "name": "spanType",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "spanType",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#toO11ySpans",
       "name": "toO11ySpans",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "toO11ySpans",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#traceProofSummary",
       "name": "traceProofSummary",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "traceProofSummary",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/inspector/traceTelemetry.ts#traceWindowMetrics",
       "name": "traceWindowMetrics",
       "sourcePath": "src/domains/nodeslide/inspector/traceTelemetry.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "traceWindowMetrics",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/inspector/traceTelemetry.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -9354,10 +9424,12 @@
       "id": "symbol:shared/nodeslide.ts#NodeSlideClaimSourceBinding",
       "name": "NodeSlideClaimSourceBinding",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideClaimSourceBinding",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -9412,110 +9484,132 @@
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceAttachment",
       "name": "NodeSlideEvidenceAttachment",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceAttachment",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceAttachmentKind",
       "name": "NodeSlideEvidenceAttachmentKind",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceAttachmentKind",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceBox",
       "name": "NodeSlideEvidenceBox",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceBox",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceCaptureDetail",
       "name": "NodeSlideEvidenceCaptureDetail",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceCaptureDetail",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceCaptureStatus",
       "name": "NodeSlideEvidenceCaptureStatus",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceCaptureStatus",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceCaptureSummary",
       "name": "NodeSlideEvidenceCaptureSummary",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceCaptureSummary",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceRegionScope",
       "name": "NodeSlideEvidenceRegionScope",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceRegionScope",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceStepDetail",
       "name": "NodeSlideEvidenceStepDetail",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceStepDetail",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceStepStatus",
       "name": "NodeSlideEvidenceStepStatus",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceStepStatus",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceStepSummary",
       "name": "NodeSlideEvidenceStepSummary",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceStepSummary",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:shared/nodeslide.ts#NodeSlideEvidenceViewport",
       "name": "NodeSlideEvidenceViewport",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideEvidenceViewport",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -9606,10 +9700,12 @@
       "id": "symbol:shared/nodeslide.ts#NodeSlideSourceBindingStatus",
       "name": "NodeSlideSourceBindingStatus",
       "sourcePath": "shared/nodeslide.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideSourceBindingStatus",
-      "destinationPaths": []
+      "destinationPaths": [
+        "shared/nodeslide.ts"
+      ]
     },
     {
       "kind": "symbol",

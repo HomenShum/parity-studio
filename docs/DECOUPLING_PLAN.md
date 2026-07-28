@@ -96,9 +96,28 @@ their four CI jobs (#75), the first-run gate re-pointing (#76), the share-route 
 and the data-rights surface (#78, main d41bf77). Three gates were deliberately left in parity with
 reasons recorded.
 
-The audit against nodeslide `origin/main` closes the day at **1,139 missing of 2,349**, down from
-1,162. Twenty-three items moved. Most of the day went into building the thing that can count, and
-into discovering the count had been measuring a third of the surface.
+The audit against nodeslide `origin/main` then stood at **1,139 missing of 2,349**.
+
+**Parallel burn-down, same night — 974 missing.** Four agents were run concurrently, each in its own
+worktree, after it became clear the clusters were independent and were being serialised for no
+reason. 165 items moved. Landed: the agent-session layer **mounted** rather than copied (#81), the
+versioned JSON envelope (#82), and the trace waterfall (#83). One agent correctly refused to ship
+anything — `openui` needs an owner decision, and `uiContract` was already ported unwired on an
+unpushed branch.
+
+Three findings from that round outrank the count:
+
+- **The audit produced a false PASS and has been fixed.** It read the shared nodeslide checkout,
+  which a concurrent agent had left dirty on a feature branch, and reported the session cluster as
+  0 missing when all 79 were absent from main. It now refuses any destination tree that is not a
+  clean checkout of main. Reproduced both ways in the same minute before committing the guard.
+- **A copy is not a port.** A pushed commit added the same six session files and changed no
+  consumer — 79 symbols nothing imports. Merged as-is, the audit would have flipped 79 MISSING to
+  79 PORTED while the product behaved identically. The gate would have been *satisfied* by work that
+  changed nothing.
+- **A size gap is not a design conflict.** The 2,138-vs-743 TraceWaterfall looked like a rewrite at
+  the destination. Ancestry says the destination's copy has one commit, is byte-identical to
+  parity's at fork date, and stopped. Only `git log` on the file settled it.
 
 Verified on the deployed URL at sha d41bf77, not from build logs: `/s/<unknown>` returns 404 with
 1,980 bytes of rendered refusal, `/s/<invalid>` returns 400, neither crashes, and the two testids
