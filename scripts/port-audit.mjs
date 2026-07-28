@@ -120,6 +120,29 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
  * `createDeck`, matched an unrelated pre-existing symbol in a test file — a word's presence is not
  * its role, and a grep for a bare name is not proof of an export.
  */
+/**
+ * Name matches that are NOT equivalences — the inverse of RENAMES.
+ *
+ * The audit's core weakness has been the same all week: it proves name presence and is read as
+ * proving ported behaviour. Mostly that inflates nothing, because a same-named export in a
+ * NodeSlide-prefixed module usually IS the port. These entries are the audited exceptions: a bare
+ * name that collides with an unrelated module, discovered by reading both sides. Without a way to
+ * record that, the finding lives in a PR comment and the count stays wrong forever — three rows
+ * reported ported that are not.
+ *
+ * Each entry denies ONE name-anywhere match and says why the collision is not an equivalence.
+ * A denial turns a would-be PORTED back into MISSING, which is the honest direction: it can only
+ * make the gate harder to pass, never easier, so unlike RENAMES it cannot be abused to silence
+ * a gap.
+ */
+const NOT_EQUIVALENT = [
+  ...['issueGrant', 'revokeGrant', 'listGrants'].map((name) => ({
+    id: `symbol:convex/nodeslideDelegation.ts#${name}`,
+    reason:
+      'Bare-name collision with nodeslideDeckGrants.ts, which is a different capability: different tables, different vocabulary (deck-scoped owner grants vs delegation grants), and its own written note that the delegation caller was never ported. Reported ported on the name alone since the audit widened; the behaviour has no destination equivalent.',
+  })),
+];
+
 const RENAMES = [
   // OpenUI visual-material lab (docs/PORT_TRIAGE.md §6, owner decision 2026-07-28: "we keeping
   // openui"). Hazard 1 of that section is a name collision the audit is structurally blind to:
@@ -704,6 +727,18 @@ function buildRenameIndex() {
 // ---------------------------------------------------------------------------------------------
 
 function decide(item, index, renames) {
+  const denial = NOT_EQUIVALENT.find((entry) => entry.id === item.id);
+  if (denial) {
+    return {
+      ...item,
+      status: 'MISSING',
+      match: null,
+      target: item.name,
+      destinationPaths: [],
+      reason: `Denied name-match: ${denial.reason}`,
+    };
+  }
+
   const rename = renames.get(item.id);
   if (rename) {
     // A rename is satisfied by EITHER name. Looking only for the new one broke the self-audit
