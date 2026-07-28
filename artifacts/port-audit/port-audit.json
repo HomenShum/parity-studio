@@ -1,9 +1,9 @@
 {
   "schemaVersion": "parity.port-audit/v1",
-  "generatedAt": "2026-07-28T01:14:29.299Z",
+  "generatedAt": "2026-07-28T01:35:25.061Z",
   "source": {
     "repository": "D:\\VSCode Projects\\parity-studio",
-    "head": "5a30d2d1dc9cc0a526cc0499e10e75bc20323e7b",
+    "head": "8981264dff3371571138ec003f5dbbb65227da10",
     "domainRoot": "src/domains/nodeslide",
     "scriptPrefix": "scripts/nodeslide-*"
   },
@@ -11,7 +11,7 @@
     "repository": "D:\\VSCode Projects\\nodeslide",
     "mode": "ref",
     "ref": "origin/main",
-    "resolved": "d41bf77738b6cfab0d15492e3d7d774d996b309c",
+    "resolved": "429ccea51e7679b30456eaec73b6db855fec0881",
     "branch": null,
     "dirty": false
   },
@@ -24,10 +24,10 @@
   ],
   "counts": {
     "total": 2349,
-    "ported": 1209,
+    "ported": 1326,
     "renamed": 0,
     "stays": 1,
-    "missing": 1139,
+    "missing": 1022,
     "symbols": 2315,
     "scripts": 34
   },
@@ -1034,80 +1034,96 @@
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#NodeSlideComposerAttachmentDraft",
       "name": "NodeSlideComposerAttachmentDraft",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideComposerAttachmentDraft",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#NodeSlideComposerSessionController",
       "name": "NodeSlideComposerSessionController",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideComposerSessionController",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#NodeSlideComposerSessionState",
       "name": "NodeSlideComposerSessionState",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideComposerSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#clearNodeSlideComposerSession",
       "name": "clearNodeSlideComposerSession",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "clearNodeSlideComposerSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#createNodeSlideComposerAttachmentDraft",
       "name": "createNodeSlideComposerAttachmentDraft",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createNodeSlideComposerAttachmentDraft",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#nodeSlideComposerSessionKey",
       "name": "nodeSlideComposerSessionKey",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "nodeSlideComposerSessionKey",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#setNodeSlideComposerSessionText",
       "name": "setNodeSlideComposerSessionText",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "setNodeSlideComposerSessionText",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/composer/nodeSlideComposerSession.ts#useNodeSlideComposerSession",
       "name": "useNodeSlideComposerSession",
       "sourcePath": "src/domains/nodeslide/composer/nodeSlideComposerSession.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "useNodeSlideComposerSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/composer/nodeSlideComposerSession.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -4744,790 +4760,948 @@
       "id": "symbol:src/domains/nodeslide/session/AgentSessionProvider.tsx#AgentSessionContextValue",
       "name": "AgentSessionContextValue",
       "sourcePath": "src/domains/nodeslide/session/AgentSessionProvider.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionContextValue",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/AgentSessionProvider.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/AgentSessionProvider.tsx#AgentSessionProvider",
       "name": "AgentSessionProvider",
       "sourcePath": "src/domains/nodeslide/session/AgentSessionProvider.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionProvider",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/AgentSessionProvider.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/AgentSessionProvider.tsx#createAgentSessionSecret",
       "name": "createAgentSessionSecret",
       "sourcePath": "src/domains/nodeslide/session/AgentSessionProvider.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createAgentSessionSecret",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/AgentSessionProvider.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/AgentSessionProvider.tsx#useAgentSession",
       "name": "useAgentSession",
       "sourcePath": "src/domains/nodeslide/session/AgentSessionProvider.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "useAgentSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/AgentSessionProvider.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/AgentSessionProvider.tsx#useOptionalAgentSession",
       "name": "useOptionalAgentSession",
       "sourcePath": "src/domains/nodeslide/session/AgentSessionProvider.tsx",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "useOptionalAgentSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/AgentSessionProvider.tsx"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#AGENT_SESSION_JOB_STALL_AFTER_MS",
       "name": "AGENT_SESSION_JOB_STALL_AFTER_MS",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AGENT_SESSION_JOB_STALL_AFTER_MS",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#agentSessionApprovalForDeck",
       "name": "agentSessionApprovalForDeck",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionApprovalForDeck",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#agentSessionRequestFingerprint",
       "name": "agentSessionRequestFingerprint",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionRequestFingerprint",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#agentSessionStorageKey",
       "name": "agentSessionStorageKey",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionStorageKey",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#archiveAgentSessionJob",
       "name": "archiveAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "archiveAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#attachAgentSessionJob",
       "name": "attachAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "attachAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#classifyAgentSessionJobFreshness",
       "name": "classifyAgentSessionJobFreshness",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "classifyAgentSessionJobFreshness",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#createInitialAgentSessionState",
       "name": "createInitialAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createInitialAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#failAgentSessionJob",
       "name": "failAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "failAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#failPreparedAgentSessionJob",
       "name": "failPreparedAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "failPreparedAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#isAgentSessionEditAuthorityLocked",
       "name": "isAgentSessionEditAuthorityLocked",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isAgentSessionEditAuthorityLocked",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#isAgentSessionJobActive",
       "name": "isAgentSessionJobActive",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isAgentSessionJobActive",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#prepareAgentSessionJob",
       "name": "prepareAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "prepareAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#readAgentSessionState",
       "name": "readAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "readAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#reconcileAgentSessionJob",
       "name": "reconcileAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "reconcileAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#updateAgentSessionControls",
       "name": "updateAgentSessionControls",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "updateAgentSessionControls",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#updateAgentSessionSurface",
       "name": "updateAgentSessionSurface",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "updateAgentSessionSurface",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/agentSessionState.ts#writeAgentSessionState",
       "name": "writeAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/agentSessionState.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "writeAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/agentSessionState.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionApprovalMode",
       "name": "AgentSessionApprovalMode",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionApprovalMode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionApprovalState",
       "name": "AgentSessionApprovalState",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionApprovalState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionAttachment",
       "name": "AgentSessionAttachment",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionAttachment",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionContextValue",
       "name": "AgentSessionContextValue",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionContextValue",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionControlPatch",
       "name": "AgentSessionControlPatch",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionControlPatch",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionControls",
       "name": "AgentSessionControls",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionControls",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionDelegationGrant",
       "name": "AgentSessionDelegationGrant",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionDelegationGrant",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionJobHandle",
       "name": "AgentSessionJobHandle",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobHandle",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionJobKind",
       "name": "AgentSessionJobKind",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobKind",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionJobReceipt",
       "name": "AgentSessionJobReceipt",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobReceipt",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionJobStatus",
       "name": "AgentSessionJobStatus",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobStatus",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionMemoryMode",
       "name": "AgentSessionMemoryMode",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionMemoryMode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionModel",
       "name": "AgentSessionModel",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionModel",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionProvider",
       "name": "AgentSessionProvider",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionProvider",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionScope",
       "name": "AgentSessionScope",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionScope",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionState",
       "name": "AgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#AgentSessionSurface",
       "name": "AgentSessionSurface",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionSurface",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#agentSessionApprovalForDeck",
       "name": "agentSessionApprovalForDeck",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionApprovalForDeck",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#agentSessionRequestFingerprint",
       "name": "agentSessionRequestFingerprint",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionRequestFingerprint",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#agentSessionStorageKey",
       "name": "agentSessionStorageKey",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "agentSessionStorageKey",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#archiveAgentSessionJob",
       "name": "archiveAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "archiveAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#attachAgentSessionJob",
       "name": "attachAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "attachAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#createAgentSessionSecret",
       "name": "createAgentSessionSecret",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createAgentSessionSecret",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#createInitialAgentSessionState",
       "name": "createInitialAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "createInitialAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#failAgentSessionJob",
       "name": "failAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "failAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#isAgentSessionEditAuthorityLocked",
       "name": "isAgentSessionEditAuthorityLocked",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isAgentSessionEditAuthorityLocked",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#isAgentSessionJobActive",
       "name": "isAgentSessionJobActive",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "isAgentSessionJobActive",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#prepareAgentSessionJob",
       "name": "prepareAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "prepareAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#readAgentSessionState",
       "name": "readAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "readAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#reconcileAgentSessionJob",
       "name": "reconcileAgentSessionJob",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "reconcileAgentSessionJob",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#updateAgentSessionControls",
       "name": "updateAgentSessionControls",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "updateAgentSessionControls",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#updateAgentSessionSurface",
       "name": "updateAgentSessionSurface",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "updateAgentSessionSurface",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#useAgentSession",
       "name": "useAgentSession",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "useAgentSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#useOptionalAgentSession",
       "name": "useOptionalAgentSession",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "useOptionalAgentSession",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/index.ts#writeAgentSessionState",
       "name": "writeAgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/index.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "writeAgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/index.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionApprovalMode",
       "name": "AgentSessionApprovalMode",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionApprovalMode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionApprovalState",
       "name": "AgentSessionApprovalState",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionApprovalState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionAttachment",
       "name": "AgentSessionAttachment",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionAttachment",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionControlPatch",
       "name": "AgentSessionControlPatch",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionControlPatch",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionControls",
       "name": "AgentSessionControls",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionControls",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionDelegationGrant",
       "name": "AgentSessionDelegationGrant",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionDelegationGrant",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobFreshness",
       "name": "AgentSessionJobFreshness",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobFreshness",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobHandle",
       "name": "AgentSessionJobHandle",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobHandle",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobKind",
       "name": "AgentSessionJobKind",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobKind",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobReceipt",
       "name": "AgentSessionJobReceipt",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobReceipt",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobStatus",
       "name": "AgentSessionJobStatus",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobStatus",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionJobSummary",
       "name": "AgentSessionJobSummary",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionJobSummary",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionMemoryMode",
       "name": "AgentSessionMemoryMode",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionMemoryMode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionMemoryState",
       "name": "AgentSessionMemoryState",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionMemoryState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionModel",
       "name": "AgentSessionModel",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionModel",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionScope",
       "name": "AgentSessionScope",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionScope",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionScopeKind",
       "name": "AgentSessionScopeKind",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionScopeKind",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionState",
       "name": "AgentSessionState",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionSurface",
       "name": "AgentSessionSurface",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionSurface",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#AgentSessionWebState",
       "name": "AgentSessionWebState",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "AgentSessionWebState",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/session/types.ts#NODESLIDE_AGENT_SESSION_VERSION",
       "name": "NODESLIDE_AGENT_SESSION_VERSION",
       "sourcePath": "src/domains/nodeslide/session/types.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NODESLIDE_AGENT_SESSION_VERSION",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/session/types.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -6986,90 +7160,108 @@
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#BoundedJsonPreview",
       "name": "BoundedJsonPreview",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "BoundedJsonPreview",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#JSON_EDITOR_CHARACTER_LIMIT",
       "name": "JSON_EDITOR_CHARACTER_LIMIT",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "JSON_EDITOR_CHARACTER_LIMIT",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#JSON_PREVIEW_CHARACTER_LIMIT",
       "name": "JSON_PREVIEW_CHARACTER_LIMIT",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "JSON_PREVIEW_CHARACTER_LIMIT",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#JsonEditResult",
       "name": "JsonEditResult",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "JsonEditResult",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#boundedJsonPreview",
       "name": "boundedJsonPreview",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "boundedJsonPreview",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#diffSelectedElementJson",
       "name": "diffSelectedElementJson",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "diffSelectedElementJson",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#jsonForCopy",
       "name": "jsonForCopy",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "jsonForCopy",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonEdit.ts#latestDeckPatch",
       "name": "latestDeckPatch",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonEdit.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "latestDeckPatch",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonEdit.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NODESLIDE_JSON_FORMAT",
       "name": "NODESLIDE_JSON_FORMAT",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NODESLIDE_JSON_FORMAT",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
@@ -7077,10 +7269,10 @@
       "name": "NODESLIDE_JSON_LIMITS",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
       "status": "PORTED",
-      "match": "name",
+      "match": "path",
       "target": "NODESLIDE_JSON_LIMITS",
       "destinationPaths": [
-        "src/domains/nodeslide/slidelang/importBounds.ts"
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
       ]
     },
     {
@@ -7088,210 +7280,252 @@
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NODESLIDE_JSON_VERSION",
       "name": "NODESLIDE_JSON_VERSION",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NODESLIDE_JSON_VERSION",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonBounds",
       "name": "NodeSlideJsonBounds",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonBounds",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonDiffPreview",
       "name": "NodeSlideJsonDiffPreview",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonDiffPreview",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonDiffResult",
       "name": "NodeSlideJsonDiffResult",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonDiffResult",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonDiffSuccess",
       "name": "NodeSlideJsonDiffSuccess",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonDiffSuccess",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonEnvelopeV1",
       "name": "NodeSlideJsonEnvelopeV1",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonEnvelopeV1",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonExportResult",
       "name": "NodeSlideJsonExportResult",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonExportResult",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonExportSuccess",
       "name": "NodeSlideJsonExportSuccess",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonExportSuccess",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonFailure",
       "name": "NodeSlideJsonFailure",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonFailure",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonFidelity",
       "name": "NodeSlideJsonFidelity",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonFidelity",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonFidelityFinding",
       "name": "NodeSlideJsonFidelityFinding",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonFidelityFinding",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonFidelityReport",
       "name": "NodeSlideJsonFidelityReport",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonFidelityReport",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonFindingCode",
       "name": "NodeSlideJsonFindingCode",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonFindingCode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonIssue",
       "name": "NodeSlideJsonIssue",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonIssue",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonIssueCode",
       "name": "NodeSlideJsonIssueCode",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonIssueCode",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonParseResult",
       "name": "NodeSlideJsonParseResult",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonParseResult",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonParseSuccess",
       "name": "NodeSlideJsonParseSuccess",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonParseSuccess",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#NodeSlideJsonPreview",
       "name": "NodeSlideJsonPreview",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "NodeSlideJsonPreview",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#diffNodeSlideSnapshots",
       "name": "diffNodeSlideSnapshots",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "diffNodeSlideSnapshots",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#exportNodeSlideJson",
       "name": "exportNodeSlideJson",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "exportNodeSlideJson",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",
       "id": "symbol:src/domains/nodeslide/slidelang/jsonSpec.ts#parseNodeSlideJson",
       "name": "parseNodeSlideJson",
       "sourcePath": "src/domains/nodeslide/slidelang/jsonSpec.ts",
-      "status": "MISSING",
-      "match": null,
+      "status": "PORTED",
+      "match": "path",
       "target": "parseNodeSlideJson",
-      "destinationPaths": []
+      "destinationPaths": [
+        "src/domains/nodeslide/slidelang/jsonSpec.ts"
+      ]
     },
     {
       "kind": "symbol",

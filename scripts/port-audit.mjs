@@ -97,6 +97,15 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
  * `to` is the destination symbol name, or for scripts the destination repo-relative path.
  *
  * Empty is the correct state until a port actually renames something. Do not pre-populate it.
+ *
+ * A NEAR MISS worth recording, because the next reader will be tempted by it. The jsonSpec port
+ * found that `exportNodeSlideJson` (parity) and `downloadDeckJson` (destination) do overlapping
+ * work, which looks exactly like a rename. It is not one, and adding it here would be the first
+ * dishonest entry: the destination's symbol is the WEAKER of the two — no versioned envelope, no
+ * schema validation — while carrying a compilation gate parity's lacks. Neither supersedes the
+ * other. An entry here would mark the item PORTED and silence a real capability gap, which is
+ * precisely the failure mode named above. Partial overlap belongs in docs/PORT_TRIAGE.md as a
+ * divergence, not here as an equivalence.
  */
 const RENAMES = [];
 
