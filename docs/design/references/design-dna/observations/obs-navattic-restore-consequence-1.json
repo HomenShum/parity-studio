@@ -1,0 +1,142 @@
+{
+  "id": "obs-navattic-restore-consequence-1",
+  "source": {
+    "url": "https://mobbin.com/screens/3f614774-c31f-47c2-b814-8e470b9e6d5a",
+    "app": "Navattic",
+    "surface": "restore-to-earlier-version confirmation, enumerating the work that will be destroyed",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "conflict",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Restore version",
+    "acceptControlTreatment": "solid red fill with a white label — the destructive hue is on the committing control, not on the content it will destroy",
+    "rejectControlTreatment": "Cancel, unfilled label text immediately to its left",
+    "undecidedContainerTreatment": "the two rows enumerating the work that will be lost sit on plain white with no red tint; the warning colour is used once, on the glyph beside the title, and once on the button",
+    "verdict": "Decision colour confined to the button. Notably the hue chosen is red rather than the product's primary, so the commit control announces the direction of the consequence without tinting the content at risk."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "confirmation-dialog",
+      "property": "enumerated-consequence-rows",
+      "value": 2,
+      "unit": "rows",
+      "locatorDescription": "between the subtitle and the button row, reading \"1 edit to Project\" and \"17 edits to Marketing Inspiration Workflow flow\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "consequence-row",
+      "property": "quantifies-loss-as",
+      "value": "an exact edit count plus the name of the affected object, in the row's first line",
+      "unit": null,
+      "locatorDescription": "the row reading \"17 edits to Marketing Inspiration Workflow flow\""
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "consequence-row",
+      "property": "second-line",
+      "value": "an absolute last-updated timestamp to the minute",
+      "unit": null,
+      "locatorDescription": "beneath each consequence row, reading \"Last updated Feb 10, 2026, 5:12 AM\" and \"Last updated Feb 10, 2026, 4:37 AM\""
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "consequence-row",
+      "property": "expandable",
+      "value": "yes; each row carries a disclosure chevron at its right, so the summary count can be opened into the individual edits",
+      "unit": null,
+      "locatorDescription": "the right edge of each of the two consequence rows"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "subtitle",
+      "property": "states-the-cutoff",
+      "value": "an absolute timestamp defining exactly which changes are in scope for deletion",
+      "unit": null,
+      "locatorDescription": "beneath the title, reading \"All changes since Feb 9, 2026, 9:39 PM will be deleted\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "subtitle-verb",
+      "property": "value",
+      "value": "\"will be deleted\" — future tense and unhedged, naming destruction rather than \"replace\" or \"update\"",
+      "unit": null,
+      "locatorDescription": "the end of the subtitle line"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "title",
+      "property": "names-the-target",
+      "value": "the destination version is named in the title rather than referred to as \"the previous version\"",
+      "unit": null,
+      "locatorDescription": "top of the dialog, reading \"Restore to Initial Copilot demo\""
+    },
+    {
+      "id": "f8",
+      "kind": "count",
+      "subject": "dialog",
+      "property": "warning-coloured-elements",
+      "value": 2,
+      "unit": "elements",
+      "locatorDescription": "the triangle glyph to the left of the title, and the fill of the \"Restore version\" button"
+    },
+    {
+      "id": "f9",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "bottom right of the dialog, reading \"Cancel\" and \"Restore version\""
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "action-row-ordering",
+      "property": "value",
+      "value": "the reversible disposition is placed left of the destructive one",
+      "unit": null,
+      "locatorDescription": "bottom right of the dialog, \"Cancel\" preceding \"Restore version\""
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "dialog",
+      "property": "backdrop-treatment",
+      "value": "the editor canvas behind is dimmed and desaturated but still legible, so the work at risk stays visible during the decision",
+      "unit": null,
+      "locatorDescription": "the demo-editor thumbnails and step list visible around the dialog"
+    }
+  ],
+  "problemTags": [
+    "irreversible-decision",
+    "quantify-the-consequence-before-committing",
+    "version-conflict-resolution"
+  ],
+  "intentTags": ["know-what-i-lose", "roll-back-deliberately"],
+  "layoutTags": ["centred-dialog", "enumerated-consequence-list"],
+  "interactionTags": [
+    "expandable-consequence-rows",
+    "destructive-fill-on-commit",
+    "cancel-left-of-commit"
+  ]
+}

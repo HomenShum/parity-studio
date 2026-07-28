@@ -1,0 +1,136 @@
+id: rule-decision-colour-containment-1
+statement: >-
+  On a trust surface, the hue that fills the committing control must not also fill or outline any
+  container whose declared state is still undecided. The decision colour may sit on the button; it
+  may not tint the thing being decided. A container may carry colour while pending only if that
+  colour is a hue the surface never uses to commit — and only to answer "what is in scope", never
+  "has this been approved".
+
+mechanismHypothesis: >-
+  A reader arriving at a proposal does not read the button first. They scan the region, and a
+  saturated border or fill on a bounded container is the strongest available signal that the region
+  is resolved — stronger than a radio glyph, stronger than the button label, because area beats
+  detail at a glance. When the accept hue is already painted on the undecided container, the reader
+  forms the belief "this is settled" before reaching the control that would settle it, and the
+  button then reads as an acknowledgement rather than as a decision. This is why the failure is
+  silent: nothing breaks, the state machine is correct, and the only casualty is that the human
+  approved something they had already been told was approved.
+
+  The corpus refines the naive version of this rule in three ways, and each refinement came from a
+  reference rather than from reasoning:
+
+  1. HUE-RELATIVE, NOT SEMANTIC. Todoist's committing control is red; Threads' is violet;
+     Grammarly's is green; PayPal's is blue. There is no universal accept hue, so a check that hunts
+     for "success green" would miss most of these and misfire on the others. The decision colour is
+     whichever hue carries the surface's only saturated solid fill.
+  2. AREA AND SATURATION SEPARATE TWO MEANINGS OF ONE HUE. GitHub puts green on the same screen
+     twice — as a pale full-row band behind added code, and as a saturated fill on Start a review.
+     Both are green and neither is ambiguous, because content-colour is low-saturation and spans a
+     row of monospace text, while decision-colour is saturated and bounded to a small control with a
+     white label. Hue alone does not identify the decision colour; hue plus saturation plus control
+     type does.
+  3. SCOPE TINT IS NOT ACCEPTANCE TINT. Sana AI washes the entire document body in violet while a
+     rewrite is pending — a container tint on an undecided thing, which the naive rule would forbid.
+     It is not a violation, because violet is not the hue anything commits in. The tint answers
+     "which text will this touch", and it is removed when the operation completes. The rule must
+     therefore be stated against the ACCEPT hue specifically, not against container tinting.
+
+  The strongest positive form in the corpus is Langdock's: the pending styling is a marker that is
+  REMOVED at acceptance, not a success styling that is ADDED. The accepted end state is
+  indistinguishable from text that was always there. Colour there can only ever mean "undecided",
+  because it does not survive the decision.
+
+confidence: medium
+# Medium, and the two reasons are specific rather than ritual.
+#
+# First, TIER. Every one of the twenty external observations is bronze/M1 — Mobbin gallery captures.
+# They establish that twenty shipped products behave this way. They do not establish that it works,
+# because no audience outcome is attached to any of them. The mechanism above is a hypothesis about
+# reader inference that this corpus cannot test. Promotion to high requires either live
+# re-observation (M2) or an outcome measurement (M3) on at least the proposal cases.
+#
+# Second, MISSING INTERNAL COUNTER-EVIDENCE. The three violations fixed in our own product this week
+# are the most relevant counter-evidence that exists, and they are not citable. parity-studio
+# origin/main and every local branch were searched over the last four days for trust-surface,
+# proposal-card, pending-accent, and acceptance-colour markers; nothing was found. Rather than cite
+# an observation id that does not exist, the gap is recorded in coverage-trust-surfaces.json and
+# named here. Writing those three up as silver/M2 observations against the live deployment would
+# raise this rule further than any additional Mobbin reference could, because they would be the only
+# evidence in the file that is both counter-instance and outcome-adjacent.
+
+appliesWhen:
+  - any surface where a human or agent leaves having decided something — proposal, conflict, consent, diff review, failed state
+  - the undecided item is rendered inside a bounded container (card, row, modal, option row)
+  - the surface has at least one control that commits
+
+doesNotApplyWhen:
+  - the surface is read-only reporting with no disposition on it, as in obs-figma-compare-changes-1 and obs-googleaistudio-viewing-differences-1, where red and green are free to mean removed and added because no decision competes for the hue
+  - the colour marks scope or authorship in a hue the surface never commits in, as in obs-sana-ai-document-edit-1
+  - the colour is content semantics at low saturation across a full row rather than a control fill, as in the diff bands of obs-github-pr-files-changed-1
+  - the item's declared state is genuinely settled — after acceptance, ordinary styling applies
+
+evidence:
+  supportingObservationIds:
+    - obs-grammarly-suggestion-review-1
+    - obs-langdock-inline-suggestion-1
+    - obs-notion-ai-inline-edit-1
+    - obs-threads-ai-summary-1
+    - obs-github-pr-files-changed-1
+    - obs-zoom-app-permission-grant-1
+    - obs-cron-google-oauth-consent-1
+    - obs-navattic-restore-consequence-1
+    - obs-todoist-calendar-grant-1
+  citedFacts:
+    # Accept hue on the control, undecided container left neutral.
+    - obs-grammarly-suggestion-review-1/f7 = "accept-control fill = solid green"
+    - obs-grammarly-suggestion-review-1/f9 = "undecided-suggestion-card background identical to panel, no green tint"
+    - obs-threads-ai-summary-1/f3 = "actions carrying a solid fill = 1 of 3"
+    - obs-threads-ai-summary-1/f6 = "undecided summary card carries no violet tint"
+    - obs-zoom-app-permission-grant-1/f11 = "Allow and Decline equal size, only the fill differs"
+    - obs-navattic-restore-consequence-1/f8 = "warning-coloured elements = 2, the title glyph and the button fill"
+    # The strongest form: pending styling removed at acceptance rather than success styling added.
+    - obs-langdock-inline-suggestion-1/f7 = "plain -> marked with glyphs -> plain, no residual marker"
+    - obs-langdock-inline-suggestion-1/f8 = "accepted text residual marking = none"
+    - obs-notion-ai-inline-edit-1/f10 = "settled bullet carries no tint and no badge"
+    # Dispositions can carry no colour at all and still be usable.
+    - obs-notion-ai-inline-edit-1/f2 = "Accept and Discard differentiated by glyph and label only"
+    - obs-cron-google-oauth-consent-1/f10 = "dispositions carrying a solid fill = 0"
+    # The accept hue is brand-relative, which is why the rule is stated hue-relative.
+    - obs-todoist-calendar-grant-1/f6 = "accept-control hue = red-orange, matching the brand mark"
+    # One hue, two meanings, separated by saturation and area rather than by hue.
+    - obs-github-pr-files-changed-1/f8 = "added line = pale green band spanning the full row"
+    - obs-github-pr-files-changed-1/f11 = "disposition weight rises left to right to a solid green fill"
+
+  counterObservationIds:
+    - obs-air-duplicate-asset-conflict-1
+    - obs-mercor-cookie-purposes-1
+  counterFacts:
+    # The exact defect: the commit hue outlining a container that has not been committed.
+    - obs-air-duplicate-asset-conflict-1/f4 = "selected option row border = blue, matching the Confirm button fill"
+    - obs-air-duplicate-asset-conflict-1/f5 = "unselected option rows border = neutral grey"
+    - obs-air-duplicate-asset-conflict-1/f3 = "options pre-selected on arrival = 1"
+    # The grant hue already painted on the controls that carry the grant.
+    - obs-mercor-cookie-purposes-1/f2 = "optional purposes rendered in the granted state = 2 of 2"
+    - obs-mercor-cookie-purposes-1/f9 = "Accept All filled, Reject All outlined, at equal size"
+
+  boundaryFacts:
+    # These do not support or refute; they are why the statement is worded as it is.
+    - obs-sana-ai-document-edit-1/f3 = "highlight hue is violet, not the accept hue — scope, not approval"
+    - obs-sana-ai-document-edit-1/f1 = "the tint covers exactly the region the operation will rewrite"
+    - obs-linear-version-redline-1/f12 = "restore control is a paler blue than the toggle in the same bar — weakest hue separation observed"
+
+  internalCounterEvidenceGap: >-
+    Three decision-colour violations were found and fixed in our own product this week. They are the
+    most directly relevant counter-evidence available and they are NOT cited here, because no
+    retrievable record of them exists. See coverage-trust-surfaces.json, corpusGaps. Until they are
+    written up as observations against the live deployment, this rule's counter-evidence is entirely
+    external and entirely bronze.
+
+rubric:
+  dimension: decision-colour-containment
+  levels:
+    0: the accept hue fills or outlines the undecided container, and a default is pre-selected — the surface answers the question before the reader arrives
+    1: the accept hue outlines the undecided container, no pre-selection
+    2: the container is neutral, but the surface offers only one disposition, so containment is untested
+    3: the accept hue is confined to the committing control; the undecided container is neutral; a refusal of comparable prominence exists
+    4: level 3, and the pending marking is removed at acceptance rather than replaced by a success marking, so the styling can only ever mean undecided

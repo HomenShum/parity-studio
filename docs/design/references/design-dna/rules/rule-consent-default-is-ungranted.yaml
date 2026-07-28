@@ -1,0 +1,112 @@
+id: rule-consent-default-is-ungranted-1
+statement: >-
+  On a consent surface, every optional grant must render in its ungranted state until the user acts,
+  and a refusal of comparable prominence must exist on the same surface. A toggle that arrives set to
+  on is acceptance styling applied to an undecided control — the same defect as tinting an undecided
+  container, expressed as state rather than as colour.
+
+mechanismHypothesis: >-
+  A pre-set toggle is not a default in the neutral sense. It is a rendered assertion that the grant
+  has been made, placed on the exact control that carries the grant, before the reader has read the
+  purpose it belongs to. The reader's task silently inverts: instead of deciding what to allow, they
+  must now find and undo what has already been allowed, which costs more attention per category and
+  is abandoned sooner. The consent is then technically recorded and substantively absent.
+
+  The corpus is unusual here and the finding is worth stating plainly: THIS RULE IS NOT INDUSTRY
+  PRACTICE. Of the consent surfaces examined, the optional grants arrived pre-set to on in Mercor,
+  Cron/Google, Calendly, Coinbase, and PayPal — five of six. Only Zoom rendered its optional grant
+  unchecked. Adopting this rule is therefore a deliberate divergence from the observed field, not a
+  remix of a reference, and any NodeKit direction gate citing it must say so rather than implying the
+  pattern was borrowed.
+
+  Two further shapes in the corpus refine the second half of the statement. Google's OAuth screen is
+  the strongest instance of a symmetric refusal anywhere in this sweep: Cancel and Continue are the
+  same size, the same shape, both outlined, and neither is filled, so the surface expresses no
+  preference about which way to decide — even though its scopes arrive pre-granted. Motion is the
+  opposite: the decision colour is correctly confined to the button, and there is only one button.
+  No decline, no skip, no back. A surface with exactly one disposition is not a decision surface, and
+  getting the styling right on the sole available option does not make the moment informed. That is
+  why the statement has two clauses; either alone is satisfiable while the consent remains hollow.
+
+  Zoom is the reference worth copying. Its optional grant is unchecked; its two dispositions are the
+  same size and differ only by fill; it groups scopes by WHOSE DATA IT IS rather than by feature —
+  two scopes affecting only the signed-in user, one affecting other people who share a meeting with
+  them — and it states up front both that the app has not been reviewed by the platform and that
+  access continues when the app is not in use. It is the only surface in the sweep that tells the
+  reader a third party's data is in scope before asking them to grant it.
+
+confidence: medium
+# Medium, and the reason is unusual enough to write down: the evidence is mostly AGAINST the rule as
+# a description of practice, while supporting it as a description of the mechanism. Five of six
+# observed products pre-grant. That is strong evidence about what the field does and no evidence at
+# all that pre-granting works for the reader, because nothing in a bronze/M1 gallery capture can
+# measure whether consent was informed.
+#
+# The rule is grounded instead in the trust-surfaces clause it inherits — do not style an undecided
+# thing as decided — and in one unambiguous positive instance. Raising it to high needs the thing this
+# corpus structurally cannot supply: an outcome (M3) showing that readers of a pre-granted consent
+# form end up with permissions they would not have chosen. Until then this is a governance position
+# with one supporting reference, honestly labelled.
+#
+# Note also a jurisdictional confound not visible in a screenshot: several of these surfaces may be
+# rendered differently under GDPR than in the capture region, so "pre-granted" may be a locale
+# behaviour rather than a design choice. Nothing in the gallery lets us tell, and that alone caps
+# confidence.
+
+appliesWhen:
+  - any surface asking a human or an agent to grant access, share data, or authorise an outbound call
+  - the grant is divisible into optional categories or scopes
+  - the surface is reached before the access occurs
+
+doesNotApplyWhen:
+  - the grant is genuinely non-optional for the product to function AND is labelled as such, as in obs-mercor-cookie-purposes-1/f3 where Essential Services carries an "Always Active" label and an unmovable control — a non-negotiable grant shown as non-negotiable is honest, and it is the negotiable ones beside it that must start off
+  - the surface is a revocation or review screen showing grants already made, where the current state is the correct rendering
+  - a legal regime requires a specific default that contradicts this rule, in which case the divergence is recorded rather than silently applied
+
+evidence:
+  supportingObservationIds:
+    - obs-zoom-app-permission-grant-1
+    - obs-cron-google-oauth-consent-1
+  citedFacts:
+    # The one instance where the optional grant is not pre-granted.
+    - obs-zoom-app-permission-grant-1/f8 = "optional additional grant default = unchecked"
+    - obs-zoom-app-permission-grant-1/f11 = "Allow and Decline equal height and comparable width; only the fill differs"
+    # Scope framing that names whose data leaves.
+    - obs-zoom-app-permission-grant-1/f1 = "scope list grouped by whose data it is, in two written subheadings"
+    - obs-zoom-app-permission-grant-1/f3 = "scopes affecting other people = 1, stated separately"
+    - obs-zoom-app-permission-grant-1/f5 = "review status disclosed: the app has not been reviewed by the platform"
+    - obs-zoom-app-permission-grant-1/f6 = "background access disclosed: access continues when the app is not in use"
+    - obs-zoom-app-permission-grant-1/f12 = "the sentence names the exact control that commits, and where to revoke later"
+    # The strongest symmetric refusal in the sweep.
+    - obs-cron-google-oauth-consent-1/f10 = "dispositions carrying a solid fill = 0"
+    - obs-cron-google-oauth-consent-1/f11 = "dispositions differentiated by label text and position only"
+    - obs-cron-google-oauth-consent-1/f5 = "scope wording says 'permanently delete' rather than softening it to 'manage'"
+
+  counterObservationIds:
+    - obs-mercor-cookie-purposes-1
+    - obs-motion-permission-grant-1
+    - obs-cron-google-oauth-consent-1
+  counterFacts:
+    # Clause 1 violated: optional grants arrive granted.
+    - obs-mercor-cookie-purposes-1/f2 = "optional purposes rendered in the granted state = 2 of 2"
+    - obs-cron-google-oauth-consent-1/f2 = "scope rows in the checked state = 6 of 6"
+    # Clause 1 violated while clause 2 is satisfied, and vice versa — which is why both clauses exist.
+    - obs-mercor-cookie-purposes-1/f8 = "Reject All present only in the upper action pair; the bottom offers Confirm alone"
+    - obs-motion-permission-grant-1/f5 = "dispositions = 1; no decline, cancel, skip, or back"
+    - obs-motion-permission-grant-1/f7 = "no privacy policy link, no revocation statement, no third-party mention"
+    - obs-motion-permission-grant-1/f4 = "scope rows carry no toggle, checkbox, or chevron — nothing is divisible"
+
+  censusFacts:
+    - "consent surfaces examined = 6 (Zoom, Cron/Google, Mercor, Calendly, Coinbase, PayPal cookie settings)"
+    - "surfaces where optional grants arrive pre-set to on = 5"
+    - "surfaces where optional grants arrive off = 1 (Zoom)"
+    - "surfaces offering no refusal at all = 1 (Motion, examined separately as an onboarding grant)"
+
+rubric:
+  dimension: consent-default-honesty
+  levels:
+    0: optional grants arrive on AND no refusal of comparable prominence exists
+    1: optional grants arrive on; a refusal exists but is lighter, smaller, or offered in only one of two action rows
+    2: optional grants arrive on; refusal is present at equal weight — the Google OAuth shape
+    3: optional grants arrive off; refusal is present at equal weight
+    4: level 3, plus scopes are grouped by whose data is affected, third-party and background access are disclosed before the decision, and the revocation path is named on the surface itself

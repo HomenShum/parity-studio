@@ -1,0 +1,196 @@
+{
+  "id": "coverage-trust-surfaces-2026-07-28",
+  "purpose": "Census of what the trust-surfaces reference sweep actually found, per surface kind, including the queries that returned nothing usable. Silence is not coverage: a kind with no record here is NOT COVERED, and the queries tried are listed so the next sweep does not repeat them.",
+  "sweptAt": "2026-07-28",
+  "source": "Mobbin MCP, platform web, mode deep",
+  "licenceNote": "Zero images were downloaded, cached, embedded, or written to disk. Every record stores our own measurements plus the mobbin_url and the date, per the approved 'mobbin' source policy in shared/nodeslideAtlasRegistry.ts (download false, cache false, ragIndexing false, embeddingIndex false, displayThumbnail true, accessMode remote-mcp, attributionRequired true).",
+  "evidenceTierPolicy": {
+    "allExternalRecords": "bronze / M1",
+    "reason": "Mobbin is a curated gallery. A gallery screen is not a live observation of a running product and carries no audience outcome, so no record in this sweep may be promoted above bronze without re-observing the product live (silver/M2) or attaching an outcome (gold/M3).",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "coverage": [
+    {
+      "surfaceKind": "proposal",
+      "status": "COVERED",
+      "observationCount": 5,
+      "observationIds": [
+        "obs-grammarly-suggestion-review-1",
+        "obs-langdock-inline-suggestion-1",
+        "obs-notion-ai-inline-edit-1",
+        "obs-sana-ai-document-edit-1",
+        "obs-threads-ai-summary-1"
+      ],
+      "queriesUsed": [
+        "AI writing suggestion card with Accept and Dismiss buttons pending user decision",
+        "AI agent proposes edits to a document and the user reviews then accepts or rejects each change (flows)"
+      ],
+      "examinedButNotRecorded": [
+        {
+          "url": "https://mobbin.com/screens/d7beed47-885e-4dad-a624-452cef44443c",
+          "app": "X",
+          "reason": "The generated variants carry a percentage badge reading '± 75%' and '± 27%' whose meaning could not be determined from the image. Recording it would have required guessing what the number measures, so the screen was dropped rather than described speculatively."
+        },
+        {
+          "url": "https://mobbin.com/screens/75b0720c-7617-4417-bfbf-26746265548e",
+          "app": "Charma",
+          "reason": "Three undecided suggestion options render identically with unselected radios, which is an unambiguous confirmation of the decision-colour rule, but every fact it offers is already carried with more detail by obs-air-duplicate-asset-conflict-1 (the same radio-then-confirm pattern, with the counter-instance behaviour). Dropped to avoid a redundant record."
+        }
+      ]
+    },
+    {
+      "surfaceKind": "diff-review",
+      "status": "COVERED",
+      "observationCount": 4,
+      "observationIds": [
+        "obs-github-pr-files-changed-1",
+        "obs-figma-compare-changes-1",
+        "obs-linear-version-redline-1",
+        "obs-googleaistudio-viewing-differences-1"
+      ],
+      "queriesUsed": [
+        "side by side code diff review with added and removed lines highlighted green and red"
+      ],
+      "examinedButNotRecorded": [
+        {
+          "url": "https://mobbin.com/screens/5dc51455-c50f-403e-a5bf-ca8e432784b4",
+          "app": "GitLab",
+          "reason": "Its distinctive fact — an entirely empty prior pane for a file with 23 additions and 0 deletions — is carried more informatively by obs-googleaistudio-viewing-differences-1/f4, which draws absence as hatching rather than leaving it blank."
+        },
+        {
+          "url": "https://mobbin.com/screens/982b86ad-bd93-4e22-8acf-4e8cdba18638",
+          "app": "Reddit",
+          "reason": "A revision comparison with no background tint on any row, which would have been useful counter-evidence for a colourless diff. Dropped because the change markers in the gutter could not be read clearly enough at the returned resolution to state what distinguishes the two columns, and a diff observation that cannot locate the difference is not an observation."
+        }
+      ]
+    },
+    {
+      "surfaceKind": "consent",
+      "status": "COVERED",
+      "observationCount": 5,
+      "observationIds": [
+        "obs-zoom-app-permission-grant-1",
+        "obs-cron-google-oauth-consent-1",
+        "obs-mercor-cookie-purposes-1",
+        "obs-todoist-calendar-grant-1",
+        "obs-motion-permission-grant-1"
+      ],
+      "queriesUsed": [
+        "cookie consent banner with accept all and reject all buttons and manage preferences link",
+        "OAuth authorization screen listing the permissions an app is requesting before you grant access to your account"
+      ],
+      "examinedButNotRecorded": [
+        {
+          "url": "https://mobbin.com/screens/a5a2fe99-3d8e-4bb3-9307-13381a5f0a8e",
+          "app": "Square",
+          "reason": "A settings screen for choosing which consent banner to install on your own site. It is a product-configuration surface, not a consent moment, so it does not belong in this kind."
+        },
+        {
+          "url": "https://mobbin.com/screens/97b250b6-ba74-4462-bcb9-4e1a340c0a2d",
+          "app": "Calendly",
+          "reason": "OneTrust preference centre with three of four categories pre-enabled. Its facts duplicate obs-mercor-cookie-purposes-1 and obs-cron-google-oauth-consent-1 exactly; recorded here as a third data point for the pre-granted-defaults count without a full record."
+        },
+        {
+          "url": "https://mobbin.com/screens/50663966-5453-4944-a315-cab7aa6decdf",
+          "app": "Coinbase",
+          "reason": "Cookie preferences with all four categories pre-checked and a single Save action. Same duplication as Calendly; counted in the pre-granted-defaults tally, not given its own record."
+        },
+        {
+          "url": "https://mobbin.com/screens/9918f64c-38fb-4579-ba34-db930c56c017",
+          "app": "PayPal",
+          "reason": "Cookie settings with all categories pre-checked, each carrying a concrete usage example. Same duplication; counted in the tally."
+        }
+      ]
+    },
+    {
+      "surfaceKind": "failed-state",
+      "status": "COVERED",
+      "observationCount": 3,
+      "observationIds": [
+        "obs-paypal-error-debug-id-1",
+        "obs-typeform-error-progress-1",
+        "obs-midday-error-escape-hatch-1"
+      ],
+      "queriesUsed": ["error state screen saying something went wrong with a retry button"],
+      "examinedButNotRecorded": [
+        {
+          "url": "https://mobbin.com/screens/7538fa89-e519-4ccc-9e92-8523fcab37d9",
+          "app": "Threads",
+          "reason": "A one-sentence failure with a small black pill retry and nothing else. Counted in the census tallies below; too thin to justify its own record."
+        },
+        {
+          "url": "https://mobbin.com/screens/892561b5-a555-49d4-920c-d9d3458117f0",
+          "app": "VEED",
+          "reason": "Failure illustration drawn in the brand blue with an unfilled Try Again. Counted in the census tallies below; its facts are carried by obs-midday-error-escape-hatch-1 and obs-paypal-error-debug-id-1."
+        }
+      ],
+      "censusAcrossAllFiveFailureScreensExamined": {
+        "screensExamined": 5,
+        "screensWithASpinnerOrIndeterminateProgress": 0,
+        "screensWhereTheDominantColourIsRed": 0,
+        "screensWhereTheRecoveryControlCarriesASolidFill": 3,
+        "screensCarryingAQuotableErrorIdentifier": 1,
+        "screensWhereASuccessMarkerSurvivesTheFailure": 1,
+        "note": "Counts cover PayPal, Typeform, Midday, Threads, and VEED. The single identifier is PayPal's Debug ID; the single surviving success marker is Typeform's green completed step."
+      }
+    },
+    {
+      "surfaceKind": "conflict",
+      "status": "PARTIALLY COVERED",
+      "observationCount": 3,
+      "observationIds": [
+        "obs-air-duplicate-asset-conflict-1",
+        "obs-navattic-restore-consequence-1",
+        "obs-confluence-revert-conflict-1"
+      ],
+      "queriesUsed": [
+        "version conflict dialog asking user to keep their version or the server version"
+      ],
+      "whatWasFound": "Name-collision resolution (Air) and destructive version rollback (Navattic, Confluence, and Linear's restore path). These are genuine conflict surfaces: a human is asked to choose between two states of the same object.",
+      "notCovered": {
+        "subKind": "concurrent-edit merge conflict",
+        "description": "No reference was found for the case that matters most to an agentic product: two writers changed the same field, and the surface presents mine / theirs / merged as a three-way choice. Every result for the conflict query resolved to version history and rollback instead.",
+        "queriesTried": [
+          "version conflict dialog asking user to keep their version or the server version"
+        ],
+        "consequence": "Any NodeKit direction gate touching a concurrent-edit merge surface must declare novel-by-intent. There is no reference in this corpus for it to remix, and citing the rollback records as if they covered merge would be a false citation."
+      },
+      "examinedButNotRecorded": [
+        {
+          "url": "https://mobbin.com/screens/68e72133-daba-44cd-a4e7-2d102b73aae8",
+          "app": "Notion",
+          "reason": "Page history with a version list and Restore version / Cancel. Every fact it offers is carried in more detail by obs-linear-version-redline-1, which shows the same pattern with an inline redline and a change stepper."
+        }
+      ]
+    }
+  ],
+  "corpusGaps": [
+    {
+      "gap": "no agent-specific trust surfaces",
+      "detail": "Nothing in this sweep shows an agent asking permission before it makes an outbound call, or an agent tool-call reporting its own failure. The consent references are all human-to-application data grants and the failure references are all page-level. Our own product's data-agent-web-consent posture has no external reference behind it."
+    },
+    {
+      "gap": "no internal counter-observation for the decision-colour violations",
+      "detail": "The three decision-colour violations fixed in our own product this week are not recorded anywhere retrievable. Searched parity-studio origin/main and every local branch for trust-surface, proposal-card, pending-accent, and acceptance-colour markers over the last four days and found no commit, doc, or observation. rule-decision-colour-containment therefore cites external counter-evidence only, and names this as an outstanding gap rather than citing an observation id that does not exist."
+    },
+    {
+      "gap": "all evidence is bronze",
+      "detail": "Every external record in this sweep is M1. No rule built on it may claim that a pattern WORKS — only that shipped products do it. Promotion requires either live re-observation (M2) or an outcome measurement (M3)."
+    }
+  ],
+  "totals": {
+    "externalObservationsWritten": 20,
+    "existingRecordsBackfilledWithEvidenceTier": 3,
+    "corpusSizeAfterThisSweep": 23,
+    "distinctProductsObserved": 20,
+    "mobbinScreensExamined": 42,
+    "imagesStored": 0,
+    "perSurfaceKind": {
+      "proposal": 5,
+      "diff-review": 4,
+      "consent": 5,
+      "conflict": 3,
+      "failed-state": 3
+    }
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "id": "obs-notion-ai-inline-edit-1",
+  "source": {
+    "url": "https://mobbin.com/flows/6463d199-92a5-4dc1-a19b-14a462c90ccb",
+    "app": "Notion",
+    "surface": "page body, AI rewrite proposed inline with a disposition menu open",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "flowScreenCount": 4,
+    "attribution": "Flow curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screens."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "proposal",
+  "decisionColour": {
+    "carrier": "none",
+    "acceptControl": "Accept",
+    "acceptControlTreatment": "a plain menu row with a monochrome check glyph and a text label; no fill, no border, no colour",
+    "rejectControlTreatment": "a plain menu row of identical construction labelled Discard, with a monochrome cross glyph, plus a keyboard-shortcut hint",
+    "undecidedContainerTreatment": "the outgoing phrase is struck through in grey and the incoming phrase is set in ordinary body colour; no tint band, no coloured card",
+    "verdict": "Neither disposition carries any colour. Accept and Discard are visually identical rows differentiated only by their glyph and their label, so the surface expresses no preference between them."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "disposition-menu",
+      "property": "options",
+      "value": 4,
+      "unit": "rows",
+      "locatorDescription": "flow position 2, the dropdown below the AI input, reading Accept / Discard / Insert below / Try again; a fifth row \"Get Notion AI\" is a promotion, not a disposition"
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "accept-and-discard-rows",
+      "property": "visual-differentiation",
+      "value": "glyph and label only; identical background, identical type, identical row height, no fill on either",
+      "unit": null,
+      "locatorDescription": "flow position 2, the first two rows of the dropdown"
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "discard-row",
+      "property": "carries",
+      "value": "a right-aligned keyboard-shortcut hint reading Escape",
+      "unit": null,
+      "locatorDescription": "flow position 2, the row labelled \"Discard\", far right of the row"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "accept-row",
+      "property": "carries",
+      "value": "no keyboard-shortcut hint, so the cheap-to-press shortcut is bound to the reversible disposition and not to the committing one",
+      "unit": null,
+      "locatorDescription": "flow position 2, compare the right edge of the \"Accept\" row against the right edge of the \"Discard\" row"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "outgoing-text",
+      "property": "treatment-while-pending",
+      "value": "grey type with a strikethrough rule, retained inline",
+      "unit": null,
+      "locatorDescription": "flow position 2, the \"Tone of Voice\" list, the struck words \"apologetic about\" inside the Confident bullet"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "incoming-text",
+      "property": "treatment-while-pending",
+      "value": "ordinary body colour, no highlight band, set immediately after the struck outgoing text",
+      "unit": null,
+      "locatorDescription": "flow position 2, the words \"apologizing for\" directly after the struck run in the Confident bullet"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "ai-input-bar",
+      "property": "trailing-affordances",
+      "value": 4,
+      "unit": "glyphs",
+      "locatorDescription": "flow position 2, right end of the field reading \"Ask AI anything...\": a scope chip labelled \"Current page\", an @ glyph, a thumbs-up glyph, a thumbs-down glyph, and a send arrow"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "ai-input-bar",
+      "property": "declares-scope-as",
+      "value": "a named chip stating which body of content the request will read",
+      "unit": null,
+      "locatorDescription": "flow position 2, the chip reading \"Current page\" inside the AI input bar"
+    },
+    {
+      "id": "f9",
+      "kind": "choreography",
+      "subject": "proposal-lifecycle",
+      "property": "state-sequence",
+      "value": "position 1 plain bullet -> position 2 struck outgoing text plus incoming text plus an open disposition menu -> position 3 single settled bullet with no strike, no menu, no residual marker",
+      "unit": null,
+      "locatorDescription": "the Confident bullet under \"Tone of Voice\" across the flow"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "accepted-text",
+      "property": "residual-marking",
+      "value": "none; the settled bullet reads \"Confident: We speak with authority, never apologizing for our creative choices.\" with no tint and no badge",
+      "unit": null,
+      "locatorDescription": "flow position 3, first bullet under \"Tone of Voice\""
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "proposal-surface",
+      "property": "occludes",
+      "value": "the menu covers the two bullets beneath the changed one, so the pending decision hides adjacent unchanged content",
+      "unit": null,
+      "locatorDescription": "flow position 2, the dropdown overlapping the Authentic and Edgy bullets"
+    }
+  ],
+  "problemTags": [
+    "pending-decision-legibility",
+    "edit-in-context",
+    "no-residue-after-decision",
+    "keyboard-reachable-disposition"
+  ],
+  "intentTags": ["decide-without-leaving-the-line", "reverse-cheaply"],
+  "layoutTags": ["inline-redline", "anchored-dropdown"],
+  "interactionTags": ["accept-reject", "colourless-dispositions", "keyboard-shortcut-on-reject"]
+}

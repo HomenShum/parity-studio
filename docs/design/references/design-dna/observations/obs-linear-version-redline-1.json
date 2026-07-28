@@ -1,0 +1,148 @@
+{
+  "id": "obs-linear-version-redline-1",
+  "source": {
+    "url": "https://mobbin.com/screens/6c14e085-9ff5-4e61-9a21-b04f1b0a3433",
+    "app": "Linear",
+    "surface": "document version history, an older version redlined against the current one, restore not yet chosen",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "diff-review",
+  "alsoCovers": ["conflict"],
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Restore version",
+    "acceptControlTreatment": "a filled control in the product's blue, rendered at noticeably lower saturation than the blue of the enabled Highlight-changes toggle sitting in the same bar",
+    "rejectControlTreatment": "Close, set as unfilled label text immediately to its left",
+    "undecidedContainerTreatment": "inserted text sits on a pale blue tint and deleted text is struck through in grey; changed paragraphs carry a blue rule in the left margin. The tint marks WHICH TEXT CHANGED and is applied to the historical version being previewed, not to the decision",
+    "verdict": "The same blue is used for the change tint, the margin rules, the toggle, and the restore button. Because three of those four are non-committing, the button relies on shape and label rather than hue to be identified as the decision — the weakest hue separation in the observed set."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "inserted-text",
+      "property": "treatment",
+      "value": "pale blue tint band behind the run, text in ordinary colour",
+      "unit": null,
+      "locatorDescription": "section \"1. Overview\", the runs reading \"that centralizes\" and \"into a single view\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "deleted-text",
+      "property": "treatment",
+      "value": "grey type with a strikethrough rule, left inline between the surviving words",
+      "unit": null,
+      "locatorDescription": "section \"1. Overview\", the struck run reading \"designed to help product and design teams gain a centralized view of\""
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "changed-paragraph",
+      "property": "marked-by",
+      "value": "a vertical blue rule in the left margin spanning the paragraph's full height",
+      "unit": null,
+      "locatorDescription": "left edge of the two paragraphs under \"1. Overview\", outside the text column"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "unchanged-sections",
+      "property": "treatment",
+      "value": "no tint, no margin rule; sections 2 and 3 are rendered exactly as ordinary document text",
+      "unit": null,
+      "locatorDescription": "the headings \"2. Problem Statement\" and \"3. Objective\" and their bodies"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "change-navigation",
+      "property": "expressed-as",
+      "value": "a position-of-total counter with previous and next chevrons",
+      "unit": null,
+      "locatorDescription": "bottom bar of the modal, reading \"1 of 3\" between two chevron glyphs"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "redline-marking",
+      "property": "dismissible-by",
+      "value": "a labelled toggle in the bottom bar, so the reader can read the historical version as unmarked prose without leaving the comparison",
+      "unit": null,
+      "locatorDescription": "bottom bar, the switch labelled \"Highlight changes\", shown in its on position"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "bottom-bar",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "bottom right of the modal, reading \"Close\" and \"Restore version\""
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "version-list",
+      "property": "grouping",
+      "value": "grouped under relative-time headings with absolute timestamps on each entry",
+      "unit": null,
+      "locatorDescription": "right rail, the headings \"Today\" and \"1 week ago\" above entries reading \"Apr 10, 2026 3:04 PM\" and \"Mar 31, 2026 10:17 AM\""
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "current-version",
+      "property": "marked-by",
+      "value": "a pill reading \"Latest\" on its row in the version list",
+      "unit": null,
+      "locatorDescription": "right rail, top entry, right edge"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "version-entry",
+      "property": "carries",
+      "value": "an author avatar and name beneath the timestamp, so every version names a person",
+      "unit": null,
+      "locatorDescription": "right rail, the line reading \"Alex Smith\" under each timestamp"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "modal-header",
+      "property": "names-the-subject",
+      "value": "the full document title is repeated in the header rather than a generic label such as History",
+      "unit": null,
+      "locatorDescription": "top of the modal, reading \"Version history for Product Document - User Insight & Behavior Analytics Dashboard\""
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "restore-control",
+      "property": "saturation-relative-to-toggle",
+      "value": "lower; the filled Restore version control is a paler blue than the Highlight-changes toggle in the same bar",
+      "unit": null,
+      "locatorDescription": "bottom bar of the modal, comparing the switch at the left against the button at the right"
+    }
+  ],
+  "problemTags": [
+    "review-a-change-before-committing",
+    "compare-against-history",
+    "navigate-many-changes-in-order"
+  ],
+  "intentTags": ["see-what-this-version-said", "step-through-every-difference", "restore-or-leave"],
+  "layoutTags": ["modal-with-version-rail", "inline-redline", "persistent-bottom-bar"],
+  "interactionTags": ["change-stepper", "toggle-redline-off", "restore-or-close"]
+}

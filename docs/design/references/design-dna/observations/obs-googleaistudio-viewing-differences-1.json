@@ -1,0 +1,129 @@
+{
+  "id": "obs-googleaistudio-viewing-differences-1",
+  "source": {
+    "url": "https://mobbin.com/screens/3430ca7f-87b3-4475-ba40-fe8258cf2687",
+    "app": "Google AI Studio",
+    "surface": "Viewing differences modal, per-file accordion with the first file expanded against an empty prior snapshot",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "diff-review",
+  "decisionColour": {
+    "carrier": "none-observed",
+    "acceptControl": "no accept, apply, or revert control is present on this surface",
+    "acceptControlTreatment": "not applicable — the modal only reads out what an agent already changed; the only exit is a close glyph",
+    "rejectControlTreatment": "not applicable",
+    "undecidedContainerTreatment": "green tint marks added lines only; nothing on the surface is awaiting a decision",
+    "verdict": "An after-the-fact change report rather than a pre-commitment review. Recorded deliberately as the contrasting case: when an agent's edits are shown only after they are applied, there is no decision colour to get wrong, and no decision either."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "file-list",
+      "property": "row-format",
+      "value": "filename on the first line and a signed change count on the second, with a disclosure chevron at the right",
+      "unit": null,
+      "locatorDescription": "the collapsed rows reading \".gitignore / +9 lines changed\", \"index.html / +14 lines changed\", \"metadata.json / +6 lines changed\""
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "file-list",
+      "property": "files-listed",
+      "value": 4,
+      "unit": "files",
+      "locatorDescription": "the modal body, reading .env.example, .gitignore, index.html, metadata.json, with the list continuing below the fold"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "file-list",
+      "property": "files-expanded",
+      "value": 1,
+      "unit": "files",
+      "locatorDescription": "the topmost row, \".env.example\", is open and shows its panes; the three below it are single rows"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "prior-snapshot-pane",
+      "property": "renders-absence-as",
+      "value": "a field of diagonal hatching rather than empty white space, so 'there was nothing here' is drawn rather than left blank",
+      "unit": null,
+      "locatorDescription": "left pane of the expanded .env.example file, the striped area filling most of the pane"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "prior-snapshot-pane",
+      "property": "labelled-by",
+      "value": "an explicit snapshot timestamp printed above the pane",
+      "unit": null,
+      "locatorDescription": "left pane header, reading \"Snapshot at Jan 1, 1970, 7:00:00 AM - Jan 1, 7:00 AM\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "prior-snapshot-pane",
+      "property": "carries",
+      "value": "a solid pink band aligned to the vertical position of the corresponding added block in the right pane, so removal and addition line up horizontally",
+      "unit": null,
+      "locatorDescription": "left pane of the expanded file, the pink horizontal band near the top of the hatched area"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "current-pane",
+      "property": "added-line-treatment",
+      "value": "a pale green band behind the run of added lines, monospace text, no per-line plus signs visible",
+      "unit": null,
+      "locatorDescription": "right pane of the expanded file, the green blocks containing GEMINI_API_KEY and APP_URL"
+    },
+    {
+      "id": "f8",
+      "kind": "count",
+      "subject": "current-pane",
+      "property": "distinct-green-blocks",
+      "value": 2,
+      "unit": "blocks",
+      "locatorDescription": "right pane of the expanded file, separated by an untinted blank line between the GEMINI_API_KEY block and the APP_URL block"
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "modal-title",
+      "property": "wording",
+      "value": "\"Viewing differences\" — a present-participle reading label, not a call to decide",
+      "unit": null,
+      "locatorDescription": "top left of the modal"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "modal",
+      "property": "backdrop-treatment",
+      "value": "the underlying application remains visible and unblurred behind the modal at reduced contrast",
+      "unit": null,
+      "locatorDescription": "the calendar grid and the right-hand panel visible around the edges of the modal"
+    }
+  ],
+  "problemTags": [
+    "report-what-an-agent-changed",
+    "render-absence-not-emptiness",
+    "many-files-one-summary"
+  ],
+  "intentTags": ["audit-an-agent-edit-after-the-fact", "scan-file-by-file"],
+  "layoutTags": ["modal-accordion", "two-pane-per-file"],
+  "interactionTags": ["expand-file-to-see-diff", "read-only-review"]
+}

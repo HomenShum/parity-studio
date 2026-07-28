@@ -1,0 +1,121 @@
+{
+  "id": "obs-typeform-error-progress-1",
+  "source": {
+    "url": "https://mobbin.com/screens/8648a5cd-9308-4456-b2b9-76433af2e70f",
+    "app": "Typeform",
+    "surface": "failure inside a two-step flow, with the flow's own progress indicator still visible",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "failed-state",
+  "recordedAs": "mixed-instance",
+  "decisionColour": {
+    "carrier": "button-and-a-surviving-success-marker",
+    "acceptControl": "Try again",
+    "acceptControlTreatment": "solid dark green fill with a white label",
+    "rejectControlTreatment": "none; a close glyph at the top right is the only exit",
+    "undecidedContainerTreatment": "the failure message area is plain white with no tint, but the step indicator at the foot of the page still shows step 1 as a filled green check",
+    "verdict": "A mixed instance. The failure region itself is neutral and the recovery button is the only filled control, which is correct. But a success-coloured completion marker survives on the same screen: the green tick on step \"Login\" persists while the flow is in a failed state, so one region of the page asserts progress while another reports failure. This is the failure mode our own trust-surfaces gate exists to catch, occurring in a shipped product."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "step-indicator",
+      "property": "steps",
+      "value": 2,
+      "unit": "steps",
+      "locatorDescription": "bottom centre of the viewport, reading \"Login\" then \"Finish\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "step-indicator-step-1",
+      "property": "state-during-the-failure",
+      "value": "a filled green circle containing a check glyph, that is, the completed treatment",
+      "unit": null,
+      "locatorDescription": "bottom centre, the circle immediately left of the word \"Login\""
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "step-indicator-step-2",
+      "property": "state-during-the-failure",
+      "value": "a filled blue circle containing the numeral 2, that is, the current-step treatment; no step carries a failed treatment",
+      "unit": null,
+      "locatorDescription": "bottom centre, the circle immediately left of the word \"Finish\""
+    },
+    {
+      "id": "f4",
+      "kind": "count",
+      "subject": "step-indicator",
+      "property": "steps-rendered-in-a-failed-state",
+      "value": 0,
+      "unit": "steps",
+      "locatorDescription": "bottom centre; neither circle is red, struck, or otherwise marked despite the failure above it"
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "failure-message",
+      "property": "wording",
+      "value": "two short lines, \"Oops! Something went wrong.\" then \"Try again\", with the second line repeating the button label as prose",
+      "unit": null,
+      "locatorDescription": "centre of the viewport, beneath the illustration"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "recovery-control",
+      "property": "fill-treatment",
+      "value": "solid dark green — the same family a success state would use, applied here to a recovery action",
+      "unit": null,
+      "locatorDescription": "the button labelled \"Try again\" beneath the message"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "elements-with-a-spinner-or-progress-animation",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the full content area between the close glyph and the step indicator"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "failure-illustration",
+      "property": "treatment",
+      "value": "a hand-drawn figure with hands on its head, in a two-colour line style, positioned above the message",
+      "unit": null,
+      "locatorDescription": "centre of the viewport, above the words \"Oops! Something went wrong.\""
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "failure-message",
+      "property": "carries-a-cause-or-identifier",
+      "value": "no; there is no error code, no correlation id, and no statement of what failed",
+      "unit": null,
+      "locatorDescription": "the two message lines beneath the illustration"
+    }
+  ],
+  "problemTags": [
+    "failure-must-not-read-as-success",
+    "progress-indicator-contradicts-the-state",
+    "failure-must-not-read-as-loading"
+  ],
+  "intentTags": ["try-again", "understand-where-i-am-in-the-flow"],
+  "layoutTags": ["centred-failure-column", "persistent-step-indicator"],
+  "interactionTags": ["single-retry", "static-failure-no-motion", "surviving-success-marker"]
+}

@@ -1,0 +1,100 @@
+id: rule-failed-state-carries-no-success-marker-1
+statement: >-
+  A surface whose declared state is failed must carry no indeterminate motion anywhere on it, and no
+  region of it may remain in a completion treatment. A spinner on a failed surface claims the system
+  is still working; a surviving green checkmark claims part of the job succeeded. Both are false
+  statements rendered as styling, and both are defects rather than polish issues.
+
+mechanismHypothesis: >-
+  Failure, loading, and success are three states a reader distinguishes almost entirely by motion and
+  colour, not by copy — the sentence is read second, if at all. Motion is the strongest of the three
+  cues, which is why an indeterminate spinner overrides any amount of failure text: the reader waits
+  instead of acting. A completion marker is the second strongest, and it is more dangerous than a
+  spinner because it does not resolve. The spinner eventually contradicts itself; a green tick on a
+  step that did not complete keeps asserting progress for as long as the page is open.
+
+  The corpus supports the motion half strongly and the marker half by a single unambiguous counter-instance.
+  Across the five failure screens examined, not one carried a spinner or indeterminate progress
+  indicator, and not one used red as the dominant page colour — failure was carried by the words and
+  by a small static glyph, with the page itself left neutral. That is a consistent convention across
+  five unrelated products.
+
+  The marker half is where a shipped product got it wrong in a way we can point at. Typeform's
+  failure screen keeps its two-step progress indicator visible, with step 1 rendered as a filled
+  green circle containing a check and step 2 as the current-step blue. No step carries a failed
+  treatment. The result is that the foot of the page asserts "Login completed, you are on Finish"
+  while the centre of the page says something went wrong. The two regions have different writers and
+  they are permitted to disagree — which is the same structural defect as the data-ns-theme collision
+  named in the trust-surfaces skill, appearing here as a state contradiction rather than an attribute
+  one.
+
+  A secondary observation, not part of the statement but adjacent to it: only one of the five failure
+  screens carried an identifier the reader could quote to support. A failed state that cannot be
+  reported is inspectable to nobody, which is clause 1 of trust-surfaces failing on the surface where
+  it matters most.
+
+confidence: medium
+# Medium. The motion half is well supported — five of five, unanimous, across unrelated products —
+# but unanimity in a curated gallery is weak evidence for a negative: Mobbin captures still frames,
+# so a spinner that runs for 400ms would not appear in any of them. The claim "these products do not
+# animate their failure states" is therefore only as strong as the assumption that a captured frame
+# represents the steady state, and that assumption is untested.
+#
+# The marker half rests on a single counter-instance. One unambiguous violation in a shipped product is
+# enough to show the failure mode is real and reachable; it is not enough to say how common it is.
+# Raising confidence requires either live observation of failure states with motion actually
+# recorded (M2), or a count across enough surfaces to know whether Typeform is typical or unusual.
+
+appliesWhen:
+  - a surface, region, or component whose declared state is failed, unavailable, or partially failed
+  - a failed step inside a multi-step flow that renders its own progress indicator
+  - an agent tool call or run that terminated without producing its result
+
+doesNotApplyWhen:
+  - the surface is genuinely still loading and says so — motion is correct there, and removing it would be the opposite defect
+  - a retry is in flight after the user pressed the recovery control; that is a loading state again, and the failed state has ended
+  - a step that genuinely did complete before a later step failed, PROVIDED the failed step also carries a failed treatment so the indicator as a whole is not claiming uniform progress
+
+evidence:
+  supportingObservationIds:
+    - obs-paypal-error-debug-id-1
+    - obs-midday-error-escape-hatch-1
+  citedFacts:
+    # No motion on the failure surface.
+    - obs-paypal-error-debug-id-1/f5 = "elements with a spinner or progress indicator = 0"
+    - obs-midday-error-escape-hatch-1/f5 = "elements with a spinner or progress animation = 0"
+    # Failure carried by words and a static glyph, not by a colour wash.
+    - obs-paypal-error-debug-id-1/f6 = "failure glyph drawn in the product's violet and blue, not in red"
+    - obs-midday-error-escape-hatch-1/f6 = "illustrations or glyphs = 0; heading, two body lines, two buttons"
+    # Copy is a styling channel: the remedy is hedged rather than promised.
+    - obs-paypal-error-debug-id-1/f4 = "'may help fix the problem' rather than asserting retry will work"
+    - obs-midday-error-escape-hatch-1/f4 = "names the condition for escalating instead of retrying"
+    # The inspectability half, supported once and absent twice.
+    - obs-paypal-error-debug-id-1/f1 = "a labelled correlation identifier printed as selectable body text"
+    - obs-paypal-error-debug-id-1/f2 = "shown by default, not behind a details disclosure"
+
+  counterObservationIds:
+    - obs-typeform-error-progress-1
+  counterFacts:
+    - obs-typeform-error-progress-1/f2 = "step 1 renders as a filled green circle with a check DURING the failure"
+    - obs-typeform-error-progress-1/f4 = "steps rendered in a failed state = 0, despite the failure above the indicator"
+    - obs-typeform-error-progress-1/f3 = "step 2 renders in the current-step treatment, so the flow claims to be progressing"
+    - obs-typeform-error-progress-1/f9 = "no error code, no correlation id, no statement of what failed"
+
+  censusFacts:
+    # From coverage-trust-surfaces.json, across all five failure screens examined including the two
+    # not given their own records.
+    - "screens examined = 5"
+    - "screens with a spinner or indeterminate progress = 0"
+    - "screens where the dominant colour is red = 0"
+    - "screens carrying a quotable error identifier = 1"
+    - "screens where a success marker survives the failure = 1"
+
+rubric:
+  dimension: failed-state-honesty
+  levels:
+    0: the failed surface animates, or a completion marker elsewhere on it asserts success — the surface is lying about which state the system is in
+    1: no motion, but a success marker survives somewhere on the surface without the failed step being marked failed
+    2: no motion and no surviving success marker, but no cause, code, or identifier the reader can report
+    3: level 2, plus a quotable identifier or named cause, and copy that hedges the remedy rather than promising it
+    4: level 3, plus the failed state is declared in the DOM as a data attribute so an inspecting agent reads the same state the human does

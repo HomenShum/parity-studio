@@ -1,0 +1,120 @@
+{
+  "id": "obs-paypal-error-debug-id-1",
+  "source": {
+    "url": "https://mobbin.com/screens/71044211-2f4a-4b72-a66f-867a5ea94b35",
+    "app": "PayPal",
+    "surface": "full-page failure state carrying a correlation identifier",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "failed-state",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Retry",
+    "acceptControlTreatment": "solid fill in the product's primary blue with a white label",
+    "rejectControlTreatment": "none; the only alternative is the persistent site navigation in the footer",
+    "undecidedContainerTreatment": "the page is plain white with no tinted banner, no red panel, and no card around the message",
+    "verdict": "The retry control carries the product's ordinary primary fill. The failure itself is carried by the words and by a small illustration containing a cross glyph, not by a colour wash — so the page reads as failed without the page becoming red."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "failure-state",
+      "property": "carries-a-correlation-identifier",
+      "value": "yes; a labelled alphanumeric id printed as selectable body text between the explanation and the button",
+      "unit": null,
+      "locatorDescription": "centre of the page, the line reading \"Debug ID: f8482509254bd\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "correlation-identifier",
+      "property": "presentation",
+      "value": "shown by default rather than hidden behind a details disclosure",
+      "unit": null,
+      "locatorDescription": "the Debug ID line sits in the main content column with no expander above it"
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "text-blocks",
+      "value": 3,
+      "unit": "blocks",
+      "locatorDescription": "the heading \"Something went wrong\", the sentence \"This happens sometimes. Trying again may help fix the problem.\", and the Debug ID line"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "explanation-sentence",
+      "property": "sets-expectation-about-the-remedy",
+      "value": "hedged rather than promised — \"may help fix the problem\" instead of asserting that retrying will work",
+      "unit": null,
+      "locatorDescription": "the sentence directly beneath the heading"
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "elements-with-a-spinner-or-progress-indicator",
+      "value": 0,
+      "unit": "elements",
+      "locatorDescription": "the full content column between the header bar and the footer"
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "failure-glyph",
+      "property": "treatment",
+      "value": "a small illustration of a window containing a cross, drawn in the product's violet and blue, not in red",
+      "unit": null,
+      "locatorDescription": "directly above the heading"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "failure-page",
+      "property": "recovery-actions",
+      "value": 1,
+      "unit": "controls",
+      "locatorDescription": "the single filled button labelled \"Retry\" beneath the Debug ID"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "site-chrome",
+      "property": "retained-during-failure",
+      "value": "the brand header bar and the full footer navigation remain; the failure replaces the content region only",
+      "unit": null,
+      "locatorDescription": "the blue header strip at the top and the Help / Contact / Sitemap / Fees / Security row at the bottom"
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "heading",
+      "property": "avoids-a-status-code",
+      "value": "written as a plain sentence with no HTTP code or internal error name in the visible copy",
+      "unit": null,
+      "locatorDescription": "the heading \"Something went wrong\""
+    }
+  ],
+  "problemTags": [
+    "failure-must-not-read-as-loading",
+    "failure-must-be-reportable",
+    "recover-without-losing-the-site"
+  ],
+  "intentTags": ["try-again", "get-help-with-a-quotable-reference"],
+  "layoutTags": ["centred-failure-column", "chrome-retained"],
+  "interactionTags": ["single-retry", "static-failure-no-motion"]
+}

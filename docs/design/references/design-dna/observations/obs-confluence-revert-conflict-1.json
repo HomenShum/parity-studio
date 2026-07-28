@@ -1,0 +1,156 @@
+{
+  "id": "obs-confluence-revert-conflict-1",
+  "source": {
+    "url": "https://mobbin.com/screens/b405410d-7a2d-4bd6-b44d-4efa934e0dec",
+    "app": "Confluence",
+    "surface": "version history table with a revert confirmation open over it, unsaved-change warning stated",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "conflict",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "OK",
+    "acceptControlTreatment": "solid red fill with a white label",
+    "rejectControlTreatment": "Cancel, unfilled label text to its right",
+    "undecidedContainerTreatment": "the dialog body and the pre-filled comment field are plain white with a neutral border; no red tint on the field or the body",
+    "verdict": "Decision colour on the button only, but the ordering is inverted relative to Navattic: here the committing red button sits LEFT of Cancel, so the destructive control occupies the position the eye reaches first."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "confirmation-body",
+      "property": "hedges-the-consequence",
+      "value": "\"Some changes may not have been saved\" — the dialog states uncertainty about the loss rather than enumerating it",
+      "unit": null,
+      "locatorDescription": "the dialog body beneath the title \"Revert\""
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "confirmation-dialog",
+      "property": "collects-an-annotation",
+      "value": "a text field pre-filled with a generated summary of the action, editable before committing",
+      "unit": null,
+      "locatorDescription": "the input inside the dialog containing the text \"Reverted from v. 2\""
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "confirmation-dialog",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "bottom right of the dialog, reading \"OK\" then \"Cancel\""
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "action-row-ordering",
+      "property": "value",
+      "value": "the committing control is placed LEFT of the cancelling one",
+      "unit": null,
+      "locatorDescription": "bottom right of the dialog, the red \"OK\" preceding the plain \"Cancel\""
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "dialog-title",
+      "property": "carries",
+      "value": "a coloured warning diamond glyph immediately left of the word Revert",
+      "unit": null,
+      "locatorDescription": "top left of the dialog"
+    },
+    {
+      "id": "f6",
+      "kind": "count",
+      "subject": "version-table",
+      "property": "columns",
+      "value": 7,
+      "unit": "columns",
+      "locatorDescription": "the header row reading Select / Version / Date / Changed By / Status / Comment / Actions"
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "version-table",
+      "property": "rows",
+      "value": 3,
+      "unit": "rows",
+      "locatorDescription": "reading \"Current (v. 3)\", \"v. 2\", \"v. 1\""
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "current-version-row",
+      "property": "marked-by",
+      "value": "the word \"Current\" printed before the version number in the Version cell, not by a colour or a badge",
+      "unit": null,
+      "locatorDescription": "the first data row, Version column, reading \"Current (v. 3)\""
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "version-status",
+      "property": "expressed-as",
+      "value": "a dot glyph plus the abbreviation WIP in the Status column of every row",
+      "unit": null,
+      "locatorDescription": "the Status column of all three data rows"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "version-date",
+      "property": "expressed-as",
+      "value": "relative time only, with no absolute timestamp in the cell",
+      "unit": null,
+      "locatorDescription": "the Date column, reading \"Less than a minute ago\", \"A minute ago\", \"6 minutes ago\""
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "per-row-actions",
+      "property": "rendered-as",
+      "value": "plain text links separated by a middot, including the destructive one",
+      "unit": null,
+      "locatorDescription": "the Actions column, reading \"Restore · Delete\" on each row"
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "comparison-constraint",
+      "property": "stated-as",
+      "value": "a sentence above the table naming the limit before the user selects, rather than an error after they exceed it",
+      "unit": null,
+      "locatorDescription": "above the compare controls, reading \"Only 2 versions can be compared at a time\""
+    },
+    {
+      "id": "f13",
+      "kind": "count",
+      "subject": "version-history-page",
+      "property": "compare-control-placements",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "\"Compare selected versions\" appears once above the table and once below it"
+    }
+  ],
+  "problemTags": [
+    "version-conflict-resolution",
+    "irreversible-decision",
+    "constraint-stated-before-violation"
+  ],
+  "intentTags": ["roll-back-deliberately", "annotate-why"],
+  "layoutTags": ["dialog-over-table", "duplicated-action-rows"],
+  "interactionTags": ["confirm-with-comment", "destructive-fill-on-commit", "commit-left-of-cancel"]
+}

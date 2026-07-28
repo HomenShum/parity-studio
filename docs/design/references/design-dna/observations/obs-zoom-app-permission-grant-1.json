@@ -1,0 +1,149 @@
+{
+  "id": "obs-zoom-app-permission-grant-1",
+  "source": {
+    "url": "https://mobbin.com/screens/a1e635f3-8c4d-4fd1-b366-9ceb997ea27a",
+    "app": "Zoom",
+    "surface": "third-party app authorisation, data-egress scopes listed and not yet granted",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "consent",
+  "decisionColour": {
+    "carrier": "button-only",
+    "acceptControl": "Allow",
+    "acceptControlTreatment": "solid blue fill with a white label",
+    "rejectControlTreatment": "Decline, an outlined control of the same size and shape with no fill, placed immediately to the right of Allow",
+    "undecidedContainerTreatment": "the scope card is plain white with a hairline border and carries no tint of the grant colour",
+    "optionalGrantDefault": "unchecked — the additional-permission checkbox is in its off state before the user acts",
+    "verdict": "The only consent surface in this corpus where an optional grant is NOT pre-granted. The grant colour is confined to the Allow button, the scope card stays neutral, and the two dispositions are the same size so only the fill distinguishes them."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "scope-list",
+      "property": "grouped-by",
+      "value": "whose data it is, using two written subheadings rather than by feature or by API name",
+      "unit": null,
+      "locatorDescription": "inside the card headed \"App can view information\", the subheadings \"Associated with you\" and \"Associated with you and others who participate in Zoom experiences with you\""
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "scope-list",
+      "property": "scopes-affecting-only-the-signed-in-user",
+      "value": 2,
+      "unit": "rows",
+      "locatorDescription": "under the subheading \"Associated with you\", reading \"Profile & Contact Information\" and \"Settings\""
+    },
+    {
+      "id": "f3",
+      "kind": "count",
+      "subject": "scope-list",
+      "property": "scopes-affecting-other-people",
+      "value": 1,
+      "unit": "rows",
+      "locatorDescription": "under the subheading \"Associated with you and others who participate in Zoom experiences with you\", reading \"Product Usage\""
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "scope-row",
+      "property": "affordance",
+      "value": "each row carries a leading category glyph and a trailing disclosure chevron, so the scope can be expanded before deciding",
+      "unit": null,
+      "locatorDescription": "the rows \"Profile & Contact Information\", \"Settings\", \"Product Usage\""
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "review-status",
+      "property": "disclosed-as",
+      "value": "a bordered note above the scopes stating the app has not been reviewed or evaluated by the platform",
+      "unit": null,
+      "locatorDescription": "the grey callout headed \"Note\", first bullet, beginning \"This app and its use of your data have not been reviewed or evaluated by Zoom\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "background-access",
+      "property": "disclosed-as",
+      "value": "a second bullet in the same note stating access continues when the app is not in use",
+      "unit": null,
+      "locatorDescription": "the grey callout headed \"Note\", second bullet, reading \"App can access and manage this information even when not using the app.\""
+    },
+    {
+      "id": "f7",
+      "kind": "count",
+      "subject": "note-callout",
+      "property": "disclosure-bullets",
+      "value": 2,
+      "unit": "bullets",
+      "locatorDescription": "the grey callout headed \"Note\", above the heading \"Manage App Permissions\""
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "optional-additional-grant",
+      "property": "default-state",
+      "value": "unchecked; the user must act to widen the grant",
+      "unit": null,
+      "locatorDescription": "beneath the scope card, the checkbox labelled \"Allow this app to use my shared access permissions.\""
+    },
+    {
+      "id": "f9",
+      "kind": "relationship",
+      "subject": "account-identity",
+      "property": "shown-as",
+      "value": "the signed-in address printed at the top with a Switch Account link beside it, so the grantor is named before the grant",
+      "unit": null,
+      "locatorDescription": "top of the page, the row reading \"samlee.mobbin@gmail.com\" with \"Switch Account\" at the right"
+    },
+    {
+      "id": "f10",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "bottom of the page, reading \"Allow\" and \"Decline\""
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "action-row-dispositions",
+      "property": "size-relationship",
+      "value": "equal height and comparable width; only the fill differs between Allow and Decline",
+      "unit": null,
+      "locatorDescription": "bottom of the page, comparing the two adjacent controls"
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "legal-consequence",
+      "property": "stated-as",
+      "value": "a sentence naming the exact control that commits the grant, plus where to revoke it later",
+      "unit": null,
+      "locatorDescription": "above the buttons, reading \"By clicking Allow, you give permission to this app to use your information in accordance ... You can remove this app at any time in My Apps.\""
+    }
+  ],
+  "problemTags": [
+    "data-egress-consent",
+    "whose-data-is-leaving",
+    "informed-before-granting",
+    "revocation-path-stated-up-front"
+  ],
+  "intentTags": ["understand-what-leaves", "grant-or-refuse"],
+  "layoutTags": ["single-column-consent", "grouped-scope-card", "sticky-action-row"],
+  "interactionTags": ["expandable-scopes", "opt-in-not-opt-out", "equal-weight-dispositions"]
+}

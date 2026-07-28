@@ -1,0 +1,132 @@
+{
+  "id": "obs-sana-ai-document-edit-1",
+  "source": {
+    "url": "https://mobbin.com/flows/51788826-a888-4d7c-8b74-c19556b6c228",
+    "app": "Sana AI",
+    "surface": "chat rail plus document pane, whole-document rewrite pending with the affected region highlighted",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "flowScreenCount": 5,
+    "attribution": "Flow curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screens."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "proposal",
+  "decisionColour": {
+    "carrier": "container-tinted-but-not-in-the-accept-hue",
+    "acceptControl": "not visible as a labelled button on the observed screens; the pending operation is headed by a restated instruction pill with a submit arrow",
+    "acceptControlTreatment": "not observed — recorded as unknown rather than guessed",
+    "rejectControlTreatment": "not observed — recorded as unknown rather than guessed",
+    "undecidedContainerTreatment": "every line of the document body, including the table cells, is covered by a single pale violet highlight band; the highlight spans the entire scope the operation will touch",
+    "postAcceptTreatment": "the violet highlight is removed entirely and the rewritten document is set in ordinary body colour",
+    "verdict": "This is the one observed reference where the undecided CONTAINER is tinted rather than only a button. Crucially the tint is violet, a scope marker, and is not the hue any accept control uses anywhere in the product. The container colour answers 'what will be changed', not 'has this been approved'."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "relationship",
+      "subject": "pending-operation",
+      "property": "scope-indicated-by",
+      "value": "a continuous pale violet highlight painted over every line the operation will rewrite, including heading rows and table cells",
+      "unit": null,
+      "locatorDescription": "flow position 2, right pane, from the line \"Subject: Kickoff Recap\" down through the Action items table rows"
+    },
+    {
+      "id": "f2",
+      "kind": "relationship",
+      "subject": "pending-operation",
+      "property": "instruction-restated-as",
+      "value": "a pill at the top of the highlighted region repeating the request in the user's own words",
+      "unit": null,
+      "locatorDescription": "flow position 2, right pane, the pill reading \"Shorten the following email to be as concise as p...\" with a trailing arrow glyph"
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "highlight-hue",
+      "property": "relationship-to-accept-hue",
+      "value": "violet; it is not green and not the product's confirmation colour, so the tint cannot be read as approval",
+      "unit": null,
+      "locatorDescription": "flow position 2, right pane, the band covering the document body"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "generated-sentence",
+      "property": "provenance-marking",
+      "value": "an inline grey source chip printed immediately after the sentence, naming the source document",
+      "unit": null,
+      "locatorDescription": "flow position 1 and 3, right pane, the repeated chips reading \"MINUTES OF MEETING PROJECT AS ...\" trailing sentences in the body and in the table cells"
+    },
+    {
+      "id": "f5",
+      "kind": "count",
+      "subject": "source-chips",
+      "property": "consecutive-chips-on-a-single-paragraph",
+      "value": 3,
+      "unit": "chips",
+      "locatorDescription": "flow position 1, right pane, the run of chips following the paragraph beginning \"On the technical side, we confirmed the move toward a serverless architecture\""
+    },
+    {
+      "id": "f6",
+      "kind": "choreography",
+      "subject": "proposal-lifecycle",
+      "property": "state-sequence",
+      "value": "position 1 document with provenance chips and no highlight -> position 2 whole affected region under one violet band with the instruction restated -> position 3 rewritten document, highlight gone, chips gone from the shortened prose",
+      "unit": null,
+      "locatorDescription": "the right pane across the flow"
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "document-pane-header",
+      "property": "carries",
+      "value": "a save-state line and two export affordances beside the title",
+      "unit": null,
+      "locatorDescription": "top of the right pane, reading \"**Follow-up email draft**\" with \"Updated today at 12:15\" beneath, and buttons \"Open in Google Docs\" and \"Share\" at the right"
+    },
+    {
+      "id": "f8",
+      "kind": "relationship",
+      "subject": "rewritten-output",
+      "property": "structural-change",
+      "value": "prose paragraphs are replaced by a labelled bullet list (Goal / Strategy / Data & delivery / Risk-control), and the Action items table loses its Notes column",
+      "unit": null,
+      "locatorDescription": "compare flow position 1 and flow position 3, right pane, the section headed \"Quick recap:\" and the table beneath \"Action items\""
+    },
+    {
+      "id": "f9",
+      "kind": "count",
+      "subject": "action-items-table",
+      "property": "columns-before-and-after-the-rewrite",
+      "value": "4 before, 3 after",
+      "unit": "columns",
+      "locatorDescription": "right pane, the table headed Task / Owner / Deadline / Notes at flow position 1 and Task / Owner / Deadline at flow position 3"
+    },
+    {
+      "id": "f10",
+      "kind": "relationship",
+      "subject": "chat-rail",
+      "property": "footer-affordances",
+      "value": "a sources control and a model-or-mode control flank the composer",
+      "unit": null,
+      "locatorDescription": "bottom of the left rail, the row reading \"+ Sources\" and \"Default\" beneath the field \"What would you like to do?\""
+    }
+  ],
+  "problemTags": [
+    "pending-decision-legibility",
+    "scope-of-a-bulk-operation",
+    "claim-provenance",
+    "no-residue-after-decision"
+  ],
+  "intentTags": ["see-what-will-be-touched", "trace-a-sentence-to-its-source"],
+  "layoutTags": ["chat-rail-plus-canvas", "whole-region-highlight"],
+  "interactionTags": ["bulk-rewrite", "scope-tint", "inline-provenance-chips"]
+}

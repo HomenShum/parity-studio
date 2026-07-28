@@ -1,0 +1,148 @@
+{
+  "id": "obs-cron-google-oauth-consent-1",
+  "source": {
+    "url": "https://mobbin.com/screens/adabd6c4-e10d-4a82-b0f3-66e0a3dad397",
+    "app": "Cron Calendar",
+    "surface": "Google OAuth scope grant, lower half of the consent screen with per-scope checkboxes and the two dispositions",
+    "capturedVia": "mobbin-live",
+    "sourcePolicyId": "mobbin",
+    "attribution": "Screen curated by Mobbin (https://mobbin.com). Inspected remotely through the Mobbin MCP under accessMode 'remote-mcp'. No image was downloaded, cached, embedded, or stored anywhere in this repository; every value below is our own reading of the rendered screen."
+  },
+  "firstSeenAt": "2026-07-28",
+  "lastVerifiedAt": "2026-07-28",
+  "evidenceTier": {
+    "tier": "bronze",
+    "level": "M1",
+    "basis": "curated-gallery",
+    "rationale": "Mobbin is a curated gallery of captured screens. It is not a live observation we made of a running product, and no audience outcome is attached, so it cannot be silver/M2 or gold/M3. Treat these facts as evidence that a shipped product once looked this way, not as evidence that it worked.",
+    "authority": "node-platform/docs/DESIGN_COUNCIL_SYNTHESIS.md"
+  },
+  "trustSurfaceKind": "consent",
+  "decisionColour": {
+    "carrier": "none",
+    "acceptControl": "Continue",
+    "acceptControlTreatment": "outlined, no fill, blue label",
+    "rejectControlTreatment": "Cancel, outlined, no fill, blue label — visually identical construction to Continue",
+    "undecidedContainerTreatment": "scope rows sit on plain white; the only saturated colour on the surface is the checked state of the scope checkboxes and an informational callout",
+    "optionalGrantDefault": "checked — every scope checkbox is in its on state before the user acts",
+    "verdict": "The strongest instance of equal-weight dispositions in the corpus: Cancel and Continue are the same size, the same shape, both outlined, neither filled, so the surface expresses no preference about which way to decide. It is also a counter-instance on defaults, because every scope arrives pre-granted."
+  },
+  "facts": [
+    {
+      "id": "f1",
+      "kind": "count",
+      "subject": "scope-list",
+      "property": "scope-rows-visible",
+      "value": 6,
+      "unit": "rows",
+      "locatorDescription": "the rows from \"See and download contact info automatically saved in your 'Other contacts'\" down to \"See and download your organisation's G Suite directory\""
+    },
+    {
+      "id": "f2",
+      "kind": "count",
+      "subject": "scope-list",
+      "property": "scope-rows-in-the-checked-state",
+      "value": 6,
+      "unit": "rows",
+      "locatorDescription": "the checkbox at the right of each of the six visible scope rows"
+    },
+    {
+      "id": "f3",
+      "kind": "relationship",
+      "subject": "scope-checkbox",
+      "property": "placement",
+      "value": "right-aligned at the end of each row rather than leading it, so the reader meets the description before the control",
+      "unit": null,
+      "locatorDescription": "the right edge of each scope row"
+    },
+    {
+      "id": "f4",
+      "kind": "relationship",
+      "subject": "scope-row",
+      "property": "carries",
+      "value": "a leading product glyph, a sentence written in the second person naming the concrete action, and a Learn more link",
+      "unit": null,
+      "locatorDescription": "the row reading \"See, edit, share and permanently delete all the calendars that you can access using Google Calendar. Learn more\""
+    },
+    {
+      "id": "f5",
+      "kind": "relationship",
+      "subject": "scope-wording",
+      "property": "names-destructive-verbs-explicitly",
+      "value": "\"permanently delete\" appears in the scope text rather than being softened to \"manage\"",
+      "unit": null,
+      "locatorDescription": "the rows beginning \"See, edit, download and permanently delete your contacts\" and \"See, edit, share and permanently delete all the calendars\""
+    },
+    {
+      "id": "f6",
+      "kind": "relationship",
+      "subject": "existing-access",
+      "property": "disclosed-as",
+      "value": "a tinted callout stating the app already holds access and linking to the count of services it covers",
+      "unit": null,
+      "locatorDescription": "the blue callout reading \"Cron already has some access\" with the line \"See the 3 services to which Cron has some access.\""
+    },
+    {
+      "id": "f7",
+      "kind": "relationship",
+      "subject": "trust-framing",
+      "property": "expressed-as",
+      "value": "a dedicated section headed with the app's name telling the reader the decision is about trust, followed by where to revoke and where to read the policies",
+      "unit": null,
+      "locatorDescription": "the heading \"Make sure that you trust Cron\" and the three paragraphs beneath it"
+    },
+    {
+      "id": "f8",
+      "kind": "count",
+      "subject": "trust-section",
+      "property": "outbound-links",
+      "value": 4,
+      "unit": "links",
+      "locatorDescription": "the trust section, reading \"Google Account\", \"share data safely\", \"privacy policy\", \"Terms of Service\""
+    },
+    {
+      "id": "f9",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions",
+      "value": 2,
+      "unit": "controls",
+      "locatorDescription": "bottom of the card, reading \"Cancel\" and \"Continue\""
+    },
+    {
+      "id": "f10",
+      "kind": "count",
+      "subject": "action-row",
+      "property": "dispositions-carrying-a-solid-fill",
+      "value": 0,
+      "unit": "controls",
+      "locatorDescription": "bottom of the card; both Cancel and Continue are outlined with a transparent interior"
+    },
+    {
+      "id": "f11",
+      "kind": "relationship",
+      "subject": "action-row-dispositions",
+      "property": "differentiated-by",
+      "value": "label text and horizontal position only",
+      "unit": null,
+      "locatorDescription": "bottom of the card, comparing the two adjacent controls"
+    },
+    {
+      "id": "f12",
+      "kind": "relationship",
+      "subject": "page-footer",
+      "property": "carries",
+      "value": "a language selector and Help / Privacy / Terms links outside the consent card",
+      "unit": null,
+      "locatorDescription": "below the card, reading \"English (United Kingdom)\" with a dropdown chevron"
+    }
+  ],
+  "problemTags": [
+    "data-egress-consent",
+    "granular-scope-selection",
+    "no-nudge-toward-either-answer"
+  ],
+  "intentTags": ["understand-what-leaves", "narrow-the-grant", "grant-or-refuse"],
+  "layoutTags": ["single-column-consent", "per-scope-checkbox-rows", "trust-section"],
+  "interactionTags": ["per-scope-opt-out", "equal-weight-dispositions", "pre-granted-defaults"]
+}
