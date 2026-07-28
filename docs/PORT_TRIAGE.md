@@ -194,6 +194,38 @@ Last touched 2026-07-16 / 2026-07-14.
 
 ## 4. Trace + PDF-evidence cluster
 
+**Verdict: PORT — DONE (nodeslide #83). The "design conflict" was not one.** · **37 symbols**
+
+The size gap was read as evidence that the destination might hold a deliberate redesign, and the
+Agent Prism rail plus the Countersigned seal seemed to confirm it. Both readings were wrong, and
+only commit ancestry settled it — file size and feature-spotting both pointed the wrong way:
+
+- nodeslide's `TraceWaterfall.tsx` has **exactly one commit ever**, `ac66f88`, the 2026-07-13
+  extraction. Its blob is **byte-identical** to parity's file on that date (`8f3ba7cde558…`).
+- Parity then continued the same file: 743 → 1,363 → 1,592 → 1,674 → 2,115 → 2,138 across five
+  commits between 07-14 and 07-16.
+- The Agent Prism rail and Countersigned seal live in `TraceInspector.tsx`, a different file, and
+  **predate the fork** — the shared 07-13 ancestor already contains them. Both repos have them.
+  Nothing was redesigned at the destination.
+
+So the destination was a frozen snapshot, not a rewrite, and the direction is parity → nodeslide.
+
+**The one thing a naive copy would have destroyed:** nodeslide's only post-fork change to
+`TraceInspector.tsx` is `d53f1dc`, a 7-line fix to `isFallbackTrace` / `hasProviderAttemptTelemetry`
+covering free-model and patch-receipt semantics, which parity does **not** have. Preserved.
+
+Two further traps the port caught: a destination-only delegated planner/executor test added in
+`39a9ebf` that parity's rewritten fixture-matrix suite has no equivalent of (carried forward rather
+than overwritten), and a stale assertion in `TraceInspector.test.tsx` matching a string that no
+longer exists in parity — raised to the shipped contract and strengthened to assert a derived count.
+
+**Left deliberately unwired:** the optional `trace` prop is not passed at the call site, because
+nodeslide's Convex layer never emits `claimSourceBindings`. Passing it would render "no
+claim-output binding" on every citation — true, and indistinguishable from a feature that was never
+wired. Flagged rather than faked.
+
+**Original verdict, retained for the record:**
+
 **Verdict: PORT (as a merge, not a copy)** · **37 symbols**
 (`traceTelemetry.ts` 12, `TraceWaterfall.tsx` 11, `TraceWaterfall.fixture.ts` 8,
 `TraceInspector.tsx` 2, `PdfEvidencePage.tsx` 2, `pdfEvidenceRuntime.ts` 2)
@@ -589,6 +621,16 @@ barrels is reachable from `App.tsx` or a registered Convex function.
    TraceWaterfall (§4) have diverged in *both* directions within the last two weeks — nodeslide PR
    #70 and #73 land changes parity does not have while parity holds a 2,138-line TraceWaterfall
    against nodeslide's 743. At least three clusters are three-way merges with design conflicts.
+
+   **PARTLY WRONG, corrected 2026-07-27 by doing the TraceWaterfall port.** That file was not a
+   design conflict at all — the destination's copy has one commit, is byte-identical to parity's at
+   fork date, and simply stopped. A size gap looks identical whether the smaller side is a
+   deliberate rewrite or a frozen snapshot, and only `git log` on the file plus a blob-hash
+   comparison distinguishes them. The claim above was inferred from line counts and from spotting
+   features at the destination that turned out to predate the fork and exist in both repos.
+   **Before treating any cluster as a design conflict, check the destination file's commit count
+   and compare its fork-date blob.** The genuine conflicts are the inspector tab model (§5) and the
+   two `VisualMaterial` families (§6); TraceWaterfall was never one.
 3. **§5 Phase 1 item 3, "move the 37 `nodeslide-*` scripts into nodeslide."** There are 34, not 37;
    one is already ported; and 10 of the remaining 33 are the Atlas/claim gates that
    `parity-studio/nodekit.yaml` declares as parity's own. Moving them makes the manifest lie.
