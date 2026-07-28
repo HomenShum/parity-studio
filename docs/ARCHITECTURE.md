@@ -68,7 +68,7 @@ Browser sees real-time updates via Convex queries
 
 ## NodeSlide domain architecture
 
-NodeSlide is an additive domain, not a replacement for the original Parity pipeline. `src/App.tsx` selects NodeSlide by default and preserves the existing application behind `?domain=parity`, which additionally requires `VITE_ENABLE_PARITY_DOMAIN=true` at build time. That variable is absent from the deployed environment — verified in the shipped bundle, where the inlined env object is empty — so on the deployed site the deep link renders a notice naming the missing variable instead of silently serving NodeSlide.
+NodeSlide was an additive domain here, and it is now a separate product at `nodeslide.vercel.app`. Since Phase 4 of `docs/DECOUPLING_PLAN.md`, `src/App.tsx` selects **parity** by default; `?domain=nodeslide` still resolves to the NodeSlide studio inside this bundle, but production 301s those requests (and old `?share=<id>` links) to the product deployment via `vercel.json`. `VITE_ENABLE_PARITY_DOMAIN` is now a kill switch — set it to `false` to route back to NodeSlide — rather than a gate that has to be set for parity to appear. The NodeSlide sources below stay in the tree until the Phase 2 port audit is green; Phase 3 removes them.
 
 The canonical runtime record is a `DeckSnapshot`:
 

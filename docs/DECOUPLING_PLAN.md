@@ -188,8 +188,27 @@ golden-master deltas = zero.
   301 to `nodeslide.vercel.app`, kept ≥ 90 days (owner decision D3).
 - Smoke: boot flag-on build, execute one real run query, screenshot the three-panel shell.
 
-**Exit:** `parity-studio.vercel.app` serves ParityApp by default (live-DOM check for a
-Parity-specific testid, not build logs); redirect verified with a real old link.
+**Executed 2026-07-27 on branch `feat/phase4-resurface-parity` — repo side done, exit criterion
+NOT yet met.** `VITE_ENABLE_PARITY_DOMAIN` inverted to a kill switch (on unless explicitly
+`false`), `parity` made the default domain, `ParityDomainDisabled` deleted, `data-testid=
+"parity-shell"` added as the thing the live-DOM check greps for, `git.deploymentEnabled` flipped to
+`true`, and three `vercel.json` redirects added. The vitality claim above was re-checked before
+relying on it: `runs.listRecent` and `parityReports.getLatest` against `blissful-pig-998` returned
+real May-2026 runs and a 16-check report (`status=needs_iteration`, 8/16).
+
+Redirect mapping, and why the slug carries across unchanged: PR #83's `vercel.json` rewrote
+`/s/:shareSlug` to `/api/share?share=:shareSlug`, so the id in the old query string **is** the id
+in the new path. `/?share=<slug>` → `https://nodeslide.vercel.app/s/<slug>`, 301.
+`/?domain=nodeslide` → `https://nodeslide.vercel.app/`, 301, with the rest of the query string
+carried. A `share` value outside `/^[a-z0-9]+(?:-[a-z0-9]+)*$/` — the shape
+`requireShareSlug` has always demanded, so a value that could never have addressed a deck — goes to
+`/link-moved.html`, a page that says what happened, instead of to a guess or a bare 404. A
+well-formed slug for a deck that was unpublished lands on NodeSlide's own rendered refusal, which
+already explains itself in 1,980 bytes. All rules are rooted at `/` so the explainer cannot loop.
+
+**Exit (still owed):** `parity-studio.vercel.app` serves ParityApp by default (live-DOM check for
+`parity-shell`, not build logs); redirect verified with a real old link against the deployed URL.
+Both are blocked on the pull request merging, since `deploymentEnabled` was `false` until it does.
 
 ### Phase 5 — Truth reconciliation (½ day)
 - `repositories.yaml`: parity's entry re-described to its real product (registry edit proposed to

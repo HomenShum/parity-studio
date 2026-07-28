@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>That NodeSlide link moved — Parity Studio</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #20211f;
+        --faint: #6b6d68;
+        --bg: #f4f4f1;
+        --rule: #dcdcd6;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.6 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        max-width: 42rem;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 0.75rem;
+      }
+      p {
+        margin: 0 0 0.9rem;
+      }
+      code {
+        font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+        font-size: 0.9em;
+        background: #fff;
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .note {
+        color: var(--faint);
+        font-size: 13px;
+        border-top: 1px solid var(--rule);
+        margin-top: 1.5rem;
+        padding-top: 0.9rem;
+      }
+      nav a {
+        display: inline-block;
+        margin-right: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main data-testid="parity-link-moved">
+      <h1>That NodeSlide link moved, and this one could not be followed</h1>
+      <p>
+        You arrived from an old Parity Studio share link of the form
+        <code>parity-studio.vercel.app/?share=&lt;id&gt;</code>. NodeSlide now lives at its own
+        deployment, and share links there are served at
+        <code>nodeslide.vercel.app/s/&lt;id&gt;</code>. Almost every old link redirects straight
+        through, because the share id is the same value on both sides.
+      </p>
+      <p data-testid="parity-link-moved-reason">
+        Yours did not, because the <code>share</code> value in your URL is not in the shape
+        NodeSlide ever issued — share ids are lowercase letters, digits and hyphens (for example
+        <code>share-1f2e…</code>). There is no deck this can be pointed at, so sending you to a
+        guess would be worse than saying so. The link was most likely truncated by whatever you
+        copied it out of.
+      </p>
+      <p>
+        If you still have the original message, copy the full URL again. If the id was correct and
+        this page appeared anyway, the deck itself may have been unpublished or revoked — open
+        NodeSlide and re-share it from the deck.
+      </p>
+      <nav>
+        <a href="https://nodeslide.vercel.app/">Open NodeSlide</a>
+        <a href="/">Open Parity Studio</a>
+      </nav>
+      <p class="note">
+        Redirects from the old <code>?share=</code> and <code>?domain=nodeslide</code> links are
+        kept until at least 2026-10-25 (90 days from the 2026-07-27 split; decision D3 in
+        <code>docs/DECOUPLING_PLAN.md</code>).
+      </p>
+    </main>
+  </body>
+</html>
