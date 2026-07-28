@@ -1,0 +1,50 @@
+id: rule-inspector-hierarchy-1
+statement: >-
+  Inside a persistent inspector narrower than 400px, a label and its value must be distinguishable
+  by colour, weight, or position — and by at least one of them. Distinguishing them by shrinking the
+  label is a defect; distinguishing them by nothing is a worse one.
+
+mechanismHypothesis: >-
+  A label/value pair is scanned, not read. The eye needs one stable cue to separate the two roles so
+  it can skip labels it already knows and land on values. Size is the wrong cue because it costs
+  legibility in a narrow column, which is why the shipped design system already forbids it. But the
+  observation below found the opposite failure and it had gone unnoticed: the pair is differentiated
+  by NEITHER size nor colour, so the reader has only position, and position alone gives no signal
+  about which of two adjacent strings is the one they came to read.
+
+confidence: medium
+# Medium, not high, and the reason is specific. The mechanism is well supported for dense
+# label/value scanning, but it is asserted here from a single application's measurement with no
+# comparison against an audience-proven reference — the corpus has no external observation to cite
+# yet. Raise to high only when a reference record shows the same relationship solving the same
+# problemTag. A rule that cites only ourselves is a house style, not a design rule.
+
+appliesWhen:
+  - persistent inspector or property panel narrower than 400px
+  - repeated label/value rows
+  - operational content the reader scans rather than reads
+
+doesNotApplyWhen:
+  - full-page narrative layout
+  - the slide canvas itself, where the artifact sets its own typography
+  - a single label/value pair with no siblings to scan against
+
+evidence:
+  supportingObservationIds:
+    - obs-nodeslide-workspace-1
+    - obs-nodeslide-inspector-evidence-1
+  citedFacts:
+    # Both surfaces measured the same relationship, independently, on different tabs.
+    - obs-nodeslide-workspace-1/label-and-value.differentiated-by = "neither size nor colour"
+    - obs-nodeslide-inspector-evidence-1/label-and-value.differentiated-by = "neither size nor colour"
+  counterObservationIds: []
+  # Empty and that is a gap, not a clean bill of health. No external reference has been recorded
+  # showing this solved well. Until one exists, this rule is a hypothesis about our own surface.
+
+rubric:
+  dimension: label-value-differentiation
+  levels:
+    0: label and value differ by neither size, weight, nor colour
+    2: differentiated by size alone, which the design system forbids
+    3: differentiated by colour or weight, consistently
+    4: differentiated by colour or weight, and the cue is the same on every row of the panel
