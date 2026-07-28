@@ -297,7 +297,15 @@ This one directly contradicts the plan's §3 non-goal "**mechanical relocation o
 
 ## 6. `openui/visualMaterials*`
 
-**Verdict: ~~PORT~~ → DECIDE, corrected 2026-07-27 by attempting the port.** · **13 symbols**
+**Verdict: ~~PORT~~ → ~~DECIDE~~ → PORT, decided by the owner 2026-07-28: "we keeping openui".** · **13 symbols**
+
+The decision accepts the recorded costs with open eyes rather than dissolving them: the 0.x
+dependency ships, the name collision is resolved by renaming the incoming family (`OpenUi*` prefix,
+every rename verified against a real destination export before entering the RENAMES table), and the
+demo spec keeps its `verification: 'unverified_scenario'` label — a surface that shows the spec must
+show its status, because upgrading the label to make the port look finished is the exact move the
+claim-gate exists to refuse. The hazards below stand as the port's checklist, not as an argument
+against it.
 
 The PORT verdict below was reached from reachability alone, and reachability was confirmed — the
 chain crosses two dynamic `import()` edges and the Workbench is genuinely openable from a live menu
@@ -327,8 +335,9 @@ A core-only port (`validateVisualMaterialSpec`, `compileVisualMaterialProposal`)
 new dependencies, since `visualMaterials.ts` imports only `shared/nodeslide`. But that splits the
 cluster across two repos without letting parity delete anything, which does not advance the plan.
 
-**Owner decision required:** does NodeSlide ship the OpenUI lab at all, and which `VisualMaterial`
-naming wins? Until answered, this cluster blocks Phase 3 for its files and should not be ported.
+**Owner decision, 2026-07-28: ship it.** The naming question resolves in the destination's favour —
+its `NodeSlideVisualMaterial` family keeps the name it shipped with, and the incoming spec family is
+renamed on port. This cluster no longer blocks Phase 3.
 
 Evidence:
 
@@ -403,7 +412,16 @@ against nodeslide's flat model. Note that `shared/nodeslideDataExport.ts` and
 
 ## 9. `uiContract.ts`
 
-**Verdict: PORT, but NOT as a second version constant. Corrected 2026-07-27.** · **8 symbols**
+**Verdict: PORT, but NOT as a second version constant. Corrected 2026-07-27; confirmed by the
+owner 2026-07-28: "we keeping uicontract".** · **8 symbols**
+
+The owner's confirmation keeps the one-channel constraint, it does not waive it. The port folds the
+contract's fields — phase, connection, loading stage, deck id and version, job status — into the
+existing DOM-attribute surface on the studio root, published from the single place the current
+attributes are set, and the ported module does not write `data-ns-theme` at all: theme keeps its one
+writer on `.nodeslide-studio`, where the CSS and the QA gate both read it. The agent-ui-linter grows
+assertions for the new attributes, existence first, because a missing attribute is a silent
+capability loss — and it is proven able to go red before the count in it is believed.
 
 Two findings from attempting it.
 
@@ -586,7 +604,7 @@ Atlas decks, which is a **different concern** from parity's Atlas contract gates
 | 3 | `slidelang/jsonSpec.ts` + `jsonEdit.ts` | PORT | 30 | — |
 | 4 | Trace + PDF-evidence (merge) | PORT | 37 | — |
 | 5 | Inspector shell / tab model | **DECIDE** | 10 | — |
-| 6 | `openui/visualMaterials*` | **DECIDE** (was PORT) | 13 | 0.x dep + name collision + unverified demo |
+| 6 | `openui/visualMaterials*` | **PORT** (owner 2026-07-28) | 13 | OpenUi* rename, dep accepted, demo label kept |
 | 7 | Agent thread (rename → `AgentThread.tsx`) | PORT | 5 | — |
 | 8 | DeleteDeck / ExportMyData / export | PORT | 11 | — |
 | 9 | `uiContract.ts` | PORT (one channel, wired) | 8 | already on unpushed `port/slidelang`, unwired |
