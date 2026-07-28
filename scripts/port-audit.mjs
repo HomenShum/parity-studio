@@ -200,7 +200,8 @@ const RENAMES = [
     from: 'symbol:convex/nodeslideWorkspaceAccess.ts#getAttachedDeck',
     to: 'getGrantedDeck',
     reason: 'D1 flat rewrite: a deck is granted, not attached to a project',
-  },];
+  },
+];
 
 /**
  * Source items that must NOT move, with the reason each one stays.
