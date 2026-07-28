@@ -1,21 +1,37 @@
-# NodeSlide
+# Parity Studio
 
-NodeSlide is a hosted deck-as-code editor that turns prompts, structured specifications,
-web evidence, and uploaded files into editable, reviewable, presentable slide decks.
+Parity Studio turns a screenshot or sketch into a componentized `ui_kit/` — real .tsx components
+and tokens.css — and judges the result against a 16-check deterministic parity rubric. The score is
+reported honestly on every iteration, including when it drops. It also works as a design-staging
+layer for an existing codebase: capture the current UI, decompose it into editable slugs, prove
+what changed, apply only the approved deltas.
 
 ## Canonical links
 
-- [NodeSlide prototype](https://parity-studio.vercel.app/)
+- [Parity Studio](https://parity-studio.vercel.app/)
 - [Source code](https://github.com/HomenShum/parity-studio)
+
+## NodeSlide moved
+
+NodeSlide, the deck-as-code editor, used to be served from this deployment at `?domain=nodeslide`.
+It is now a separate product with its own repository and deployment.
+
+- [NodeSlide](https://nodeslide.vercel.app/)
+- [NodeSlide source](https://github.com/HomenShum/NodeSlide)
+
+Old `?domain=nodeslide` and `?share=<id>` links on this host redirect there, and will keep doing so
+until at least 2026-10-25. Do not cite this host as a source for NodeSlide behavior.
 
 ## Product behavior
 
-- AI changes are proposed and validated before they can mutate a deck.
-- Slides remain structured and exportable rather than becoming static slide images.
-- Provider, model, effort, timing, token, cost, tool, and source evidence is exposed in Trace.
-- External model and web access require explicit user consent.
+- Parity checks are deterministic and named; the passing count is never rounded up or floored.
+- Decomposition emits editable component files, not a flattened image.
+- A comment scopes to a selected file and a pinned bounding box, so an iteration rewrites a slice
+  rather than the whole artifact.
+- Model tier, timing, token and cost telemetry is exposed per run rather than summarized away.
+- External model access requires an explicit key and consent.
 
 ## Agent access
 
-Use the in-product BYOK / Agents surface for MCP connection instructions and scoped tools.
-Treat published deck links as user-authored artifacts; verify their individual citations.
+Use the in-product Keys and BYOK surface for connection instructions and scoped tools. Exported
+`ui_kit/` bundles are user-authored artifacts; verify their contents rather than assuming parity.

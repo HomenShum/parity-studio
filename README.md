@@ -4,9 +4,15 @@
 
 Parity Studio also works as a design-staging layer for real codebases. Before a coding agent rewrites your app, capture the current UI, decompose it into editable slugs, prove what changed, then apply only the approved deltas back to production.
 
-## NodeSlide domain
+## NodeSlide moved
 
-This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain. The original Parity Studio surface opens at `?domain=parity`, but only where `VITE_ENABLE_PARITY_DOMAIN=true` is set at build time — it is **not** set on the deployed site, so that deep link shows an explanatory notice there rather than the legacy shell. The Atlas gallery is ungated and live at [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas).
+**NodeSlide ships from its own repo and deployment: [`nodeslide.vercel.app`](https://nodeslide.vercel.app/) ([HomenShum/NodeSlide](https://github.com/HomenShum/NodeSlide)).** As of Phase 4 of [`docs/DECOUPLING_PLAN.md`](docs/DECOUPLING_PLAN.md), this deployment serves Parity Studio by default; old `?domain=nodeslide` and `?share=<id>` links 301 to the product deployment and stay redirected until at least 2026-10-25.
+
+The NodeSlide code has not been deleted from this repo — that is Phase 3, gated on a port audit that is still red — so `?domain=nodeslide` remains a working route in a local build. The Atlas gallery is still served from here, at [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas).
+
+`VITE_ENABLE_PARITY_DOMAIN` survives as a kill switch: set it to `false` at build time to put this deployment back on NodeSlide.
+
+NodeSlide's design notes below describe work that now lives in the product repo, and are kept here while the port completes.
 
 **Launch posture (2026-07-10): GO for a controlled anonymous private preview; NO-GO for a public multi-tenant launch.** Editor access is protected by a 256-bit owner capability stored in the creating browser, and read-only presentation links use separate unguessable capabilities. This is a materially safer preview boundary than raw deck IDs, but it is not account authentication, tenant isolation, share revocation, or an enterprise access-control system.
 

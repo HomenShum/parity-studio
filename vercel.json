@@ -1,8 +1,37 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": true
   },
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
+        { "type": "query", "key": "share", "value": "^(?<shareSlug>[a-z0-9]+(?:-[a-z0-9]+)*)$" }
+      ],
+      "destination": "https://nodeslide.vercel.app/s/:shareSlug",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
+        { "type": "query", "key": "share" }
+      ],
+      "destination": "/link-moved.html",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "parity-studio.vercel.app" },
+        { "type": "query", "key": "domain", "value": "nodeslide" }
+      ],
+      "destination": "https://nodeslide.vercel.app/",
+      "statusCode": 301
+    }
+  ],
   "headers": [
     {
       "source": "/runtime-source.json",

@@ -816,7 +816,10 @@ Please update the UI so the page purpose, primary action, layout, and accessibil
                 color: 'var(--color-text-primary)',
               }}
             >
-              <span>{parityScore}</span>
+              {/* The score is what a screenshot of this panel is actually evidence of, so it
+                  carries a stable hook: a capture taken before the report resolves shows 0 and
+                  looks exactly like a capture of a passing run that scored 0. */}
+              <span data-testid="parity-score">{parityScore}</span>
               <span style={{ color: 'var(--color-text-faint)', fontSize: 36, padding: '0 4px' }}>
                 /
               </span>

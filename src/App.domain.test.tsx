@@ -4,13 +4,16 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The scenario: someone follows README.md, opens `?domain=parity` on production, and gets the
- * NodeSlide studio. Nothing errored, nothing logged — the request was discarded in silence, so a
- * gated feature and an unrequested one rendered the same screen.
+ * The old scenario here was a gated surface that looked like an ungated default: `?domain=parity`
+ * silently rendered NodeSlide because `VITE_ENABLE_PARITY_DOMAIN` was unset in production, and the
+ * fix was a notice that named the variable.
  *
- * That is what makes it worth a test rather than a one-line fix: verified against the deployed
- * bundle, `VITE_ENABLE_PARITY_DOMAIN` is absent from the shipped env object, so the documented
- * deep link has never worked in production. The regression to guard is the silence, not the flag.
+ * Phase 4 of docs/DECOUPLING_PLAN.md removes the gate instead of explaining it. Parity is this
+ * repo's product again, so it is what an unqualified visit renders, and the notice is gone because
+ * the state it described is no longer reachable by default. The regression to guard is now the
+ * inverse of the original one: resurfacing parity must not quietly evict the NodeSlide and Atlas
+ * routes that are still compiled into this bundle, because their deletion is Phase 3 and Phase 3
+ * is gated on a port audit that is still red.
  */
 
 // The real App pulls in Convex, the whole legacy shell and two lazy studios. None of that is under
@@ -38,64 +41,83 @@ async function renderAt(search: string, env: Record<string, string> = {}) {
   return render(<App />);
 }
 
+/**
+ * The parity branch is the only one that needs the real provider tree — the NodeSlide and Atlas
+ * stubs both render without one — so reaching it at all is part of the assertion.
+ *
+ * It also needs `VITE_CONVEX_URL`: `ParityApp` calls `convexHttpUrl()` during render, and that
+ * helper throws rather than falling back to production. Stubbing it here is deliberate. Left to
+ * the ambient environment these tests pass on a developer machine that has `.env.local` and fail
+ * in CI, which is the worst of both — a green suite locally and a red one where it matters.
+ */
+async function renderParityAt(search: string, env: Record<string, string> = {}) {
+  vi.resetModules();
+  vi.stubEnv('VITE_CONVEX_URL', 'https://example-deployment.convex.cloud');
+  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+  window.history.replaceState(null, '', `/${search}`);
+  const [{ default: App }, { I18nProvider }] = await Promise.all([
+    import('./App'),
+    import('./lib/i18n'),
+  ]);
+  return render(
+    <I18nProvider>
+      <App />
+    </I18nProvider>,
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
 });
 
-describe('domain routing: a gated surface must not look like an ungated default', () => {
-  it('explains itself when parity is requested but the flag is unset', async () => {
-    await renderAt('?domain=parity');
-    const notice = await screen.findByTestId('parity-domain-disabled');
-    expect(notice).toBeInTheDocument();
-    // Naming the variable is the difference between "broken link" and "one env var away".
-    expect(screen.getByTestId('parity-domain-reason')).toHaveTextContent(
-      'VITE_ENABLE_PARITY_DOMAIN',
-    );
+describe('domain routing: parity is the product this repo serves', () => {
+  it('renders the Parity shell to someone who asked for nothing in particular', async () => {
+    await renderParityAt('');
+    expect(await screen.findByTestId('parity-shell')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-nodeslide')).not.toBeInTheDocument();
   });
 
-  it('serves the real Parity shell once the flag is set', async () => {
-    vi.resetModules();
-    vi.stubEnv('VITE_ENABLE_PARITY_DOMAIN', 'true');
-    window.history.replaceState(null, '', '/?domain=parity');
-    // The legacy shell is the only branch that needs the real provider tree — reaching it at all
-    // is the assertion, since the notice and the NodeSlide stub both render without one.
-    const [{ default: App }, { I18nProvider }] = await Promise.all([
-      import('./App'),
-      import('./lib/i18n'),
-    ]);
-    render(
-      <I18nProvider>
-        <App />
-      </I18nProvider>,
-    );
-    expect(screen.queryByTestId('parity-domain-disabled')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-nodeslide')).not.toBeInTheDocument();
+  it('renders the Parity shell for the documented deep link', async () => {
+    await renderParityAt('?domain=parity');
+    expect(await screen.findByTestId('parity-shell')).toBeInTheDocument();
   });
 
-  it('does NOT show the notice to someone who never asked for parity', async () => {
-    await renderAt('');
-    expect(await screen.findByTestId('stub-nodeslide')).toBeInTheDocument();
-    expect(screen.queryByTestId('parity-domain-disabled')).not.toBeInTheDocument();
+  it('no longer ships the disabled interstitial in any routing state', async () => {
+    for (const search of ['', '?domain=parity', '?domain=nodeslide', '?domain=atlas']) {
+      cleanup();
+      await renderParityAt(search);
+      expect(
+        screen.queryByTestId('parity-domain-disabled'),
+        `interstitial rendered for ${search || '(no query)'}`,
+      ).not.toBeInTheDocument();
+    }
   });
 
-  it('keeps the atlas surface reachable regardless of the parity flag', async () => {
-    // Atlas is checked before the gate and is the surface currently live in production.
-    await renderAt('?domain=atlas');
-    expect(await screen.findByTestId('stub-atlas')).toBeInTheDocument();
-  });
-
-  it('still routes an explicit nodeslide request to nodeslide', async () => {
+  it('keeps ?domain=nodeslide working as a route inside this bundle', async () => {
+    // Production sends this to nodeslide.vercel.app at the edge (vercel.json), but the route
+    // itself must survive here: deleting it is Phase 3, and Phase 3 has not exited.
     await renderAt('?domain=nodeslide');
     expect(await screen.findByTestId('stub-nodeslide')).toBeInTheDocument();
   });
 
-  it('offers a way out of the notice instead of stranding the visitor', async () => {
-    await renderAt('?domain=parity');
-    await screen.findByTestId('parity-domain-disabled');
-    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
-    expect(links).toContain('?domain=nodeslide');
-    expect(links).toContain('?domain=atlas');
+  it('keeps the Atlas gallery reachable, which parity still declares itself canonical for', async () => {
+    await renderAt('?domain=atlas');
+    expect(await screen.findByTestId('stub-atlas')).toBeInTheDocument();
+  });
+
+  it('honours the kill switch: an explicit false falls back to NodeSlide', async () => {
+    // The flag survives resurfacing as a way to undo it without a revert. It has to actually
+    // work, or it is decoration in the one situation where someone reaches for it.
+    await renderAt('', { VITE_ENABLE_PARITY_DOMAIN: 'false' });
+    expect(await screen.findByTestId('stub-nodeslide')).toBeInTheDocument();
+    cleanup();
+    await renderAt('?domain=parity', { VITE_ENABLE_PARITY_DOMAIN: 'false' });
+    expect(await screen.findByTestId('stub-nodeslide')).toBeInTheDocument();
+  });
+
+  it('lets VITE_STUDIO_DOMAIN pin a deployment to NodeSlide without touching the flag', async () => {
+    await renderAt('', { VITE_STUDIO_DOMAIN: 'nodeslide' });
+    expect(await screen.findByTestId('stub-nodeslide')).toBeInTheDocument();
   });
 });
