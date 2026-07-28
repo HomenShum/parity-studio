@@ -92,20 +92,8 @@
       "locatorDescription": "upper left of the viewport, reading \"Slide 1 Stories with structure Liv\""
     }
   ],
-  "problemTags": [
-    "artifact-dominance",
-    "three-panel-orientation"
-  ],
-  "intentTags": [
-    "read-the-slide",
-    "reach-the-agent"
-  ],
-  "layoutTags": [
-    "three-panel",
-    "persistent-inspector"
-  ],
-  "interactionTags": [
-    "tab-switching",
-    "direct-edit"
-  ]
+  "problemTags": ["artifact-dominance", "three-panel-orientation"],
+  "intentTags": ["read-the-slide", "reach-the-agent"],
+  "layoutTags": ["three-panel", "persistent-inspector"],
+  "interactionTags": ["tab-switching", "direct-edit"]
 }
