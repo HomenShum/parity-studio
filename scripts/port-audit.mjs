@@ -107,7 +107,50 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
  * precisely the failure mode named above. Partial overlap belongs in docs/PORT_TRIAGE.md as a
  * divergence, not here as an equivalence.
  */
-const RENAMES = [];
+const RENAMES = [
+  // OpenUI visual-material lab (docs/PORT_TRIAGE.md §6, owner decision 2026-07-28: "we keeping
+  // openui"). Hazard 1 of that section is a name collision the audit is structurally blind to:
+  // the destination already ships a `VisualMaterial` family — NodeSlideVisualMaterial,
+  // NodeSlideVisualMaterialKind, NodeSlideVisualMaterialStatus, NodeSlideVisualMaterialInventory
+  // in convex/lib/nodeslideStoryContext.ts, read by nodeslideDesignPlan.ts — that models the
+  // EVIDENCE a deck can be built from. Parity's family models a RENDERABLE SLIDE SPEC. Two
+  // vocabularies, one set of nouns. The destination's family keeps the name it shipped with and
+  // the incoming one takes an `OpenUi` prefix, which is also the more accurate name for it: the
+  // family exists to feed the OpenUI Lang renderer.
+  //
+  // Every `to` below was verified to appear in an `export` statement of a NON-TEST destination
+  // module before this table was written — the docstring above explains why that order matters,
+  // and the four symbols that did NOT change name (NODESLIDE_OPENUI_ACTION,
+  // NODESLIDE_OPENUI_PROGRAM_VERSION, AI2027_OPENUI_PROGRAM, AI2027_TRANSFORMATION_LADDER) are
+  // deliberately absent from this table: they resolve as PORTED on their own names, and adding
+  // them here would be a rename entry asserting a change that never happened.
+  ...[
+    // src/domains/nodeslide/openui/visualMaterials.ts -> openui/openUiMaterials.ts
+    ['NODESLIDE_VISUAL_MATERIAL_VERSION', 'NODESLIDE_OPENUI_MATERIAL_VERSION'],
+    ['VisualMaterialClaim', 'OpenUiMaterialClaim'],
+    ['VisualMaterialSpec', 'OpenUiMaterialSpec'],
+    ['VisualMaterialValidation', 'OpenUiMaterialValidation'],
+    ['validateVisualMaterialSpec', 'validateOpenUiMaterialSpec'],
+    ['compileVisualMaterialProposal', 'compileOpenUiMaterialProposal'],
+  ].map(([from, to]) => ({
+    from: `symbol:src/domains/nodeslide/openui/visualMaterials.ts#${from}`,
+    to,
+    reason:
+      'OpenUI port: destination already owns a VisualMaterial family for deck-building evidence; the incoming renderable-spec family takes the OpenUi prefix',
+  })),
+
+  ...[
+    // src/domains/nodeslide/openui/VisualMaterialWorkbench.tsx -> openui/OpenUiMaterialWorkbench.tsx
+    ['VisualMaterialWorkbench', 'OpenUiMaterialWorkbench'],
+    ['VisualMaterialWorkbenchProps', 'OpenUiMaterialWorkbenchProps'],
+    ['nodeslideVisualMaterialLibrary', 'nodeslideOpenUiMaterialLibrary'],
+  ].map(([from, to]) => ({
+    from: `symbol:src/domains/nodeslide/openui/VisualMaterialWorkbench.tsx#${from}`,
+    to,
+    reason:
+      'OpenUI port: destination already owns a VisualMaterial family for deck-building evidence; the incoming renderable-spec family takes the OpenUi prefix',
+  })),
+];
 
 /**
  * Source items that must NOT move, with the reason each one stays.
