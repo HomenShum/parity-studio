@@ -15,6 +15,7 @@
  * third outcome and no way to record a state as covered without a file behind it.
  *
  * Usage: node tools/brain/capture-required-states.mjs [--url <base>] [--out <dir>]
+ *        node tools/brain/capture-required-states.mjs --knockout <disclosure|authorship>
  */
 
 import { createHash } from 'node:crypto';
@@ -29,6 +30,37 @@ const flag = (name, fallback) => {
 
 const BASE = flag('url', 'https://nodeslide.vercel.app');
 const OUT = path.resolve(flag('out', 'outputs/required-states'));
+
+/**
+ * The one string the product writes when the deterministic planner stood in for a model that was
+ * asked and did not deliver. It is the marker `failed_safe` requires present and `proposal`
+ * requires absent, which is what makes those two states mutually exclusive rather than merely
+ * differently named.
+ */
+const FALLBACK_MARKER = /deterministic fallback/i;
+
+/**
+ * `--knockout <disclosure|authorship>` — the proof that these assertions can fail.
+ *
+ * A sensor nobody has watched fail is a sensor nobody has tested. Two of this file's three previous
+ * `failed_safe` assertions passed against a screen that did not contain the state, and both looked
+ * exactly like a working sensor from the outside. So the knockouts are kept in the file rather than
+ * in a thread: run the capture with the disclosure removed from the page, and the state must be
+ * reported NOT REACHED. If it still passes, the assertion is welded open again.
+ *
+ *   disclosure  strips the fallback label and reason from every direction card.
+ *               EXPECT: failed_safe NOT REACHED.
+ *   authorship  rewrites the planner step so a model-authored run claims the fallback label.
+ *               EXPECT: proposal NOT REACHED.
+ *
+ * This mutates only what the browser renders. It cannot make a state pass that would otherwise
+ * fail — it can only take evidence away — so it is not a lever for inflating coverage.
+ */
+const KNOCKOUT = flag('knockout', null);
+if (KNOCKOUT && !['disclosure', 'authorship'].includes(KNOCKOUT)) {
+  process.stderr.write(`unknown --knockout ${KNOCKOUT}\n`);
+  process.exit(2);
+}
 
 /**
  * The nine states, each with how to reach it. `reach` returns true when the state is genuinely on
@@ -109,20 +141,69 @@ const STATES = [
     id: 'proposal',
     viewport: { width: 1440, height: 900 },
     async reach(page) {
+      // A proposal the EXTERNAL MODEL authored.
+      //
+      // The previous version asserted "some button named Accept is visible" while sitting on the
+      // screen the `loading` step had already populated with three generated directions. Those
+      // directions carry their own Accept buttons (`variation-accept`), so the assertion was
+      // satisfied by the variation lane and never exercised the single-patch lane at all. That is
+      // also why `failed_safe` could match: on production those directions had genuinely fallen
+      // back, so the fallback copy was sitting on the `proposal` screen the whole time. Two states
+      // asserting against one component is how you get one frame filed twice.
+      //
+      // Drive the single-patch lane instead — type an instruction, submit, wait for the agent
+      // thread's patch turn — and require the turn to be MODEL-authored. `agent-thread-patch`
+      // carries `data-trust-surface="proposal"` and `data-decision`, so the state the screenshot
+      // freezes is the state the DOM declares (trust-surfaces clause 1).
       await page.locator('[data-testid="inspector-tab-ai"]').click();
       await page.waitForTimeout(1200);
-      for (let i = 0; i < 30; i += 1) {
+      const composer = page.locator('[data-testid="ai-composer"] textarea').first();
+      if (!(await composer.isVisible().catch(() => false))) return false;
+      await composer.click();
+      await composer.fill('Shorten the title on the first slide to three words.');
+      await page.locator('[data-testid="ai-submit"]').first().click({ timeout: 15_000 });
+
+      const turn = page.locator(
+        '[data-testid="agent-thread-patch"][data-trust-surface="proposal"][data-decision="undecided"]',
+      );
+      let settled = false;
+      for (let i = 0; i < 70; i += 1) {
         if (
-          await page
-            .getByRole('button', { name: /Accept/i })
+          await turn
             .first()
             .isVisible()
             .catch(() => false)
-        )
-          return true;
+        ) {
+          settled = true;
+          break;
+        }
         await page.waitForTimeout(2000);
       }
-      return false;
+      if (!settled) return false;
+      await turn
+        .first()
+        .scrollIntoViewIfNeeded()
+        .catch(() => {});
+      await page.waitForTimeout(400);
+
+      // The authorship half. `free_route` writes the model's own label into the run header and the
+      // planner step; the fallback branch writes `deterministic fallback` into those same two
+      // slots. Requiring the marker to be ABSENT here is what makes this state and `failed_safe`
+      // mutually exclusive by construction rather than by hope.
+      const authored = await page.evaluate((markerSource) => {
+        const marker = new RegExp(markerSource, 'i');
+        const run = document.querySelector('[data-testid="ai-review-scroll"]');
+        if (!run) return { ok: false, why: 'no review region' };
+        const text = run.textContent.replace(/\s+/g, ' ');
+        const planner = text.match(/Planner\s*·?\s*([^:]{1,60}):\s*proposed/i)?.[1]?.trim() ?? null;
+        return {
+          ok: Boolean(planner) && !marker.test(planner) && !/deterministic/i.test(planner),
+          why: `planner label ${JSON.stringify(planner)}`,
+          planner,
+        };
+      }, FALLBACK_MARKER.source);
+      process.stdout.write(`               proposal authorship: ${authored.why}\n`);
+      return authored.ok;
     },
   },
   {
@@ -139,28 +220,82 @@ const STATES = [
     id: 'failed_safe',
     viewport: { width: 1440, height: 900 },
     async reach(page) {
-      // The product does surface this: when the external model cannot supply every direction it
-      // labels the deterministic fallback rather than presenting it as a model result.
+      // The external model was asked, it did not deliver, and the deterministic planner supplied
+      // the output instead — with that substitution disclosed.
       //
-      // Previously this ran with no navigation of its own, so it inherited whatever the `proposal`
-      // state had left on screen. Both states then filed byte-identical screenshots — same sha256
-      // — which is the tell: two "different" states cannot look the same. It was scoring the
-      // previous state's frame. Assert the fallback label specifically, and let the digest
-      // uniqueness check below catch any recurrence.
+      // Two earlier versions of this step were welded open. The first ran with no navigation and
+      // inherited the previous state's frame. The second added a click on the inspector tab it was
+      // ALREADY ON — a no-op — and kept a bare text assertion that the `proposal` screen also
+      // satisfied, so it still filed the same frame. The defect was never the missing navigation;
+      // it was that the assertion was not exclusive to this state.
+      //
+      // Three things must now hold together, and the arming step is separated from the finding so
+      // that "the lane never populated" and "the lane populated with no fallback" are different
+      // reasons rather than one indistinguishable false negative:
+      //
+      //   ARM      the direction lane rendered at all
+      //   ROUTE    the card says `Deterministic fallback`, NOT `Private deterministic` — the
+      //            latter means no provider was ever requested, which is not a failure at all
+      //   REASON   a `Fallback reason:` is stated, so the disclosure names why
+      //
+      // The card is then scrolled into view before the screenshot, so the frame that gets hashed
+      // is this surface and not whatever the previous state left on screen.
       await page.locator('[data-testid="inspector-tab-ai"]').click();
-      await page.waitForTimeout(1500);
-      return page
-        .getByText(/deterministic fallback|could not safely supply|Fallback reason/i)
+      await page.waitForTimeout(1200);
+
+      const cards = page.locator('[data-testid="variation-card"]');
+      let armed = false;
+      for (let i = 0; i < 20; i += 1) {
+        if ((await cards.count()) > 0) {
+          armed = true;
+          break;
+        }
+        await page.waitForTimeout(1500);
+      }
+      if (!armed) {
+        process.stdout.write('               failed_safe: SENSOR NOT ARMED — no direction lane\n');
+        return false;
+      }
+
+      const found = await page.evaluate(() => {
+        for (const card of document.querySelectorAll('[data-testid="variation-card"]')) {
+          const origin = card.querySelector('.is-deterministic_fallback');
+          const label = origin?.textContent?.trim() ?? '';
+          const reason = card.querySelector('.ns-variation-fallback-reason')?.textContent ?? '';
+          // `Private deterministic` shares the origin value but means the provider was never
+          // asked. Only the labelled fallback plus a stated reason is a failed-safe.
+          if (label === 'Deterministic fallback' && /Fallback reason:/i.test(reason)) {
+            card.setAttribute('data-capture-failed-safe', 'true');
+            return { ok: true, label, reason: reason.replace(/\s+/g, ' ').trim() };
+          }
+        }
+        return { ok: false, label: null, reason: null };
+      });
+      process.stdout.write(
+        `               failed_safe: armed, ${found.ok ? `disclosed — ${found.reason}` : 'lane populated but no disclosed fallback'}\n`,
+      );
+      if (!found.ok) return false;
+      await page
+        .locator('[data-capture-failed-safe="true"]')
         .first()
-        .isVisible()
-        .catch(() => false);
+        .scrollIntoViewIfNeeded()
+        .catch(() => {});
+      await page.waitForTimeout(500);
+      return true;
     },
   },
   {
     id: 'completed',
     viewport: { width: 1440, height: 900 },
     async reach(page) {
-      const accept = page.getByRole('button', { name: /Accept/i }).first();
+      // Accept the patch `proposal` staged, not "whatever button says Accept" — the direction lane
+      // has three of those and accepting one of them would prove a different state than this step
+      // claims.
+      const turn = page
+        .locator('[data-testid="agent-thread-patch"][data-trust-surface="proposal"]')
+        .first();
+      if (!(await turn.isVisible().catch(() => false))) return false;
+      const accept = turn.getByRole('button', { name: /^Accept$/i }).first();
       if (!(await accept.isVisible().catch(() => false))) return false;
       await accept.click();
       await page.waitForTimeout(6000);
@@ -190,6 +325,40 @@ await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await context.newPage();
+
+if (KNOCKOUT) {
+  process.stdout.write(`  KNOCKOUT ${KNOCKOUT} — evidence removed from the page on purpose\n`);
+  // Runs before any app script on every document, then keeps running: React re-renders would
+  // otherwise put the evidence back a frame later and the knockout would silently no-op, which is
+  // the same failure mode the knockout exists to catch.
+  await page.addInitScript((mode) => {
+    // Every write is guarded by a read. Assigning textContent fires a mutation record even when the
+    // value is unchanged, so an unguarded strip feeds its own observer and the page live-locks —
+    // which is exactly what happened the first time this was run.
+    const strip = () => {
+      if (mode === 'disclosure') {
+        for (const el of document.querySelectorAll('.ns-variation-fallback-reason')) el.remove();
+        for (const el of document.querySelectorAll('.is-deterministic_fallback')) {
+          if (el.textContent !== 'External model route') el.textContent = 'External model route';
+        }
+      } else {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (!/:\s*proposed \d+ operation/i.test(node.textContent)) continue;
+          if (/^deterministic fallback:/i.test(node.textContent)) continue;
+          node.textContent = node.textContent.replace(/^[^:]+/, 'deterministic fallback');
+        }
+      }
+    };
+    const start = () => {
+      strip();
+      new MutationObserver(strip).observe(document.body, { childList: true, subtree: true });
+    };
+    if (document.body) start();
+    else addEventListener('DOMContentLoaded', start);
+  }, KNOCKOUT);
+}
 
 const rendered = [];
 const missed = [];
