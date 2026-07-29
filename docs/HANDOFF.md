@@ -34,6 +34,7 @@ model falls back — the live DOM says `Deterministic fallback` and
 | Item | Owner | Note |
 |---|---|---|
 | **Exposed Google API key** | Homen only | `HomenShum/NodeBenchAI/scripts/tax-2025/tax-doc-processor.mjs`, public repo, live key, exposed since 31 March. **Rotate in Google Cloud first** — deleting the file does not invalidate it. |
+| **Two prod job rows carry 4 plaintext deck capabilities** | Homen only | `nodeslide_job_7390152a7aeab1e726b2ff8cd0dc9dde` and `nodeslide_job_b880b4820373d1bddac8f9000b1eb327` — owner + execution access keys, readable since 2026-07-28 by anyone holding those two `clientSessionId`s. The write path is fixed (below); **these rows are not**. Nothing was deleted or rotated — that is deliberate. **Rotation is the real remedy**; purging alone does not un-disclose. Purge options, least destructive first: a one-shot internal mutation re-running `redactNodeSlideErrorText` in place (keeps the diagnosis), the existing derived erasure over their decks, or deleting the two rows by `_id`. |
 | Google Slides sync is **inert** | Homen | Ships and fails closed. Needs `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NODESLIDE_OAUTH_TOKEN_ENCRYPTION_KEY`, `NODESLIDE_GOOGLE_REDIRECT_URI`, `NODESLIDE_APP_ORIGINS`. Present-and-non-functional is worse for a new user than absent. |
 | parity PR #85 (Phase 4 resurface) | Homen | Blocked on `PARITY_CONVEX_DEPLOY_MODE` in the Vercel **Preview** environment. The guard fails closed and has since it landed; it was invisible while deploys were off. |
 | First real metered spend | anyone | Enforcement landed (PR #109/#113) and no request has ever left the process. Reservations are real rows against the real price table; the first real user is the first real test. |
@@ -101,14 +102,39 @@ limits in its own output — that is the convention, keep it.
 
 ## 5. Known open findings, filed not fixed
 
-- **Durable create-job path looks dead.** The runner requires the action to return
-  `deck_job_<hash>`; the action mints `deck_<t36>_<hash>`. Different prefixes, never equal —
-  a job-driven create would do the full provider call and then throw. The live path is the
-  direct action call from `NodeSlideStudio.tsx`/MCP, which is unaffected. Under investigation.
-- **Proposal authorship is prose-only.** A human can see `Deterministic fallback`; an
-  inspecting agent cannot — `DeckPatch` and `AgentTrace` carry no `origin` field, and the
-  single-patch lane drops the planner receipt's `origin` before the client. Under
-  investigation.
+- **`clientSessionId` is a de-facto bearer token.** It is the sole argument to the public
+  `listSessionJobs` query, with no second factor. The primary path is `crypto.randomUUID()`
+  (122 bits, fine) — but `src/lib/sessionIdentity.ts` falls back to
+  `session-<Date.now()>-<Math.random()>`, which is **not cryptographically random**, is
+  written to `localStorage`, and never rotates. On that path a guessable string is the only
+  gate on every error body in the session. Error bodies no longer carry capabilities, which
+  was the urgent half; the auth shape is a **product decision** and was deliberately not
+  changed by an agent.
+- **`interaction-clip` has a marker now, `roundtrip-ppt.pptx` does not.** The roundtrip
+  artefact was deliberately not regenerated — a fresh conversion re-measures the portability
+  facts in `shared/nodeslideAtlas.ts`, which the generator itself documents as a thing not to
+  do incidentally. Its A3 subject count stays 2.
+- **The `origin` attribute has only been seen on a synthetic fallback.** `data-proposal-origin`
+  is proven in jsdom, never on a live production fallback — the runtime probe refuses to bill
+  for its own fixture, so its clause E reads `not-run` until someone runs it against a
+  deployment carrying a real pending proposal.
+
+**Closed since this document was first written** (kept because the reasoning outlives the fix):
+
+- *Durable create/edit jobs* — settled empirically against the deployed backend, not by
+  reading: both **did** fail, on `ArgumentValidationError`. Convex rejects undeclared
+  arguments at the callee boundary **before the handler runs**, so the deck-id prefix mismatch
+  was real but unreachable — validation always fired first. Create is now ported properly
+  (validator plus identity binding as pure string comparisons, no DB read); edit is
+  **deliberately still rejected**, with the refusal moved to enqueue, because `maxCostUsd` is a
+  caller-supplied spend ceiling and declaring it without honouring it would accept a dollar
+  limit and ignore it. The edit path has **four** undeclared fields, not one — Convex reports
+  only the alphabetically first.
+- *Proposal authorship was prose-only* — `origin` and `fallbackReason` now reach the client and
+  publish as `data-proposal-origin`. The value is keyed off `usedFallback` rather than
+  `receipt.origin`, because a provider that errors before parsing leaves the receipt reading
+  `free_route` while the deterministic path wrote the operations — publishing the raw origin
+  there would make the attribute contradict the visible copy.
 - **`interaction-clip` (atlas slide 25)** is deliberately degraded to a poster frame, but
   the exported slide carries no trace of the decision, so an examined-and-excused slide is
   indistinguishable from one never considered.
