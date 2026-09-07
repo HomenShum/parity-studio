@@ -32,6 +32,7 @@ vi.mock('./domains/nodeslide/atlas/AtlasGallery', () => ({
 
 async function renderAt(search: string, env: Record<string, string> = {}) {
   vi.resetModules();
+  vi.stubEnv('VITE_ENABLE_PARITY_DOMAIN', undefined);
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
   window.history.replaceState(null, '', `/${search}`);
   const { default: App } = await import('./App');

@@ -163,6 +163,7 @@ export function AgentRail({
           padding: 'var(--space-4) var(--space-4) var(--space-3)',
           borderBottom: '1px solid var(--color-border-subtle)',
           display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr)',
           gap: 12,
         }}
       >
@@ -224,7 +225,9 @@ export function AgentRail({
         </div>
 
         <div style={commandCardStyle}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}
+          >
             <button type="button" onClick={() => setLaunchOpen(true)} style={primaryButtonStyle}>
               <Plus size={14} />
               {t('history.newRun')}

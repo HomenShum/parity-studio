@@ -87,7 +87,7 @@ window.addEventListener('unhandledrejection', function(event) {
   }
 
   // When comment mode is on, inject a tiny helper script that captures
-  // clicks on any element, computes its normalized rect inside the iframe
+  // clicks or touch taps, computes the normalized rect inside the iframe
   // viewport, and posts a `parity:element-click` message to the parent.
   // CommentOverlay listens for these and shows an anchored quick-action
   // bubble. Without this, comment mode would only support drag-bbox.
@@ -112,16 +112,14 @@ window.addEventListener('unhandledrejection', function(event) {
     hoverRing.style.height = r.height + 'px';
   }
   document.addEventListener('mousemove', function(e){ attach(); setHover(e.target); }, true);
-  document.addEventListener('click', function(e){
-    if (!e.target || e.target === hoverRing) return;
-    e.preventDefault();
-    e.stopPropagation();
+  function selectTarget(target) {
+    if (!target || target === hoverRing) return;
     function closestCommentTarget(node) {
       if (!node || !node.closest) return node;
       var actionable = node.closest('a, button, [role="button"], input, textarea, select, [data-component], [data-testid]');
       return actionable || node;
     }
-    var el = closestCommentTarget(e.target);
+    var el = closestCommentTarget(target);
     var r = el.getBoundingClientRect();
     var W = document.documentElement.clientWidth || window.innerWidth || 1;
     var H = document.documentElement.clientHeight || window.innerHeight || 1;
@@ -191,6 +189,36 @@ window.addEventListener('unhandledrejection', function(event) {
         h: Math.max(0, Math.min(1, r.height / H))
       }
     }, '*');
+  }
+  // One touch candidate; scrolling, cancellation or a second finger invalidates it.
+  var touch = null;
+  var suppressTouchClick = false;
+  document.addEventListener('pointerdown', function(e){
+    suppressTouchClick = e.pointerType === 'touch';
+    touch = suppressTouchClick && e.isPrimary
+      ? { id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target }
+      : null;
+  }, true);
+  document.addEventListener('pointermove', function(e){
+    if (touch && e.pointerId === touch.id && Math.hypot(e.clientX - touch.x, e.clientY - touch.y) > 8) touch = null;
+  }, true);
+  document.addEventListener('pointercancel', function(){ touch = null; }, true);
+  document.addEventListener('scroll', function(){ touch = null; }, true);
+  document.addEventListener('pointerup', function(e){
+    if (!touch || e.pointerId !== touch.id) return;
+    var candidate = touch;
+    touch = null;
+    if (Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) <= 8) selectTarget(candidate.target);
+  }, true);
+  document.addEventListener('click', function(e){
+    if (!e.target || e.target === hoverRing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Consume a touch compatibility click; a new mouse pointerdown resets this.
+    // Keyboard activation has detail 0 and retains the existing click path.
+    var duplicate = suppressTouchClick && e.detail !== 0;
+    suppressTouchClick = false;
+    if (!duplicate) selectTarget(e.target);
   }, true);
 })();
 </script>

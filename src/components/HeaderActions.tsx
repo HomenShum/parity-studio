@@ -112,6 +112,7 @@ export function HeaderActions({
 
   return (
     <div
+      className="parity-header-actions"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -212,7 +213,7 @@ export function HeaderActions({
         <ChevronDown size={13} aria-hidden />
       </label>
 
-      <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div ref={wrapRef} className="parity-export">
         {exportEnabled ? (
           <button
             type="button"
@@ -241,11 +242,8 @@ export function HeaderActions({
         {open && exportEnabled ? (
           <div
             role="menu"
+            className="parity-export-menu"
             style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              right: 0,
-              minWidth: 280,
               background: 'var(--color-surface)',
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-md)',

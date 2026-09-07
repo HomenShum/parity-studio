@@ -85,6 +85,7 @@ import type * as lib_nodeslideSourceLineage from "../lib/nodeslideSourceLineage.
 import type * as lib_nodeslideSourceRefresh from "../lib/nodeslideSourceRefresh.js";
 import type * as lib_nodeslideSourceRevision from "../lib/nodeslideSourceRevision.js";
 import type * as lib_nodeslideStoryBench from "../lib/nodeslideStoryBench.js";
+import type * as lib_nodeslideSyntheticCreationFault from "../lib/nodeslideSyntheticCreationFault.js";
 import type * as lib_nodeslideTasteMismatch from "../lib/nodeslideTasteMismatch.js";
 import type * as lib_nodeslideUploadPolicy from "../lib/nodeslideUploadPolicy.js";
 import type * as lib_nodeslideValidation from "../lib/nodeslideValidation.js";
@@ -219,6 +220,7 @@ declare const fullApi: ApiFromModules<{
   "lib/nodeslideSourceRefresh": typeof lib_nodeslideSourceRefresh;
   "lib/nodeslideSourceRevision": typeof lib_nodeslideSourceRevision;
   "lib/nodeslideStoryBench": typeof lib_nodeslideStoryBench;
+  "lib/nodeslideSyntheticCreationFault": typeof lib_nodeslideSyntheticCreationFault;
   "lib/nodeslideTasteMismatch": typeof lib_nodeslideTasteMismatch;
   "lib/nodeslideUploadPolicy": typeof lib_nodeslideUploadPolicy;
   "lib/nodeslideValidation": typeof lib_nodeslideValidation;

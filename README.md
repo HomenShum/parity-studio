@@ -4,6 +4,8 @@
 
 Parity Studio also works as a design-staging layer for real codebases. Before a coding agent rewrites your app, capture the current UI, decompose it into editable slugs, prove what changed, then apply only the approved deltas back to production.
 
+For the isolated local import/review/export workflow and the current narrow-screen repair evidence, read the [local Parity handoff](docs/PARITY_LOCAL_HANDOFF.md). It separates current local proof from historical demos and production claims.
+
 ## NodeSlide domain
 
 This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain. The original Parity Studio surface opens at `?domain=parity`, but only where `VITE_ENABLE_PARITY_DOMAIN=true` is set at build time — it is **not** set on the deployed site, so that deep link shows an explanatory notice there rather than the legacy shell. The Atlas gallery is ungated and live at [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas).

@@ -32,8 +32,9 @@ const AtlasGallery = lazy(() =>
  *   ├────────────┬─────────────┬───────────────┤
  *   │  Agent     │   Canvas    │   Parity      │
  *   │   Rail     │   Panel     │   Panel       │
- *   │  (392 px)  │   (1fr)     │  (432 px)     │
+ *   │  (430 px)  │   (1fr)     │  (432 px)     │
  *   └────────────┴─────────────┴───────────────┘
+ * Compact screens place Canvas first, then Agent and Coach in normal document flow.
  */
 export default function App() {
   const urlDomain =
@@ -200,33 +201,17 @@ function ParityApp() {
 
   return (
     <div
+      className="parity-shell"
+      data-canvas-tab={canvasTab}
+      data-agent-collapsed={agentCollapsed}
+      data-coach-collapsed={parityCollapsed}
       style={{
-        display: 'grid',
-        gridTemplateColumns: [
-          agentCollapsed ? '52px' : '430px',
-          'minmax(0, 1fr)',
-          parityCollapsed ? '52px' : 'var(--layout-parity-width)',
-        ].join(' '),
-        gridTemplateRows: 'var(--size-titlebar-height) 42px 1fr',
-        height: '100vh',
         background: 'var(--color-background)',
         color: 'var(--color-text-primary)',
         fontFamily: 'var(--font-sans)',
       }}
     >
-      <header
-        style={{
-          gridColumn: '1 / -1',
-          gridRow: 1,
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          alignItems: 'center',
-          gap: 'var(--space-6)',
-          padding: '0 var(--space-6)',
-          background: 'var(--color-background)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
+      <header className="parity-shell-header">
         <Wordmark />
         <Breadcrumb
           title={breadcrumbTitle}
@@ -250,36 +235,11 @@ function ParityApp() {
           }
         />
       </header>
-      <div
-        style={{
-          gridColumn: '1 / -1',
-          gridRow: 2,
-          display: 'grid',
-          placeItems: 'center',
-          background: 'var(--color-background)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
+      <div className="parity-shell-workflow">
         <JourneySteps activeStep={activeStep} />
       </div>
 
-      <div style={{ gridColumn: 1, gridRow: 3, minHeight: 0, minWidth: 0, display: 'flex' }}>
-        <AgentRail
-          currentRunId={currentRunId}
-          onSelectRun={activateRun}
-          onRunStarted={activateRun}
-          clientSessionId={clientSessionId}
-          onResetSession={() => {
-            setCurrentRunId(null);
-            setMissingRunId(null);
-            setClientSessionId(resetSessionId());
-          }}
-          collapsed={agentCollapsed}
-          onToggleCollapsed={() => setAgentCollapsed((value) => !value)}
-        />
-      </div>
-
-      <div style={{ gridColumn: 2, gridRow: 3, minHeight: 0, minWidth: 0, display: 'flex' }}>
+      <div className="parity-shell-canvas">
         <CanvasPanel
           runId={currentRunId}
           selectedFile={selectedFile}
@@ -296,7 +256,23 @@ function ParityApp() {
         />
       </div>
 
-      <div style={{ gridColumn: 3, gridRow: 3, minHeight: 0, minWidth: 0, display: 'flex' }}>
+      <div className="parity-shell-agent">
+        <AgentRail
+          currentRunId={currentRunId}
+          onSelectRun={activateRun}
+          onRunStarted={activateRun}
+          clientSessionId={clientSessionId}
+          onResetSession={() => {
+            setCurrentRunId(null);
+            setMissingRunId(null);
+            setClientSessionId(resetSessionId());
+          }}
+          collapsed={agentCollapsed}
+          onToggleCollapsed={() => setAgentCollapsed((value) => !value)}
+        />
+      </div>
+
+      <div className="parity-shell-coach">
         <ParityPanel
           runId={currentRunId}
           selectedFile={selectedFile}
@@ -325,6 +301,7 @@ function JourneySteps({ activeStep }: { activeStep: number }) {
   ];
   return (
     <div
+      className="parity-workflow-steps"
       aria-label="Workflow steps"
       style={{
         display: 'inline-flex',

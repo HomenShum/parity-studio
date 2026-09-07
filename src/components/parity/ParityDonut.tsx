@@ -39,6 +39,7 @@ export function ParityDonut({
     <svg
       width={size}
       height={size}
+      style={{ flexShrink: 0 }}
       role="img"
       aria-label={t('parity.donutLabel', { pass, warn, fail })}
     >

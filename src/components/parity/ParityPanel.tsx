@@ -802,10 +802,11 @@ Please update the UI so the page purpose, primary action, layout, and accessibil
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 'var(--space-4)',
+            flexWrap: 'wrap',
             paddingTop: 8,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div
               style={{
                 fontFamily: 'var(--font-display)',
@@ -886,6 +887,7 @@ Please update the UI so the page purpose, primary action, layout, and accessibil
             flexDirection: 'column',
             gap: 8,
             maxHeight: 'min(44vh, 390px)',
+            flexShrink: 0,
             minHeight: 0,
             overflowY: 'auto',
             overscrollBehavior: 'contain',
