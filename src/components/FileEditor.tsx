@@ -207,7 +207,6 @@ export function FileEditor({ runId, selectedFile, onSelectFile }: FileEditorProp
             minHeight: 320,
             resize: 'none',
             border: 'none',
-            outline: 'none',
             padding: '14px 16px',
             background: '#1e1e1e',
             color: '#f4efe7',

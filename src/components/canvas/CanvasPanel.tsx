@@ -101,15 +101,14 @@ export function CanvasPanel({
       aria-label={t('canvas.label')}
     >
       <div
+        className="parity-canvas-tabs"
         role="tablist"
         aria-label={t('canvas.tabMode')}
         style={{
           display: 'flex',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 'var(--space-7)',
           minHeight: 48,
-          padding: '6px var(--space-7)',
           borderBottom: '1px solid var(--color-border-subtle)',
         }}
       >
@@ -313,11 +312,11 @@ export function CanvasPanel({
             }}
           >
             <div
+              className="parity-preview-space"
               style={{
                 flex: 1,
                 minWidth: 0,
                 minHeight: 0,
-                padding: 'var(--space-6) var(--space-7)',
                 display: 'flex',
                 flexDirection: 'column',
                 boxSizing: 'border-box',

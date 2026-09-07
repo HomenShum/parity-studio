@@ -385,7 +385,6 @@ function PendingBubble({
   onQuickAction: (template: (el?: string) => string) => void;
   error: string | null;
 }) {
-  const anchorAbove = pending.bbox.y + pending.bbox.h > 0.7;
   return (
     <>
       <div
@@ -405,16 +404,21 @@ function PendingBubble({
       <div
         style={{
           position: 'absolute',
-          left: `${Math.max(0, Math.min(0.58, pending.bbox.x)) * 100}%`,
-          ...(anchorAbove
-            ? { bottom: `${(1 - pending.bbox.y) * 100}%`, marginBottom: 8 }
-            : { top: `${(pending.bbox.y + pending.bbox.h) * 100}%`, marginTop: 8 }),
+          left: `min(${Math.max(0, Math.min(0.58, pending.bbox.x)) * 100}%, max(0px, calc(100% - 340px)))`,
+          top: 8,
+          bottom: 8,
+          marginBlock: 'auto',
+          height: 'fit-content',
+          maxHeight: 'calc(100% - 16px)',
+          overflowY: 'auto',
           background: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
           borderRadius: 'var(--radius-md)',
           boxShadow: 'var(--shadow-elevated)',
           padding: 12,
           width: 340,
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           zIndex: 30,
           pointerEvents: 'auto',
           fontFamily: 'var(--font-sans)',
@@ -483,7 +487,6 @@ function PendingBubble({
             fontSize: 13,
             fontFamily: 'var(--font-sans)',
             resize: 'vertical',
-            outline: 'none',
             boxSizing: 'border-box',
           }}
         />
@@ -561,7 +564,7 @@ function CommentRail({
   onDismiss: (commentId: Id<'comments'>) => void;
 }) {
   return (
-    <div
+    <details
       style={{
         position: 'absolute',
         right: 14,
@@ -579,6 +582,9 @@ function CommentRail({
         fontFamily: 'var(--font-sans)',
       }}
     >
+      <summary style={{ minHeight: 24, cursor: 'pointer' }}>
+        <strong style={{ fontSize: 13 }}>Review comments {comments.length}</strong>
+      </summary>
       <div
         style={{
           display: 'flex',
@@ -587,7 +593,6 @@ function CommentRail({
           marginBottom: 10,
         }}
       >
-        <strong style={{ fontSize: 13 }}>Review comments {comments.length}</strong>
         <button type="button" onClick={onToggleNotes} style={tinyButtonStyle}>
           {notesVisible ? 'Hide boxes' : 'Show boxes'}
         </button>
@@ -670,7 +675,7 @@ function CommentRail({
           </div>
         ))}
       </div>
-    </div>
+    </details>
   );
 }
 

@@ -123,6 +123,7 @@ export function FilesView({
       }}
     >
       <div
+        className="parity-files-navigation"
         style={{
           display: 'flex',
           flexDirection: 'column',

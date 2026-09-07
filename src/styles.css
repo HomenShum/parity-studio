@@ -402,9 +402,22 @@ button.file.selected {
 
 @media (max-width: 900px) {
   .files-workspace-grid {
-    grid-template-columns: 1fr !important;
-    grid-auto-rows: auto;
-    overflow-y: auto;
+    display: block !important;
+    height: auto !important;
+    min-height: 100%;
+  }
+
+  .files-workspace-grid > .parity-files-navigation {
+    display: block !important;
+  }
+
+  .parity-files-navigation > div {
+    margin-bottom: var(--space-6);
+  }
+
+  .files-workspace-grid .editor-toolbar,
+  .files-workspace-grid .editor-toolbar > div {
+    flex-wrap: wrap;
   }
 }
 
@@ -870,4 +883,154 @@ button.file.selected {
 .domain-notice nav a {
   color: var(--color-accent, #c76d54);
   text-underline-offset: 3px;
+}
+
+/* Parity shell: keep the artifact usable before allocating fixed supporting rails. */
+.parity-shell {
+  --parity-agent-track: 430px;
+  --parity-coach-track: var(--layout-parity-width);
+  display: grid;
+  grid-template-columns: var(--parity-agent-track) minmax(0, 1fr) var(--parity-coach-track);
+  grid-template-rows: var(--size-titlebar-height) 42px 1fr;
+  grid-template-areas:
+    "header header header"
+    "workflow workflow workflow"
+    "agent canvas coach";
+  min-width: 0;
+  height: 100vh;
+}
+
+.parity-shell[data-agent-collapsed="true"] {
+  --parity-agent-track: 52px;
+}
+
+.parity-shell[data-coach-collapsed="true"] {
+  --parity-coach-track: 52px;
+}
+
+.parity-shell-header {
+  grid-area: header;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 0 var(--space-6);
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.parity-shell-workflow {
+  grid-area: workflow;
+  display: grid;
+  place-items: center;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.parity-shell-agent,
+.parity-shell-canvas,
+.parity-shell-coach {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.parity-shell-agent {
+  grid-area: agent;
+}
+.parity-shell-canvas {
+  grid-area: canvas;
+}
+.parity-shell-coach {
+  grid-area: coach;
+}
+.parity-export {
+  position: relative;
+}
+
+.parity-export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 280px;
+}
+
+.parity-canvas-tabs {
+  gap: var(--space-7);
+  padding: 6px var(--space-7);
+}
+
+.parity-preview-space {
+  padding: var(--space-6) var(--space-7);
+}
+
+@media (max-width: 1199px) {
+  .parity-shell {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .parity-shell-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .parity-header-actions {
+    position: relative;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .parity-export {
+    position: static;
+  }
+
+  .parity-export-menu {
+    min-width: 0;
+    width: min(20rem, 100%);
+  }
+
+  .parity-shell-workflow {
+    padding: 6px 16px;
+  }
+
+  .parity-workflow-steps {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .parity-shell-canvas,
+  .parity-shell-agent,
+  .parity-shell-coach {
+    height: max(32rem, 70dvh);
+  }
+
+  .parity-shell[data-canvas-tab="files"] .parity-shell-canvas {
+    height: auto;
+    min-height: max(32rem, 70dvh);
+  }
+
+  .parity-shell[data-agent-collapsed="true"] .parity-shell-agent,
+  .parity-shell[data-coach-collapsed="true"] .parity-shell-coach {
+    height: auto;
+    min-height: min-content;
+  }
+
+  .parity-canvas-tabs {
+    gap: var(--space-4);
+    padding: 6px 16px;
+  }
+
+  .parity-preview-space {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .parity-cost-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
