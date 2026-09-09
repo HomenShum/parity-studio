@@ -733,7 +733,9 @@ async function requireRuntimeControls(page: Page): Promise<void> {
       ({ sessionIdKey, sessionPrefix, consentKey }) => {
         const sessionId = window.localStorage.getItem(sessionIdKey);
         if (!sessionId) return null;
-        const raw = window.sessionStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
+        const raw = window.sessionStorage.getItem(
+          `${sessionPrefix}${encodeURIComponent(sessionId)}`,
+        );
         if (!raw) return null;
         try {
           const parsed = JSON.parse(raw) as {
@@ -847,7 +849,9 @@ async function waitForStoredJobCapability(
       }) => {
         const sessionId = window.localStorage.getItem(sessionIdKey);
         if (!sessionId) return null;
-        const raw = window.sessionStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
+        const raw = window.sessionStorage.getItem(
+          `${sessionPrefix}${encodeURIComponent(sessionId)}`,
+        );
         if (!raw) return null;
         try {
           const state = JSON.parse(raw) as {
