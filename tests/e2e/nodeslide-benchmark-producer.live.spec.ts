@@ -709,6 +709,11 @@ async function chooseRecommendedNebius(page: Page, surface: 'landing' | 'editor'
   const effort = page.getByTestId(effortTestId);
   await effort.click();
   const effortListbox = page.getByRole('listbox');
+  await effortListbox.getByRole('option', { name: 'Low', exact: true }).click();
+  if (!(await effort.textContent())?.includes('Low')) {
+    throw new Error('reasoning effort did not change before restoring the fixed policy');
+  }
+  await effort.click();
   await effortListbox.getByRole('option', { name: 'Medium', exact: true }).click();
   if (!(await effort.textContent())?.includes('Medium')) {
     throw new Error('reasoning effort was not medium');
@@ -728,7 +733,7 @@ async function requireRuntimeControls(page: Page): Promise<void> {
       ({ sessionIdKey, sessionPrefix, consentKey }) => {
         const sessionId = window.localStorage.getItem(sessionIdKey);
         if (!sessionId) return null;
-        const raw = window.localStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
+        const raw = window.sessionStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
         if (!raw) return null;
         try {
           const parsed = JSON.parse(raw) as {
@@ -802,7 +807,7 @@ async function latestStoredJobId(page: Page): Promise<string | null> {
     ({ sessionIdKey, sessionPrefix }) => {
       const sessionId = window.localStorage.getItem(sessionIdKey);
       if (!sessionId) return null;
-      const raw = window.localStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
+      const raw = window.sessionStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
       if (!raw) return null;
       try {
         const state = JSON.parse(raw) as {
@@ -842,7 +847,7 @@ async function waitForStoredJobCapability(
       }) => {
         const sessionId = window.localStorage.getItem(sessionIdKey);
         if (!sessionId) return null;
-        const raw = window.localStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
+        const raw = window.sessionStorage.getItem(`${sessionPrefix}${encodeURIComponent(sessionId)}`);
         if (!raw) return null;
         try {
           const state = JSON.parse(raw) as {
