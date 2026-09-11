@@ -261,6 +261,13 @@ Visit http://localhost:5180
 
 ## Self-dogfood
 
+The live presentation benchmark reads agent controls and job capabilities from the current
+tab's session storage. It exercises a Low-to-Medium effort change before checking the fixed
+policy, so selecting an unchanged default cannot leave that record absent. The strict
+model, consent, scope, budget and evidence gates remain in place. The fixed golden sample
+still requires valid owner access on repeat runs; this storage repair does not establish
+a passing live benchmark or replace that ownership requirement.
+
 The shell on this repo is itself decomposable. See [docs/plans/2026-04-28-shell-revamp-from-reference.md](./docs/plans/2026-04-28-shell-revamp-from-reference.md) for the four-sprint rebuild that took the shell from a 4-pane dark layout to the current 3-column cream-light shell driven by 16 honest parity checks.
 
 ## Honest non-claims
