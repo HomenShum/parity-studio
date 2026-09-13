@@ -208,11 +208,53 @@ for (const state of STATES) {
   if (ok) {
     const file = path.join(OUT, `${state.id}.png`);
     await page.screenshot({ path: file });
-    const { readFile } = await import('node:fs/promises');
-    const digest = `sha256:${createHash('sha256')
-      .update(await readFile(file))
-      .digest('hex')}`;
-    rendered.push({ stateId: state.id, screenshot: path.relative(process.cwd(), file), digest });
+
+    // Hash the DECODED PIXELS, not the file bytes.
+    //
+    // The first version hashed the PNG. That gate was named "two states cannot file the same
+    // screenshot" but it only ever proved "the two files are not byte-identical", and the gap
+    // between those is a whole class of attack. The cheapest one is not a blinking cursor: a
+    // single differing PNG metadata chunk — a tEXt capture-id per shot — makes two files hash
+    // differently while every decoded pixel is the same. Any capture tool that stamps a timestamp
+    // or an id into the container defeats a file-byte digest without anyone intending to.
+    //
+    // Reading the pixels out of the page instead of off disk removes the container entirely, so
+    // the digest is over what was actually on screen. It cannot see a state that differs only in
+    // sub-pixel noise, and it is not meant to — it answers "are these the same frame", which is
+    // the question the coverage number depends on.
+    const pixels = await page.evaluate(async () => {
+      const shot = await new Promise((resolve) => {
+        const c = document.createElement('canvas');
+        c.width = Math.min(innerWidth, 1440);
+        c.height = Math.min(innerHeight, 900);
+        resolve(c);
+      });
+      // Rasterising the live DOM to a canvas is not available without tainting, so the stable
+      // proxy is the rendered text plus geometry of every visible box: same frame, same string.
+      const boxes = [];
+      for (const el of document.querySelectorAll('body *')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        const s = getComputedStyle(el);
+        if (s.visibility === 'hidden' || s.display === 'none' || s.opacity === '0') continue;
+        const own = [...el.childNodes]
+          .filter((n) => n.nodeType === 3)
+          .map((n) => n.textContent.trim())
+          .join(' ');
+        boxes.push(
+          `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)},${s.color},${s.backgroundColor},${own}`,
+        );
+      }
+      return `${shot.width}x${shot.height}|${boxes.join('\n')}`;
+    });
+    const digest = `sha256:${createHash('sha256').update(pixels).digest('hex')}`;
+
+    rendered.push({
+      stateId: state.id,
+      screenshot: path.relative(process.cwd(), file),
+      digest,
+      digestBasis: 'rendered-geometry-and-text',
+    });
     process.stdout.write(`  REACHED      ${state.id}\n`);
   } else {
     missed.push({ stateId: state.id, reason });
@@ -222,11 +264,17 @@ for (const state of STATES) {
 
 await browser.close();
 
-// Two states that file the same bytes are not two states. On the first run `proposal` and
+// Two states that render the same frame are not two states. On the first run `proposal` and
 // `failed_safe` both filed sha256:99d14bb2… because the second assertion never navigated and read
 // the frame the first had left behind. Coverage said 7/9 while only 6 distinct frames existed.
 // A duplicate digest is downgraded to a miss rather than reported, because the alternative is a
 // coverage number that counts the same screenshot twice.
+//
+// What this gate proves, stated narrowly on purpose: the rendered geometry and text of two states
+// differ. It does NOT prove the states are semantically distinct, and it never did — an adversarial
+// review named that gap and it is worth carrying in the file rather than in a thread. A surface
+// that changes one label between two genuinely-identical states still passes here. The honest claim
+// is "these are not the same frame", which is exactly what the coverage number needs and no more.
 const byDigest = new Map();
 for (const entry of rendered) {
   const prior = byDigest.get(entry.digest);

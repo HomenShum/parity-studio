@@ -50,7 +50,7 @@
       "id": "f5",
       "kind": "count",
       "subject": "page",
-      "property": "elements-with-infinite-animation",
+      "property": "painted-elements-with-infinite-animation",
       "value": 0,
       "unit": "elements",
       "locatorDescription": "the page as a whole"
@@ -65,20 +65,8 @@
       "locatorDescription": "the page as a whole"
     }
   ],
-  "problemTags": [
-    "first-run-orientation",
-    "route-disclosure-before-egress"
-  ],
-  "intentTags": [
-    "state-a-goal",
-    "choose-a-model"
-  ],
-  "layoutTags": [
-    "three-panel",
-    "persistent-inspector"
-  ],
-  "interactionTags": [
-    "tab-switching",
-    "direct-edit"
-  ]
+  "problemTags": ["first-run-orientation", "route-disclosure-before-egress"],
+  "intentTags": ["state-a-goal", "choose-a-model"],
+  "layoutTags": ["three-panel", "persistent-inspector"],
+  "interactionTags": ["tab-switching", "direct-edit"]
 }

@@ -77,7 +77,7 @@
       "id": "f8",
       "kind": "count",
       "subject": "page",
-      "property": "elements-with-infinite-animation",
+      "property": "painted-elements-with-infinite-animation",
       "value": 0,
       "unit": "elements",
       "locatorDescription": "the page as a whole"
@@ -92,19 +92,8 @@
       "locatorDescription": "upper left of the viewport, reading \"Slide 1 Stories with structure Liv\""
     }
   ],
-  "problemTags": [
-    "dense-data-scan",
-    "claim-to-source-tracing"
-  ],
-  "intentTags": [
-    "check-what-backs-this-number"
-  ],
-  "layoutTags": [
-    "three-panel",
-    "persistent-inspector"
-  ],
-  "interactionTags": [
-    "tab-switching",
-    "direct-edit"
-  ]
+  "problemTags": ["dense-data-scan", "claim-to-source-tracing"],
+  "intentTags": ["check-what-backs-this-number"],
+  "layoutTags": ["three-panel", "persistent-inspector"],
+  "interactionTags": ["tab-switching", "direct-edit"]
 }

@@ -1,14 +1,94 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getDeckOwnerAccessKey,
+  getOrCreateSessionId,
   getStoredOwnerAccessKey,
   listStoredDeckAccess,
   removeDeckOwnerAccessKey,
+  resetSessionId,
   storeDeckOwnerAccessKey,
 } from './sessionIdentity';
 
+const systemCrypto = globalThis.crypto;
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('anonymous visitor session identity', () => {
+  it('preserves a returning visitor session without requiring random-number APIs', () => {
+    const localStorage = new MemoryStorage();
+    localStorage.setItem('parity.studio.sessionId', 'existing-session');
+    installWindow(localStorage);
+    vi.stubGlobal('crypto', {});
+
+    expect(getOrCreateSessionId()).toBe('existing-session');
+  });
+
+  it('mints distinct sessions through randomUUID when the browser exposes it', () => {
+    installWindow(new MemoryStorage());
+    vi.stubGlobal('crypto', systemCrypto);
+
+    const minted = new Set(Array.from({ length: 300 }, () => resetSessionId()));
+
+    expect(minted).toHaveLength(300);
+  });
+
+  it('calls getRandomValues when randomUUID is unavailable', () => {
+    installWindow(new MemoryStorage());
+    const getRandomValues = vi.fn(systemCrypto.getRandomValues.bind(systemCrypto));
+    vi.stubGlobal('crypto', { getRandomValues });
+
+    resetSessionId();
+
+    expect(getRandomValues).toHaveBeenCalledOnce();
+    expect(getRandomValues.mock.calls[0]?.[0]).toHaveLength(16);
+  });
+
+  it('varies all 128 fallback entropy bits across a browser-session burst', () => {
+    installWindow(new MemoryStorage());
+    installGetRandomValuesOnly();
+
+    const minted = Array.from({ length: 300 }, () => resetSessionId());
+    const payloads = minted.map(sessionIdToBytes);
+
+    for (let bit = 0; bit < 128; bit += 1) {
+      const byteIndex = Math.floor(bit / 8);
+      const mask = 1 << (bit % 8);
+      const observed = new Set(payloads.map((bytes) => bytes[byteIndex] & mask));
+      expect(observed, `entropy bit ${bit}`).toEqual(new Set([0, mask]));
+    }
+  });
+
+  it('keeps fallback sessions distinct while the clock is frozen', () => {
+    installWindow(new MemoryStorage());
+    installGetRandomValuesOnly();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-29T12:00:00Z'));
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const minted = new Set(Array.from({ length: 100 }, () => resetSessionId()));
+
+    expect(minted).toHaveLength(100);
+  });
+
+  it('keeps fallback sessions distinct when Math.random is pinned', () => {
+    installWindow(new MemoryStorage());
+    installGetRandomValuesOnly();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const minted = new Set(Array.from({ length: 100 }, () => resetSessionId()));
+
+    expect(minted).toHaveLength(100);
+  });
+
+  it('refuses to mint a readable session when secure randomness is unavailable', () => {
+    installWindow(new MemoryStorage());
+    vi.stubGlobal('crypto', {});
+
+    expect(() => getOrCreateSessionId()).toThrow('Secure random number generation is unavailable.');
+  });
 });
 
 describe('NodeSlide owner capability persistence', () => {
@@ -96,6 +176,18 @@ function installWindow(localStorage: Storage): void {
     localStorage,
     sessionStorage: new MemoryStorage(),
   });
+}
+
+function installGetRandomValuesOnly(): void {
+  vi.stubGlobal('crypto', {
+    getRandomValues: systemCrypto.getRandomValues.bind(systemCrypto),
+  });
+}
+
+function sessionIdToBytes(sessionId: string): Uint8Array {
+  const payload = sessionId.replace(/^session-/u, '');
+  expect(payload).toMatch(/^[0-9a-f]{32}$/u);
+  return Uint8Array.from(payload.match(/.{2}/gu) ?? [], (hex) => Number.parseInt(hex, 16));
 }
 
 class MemoryStorage implements Storage {

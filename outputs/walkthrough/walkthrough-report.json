@@ -1,0 +1,76 @@
+{
+  "recordedAt": "2026-07-26T03:33:22.359Z",
+  "target": "https://nodeslide.vercel.app",
+  "video": "D:\\VSCode Projects\\parity-studio\\outputs\\walkthrough\\nodeslide-walkthrough.webm",
+  "bytes": 19642120,
+  "megabytes": 18.73,
+  "wallSeconds": 281,
+  "viewport": "1440x900",
+  "beats": [
+    {
+      "beat": 1,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 2,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 3,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 4,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 5,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 6,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 7,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 8,
+      "ok": true,
+      "missing": []
+    },
+    {
+      "beat": 9,
+      "ok": true,
+      "missing": []
+    }
+  ],
+  "missedBeats": [],
+  "filmedHeadlineId": "element_fa481b9c8a9f6edd942cc10bbc19e479",
+  "filmedOps": [
+    "Update letterSpacing, lineHeight on element_fa481b9c8a9f6edd942cc10bbc19e479",
+    "Update opacity on element_3ef9d2d15cd20ee39a3e3e7fc4242736"
+  ],
+  "deckJsonPath": "D:\\VSCode Projects\\parity-studio\\outputs\\walkthrough\\deck.json",
+  "notes": [
+    "headline element filmed: element_fa481b9c8a9f6edd942cc10bbc19e479",
+    "selection record fields: id, bbox, exportCapabilities, sourceIds, version",
+    "deck.json saved: D:\\VSCode Projects\\parity-studio\\outputs\\walkthrough\\deck.json (68705 bytes)",
+    "directions returned: 3 in 36s",
+    "operations filmed: Update letterSpacing, lineHeight on element_fa481b9c8a9f6edd942cc10bbc19e479 ; Update opacity on element_3ef9d2d15cd20ee39a3e3e7fc4242736",
+    "operations name the element opened in beat 1 (element_fa481b9c8a9f6edd942cc10bbc19e479)",
+    "fallback reasons on screen: Fallback reason: provider timeout",
+    "evidence bindings on screen: Cited by 8 elements | Cited by 35 elements",
+    "view-source carries a836c6a29e026bb219b959bdf3e2dc9e9f407c77: true",
+    "github main HEAD shows a836c6a: true"
+  ],
+  "consoleErrors": []
+}

@@ -9,8 +9,15 @@ export interface OwnerAccessPersistenceReceipt {
 }
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('Secure random number generation is unavailable.');
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `session-${[...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export function getOrCreateSessionId(): string {

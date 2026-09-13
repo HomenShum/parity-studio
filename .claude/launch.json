@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "D:/VSCode Projects/nodeslide"],
       "port": 5173
+    },
+    {
+      "name": "brain",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "tools/brain", "-p", "5199", "-c-1", "--silent"],
+      "port": 5199
     }
   ]
 }

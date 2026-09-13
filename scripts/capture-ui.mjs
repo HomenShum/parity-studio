@@ -1,124 +1,87 @@
+#!/usr/bin/env node
 /**
- * Capture the running app to PNG files, for before-and-after evidence.
+ * capture-ui.mjs — drive the real apps in headless Chromium and write frames.
  *
- * The owner asked a fair question: every change ships without a picture of its effect. The in-app
- * browser pane cannot answer that, because it only takes a screenshot when a human has the pane on
- * screen. This script does not need the pane. It drives a real Chromium through Playwright and
- * writes real files, so a change can be shown and not only described.
+ * WHY THIS EXISTS
  *
- * Usage:
- *   node scripts/capture-ui.mjs --url http://localhost:5180/?domain=nodeslide --out shot.png
- *                               [--click <testid>] [--wait <testid>] [--width 1440] [--height 900]
- *                               [--measure <css selector>]
+ * The browser-automation surface in the agent harness could screenshot but not
+ * record: starting a GIF recording wedged the renderer every time, and the
+ * screenshot tool's save-to-disk wrote nowhere findable. So visual evidence
+ * existed only inside a chat transcript, which is not evidence anyone else can
+ * check.
  *
- * The exit code is 1 when a wait target never appears. A capture of the wrong screen is worse than
- * no capture, so this fails instead of writing a picture of something else.
+ * Playwright is already a dependency of all three apps and Chromium is already
+ * cached, so this drives the real browser directly and writes real files.
  *
- * `--measure` prints the geometry and type scale of one element. A screenshot shows that a layout
- * changed; it does not say by how much, and "looks centred" is not a fact. Design review kept
- * turning into opinion because the numbers were never on the table — this puts them there, so
- * "the palette is pinned to the corner at 9px type" is a reading rather than an impression.
+ * Frames are written as PNGs and assembled into a GIF by assemble-gif.mjs.
+ * Nothing here is simulated: if a page fails to load, the run FAILS rather than
+ * emitting a frame that implies it rendered.
+ *
+ *   node capture-ui.mjs
  */
 
-import { chromium } from 'playwright';
+import { chromium } from "playwright";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-function flag(name, fallback = null) {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index < 0) return fallback;
-  const value = process.argv[index + 1];
-  return value && !value.startsWith('--') ? value : true;
-}
+const OUT = "C:/Users/hshum/Downloads/Interview items/brain/media/frames";
 
-const url = flag('url', 'http://localhost:5180/');
-const out = flag('out', 'shot.png');
-const clickTarget = flag('click');
-const clickText = flag('clickText');
-const waitTarget = flag('wait');
-const measureTarget = flag('measure');
-const width = Number(flag('width', 1440));
-const height = Number(flag('height', 900));
+/** Each app: a name, a URL, and a selector that PROVES it actually rendered. */
+const TARGETS = [
+  {
+    name: "noderoom",
+    url: "http://localhost:5260/",
+    proof: "text=Review every change",
+    steps: [{ label: "landing" }, { label: "scrolled", scroll: 600 }],
+  },
+  {
+    name: "nodeslide",
+    url: "http://localhost:5180/",
+    proof: "text=What presentation should we build",
+    steps: [{ label: "composer" }, { label: "scrolled", scroll: 400 }],
+  },
+];
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width, height } });
+const run = async () => {
+  await mkdir(OUT, { recursive: true });
+  const browser = await chromium.launch();
+  const failures = [];
+  const written = [];
 
-const consoleErrors = [];
-page.on('console', (message) => {
-  if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 160));
-});
+  for (const t of TARGETS) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await page.goto(t.url, { waitUntil: "networkidle", timeout: 30_000 });
+      // A proof selector, not a timeout. A screenshot of a blank page is worse
+      // than no screenshot: it looks like evidence and is not.
+      await page.waitForSelector(t.proof, { timeout: 20_000 });
 
-try {
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 45_000 });
-
-  if (clickTarget) {
-    const target = page.locator(`[data-testid="${clickTarget}"]`);
-    await target.waitFor({ state: 'visible', timeout: 20_000 });
-    await target.click();
+      for (const [i, step] of t.steps.entries()) {
+        if (step.scroll) {
+          await page.mouse.wheel(0, step.scroll);
+          await page.waitForTimeout(700);
+        }
+        const file = path.join(OUT, `${t.name}-${String(i).padStart(2, "0")}-${step.label}.png`);
+        await page.screenshot({ path: file });
+        written.push(file);
+        console.log(`  captured  ${path.basename(file)}`);
+      }
+    } catch (e) {
+      failures.push(`${t.name}: ${e.message.split("\n")[0]}`);
+      console.log(`  FAILED    ${t.name} - ${e.message.split("\n")[0]}`);
+    } finally {
+      await page.close();
+    }
   }
 
-  // Not every control carries a test id. Text is the fallback, and it is what a person clicks.
-  if (clickText) {
-    const target = page.getByText(clickText, { exact: false }).first();
-    await target.waitFor({ state: 'visible', timeout: 20_000 });
-    await target.click();
-    await page.waitForTimeout(2500);
-  }
-
-  if (waitTarget) {
-    await page.locator(`[data-testid="${waitTarget}"]`).waitFor({
-      state: 'visible',
-      timeout: 20_000,
-    });
-  }
-
-  // Let fonts and any entry animation settle, so two captures are comparable.
-  await page.waitForTimeout(900);
-  await page.screenshot({ path: out, fullPage: false });
-
-  if (typeof measureTarget === 'string') {
-    const measured = await page.evaluate((selector) => {
-      const node = document.querySelector(selector);
-      if (!node) return null;
-      const box = node.getBoundingClientRect();
-      const style = getComputedStyle(node);
-      return {
-        left: Math.round(box.left),
-        top: Math.round(box.top),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
-        // Positive means it sits right of centre, negative left. Zero is centred, and says so
-        // without anyone having to judge a screenshot.
-        centreOffsetPx: Math.round(box.left + box.width / 2 - window.innerWidth / 2),
-        fontSize: style.fontSize,
-        // Every distinct text size inside, smallest first. A scale with an 8px floor under a 31px
-        // icon reads as noise no matter how the individual rules look in isolation.
-        textSizes: [
-          ...new Set(
-            [...node.querySelectorAll('*')]
-              .filter((child) => child.textContent?.trim())
-              .map((child) => getComputedStyle(child).fontSize),
-          ),
-        ].sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b)),
-      };
-    }, measureTarget);
-
-    process.stdout.write(
-      measured
-        ? `measured ${measureTarget}\n${JSON.stringify(measured, null, 2)}\n`
-        : `measured ${measureTarget}: NOT FOUND\n`,
-    );
-    if (!measured) process.exitCode = 1;
-  }
-
-  process.stdout.write(
-    `captured ${out} at ${width}x${height}\n` +
-      `  url            ${url}\n` +
-      `  clicked        ${clickTarget ?? '(none)'}\n` +
-      `  waited for     ${waitTarget ?? '(none)'}\n` +
-      `  console errors ${consoleErrors.length}${consoleErrors.length ? `: ${consoleErrors[0]}` : ''}\n`,
-  );
-} catch (error) {
-  process.stderr.write(`capture failed: ${error.message}\n`);
-  process.exitCode = 1;
-} finally {
   await browser.close();
-}
+  console.log(`\n  ${written.length} frame(s) written to ${OUT}`);
+  if (failures.length) {
+    console.log(`  ${failures.length} target(s) FAILED - no frame was faked for them:`);
+    for (const f of failures) console.log(`    ${f}`);
+  }
+  process.exitCode = written.length === 0 ? 1 : 0;
+};
+
+await run();

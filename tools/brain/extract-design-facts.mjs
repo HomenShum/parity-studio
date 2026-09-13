@@ -147,12 +147,24 @@ function collect() {
   }
 
   // ---- infinite loops, which the motion ladder caps at zero unguarded ------
+  //
+  // Counted over PAINTED elements only. getComputedStyle happily reports an animation on an element
+  // inside a display:none subtree, so an unfiltered sweep counts motion that is not running and
+  // cannot be seen. A sibling audit misreported "17 infinite animations" on a page whose real
+  // painted count was zero, from exactly this.
+  //
+  // The direction of that error matters: it inflates. An inflated count sends someone hunting for
+  // animations that do not exist, and when they find nothing the natural conclusion is that the
+  // instrument is noise — which is how a real finding gets ignored later. This one currently reads
+  // zero either way, so the fix changes no number today and prevents a false alarm on any page
+  // that keeps hidden animated markup, which is most of them.
   let infinite = 0;
   for (const el of document.querySelectorAll('*')) {
+    if (!visible(el)) continue;
     const s = getComputedStyle(el);
     if (s.animationIterationCount.split(',').some((c) => c.trim() === 'infinite')) infinite += 1;
   }
-  push('count', 'page', 'elements-with-infinite-animation', infinite, 'elements', null);
+  push('count', 'page', 'painted-elements-with-infinite-animation', infinite, 'elements', null);
 
   // ---- artifact dominance -------------------------------------------------
   //
