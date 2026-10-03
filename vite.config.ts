@@ -1,7 +1,7 @@
 import { URL, fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/postcss';
 import react from '@vitejs/plugin-react';
-import { configDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 import {
   frontendRuntimeSourceManifest,
   resolveRuntimeSourceSha,
@@ -39,7 +39,15 @@ export default defineConfig(() => {
       },
     },
     test: {
-      exclude: [...configDefaults.exclude, '**/.claude/**', '**/tests/e2e/**'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/cypress/**',
+        '**/.{idea,git,cache,output,temp}/**',
+        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
+        '**/.claude/**',
+        '**/tests/e2e/**',
+      ],
       // The NodeSlide interaction suites intentionally exercise complete jsdom
       // journeys. Keep their assertions strict while allowing parallel CI load
       // to finish without the 5 s Vitest default becoming a flaky failure.
