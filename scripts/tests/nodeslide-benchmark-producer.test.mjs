@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildGoldenNodeSlide } from '../../convex/lib/nodeslideSeed';
 import {
@@ -18,6 +20,7 @@ import { loadUxArtifact, sha256 } from '../nodeslide-uxbench.mjs';
 
 const temporaryDirectories = [];
 const sourceRevision = 'a'.repeat(40);
+const { runBoundary, ProducerOutcomeError } = loadProducerBoundary();
 
 afterEach(async () => {
   await Promise.all(
@@ -189,7 +192,160 @@ describe('NodeSlide live benchmark producer', () => {
     expect(guard.observe(new Error('Provider timeout 123'))).toBe('Provider timeout <n>');
     expect(() => guard.observe(new Error('Provider timeout 456'))).toThrow(/stopped after two/u);
   });
+
+  it.each([
+    { label: 'successful capture and cleanup', primary: false, cleanup: false },
+    { label: 'failed capture with successful cleanup', primary: true, cleanup: false },
+    { label: 'successful capture with failed cleanup', primary: false, cleanup: true },
+    { label: 'failed capture and failed cleanup', primary: true, cleanup: true },
+  ])('reports every outcome for the operator after $label', async (scenario) => {
+    await verifyBoundaryScenario(scenario);
+  });
+
+  it('retains collected cases and an early stop when cleanup also fails', async () => {
+    let cleanupCalls = 0;
+    const outcome = await runBoundary(
+      async (failures) => {
+        failures.push(new ProducerOutcomeError('C01', 'UNSCORED', 'creation receipt unavailable'));
+        failures.push(new ProducerOutcomeError('E01', 'UNSCORED', 'edit receipt unavailable'));
+        throw new ProducerOutcomeError(
+          'E01',
+          'UNSCORED',
+          'repeated identical live failure stopped the producer',
+        );
+      },
+      async () => {
+        cleanupCalls++;
+        throw new ProducerOutcomeError(
+          'C01',
+          'FAIL',
+          'synthetic deck cleanup could not recover the creation receipt',
+        );
+      },
+    ).catch((error) => error);
+    for (const stage of [
+      'creation receipt unavailable',
+      'edit receipt unavailable',
+      'repeated identical live failure stopped the producer',
+      'synthetic deck cleanup could not recover the creation receipt',
+    ]) {
+      expect(outcome.message).toContain(stage);
+    }
+    expect(cleanupCalls).toBe(1);
+  });
+
+  it('keeps unknown provider details out of the combined operator failure', async () => {
+    const outcome = await runBoundary(
+      async () => {
+        throw new Error('synthetic-provider-body-private-marker');
+      },
+      async () => {
+        throw new Error('synthetic-owner-capability-private-marker');
+      },
+    ).catch((error) => error);
+    expect(outcome).toBeInstanceOf(Error);
+    expect(outcome.message).toContain('the live producer was incomplete');
+    expect(outcome.message).toContain('synthetic deck cleanup did not complete');
+    expect(outcome.message).not.toContain('private-marker');
+  });
+
+  it('keeps concurrent operator runs isolated and awaits each cleanup exactly once', async () => {
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        verifyBoundaryScenario({
+          primary: index % 2 === 0,
+          cleanup: index % 3 === 0,
+          label: `burst-${index}`,
+        }),
+      ),
+    );
+  });
+
+  it('does not carry failures into later runs across sustained cleanup history', async () => {
+    for (let index = 0; index < 500; index++) {
+      await verifyBoundaryScenario({
+        primary: index % 2 === 0,
+        cleanup: index % 3 === 0,
+        label: `history-${index}`,
+      });
+    }
+  });
 });
+
+async function verifyBoundaryScenario({ primary, cleanup, label }) {
+  let cleanupCalls = 0;
+  const outcome = await runBoundary(
+    async (failures) => {
+      if (primary)
+        failures.push(new ProducerOutcomeError('C01', 'UNSCORED', `${label} receipt unavailable`));
+    },
+    async () => {
+      cleanupCalls++;
+      await Promise.resolve();
+      if (cleanup) throw new ProducerOutcomeError('C01', 'FAIL', `${label} cleanup unavailable`);
+    },
+  ).catch((error) => error);
+  expect(cleanupCalls).toBe(1);
+  if (!primary && !cleanup) {
+    expect(outcome).toBeUndefined();
+    return;
+  }
+  expect(outcome).toBeInstanceOf(Error);
+  expect(outcome.message.includes(`${label} receipt unavailable`)).toBe(primary);
+  expect(outcome.message.includes(`${label} cleanup unavailable`)).toBe(cleanup);
+}
+
+function loadProducerBoundary() {
+  // Run the real reporting boundary without importing live browser/provider code.
+  // Only case operations and cleanup are replaced; catches, finally and summary stay intact.
+  const filename = new URL(
+    '../../tests/e2e/nodeslide-benchmark-producer.live.spec.ts',
+    import.meta.url,
+  );
+  const source = readFileSync(filename, 'utf8');
+  const tree = ts.createSourceFile(filename.pathname, source, ts.ScriptTarget.Latest, true);
+  let callback;
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(tree) === 'test' &&
+      node.arguments[0]?.text === 'captures C01, A05, and E01 without retaining live credentials'
+    ) {
+      callback = node.arguments[1];
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  const boundary = callback.body.statements.find(ts.isTryStatement);
+  const summary = boundary.tryBlock.statements
+    .filter(
+      (node) => ts.isIfStatement(node) && node.expression.getText(tree) === 'failures.length > 0',
+    )
+    .map((node) => node.getText(tree))
+    .join('\n');
+  const runSource = `${source.slice(boundary.getStart(tree), boundary.tryBlock.getStart(tree) + 1)}
+await exercise(failures);
+${summary}
+${source.slice(boundary.tryBlock.end - 1, boundary.end)}`;
+  const after = callback.body.statements
+    .filter((node) => node.pos >= boundary.end)
+    .map((node) => node.getText(tree))
+    .join('\n');
+  const helpers = tree.statements
+    .filter((node) => ['ProducerOutcomeError', 'asProducerOutcome'].includes(node.name?.text))
+    .map((node) => node.getText(tree))
+    .join('\n');
+  const compiled = ts.transpileModule(
+    `${helpers}\nasync function runBoundary(exercise, cleanupSyntheticC01) {
+    const failures = [];
+    const page = {}, convexClient = null, c01Job = null, c01Deck = null;
+    const c01DispatchAttempted = false, c01PreviousJobId = null, receiptFailureGuard = {};
+    ${runSource}\n${after}
+  }`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  return new Function(`${compiled}\nreturn { runBoundary, ProducerOutcomeError };`)();
+}
 
 async function temporaryDirectory() {
   const directory = await mkdtemp(path.join(tmpdir(), 'nodeslide-producer-'));

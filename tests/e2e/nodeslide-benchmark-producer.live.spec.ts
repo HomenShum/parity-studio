@@ -487,24 +487,33 @@ test.describe('NodeSlide live benchmark producer', () => {
         }
         if (primaryFailure) throw primaryFailure;
       });
-
-      if (failures.length > 0) {
-        throw new Error(
-          `Live benchmark producer completed without fabricated results: ${failures
-            .map((failure) => `${failure.caseId} ${failure.status} (${failure.stage})`)
-            .join('; ')}`,
+    } catch (error) {
+      failures.push(
+        asProducerOutcome(error, 'C01', 'UNSCORED', 'the live producer was incomplete'),
+      );
+    } finally {
+      try {
+        await cleanupSyntheticC01({
+          page,
+          client: convexClient,
+          job: c01Job,
+          deck: c01Deck,
+          dispatchAttempted: c01DispatchAttempted,
+          previousJobId: c01PreviousJobId,
+          receiptFailureGuard,
+        });
+      } catch (error) {
+        failures.push(
+          asProducerOutcome(error, 'C01', 'FAIL', 'synthetic deck cleanup did not complete'),
         );
       }
-    } finally {
-      await cleanupSyntheticC01({
-        page,
-        client: convexClient,
-        job: c01Job,
-        deck: c01Deck,
-        dispatchAttempted: c01DispatchAttempted,
-        previousJobId: c01PreviousJobId,
-        receiptFailureGuard,
-      });
+    }
+    if (failures.length > 0) {
+      throw new Error(
+        `Live benchmark producer completed without fabricated results: ${failures
+          .map((failure) => `${failure.caseId} ${failure.status} (${failure.stage})`)
+          .join('; ')}`,
+      );
     }
   });
 });
