@@ -581,7 +581,7 @@ test.describe('NodeSlide editor-wide control and surface matrix', () => {
       expectSurfaceSnapshotOperable(toolbarSnapshot);
 
       const composer = page.getByTestId('ai-composer');
-      if (!(await composer.isVisible())) {
+      if (visualCase.width < 1100) {
         const openInspector = page
           .locator(
             'button[aria-label="Open inspector"]:visible, button[aria-label="Ask AI"]:visible',
