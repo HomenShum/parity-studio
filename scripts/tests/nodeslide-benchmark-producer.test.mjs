@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildGoldenNodeSlide } from '../../convex/lib/nodeslideSeed';
 import {
   FIXED_LIVE_CASES,
@@ -20,7 +20,14 @@ import { loadUxArtifact, sha256 } from '../nodeslide-uxbench.mjs';
 
 const temporaryDirectories = [];
 const sourceRevision = 'a'.repeat(40);
-const { runBoundary, ProducerOutcomeError } = loadProducerBoundary();
+const {
+  runBoundary,
+  ProducerOutcomeError,
+  waitForRunReceipt,
+  openGoldenSample,
+  cleanupSyntheticC01,
+  safeErrorClass,
+} = loadProducerBoundary();
 
 afterEach(async () => {
   await Promise.all(
@@ -270,6 +277,165 @@ describe('NodeSlide live benchmark producer', () => {
       });
     }
   });
+
+  it('distinguishes query and processing errors while preserving the two-failure stop', async () => {
+    const query = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('synthetic-private-provider-body'))
+      .mockResolvedValueOnce({ job: null });
+    const guard = new RepeatedLiveFailureGuard();
+    const outcome = await waitForRunReceipt(
+      { query },
+      'C01',
+      syntheticCapability(),
+      guard,
+      () => false,
+      0,
+    ).catch((error) => error);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(outcome).toBeInstanceOf(ProducerOutcomeError);
+    expect(outcome.status).toBe('UNSCORED');
+    expect(outcome.stage).toBe('repeated receipt query failure stopped the live run');
+    expect(outcome.diagnostic).toBe('first=receipt_query:Error last=receipt_processing:TypeError');
+    expect(outcome.message).not.toContain('private');
+  });
+
+  it('lets the operator receive a valid receipt after one transient query failure', async () => {
+    const receipt = { job: { jobId: 'synthetic-job', status: 'awaiting_review' } };
+    const query = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('private'))
+      .mockResolvedValueOnce(receipt);
+    await expect(
+      waitForRunReceipt(
+        { query },
+        'C01',
+        syntheticCapability(),
+        new RepeatedLiveFailureGuard(),
+        () => true,
+        0,
+      ),
+    ).resolves.toBe(receipt);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('attributes a readiness exception to processing rather than network failure', async () => {
+    const query = vi.fn().mockResolvedValue({ job: { jobId: 'synthetic-job', status: 'running' } });
+    const outcome = await waitForRunReceipt(
+      { query },
+      'C01',
+      syntheticCapability(),
+      new RepeatedLiveFailureGuard(),
+      () => {
+        throw new RangeError('synthetic-private-readiness-detail');
+      },
+      0,
+    ).catch((error) => error);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(outcome.diagnostic).toBe(
+      'first=receipt_processing:RangeError last=receipt_processing:RangeError',
+    );
+    expect(outcome.message).not.toContain('private');
+  });
+
+  it('omits private messages, data, causes, stacks and arbitrary error names', () => {
+    const forbiddenRead = vi.fn(() => {
+      throw new Error('synthetic-private-getter');
+    });
+    const unknown = Object.defineProperties(
+      {},
+      {
+        name: { get: forbiddenRead },
+        message: { get: forbiddenRead },
+        data: { get: forbiddenRead },
+        cause: { get: forbiddenRead },
+        stack: { get: forbiddenRead },
+      },
+    );
+    expect(safeErrorClass(unknown)).toBe('unknown');
+    expect(forbiddenRead).not.toHaveBeenCalled();
+    expect(
+      safeErrorClass({ name: 'synthetic-private-name', message: 'private', data: 'private' }),
+    ).toBe('unknown');
+    expect(safeErrorClass(new Error('private'.repeat(200_000)))).toBe('Error');
+    expect(safeErrorClass(new Proxy({}, { getOwnPropertyDescriptor: forbiddenRead }))).toBe(
+      'unknown',
+    );
+    expect(
+      safeErrorClass(Object.assign(new Error('private'), { name: 'ConvexError', data: 'private' })),
+    ).toBe('ConvexError');
+    expect(safeErrorClass(Object.assign(new Error('private'), { name: 'TimeoutError' }))).toBe(
+      'TimeoutError',
+    );
+    expect(safeErrorClass(Object.assign(new Error('private'), { name: 'AbortError' }))).toBe(
+      'AbortError',
+    );
+  });
+
+  it.each([
+    'sample_navigation',
+    'sample_session_reset',
+    'sample_reload',
+    'sample_landing_ready',
+    'sample_session_check',
+    'sample_button_ready',
+    'sample_button_open',
+    'sample_editor_ready',
+    'sample_route_check',
+  ])('tells the maintainer which golden-sample operation failed at %s', async (operation) => {
+    const outcome = await openGoldenSample(syntheticGoldenPage(operation)).catch((error) => error);
+    expect(outcome).toBeInstanceOf(ProducerOutcomeError);
+    expect(outcome.status).toBe('UNSCORED');
+    expect(outcome.stage).toBe('the deterministic golden sample was unavailable');
+    expect(outcome.diagnostic).toContain(`operation=${operation} error=`);
+    expect(outcome.diagnostic).not.toContain('private');
+    expect(Buffer.byteLength(outcome.diagnostic, 'utf8')).toBeLessThanOrEqual(160);
+  });
+
+  it('opens the unchanged golden-sample path when every operation succeeds', async () => {
+    await expect(openGoldenSample(syntheticGoldenPage())).resolves.toBe('synthetic-deck');
+  });
+
+  it('retains both failures and reaches no deletion after receipt recovery fails', async () => {
+    const client = {
+      query: vi.fn().mockRejectedValue(new Error('synthetic-private-response')),
+      mutation: vi.fn(),
+    };
+    const receiptFailureGuard = new RepeatedLiveFailureGuard();
+    const job = syntheticCapability();
+    const outcome = await runBoundary(
+      () => waitForRunReceipt(client, 'C01', job, receiptFailureGuard, () => false, 0),
+      () =>
+        cleanupSyntheticC01({
+          page: {},
+          client,
+          job,
+          deck: null,
+          dispatchAttempted: true,
+          previousJobId: null,
+          receiptFailureGuard,
+        }),
+    ).catch((error) => error);
+    expect(client.query).toHaveBeenCalledTimes(3);
+    expect(client.mutation).not.toHaveBeenCalled();
+    expect(outcome.message).toContain(
+      'C01 UNSCORED (repeated receipt query failure stopped the live run)',
+    );
+    expect(outcome.message).toContain(
+      'C01 FAIL (synthetic deck cleanup could not recover the creation receipt)',
+    );
+    expect(outcome.message).toContain('first=receipt_query:Error last=receipt_query:Error');
+    expect(outcome.message).not.toContain('private');
+    expect(Buffer.byteLength(outcome.message, 'utf8')).toBeLessThan(1024);
+  });
+
+  it('isolates receipt diagnostics across a burst of 100 operator runs', async () => {
+    await Promise.all(Array.from({ length: 100 }, () => verifyReceiptDiagnosticScenario()));
+  });
+
+  it('retains no prior-run error payload across 500 sustained operator runs', async () => {
+    for (let index = 0; index < 500; index++) await verifyReceiptDiagnosticScenario();
+  });
 });
 
 async function verifyBoundaryScenario({ primary, cleanup, label }) {
@@ -293,6 +459,67 @@ async function verifyBoundaryScenario({ primary, cleanup, label }) {
   expect(outcome).toBeInstanceOf(Error);
   expect(outcome.message.includes(`${label} receipt unavailable`)).toBe(primary);
   expect(outcome.message.includes(`${label} cleanup unavailable`)).toBe(cleanup);
+}
+
+function syntheticCapability() {
+  return {
+    jobId: 'synthetic-job',
+    ownerAccessKey: 'synthetic-private-owner-capability',
+    kind: 'create_deck',
+    deckId: null,
+  };
+}
+
+async function verifyReceiptDiagnosticScenario() {
+  const query = vi.fn().mockRejectedValue(new Error('synthetic-private-response'));
+  const outcome = await waitForRunReceipt(
+    { query },
+    'C01',
+    syntheticCapability(),
+    new RepeatedLiveFailureGuard(),
+    () => false,
+    0,
+  ).catch((error) => error);
+  expect(query).toHaveBeenCalledTimes(2);
+  expect(outcome.status).toBe('UNSCORED');
+  expect(outcome.diagnostic).toBe('first=receipt_query:Error last=receipt_query:Error');
+  expect(Buffer.byteLength(outcome.diagnostic, 'utf8')).toBeLessThanOrEqual(160);
+  expect(outcome.diagnostic).not.toContain('private');
+}
+
+function syntheticGoldenPage(failureOperation) {
+  let evaluations = 0;
+  const perform = async (operation, value) => {
+    if (operation === failureOperation) {
+      throw Object.assign(new Error('synthetic-private-browser-payload'), { name: 'TimeoutError' });
+    }
+    return value;
+  };
+  return {
+    goto: () => perform('sample_navigation'),
+    evaluate: () => {
+      evaluations++;
+      if (evaluations === 1) return perform('sample_session_reset');
+      return Promise.resolve(
+        failureOperation === 'sample_session_check'
+          ? 'synthetic-private-wrong-session'
+          : 'founder-roadshow-v1',
+      );
+    },
+    reload: () => perform('sample_reload'),
+    getByTestId: (id) => ({
+      waitFor: () =>
+        perform(id === 'nodeslide-landing' ? 'sample_landing_ready' : 'sample_editor_ready'),
+    }),
+    getByRole: () => ({
+      waitFor: () => perform('sample_button_ready'),
+      click: () => perform('sample_button_open'),
+    }),
+    url: () =>
+      failureOperation === 'sample_route_check'
+        ? 'https://example.invalid/'
+        : 'https://example.invalid/?deck=synthetic-deck',
+  };
 }
 
 function loadProducerBoundary() {
@@ -331,12 +558,36 @@ ${source.slice(boundary.tryBlock.end - 1, boundary.end)}`;
     .filter((node) => node.pos >= boundary.end)
     .map((node) => node.getText(tree))
     .join('\n');
+  const constants = tree.statements
+    .filter(ts.isVariableStatement)
+    .filter((node) =>
+      node.declarationList.declarations.some((declaration) =>
+        [
+          'LIVE_RECEIPT_TIMEOUT_MS',
+          'ACTIVE_JOB_STATUSES',
+          'SESSION_ID_KEY',
+          'GOLDEN_SESSION_ID',
+        ].includes(declaration.name.getText(tree)),
+      ),
+    )
+    .map((node) => node.getText(tree))
+    .join('\n');
   const helpers = tree.statements
-    .filter((node) => ['ProducerOutcomeError', 'asProducerOutcome'].includes(node.name?.text))
+    .filter((node) =>
+      [
+        'ProducerOutcomeError',
+        'asProducerOutcome',
+        'safeErrorClass',
+        'waitForRunReceipt',
+        'isSettledReceipt',
+        'openGoldenSample',
+        'cleanupSyntheticC01',
+      ].includes(node.name?.text),
+    )
     .map((node) => node.getText(tree))
     .join('\n');
   const compiled = ts.transpileModule(
-    `${helpers}\nasync function runBoundary(exercise, cleanupSyntheticC01) {
+    `${constants}\n${helpers}\nasync function runBoundary(exercise, cleanupSyntheticC01) {
     const failures = [];
     const page = {}, convexClient = null, c01Job = null, c01Deck = null;
     const c01DispatchAttempted = false, c01PreviousJobId = null, receiptFailureGuard = {};
@@ -344,7 +595,24 @@ ${source.slice(boundary.tryBlock.end - 1, boundary.end)}`;
   }`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
   ).outputText;
-  return new Function(`${compiled}\nreturn { runBoundary, ProducerOutcomeError };`)();
+  return new Function(
+    'api',
+    'delay',
+    `${compiled}\nreturn {
+      runBoundary,
+      ProducerOutcomeError,
+      waitForRunReceipt,
+      openGoldenSample,
+      cleanupSyntheticC01,
+      safeErrorClass,
+    };`,
+  )(
+    {
+      nodeslideJobs: { getRunReceipt: 'synthetic-receipt' },
+      nodeslide: { deleteDeck: 'synthetic-delete', getWorkspace: 'synthetic-workspace' },
+    },
+    () => Promise.resolve(),
+  );
 }
 
 async function temporaryDirectory() {
