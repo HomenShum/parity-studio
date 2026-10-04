@@ -638,7 +638,10 @@ async function openGoldenSample(page: Page): Promise<string> {
     operation = 'sample_landing_ready';
     await page.getByTestId('nodeslide-landing').waitFor({ state: 'visible', timeout: 60_000 });
     operation = 'sample_session_check';
-    const sessionId = await page.evaluate((key) => window.localStorage.getItem(key), SESSION_ID_KEY);
+    const sessionId = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      SESSION_ID_KEY,
+    );
     if (sessionId !== GOLDEN_SESSION_ID) throw new Error('golden session id mismatch');
     operation = 'sample_button_ready';
     const sample = page.getByRole('button', { name: 'Explore the editable sample workspace' });

@@ -302,7 +302,10 @@ describe('NodeSlide live benchmark producer', () => {
 
   it('lets the operator receive a valid receipt after one transient query failure', async () => {
     const receipt = { job: { jobId: 'synthetic-job', status: 'awaiting_review' } };
-    const query = vi.fn().mockRejectedValueOnce(new Error('private')).mockResolvedValueOnce(receipt);
+    const query = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('private'))
+      .mockResolvedValueOnce(receipt);
     await expect(
       waitForRunReceipt(
         { query },
@@ -355,9 +358,9 @@ describe('NodeSlide live benchmark producer', () => {
       safeErrorClass({ name: 'synthetic-private-name', message: 'private', data: 'private' }),
     ).toBe('unknown');
     expect(safeErrorClass(new Error('private'.repeat(200_000)))).toBe('Error');
-    expect(
-      safeErrorClass(new Proxy({}, { getOwnPropertyDescriptor: forbiddenRead })),
-    ).toBe('unknown');
+    expect(safeErrorClass(new Proxy({}, { getOwnPropertyDescriptor: forbiddenRead }))).toBe(
+      'unknown',
+    );
     expect(
       safeErrorClass(Object.assign(new Error('private'), { name: 'ConvexError', data: 'private' })),
     ).toBe('ConvexError');
