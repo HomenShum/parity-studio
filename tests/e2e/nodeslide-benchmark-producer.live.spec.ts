@@ -115,13 +115,20 @@ class ProducerOutcomeError extends Error {
   readonly caseId: CaseId;
   readonly status: BenchmarkStatus;
   readonly stage: string;
+  readonly diagnostic: string | null;
 
-  constructor(caseId: CaseId, status: BenchmarkStatus, stage: string) {
+  constructor(
+    caseId: CaseId,
+    status: BenchmarkStatus,
+    stage: string,
+    diagnostic: string | null = null,
+  ) {
     super(`${caseId} ${status}: ${stage}`);
     this.name = 'ProducerOutcomeError';
     this.caseId = caseId;
     this.status = status;
     this.stage = stage;
+    this.diagnostic = diagnostic?.slice(0, 160) ?? null;
   }
 }
 
@@ -172,7 +179,8 @@ test.describe('NodeSlide live benchmark producer', () => {
           'C01',
           'UNSCORED',
           'the browser Convex deployment could not be bound',
-          async () => new ConvexHttpClient(await resolveConvexUrl(convexOriginProbe)),
+          async () =>
+            new ConvexHttpClient(await resolveConvexUrl(convexOriginProbe), { logger: false }),
         );
         await guardedStage('C01', 'UNSCORED', 'Nebius generation controls did not match', () =>
           configureNebiusLanding(page),
@@ -511,7 +519,12 @@ test.describe('NodeSlide live benchmark producer', () => {
     if (failures.length > 0) {
       throw new Error(
         `Live benchmark producer completed without fabricated results: ${failures
-          .map((failure) => `${failure.caseId} ${failure.status} (${failure.stage})`)
+          .map(
+            (failure) =>
+              `${failure.caseId} ${failure.status} (${failure.stage})${
+                failure.diagnostic ? ` [${failure.diagnostic}]` : ''
+              }`,
+          )
           .join('; ')}`,
       );
     }
@@ -606,28 +619,46 @@ async function openClearedLanding(page: Page): Promise<void> {
 }
 
 async function openGoldenSample(page: Page): Promise<string> {
-  await page.goto('/');
-  await page.evaluate(
-    ({ sessionIdKey, sessionId }) => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.name = '';
-      window.history.replaceState(null, '', window.location.pathname);
-      window.localStorage.setItem(sessionIdKey, sessionId);
-    },
-    { sessionIdKey: SESSION_ID_KEY, sessionId: GOLDEN_SESSION_ID },
-  );
-  await page.reload();
-  await page.getByTestId('nodeslide-landing').waitFor({ state: 'visible', timeout: 60_000 });
-  const sessionId = await page.evaluate((key) => window.localStorage.getItem(key), SESSION_ID_KEY);
-  if (sessionId !== GOLDEN_SESSION_ID) throw new Error('golden session id mismatch');
-  const sample = page.getByRole('button', { name: 'Explore the editable sample workspace' });
-  await sample.waitFor({ state: 'visible', timeout: 30_000 });
-  await sample.click();
-  await page.getByTestId('deck-title').waitFor({ state: 'visible', timeout: 90_000 });
-  const deckId = new URL(page.url()).searchParams.get('deck');
-  if (!deckId) throw new Error('golden sample route missing deck id');
-  return deckId;
+  let operation = 'sample_navigation';
+  try {
+    await page.goto('/');
+    operation = 'sample_session_reset';
+    await page.evaluate(
+      ({ sessionIdKey, sessionId }) => {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+        window.name = '';
+        window.history.replaceState(null, '', window.location.pathname);
+        window.localStorage.setItem(sessionIdKey, sessionId);
+      },
+      { sessionIdKey: SESSION_ID_KEY, sessionId: GOLDEN_SESSION_ID },
+    );
+    operation = 'sample_reload';
+    await page.reload();
+    operation = 'sample_landing_ready';
+    await page.getByTestId('nodeslide-landing').waitFor({ state: 'visible', timeout: 60_000 });
+    operation = 'sample_session_check';
+    const sessionId = await page.evaluate((key) => window.localStorage.getItem(key), SESSION_ID_KEY);
+    if (sessionId !== GOLDEN_SESSION_ID) throw new Error('golden session id mismatch');
+    operation = 'sample_button_ready';
+    const sample = page.getByRole('button', { name: 'Explore the editable sample workspace' });
+    await sample.waitFor({ state: 'visible', timeout: 30_000 });
+    operation = 'sample_button_open';
+    await sample.click();
+    operation = 'sample_editor_ready';
+    await page.getByTestId('deck-title').waitFor({ state: 'visible', timeout: 90_000 });
+    operation = 'sample_route_check';
+    const deckId = new URL(page.url()).searchParams.get('deck');
+    if (!deckId) throw new Error('golden sample route missing deck id');
+    return deckId;
+  } catch (error) {
+    throw new ProducerOutcomeError(
+      'E01',
+      'UNSCORED',
+      'the deterministic golden sample was unavailable',
+      `operation=${operation} error=${safeErrorClass(error)}`,
+    );
+  }
 }
 
 async function selectGoldenHeadline(page: Page): Promise<void> {
@@ -939,12 +970,16 @@ async function waitForRunReceipt(
   const deadline = Date.now() + LIVE_RECEIPT_TIMEOUT_MS;
   let latest: RunReceipt | null = null;
   let terminalSince: number | null = null;
+  let firstFailure: string | null = null;
+  let lastFailure: string | null = null;
   while (Date.now() < deadline) {
+    let operation = 'receipt_query';
     try {
       const receipt = (await client.query(api.nodeslideJobs.getRunReceipt, {
         jobId: capability.jobId,
         ownerAccessKey: capability.ownerAccessKey,
       })) as RunReceipt | null;
+      operation = 'receipt_processing';
       if (receipt?.job.jobId === capability.jobId) {
         latest = receipt;
         if (ready(receipt)) return receipt;
@@ -953,7 +988,9 @@ async function waitForRunReceipt(
           if (Date.now() - terminalSince >= terminalGraceMs) return receipt;
         }
       }
-    } catch {
+    } catch (error) {
+      lastFailure = `${operation}:${safeErrorClass(error)}`;
+      firstFailure ??= lastFailure;
       try {
         failureGuard.observe(new Error(`${caseId} receipt query unavailable`));
       } catch {
@@ -961,6 +998,7 @@ async function waitForRunReceipt(
           caseId,
           'UNSCORED',
           'repeated receipt query failure stopped the live run',
+          `first=${firstFailure} last=${lastFailure}`,
         );
       }
     }
@@ -1233,11 +1271,12 @@ async function cleanupSyntheticC01(options: {
         (candidate) => isSettledReceipt(candidate),
         0,
       );
-    } catch {
+    } catch (error) {
       throw new ProducerOutcomeError(
         'C01',
         'FAIL',
         'synthetic deck cleanup could not recover the creation receipt',
+        error instanceof ProducerOutcomeError ? error.diagnostic : null,
       );
     }
     const deckId = receipt.snapshot?.deck.id ?? receipt.job.resultDeckId;
@@ -1322,7 +1361,28 @@ function asProducerOutcome(
 ): ProducerOutcomeError {
   return error instanceof ProducerOutcomeError
     ? error
-    : new ProducerOutcomeError(caseId, status, stage);
+    : new ProducerOutcomeError(
+        caseId,
+        status,
+        stage,
+        `operation=stage error=${safeErrorClass(error)}`,
+      );
+}
+
+function safeErrorClass(error: unknown): string {
+  try {
+    if (error instanceof TypeError) return 'TypeError';
+    if (error instanceof SyntaxError) return 'SyntaxError';
+    if (error instanceof RangeError) return 'RangeError';
+    const name =
+      error !== null && typeof error === 'object'
+        ? Object.getOwnPropertyDescriptor(error, 'name')?.value
+        : null;
+    if (name === 'ConvexError' || name === 'TimeoutError' || name === 'AbortError') return name;
+    return error instanceof Error ? 'Error' : 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 function requireJob(job: StoredJobCapability | null, caseId: CaseId): StoredJobCapability {
