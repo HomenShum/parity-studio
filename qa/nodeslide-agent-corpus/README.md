@@ -103,6 +103,15 @@ Evidence is never inferred from the repository. With no manifests, the evidence 
 `UNSCORED` and exits 2; `--enforce` converts both `FAIL` and `UNSCORED` into a failing gate (exit
 1). Generated CI output belongs in workflow artifacts, not in the repository.
 
+In GitHub Actions, the supplied lane runs only for `workflow_dispatch` with a nonempty
+`evidence_path`. A named missing or malformed path is evaluated rather than skipped.
+Nonzero evaluator outcomes fail that requested job even when `enforce` is false.
+
+The shared `enforce` input still controls tolerance for manual live diagnostic runs.
+For supplied runs it also requests `--enforce`, which changes an `UNSCORED` exit from
+2 to 1 without changing its status. PR and main-push events provide no supplied
+qualification; scheduled live enforcement remains unchanged.
+
 ```text
 pnpm exec vitest run scripts/tests/nodeslide-uxbench.test.mjs \
   scripts/tests/nodeslide-tastebench.test.mjs

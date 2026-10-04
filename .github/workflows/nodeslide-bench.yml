@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       enforce:
-        description: 'Fail this job when the evidence lane is FAIL or UNSCORED'
+        description: 'Enforce manual live FAIL/UNSCORED; supplied runs always propagate nonzero exits'
         required: false
         default: false
         type: boolean
@@ -63,11 +63,9 @@ jobs:
   evidence:
     name: Supplied evidence lane
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.evidence_path != '')
+      github.event_name == 'workflow_dispatch' && inputs.evidence_path != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: ${{ github.event_name != 'workflow_dispatch' || inputs.enforce != true }}
     env:
       EVIDENCE_PATH: ${{ inputs.evidence_path }}
       BASELINE_PATH: ${{ inputs.baseline_path }}
