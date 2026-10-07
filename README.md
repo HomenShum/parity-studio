@@ -4,11 +4,11 @@
 
 Parity Studio also works as a design-staging layer for real codebases. Before a coding agent rewrites your app, capture the current UI, decompose it into editable slugs, prove what changed, then apply only the approved deltas back to production.
 
-For the isolated local import/review/export workflow and the current narrow-screen repair evidence, read the [local Parity handoff](docs/PARITY_LOCAL_HANDOFF.md). It separates current local proof from historical demos and production claims.
+**Choose your surface:** NodeSlide is the default deck workspace. For the original Parity import/review/export workflow, start with the [local Parity handoff](docs/PARITY_LOCAL_HANDOFF.md), including its isolated backend and `VITE_ENABLE_PARITY_DOMAIN=true` setup. It separates local narrow-screen repair evidence from historical demos and production claims.
 
 ## NodeSlide domain
 
-This branch adds **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain. The original Parity Studio surface opens at `?domain=parity`, but only where `VITE_ENABLE_PARITY_DOMAIN=true` is set at build time — it is **not** set on the deployed site, so that deep link shows an explanatory notice there rather than the legacy shell. The Atlas gallery is ungated and live at [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas).
+This repository also contains **NodeSlide**, a living-deck workspace built on Parity Studio's scoped-edit and proof discipline. NodeSlide is the default app domain. The original Parity Studio surface opens at `?domain=parity` only where `VITE_ENABLE_PARITY_DOMAIN=true` is set when Vite serves or builds the frontend. Builds without that flag show an explanatory notice rather than the Parity shell. The Atlas gallery uses [`?domain=atlas`](https://parity-studio.vercel.app/?domain=atlas) independently of the Parity flag. These are source routing rules, not a fresh check of the hosted deployment.
 
 **Launch posture (2026-07-10): GO for a controlled anonymous private preview; NO-GO for a public multi-tenant launch.** Editor access is protected by a 256-bit owner capability stored in the creating browser, and read-only presentation links use separate unguessable capabilities. This is a materially safer preview boundary than raw deck IDs, but it is not account authentication, tenant isolation, share revocation, or an enterprise access-control system.
 
@@ -45,7 +45,7 @@ NodeSlide reports export behavior per element (`web_native`, `pptx_editable`, `p
 5. **Iterate / edit** that scoped slice - not the whole artifact.
 6. **Export as a `ui_kit` zip, Figma bridge, QA proof packet, or approved repo mapping** - same shape on the way in as on the way out, guided handoff to a coding agent or plugin-importable Figma frames.
 
-That is the entire product. Every surface is in service of one of those six steps. The canonical zip shape (NodeBench AI Skill-pack format, see [docs/CANONICAL_KIT.md](./docs/CANONICAL_KIT.md)) is symmetric: drop one in, get one out.
+Those are the original Parity workflow steps; NodeSlide has a separate deck workflow. The canonical zip shape (NodeBench AI Skill-pack format, see [docs/CANONICAL_KIT.md](./docs/CANONICAL_KIT.md)) is symmetric: drop one in, get one out.
 
 ## Existing App Flow
 
@@ -67,13 +67,15 @@ Open Design and Claude Design-style tools are strong at generating design artifa
 
 Parity Studio now supports both paths: generate/import a new artifact, or capture/decompose an existing app route.
 
-[**Try it live ->**](https://parity-studio.vercel.app)
+[**Hosted site (NodeSlide is the default domain) ->**](https://parity-studio.vercel.app)
+
+For the Parity workflow above, use the [local Parity handoff](docs/PARITY_LOCAL_HANDOFF.md). The hosted URL alone does not establish that its Parity domain is enabled.
 
 ---
 
-## See it run
+## Historical Parity demos
 
-The README uses focused proof clips instead of one overloaded tour. Each GIF links to its MP4 in the release assets.
+These release recordings show the original Parity workflow, not current hosted availability. Each GIF links to its MP4 in the named release assets.
 
 ### Core `ui_kit` round trip
 
@@ -93,27 +95,27 @@ Open the version-control modal, compare patch-current-run vs recapture-as-new-re
 
 [![Parity Studio source sync workflow demo](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-sync-workflow-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-sync-workflow.mp4)
 
-### Product surface tour
+### Historical product surface tour
 
 Launch + model routing, BYOK/session privacy, run history/chat, file editing, Parity Coach, Inspiration, source sync/MCP setup, i18n, and export:
 
-[![Parity Studio current workflows tour](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows.mp4)
+[![Parity Studio historical workflows tour](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows-720.gif)](https://github.com/HomenShum/parity-studio/releases/download/v0.3.1/demo-current-workflows.mp4)
 
 <sub>`v0.3.1` proof clips and the product tour were recorded from the live production app and checked with Gemini video analysis. The original v0.1.0 six-step demo remains archived in the `v0.1.0` release assets.</sub>
 
 ---
 
-**Status**: LIVE - current web app + MCP v0.3.7
+**Historical hosted and release references**: web app + MCP v0.3.7. These references do not establish the current enabled domains or deployed package version.
 
 - **Web app**: https://parity-studio.vercel.app
-- **Current workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
+- **Historical workflow demo run**: https://parity-studio.vercel.app/?run=jh721fbd9rnvckyxz3p5annjjd8602x7
 - **MCP server (npm)**: [`parity-studio-mcp`](https://www.npmjs.com/package/parity-studio-mcp) - `npx parity-studio-mcp` (`npx.cmd` for Windows stdio clients) - includes `parity_design_workflow_catalog`, `parity_design_mission`, `parity_agent_runtime_metadata`, `parity_apply_approved_design`, `parity_studio`, `parity_platform_to_ui_kit`, `parity_figma_export`, and `parity_figma_import` for Claude Code / Codex / Cursor to choose the right design workflow, stage design/UI slug changes, inspect safe runtime/env policy, apply approved deltas, hand off to Figma, or capture an existing app route into a Parity-ready `ui_kit` ZIP/run
 - **Convex prod**: `blissful-pig-998` - HTTP routes at https://blissful-pig-998.convex.site
 - Stack: single-page web - Convex Cloud + pi-ai - stdio MCP for Claude Code / Codex / Cursor / Windsurf
 
-## Workflows available now
+## Parity workflow catalog
 
-### Web app workflows
+### Parity web workflows (enabled builds)
 
 - **Capture or import an existing product surface**: start from a running app capture through MCP, a canonical kit, Claude Design-style skill pack, Open CoDesign-style export, plain HTML handoff ZIP, Figma bridge JSON/ZIP, or source screenshot. Parity normalizes those inputs into editable `ui_kits/<slug>/` surfaces.
 - **Comment, repair, and prove before implementation**: select a file or pin a bbox on the preview, ask the agent to fix that scoped slice, read the Parity Coach impact summary, rerun verification, and export a proof packet before touching production code.
@@ -249,7 +251,9 @@ The verifier returns a **bounded enum** - `verified | needs_review | needs_itera
 
 We do **not** use `@convex-dev/agent` because it locks to Vercel AI SDK and we want pi-ai's full provider abstraction. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the decision record.
 
-## Quick start
+## Quick start: default NodeSlide development
+
+Use your own development Convex project for the commands below. For isolated Parity import/review/export, follow [the local Parity handoff](docs/PARITY_LOCAL_HANDOFF.md) instead; it supplies both backend URLs and enables the Parity domain.
 
 ```bash
 pnpm install
@@ -257,7 +261,7 @@ pnpm convex dev      # one-time: links to a Convex project
 pnpm dev             # starts vite + convex together
 ```
 
-Visit http://localhost:5180
+Visit http://localhost:5180 for the default NodeSlide workspace. The original Parity surface requires the flag described above and `?domain=parity`.
 
 ## Self-dogfood
 
