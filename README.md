@@ -11,6 +11,8 @@
 <p align="center"><a href="#quick-start-default-nodeslide-development">Quickstart</a> · <a href="https://parity-studio.vercel.app">Hosted&nbsp;NodeSlide&nbsp;app</a> · <a href="https://homenshum.github.io/">All&nbsp;projects</a></p>
 <!-- brand:end -->
 
+# Parity Studio
+
 > Image to verified, componentized `ui_kit/`. Self-judged with a 16-check deterministic rubric. Honest score drift on every iteration. Coding-agent-ready handoff.
 
 Parity Studio also works as a design-staging layer for real codebases. Before a coding agent rewrites your app, capture the current UI, decompose it into editable slugs, prove what changed, then apply only the approved deltas back to production.
