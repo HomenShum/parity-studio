@@ -985,10 +985,10 @@ async function executeTool(
   }
 }
 
-function safeParseJson(s: string): Record<string, unknown> | undefined {
+function safeParseJson(s: string): ToolCall['arguments'] | undefined {
   try {
     const v = JSON.parse(s);
-    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : undefined;
+    return typeof v === 'object' && v !== null ? (v as ToolCall['arguments']) : undefined;
   } catch {
     return undefined;
   }
