@@ -10,10 +10,16 @@
  * Sources (all USD per million tokens unless noted):
  *   1. pi-ai installed catalog          getModel(provider, id).cost                       pricingAsOf = pi-ai 1.1.0 install
  *   2. NODESLIDE_MODEL_PRICING          shared/nodeslideRunBudget.ts (micro-USD per M)    pricingAsOf = row.verifiedAt
- *   3. NODESLIDE_NEBIUS_GLM.cost        convex/lib/nodeslideProvider.ts (hand-built Model, not exported)  undated in source
- *   4. NATIVE_NEBIUS_METADATA.pricing   convex/lib/nodeslideRoutingPolicy.ts (not exported)               undated in source
+ *   3. NODESLIDE_NEBIUS_GLM.cost        convex/lib/nodeslideProvider.ts (hand-built Model, not exported)  pricingAsOf = SOURCE_READ_AS_OF
+ *   4. NATIVE_NEBIUS_METADATA.pricing   convex/lib/nodeslideRoutingPolicy.ts (not exported)               pricingAsOf = SOURCE_READ_AS_OF
  * Sources 3 and 4 are not exported and live in NodeSlide-domain files that this repo only mirrors (drift-only),
- * so they are read from source text; the regex fails the test if the shape moves.
+ * and neither carries a date of its own; this repo may not edit them, so the date recorded for them is the day this
+ * test read their values (SOURCE_READ_AS_OF). They are read from source text; the regex fails the test if the shape
+ * moves.
+ *
+ * HAND-OFF to HomenShum/NodeSlide (the owner of sources 2-4, not touched by this PR): the z-ai/glm-5.2 request-price
+ * ceiling (1.4 / 4.4) now sits BELOW the catalog output price (7.2) after the pi-ai 1.1.0 catalog move, and sources
+ * 3 and 4 should carry their own pricingAsOf. Until NodeSlide fixes either, the divergence is pinned on both sides.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +28,15 @@ import { describe, expect, it } from 'vitest';
 import { NODESLIDE_MODEL_PRICING } from '../../shared/nodeslideRunBudget';
 
 const CATALOG_PRICING_AS_OF = '2026-10-14'; // measured against the installed @earendil-works/pi-ai 1.1.0
+const SOURCE_READ_AS_OF = '2026-10-14'; // sources 3 and 4 carry no date in their frozen files
+
+/** A.0.6: every pricing source in the repo, each with a date. */
+const PRICING_SOURCES = [
+  { source: 'pi-ai catalog', pricingAsOf: CATALOG_PRICING_AS_OF },
+  { source: 'NODESLIDE_MODEL_PRICING', pricingAsOf: '2026-07-16T01:22:40Z' }, // row.verifiedAt, asserted below
+  { source: 'NODESLIDE_NEBIUS_GLM.cost', pricingAsOf: SOURCE_READ_AS_OF },
+  { source: 'NATIVE_NEBIUS_METADATA.pricing', pricingAsOf: SOURCE_READ_AS_OF },
+];
 
 interface Rate {
   inPerM: number;
@@ -61,6 +76,13 @@ function budgetRate(id: keyof typeof NODESLIDE_MODEL_PRICING): Rate & { verified
 }
 
 describe('pricing sources agree per (id, transport)', () => {
+  it('lists all four pricing sources, each with a pricingAsOf date', () => {
+    expect(PRICING_SOURCES).toHaveLength(4);
+    for (const { source, pricingAsOf } of PRICING_SOURCES) {
+      expect(pricingAsOf, source).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    }
+  });
+
   it('(zai-org/GLM-5.2, nebius): provider Model, routing policy mirror and run-budget table are equal', () => {
     const providerModel = handTypedRate(
       './nodeslideProvider.ts',

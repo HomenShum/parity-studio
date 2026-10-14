@@ -55,6 +55,9 @@ export type SupportedProvider =
   | 'xai'
   | 'mistral';
 
+/** Anthropic effort for the managed-effort Claude 5.5 models; every other API ignores it. */
+export type Effort = 'low' | 'medium' | 'high';
+
 export interface CallOptions {
   provider: SupportedProvider;
   modelId: string;
@@ -63,19 +66,28 @@ export interface CallOptions {
   /** Optional vision input. Both fields required if present. */
   userImage?: { base64: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp' };
   maxTokens?: number;
+  /** Per-phase effort (PHASE_EFFORT in autoRouter.ts). Omitted = pi-ai's own default. */
+  effort?: Effort;
   signal?: AbortSignal;
 }
 
 export interface CallResult {
   text: string;
+  /** Cost of every attempt `call()` made (soft retries included), not just the one whose text it returns. */
   costMicroUsd: number;
+  /** Completion requests `call()` dispatched: 1 + soft retries (OpenRouter only; see `maxAttempts`). */
+  attempts: number;
   inputTokens: number;
   outputTokens: number;
   modelUsed: string;
   provider: SupportedProvider;
   stopReason: AssistantMessage['stopReason'];
-  /** The `model` string the provider returned (not the one requested); absent when the provider does not echo it. */
-  echoedModel?: string;
+  /**
+   * The `model` string the provider returned. pi-ai records `responseModel` only when it DIFFERS from the requested
+   * id (anthropic-messages.js:453, openai-completions.js:360), so a matching echo arrives as `undefined`; it is
+   * normalised here to the requested id, which is what the provider returned in that case.
+   */
+  echoedModel: string;
   errorMessage?: string;
 }
 
@@ -107,6 +119,15 @@ function isRetriableError(msg: string | undefined): boolean {
     lower.includes('upstream')
   );
 }
+
+/**
+ * Completion requests `call()` may dispatch for one provider: OpenRouter soft-retries upstream errors twice
+ * (SOFT_RETRIES), everything else is one request. The live receipt harness budgets against this. It counts the
+ * completion requests this function dispatches, not pi-ai's own HTTP-level retries (`maxRetries: 3`) inside one.
+ */
+const OPENROUTER_SOFT_RETRIES = 2;
+export const maxAttempts = (provider: SupportedProvider): number =>
+  provider === 'openrouter' ? 1 + OPENROUTER_SOFT_RETRIES : 1;
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -160,6 +181,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+    ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };
 
@@ -167,10 +189,14 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   // pi-ai's maxRetries handles HTTP-level retries inside the SDK, but
   // OpenRouter often returns a 200-with-error-body for upstream 429s, which
   // pi-ai surfaces as stopReason='error'. We catch that here.
-  const MAX_SOFT_RETRIES = isOpenRouter ? 2 : 0;
+  const MAX_SOFT_RETRIES = maxAttempts(opts.provider) - 1;
   let lastResult: Awaited<ReturnType<typeof piComplete>> | undefined;
+  let attempts = 0;
+  let spentUsd = 0;
   for (let attempt = 0; attempt <= MAX_SOFT_RETRIES; attempt += 1) {
     lastResult = await piComplete(model, context, baseOptions);
+    attempts += 1;
+    spentUsd += Number.isFinite(lastResult.usage.cost.total) ? lastResult.usage.cost.total : 0;
     const isSoftError =
       lastResult.stopReason === 'error' && isRetriableError(lastResult.errorMessage);
     if (!isSoftError || attempt === MAX_SOFT_RETRIES) break;
@@ -187,14 +213,15 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const text = textBlocks.map((b) => b.text).join('');
   const out: CallResult = {
     text,
-    costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+    costMicroUsd: usdToMicroUsd(spentUsd),
+    attempts,
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
     provider: opts.provider,
     modelUsed: result.model,
     stopReason: result.stopReason,
+    echoedModel: result.responseModel ?? result.model,
   };
-  if (result.responseModel !== undefined) out.echoedModel = result.responseModel;
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
   return out;
 }

@@ -23,7 +23,8 @@
  */
 
 import { getModel } from '@earendil-works/pi-ai/compat';
-import type { SupportedProvider } from './piAi';
+import { FREE_LOOKING } from './modelBoundary';
+import type { Effort, SupportedProvider } from './piAi';
 
 // Wire ids this file writes (model-defaults SPEC 1.2, the only source). One constant per id so the tier tables
 // and the tests read the same value; the request-shape test checks each against its own SPEC 1.2 literal.
@@ -48,6 +49,23 @@ export const OUTPUT_CAPS = {
   decompose: 24_000,
   iterate: 24_000,
 } as const;
+/**
+ * Explicit Anthropic effort per phase (SPEC 1.3, A.2.7: Opus 5.5's default moved from high to medium, so the value
+ * is stated instead of inherited). pi-ai 1.1.0 reads `options.effort` into the trailing system message's
+ * `output_config` (anthropic-messages.js:874,1216); the top-level `output_config.effort` stays hard-coded 'high' and
+ * is not what applies. Every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6
+ * defaulted to high); `enhance` is the one-shot prompt rewrite that ran on Haiku 4.5 with no thinking, so it gets
+ * 'low'. Lowering a phase below its old behaviour is a measured follow-up. Other APIs ignore the option.
+ */
+export const PHASE_EFFORT: Record<Phase, Effort> = {
+  enhance: 'low',
+  advise: 'high',
+  execute: 'high',
+  generate: 'high',
+  decompose: 'high',
+  iterate: 'high',
+  judge: 'high',
+};
 /** convex/chatLoop.ts default when CHAT_MODEL is unset, keyed by CHAT_PROVIDER. */
 export const CHAT_DEFAULT_MODEL = {
   anthropic: CLAUDE_SONNET,
@@ -359,8 +377,6 @@ export function tierFromRun(run: RunModelConfig | null | undefined): ModelTier {
     return tier;
   return deploymentTier();
 }
-
-const FREE_LOOKING = /[:-]free$/i;
 
 /**
  * SPEC A.0.10. An override that pi-ai's catalog knows passes through untouched (persisted 4.x rows included).

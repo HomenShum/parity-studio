@@ -18,6 +18,7 @@ import { action, internalAction } from './_generated/server';
 import {
   CHAT_DEFAULT_MODEL,
   OUTPUT_CAPS,
+  PHASE_EFFORT,
   type Phase,
   type RunModelConfig,
   resolveRunModel,
@@ -111,14 +112,19 @@ function resolvePhaseModel({
   let provider = fallbackProvider;
   let modelId = fallbackModel;
   let source: 'router' | 'custom' | 'env' | 'fallback' = 'fallback';
-  if (runId !== undefined) {
+  const providerOverride = process.env[providerEnvKey];
+  const modelOverride = process.env[modelEnvKey];
+  // Env overrides win (A.0.4). The run's router/custom pick is only consulted for what the env leaves open, so a
+  // persisted run override the resolver rejects cannot block an operator override that would have replaced it.
+  const envSettlesRoute =
+    SUPPORTED_PROVIDER_VALUES.includes(providerOverride as SupportedProvider) &&
+    modelOverride !== undefined;
+  if (runId !== undefined && !envSettlesRoute) {
     const resolved = resolveRunModel(run, phase, String(runId));
     provider = resolved.provider;
     modelId = resolved.modelId;
     source = run?.modelOverride !== undefined && phase !== 'judge' ? 'custom' : 'router';
   }
-  const providerOverride = process.env[providerEnvKey];
-  const modelOverride = process.env[modelEnvKey];
   if (providerOverride !== undefined || modelOverride !== undefined) {
     provider = asSupportedProvider(providerOverride, provider);
     modelId = modelOverride ?? modelId;
@@ -181,7 +187,10 @@ export const enhance = action({
       systemPrompt: ENHANCE_INSTRUCTION,
       messages: [{ role: 'user', content: trimmed, timestamp: Date.now() }],
     };
-    const result = await piComplete(model, ctxObj, { maxTokens: OUTPUT_CAPS.enhance });
+    const result = await piComplete(model, ctxObj, {
+      maxTokens: OUTPUT_CAPS.enhance,
+      effort: PHASE_EFFORT.enhance,
+    });
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
     if (out.length === 0) {
@@ -503,7 +512,7 @@ export const explainParity = action({
               },
             ],
           },
-          { maxTokens: OUTPUT_CAPS.explain },
+          { maxTokens: OUTPUT_CAPS.explain, effort: PHASE_EFFORT.advise },
         ),
         25_000,
         'parity explanation',
@@ -733,13 +742,16 @@ export const runAgentLoop = internalAction({
       // Direct env overrides (CHAT_ADVISOR_MODEL / CHAT_EXECUTOR_MODEL) win
       // over tier defaults, preserving the v1 dual-model knob.
       const phase = useAdvisor ? 'advise' : 'execute';
-      const baseResolved = resolveRunModel(runRow, phase, String(runId));
-      const provider = useAdvisor
-        ? (process.env['CHAT_ADVISOR_PROVIDER'] ?? baseResolved.provider)
-        : (process.env['CHAT_EXECUTOR_PROVIDER'] ?? baseResolved.provider);
-      const modelId = useAdvisor
-        ? (process.env['CHAT_ADVISOR_MODEL'] ?? baseResolved.modelId)
-        : (process.env['CHAT_EXECUTOR_MODEL'] ?? baseResolved.modelId);
+      const envProvider =
+        process.env[useAdvisor ? 'CHAT_ADVISOR_PROVIDER' : 'CHAT_EXECUTOR_PROVIDER'];
+      const envModel = process.env[useAdvisor ? 'CHAT_ADVISOR_MODEL' : 'CHAT_EXECUTOR_MODEL'];
+      // The run's pick is only resolved for what the env leaves open (A.0.4): see resolvePhaseModel.
+      const baseResolved =
+        envProvider !== undefined && envModel !== undefined
+          ? undefined
+          : resolveRunModel(runRow, phase, String(runId));
+      const provider = envProvider ?? baseResolved?.provider;
+      const modelId = envModel ?? baseResolved?.modelId;
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
       const model = (getModel as any)(provider, modelId);
       const ctxObj: Context = {
@@ -749,7 +761,10 @@ export const runAgentLoop = internalAction({
       };
       let result: AssistantMessage;
       try {
-        result = await piComplete(model, ctxObj, { maxTokens: OUTPUT_CAPS.agentLoop });
+        result = await piComplete(model, ctxObj, {
+          maxTokens: OUTPUT_CAPS.agentLoop,
+          effort: PHASE_EFFORT[phase],
+        });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,

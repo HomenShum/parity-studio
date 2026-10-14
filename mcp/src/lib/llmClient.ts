@@ -55,6 +55,20 @@ export type SupportedProvider =
   | 'xai'
   | 'mistral';
 
+/**
+ * Anthropic effort for the managed-effort Claude 5.5 models (SPEC 1.3). pi-ai 1.1.0 reads `options.effort` and puts
+ * it into the trailing system message's `output_config`; the top-level `output_config.effort` stays hard-coded
+ * 'high' and is not what applies. Ignored by every other API.
+ */
+export type Effort = 'low' | 'medium' | 'high';
+
+/**
+ * Every phase the MCP server runs (decompose, generate, iterate, judge) ran at 'high' before the refresh (Opus 4.7
+ * and Sonnet 4.6 defaulted to high), so that stays the explicit per-phase value. Opus 5.5's own default is
+ * 'medium'; lowering any phase is a measured follow-up, not part of the refresh.
+ */
+export const DEFAULT_EFFORT: Effort = 'high';
+
 export interface VisionInput {
   base64: string;
   mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -70,6 +84,8 @@ export interface CallOptions {
   /** Optional vision input. Both fields required if present. Errors if model lacks vision. */
   userImage?: VisionInput;
   maxTokens?: number;
+  /** Anthropic effort; defaults to DEFAULT_EFFORT. */
+  effort?: Effort;
   signal?: AbortSignal;
   /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
   baseUrl?: string;
@@ -109,57 +125,35 @@ export function inferProvider(modelId: string): SupportedProvider {
 export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 /**
- * Direct Anthropic wire ids a caller may name (SPEC 1.2 for 5.5; the 4.x ids stay for persisted rows and are
- * still in the pi-ai 1.1.0 catalog). The `anthropic/` spelling of each is accepted as an alias because
- * `inferProvider` routes that prefix to Anthropic.
- */
-const ANTHROPIC_WIRE_IDS = [
-  'claude-haiku-5-5',
-  'claude-sonnet-5-5',
-  'claude-opus-5-5',
-  'claude-haiku-4-5',
-  'claude-sonnet-4-5',
-  'claude-sonnet-4-6',
-  'claude-opus-4-5',
-  'claude-opus-4-6',
-  'claude-opus-4-7',
-  'claude-opus-4-8',
-] as const;
-
-/**
- * Explicit spelling -> wire id table, per provider (SPEC A.0.5). No prefix stripping and no dot/hyphen
- * surgery: a spelling that is not listed here is passed to getModel exactly as given, so an unlisted
- * spelling fails closed instead of being "fixed" into a different model.
+ * Spellings that are not `<provider>/<catalog id>` (SPEC A.0.5): OpenRouter's dotted Claude slugs, which
+ * `inferProvider` also sends to Anthropic, mapped onto the direct wire ids of SPEC 1.2. Everything else is
+ * resolved by `resolveWire`: the exact `<provider>/` prefix strip, then the catalog.
  */
 export const WIRE_IDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   anthropic: {
-    ...Object.fromEntries(
-      ANTHROPIC_WIRE_IDS.flatMap((id) => [
-        [id, id],
-        [`anthropic/${id}`, id],
-      ]),
-    ),
-    // OpenRouter's dotted slugs, which `inferProvider` also sends to Anthropic.
     'anthropic/claude-haiku-5.5': 'claude-haiku-5-5',
     'anthropic/claude-sonnet-5.5': 'claude-sonnet-5-5',
     'anthropic/claude-opus-5.5': 'claude-opus-5-5',
   },
-  // Frozen default at mcp/src/index.ts (PARITY_JUDGE_MODEL); `inferProvider` sends the `google/` prefix here.
-  google: { 'google/gemini-3.1-pro-preview': 'gemini-3.1-pro-preview' },
 };
 
 const FREE_LOOKING = /[:-]free$/i;
 
 /**
- * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.5, A.0.10): the explicit table, then an
- * unknown free-looking id falls to the verified free constant, and any other unknown id throws before a request
- * exists (getModel returns undefined for it, which used to surface as a TypeError).
+ * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.4, A.0.5, A.0.10). Caller spellings keep
+ * working exactly as before: the explicit table for the dotted OpenRouter slugs, then the exact `${provider}/`
+ * prefix strip (`openai/gpt-4o`, `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1` map to the same catalog
+ * id `inferProvider` routed them to). Only an id that still misses the catalog fails closed: an unknown
+ * free-looking id falls to the verified free constant, any other throws before a request exists.
  */
 function resolveWire(
   provider: SupportedProvider,
   modelId: string,
 ): { provider: SupportedProvider; modelId: string } {
-  const id = WIRE_IDS[provider]?.[modelId] ?? modelId;
+  const prefix = `${provider}/`;
+  const id =
+    WIRE_IDS[provider]?.[modelId] ??
+    (modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId);
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel is typed against its compile-time registry
   if ((getModel as any)(provider, id) !== undefined) return { provider, modelId: id };
   if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
@@ -212,6 +206,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   };
 
   const result = await piComplete(model, context, {
+    effort: opts.effort ?? DEFAULT_EFFORT,
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
   });

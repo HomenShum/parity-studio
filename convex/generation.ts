@@ -4,7 +4,13 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
-import { OUTPUT_CAPS, type Phase, type ResolvedModel, resolveRunModel } from './lib/autoRouter';
+import {
+  OUTPUT_CAPS,
+  PHASE_EFFORT,
+  type Phase,
+  type ResolvedModel,
+  resolveRunModel,
+} from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
@@ -175,6 +181,7 @@ async function callValidatedPipelineModel(
         systemPrompt: args.systemPrompt,
         userText: args.userText,
         maxTokens: args.maxTokens,
+        effort: PHASE_EFFORT[args.stage.startsWith('iterate') ? 'iterate' : (args.stage as Phase)],
         signal: AbortSignal.timeout(timeoutMs),
         ...(args.userImage !== undefined ? { userImage: args.userImage } : {}),
       });

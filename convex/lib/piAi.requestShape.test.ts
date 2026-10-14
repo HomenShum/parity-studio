@@ -16,12 +16,13 @@ import {
   CHAT_DEFAULT_MODEL,
   type ModelTier,
   OUTPUT_CAPS,
+  PHASE_EFFORT,
   type Phase,
   VERIFIED_FREE_MODEL,
   resolveModel,
   resolveRunModel,
 } from './autoRouter';
-import { call } from './piAi';
+import { type Effort, call } from './piAi';
 
 // SPEC 1.2: the only wire ids this PR may write, per transport. Independent literals on purpose: the tier tables
 // use named constants, and this table is what those constants are checked against.
@@ -62,6 +63,7 @@ const repoFile = (relative: string): string =>
 function allRoutes() {
   const out: Array<{
     cell: string;
+    phase: Phase;
     kind: 'primary' | 'fallback';
     provider: string;
     modelId: string;
@@ -70,10 +72,17 @@ function allRoutes() {
     for (const phase of PHASES) {
       const cell = resolveModel(tier, phase);
       const cellName = `${tier}/${phase}`;
-      out.push({ cell: cellName, kind: 'primary', provider: cell.provider, modelId: cell.modelId });
+      out.push({
+        cell: cellName,
+        phase,
+        kind: 'primary',
+        provider: cell.provider,
+        modelId: cell.modelId,
+      });
       if (cell.fallback) {
         out.push({
           cell: cellName,
+          phase,
           kind: 'fallback',
           provider: cell.fallback.provider,
           modelId: cell.fallback.modelId,
@@ -115,11 +124,35 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function build(provider: 'anthropic' | 'openrouter', modelId: string, maxTokens: number) {
+async function build(
+  provider: 'anthropic' | 'openrouter',
+  modelId: string,
+  maxTokens: number,
+  effort?: Effort,
+) {
   captured = [];
-  await call({ provider, modelId, systemPrompt: 'sys', userText: 'hello', maxTokens });
+  await call({
+    provider,
+    modelId,
+    systemPrompt: 'sys',
+    userText: 'hello',
+    maxTokens,
+    ...(effort !== undefined ? { effort } : {}),
+  });
   expect(captured).toHaveLength(1);
   return captured[0]?.body ?? {};
+}
+
+/**
+ * The effort that applies on a managed-effort 5.5 model. pi-ai 1.1.0 hard-codes the TOP-LEVEL `output_config` to
+ * `{effort: 'high'}`; the per-call `effort` option lands in the trailing system message's `output_config`
+ * (anthropic-messages.js:874,1216). Pinning only the top level cannot see the effort that actually applies.
+ */
+function activeEffort(body: Record<string, unknown>): unknown {
+  const messages = body['messages'] as Array<{ role: string; output_config?: { effort?: string } }>;
+  const last = messages.at(-1);
+  expect(last?.role, 'trailing effort message').toBe('system');
+  return last?.output_config?.effort;
 }
 
 function assertNoForbiddenKeys(body: Record<string, unknown>) {
@@ -169,15 +202,20 @@ describe('request shape: tier x phase cells', () => {
 
   for (const cell of claudeCells) {
     it(`${cell.cell} ${cell.kind} ${cell.provider}:${cell.modelId} -> SPEC 1.2 id, no forbidden keys, caller cap honoured`, async () => {
-      const body = await build(cell.provider as 'anthropic' | 'openrouter', cell.modelId, 1234);
+      const body = await build(
+        cell.provider as 'anthropic' | 'openrouter',
+        cell.modelId,
+        1234,
+        PHASE_EFFORT[cell.phase],
+      );
       expect(body['model']).toBe(WIRE[`${cell.provider}:${cell.modelId}` as keyof typeof WIRE]);
       assertNoForbiddenKeys(body);
       // `maxOutputTokens` is not a pi-ai option; it was silently dropped and the model default (128000) was sent.
       expect(body['max_tokens']).toBe(1234);
       if (cell.provider === 'anthropic') {
-        // SPEC 1.3 effort. pi-ai 1.1.0 hard-codes output_config.effort = 'high' for the managed-effort 5.5
-        // models and has no per-call knob, so effort is SDK policy, not repo policy: Opus 5.5's default
-        // medium never applies and every phase runs at 'high'. This pin turns a silent SDK change into a failure.
+        // SPEC 1.3 / A.2.7: effort is explicit per phase, and the effort that applies is the trailing system
+        // message's, not the hard-coded top-level one (see activeEffort).
+        expect(activeEffort(body), `${cell.cell} active effort`).toBe(PHASE_EFFORT[cell.phase]);
         expect(body['output_config']).toEqual({ effort: 'high' });
         expect((body['thinking'] as Record<string, unknown>)['type']).toBe('adaptive');
       }

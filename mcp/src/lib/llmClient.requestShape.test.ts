@@ -2,17 +2,22 @@
 /**
  * Request-shape proof for mcp/src/lib/llmClient.ts (model-defaults SPEC A.0 rule 6, A.2.7).
  * Real request through this repo's own `call()` against a fake transport (stubbed fetch, always 400, no spend).
- * Asserts the explicit spelling table (SPEC A.0.5) replaces prefix/dot surgery, the caller's maxTokens reaches
- * the wire, and unknown ids fail closed (SPEC A.0.10).
+ * Asserts the explicit spelling table (SPEC A.0.5) covers the dotted OpenRouter slugs, the exact `<provider>/`
+ * prefix strip keeps every spelling `inferProvider` routes working (SPEC A.0.4), the caller's maxTokens and the
+ * per-phase effort reach the wire, and unknown ids fail closed (SPEC A.0.10).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VERIFIED_FREE_MODEL, WIRE_IDS, call } from './llmClient';
+import { DEFAULT_EFFORT, VERIFIED_FREE_MODEL, WIRE_IDS, call, callByModel } from './llmClient';
+
+// The first request per provider lazy-loads that provider's SDK (3 s+ on a cold machine).
+vi.setConfig({ testTimeout: 30_000 });
 
 let bodies: Array<{ url: string; body: Record<string, unknown> }> = [];
 
 beforeEach(() => {
   bodies = [];
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
+  vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
   vi.stubEnv('GEMINI_API_KEY', 'test-key-not-real');
   vi.stubEnv('GOOGLE_API_KEY', 'test-key-not-real');
   vi.stubEnv('OPENROUTER_API_KEY', 'test-key-not-real');
@@ -47,7 +52,7 @@ describe('llmClient request shape (Claude 5.5)', () => {
     ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
     ['anthropic/claude-opus-5.5', 'claude-opus-5-5'],
     ['anthropic/claude-sonnet-5-5', 'claude-sonnet-5-5'],
-    // Persisted 4.x spellings are listed in the table explicitly (no generic prefix strip any more).
+    // Persisted 4.x spellings, with and without the provider prefix.
     ['claude-sonnet-4-6', 'claude-sonnet-4-6'],
     ['anthropic/claude-sonnet-4-6', 'claude-sonnet-4-6'],
     ['anthropic/claude-opus-4-7', 'claude-opus-4-7'],
@@ -76,11 +81,32 @@ describe('llmClient request shape (Claude 5.5)', () => {
       }
       expect(body['max_tokens']).toBe(321);
       if (wire.endsWith('-5-5')) {
-        // pi-ai 1.1.0 hard-codes effort 'high' for the managed-effort 5.5 models (SDK policy, no per-call knob).
+        // The effort that applies is the trailing system message's; the top-level output_config is hard-coded
+        // 'high' by pi-ai 1.1.0 and cannot see it.
         expect(body['output_config']).toEqual({ effort: 'high' });
+        const messages = body['messages'] as Array<{ role: string; output_config?: unknown }>;
+        expect(messages.at(-1)).toMatchObject({
+          role: 'system',
+          output_config: { effort: DEFAULT_EFFORT },
+        });
       }
     });
   }
+
+  it('an explicit effort reaches the trailing system message', async () => {
+    await call({
+      provider: 'anthropic',
+      modelId: 'claude-opus-5-5',
+      systemPrompt: 's',
+      userText: 'u',
+      effort: 'medium',
+    });
+    const messages = bodies[0]?.body['messages'] as Array<{
+      role: string;
+      output_config?: unknown;
+    }>;
+    expect(messages.at(-1)).toMatchObject({ role: 'system', output_config: { effort: 'medium' } });
+  });
 
   it('the explicit table maps only onto catalog-resolvable wire ids and lists the 5.5 triple', () => {
     const anthropic = new Set(Object.values(WIRE_IDS['anthropic'] ?? {}));
@@ -103,9 +129,31 @@ describe('llmClient request shape (Claude 5.5)', () => {
   });
 });
 
+describe('callByModel keeps every provider-prefixed spelling inferProvider routes (SPEC A.0.4)', () => {
+  // [spelling a caller passes, text that must appear in the request URL or body model]
+  const spellings: Array<[string, string]> = [
+    ['openai/gpt-4o', 'gpt-4o'],
+    ['openai/gpt-5', 'gpt-5'],
+    ['google/gemini-3.8-flash', 'gemini-3.8-flash'],
+    ['google/gemini-3.6-flash', 'gemini-3.6-flash'],
+    ['anthropic/claude-fable-5-1', 'claude-fable-5-1'],
+  ];
+  for (const [spelling, wire] of spellings) {
+    it(`${spelling} sends a request for ${wire}`, async () => {
+      await callByModel({ model: spelling, systemPrompt: 's', userText: 'u', maxTokens: 64 }).catch(
+        () => undefined,
+      );
+      expect(bodies).toHaveLength(1);
+      const sent = bodies[0];
+      expect(`${sent?.url} ${String(sent?.body['model'] ?? '')}`).toContain(wire);
+      expect(sent?.url).not.toContain(`${spelling.split('/')[0]}/${wire}`);
+      expect(sent?.body['model']).not.toBe(spelling);
+    });
+  }
+});
+
 describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
-  it('an unlisted spelling is not converted: it throws before any request', async () => {
-    // Previously a generic prefix strip turned this into a different model; now only table entries convert.
+  it('an id that still misses the catalog after the prefix strip throws before any request', async () => {
     for (const [provider, modelId] of [
       ['anthropic', 'anthropic/claude-sonnet-9-9'],
       ['anthropic', 'claude-sonnet-5.5'],
