@@ -180,8 +180,8 @@ The [`parity-studio-mcp`](./mcp/) v0.5.0 source is a stdio MCP server with 34 to
       "args": ["-y", "parity-studio-mcp"],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
-        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
-        "PARITY_JUDGE_MODEL": "claude-sonnet-4-6"
+        "PARITY_DECOMPOSE_MODEL": "claude-opus-5-5",
+        "PARITY_JUDGE_MODEL": "claude-sonnet-5-5"
       }
     }
   }

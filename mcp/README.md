@@ -32,8 +32,8 @@ In Claude Code, Codex, Cursor, Windsurf, or any MCP client config:
         "OPENAI_API_KEY": "sk-...",
         "OPENROUTER_API_KEY": "sk-or-...",
         "GEMINI_API_KEY": "AI...",
-        "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
-        "PARITY_JUDGE_MODEL": "claude-sonnet-4-6",
+        "PARITY_DECOMPOSE_MODEL": "claude-opus-5-5",
+        "PARITY_JUDGE_MODEL": "claude-sonnet-5-5",
         "PARITY_CONVEX_URL": "https://blissful-pig-998.convex.cloud",
         "PARITY_CONVEX_HTTP_URL": "https://blissful-pig-998.convex.site"
       }

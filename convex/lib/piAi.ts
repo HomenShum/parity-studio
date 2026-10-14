@@ -5,7 +5,7 @@
  * `@earendil-works/pi-ai`). Real API surface, NOT a stub:
  *
  *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
- *   const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+ *   const model = getModel('anthropic', 'claude-sonnet-5-5');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
  *     messages: [{ role: 'user', content: [
@@ -74,6 +74,8 @@ export interface CallResult {
   modelUsed: string;
   provider: SupportedProvider;
   stopReason: AssistantMessage['stopReason'];
+  /** The `model` string the provider returned (not the one requested); absent when the provider does not echo it. */
+  echoedModel?: string;
   errorMessage?: string;
 }
 
@@ -192,6 +194,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     modelUsed: result.model,
     stopReason: result.stopReason,
   };
+  if (result.responseModel !== undefined) out.echoedModel = result.responseModel;
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
   return out;
 }

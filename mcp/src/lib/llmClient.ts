@@ -105,36 +105,67 @@ export function inferProvider(modelId: string): SupportedProvider {
   return 'openai';
 }
 
-/**
- * Explicit Claude 5.5 wire ids (model-defaults SPEC section 1.2), keyed by every spelling a caller may
- * pass. The direct Anthropic transport takes `claude-*-5-5`; the OpenRouter slug is `anthropic/claude-*-5.5`
- * and is accepted here as an alias because `inferProvider` routes any `anthropic/` prefix to Anthropic.
- * No string surgery: a spelling that is not in this table is not converted.
- */
-export const CLAUDE_5_5_WIRE_IDS: Readonly<Record<string, string>> = {
-  'claude-haiku-5-5': 'claude-haiku-5-5',
-  'anthropic/claude-haiku-5-5': 'claude-haiku-5-5',
-  'anthropic/claude-haiku-5.5': 'claude-haiku-5-5',
-  'claude-sonnet-5-5': 'claude-sonnet-5-5',
-  'anthropic/claude-sonnet-5-5': 'claude-sonnet-5-5',
-  'anthropic/claude-sonnet-5.5': 'claude-sonnet-5-5',
-  'claude-opus-5-5': 'claude-opus-5-5',
-  'anthropic/claude-opus-5-5': 'claude-opus-5-5',
-  'anthropic/claude-opus-5.5': 'claude-opus-5-5',
-};
+/** The only verified free route (model-defaults SPEC 1.2). Unknown free-looking ids resolve here. */
+export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 /**
- * Resolve the id handed to getModel(provider, id). Claude 5.5 goes through the explicit table above;
- * every other id keeps the previous behaviour (strip a leading `<provider>/`), so persisted 4.x ids stay valid.
+ * Direct Anthropic wire ids a caller may name (SPEC 1.2 for 5.5; the 4.x ids stay for persisted rows and are
+ * still in the pi-ai 1.1.0 catalog). The `anthropic/` spelling of each is accepted as an alias because
+ * `inferProvider` routes that prefix to Anthropic.
  */
-function canonicalizeModelId(provider: SupportedProvider, modelId: string): string {
-  if (provider === 'anthropic') {
-    const wire = CLAUDE_5_5_WIRE_IDS[modelId];
-    if (wire !== undefined) return wire;
-  }
-  const prefix = `${provider}/`;
-  if (modelId.startsWith(prefix)) return modelId.slice(prefix.length);
-  return modelId;
+const ANTHROPIC_WIRE_IDS = [
+  'claude-haiku-5-5',
+  'claude-sonnet-5-5',
+  'claude-opus-5-5',
+  'claude-haiku-4-5',
+  'claude-sonnet-4-5',
+  'claude-sonnet-4-6',
+  'claude-opus-4-5',
+  'claude-opus-4-6',
+  'claude-opus-4-7',
+  'claude-opus-4-8',
+] as const;
+
+/**
+ * Explicit spelling -> wire id table, per provider (SPEC A.0.5). No prefix stripping and no dot/hyphen
+ * surgery: a spelling that is not listed here is passed to getModel exactly as given, so an unlisted
+ * spelling fails closed instead of being "fixed" into a different model.
+ */
+export const WIRE_IDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  anthropic: {
+    ...Object.fromEntries(
+      ANTHROPIC_WIRE_IDS.flatMap((id) => [
+        [id, id],
+        [`anthropic/${id}`, id],
+      ]),
+    ),
+    // OpenRouter's dotted slugs, which `inferProvider` also sends to Anthropic.
+    'anthropic/claude-haiku-5.5': 'claude-haiku-5-5',
+    'anthropic/claude-sonnet-5.5': 'claude-sonnet-5-5',
+    'anthropic/claude-opus-5.5': 'claude-opus-5-5',
+  },
+  // Frozen default at mcp/src/index.ts (PARITY_JUDGE_MODEL); `inferProvider` sends the `google/` prefix here.
+  google: { 'google/gemini-3.1-pro-preview': 'gemini-3.1-pro-preview' },
+};
+
+const FREE_LOOKING = /[:-]free$/i;
+
+/**
+ * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.5, A.0.10): the explicit table, then an
+ * unknown free-looking id falls to the verified free constant, and any other unknown id throws before a request
+ * exists (getModel returns undefined for it, which used to surface as a TypeError).
+ */
+function resolveWire(
+  provider: SupportedProvider,
+  modelId: string,
+): { provider: SupportedProvider; modelId: string } {
+  const id = WIRE_IDS[provider]?.[modelId] ?? modelId;
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel is typed against its compile-time registry
+  if ((getModel as any)(provider, id) !== undefined) return { provider, modelId: id };
+  if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  throw new Error(
+    `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
+  );
 }
 
 /**
@@ -148,19 +179,19 @@ function canonicalizeModelId(provider: SupportedProvider, modelId: string): stri
  *   to retry with larger maxTokens
  */
 export async function call(opts: CallOptions): Promise<CallResult> {
-  const canonicalId = canonicalizeModelId(opts.provider, opts.modelId);
+  const { provider, modelId: canonicalId } = resolveWire(opts.provider, opts.modelId);
   // pi-ai's getModel is typed against its compile-time MODEL registry, but
   // we accept arbitrary strings at this boundary (env-driven model overrides,
   // per-call user input). Runtime validation inside getModel throws for
   // unknown ids — we surface that as a clear error message to the agent.
   // biome-ignore lint/suspicious/noExplicitAny: see comment above
-  const registryModel = (getModel as any)(opts.provider, canonicalId);
+  const registryModel = (getModel as any)(provider, canonicalId);
   const model = opts.baseUrl ? { ...registryModel, baseUrl: opts.baseUrl } : registryModel;
 
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {
     if (!model.input.includes('image')) {
-      throw new Error(`pi-ai model ${opts.provider}/${canonicalId} does not support image input`);
+      throw new Error(`pi-ai model ${provider}/${canonicalId} does not support image input`);
     }
     userContent.push({
       type: 'image',
@@ -193,7 +224,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     costUsd: Number.isFinite(result.usage.cost.total) ? result.usage.cost.total : 0,
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
-    provider: opts.provider,
+    provider,
     modelUsed: result.model,
     stopReason: result.stopReason,
   };

@@ -22,7 +22,37 @@
  * we fall through to the secondary, then surface a clear error.
  */
 
+import { getModel } from '@earendil-works/pi-ai/compat';
 import type { SupportedProvider } from './piAi';
+
+// Wire ids this file writes (model-defaults SPEC 1.2, the only source). One constant per id so the tier tables
+// and the tests read the same value; the request-shape test checks each against its own SPEC 1.2 literal.
+export const CLAUDE_HAIKU = 'claude-haiku-5-5';
+export const CLAUDE_SONNET = 'claude-sonnet-5-5';
+export const CLAUDE_OPUS = 'claude-opus-5-5';
+export const OPENROUTER_CLAUDE_HAIKU = 'anthropic/claude-haiku-5.5';
+export const OPENROUTER_CLAUDE_SONNET = 'anthropic/claude-sonnet-5.5';
+/** The only verified free route (SPEC 1.2 live :free list). Unknown free-looking ids resolve here. */
+export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+/**
+ * Output-token caps per call site. Thinking counts toward `max_tokens` on Claude 5.5 (SPEC 1.3), and since the
+ * maxOutputTokens -> maxTokens fix they are real caps on every model, kimi-k2.6 included (before, pi-ai ignored
+ * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto the
+ * paid fallback, so these values are part of the needs-live-eval scope on PR #101 until measured.
+ */
+export const OUTPUT_CAPS = {
+  enhance: 4_000,
+  explain: 4_000,
+  agentLoop: 16_000,
+  generate: 16_000,
+  decompose: 24_000,
+  iterate: 24_000,
+} as const;
+/** convex/chatLoop.ts default when CHAT_MODEL is unset, keyed by CHAT_PROVIDER. */
+export const CHAT_DEFAULT_MODEL = {
+  anthropic: CLAUDE_SONNET,
+  openrouter: 'moonshotai/kimi-k2.6',
+} as const;
 
 export type ModelTier = 'frontier' | 'balanced' | 'free' | 'small';
 export type Phase =
@@ -63,37 +93,37 @@ export interface RunModelConfig {
 const FRONTIER: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-5-5',
+    modelId: CLAUDE_HAIKU,
     isFree: false,
     label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-opus-5-5',
+    modelId: CLAUDE_OPUS,
     isFree: false,
     label: 'opus-5.5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-5-5',
+    modelId: CLAUDE_SONNET,
     isFree: false,
     label: 'sonnet-5.5',
   },
   generate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-5-5',
+    modelId: CLAUDE_SONNET,
     isFree: false,
     label: 'sonnet-5.5',
   },
   decompose: {
     provider: 'anthropic',
-    modelId: 'claude-opus-5-5',
+    modelId: CLAUDE_OPUS,
     isFree: false,
     label: 'opus-5.5',
   },
   iterate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-5-5',
+    modelId: CLAUDE_SONNET,
     isFree: false,
     label: 'sonnet-5.5',
   },
@@ -108,40 +138,40 @@ const FRONTIER: Record<Phase, ResolvedModel> = {
 const BALANCED: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-5-5',
+    modelId: CLAUDE_HAIKU,
     isFree: false,
     label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-5-5',
+    modelId: CLAUDE_SONNET,
     isFree: false,
     label: 'sonnet-5.5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-5-5',
+    modelId: CLAUDE_SONNET,
     isFree: false,
     label: 'sonnet-5.5',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
     isFree: false,
     label: 'kimi-k2.6',
   },
@@ -196,9 +226,11 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 // candidate at 60% pass — added to FREE fallback chain. Still below
 // the 80% bar paid haiku clears, so primary stays ling-2.6-1t.
 //
-// Reliable graceful-degrade fallback when ling rate-limits: claude-haiku-4-5
-// (paid, ~$0.001/call). Better to spend a fraction of a cent than serve
-// a broken response.
+// Graceful-degrade fallback when the free primary fails: anthropic/claude-haiku-5.5 (PAID, OpenRouter).
+// That turns a free request into a paid one, which model-defaults SPEC A.0.10 forbids unless the call site
+// carries allowPaidFallback: true plus a financial reservation. Neither exists here, so this is an open
+// needs-Homen decision (free->free fallback, or allowPaidFallback with a reservation), recorded on PR #101.
+// Not widened by the 5.5 refresh: the fallback only changed id (haiku-4.5 -> haiku-5.5).
 // 2026-10-14: inclusionai/ling-2.6-1t:free is absent from OpenRouter (live :free list 2026-10-10), so the
 // FREE tier primary moved to nvidia/nemotron-3-super-120b-a12b:free (tools + structured outputs; the
 // NodeVideo benchmark pick). UNMEASURED on this repo's tool surface (needs-live-eval): the eval above
@@ -206,50 +238,50 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   advise: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   execute: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   generate: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   decompose: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   iterate: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
+    modelId: VERIFIED_FREE_MODEL,
+    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
@@ -262,49 +294,49 @@ const FREE: Record<Phase, ResolvedModel> = {
 const SMALL: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-5-5',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    modelId: CLAUDE_HAIKU,
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-5-5',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    modelId: CLAUDE_HAIKU,
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'haiku-5-5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-5-5',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    modelId: CLAUDE_HAIKU,
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'haiku-5-5',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    fallback: { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    modelId: VERIFIED_FREE_MODEL,
     isFree: true,
     label: 'nemotron-3-super :free',
   },
@@ -328,6 +360,25 @@ export function tierFromRun(run: RunModelConfig | null | undefined): ModelTier {
   return deploymentTier();
 }
 
+const FREE_LOOKING = /[:-]free$/i;
+
+/**
+ * SPEC A.0.10. An override that pi-ai's catalog knows passes through untouched (persisted 4.x rows included).
+ * An unknown free-looking id resolves to the verified free constant, so a free request never becomes a paid one;
+ * any other unknown id throws here, before a request exists, instead of becoming a TypeError inside getModel.
+ */
+function failClosedOverride(
+  provider: SupportedProvider,
+  modelId: string,
+): { provider: SupportedProvider; modelId: string } {
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel is typed against its compile-time registry
+  if ((getModel as any)(provider, modelId) !== undefined) return { provider, modelId };
+  if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  throw new Error(
+    `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
+  );
+}
+
 export function resolveRunModel(
   run: RunModelConfig | null | undefined,
   phase: Phase,
@@ -338,11 +389,12 @@ export function resolveRunModel(
   if (override !== undefined && (phase !== 'judge' || options.allowCustomJudge === true)) {
     const modelId = override.modelId.trim();
     if (modelId.length > 0) {
+      const route = failClosedOverride(override.provider, modelId);
       return {
-        provider: override.provider,
-        modelId,
-        isFree: modelId.includes(':free'),
-        label: override.label?.trim() || modelId,
+        provider: route.provider,
+        modelId: route.modelId,
+        isFree: route.modelId.includes(':free'),
+        label: override.label?.trim() || route.modelId,
       };
     }
   }

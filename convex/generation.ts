@@ -4,7 +4,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
-import { type Phase, type ResolvedModel, resolveRunModel } from './lib/autoRouter';
+import { OUTPUT_CAPS, type Phase, type ResolvedModel, resolveRunModel } from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
@@ -260,7 +260,7 @@ export const generateInitial = internalAction({
         picked,
         systemPrompt: GENERATE_SYSTEM,
         userText,
-        maxTokens: 16_000,
+        maxTokens: OUTPUT_CAPS.generate,
         ...(sourceImageBase64 !== undefined && sourceImageMimeType !== undefined
           ? { userImage: { base64: sourceImageBase64, mimeType: sourceImageMimeType } }
           : {}),
@@ -307,7 +307,7 @@ export const decompose = internalAction({
         picked,
         systemPrompt: DECOMPOSE_SYSTEM,
         userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
-        maxTokens: 24_000,
+        maxTokens: OUTPUT_CAPS.decompose,
         validate: (text) => {
           const parsed = parseUiKitResponse(text);
           const validation = validateParsedUiKit(parsed);
@@ -498,7 +498,7 @@ ${args.sourceHtml.slice(0, 8_000)}`;
         picked,
         systemPrompt: ITERATE_SYSTEM,
         userText,
-        maxTokens: 24_000,
+        maxTokens: OUTPUT_CAPS.iterate,
         validate: (text) => {
           const parsed = parseUiKitResponse(text);
           const validation = validateParsedUiKit(parsed);

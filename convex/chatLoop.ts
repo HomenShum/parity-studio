@@ -15,7 +15,13 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action, internalAction } from './_generated/server';
-import { type Phase, type RunModelConfig, resolveRunModel } from './lib/autoRouter';
+import {
+  CHAT_DEFAULT_MODEL,
+  OUTPUT_CAPS,
+  type Phase,
+  type RunModelConfig,
+  resolveRunModel,
+} from './lib/autoRouter';
 import { type SupportedProvider, usdToMicroUsd } from './lib/piAi';
 import { QUALITY_GATE_MAX_REPAIRS } from './lib/qualityGate';
 import { lintKit } from './lib/staticLint';
@@ -38,7 +44,7 @@ import { lintKit } from './lib/staticLint';
 const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropic' | 'openrouter';
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
-  (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-5-5' : 'moonshotai/kimi-k2.6');
+  (CHAT_PROVIDER === 'anthropic' ? CHAT_DEFAULT_MODEL.anthropic : CHAT_DEFAULT_MODEL.openrouter);
 // Advisor + Executor envs are read inline at hop time (in runAgentLoop)
 // since the tier resolver is the new default; only fall back to env on
 // explicit override. We keep the ADVISOR_* constants here for the
@@ -175,7 +181,7 @@ export const enhance = action({
       systemPrompt: ENHANCE_INSTRUCTION,
       messages: [{ role: 'user', content: trimmed, timestamp: Date.now() }],
     };
-    const result = await piComplete(model, ctxObj, { maxTokens: 4_000 });
+    const result = await piComplete(model, ctxObj, { maxTokens: OUTPUT_CAPS.enhance });
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
     if (out.length === 0) {
@@ -497,7 +503,7 @@ export const explainParity = action({
               },
             ],
           },
-          { maxTokens: 4_000 },
+          { maxTokens: OUTPUT_CAPS.explain },
         ),
         25_000,
         'parity explanation',
@@ -743,7 +749,7 @@ export const runAgentLoop = internalAction({
       };
       let result: AssistantMessage;
       try {
-        result = await piComplete(model, ctxObj, { maxTokens: 16_000 });
+        result = await piComplete(model, ctxObj, { maxTokens: OUTPUT_CAPS.agentLoop });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
