@@ -6,7 +6,7 @@
  * did not truncate the answer (stopReason != 'length', the check that guards the BALANCED -> paid-fallback path),
  * and writes a SPEC A.0.3 receipt.
  *
- *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=1 ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=... GEMINI_API_KEY=... \
+ *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=2 ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=... GEMINI_API_KEY=... \
  *     pnpm exec vitest run convex/lib/modelRefresh.live.test.ts
  *
  * Run it on a clean checkout of the PR head (a dirty tree is refused). It then writes
@@ -14,7 +14,8 @@
  *
  * Spend is bounded per dispatch, not just up front. `call()` soft-retries OpenRouter up to `maxAttempts` times and
  * sums every attempt's cost, so before each cell the harness requires spentUsd + (attempts x single-attempt worst
- * case) <= PARITY_LIVE_MAX_USD (default 1); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
+ * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: with the MCP cells the one-attempt
+ * worst case is ~$1.01, so a real run passes 2); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
  * review treats as an incomplete run, never a pass. The all-attempts worst case is printed before any call.
  * `budget.requests` and each row's `transportRequests` are counted at the transport (a wrapper around the global
  * `fetch` pi-ai sends through), so they include pi-ai's own HTTP retries of a 429/5xx. `completionAttempts` is the
