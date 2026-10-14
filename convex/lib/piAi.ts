@@ -157,7 +157,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const isOpenRouter = opts.provider === 'openrouter';
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxOutputTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
     ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };
 

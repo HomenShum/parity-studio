@@ -34,11 +34,11 @@ import { lintKit } from './lib/staticLint';
 //   CHAT_EXECUTOR_MODEL=nvidia/nemotron-3-super-120b  # best reliable, 14.5s
 // (Slugs subject to openrouter's catalog — verify with their /models endpoint.)
 //
-// Defaults: Claude Sonnet 4.6 for both when using Anthropic directly.
+// Defaults: Claude Sonnet 5.5 for both when using Anthropic directly.
 const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropic' | 'openrouter';
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
-  (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-4-6' : 'moonshotai/kimi-k2.6');
+  (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-5-5' : 'moonshotai/kimi-k2.6');
 // Advisor + Executor envs are read inline at hop time (in runAgentLoop)
 // since the tier resolver is the new default; only fall back to env on
 // explicit override. We keep the ADVISOR_* constants here for the
@@ -175,7 +175,7 @@ export const enhance = action({
       systemPrompt: ENHANCE_INSTRUCTION,
       messages: [{ role: 'user', content: trimmed, timestamp: Date.now() }],
     };
-    const result = await piComplete(model, ctxObj, { maxOutputTokens: 1_000 });
+    const result = await piComplete(model, ctxObj, { maxTokens: 4_000 });
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
     if (out.length === 0) {
@@ -497,7 +497,7 @@ export const explainParity = action({
               },
             ],
           },
-          { maxOutputTokens: 700 },
+          { maxTokens: 4_000 },
         ),
         25_000,
         'parity explanation',
@@ -743,7 +743,7 @@ export const runAgentLoop = internalAction({
       };
       let result: AssistantMessage;
       try {
-        result = await piComplete(model, ctxObj, { maxOutputTokens: 4_000 });
+        result = await piComplete(model, ctxObj, { maxTokens: 16_000 });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
@@ -985,10 +985,10 @@ async function executeTool(
   }
 }
 
-function safeParseJson(s: string): Record<string, unknown> | undefined {
+function safeParseJson(s: string): ToolCall['arguments'] | undefined {
   try {
     const v = JSON.parse(s);
-    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : undefined;
+    return typeof v === 'object' && v !== null ? (v as ToolCall['arguments']) : undefined;
   } catch {
     return undefined;
   }

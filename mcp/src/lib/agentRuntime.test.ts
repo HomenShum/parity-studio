@@ -3,7 +3,7 @@ import { buildAgentRuntimeMetadata, filterSafeAgentEnv } from './agentRuntime';
 
 describe('agentRuntime', () => {
   it('returns runtime profiles and model-specific provider env allowlist', () => {
-    const metadata = buildAgentRuntimeMetadata(['claude-sonnet-4-6', 'moonshotai/kimi-k2.6']);
+    const metadata = buildAgentRuntimeMetadata(['claude-sonnet-5-5', 'moonshotai/kimi-k2.6']);
     expect(metadata.profiles.some((profile) => profile.id === 'claude-code')).toBe(true);
     expect(metadata.launchCommands).toContainEqual(
       expect.objectContaining({ platform: 'windows', command: 'npx.cmd' }),

@@ -8,7 +8,7 @@ describe('auto router', () => {
       Array.from({ length: 50 }, (_, i) => sessionPick(`run-${i}`, model).modelId),
     );
     expect(pickedIds).toEqual(new Set([model.modelId]));
-    expect(model.fallback?.modelId).toBe('anthropic/claude-haiku-4.5');
+    expect(model.fallback?.modelId).toBe('anthropic/claude-haiku-5.5');
   });
 
   it('has a paid recovery model for balanced prompt generation', () => {
@@ -16,7 +16,7 @@ describe('auto router', () => {
     expect(model.modelId).toBe('moonshotai/kimi-k2.6');
     expect(model.fallback).toEqual({
       provider: 'openrouter',
-      modelId: 'anthropic/claude-sonnet-4.6',
+      modelId: 'anthropic/claude-sonnet-5.5',
     });
   });
 });

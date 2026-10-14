@@ -54,8 +54,8 @@ export const MODEL_PROVIDERS: Array<{ value: ModelProvider; label: string; envVa
 ];
 
 export const MODEL_PRESETS: ModelOverride[] = [
-  { provider: 'anthropic', modelId: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { provider: 'anthropic', modelId: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+  { provider: 'anthropic', modelId: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+  { provider: 'anthropic', modelId: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
   { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
   {
     provider: 'openrouter',
@@ -64,8 +64,8 @@ export const MODEL_PRESETS: ModelOverride[] = [
   },
   {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    label: 'Ling 2.6 free via OpenRouter',
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    label: 'Nemotron 3 Super free via OpenRouter',
   },
   { provider: 'google', modelId: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro direct' },
 ];

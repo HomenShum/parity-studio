@@ -128,7 +128,7 @@ async function main() {
         arguments: {
           artifactHtml:
             '<html><body><header><h1>Smoke Test</h1></header><main><p>Tiny artifact for dashboard smoke test.</p></main></body></html>',
-          decomposeModel: 'claude-haiku-4-5', // cheapest available
+          decomposeModel: 'claude-haiku-5-5', // cheapest available
         },
       }),
     );

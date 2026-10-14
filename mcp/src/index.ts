@@ -26,8 +26,8 @@
  *     "env": {
  *       "ANTHROPIC_API_KEY": "sk-ant-...",
  *       "OPENAI_API_KEY": "sk-...",
- *       "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
- *       "PARITY_JUDGE_MODEL": "claude-sonnet-4-6"
+ *       "PARITY_DECOMPOSE_MODEL": "claude-opus-5-5",
+ *       "PARITY_JUDGE_MODEL": "claude-sonnet-5-5"
  *     }
  *   }
  */
@@ -196,8 +196,8 @@ async function convexCall(
 
 // Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
 // for vision judge). Override via env for any tier you prefer:
-//   PARITY_GENERATE_MODEL=claude-sonnet-4-6
-//   PARITY_DECOMPOSE_MODEL=claude-opus-4-7
+//   PARITY_GENERATE_MODEL=claude-sonnet-5-5
+//   PARITY_DECOMPOSE_MODEL=claude-opus-5-5
 //   PARITY_JUDGE_MODEL=gpt-4o
 const GENERATE_MODEL = process.env.PARITY_GENERATE_MODEL ?? 'moonshotai/kimi-k2.6';
 const DECOMPOSE_MODEL = process.env.PARITY_DECOMPOSE_MODEL ?? 'moonshotai/kimi-k2.6';

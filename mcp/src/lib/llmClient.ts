@@ -6,7 +6,7 @@
  *
  * API surface:
  *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
- *   const model = getModel('anthropic', 'claude-sonnet-4-6');
+ *   const model = getModel('anthropic', 'claude-sonnet-5-5');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
  *     messages: [{ role: 'user', content: [
@@ -63,7 +63,7 @@ export interface VisionInput {
 export interface CallOptions {
   /** Provider id (anthropic, openai, google, openrouter, groq, cerebras, xai, mistral). */
   provider: SupportedProvider;
-  /** Provider-specific model id (e.g. claude-sonnet-4-6, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
+  /** Provider-specific model id (e.g. claude-sonnet-5-5, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
   modelId: string;
   systemPrompt: string;
   userText: string;
@@ -106,10 +106,32 @@ export function inferProvider(modelId: string): SupportedProvider {
 }
 
 /**
- * Strip provider prefix if present so getModel(provider, id) gets the canonical
- * id. e.g. "anthropic/claude-sonnet-4-6" + provider="anthropic" -> "claude-sonnet-4-6".
+ * Explicit Claude 5.5 wire ids (model-defaults SPEC section 1.2), keyed by every spelling a caller may
+ * pass. The direct Anthropic transport takes `claude-*-5-5`; the OpenRouter slug is `anthropic/claude-*-5.5`
+ * and is accepted here as an alias because `inferProvider` routes any `anthropic/` prefix to Anthropic.
+ * No string surgery: a spelling that is not in this table is not converted.
+ */
+export const CLAUDE_5_5_WIRE_IDS: Readonly<Record<string, string>> = {
+  'claude-haiku-5-5': 'claude-haiku-5-5',
+  'anthropic/claude-haiku-5-5': 'claude-haiku-5-5',
+  'anthropic/claude-haiku-5.5': 'claude-haiku-5-5',
+  'claude-sonnet-5-5': 'claude-sonnet-5-5',
+  'anthropic/claude-sonnet-5-5': 'claude-sonnet-5-5',
+  'anthropic/claude-sonnet-5.5': 'claude-sonnet-5-5',
+  'claude-opus-5-5': 'claude-opus-5-5',
+  'anthropic/claude-opus-5-5': 'claude-opus-5-5',
+  'anthropic/claude-opus-5.5': 'claude-opus-5-5',
+};
+
+/**
+ * Resolve the id handed to getModel(provider, id). Claude 5.5 goes through the explicit table above;
+ * every other id keeps the previous behaviour (strip a leading `<provider>/`), so persisted 4.x ids stay valid.
  */
 function canonicalizeModelId(provider: SupportedProvider, modelId: string): string {
+  if (provider === 'anthropic') {
+    const wire = CLAUDE_5_5_WIRE_IDS[modelId];
+    if (wire !== undefined) return wire;
+  }
   const prefix = `${provider}/`;
   if (modelId.startsWith(prefix)) return modelId.slice(prefix.length);
   return modelId;
@@ -160,7 +182,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
 
   const result = await piComplete(model, context, {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxOutputTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
   });
 
   const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');

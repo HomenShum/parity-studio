@@ -58,44 +58,44 @@ export interface RunModelConfig {
 
 // ── Tier × phase mapping (curated) ──────────────────────────────────────
 
-// Anthropic paid-family IDs refreshed 2026-05-01 against official docs
-// and the installed pi-ai 0.70.2 registry: Opus 4.7, Sonnet 4.6, Haiku 4.5.
+// Anthropic paid-family IDs follow the vendor migration guide (4.x -> 5.5), verified against official docs
+// and the installed pi-ai registry. 2026-10 refresh (model-defaults SPEC A.2.7): Opus 5.5, Sonnet 5.5, Haiku 5.5 (pi-ai 1.1.0).
 const FRONTIER: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-4-5',
+    modelId: 'claude-haiku-5-5',
     isFree: false,
-    label: 'haiku-4-5',
+    label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-opus-4-7',
+    modelId: 'claude-opus-5-5',
     isFree: false,
-    label: 'opus-4.7',
+    label: 'opus-5.5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5-5',
     isFree: false,
-    label: 'sonnet-4.6',
+    label: 'sonnet-5.5',
   },
   generate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5-5',
     isFree: false,
-    label: 'sonnet-4.6',
+    label: 'sonnet-5.5',
   },
   decompose: {
     provider: 'anthropic',
-    modelId: 'claude-opus-4-7',
+    modelId: 'claude-opus-5-5',
     isFree: false,
-    label: 'opus-4.7',
+    label: 'opus-5.5',
   },
   iterate: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5-5',
     isFree: false,
-    label: 'sonnet-4.6',
+    label: 'sonnet-5.5',
   },
   judge: {
     provider: 'openrouter',
@@ -108,40 +108,40 @@ const FRONTIER: Record<Phase, ResolvedModel> = {
 const BALANCED: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-4-5',
+    modelId: 'claude-haiku-5-5',
     isFree: false,
-    label: 'haiku-4-5',
+    label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5-5',
     isFree: false,
-    label: 'sonnet-4.6',
+    label: 'sonnet-5.5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5-5',
     isFree: false,
-    label: 'sonnet-4.6',
+    label: 'sonnet-5.5',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4.6' },
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5.5' },
     isFree: false,
     label: 'kimi-k2.6',
   },
@@ -199,55 +199,59 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 // Reliable graceful-degrade fallback when ling rate-limits: claude-haiku-4-5
 // (paid, ~$0.001/call). Better to spend a fraction of a cent than serve
 // a broken response.
+// 2026-10-14: inclusionai/ling-2.6-1t:free is absent from OpenRouter (live :free list 2026-10-10), so the
+// FREE tier primary moved to nvidia/nemotron-3-super-120b-a12b:free (tools + structured outputs; the
+// NodeVideo benchmark pick). UNMEASURED on this repo's tool surface (needs-live-eval): the eval above
+// measured ling, not nemotron; scripts/eval-free-models.mjs is the evidence path once its import is fixed.
 const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   advise: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   execute: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   generate: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   decompose: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   iterate: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
-    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-4.5' },
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fallback: { provider: 'openrouter', modelId: 'anthropic/claude-haiku-5.5' },
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
 };
 
@@ -258,51 +262,51 @@ const FREE: Record<Phase, ResolvedModel> = {
 const SMALL: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    modelId: 'claude-haiku-5-5',
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
-    label: 'haiku-4-5',
+    label: 'haiku-5-5',
   },
   advise: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    modelId: 'claude-haiku-5-5',
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
-    label: 'haiku-4-5',
+    label: 'haiku-5-5',
   },
   execute: {
     provider: 'anthropic',
-    modelId: 'claude-haiku-4-5',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    modelId: 'claude-haiku-5-5',
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
-    label: 'haiku-4-5',
+    label: 'haiku-5-5',
   },
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+    fallback: { provider: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
     isFree: false,
     label: 'kimi-k2.6',
   },
   judge: {
     provider: 'openrouter',
-    modelId: 'inclusionai/ling-2.6-1t:free',
+    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
     isFree: true,
-    label: 'ling-2.6-1t :free',
+    label: 'nemotron-3-super :free',
   },
 };
 

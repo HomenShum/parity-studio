@@ -61,7 +61,7 @@
     "@assistant-ui/store": "0.2.19",
     "@convex-dev/persistent-text-streaming": "^0.3.3",
     "@convex-dev/workflow": "^0.3.0",
-    "@earendil-works/pi-ai": "0.80.6",
+    "@earendil-works/pi-ai": "1.1.0",
     "@fontsource-variable/fraunces": "^5.2.9",
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
