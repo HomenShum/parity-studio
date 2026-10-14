@@ -178,9 +178,13 @@ describe('NodeSlide fail-closed auto routing policy', () => {
   });
 
   describe('per-request cost cap', () => {
+    // The estimate is read from the installed pi-ai openrouter catalog (z-ai/glm-5.2), so these pins follow the
+    // dependency. pi-ai 0.80.6 -> 1.1.0 (model-defaults SPEC A.2.7 pre-PR) re-priced it: was 0.532 in / 1.672 out
+    // USD per M tokens, total 2_204 micro-USD (caps 0.002203 / 0.002204); now 0.171 / 7.2, total 7_371 micro-USD.
+    // Assertions are unchanged; only the measured catalog numbers moved. Re-measured 2026-10-14 against 1.1.0.
     it.each([
-      { name: 'one micro-dollar below estimate', cap: 0.002203, kind: 'refused' },
-      { name: 'exactly equal to estimate', cap: 0.002204, kind: 'selected' },
+      { name: 'one micro-dollar below estimate', cap: 0.00737, kind: 'refused' },
+      { name: 'exactly equal to estimate', cap: 0.007371, kind: 'selected' },
       { name: 'well above estimate', cap: 1, kind: 'selected' },
     ] as const)('$name is $kind', ({ cap, kind }) => {
       const decision = decideNodeSlideAutoRoute(input({ maxUsd: cap }));
@@ -188,12 +192,12 @@ describe('NodeSlide fail-closed auto routing policy', () => {
       expect(decision.kind).toBe(kind);
       expect(decision.costEstimate).toMatchObject({
         status: 'estimated',
-        totalMicroUsd: 2_204,
-        totalUsd: 0.002204,
+        totalMicroUsd: 7_371,
+        totalUsd: 0.007371,
         pricing: {
           source: 'pi-ai-openrouter-catalog',
-          inputUsdPerMillionTokens: 0.532,
-          outputUsdPerMillionTokens: 1.672,
+          inputUsdPerMillionTokens: 0.171,
+          outputUsdPerMillionTokens: 7.2,
         },
       });
       if (kind === 'refused') {
