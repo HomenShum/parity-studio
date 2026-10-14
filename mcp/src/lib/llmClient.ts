@@ -163,6 +163,20 @@ function resolveWire(
 }
 
 /**
+ * The provider whose key a call for `model` will actually use: `inferProvider`, then `resolveWire`, so an unknown
+ * free-looking id (`obsolete-model-free`, inferred as openai) is keyed as the OpenRouter route it is redirected
+ * to. An id `resolveWire` refuses keeps the inferred provider; `call()` throws for it before any request.
+ */
+export function keyProviderFor(model: string): SupportedProvider {
+  const inferred = inferProvider(model);
+  try {
+    return resolveWire(inferred, model).provider;
+  } catch {
+    return inferred;
+  }
+}
+
+/**
  * Single completion call. Supports text-only and vision.
  *
  * Error handling per agentic_reliability HONEST_STATUS:

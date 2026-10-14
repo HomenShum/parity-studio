@@ -1,4 +1,4 @@
-import { type SupportedProvider, inferProvider } from './llmClient.js';
+import { type SupportedProvider, keyProviderFor } from './llmClient.js';
 
 export const PROVIDER_KEY_ENV: Record<SupportedProvider, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
@@ -25,7 +25,7 @@ export function localByokStatus(models: readonly string[]): {
   missingEnvVars: string[];
 } {
   const statuses = models.map((model) => {
-    const provider = inferProvider(model);
+    const provider = keyProviderFor(model);
     const envVar = PROVIDER_KEY_ENV[provider];
     return {
       model,

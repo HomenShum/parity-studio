@@ -1,6 +1,6 @@
 /**
  * Public model-selection boundary (model-defaults SPEC A.0.10). Pure, so the V8-runtime mutations in runs.ts can
- * use it; pi-ai is node-only there. Same rule as the action-side resolver (`failClosedOverride` in autoRouter.ts):
+ * use it; pi-ai is node-only there. Same rule as the action-side resolver (`failClosedRoute` in autoRouter.ts):
  * a catalog id is accepted, an unknown free-looking id is accepted because the resolver turns it into the verified
  * free constant, and any other unknown id is refused before it is persisted.
  */

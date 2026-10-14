@@ -166,9 +166,11 @@ function assertNoForbiddenKeys(body: Record<string, unknown>) {
     expect(thinking['type']).toBe('adaptive');
     expect(thinking).not.toHaveProperty('budget_tokens');
   }
-  // SPEC 1.3: assistant prefill is a 400. The request must end on a user turn.
+  // SPEC 1.3: assistant prefill is a 400. The request must end on a user turn. pi-ai always appends a trailing
+  // `system` effort message on the 5.5 models, so the last message alone can never be 'assistant' there; the check
+  // is on the last non-system message (round 3: the old check could not fail).
   const messages = body['messages'] as Array<{ role: string }>;
-  expect(messages.at(-1)?.role).not.toBe('assistant');
+  expect(messages.filter((m) => m.role !== 'system').at(-1)?.role).not.toBe('assistant');
 }
 
 describe('request shape: tier x phase cells', () => {

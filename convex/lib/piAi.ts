@@ -75,8 +75,12 @@ export interface CallResult {
   text: string;
   /** Cost of every attempt `call()` made (soft retries included), not just the one whose text it returns. */
   costMicroUsd: number;
-  /** Completion requests `call()` dispatched: 1 + soft retries (OpenRouter only; see `maxAttempts`). */
-  attempts: number;
+  /**
+   * Completions `call()` asked pi-ai for: 1 + soft retries (OpenRouter only; see `maxAttempts`). NOT the number of
+   * HTTP requests: pi-ai retries 429/5xx itself inside one completion (`maxRetries: 3` for OpenRouter), so count
+   * transport requests at the transport (the live receipt wraps `fetch`) when the real number matters.
+   */
+  completionAttempts: number;
   inputTokens: number;
   outputTokens: number;
   modelUsed: string;
@@ -191,11 +195,11 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   // pi-ai surfaces as stopReason='error'. We catch that here.
   const MAX_SOFT_RETRIES = maxAttempts(opts.provider) - 1;
   let lastResult: Awaited<ReturnType<typeof piComplete>> | undefined;
-  let attempts = 0;
+  let completionAttempts = 0;
   let spentUsd = 0;
   for (let attempt = 0; attempt <= MAX_SOFT_RETRIES; attempt += 1) {
     lastResult = await piComplete(model, context, baseOptions);
-    attempts += 1;
+    completionAttempts += 1;
     spentUsd += Number.isFinite(lastResult.usage.cost.total) ? lastResult.usage.cost.total : 0;
     const isSoftError =
       lastResult.stopReason === 'error' && isRetriableError(lastResult.errorMessage);
@@ -214,7 +218,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const out: CallResult = {
     text,
     costMicroUsd: usdToMicroUsd(spentUsd),
-    attempts,
+    completionAttempts,
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
     provider: opts.provider,

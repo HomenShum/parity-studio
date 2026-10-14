@@ -106,6 +106,10 @@ function assertNoForbiddenKeys(body: Body) {
     expect(thinking['type']).toBe('adaptive');
     expect(thinking).not.toHaveProperty('budget_tokens');
   }
+  // SPEC 1.3: assistant prefill is a 400. runAgentLoop is the only path that replays assistant history; the last
+  // non-system message (pi-ai appends a trailing effort `system` message on the 5.5 models) must not be assistant.
+  const messages = (body['messages'] ?? []) as Array<{ role: string }>;
+  expect(messages.filter((m) => m.role !== 'system').at(-1)?.role).not.toBe('assistant');
 }
 
 const RUN_ID = 'run_1';
@@ -225,11 +229,48 @@ describe('env overrides still win over a run override the resolver would reject 
     expect(bodies[0]?.['model']).toBe('moonshotai/kimi-k2.6');
   });
 
-  it('a half-set env still resolves the run pick for the missing half, so the unknown override still throws', async () => {
+  // Review round 3: this used to assert a throw ("a half-set env still resolves the run pick ... still throws"). A.0.4
+  // says an env override wins over the run's pick, and main sent the env model (provider from the stored row), so the
+  // throw was a regression. The pair that will actually be sent is what gets validated.
+  it('CHAT_EXECUTOR_MODEL alone replaces the obsolete stored model: the stored provider, the env model', async () => {
     vi.stubEnv('CHAT_EXECUTOR_MODEL', 'moonshotai/kimi-k2.6');
+    await agentLoopHandler(fakeCtx(badRun, [{ role: 'user', content: 'go' }]), { runId: RUN_ID });
+    expect(bodies[0]?.['model']).toBe('moonshotai/kimi-k2.6');
+  });
+
+  it('CHAT_ENHANCE_MODEL alone replaces it for enhance, and PARITY_EXPLAIN_MODEL for explainParity', async () => {
+    vi.stubEnv('CHAT_ENHANCE_MODEL', 'moonshotai/kimi-k2.6');
+    await settle(enhanceHandler(fakeCtx(badRun, []), { text: 'hi', runId: RUN_ID }));
+    expect(bodies[0]?.['model']).toBe('moonshotai/kimi-k2.6');
+    vi.stubEnv('PARITY_EXPLAIN_MODEL', 'moonshotai/kimi-k2.6');
+    await explainHandler(fakeCtx(badRun, []), { runId: RUN_ID });
+    expect(bodies[1]?.['model']).toBe('moonshotai/kimi-k2.6');
+  });
+
+  it('an env model the catalog does not know still fails closed with zero requests, whatever the stored row says', async () => {
+    vi.stubEnv('CHAT_EXECUTOR_MODEL', 'made-up/other-paid-model');
     await expect(
-      agentLoopHandler(fakeCtx(badRun, [{ role: 'user', content: 'go' }]), { runId: RUN_ID }),
+      agentLoopHandler(fakeCtx({ tier: 'balanced' }, [{ role: 'user', content: 'go' }]), {
+        runId: RUN_ID,
+      }),
     ).rejects.toThrow(/Unknown model/);
     expect(bodies).toHaveLength(0);
+  });
+});
+
+describe('an unknown free-looking env id resolves to the verified free constant (A.0.10)', () => {
+  it('CHAT_ENHANCE_* with an unknown :free id sends the verified free model, not a TypeError', async () => {
+    vi.stubEnv('CHAT_ENHANCE_PROVIDER', 'openrouter');
+    vi.stubEnv('CHAT_ENHANCE_MODEL', 'nonexistent/model:free');
+    await settle(enhanceHandler(fakeCtx({}, []), { text: 'hi' }));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.['model']).toBe(VERIFIED_FREE_MODEL);
+  });
+
+  it('CHAT_EXECUTOR_* with an unknown -free id sends the verified free model', async () => {
+    vi.stubEnv('CHAT_EXECUTOR_PROVIDER', 'openrouter');
+    vi.stubEnv('CHAT_EXECUTOR_MODEL', 'obsolete/model-free');
+    await agentLoopHandler(fakeCtx({}, [{ role: 'user', content: 'go' }]), { runId: RUN_ID });
+    expect(bodies[0]?.['model']).toBe(VERIFIED_FREE_MODEL);
   });
 });

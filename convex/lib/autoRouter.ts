@@ -379,11 +379,12 @@ export function tierFromRun(run: RunModelConfig | null | undefined): ModelTier {
 }
 
 /**
- * SPEC A.0.10. An override that pi-ai's catalog knows passes through untouched (persisted 4.x rows included).
- * An unknown free-looking id resolves to the verified free constant, so a free request never becomes a paid one;
- * any other unknown id throws here, before a request exists, instead of becoming a TypeError inside getModel.
+ * SPEC A.0.10, applied to the (provider, model) pair that is about to be sent, wherever it came from (the run's
+ * override, an env override, or a mix). A pair pi-ai's catalog knows passes through untouched (persisted 4.x rows
+ * included). An unknown free-looking id resolves to the verified free constant, so a free request never becomes a
+ * paid one; any other unknown id throws here, before a request exists, instead of becoming a TypeError in getModel.
  */
-function failClosedOverride(
+export function failClosedRoute(
   provider: SupportedProvider,
   modelId: string,
 ): { provider: SupportedProvider; modelId: string } {
@@ -395,26 +396,52 @@ function failClosedOverride(
   );
 }
 
+/** The run's explicit override for this phase, exactly as stored (not validated), or undefined. */
+function runOverride(
+  run: RunModelConfig | null | undefined,
+  phase: Phase,
+  options: { allowCustomJudge?: boolean },
+): { provider: SupportedProvider; modelId: string; label: string | undefined } | undefined {
+  const override = run?.modelOverride;
+  if (override === undefined || (phase === 'judge' && options.allowCustomJudge !== true)) {
+    return undefined;
+  }
+  const modelId = override.modelId.trim();
+  if (modelId.length === 0) return undefined;
+  return { provider: override.provider, modelId, label: override.label?.trim() || undefined };
+}
+
+/**
+ * The run's own pick (explicit override, else the tier cell), NOT validated. A caller that may replace part of it
+ * from env (A.0.4) validates the pair it will actually send with `failClosedRoute`, so a stale stored override
+ * that env replaces cannot block the send; everyone else uses `resolveRunModel`.
+ */
+export function pickRunModel(
+  run: RunModelConfig | null | undefined,
+  phase: Phase,
+  runId: string,
+  options: { allowCustomJudge?: boolean } = {},
+): { provider: SupportedProvider; modelId: string } {
+  return (
+    runOverride(run, phase, options) ?? sessionPick(runId, resolveModel(tierFromRun(run), phase))
+  );
+}
+
 export function resolveRunModel(
   run: RunModelConfig | null | undefined,
   phase: Phase,
   runId: string,
   options: { allowCustomJudge?: boolean } = {},
 ): ResolvedModel {
-  const override = run?.modelOverride;
-  if (override !== undefined && (phase !== 'judge' || options.allowCustomJudge === true)) {
-    const modelId = override.modelId.trim();
-    if (modelId.length > 0) {
-      const route = failClosedOverride(override.provider, modelId);
-      return {
-        provider: route.provider,
-        modelId: route.modelId,
-        isFree: route.modelId.includes(':free'),
-        label: override.label?.trim() || route.modelId,
-      };
-    }
-  }
-  return sessionPick(runId, resolveModel(tierFromRun(run), phase));
+  const override = runOverride(run, phase, options);
+  if (override === undefined) return sessionPick(runId, resolveModel(tierFromRun(run), phase));
+  const route = failClosedRoute(override.provider, override.modelId);
+  return {
+    provider: route.provider,
+    modelId: route.modelId,
+    isFree: route.modelId.includes(':free'),
+    label: override.label || route.modelId,
+  };
 }
 
 /**

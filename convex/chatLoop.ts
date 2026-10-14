@@ -21,7 +21,8 @@ import {
   PHASE_EFFORT,
   type Phase,
   type RunModelConfig,
-  resolveRunModel,
+  failClosedRoute,
+  pickRunModel,
 } from './lib/autoRouter';
 import { type SupportedProvider, usdToMicroUsd } from './lib/piAi';
 import { QUALITY_GATE_MAX_REPAIRS } from './lib/qualityGate';
@@ -112,24 +113,21 @@ function resolvePhaseModel({
   let provider = fallbackProvider;
   let modelId = fallbackModel;
   let source: 'router' | 'custom' | 'env' | 'fallback' = 'fallback';
-  const providerOverride = process.env[providerEnvKey];
-  const modelOverride = process.env[modelEnvKey];
-  // Env overrides win (A.0.4). The run's router/custom pick is only consulted for what the env leaves open, so a
-  // persisted run override the resolver rejects cannot block an operator override that would have replaced it.
-  const envSettlesRoute =
-    SUPPORTED_PROVIDER_VALUES.includes(providerOverride as SupportedProvider) &&
-    modelOverride !== undefined;
-  if (runId !== undefined && !envSettlesRoute) {
-    const resolved = resolveRunModel(run, phase, String(runId));
-    provider = resolved.provider;
-    modelId = resolved.modelId;
+  if (runId !== undefined) {
+    const picked = pickRunModel(run, phase, String(runId));
+    provider = picked.provider;
+    modelId = picked.modelId;
     source = run?.modelOverride !== undefined && phase !== 'judge' ? 'custom' : 'router';
   }
+  const providerOverride = process.env[providerEnvKey];
+  const modelOverride = process.env[modelEnvKey];
   if (providerOverride !== undefined || modelOverride !== undefined) {
     provider = asSupportedProvider(providerOverride, provider);
     modelId = modelOverride ?? modelId;
     source = 'env';
   }
+  // A.0.4 / A.0.10: env wins over the run's pick, and the pair that will actually be sent is what gets validated.
+  ({ provider, modelId } = failClosedRoute(provider, modelId));
   return { provider, modelId, source };
 }
 
@@ -745,13 +743,12 @@ export const runAgentLoop = internalAction({
       const envProvider =
         process.env[useAdvisor ? 'CHAT_ADVISOR_PROVIDER' : 'CHAT_EXECUTOR_PROVIDER'];
       const envModel = process.env[useAdvisor ? 'CHAT_ADVISOR_MODEL' : 'CHAT_EXECUTOR_MODEL'];
-      // The run's pick is only resolved for what the env leaves open (A.0.4): see resolvePhaseModel.
-      const baseResolved =
-        envProvider !== undefined && envModel !== undefined
-          ? undefined
-          : resolveRunModel(runRow, phase, String(runId));
-      const provider = envProvider ?? baseResolved?.provider;
-      const modelId = envModel ?? baseResolved?.modelId;
+      // Env wins over the run's pick (A.0.4); the pair that will actually be sent is what gets validated (A.0.10).
+      const picked = pickRunModel(runRow, phase, String(runId));
+      const { provider, modelId } = failClosedRoute(
+        (envProvider ?? picked.provider) as SupportedProvider,
+        envModel ?? picked.modelId,
+      );
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
       const model = (getModel as any)(provider, modelId);
       const ctxObj: Context = {

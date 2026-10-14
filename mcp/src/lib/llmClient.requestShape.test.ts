@@ -7,6 +7,7 @@
  * per-phase effort reach the wire, and unknown ids fail closed (SPEC A.0.10).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requireLocalKeys } from './byok';
 import { DEFAULT_EFFORT, VERIFIED_FREE_MODEL, WIRE_IDS, call, callByModel } from './llmClient';
 
 // The first request per provider lazy-loads that provider's SDK (3 s+ on a cold machine).
@@ -178,5 +179,22 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     expect(bodies).toHaveLength(1);
     expect(bodies[0]?.body['model']).toBe(VERIFIED_FREE_MODEL);
     expect(VERIFIED_FREE_MODEL).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+  });
+
+  it('the key precheck follows the route the call will use: an unknown -free id needs the OpenRouter key, not OpenAI', async () => {
+    // inferProvider('obsolete-model-free') is 'openai'; resolveWire redirects it to OpenRouter (SPEC A.0.10).
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const status = requireLocalKeys(['obsolete-model-free']);
+    expect(status.models[0]).toMatchObject({
+      provider: 'openrouter',
+      envVar: 'OPENROUTER_API_KEY',
+    });
+    await callByModel({ model: 'obsolete-model-free', systemPrompt: 's', userText: 'u' }).catch(
+      () => undefined,
+    );
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.body['model']).toBe(VERIFIED_FREE_MODEL);
+    // An id resolveWire refuses keeps the inferred provider's key; call() then throws before any request.
+    expect(() => requireLocalKeys(['gpt-made-up'])).toThrow(/OPENAI_API_KEY/);
   });
 });

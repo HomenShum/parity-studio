@@ -2,8 +2,9 @@
 /**
  * Truthful receipt inputs from `call()` (model-defaults SPEC A.0.3), against a fake transport (stubbed fetch,
  * no network, no key, no spend):
- *  - `costMicroUsd` and `attempts` cover every OpenRouter soft retry, not just the attempt whose text is returned
- *    (the live harness budgets its spend and records `budget.requests` from them);
+ *  - `costMicroUsd` and `completionAttempts` cover every OpenRouter soft retry, not just the attempt whose text is
+ *    returned (the live harness budgets its spend from them). `completionAttempts` is NOT a request count: pi-ai's own
+ *    HTTP retries happen inside one completion, so the live harness counts requests at the transport instead;
  *  - `echoedModel` is the provider-returned model, which pi-ai reports as `responseModel` only when it DIFFERS from
  *    the requested id, so a matching echo must still come back non-empty.
  */
@@ -122,7 +123,7 @@ describe('call() accounts for every attempt (SPEC A.0.3)', () => {
   it('a single clean attempt is one request at the single-attempt cost', async () => {
     replies = [() => openRouterReply('stop')];
     const single = await call({ ...kimi, ...base });
-    expect(single).toMatchObject({ attempts: 1, stopReason: 'stop' });
+    expect(single).toMatchObject({ completionAttempts: 1, stopReason: 'stop' });
     expect(single.costMicroUsd).toBeGreaterThan(0);
     expect(requests).toBe(1);
   });
@@ -141,16 +142,30 @@ describe('call() accounts for every attempt (SPEC A.0.3)', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     const result = await pending;
     expect(requests).toBe(3);
-    expect(result.attempts).toBe(3);
+    expect(result.completionAttempts).toBe(3);
     expect(result.stopReason).toBe('stop');
     // The returned cost is the sum of the three attempts, not the last attempt alone (+-1 micro-USD per floor).
     expect(Math.abs(result.costMicroUsd - 3 * unit)).toBeLessThanOrEqual(3);
   });
 
+  it('a 429 that pi-ai retries inside one completion is 2 transport requests but 1 completionAttempt', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    replies = [
+      () => new Response('{"error":{"message":"rate limited"}}', { status: 429 }),
+      () => openRouterReply('stop'),
+    ];
+    const pending = call({ ...kimi, ...base });
+    await vi.advanceTimersByTimeAsync(30_000);
+    const result = await pending;
+    expect(result).toMatchObject({ completionAttempts: 1, stopReason: 'stop' });
+    // Why the live receipt counts requests at the transport (budget.requests) and not from completionAttempts.
+    expect(requests).toBe(2);
+  });
+
   it('a non-retriable error is not retried', async () => {
     replies = [() => openRouterReply('content_filter')];
     const result = await call({ ...kimi, ...base });
-    expect(result).toMatchObject({ attempts: 1, stopReason: 'error' });
+    expect(result).toMatchObject({ completionAttempts: 1, stopReason: 'error' });
     expect(requests).toBe(1);
   });
 });
