@@ -15,7 +15,13 @@ type Body = Record<string, unknown>;
 let bodies: Body[] = [];
 let mutations: string[] = [];
 
+// pi-ai's own default effort is 'high', and most phases are 'high' too, so a call that forgot to pass the phase's
+// effort would be invisible. Distinct sentinels make the pass-through observable: the request must carry exactly
+// what PHASE_EFFORT says for the phase, whatever that is.
+const ORIGINAL_EFFORT = { ...PHASE_EFFORT };
+
 beforeEach(() => {
+  Object.assign(PHASE_EFFORT, { enhance: 'medium', advise: 'low', execute: 'medium' });
   bodies = [];
   mutations = [];
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
@@ -33,6 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Object.assign(PHASE_EFFORT, ORIGINAL_EFFORT);
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
