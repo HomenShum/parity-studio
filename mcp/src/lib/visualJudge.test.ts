@@ -13,6 +13,7 @@ vi.mock('./render.js', () => ({
   shutdownRenderer: async () => undefined,
 }));
 
+import { IncompleteCompletionError } from './llmClient';
 import { runVisualJudge } from './visualJudge';
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -74,6 +75,18 @@ describe('runVisualJudge honest status', () => {
     await expect(runVisualJudge(ARGS)).rejects.toThrow(
       /truncated at its output cap.*no score reported/,
     );
+  });
+
+  it('the unfinished reply was billed, and the failure carries that cost for the pipeline to record', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        sse(reply('{"summary":"close","checks":[{"dimension":"layout"', 'MAX_TOKENS')),
+      ),
+    );
+    const err = await runVisualJudge(ARGS).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(IncompleteCompletionError);
+    expect((err as IncompleteCompletionError).costUsd).toBeGreaterThan(0);
   });
 
   it('a failed judge request is a judge failure, not a 0/12 fail', async () => {

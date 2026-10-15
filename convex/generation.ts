@@ -6,9 +6,9 @@ import { action, internalAction } from './_generated/server';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
 import {
   OUTPUT_CAPS,
-  PHASE_EFFORT,
   type Phase,
   type ResolvedModel,
+  effortFor,
   resolveRunModel,
 } from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
@@ -181,7 +181,10 @@ async function callValidatedPipelineModel(
         systemPrompt: args.systemPrompt,
         userText: args.userText,
         maxTokens: args.maxTokens,
-        effort: PHASE_EFFORT[args.stage.startsWith('iterate') ? 'iterate' : (args.stage as Phase)],
+        effort: effortFor(
+          args.stage.startsWith('iterate') ? 'iterate' : (args.stage as Phase),
+          model.modelId,
+        ),
         signal: AbortSignal.timeout(timeoutMs),
         ...(args.userImage !== undefined ? { userImage: args.userImage } : {}),
       });

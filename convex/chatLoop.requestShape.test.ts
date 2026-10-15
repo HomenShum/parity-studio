@@ -197,6 +197,32 @@ describe('chatLoop.runAgentLoop builds the SPEC 1.2 request with the tool surfac
   });
 });
 
+// The SMALL tier's advise and execute cells moved Haiku 4.5 -> Haiku 5.5. Haiku 4.5 ran with no thinking and no effort
+// parameter, so PHASE_EFFORT's 'high' (a statement about Opus 4.7 / Sonnet 4.6) has no baseline there: those cells
+// take Haiku 5.5's own default, 'medium', whatever the phase table says.
+describe('SMALL tier (Haiku 5.5) does not inherit the Opus/Sonnet phase effort', () => {
+  it('execute hop: claude-haiku-5-5 sends medium although the phase table says high', async () => {
+    Object.assign(PHASE_EFFORT, { execute: 'high' });
+    await agentLoopHandler(fakeCtx({ tier: 'small' }, [{ role: 'user', content: 'tweak it' }]), {
+      runId: RUN_ID,
+    });
+    const body = bodies[0] as Body;
+    expect(body['model']).toBe('claude-haiku-5-5');
+    expect(activeEffort(body)).toBe('medium');
+  });
+
+  it('advise hop (Auto-fix): claude-haiku-5-5 sends medium although the phase table says low', async () => {
+    await agentLoopHandler(
+      fakeCtx({ tier: 'small' }, [{ role: 'user', content: 'Auto-fix triggered: fix header' }]),
+      { runId: RUN_ID },
+    );
+    const body = bodies[0] as Body;
+    expect(body['model']).toBe('claude-haiku-5-5');
+    expect(PHASE_EFFORT.advise).toBe('low');
+    expect(activeEffort(body)).toBe('medium');
+  });
+});
+
 describe('chatLoop.explainParity builds the SPEC 1.2 request', () => {
   it('advise phase: claude-opus-5-5, explain cap, high effort', async () => {
     await explainHandler(fakeCtx({ tier: 'frontier' }, []), { runId: RUN_ID });
@@ -312,7 +338,7 @@ data: ${JSON.stringify({ type, ...(data as object) })}
 
 `;
 
-  const truncatedUpsertStream = (stopReason: 'max_tokens' | 'tool_use') =>
+  const truncatedUpsertStream = (stopReason: 'max_tokens' | 'tool_use' | 'refusal') =>
     [
       sseEvent('message_start', {
         message: {
@@ -344,7 +370,7 @@ data: ${JSON.stringify({ type, ...(data as object) })}
       sseEvent('message_stop', {}),
     ].join('');
 
-  const stubStream = (stopReason: 'max_tokens' | 'tool_use') =>
+  const stubStream = (stopReason: 'max_tokens' | 'tool_use' | 'refusal') =>
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
@@ -366,6 +392,22 @@ data: ${JSON.stringify({ type, ...(data as object) })}
     const turns = mutationCalls.filter((c) => c.name === 'chat:insertTurn').map((c) => c.args);
     expect(turns.some((t) => t['toolCalls'] !== undefined)).toBe(false);
     expect(turns.at(-1)?.['content']).toMatch(/output cap while writing upsert_file/);
+  });
+
+  // Claude 5.5 models can end a reply with stop_reason 'refusal'. pi-ai maps it to stopReason 'error' and keeps the
+  // partial tool_use block, so a guard that only knew 'length' still wrote the half file (12 writes, no error turn).
+  it('stop_reason refusal: the partial upsert_file is never run and the user sees why', async () => {
+    stubStream('refusal');
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'write it' }]), {
+      runId: RUN_ID,
+    });
+    expect(bodies).toHaveLength(1);
+    expect(mutations).not.toContain('uiKits:upsertFileInternal');
+    const turns = mutationCalls.filter((c) => c.name === 'chat:insertTurn').map((c) => c.args);
+    expect(turns.some((t) => t['toolCalls'] !== undefined)).toBe(false);
+    expect(turns.at(-1)?.['content']).toMatch(
+      /agent error: the model ended the reply early \(error.*writing upsert_file/,
+    );
   });
 
   it('control: the same stream ending in tool_use runs the call, so the guard is what stops the write', async () => {

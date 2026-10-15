@@ -63,7 +63,7 @@ import {
   parseFigmaBridgeJson,
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
-import { callByModel } from './lib/llmClient.js';
+import { IncompleteCompletionError, assertCompleted, callByModel } from './lib/llmClient.js';
 import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
@@ -234,9 +234,7 @@ async function handleDecompose(args: {
     maxTokens: 24_000,
   });
 
-  if (result.stopReason === 'error') {
-    throw new Error(`decompose stage error from model ${result.modelUsed}`);
-  }
+  assertCompleted(result, 'decompose stage', 'no kit was returned');
 
   const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
   return {
@@ -658,6 +656,7 @@ async function handlePlatformToUiKit(args: {
       }),
       maxTokens: 24_000,
     });
+    assertCompleted(result, 'platform decompose', 'no kit was returned');
     let parsed = parseUiKitResponse(result.text, args.fallbackSlug);
     const latencyMs = Date.now() - t0;
     if (Object.keys(parsed.files).length === 0) {
@@ -800,6 +799,7 @@ async function handlePlatformToUiKit(args: {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof IncompleteCompletionError) eventBus.addCost(runId, err.costUsd);
     eventBus.updateRun(runId, { status: 'failed', errorMessage: message });
     eventBus.appendLog(runId, 'error', message);
     throw err;
@@ -1205,6 +1205,7 @@ async function handlePipeline(args: {
           : {}),
         maxTokens: 16_000,
       });
+      assertCompleted(gen, 'generate stage', 'no artifact was produced');
       artifactHtml = stripWrappingFences(gen.text);
       totalCostUsd += gen.costUsd;
       generateLatencyMs = Date.now() - t0;
@@ -1390,6 +1391,8 @@ async function handlePipeline(args: {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // A reply that never finished is billed all the same; its stage threw before it could record the cost.
+    if (err instanceof IncompleteCompletionError) eventBus.addCost(runId, err.costUsd);
     eventBus.updateRun(runId, { status: 'failed', errorMessage: message });
     eventBus.appendLog(runId, 'error', `pipeline failed: ${message}`);
     throw err;
@@ -1676,6 +1679,7 @@ async function runDecompose(args: {
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
   });
+  assertCompleted(dec, 'decompose stage', 'no kit was stored');
   const parsed = parseUiKitResponse(dec.text);
   const latencyMs = Date.now() - t0;
 
@@ -1769,6 +1773,7 @@ ${args.artifactHtml.slice(0, 8_000)}`;
     userText,
     maxTokens: 24_000,
   });
+  assertCompleted(result, 'iterate stage', 'the previous kit was kept');
   const parsed = parseUiKitResponse(result.text);
   const latencyMs = Date.now() - t0;
 

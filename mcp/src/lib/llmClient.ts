@@ -207,6 +207,38 @@ export function keyProviderFor(model: string): SupportedProvider {
   }
 }
 
+/** A reply that did not finish. `costUsd` is what the provider billed for it, so callers can still record it. */
+export class IncompleteCompletionError extends Error {
+  constructor(
+    message: string,
+    readonly costUsd: number,
+  ) {
+    super(message);
+    this.name = 'IncompleteCompletionError';
+  }
+}
+
+/**
+ * Throws unless the reply finished (stopReason 'stop'). The caps in this package are real (`maxTokens` reaches the
+ * wire), so a reply can end at the cap ('length'), be refused or fail ('error': pi-ai maps Anthropic 'refusal'
+ * here) or be aborted, and its text is then a partial artifact: parsing it would return a cut-off kit or judge
+ * rubric as a success, or replace a complete stored kit with it. Every caller that parses `text` calls this first.
+ * The thrown error carries `costUsd`, because the provider billed for the reply either way.
+ */
+export function assertCompleted(result: CallResult, stage: string, consequence: string): void {
+  if (result.stopReason === 'stop') return;
+  const what =
+    result.stopReason === 'length'
+      ? 'truncated at its output cap'
+      : result.stopReason === 'error'
+        ? 'error'
+        : `ended with stopReason ${result.stopReason}`;
+  throw new IncompleteCompletionError(
+    `${stage} ${what} from model ${result.modelUsed}${result.errorMessage ? `: ${result.errorMessage}` : ''}; ${consequence} (billed $${result.costUsd.toFixed(4)})`,
+    result.costUsd,
+  );
+}
+
 /**
  * Single completion call. Supports text-only and vision.
  *

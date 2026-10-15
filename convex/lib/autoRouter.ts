@@ -42,8 +42,9 @@ export const FREE_FALLBACK_MODEL = 'google/gemma-4-26b-a4b-it:free';
  * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto the
  * paid fallback, so these values are part of the needs-live-eval scope on PR #101 until measured.
  * `agentLoop` sits at what an `upsert_file` can carry (200 KB, about 50-67k tokens): a lower cap would make every
- * large file write truncate. runAgentLoop also refuses to run tool calls from a reply that hit the cap, so a
- * write longer than this fails visibly instead of saving a cut-off file.
+ * large file write truncate. runAgentLoop runs tool calls only from a reply that completed (stopReason 'toolUse'),
+ * so a write longer than this fails visibly instead of saving a cut-off file. The MCP caps (llmClient
+ * assertCompleted) reject an unfinished reply the same way before anything is parsed or stored.
  */
 export const OUTPUT_CAPS = {
   enhance: 4_000,
@@ -58,9 +59,12 @@ export const OUTPUT_CAPS = {
  * is stated instead of inherited). pi-ai 1.1.0 hard-codes the top-level `output_config.effort` to 'high'
  * (anthropic-messages.js:944) and carries `options.effort` only in a trailing system message (:1216), which the API
  * applies from the NEXT user turn, i.e. not to this one. Every call site therefore spreads `effortOptions(effort)`
- * (piAi.ts), which also sets the top-level value, so the phase value is what governs the turn. Every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6
- * defaulted to high); `enhance` is the one-shot prompt rewrite that ran on Haiku 4.5 with no thinking, so it gets
- * 'low'. Lowering a phase below its old behaviour is a measured follow-up. Other APIs ignore the option.
+ * (piAi.ts), which also sets the top-level value, so the phase value is what governs the turn. On the Opus and Sonnet
+ * cells every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6 defaulted to high);
+ * `enhance` is the one-shot prompt rewrite that ran on Haiku 4.5 with no thinking, so it gets 'low'. That 'high'
+ * describes Opus and Sonnet only: Haiku 4.5 never ran adaptive thinking, so a Haiku cell is resolved by
+ * `effortFor`, not by this table. Lowering a phase below its old behaviour is a measured follow-up. Other APIs
+ * ignore the option.
  */
 export const PHASE_EFFORT: Record<Phase, Effort> = {
   enhance: 'low',
@@ -71,6 +75,15 @@ export const PHASE_EFFORT: Record<Phase, Effort> = {
   iterate: 'high',
   judge: 'high',
 };
+/**
+ * The effort a call sends: `PHASE_EFFORT[phase]`, except on Haiku 5.5 outside `enhance`. The SMALL tier's advise and
+ * execute cells (and any run override or env override that picks Haiku) ran Haiku 4.5 with no thinking and no effort
+ * parameter, so the table's 'high' has no baseline there and would be an unmeasured rise in cost and latency on the
+ * cheap tier. They take Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited.
+ */
+export function effortFor(phase: Phase, modelId: string): Effort {
+  return modelId === CLAUDE_HAIKU && phase !== 'enhance' ? 'medium' : PHASE_EFFORT[phase];
+}
 /** convex/chatLoop.ts default when CHAT_MODEL is unset, keyed by CHAT_PROVIDER. */
 export const CHAT_DEFAULT_MODEL = {
   anthropic: CLAUDE_SONNET,

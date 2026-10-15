@@ -21,6 +21,7 @@ import {
   PHASE_EFFORT,
   type Phase,
   type RunModelConfig,
+  effortFor,
   failClosedRoute,
   pickRunModel,
 } from './lib/autoRouter';
@@ -511,7 +512,10 @@ export const explainParity = action({
               },
             ],
           },
-          { maxTokens: OUTPUT_CAPS.explain, ...effortOptions(PHASE_EFFORT.advise) },
+          {
+            maxTokens: OUTPUT_CAPS.explain,
+            ...effortOptions(effortFor('advise', routed.modelId)),
+          },
         ),
         25_000,
         'parity explanation',
@@ -764,7 +768,7 @@ export const runAgentLoop = internalAction({
         const model = (getModel as any)(provider, modelId);
         result = await piComplete(model, ctxObj, {
           maxTokens: OUTPUT_CAPS.agentLoop,
-          ...effortOptions(PHASE_EFFORT[phase]),
+          ...effortOptions(effortFor(phase, modelId)),
         });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {
@@ -783,10 +787,17 @@ export const runAgentLoop = internalAction({
         .join('')
         .trim();
 
-      // A reply cut off by the output cap carries tool calls whose arguments are partial (an upsert_file whose
-      // content stops mid-file would be written as if complete). Nothing in it runs, and the cut-off calls are not
+      // Tool calls run only from a completed reply (stopReason 'toolUse'). A reply that was cut off by the output
+      // cap ('length'), refused or failed ('error': pi-ai maps Anthropic stop_reason 'refusal' here and keeps the
+      // partial tool_use block) or was aborted carries calls whose arguments are partial, so an upsert_file whose
+      // content stops mid-file would be written as if complete. Nothing in it runs, and the unfinished calls are not
       // recorded, so the stored history never holds a tool call without its result.
-      if (result.stopReason === 'length' && toolCalls.length > 0) {
+      if (toolCalls.length > 0 && result.stopReason !== 'toolUse') {
+        const names = toolCalls.map((tc) => tc.name).join(', ');
+        const why =
+          result.stopReason === 'length'
+            ? `the reply hit the ${OUTPUT_CAPS.agentLoop.toLocaleString('en-US')}-token output cap while writing ${names}`
+            : `the model ended the reply early (${result.stopReason}${result.errorMessage ? `: ${result.errorMessage}` : ''}) while writing ${names}`;
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
           role: 'assistant',
@@ -799,7 +810,7 @@ export const runAgentLoop = internalAction({
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
           role: 'assistant',
-          content: `(agent error: the reply hit the ${OUTPUT_CAPS.agentLoop.toLocaleString('en-US')}-token output cap while writing ${toolCalls.map((tc) => tc.name).join(', ')}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`,
+          content: `(agent error: ${why}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`,
           turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
         });
         await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);
