@@ -10,10 +10,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { getModel } from '@earendil-works/pi-ai/compat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_PRESETS } from '../../src/lib/modelRouting';
 import {
   CHAT_DEFAULT_MODEL,
+  FREE_FALLBACK_MODEL,
   type ModelTier,
   OUTPUT_CAPS,
   PHASE_EFFORT,
@@ -30,10 +32,10 @@ const WIRE = {
   'anthropic:claude-haiku-5-5': 'claude-haiku-5-5',
   'anthropic:claude-sonnet-5-5': 'claude-sonnet-5-5',
   'anthropic:claude-opus-5-5': 'claude-opus-5-5',
-  'openrouter:anthropic/claude-haiku-5.5': 'anthropic/claude-haiku-5.5', // OpenRouter transport keeps the dotted slug (SPEC 1.2)
   'openrouter:anthropic/claude-sonnet-5.5': 'anthropic/claude-sonnet-5.5',
 } as const;
 const WIRE_FREE = 'nvidia/nemotron-3-super-120b-a12b:free'; // SPEC 1.2 live :free list
+const WIRE_FREE_FALLBACK = 'google/gemma-4-26b-a4b-it:free'; // SPEC 1.2 live :free list; takes image input
 
 const TIERS: ModelTier[] = ['frontier', 'balanced', 'free', 'small'];
 const PHASES: Phase[] = [
@@ -46,8 +48,10 @@ const PHASES: Phase[] = [
   'judge',
 ];
 
-// SPEC 1.2: ids the pre-change code used. None may survive in any tier cell or migrated file.
-const RETIRED = [
+// Ids the pre-change code used. The four Claude ids are superseded by the migration guide rename table (SPEC 1.1 lists
+// them Active legacy, not retired); ling-2.6-1t:free is absent from OpenRouter (SPEC 1.2 live :free list). None may
+// survive in any tier cell or migrated file.
+const SUPERSEDED = [
   'claude-haiku-4-5',
   'claude-opus-4-7',
   'claude-sonnet-4-6',
@@ -124,6 +128,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+/** True when the catalog model speaks the Anthropic Messages API, which is what carries `output_config.effort`. */
+function usesAnthropicMessages(provider: string, modelId: string): boolean {
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai getModel is typed against its compile-time registry
+  return (getModel as any)(provider, modelId).api === 'anthropic-messages';
+}
+
 async function build(
   provider: 'anthropic' | 'openrouter',
   modelId: string,
@@ -179,7 +189,7 @@ function assertNoForbiddenKeys(body: Record<string, unknown>) {
 describe('request shape: tier x phase cells', () => {
   it('every Anthropic-provider or claude-named route, primary and fallback, is a SPEC 1.2 wire id (allowlist)', () => {
     // An allowlist, not a denylist: a malformed replacement ('claude-sonnet-5.5' on the direct transport) or an
-    // id from the wrong generation ('claude-opus-4-8') is absent from WIRE and fails here, whatever RETIRED lists.
+    // id from the wrong generation ('claude-opus-4-8') is absent from WIRE and fails here, whatever SUPERSEDED lists.
     for (const route of allRoutes()) {
       if (route.provider === 'anthropic' || /claude/i.test(route.modelId)) {
         expect(
@@ -190,9 +200,9 @@ describe('request shape: tier x phase cells', () => {
     }
   });
 
-  it('no retired id survives in any tier cell, primary or fallback', () => {
+  it('no superseded id survives in any tier cell, primary or fallback', () => {
     const ids = allRoutes().map((r) => r.modelId);
-    for (const retired of RETIRED) expect(ids, retired).not.toContain(retired);
+    for (const old of SUPERSEDED) expect(ids, old).not.toContain(old);
   });
 
   const claudeCells = allRoutes().filter(
@@ -200,7 +210,7 @@ describe('request shape: tier x phase cells', () => {
   );
 
   it('covers every Claude cell the refresh touched', () => {
-    // opus-5-5 (advise/decompose), sonnet-5-5, haiku-5-5, OpenRouter sonnet/haiku 5.5 fallbacks.
+    // opus-5-5 (advise/decompose), sonnet-5-5, haiku-5-5, OpenRouter sonnet 5.5 fallback.
     const ids = new Set(claudeCells.map((c) => `${c.provider}:${c.modelId}`));
     expect(ids).toEqual(new Set(Object.keys(WIRE)));
   });
@@ -217,7 +227,9 @@ describe('request shape: tier x phase cells', () => {
       assertNoForbiddenKeys(body);
       // `maxOutputTokens` is not a pi-ai option; it was silently dropped and the model default (128000) was sent.
       expect(body['max_tokens']).toBe(1234);
-      if (cell.provider === 'anthropic') {
+      // Selected by the model's wire api, not the provider name: OpenRouter's Claude 5.5 rows are
+      // 'anthropic-messages' too and carry the same top-level and trailing effort (review round 5, defect 5).
+      if (usesAnthropicMessages(cell.provider, cell.modelId)) {
         // SPEC 1.3 / A.2.7: effort is explicit per phase and the top-level value (the one that governs the turn)
         // carries it. This was `toEqual({ effort: 'high' })` while pi-ai's hard-coded 'high' was mistaken for the
         // inert value; with `enhance` at 'low' that pinned the defect (review round 2, defect 1).
@@ -232,6 +244,7 @@ describe('request shape: tier x phase cells', () => {
     const cell = resolveModel('free', 'execute');
     expect(cell.modelId).toBe(WIRE_FREE);
     expect(VERIFIED_FREE_MODEL).toBe(WIRE_FREE);
+    expect(FREE_FALLBACK_MODEL).toBe(WIRE_FREE_FALLBACK);
     const body = await build('openrouter', cell.modelId, 777);
     expect(body['model']).toBe(WIRE_FREE);
     for (const key of ['temperature', 'top_p', 'top_k', 'tool_choice']) {
@@ -287,7 +300,7 @@ describe('request shape: defaults that do not live in a tier cell', () => {
     expect(free?.modelId).toBe(WIRE_FREE);
   });
 
-  it('migrated script and doc defaults carry the SPEC 1.2 id and no retired id', () => {
+  it('migrated script and doc defaults carry the SPEC 1.2 id and no superseded id', () => {
     for (const file of [
       'scripts/verify-demo-video-gemini.mjs',
       'scripts/verify-current-workflows-demo-gemini.mjs',
@@ -312,8 +325,8 @@ describe('request shape: defaults that do not live in a tier cell', () => {
       'src/lib/modelRouting.ts',
     ]) {
       const source = repoFile(file);
-      for (const retired of RETIRED) {
-        expect(source, `${file} still names ${retired}`).not.toContain(retired);
+      for (const old of SUPERSEDED) {
+        expect(source, `${file} still names ${old}`).not.toContain(old);
       }
     }
   });

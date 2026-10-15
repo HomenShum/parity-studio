@@ -31,10 +31,11 @@ import type { Effort, SupportedProvider } from './piAi';
 export const CLAUDE_HAIKU = 'claude-haiku-5-5';
 export const CLAUDE_SONNET = 'claude-sonnet-5-5';
 export const CLAUDE_OPUS = 'claude-opus-5-5';
-export const OPENROUTER_CLAUDE_HAIKU = 'anthropic/claude-haiku-5.5';
 export const OPENROUTER_CLAUDE_SONNET = 'anthropic/claude-sonnet-5.5';
 /** The only verified free route (SPEC 1.2 live :free list). Unknown free-looking ids resolve here. */
 export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+/** Free recovery model for the FREE tier (SPEC 1.2 live :free list; takes image input, which the primary does not). */
+export const FREE_FALLBACK_MODEL = 'google/gemma-4-26b-a4b-it:free';
 /**
  * Output-token caps per call site. Thinking counts toward `max_tokens` on Claude 5.5 (SPEC 1.3), and since the
  * maxOutputTokens -> maxTokens fix they are real caps on every model, kimi-k2.6 included (before, pi-ai ignored
@@ -245,11 +246,12 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 // candidate at 60% pass — added to FREE fallback chain. Still below
 // the 80% bar paid haiku clears, so primary stays ling-2.6-1t.
 //
-// Graceful-degrade fallback when the free primary fails: anthropic/claude-haiku-5.5 (PAID, OpenRouter).
-// That turns a free request into a paid one, which model-defaults SPEC A.0.10 forbids unless the call site
-// carries allowPaidFallback: true plus a financial reservation. Neither exists here, so this is an open
-// needs-Homen decision (free->free fallback, or allowPaidFallback with a reservation), recorded on PR #101.
-// Not widened by the 5.5 refresh: the fallback only changed id (haiku-4.5 -> haiku-5.5).
+// Graceful-degrade fallback when the free primary fails: FREE_FALLBACK_MODEL (free -> free). SPEC A.0.10 forbids
+// turning a free request into a paid one without allowPaidFallback plus a financial reservation, and neither exists
+// here, so the former paid Haiku hop is gone. gemma-4-26b is the eval's own secondary free pick (above), is on the
+// SPEC 1.2 live :free list, and, unlike the text-only nemotron primary, accepts images (pi-ai 1.1.0 catalog), so a
+// FREE generate run with a source image is rejected locally by nemotron and served by gemma instead of going paid.
+// The (a) free fallback versus (b) allowPaidFallback-with-reservation choice stays Homen's; this is (a).
 // 2026-10-14: inclusionai/ling-2.6-1t:free is absent from OpenRouter (live :free list 2026-10-10), so the
 // FREE tier primary moved to nvidia/nemotron-3-super-120b-a12b:free (tools + structured outputs; the
 // NodeVideo benchmark pick). UNMEASURED on this repo's tool surface (needs-live-eval): the eval above
@@ -258,49 +260,49 @@ const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   advise: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   execute: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   generate: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   decompose: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   iterate: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },
   judge: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_HAIKU },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
     label: 'nemotron-3-super :free',
   },

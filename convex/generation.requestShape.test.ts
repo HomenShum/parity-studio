@@ -8,7 +8,12 @@
 import { getFunctionName } from 'convex/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decompose, generateInitial } from './generation';
-import { OUTPUT_CAPS, PHASE_EFFORT } from './lib/autoRouter';
+import {
+  FREE_FALLBACK_MODEL,
+  OUTPUT_CAPS,
+  PHASE_EFFORT,
+  VERIFIED_FREE_MODEL,
+} from './lib/autoRouter';
 
 type Body = Record<string, unknown>;
 let bodies: Body[] = [];
@@ -107,5 +112,25 @@ describe('generation pipeline builds the SPEC 1.2 request', () => {
     for (const body of bodies) {
       expect(body['max_tokens'] ?? body['max_completion_tokens']).toBe(OUTPUT_CAPS.generate);
     }
+  });
+
+  it('FREE generate: nemotron then the free gemma recovery hop, never a paid model (SPEC A.0.10)', async () => {
+    await expect(
+      generateHandler(fakeCtx({ tier: 'free' }), { runId: 'run_1', prompt: 'a landing page' }),
+    ).rejects.toThrow(/generate stage error/);
+    expect(bodies.map((b) => b['model'])).toEqual([VERIFIED_FREE_MODEL, FREE_FALLBACK_MODEL]);
+  });
+
+  it('FREE generate with a source image: the text-only primary is rejected locally, the free image-capable fallback serves it', async () => {
+    await expect(
+      generateHandler(fakeCtx({ tier: 'free' }), {
+        runId: 'run_1',
+        prompt: 'match this',
+        sourceImageBase64: 'iVBORw0KGgo=',
+        sourceImageMimeType: 'image/png',
+      }),
+    ).rejects.toThrow(/does not support image input/);
+    // nemotron never reaches the wire (pi-ai rejects image input on a text-only model); gemma does; nothing paid.
+    expect(bodies.map((b) => b['model'])).toEqual([FREE_FALLBACK_MODEL]);
   });
 });

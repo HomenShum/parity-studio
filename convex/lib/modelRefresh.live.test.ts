@@ -31,6 +31,14 @@
  * cell proves the provider accepts the cap and effort and that this prompt fits; it does not bound a real artifact's
  * output, so a cap that proves too tight on real traffic is still an MCP-side finding.
  *
+ * What a row proves. The Convex rows (enhance through iterate, the FREE rows) go through the repo's own resolver and
+ * `call()`, so they exercise the real caller path. The last four rows (the Gemini video verifiers, the MCP visual
+ * judge, MCP decompose/generate, the NodeSlide BYOK planner) are id/cap ACCEPTANCE SMOKE checks: they send through the
+ * Convex `piAi.call` with the caller's id, cap and effort, not through scripts/verify-*-demo-gemini.mjs (a raw
+ * generateContent fetch) or mcp/src/lib/llmClient.call. They show the provider accepts that id, key, cap and effort;
+ * the callers' own request shapes rest on the fake-transport tests (piAi.requestShape.test.ts for the verifier
+ * defaults, mcp/src/lib/llmClient.requestShape.test.ts for the MCP client).
+ *
  * Row fields: `requestedModel` is the SPEC 1.2 id the cell claims to test (a literal below, independent of the
  * code); `resolvedModel` is what `resolveRunModel` returned for that cell's tier and phase (asserted equal BEFORE
  * any spend); `echoedModel` is `CallResult.echoedModel`, the model string read off the provider's own reply (null
@@ -70,7 +78,7 @@ interface Cell {
 const RUN = 'live-receipt';
 const primary = (tier: 'frontier' | 'balanced' | 'free', phase: Phase) => (): Route =>
   resolveRunModel({ tier }, phase, RUN) as Route;
-const fallback = (tier: 'balanced', phase: Phase) => (): Route => {
+const fallback = (tier: 'balanced' | 'free', phase: Phase) => (): Route => {
   const route = resolveRunModel({ tier }, phase, RUN).fallback;
   if (route === undefined) throw new Error(`${tier}/${phase} has no fallback`);
   return route as Route;
@@ -155,17 +163,25 @@ const CELLS: Cell[] = [
     effort: PHASE_EFFORT.generate,
   },
   {
-    // Native Google generateContent, the transport the three video verifiers use (SPEC section D: one keyed call
-    // per repo confirms the migrated gemini-3.8-flash). Text-only: it proves the id, key and request shape are
-    // accepted, not video understanding.
-    phase: 'video verifiers (scripts/verify-*-demo-gemini.mjs default)',
+    // The FREE recovery hop (SPEC A.0.10): free, so it adds no spend, and it is the only model that takes an image.
+    phase: 'generate-fallback (FREE)',
+    expected: 'openrouter:google/gemma-4-26b-a4b-it:free',
+    resolve: fallback('free', 'generate'),
+    cap: OUTPUT_CAPS.generate,
+    effort: PHASE_EFFORT.generate,
+  },
+  {
+    // Smoke check (SPEC section D: one keyed call per repo confirms the migrated gemini-3.8-flash). It sends through
+    // piAi.call (pi-ai's Google adapter), not the verifiers' own raw generateContent builder, and is text-only: it
+    // proves the id and key are accepted, not the verifiers' request shape or video understanding.
+    phase: 'smoke: video verifiers default id (scripts/verify-*-demo-gemini.mjs)',
     expected: 'google:gemini-3.8-flash',
     resolve: () => ({ provider: 'google', modelId: videoVerifierDefaultModel() }),
     cap: 4_000,
     effort: 'high', // ignored by the Google API
   },
   {
-    phase: 'MCP visual judge (index.ts:365, frozen default)',
+    phase: 'smoke: MCP visual judge id/cap (index.ts:365, frozen default)',
     expected: 'google:gemini-3.1-pro-preview',
     resolve: () => ({ provider: 'google', modelId: 'gemini-3.1-pro-preview' }),
     cap: 4_000,
@@ -173,14 +189,14 @@ const CELLS: Cell[] = [
     prompt: JUDGE_PROMPT,
   },
   {
-    phase: 'MCP decompose/generate (index.ts:238, kimi-k2.6, frozen default)',
+    phase: 'smoke: MCP decompose/generate id/cap (index.ts:238, kimi-k2.6, frozen default)',
     expected: 'openrouter:moonshotai/kimi-k2.6',
     resolve: () => ({ provider: 'openrouter', modelId: 'moonshotai/kimi-k2.6' }),
     cap: 24_000,
     effort: 'high',
   },
   {
-    phase: 'NodeSlide BYOK planner (nodeslideTools.ts:1060, frozen default)',
+    phase: 'smoke: NodeSlide BYOK planner id/cap (nodeslideTools.ts:1060, frozen default)',
     expected: 'openrouter:z-ai/glm-5.2',
     resolve: () => ({ provider: 'openrouter', modelId: 'z-ai/glm-5.2' }),
     cap: 3_000,
@@ -213,6 +229,15 @@ afterAll(() => {
 
 const routeKey = (route: Route): string => `${route.provider}:${route.modelId}`;
 
+/**
+ * Effort rides in `output_config.effort` on every Anthropic Messages request, so it is checked by the model's wire api
+ * and not the provider name: OpenRouter's Claude 5.5 rows are 'anthropic-messages' too.
+ */
+function usesAnthropicMessages(route: Route): boolean {
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai getModel is typed against its compile-time registry
+  return (getModel as any)(route.provider, route.modelId).api === 'anthropic-messages';
+}
+
 /** Single-attempt worst case: 200 input tokens plus the full cap as output, at the catalog price. */
 function singleAttemptUsd(route: Route, cap: number): number {
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai getModel is typed against its compile-time registry
@@ -232,7 +257,7 @@ interface RowEvidence {
   errorMessage?: string;
   echoedModel: string | null;
   transportRequests: number;
-  /** Anthropic-API rows only (effort is ignored elsewhere): the requested effort and what the request carried. */
+  /** Anthropic Messages API rows only, direct or via OpenRouter (effort is ignored elsewhere): the requested effort and what the request carried. */
   effort: { requested: Effort; topLevel?: string; trailing?: string } | null;
 }
 
@@ -297,6 +322,17 @@ describe('receipt row acceptance (SPEC A.0.3), no spend', () => {
     expect(
       rowFailure({ ...good, effort: { requested: 'low', topLevel: 'low', trailing: 'high' } }),
     ).toMatch(/effort on the wire/);
+  });
+  it('effort is checked on every Anthropic Messages request, OpenRouter Claude included', () => {
+    for (const [provider, modelId, expected] of [
+      ['anthropic', 'claude-sonnet-5-5', true],
+      ['openrouter', 'anthropic/claude-sonnet-5.5', true],
+      ['openrouter', 'moonshotai/kimi-k2.6', false],
+      ['openrouter', 'google/gemma-4-26b-a4b-it:free', false],
+      ['google', 'gemini-3.8-flash', false],
+    ] as const) {
+      expect(usesAnthropicMessages({ provider, modelId }), `${provider}:${modelId}`).toBe(expected);
+    }
   });
   it('a call() cut off by an already-aborted signal (the 180 s timeout case) is rejected', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
@@ -375,8 +411,9 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
         });
         spentUsd += result.costMicroUsd / 1_000_000;
         const transportCount = transportRequests - requestsBefore;
-        const effort =
-          route.provider === 'anthropic' ? effortOnWire(requestsBefore, cell.effort) : null;
+        const effort = usesAnthropicMessages(route)
+          ? effortOnWire(requestsBefore, cell.effort)
+          : null;
         rows.push({
           phase: cell.phase,
           requestedModel: cell.expected,
