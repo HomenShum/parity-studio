@@ -89,6 +89,15 @@ function effortOptions(effort: Effort): {
   };
 }
 
+/**
+ * Same as `boundedMaxTokens` in convex/lib/piAi.ts: pi-ai copies `maxTokens` into the request unclamped, so a cap
+ * larger than the selected catalog model's own maximum output would reach it as an oversized request.
+ */
+function boundedMaxTokens(model: { maxTokens?: number }, cap: number): number {
+  const max = model.maxTokens;
+  return typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.min(cap, max) : cap;
+}
+
 export interface VisionInput {
   base64: string;
   mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -285,7 +294,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const result = await piComplete(model, context, {
     ...effortOptions(opts.effort ?? DEFAULT_EFFORT),
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: boundedMaxTokens(model, opts.maxTokens) } : {}),
   });
 
   const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');

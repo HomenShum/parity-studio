@@ -266,6 +266,25 @@ describe('request shape: tier x phase cells', () => {
   );
 });
 
+describe('request shape: the caller cap is bounded by the model maximum', () => {
+  // pi-ai copies maxTokens into the request unclamped; gemma-4-26b :free (the FREE-tier recovery model) tops out at
+  // 32,768 in the pi-ai 1.1.0 catalog, below OUTPUT_CAPS.agentLoop (64,000).
+  const GEMMA = 'google/gemma-4-26b-a4b-it:free';
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+  const gemmaMax: number = (getModel as any)('openrouter', GEMMA).maxTokens;
+
+  it('a cap above the catalog maximum is sent as the maximum', async () => {
+    expect(gemmaMax).toBeLessThan(OUTPUT_CAPS.agentLoop);
+    const body = await build('openrouter', GEMMA, OUTPUT_CAPS.agentLoop);
+    expect(body['max_tokens'] ?? body['max_completion_tokens']).toBe(gemmaMax);
+  });
+
+  it('a cap below the catalog maximum is sent unchanged', async () => {
+    const body = await build('openrouter', GEMMA, 777);
+    expect(body['max_tokens'] ?? body['max_completion_tokens']).toBe(777);
+  });
+});
+
 describe('request shape: defaults that do not live in a tier cell', () => {
   it('chatLoop CHAT_MODEL default (feeds enhance, explainParity and runAgentLoop) builds a SPEC 1.2 request', async () => {
     expect(CHAT_DEFAULT_MODEL.anthropic).toBe('claude-sonnet-5-5');
@@ -276,6 +295,8 @@ describe('request shape: defaults that do not live in a tier cell', () => {
     const source = repoFile('convex/chatLoop.ts');
     expect(source).toContain('CHAT_DEFAULT_MODEL');
     expect(source).not.toMatch(/['"](?:anthropic\/)?claude-[a-z]+-[0-9]/);
+    // The frozen OpenRouter default stays where the freeze registry anchors it (SPEC A.2.7 row chatLoop.ts:41).
+    expect(source).toContain("'moonshotai/kimi-k2.6'");
   });
 
   it('every UI preset resolves unchanged through resolveRunModel and the Claude ones build a SPEC 1.2 request', async () => {

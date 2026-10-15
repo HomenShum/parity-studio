@@ -84,10 +84,12 @@ export const PHASE_EFFORT: Record<Phase, Effort> = {
 export function effortFor(phase: Phase, modelId: string): Effort {
   return modelId === CLAUDE_HAIKU && phase !== 'enhance' ? 'medium' : PHASE_EFFORT[phase];
 }
-/** convex/chatLoop.ts default when CHAT_MODEL is unset, keyed by CHAT_PROVIDER. */
+/**
+ * convex/chatLoop.ts default when CHAT_MODEL is unset and CHAT_PROVIDER is anthropic. The OpenRouter default
+ * (moonshotai/kimi-k2.6, frozen) stays a literal in chatLoop.ts: it is not migrated, so its site does not move.
+ */
 export const CHAT_DEFAULT_MODEL = {
   anthropic: CLAUDE_SONNET,
-  openrouter: 'moonshotai/kimi-k2.6',
 } as const;
 
 export type ModelTier = 'frontier' | 'balanced' | 'free' | 'small';

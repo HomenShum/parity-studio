@@ -120,6 +120,17 @@ export function effortOptions(effort: Effort | undefined): {
   };
 }
 
+/**
+ * A phase cap, bounded by the selected model's own maximum output. pi-ai copies `maxTokens` straight into
+ * `max_tokens` / `max_completion_tokens` and does not clamp it, so a cap sized for the 128K Claude 5.5 models
+ * (OUTPUT_CAPS.agentLoop is 64,000) would reach a catalog model with a smaller limit (the free
+ * `google/gemma-4-26b-a4b-it:free` is 32,768) as an oversized request. `mcp/src/lib/llmClient.ts` mirrors this.
+ */
+export function boundedMaxTokens(model: { maxTokens?: number }, cap: number): number {
+  const max = model.maxTokens;
+  return typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.min(cap, max) : cap;
+}
+
 /** The model string a raw provider stream event carries, if any (see `CallResult.echoedModel`). */
 function eventModel(data: unknown): string | undefined {
   const d = data as {
@@ -222,7 +233,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const isOpenRouter = opts.provider === 'openrouter';
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: boundedMaxTokens(model, opts.maxTokens) } : {}),
     ...effortOptions(opts.effort),
     ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };

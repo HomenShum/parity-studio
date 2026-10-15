@@ -1,3 +1,4 @@
+import { getModel } from '@earendil-works/pi-ai/compat';
 // @vitest-environment node
 /**
  * Request-shape proof for the three production builders in convex/chatLoop.ts (model-defaults SPEC A.0 rule 6):
@@ -194,6 +195,42 @@ describe('chatLoop.runAgentLoop builds the SPEC 1.2 request with the tool surfac
     expect(activeEffort(body)).toBe(PHASE_EFFORT.advise);
     expect((body['tools'] as unknown[]).length).toBeGreaterThan(0);
     assertNoForbiddenKeys(body);
+  });
+});
+
+// Persona: a user (or ops, via CHAT_EXECUTOR_MODEL) picks the free recovery model google/gemma-4-26b-a4b-it:free
+// for the chat agent. Its catalog maximum output is 32,768, but OUTPUT_CAPS.agentLoop (64,000) is sized for the
+// 128K Claude 5.5 models and pi-ai copies maxTokens into the request unclamped, so the request asked for more than
+// the model can emit. The phase cap must be bounded by the selected model's own maximum.
+describe('the phase cap never exceeds the selected model maximum output', () => {
+  const catalogMax = (provider: string, id: string): number =>
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+    (getModel as any)(provider, id).maxTokens;
+  const GEMMA = 'google/gemma-4-26b-a4b-it:free';
+
+  it('the fixture really is below the cap (otherwise the test proves nothing)', () => {
+    expect(catalogMax('openrouter', GEMMA)).toBeLessThan(OUTPUT_CAPS.agentLoop);
+  });
+
+  it('agent loop on gemma sends the catalog maximum, not OUTPUT_CAPS.agentLoop', async () => {
+    vi.stubEnv('CHAT_EXECUTOR_PROVIDER', 'openrouter');
+    vi.stubEnv('CHAT_EXECUTOR_MODEL', GEMMA);
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'go' }]), {
+      runId: RUN_ID,
+    });
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0] as Body;
+    expect(body['model']).toBe(GEMMA);
+    const sent = (body['max_completion_tokens'] ?? body['max_tokens']) as number;
+    expect(sent).toBe(catalogMax('openrouter', GEMMA));
+    expect(sent).toBeLessThan(OUTPUT_CAPS.agentLoop);
+  });
+
+  it('a model whose maximum is above the cap still gets the phase cap (claude-sonnet-5-5 keeps 64,000)', async () => {
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'go' }]), {
+      runId: RUN_ID,
+    });
+    expect((bodies[0] as Body)['max_tokens']).toBe(OUTPUT_CAPS.agentLoop);
   });
 });
 
@@ -416,5 +453,98 @@ data: ${JSON.stringify({ type, ...(data as object) })}
       runId: RUN_ID,
     });
     expect(mutations).toContain('uiKits:upsertFileInternal');
+  });
+});
+
+// Persona: an operator runs the chat agent on an OpenAI-compatible route (the frozen kimi-k2.6, or a :free nemotron
+// through OpenRouter). Those providers answer a tool call with finish_reason 'tool_calls' or, often, 'stop', and pi-ai
+// 1.1.0 maps 'stop' to stopReason 'stop' even when tool_calls came with it. On main those calls ran; a guard that
+// accepted only 'toolUse' refused every one of them with an '(agent error ...)' turn.
+describe('tool calls on an OpenAI-compatible route (finish_reason stop / tool_calls / length)', () => {
+  const chunk = (delta: unknown, finish: string | null) =>
+    `data: ${JSON.stringify({
+      id: 'c1',
+      object: 'chat.completion.chunk',
+      model: 'moonshotai/kimi-k2.6',
+      choices: [{ index: 0, delta, finish_reason: finish }],
+    })}\n\n`;
+
+  const toolStream = (finish: 'stop' | 'tool_calls' | 'length') =>
+    [
+      chunk({ role: 'assistant', content: null }, null),
+      chunk(
+        {
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'upsert_file',
+                arguments: '{"path":"index.html","content":"<html><body>done</body></html>"}',
+              },
+            },
+          ],
+        },
+        null,
+      ),
+      chunk({}, finish),
+      'data: [DONE]\n\n',
+    ].join('');
+
+  const textStream = [
+    chunk({ role: 'assistant', content: 'all set' }, null),
+    chunk({}, 'stop'),
+    'data: [DONE]\n\n',
+  ].join('');
+
+  /** First request gets the tool-call reply, every later one a plain finished text reply. */
+  const stubOpenAi = (finish: 'stop' | 'tool_calls' | 'length') => {
+    let n = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+        bodies.push(JSON.parse(String(init?.body ?? '{}')));
+        n += 1;
+        return new Response(n === 1 ? toolStream(finish) : textStream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }),
+    );
+  };
+
+  const runKimi = async () => {
+    vi.stubEnv('CHAT_EXECUTOR_PROVIDER', 'openrouter');
+    vi.stubEnv('CHAT_EXECUTOR_MODEL', 'moonshotai/kimi-k2.6');
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'write it' }]), {
+      runId: RUN_ID,
+    });
+  };
+
+  const lastTurn = () =>
+    String(mutationCalls.filter((c) => c.name === 'chat:insertTurn').at(-1)?.args['content']);
+
+  it("finish_reason 'stop' together with tool_calls: the call runs (as on main) and the loop continues", async () => {
+    stubOpenAi('stop');
+    await runKimi();
+    expect(mutations).toContain('uiKits:upsertFileInternal');
+    expect(lastTurn()).not.toMatch(/agent error/);
+    expect(bodies).toHaveLength(2);
+  });
+
+  it("finish_reason 'tool_calls': the call runs", async () => {
+    stubOpenAi('tool_calls');
+    await runKimi();
+    expect(mutations).toContain('uiKits:upsertFileInternal');
+    expect(lastTurn()).not.toMatch(/agent error/);
+  });
+
+  it("finish_reason 'length' with partial tool_calls: nothing runs and the user sees why", async () => {
+    stubOpenAi('length');
+    await runKimi();
+    expect(mutations).not.toContain('uiKits:upsertFileInternal');
+    expect(lastTurn()).toMatch(/output cap while writing upsert_file/);
+    expect(bodies).toHaveLength(1);
   });
 });

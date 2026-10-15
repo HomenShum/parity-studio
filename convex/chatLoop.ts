@@ -25,7 +25,7 @@ import {
   failClosedRoute,
   pickRunModel,
 } from './lib/autoRouter';
-import { type SupportedProvider, effortOptions, usdToMicroUsd } from './lib/piAi';
+import { type SupportedProvider, boundedMaxTokens, effortOptions, usdToMicroUsd } from './lib/piAi';
 import { QUALITY_GATE_MAX_REPAIRS } from './lib/qualityGate';
 import { lintKit } from './lib/staticLint';
 
@@ -43,11 +43,12 @@ import { lintKit } from './lib/staticLint';
 //   CHAT_EXECUTOR_MODEL=nvidia/nemotron-3-super-120b  # best reliable, 14.5s
 // (Slugs subject to openrouter's catalog — verify with their /models endpoint.)
 //
-// Defaults: Claude Sonnet 5.5 for both when using Anthropic directly.
+// Defaults: Claude Sonnet 5.5 for both when using Anthropic directly. The OpenRouter default (kimi-k2.6, an active
+// open-weight id frozen until Part B v2 ranks it) stays a literal here so its site anchor does not move.
 const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropic' | 'openrouter';
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
-  (CHAT_PROVIDER === 'anthropic' ? CHAT_DEFAULT_MODEL.anthropic : CHAT_DEFAULT_MODEL.openrouter);
+  (CHAT_PROVIDER === 'anthropic' ? CHAT_DEFAULT_MODEL.anthropic : 'moonshotai/kimi-k2.6');
 // Advisor + Executor envs are read inline at hop time (in runAgentLoop)
 // since the tier resolver is the new default; only fall back to env on
 // explicit override. We keep the ADVISOR_* constants here for the
@@ -187,7 +188,7 @@ export const enhance = action({
       messages: [{ role: 'user', content: trimmed, timestamp: Date.now() }],
     };
     const result = await piComplete(model, ctxObj, {
-      maxTokens: OUTPUT_CAPS.enhance,
+      maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.enhance),
       ...effortOptions(PHASE_EFFORT.enhance),
     });
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
@@ -513,7 +514,7 @@ export const explainParity = action({
             ],
           },
           {
-            maxTokens: OUTPUT_CAPS.explain,
+            maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.explain),
             ...effortOptions(effortFor('advise', routed.modelId)),
           },
         ),
@@ -767,7 +768,7 @@ export const runAgentLoop = internalAction({
         // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
         const model = (getModel as any)(provider, modelId);
         result = await piComplete(model, ctxObj, {
-          maxTokens: OUTPUT_CAPS.agentLoop,
+          maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.agentLoop),
           ...effortOptions(effortFor(phase, modelId)),
         });
       } catch (err) {
@@ -787,12 +788,15 @@ export const runAgentLoop = internalAction({
         .join('')
         .trim();
 
-      // Tool calls run only from a completed reply (stopReason 'toolUse'). A reply that was cut off by the output
+      // Tool calls run only from a reply that finished: 'toolUse' (Anthropic tool_use, OpenAI tool_calls) or 'stop'
+      // (pi-ai maps an OpenAI-compatible finish_reason 'stop' to 'stop' even when tool_calls came with it, and
+      // OpenRouter/kimi/nemotron routes report that; main ran those calls). A reply that was cut off by the output
       // cap ('length'), refused or failed ('error': pi-ai maps Anthropic stop_reason 'refusal' here and keeps the
-      // partial tool_use block) or was aborted carries calls whose arguments are partial, so an upsert_file whose
-      // content stops mid-file would be written as if complete. Nothing in it runs, and the unfinished calls are not
-      // recorded, so the stored history never holds a tool call without its result.
-      if (toolCalls.length > 0 && result.stopReason !== 'toolUse') {
+      // partial tool_use block), was aborted or never got a finish_reason ('pending') carries calls whose arguments
+      // are partial, so an upsert_file whose content stops mid-file would be written as if complete. Nothing in
+      // such a reply runs, and its calls are not recorded, so the stored history never holds a tool call without
+      // its result.
+      if (toolCalls.length > 0 && result.stopReason !== 'toolUse' && result.stopReason !== 'stop') {
         const names = toolCalls.map((tc) => tc.name).join(', ');
         const why =
           result.stopReason === 'length'

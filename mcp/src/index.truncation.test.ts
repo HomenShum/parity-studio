@@ -29,6 +29,20 @@ vi.mock('./lib/render.js', () => ({
   shutdownRenderer: async () => undefined,
 }));
 
+// The dashboard modules import `open`, `hono` and `@hono/node-server`, dependencies declared only in
+// mcp/package.json. CI installs the repo root only (quality.yml `pnpm install --frozen-lockfile`), so the real
+// packages cannot load there. The tools under test neither serve nor open a dashboard, so both modules are
+// stubbed with the dashboard off (PARITY_DASHBOARD=disabled semantics).
+vi.mock('./dashboard/openBrowser.js', () => ({
+  dashboardMode: () => 'disabled',
+  openDashboardOnce: async () => undefined,
+}));
+vi.mock('./dashboard/server.js', () => ({
+  ensureDashboard: async () => {
+    throw new Error('dashboard is disabled in this test');
+  },
+}));
+
 vi.setConfig({ testTimeout: 30_000 });
 
 const sse = (events: Array<[string, unknown]>): Response =>

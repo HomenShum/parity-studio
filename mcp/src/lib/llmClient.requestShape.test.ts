@@ -168,6 +168,19 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     expect(bodies).toHaveLength(0);
   });
 
+  it('a cap above the catalog maximum is sent as the maximum (gemma-4-26b :free tops out at 32,768)', async () => {
+    await call({
+      provider: 'openrouter',
+      modelId: 'google/gemma-4-26b-a4b-it:free',
+      systemPrompt: 's',
+      userText: 'u',
+      maxTokens: 64_000,
+    }).catch(() => undefined);
+    expect(bodies).toHaveLength(1);
+    const b = bodies[0]?.body ?? {};
+    expect(b['max_tokens'] ?? b['max_completion_tokens']).toBe(32_768);
+  });
+
   it('an unknown free-looking id resolves to the verified free constant on OpenRouter', async () => {
     await call({
       provider: 'openrouter',
