@@ -1,4 +1,4 @@
-import { type SupportedProvider, keyProviderFor } from './llmClient.js';
+import { type SupportedProvider, assertCallableModel, keyProviderFor } from './llmClient.js';
 
 export const PROVIDER_KEY_ENV: Record<SupportedProvider, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
@@ -47,6 +47,8 @@ export function localByokStatus(models: readonly string[]): {
 }
 
 export function requireLocalKeys(models: readonly string[]): ReturnType<typeof localByokStatus> {
+  // Unknown paid ids are refused here, at tool entry (A.0.10); localByokStatus stays a diagnostic that never throws.
+  for (const model of models) assertCallableModel(model);
   const status = localByokStatus(models);
   if (status.missingEnvVars.length > 0) {
     const missing = status.missingEnvVars.join(', ');

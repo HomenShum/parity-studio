@@ -6,7 +6,7 @@
  * did not truncate the answer (stopReason != 'length', the check that guards the BALANCED -> paid-fallback path),
  * and writes a SPEC A.0.3 receipt.
  *
- *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=2 ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=... GEMINI_API_KEY=... \
+ *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=3 ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=... GEMINI_API_KEY=... \
  *     pnpm exec vitest run convex/lib/modelRefresh.live.test.ts
  *
  * Run it on a clean checkout of the PR head (a dirty tree is refused). It then writes
@@ -14,17 +14,18 @@
  *
  * Spend is bounded per dispatch, not just up front. `call()` soft-retries OpenRouter up to `maxAttempts` times and
  * sums every attempt's cost, so before each cell the harness requires spentUsd + (attempts x single-attempt worst
- * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: with the MCP cells the one-attempt
- * worst case is ~$1.02, so a real run passes 2); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
+ * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: the one-attempt worst case is
+ * about $2.6, dominated by the 64,000-token agent-loop cap on Opus and Sonnet, so a real run passes 3); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
  * review treats as an incomplete run, never a pass. The all-attempts worst case is printed before any call.
  * `budget.requests` and each row's `transportRequests` are counted at the transport (a wrapper around the global
  * `fetch` pi-ai sends through), so they include pi-ai's own HTTP retries of a 429/5xx. `completionAttempts` is the
  * number of completions `call()` asked pi-ai for and is lower whenever pi-ai retried inside one.
  * The Convex `verifyVisual` phase issues no model request, but the MCP server does, and the `maxOutputTokens` ->
  * `maxTokens` fix in mcp/src/lib/llmClient.ts turned every MCP caller's cap into a real cap. The last three cells
- * cover them: the visual judge (mcp/src/index.ts:365, cap 4,000, default google/gemini-3.1-pro-preview, run with a
- * 12-check rubric-shaped prompt because runVisualJudge does not check stopReason 'length' and a cut-off reply scores
- * 0/12 with no error), decompose/generate (index.ts:238, 724, 1742, 1835 at 24,000 and :1271 at 16,000, default
+ * cover them: the visual judge (mcp/src/lib/visualJudge.ts, cap 4,000, default google/gemini-3.1-pro-preview, run
+ * with a 12-check rubric-shaped prompt so the cell shows the rubric fits the cap; runVisualJudge reports a judge
+ * failure rather than a score when the reply is cut off, but a cap that is too tight would still make every
+ * verification fail), decompose/generate (index.ts:238, 724, 1742, 1835 at 24,000 and :1271 at 16,000, default
  * kimi-k2.6; the 24,000 cap stands for both), and the frozen NodeSlide BYOK planner (nodeslideTools.ts:1060, cap
  * 3,000, default z-ai/glm-5.2; measured, not edited). Their routes are literals mirroring the MCP defaults (the MCP
  * package is not importable from here), so for them `resolvedModel` equals `requestedModel` by construction. A
@@ -142,11 +143,20 @@ const CELLS: Cell[] = [
     effort: PHASE_EFFORT.execute,
   },
   {
+    // Production sends the generate cap to this fallback on a generate truncation or error.
     phase: 'generate-fallback',
     expected: 'openrouter:anthropic/claude-sonnet-5.5',
     resolve: fallback('balanced', 'generate'),
-    cap: OUTPUT_CAPS.iterate,
+    cap: OUTPUT_CAPS.generate,
     effort: PHASE_EFFORT.generate,
+  },
+  {
+    // The same fallback model under the larger cap decompose and iterate send it (both 24,000).
+    phase: 'decompose/iterate-fallback',
+    expected: 'openrouter:anthropic/claude-sonnet-5.5',
+    resolve: fallback('balanced', 'iterate'),
+    cap: OUTPUT_CAPS.iterate,
+    effort: PHASE_EFFORT.iterate,
   },
   ...(['generate', 'decompose', 'iterate'] as const).map((phase) => ({
     phase: `${phase} (kimi-k2.6, BALANCED)`,
@@ -181,7 +191,7 @@ const CELLS: Cell[] = [
     effort: 'high', // ignored by the Google API
   },
   {
-    phase: 'smoke: MCP visual judge id/cap (index.ts:365, frozen default)',
+    phase: 'smoke: MCP visual judge id/cap (lib/visualJudge.ts, frozen default)',
     expected: 'google:gemini-3.1-pro-preview',
     resolve: () => ({ provider: 'google', modelId: 'gemini-3.1-pro-preview' }),
     cap: 4_000,
@@ -205,6 +215,11 @@ const CELLS: Cell[] = [
 ];
 
 const INPUT_TOKENS_UPPER = 200;
+/** The budget the header command passes. The estimate must fit it, or the documented command fails closed. */
+const DOCUMENTED_MAX_USD = 3;
+/** The command as run, with the budget it ran under: re-running it as recorded must reproduce the same gate. */
+const receiptCommand = (maxUsd: number): string =>
+  `PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=${maxUsd} pnpm exec vitest run convex/lib/modelRefresh.live.test.ts`;
 
 // Transport-level request counter and request-body capture: every pi-ai request goes through the global fetch.
 let transportRequests = 0;
@@ -295,6 +310,23 @@ function effortOnWire(
     ...(trailing !== undefined ? { trailing } : {}),
   };
 }
+
+describe('receipt harness bookkeeping (SPEC A.0.3), no spend', () => {
+  it('the generate fallback is exercised at the generate cap, the decompose/iterate fallback at theirs', () => {
+    const byPhase = Object.fromEntries(CELLS.map((c) => [c.phase, c.cap]));
+    expect(byPhase['generate-fallback']).toBe(OUTPUT_CAPS.generate);
+    expect(byPhase['decompose/iterate-fallback']).toBe(OUTPUT_CAPS.iterate);
+    expect(OUTPUT_CAPS.decompose).toBe(OUTPUT_CAPS.iterate);
+    expect(byPhase['advise']).toBe(OUTPUT_CAPS.agentLoop);
+    expect(byPhase['execute']).toBe(OUTPUT_CAPS.agentLoop);
+  });
+  it('the recorded command carries the budget it ran under, and the documented budget admits the estimate', () => {
+    expect(receiptCommand(DOCUMENTED_MAX_USD)).toContain(
+      `PARITY_LIVE_MAX_USD=${DOCUMENTED_MAX_USD} `,
+    );
+    expect(estimateUsd).toBeLessThanOrEqual(DOCUMENTED_MAX_USD);
+  });
+});
 
 describe('receipt row acceptance (SPEC A.0.3), no spend', () => {
   const good: RowEvidence = {
@@ -441,7 +473,7 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
       }
 
       const receipt = {
-        command: 'PARITY_LIVE_RECEIPT=1 pnpm exec vitest run convex/lib/modelRefresh.live.test.ts',
+        command: receiptCommand(maxUsd),
         candidateIds: CELLS.map((c) => c.expected),
         echoedModels: rows.map((r) => r['echoedModel']),
         rows,

@@ -22,7 +22,7 @@
  * we fall through to the secondary, then surface a clear error.
  */
 
-import { getModel } from '@earendil-works/pi-ai/compat';
+import { getModels } from '@earendil-works/pi-ai/compat';
 import { FREE_LOOKING } from './modelBoundary';
 import type { Effort, SupportedProvider } from './piAi';
 
@@ -41,11 +41,14 @@ export const FREE_FALLBACK_MODEL = 'google/gemma-4-26b-a4b-it:free';
  * maxOutputTokens -> maxTokens fix they are real caps on every model, kimi-k2.6 included (before, pi-ai ignored
  * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto the
  * paid fallback, so these values are part of the needs-live-eval scope on PR #101 until measured.
+ * `agentLoop` sits at what an `upsert_file` can carry (200 KB, about 50-67k tokens): a lower cap would make every
+ * large file write truncate. runAgentLoop also refuses to run tool calls from a reply that hit the cap, so a
+ * write longer than this fails visibly instead of saving a cut-off file.
  */
 export const OUTPUT_CAPS = {
   enhance: 4_000,
   explain: 4_000,
-  agentLoop: 16_000,
+  agentLoop: 64_000,
   generate: 16_000,
   decompose: 24_000,
   iterate: 24_000,
@@ -391,8 +394,11 @@ export function failClosedRoute(
   provider: SupportedProvider,
   modelId: string,
 ): { provider: SupportedProvider; modelId: string } {
-  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel is typed against its compile-time registry
-  if ((getModel as any)(provider, modelId) !== undefined) return { provider, modelId };
+  // Own-property membership, not `getModel(...) !== undefined`: pi-ai looks ids up as MODELS[provider]?.[id], so
+  // 'toString' / 'constructor' / '__proto__' come back as an inherited function or object and would pass.
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+  if ((getModels as any)(provider).some((m: { id: string }) => m.id === modelId))
+    return { provider, modelId };
   if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
   throw new Error(
     `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,

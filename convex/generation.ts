@@ -258,9 +258,11 @@ export const generateInitial = internalAction({
       ? prompt
       : 'Generate a polished, production-quality UI matching the attached image.';
 
-    const picked = await pickPhase(ctx, String(runId), 'generate');
     let generated: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(runId), 'generate');
       generated = await callValidatedPipelineModel(ctx, {
         runId: String(runId),
         stage: 'generate',
@@ -305,9 +307,11 @@ export const decompose = internalAction({
   handler: async (ctx, { runId, artifactVersion, artifactHtml }) => {
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
-    const picked = await pickPhase(ctx, String(runId), 'decompose');
     let decomposeResult: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(runId), 'decompose');
       decomposeResult = await callValidatedPipelineModel(ctx, {
         runId: String(runId),
         stage: 'decompose',
@@ -496,9 +500,11 @@ ${previousTokensCss.slice(0, 2_000)}
 ORIGINAL SOURCE (the artifact you should be matching):
 ${args.sourceHtml.slice(0, 8_000)}`;
 
-    const picked = await pickPhase(ctx, String(args.runId), 'iterate');
     let iterateResult: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(args.runId), 'iterate');
       iterateResult = await callValidatedPipelineModel(ctx, {
         runId: String(args.runId),
         stage: `iterate-${args.iterationNumber}`,

@@ -12,7 +12,10 @@
  *   2. NODESLIDE_MODEL_PRICING          shared/nodeslideRunBudget.ts (micro-USD per M)    pricingAsOf = row.verifiedAt
  *   3. NODESLIDE_NEBIUS_GLM.cost        convex/lib/nodeslideProvider.ts (hand-built Model, not exported)  pricingAsOf = SOURCE_READ_AS_OF
  *   4. NATIVE_NEBIUS_METADATA.pricing   convex/lib/nodeslideRoutingPolicy.ts (not exported)               pricingAsOf = SOURCE_READ_AS_OF
- * Sources 3 and 4 are not exported and live in NodeSlide-domain files that this repo only mirrors (drift-only),
+ *   5. GPT_IMAGE_2_PRICING_PER_MTOK     convex/generation.ts (not exported; text-in / image-in / image-out)  pricingAsOf = GPT_IMAGE_2_READ_AS_OF
+ * Source 5 is the image-generation cost telemetry (frozen class, not edited by this PR) and carries no date of its
+ * own; it is read from source text like 3 and 4. No other source prices gpt-image-2 (asserted below), so there is
+ * nothing for it to disagree with. Sources 3 and 4 are not exported and live in NodeSlide-domain files that this repo only mirrors (drift-only),
  * and neither carries a date of its own; this repo may not edit them, so the date recorded for them is the day this
  * test read their values (SOURCE_READ_AS_OF). They are read from source text; the regex fails the test if the shape
  * moves.
@@ -23,12 +26,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel } from '@earendil-works/pi-ai/compat';
+import { getModel, getModels } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 import { NODESLIDE_MODEL_PRICING } from '../../shared/nodeslideRunBudget';
 
 const CATALOG_PRICING_AS_OF = '2026-10-14'; // measured against the installed @earendil-works/pi-ai 1.1.0
 const SOURCE_READ_AS_OF = '2026-10-14'; // sources 3 and 4 carry no date in their frozen files
+const GPT_IMAGE_2_READ_AS_OF = '2026-10-15'; // source 5 carries no date; the day this test first read its values
 
 /** A.0.6: every pricing source in the repo, each with a date. */
 const PRICING_SOURCES = [
@@ -36,6 +40,7 @@ const PRICING_SOURCES = [
   { source: 'NODESLIDE_MODEL_PRICING', pricingAsOf: '2026-07-16T01:22:40Z' }, // row.verifiedAt, asserted below
   { source: 'NODESLIDE_NEBIUS_GLM.cost', pricingAsOf: SOURCE_READ_AS_OF },
   { source: 'NATIVE_NEBIUS_METADATA.pricing', pricingAsOf: SOURCE_READ_AS_OF },
+  { source: 'GPT_IMAGE_2_PRICING_PER_MTOK', pricingAsOf: GPT_IMAGE_2_READ_AS_OF },
 ];
 
 interface Rate {
@@ -76,8 +81,8 @@ function budgetRate(id: keyof typeof NODESLIDE_MODEL_PRICING): Rate & { verified
 }
 
 describe('pricing sources agree per (id, transport)', () => {
-  it('lists all four pricing sources, each with a pricingAsOf date', () => {
-    expect(PRICING_SOURCES).toHaveLength(4);
+  it('lists all five pricing sources, each with a pricingAsOf date', () => {
+    expect(PRICING_SOURCES).toHaveLength(5);
     for (const { source, pricingAsOf } of PRICING_SOURCES) {
       expect(pricingAsOf, source).toMatch(/^\d{4}-\d{2}-\d{2}/);
     }
@@ -99,6 +104,37 @@ describe('pricing sources agree per (id, transport)', () => {
     expect(providerModel).toEqual({ inPerM: 1.4, outPerM: 4.4 });
     expect(routingMirror).toEqual(providerModel);
     expect(runBudget).toEqual(providerModel);
+  });
+
+  it('(gpt-image-2, openai): the image-generation telemetry rates are pinned, and no other source prices it', () => {
+    const text = sourceText('../generation.ts');
+    const from = text.indexOf('const GPT_IMAGE_2_PRICING_PER_MTOK');
+    expect(
+      from,
+      'GPT_IMAGE_2_PRICING_PER_MTOK not found in convex/generation.ts',
+    ).toBeGreaterThanOrEqual(0);
+    const m =
+      /textInput:\s*([0-9.]+),[^\n]*\n\s*imageInput:\s*([0-9.]+),[^\n]*\n\s*imageOutput:\s*([0-9.]+)/.exec(
+        text.slice(from),
+      );
+    expect(m, 'rate literals not found after GPT_IMAGE_2_PRICING_PER_MTOK').not.toBeNull();
+    expect({
+      textInput: Number(m?.[1]),
+      imageInput: Number(m?.[2]),
+      imageOutput: Number(m?.[3]),
+    }).toEqual({
+      textInput: 5,
+      imageInput: 10,
+      imageOutput: 40,
+    });
+    // If pi-ai ever catalogs gpt-image-2, the agreement rule applies and this must become a comparison.
+    for (const provider of ['openai', 'openrouter'] as const) {
+      const ids: string[] = getModels(provider as never).map((x: { id: string }) => x.id);
+      expect(
+        ids.filter((id) => /gpt-image-2/.test(id)),
+        provider,
+      ).toEqual([]);
+    }
   });
 
   it('(google/gemini-3.5-flash, openrouter): run-budget table equals the pi-ai catalog', () => {

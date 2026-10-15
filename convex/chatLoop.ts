@@ -485,16 +485,17 @@ export const explainParity = action({
       context,
     };
 
-    const routed = resolvePhaseModel({
-      runId,
-      run,
-      phase: 'advise',
-      fallbackProvider: ENHANCE_PROVIDER,
-      fallbackModel: ENHANCE_MODEL,
-      providerEnvKey: 'PARITY_EXPLAIN_PROVIDER',
-      modelEnvKey: 'PARITY_EXPLAIN_MODEL',
-    });
     try {
+      // Inside the try, as on main: an unknown id falls back to the rule-based explanation instead of throwing.
+      const routed = resolvePhaseModel({
+        runId,
+        run,
+        phase: 'advise',
+        fallbackProvider: ENHANCE_PROVIDER,
+        fallbackModel: ENHANCE_MODEL,
+        providerEnvKey: 'PARITY_EXPLAIN_PROVIDER',
+        modelEnvKey: 'PARITY_EXPLAIN_MODEL',
+      });
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
       const model = (getModel as any)(routed.provider, routed.modelId);
       const result = await withTimeout(
@@ -745,12 +746,6 @@ export const runAgentLoop = internalAction({
       const envModel = process.env[useAdvisor ? 'CHAT_ADVISOR_MODEL' : 'CHAT_EXECUTOR_MODEL'];
       // Env wins over the run's pick (A.0.4); the pair that will actually be sent is what gets validated (A.0.10).
       const picked = pickRunModel(runRow, phase, String(runId));
-      const { provider, modelId } = failClosedRoute(
-        (envProvider ?? picked.provider) as SupportedProvider,
-        envModel ?? picked.modelId,
-      );
-      // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
-      const model = (getModel as any)(provider, modelId);
       const ctxObj: Context = {
         systemPrompt: SYSTEM_PROMPT,
         messages,
@@ -758,6 +753,15 @@ export const runAgentLoop = internalAction({
       };
       let result: AssistantMessage;
       try {
+        // Resolved inside the try: an unknown id (a stale stored override, a bad CHAT_*_MODEL) must reach the user as
+        // a visible '(agent error: ...)' turn, as it did on main, not as an exception that escapes the scheduled
+        // action. failClosedRoute still throws before any request exists, so nothing is spent.
+        const { provider, modelId } = failClosedRoute(
+          (envProvider ?? picked.provider) as SupportedProvider,
+          envModel ?? picked.modelId,
+        );
+        // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+        const model = (getModel as any)(provider, modelId);
         result = await piComplete(model, ctxObj, {
           maxTokens: OUTPUT_CAPS.agentLoop,
           ...effortOptions(PHASE_EFFORT[phase]),
@@ -778,6 +782,29 @@ export const runAgentLoop = internalAction({
         .map((b) => b.text)
         .join('')
         .trim();
+
+      // A reply cut off by the output cap carries tool calls whose arguments are partial (an upsert_file whose
+      // content stops mid-file would be written as if complete). Nothing in it runs, and the cut-off calls are not
+      // recorded, so the stored history never holds a tool call without its result.
+      if (result.stopReason === 'length' && toolCalls.length > 0) {
+        await ctx.runMutation(internal.chat.insertTurn, {
+          runId,
+          role: 'assistant',
+          content: text,
+          turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
+          modelId: result.model,
+          provider: result.provider,
+          costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+        });
+        await ctx.runMutation(internal.chat.insertTurn, {
+          runId,
+          role: 'assistant',
+          content: `(agent error: the reply hit the ${OUTPUT_CAPS.agentLoop.toLocaleString('en-US')}-token output cap while writing ${toolCalls.map((tc) => tc.name).join(', ')}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`,
+          turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
+        });
+        await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);
+        return;
+      }
 
       await ctx.runMutation(internal.chat.insertTurn, {
         runId,

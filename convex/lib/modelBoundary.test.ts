@@ -9,7 +9,7 @@ import { getModels } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 import { MODEL_PRESETS } from '../../src/lib/modelRouting';
 import { setModelSelection } from '../runs';
-import { resolveRunModel } from './autoRouter';
+import { failClosedRoute, resolveRunModel } from './autoRouter';
 import { KNOWN_MODEL_IDS } from './knownModelIds.generated';
 import { assertSelectableModel } from './modelBoundary';
 
@@ -85,6 +85,25 @@ describe('assertSelectableModel', () => {
       })();
       expect(boundary, `${provider}:${modelId}`).toBe(resolver);
     }
+  });
+
+  // pi-ai looks ids up as MODELS[provider]?.[id], so getModel('openrouter', 'toString') returns an inherited
+  // function. Both resolvers must check catalog membership, not `getModel(...) !== undefined`.
+  it('refuses inherited Object.prototype names at the boundary and in failClosedRoute alike', () => {
+    for (const modelId of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      for (const provider of ['openrouter', 'anthropic'] as const) {
+        expect(() => assertSelectableModel(provider, modelId), `boundary ${modelId}`).toThrow(
+          /Unknown model/,
+        );
+        expect(() => failClosedRoute(provider, modelId), `resolver ${modelId}`).toThrow(
+          /Unknown model/,
+        );
+      }
+    }
+    expect(failClosedRoute('anthropic', 'claude-sonnet-5-5')).toEqual({
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-5-5',
+    });
   });
 });
 

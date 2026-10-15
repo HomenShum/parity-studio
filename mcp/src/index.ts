@@ -68,14 +68,10 @@ import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
 import { redactSensitiveValues } from './lib/privacy.js';
-import {
-  DECOMPOSE_SYSTEM,
-  GENERATE_SYSTEM,
-  ITERATE_SYSTEM,
-  VISUAL_JUDGE_SYSTEM,
-} from './lib/prompts.js';
-import { renderHtmlToPng, shutdownRenderer } from './lib/render.js';
+import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM } from './lib/prompts.js';
+import { shutdownRenderer } from './lib/render.js';
 import { parseUiKitResponse } from './lib/uiKitParser.js';
+import { type VisualJudgeOutcome, runVisualJudge } from './lib/visualJudge.js';
 
 /**
  * Eager-init the dashboard at MCP server boot. Returns the URL (or null
@@ -327,67 +323,6 @@ async function handleVerify(args: {
         ),
       },
     ],
-  };
-}
-
-interface VisualJudgeOutcome {
-  passCount: number;
-  totalChecks: number;
-  parityScore: number;
-  status: ParityReport['status'];
-  summary: string;
-  checks: Array<{ dimension: string; id: string; passed: boolean; note: string }>;
-  judgeCostUsd: number;
-  modelUsed: string;
-  renderLatencyMs: number;
-}
-
-async function runVisualJudge(args: {
-  sourceImageBase64: string;
-  sourceImageMimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-  indexHtml: string;
-  judgeModel: string;
-}): Promise<VisualJudgeOutcome> {
-  requireLocalKeys([args.judgeModel]);
-  const rendered = await renderHtmlToPng(args.indexHtml);
-
-  // Build a single user message with both images side-by-side context.
-  // Some providers only accept one image per message — we send the rendered as
-  // primary and pass the source as a leading reference inside the userText.
-  // For Anthropic vision multi-image: use both via two image blocks.
-  // Simpler: pass them sequentially in the same prompt body, judge tolerates.
-  const judge = await callByModel({
-    model: args.judgeModel,
-    systemPrompt: VISUAL_JUDGE_SYSTEM,
-    userText:
-      'IMAGE 1 = SOURCE (reference). IMAGE 2 = RENDERED candidate.\nReturn the JSON rubric described above.',
-    userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType },
-    maxTokens: 4_000,
-  });
-
-  // Parse JSON loosely — providers sometimes wrap in fences
-  const parsed = parseLooseJson(judge.text);
-  const checks: VisualJudgeOutcome['checks'] = Array.isArray(parsed?.checks)
-    ? (parsed.checks as VisualJudgeOutcome['checks'])
-    : [];
-  const passCount = checks.filter((c) => c.passed === true).length;
-  const totalChecks = checks.length || 12;
-  const parityScore = totalChecks === 0 ? 0 : passCount / totalChecks;
-  const status = statusFromBooleans(passCount, totalChecks);
-
-  return {
-    passCount,
-    totalChecks,
-    parityScore,
-    status,
-    summary:
-      typeof parsed?.summary === 'string'
-        ? (parsed.summary as string)
-        : `${passCount}/${totalChecks} visual checks passed`,
-    checks,
-    judgeCostUsd: judge.costUsd,
-    modelUsed: judge.modelUsed,
-    renderLatencyMs: rendered.latencyMs,
   };
 }
 
@@ -1884,29 +1819,6 @@ function stripWrappingFences(raw: string): string {
   const trimmed = raw.trim();
   const fenceMatch = trimmed.match(/^```(?:html)?\s*\n([\s\S]*?)\n```$/);
   return fenceMatch?.[1] ?? trimmed;
-}
-
-function parseLooseJson(raw: string): Record<string, unknown> | null {
-  const trimmed = raw.trim();
-  // Strip leading/trailing fence
-  const stripped = trimmed
-    .replace(/^```(?:json)?\s*\n?/, '')
-    .replace(/\n?```$/, '')
-    .trim();
-  try {
-    return JSON.parse(stripped) as Record<string, unknown>;
-  } catch {
-    // Try to extract first { ... } block
-    const m = stripped.match(/\{[\s\S]*\}/);
-    if (m) {
-      try {
-        return JSON.parse(m[0]) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
 }
 
 // ---------- Server bootstrap ----------------------------------------------

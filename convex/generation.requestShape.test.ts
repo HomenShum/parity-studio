@@ -134,3 +134,39 @@ describe('generation pipeline builds the SPEC 1.2 request', () => {
     expect(bodies.map((b) => b['model'])).toEqual([FREE_FALLBACK_MODEL]);
   });
 });
+
+// Persona: a run was started with a custom model that the catalog has since dropped. On main the stage failed with a
+// visible 'failed' status and message; resolving outside the try would throw past it and leave the run 'generating'
+// forever. The id is refused before a request exists (A.0.10) and the run still ends in a visible failure.
+describe('an unknown stored model override fails the stage visibly, with zero requests', () => {
+  const badRun = {
+    tier: 'frontier',
+    modelOverride: { provider: 'openrouter', modelId: 'made-up/paid-model' },
+  };
+  const recordingCtx = (statuses: Array<Record<string, unknown>>) => ({
+    ...fakeCtx(badRun as never),
+    runMutation: async (
+      ref: Parameters<typeof getFunctionName>[0],
+      args: Record<string, unknown>,
+    ) => {
+      if (getFunctionName(ref) === 'runs:updateStatus') statuses.push(args);
+      return null;
+    },
+  });
+
+  it('generate and decompose mark the run failed with the stage error', async () => {
+    const statuses: Array<Record<string, unknown>> = [];
+    await expect(
+      generateHandler(recordingCtx(statuses), { runId: 'run_1', prompt: 'a landing page' }),
+    ).rejects.toThrow(/generate stage error: Unknown model "made-up\/paid-model"/);
+    await expect(
+      decomposeHandler(recordingCtx(statuses), {
+        runId: 'run_1',
+        artifactVersion: 0,
+        artifactHtml: '<html></html>',
+      }),
+    ).rejects.toThrow(/decompose stage error: Unknown model/);
+    expect(statuses.filter((s) => s['status'] === 'failed')).toHaveLength(2);
+    expect(bodies).toHaveLength(0);
+  });
+});

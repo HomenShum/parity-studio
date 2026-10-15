@@ -37,6 +37,7 @@ import {
   type ImageContent,
   type TextContent,
   getModel,
+  getModels,
   complete as piComplete,
 } from '@earendil-works/pi-ai/compat';
 
@@ -173,12 +174,23 @@ function resolveWire(
   const id =
     WIRE_IDS[provider]?.[modelId] ??
     (modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId);
-  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel is typed against its compile-time registry
-  if ((getModel as any)(provider, id) !== undefined) return { provider, modelId: id };
+  // Own-property membership, not `getModel(...) !== undefined`: pi-ai looks ids up as MODELS[provider]?.[id], so
+  // 'toString' / 'constructor' / '__proto__' come back as an inherited function or object and would pass.
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+  if ((getModels as any)(provider).some((m: { id: string }) => m.id === id))
+    return { provider, modelId: id };
   if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
   throw new Error(
     `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
   );
+}
+
+/**
+ * Tool-entry check (SPEC A.0.10, "again at the public API boundary"): throws for an id `call()` would refuse, so a
+ * bad `decomposeModel` / `judgeModel` / `generateModel` argument fails before any run record, capture or render.
+ */
+export function assertCallableModel(model: string): void {
+  resolveWire(inferProvider(model), model);
 }
 
 /**

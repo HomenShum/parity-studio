@@ -14,6 +14,7 @@ import { OUTPUT_CAPS, PHASE_EFFORT, VERIFIED_FREE_MODEL } from './lib/autoRouter
 type Body = Record<string, unknown>;
 let bodies: Body[] = [];
 let mutations: string[] = [];
+let mutationCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
 // pi-ai's own default effort is 'high', and most phases are 'high' too, so a call that forgot to pass the phase's
 // effort would be invisible. Distinct sentinels make the pass-through observable: the request must carry exactly
@@ -24,6 +25,7 @@ beforeEach(() => {
   Object.assign(PHASE_EFFORT, { enhance: 'medium', advise: 'low', execute: 'medium' });
   bodies = [];
   mutations = [];
+  mutationCalls = [];
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
   vi.stubEnv('OPENROUTER_API_KEY', 'test-key-not-real');
   vi.stubGlobal(
@@ -73,9 +75,14 @@ function fakeCtx(run: RunRow, history: Array<{ role: string; content: string }>)
           throw new Error(`unexpected query ${getFunctionName(ref)}`);
       }
     },
-    runMutation: async (ref: Parameters<typeof getFunctionName>[0]) => {
-      mutations.push(getFunctionName(ref));
-      return null;
+    runMutation: async (
+      ref: Parameters<typeof getFunctionName>[0],
+      args: Record<string, unknown>,
+    ) => {
+      const name = getFunctionName(ref);
+      mutations.push(name);
+      mutationCalls.push({ name, args });
+      return name === 'uiKits:upsertFileInternal' ? { created: true, sizeBytes: 1 } : null;
     },
     runAction: async () => null,
     scheduler: { runAfter: async () => null },
@@ -153,7 +160,7 @@ describe('chatLoop.runAgentLoop builds the SPEC 1.2 request with the tool surfac
       .filter((name) => !name.startsWith('__pi_'))
       .sort();
 
-  it('execute hop: claude-sonnet-5-5, 16k cap, high effort, all tools, no forced tool_choice', async () => {
+  it('execute hop: claude-sonnet-5-5, agent-loop cap, high effort, all tools, no forced tool_choice', async () => {
     await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'tweak it' }]), {
       runId: RUN_ID,
     });
@@ -207,11 +214,20 @@ describe('env overrides still win over a run override the resolver would reject 
     modelOverride: { provider: 'openrouter', modelId: 'made-up/paid-model' },
   };
 
-  it('without an env override the unknown persisted override fails closed with zero requests', async () => {
-    await expect(
-      agentLoopHandler(fakeCtx(badRun, [{ role: 'user', content: 'go' }]), { runId: RUN_ID }),
-    ).rejects.toThrow(/Unknown model/);
+  // Review round 6: these two used to assert `.rejects` (the throw escaped the scheduled action, so the user got no
+  // reply at all). On main an unknown id reached piComplete(undefined), which rejected inside the try and left a
+  // visible '(agent error: ...)' turn; that is the contract kept here, and still with zero requests.
+  const errorTurns = () =>
+    mutationCalls
+      .filter((c) => c.name === 'chat:insertTurn')
+      .map((c) => String(c.args['content']))
+      .filter((content) => content.startsWith('(agent error:'));
+
+  it('without an env override the unknown persisted override fails closed: zero requests and a visible error turn', async () => {
+    await agentLoopHandler(fakeCtx(badRun, [{ role: 'user', content: 'go' }]), { runId: RUN_ID });
     expect(bodies).toHaveLength(0);
+    expect(errorTurns()).toHaveLength(1);
+    expect(errorTurns()[0]).toMatch(/Unknown model "made-up\/paid-model"/);
   });
 
   it('CHAT_EXECUTOR_PROVIDER + CHAT_EXECUTOR_MODEL replace it: the env model is what goes on the wire', async () => {
@@ -255,12 +271,17 @@ describe('env overrides still win over a run override the resolver would reject 
 
   it('an env model the catalog does not know still fails closed with zero requests, whatever the stored row says', async () => {
     vi.stubEnv('CHAT_EXECUTOR_MODEL', 'made-up/other-paid-model');
-    await expect(
-      agentLoopHandler(fakeCtx({ tier: 'balanced' }, [{ role: 'user', content: 'go' }]), {
-        runId: RUN_ID,
-      }),
-    ).rejects.toThrow(/Unknown model/);
+    await agentLoopHandler(fakeCtx({ tier: 'balanced' }, [{ role: 'user', content: 'go' }]), {
+      runId: RUN_ID,
+    });
     expect(bodies).toHaveLength(0);
+    expect(errorTurns()[0]).toMatch(/Unknown model "made-up\/other-paid-model"/);
+  });
+
+  it('explainParity with an unknown stored override falls back to the rule-based explanation, zero requests', async () => {
+    const out = await explainHandler(fakeCtx(badRun, []), { runId: RUN_ID });
+    expect(bodies).toHaveLength(0);
+    expect(out).toMatchObject({ modelUsed: 'rule-based', provider: 'local', costMicroUsd: 0 });
   });
 });
 
@@ -278,5 +299,80 @@ describe('an unknown free-looking env id resolves to the verified free constant 
     vi.stubEnv('CHAT_EXECUTOR_MODEL', 'obsolete/model-free');
     await agentLoopHandler(fakeCtx({}, [{ role: 'user', content: 'go' }]), { runId: RUN_ID });
     expect(bodies[0]?.['model']).toBe(VERIFIED_FREE_MODEL);
+  });
+});
+
+// Persona: a builder asks the chat agent to write a large index.html. The reply runs into the output cap partway
+// through the upsert_file arguments. pi-ai still hands back a tool call with the partial content, and before this fix
+// the loop saved it as if complete, leaving a cut-off file in the kit.
+describe('a reply cut off by the output cap never runs its tool calls', () => {
+  const sseEvent = (type: string, data: unknown) =>
+    `event: ${type}
+data: ${JSON.stringify({ type, ...(data as object) })}
+
+`;
+
+  const truncatedUpsertStream = (stopReason: 'max_tokens' | 'tool_use') =>
+    [
+      sseEvent('message_start', {
+        message: {
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-sonnet-5-5',
+          content: [],
+          stop_reason: null,
+          usage: { input_tokens: 10, output_tokens: 1 },
+        },
+      }),
+      sseEvent('content_block_start', {
+        index: 0,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'upsert_file', input: {} },
+      }),
+      sseEvent('content_block_delta', {
+        index: 0,
+        delta: {
+          type: 'input_json_delta',
+          partial_json: '{"path":"index.html","content":"<html><body><main>half a fi',
+        },
+      }),
+      sseEvent('content_block_stop', { index: 0 }),
+      sseEvent('message_delta', {
+        delta: { stop_reason: stopReason },
+        usage: { output_tokens: OUTPUT_CAPS.agentLoop },
+      }),
+      sseEvent('message_stop', {}),
+    ].join('');
+
+  const stubStream = (stopReason: 'max_tokens' | 'tool_use') =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+        bodies.push(JSON.parse(String(init?.body ?? '{}')));
+        return new Response(truncatedUpsertStream(stopReason), {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }),
+    );
+
+  it('stop_reason max_tokens: upsertFileInternal is never called, no tool call is recorded, the user sees why', async () => {
+    stubStream('max_tokens');
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'write it' }]), {
+      runId: RUN_ID,
+    });
+    expect(bodies).toHaveLength(1);
+    expect(mutations).not.toContain('uiKits:upsertFileInternal');
+    const turns = mutationCalls.filter((c) => c.name === 'chat:insertTurn').map((c) => c.args);
+    expect(turns.some((t) => t['toolCalls'] !== undefined)).toBe(false);
+    expect(turns.at(-1)?.['content']).toMatch(/output cap while writing upsert_file/);
+  });
+
+  it('control: the same stream ending in tool_use runs the call, so the guard is what stops the write', async () => {
+    stubStream('tool_use');
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'write it' }]), {
+      runId: RUN_ID,
+    });
+    expect(mutations).toContain('uiKits:upsertFileInternal');
   });
 });

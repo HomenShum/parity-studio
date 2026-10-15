@@ -194,7 +194,36 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     );
     expect(bodies).toHaveLength(1);
     expect(bodies[0]?.body['model']).toBe(VERIFIED_FREE_MODEL);
-    // An id resolveWire refuses keeps the inferred provider's key; call() then throws before any request.
-    expect(() => requireLocalKeys(['gpt-made-up'])).toThrow(/OPENAI_API_KEY/);
+    // Review round 6: this used to expect /OPENAI_API_KEY/ (the precheck swallowed resolveWire's refusal and only
+    // reported the missing key, so an unknown paid id passed tool entry). The refusal itself is now the error.
+    expect(() => requireLocalKeys(['gpt-made-up'])).toThrow(/Unknown model/);
+  });
+
+  // pi-ai looks ids up as MODELS[provider]?.[id], so inherited Object.prototype names are not "unknown" to getModel.
+  const INHERITED = ['toString', 'constructor', '__proto__', 'hasOwnProperty'];
+
+  it('inherited Object.prototype names are refused by the resolver, not mistaken for catalog ids', async () => {
+    for (const modelId of INHERITED) {
+      await expect(
+        call({ provider: 'openrouter', modelId, systemPrompt: 's', userText: 'u' }),
+        modelId,
+      ).rejects.toThrow(/Unknown model/);
+    }
+    expect(bodies).toHaveLength(0);
+  });
+
+  it('the tool-entry precheck (requireLocalKeys) refuses an unknown paid id before any work; known and free ids pass', () => {
+    for (const model of [
+      'gpt-made-up',
+      'made-up/paid-model',
+      'anthropic/claude-sonnet-9-9',
+      ...INHERITED,
+    ]) {
+      expect(() => requireLocalKeys([model]), model).toThrow(/Unknown model/);
+    }
+    expect(() => requireLocalKeys(['claude-sonnet-5-5'])).not.toThrow();
+    expect(() => requireLocalKeys(['anthropic/claude-sonnet-5.5'])).not.toThrow();
+    expect(() => requireLocalKeys(['made-up/model:free'])).not.toThrow();
+    expect(bodies).toHaveLength(0);
   });
 });
