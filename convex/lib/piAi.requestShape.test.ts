@@ -144,15 +144,18 @@ async function build(
 }
 
 /**
- * The effort that applies on a managed-effort 5.5 model. pi-ai 1.1.0 hard-codes the TOP-LEVEL `output_config` to
- * `{effort: 'high'}`; the per-call `effort` option lands in the trailing system message's `output_config`
- * (anthropic-messages.js:874,1216). Pinning only the top level cannot see the effort that actually applies.
+ * The effort that governs the turn on a managed-effort 5.5 model. pi-ai 1.1.0 hard-codes the TOP-LEVEL
+ * `output_config.effort` to 'high' and carries the per-call `effort` only in a trailing system message
+ * (anthropic-messages.js:944,1216), which the API applies from the NEXT user turn; none follows. `call()` therefore
+ * rewrites the top-level value (`effortOptions`), and this returns it after checking the trailing message agrees.
  */
 function activeEffort(body: Record<string, unknown>): unknown {
   const messages = body['messages'] as Array<{ role: string; output_config?: { effort?: string } }>;
   const last = messages.at(-1);
   expect(last?.role, 'trailing effort message').toBe('system');
-  return last?.output_config?.effort;
+  const topLevel = (body['output_config'] as { effort?: string } | undefined)?.effort;
+  expect(last?.output_config?.effort, 'trailing effort agrees with top level').toBe(topLevel);
+  return topLevel;
 }
 
 function assertNoForbiddenKeys(body: Record<string, unknown>) {
@@ -215,10 +218,11 @@ describe('request shape: tier x phase cells', () => {
       // `maxOutputTokens` is not a pi-ai option; it was silently dropped and the model default (128000) was sent.
       expect(body['max_tokens']).toBe(1234);
       if (cell.provider === 'anthropic') {
-        // SPEC 1.3 / A.2.7: effort is explicit per phase, and the effort that applies is the trailing system
-        // message's, not the hard-coded top-level one (see activeEffort).
+        // SPEC 1.3 / A.2.7: effort is explicit per phase and the top-level value (the one that governs the turn)
+        // carries it. This was `toEqual({ effort: 'high' })` while pi-ai's hard-coded 'high' was mistaken for the
+        // inert value; with `enhance` at 'low' that pinned the defect (review round 2, defect 1).
         expect(activeEffort(body), `${cell.cell} active effort`).toBe(PHASE_EFFORT[cell.phase]);
-        expect(body['output_config']).toEqual({ effort: 'high' });
+        expect(body['output_config']).toEqual({ effort: PHASE_EFFORT[cell.phase] });
         expect((body['thinking'] as Record<string, unknown>)['type']).toBe('adaptive');
       }
     });

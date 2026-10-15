@@ -51,9 +51,10 @@ export const OUTPUT_CAPS = {
 } as const;
 /**
  * Explicit Anthropic effort per phase (SPEC 1.3, A.2.7: Opus 5.5's default moved from high to medium, so the value
- * is stated instead of inherited). pi-ai 1.1.0 reads `options.effort` into the trailing system message's
- * `output_config` (anthropic-messages.js:874,1216); the top-level `output_config.effort` stays hard-coded 'high' and
- * is not what applies. Every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6
+ * is stated instead of inherited). pi-ai 1.1.0 hard-codes the top-level `output_config.effort` to 'high'
+ * (anthropic-messages.js:944) and carries `options.effort` only in a trailing system message (:1216), which the API
+ * applies from the NEXT user turn, i.e. not to this one. Every call site therefore spreads `effortOptions(effort)`
+ * (piAi.ts), which also sets the top-level value, so the phase value is what governs the turn. Every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6
  * defaulted to high); `enhance` is the one-shot prompt rewrite that ran on Haiku 4.5 with no thinking, so it gets
  * 'low'. Lowering a phase below its old behaviour is a measured follow-up. Other APIs ignore the option.
  */

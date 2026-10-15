@@ -24,7 +24,7 @@ import {
   failClosedRoute,
   pickRunModel,
 } from './lib/autoRouter';
-import { type SupportedProvider, usdToMicroUsd } from './lib/piAi';
+import { type SupportedProvider, effortOptions, usdToMicroUsd } from './lib/piAi';
 import { QUALITY_GATE_MAX_REPAIRS } from './lib/qualityGate';
 import { lintKit } from './lib/staticLint';
 
@@ -187,7 +187,7 @@ export const enhance = action({
     };
     const result = await piComplete(model, ctxObj, {
       maxTokens: OUTPUT_CAPS.enhance,
-      effort: PHASE_EFFORT.enhance,
+      ...effortOptions(PHASE_EFFORT.enhance),
     });
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
@@ -510,7 +510,7 @@ export const explainParity = action({
               },
             ],
           },
-          { maxTokens: OUTPUT_CAPS.explain, effort: PHASE_EFFORT.advise },
+          { maxTokens: OUTPUT_CAPS.explain, ...effortOptions(PHASE_EFFORT.advise) },
         ),
         25_000,
         'parity explanation',
@@ -760,7 +760,7 @@ export const runAgentLoop = internalAction({
       try {
         result = await piComplete(model, ctxObj, {
           maxTokens: OUTPUT_CAPS.agentLoop,
-          effort: PHASE_EFFORT[phase],
+          ...effortOptions(PHASE_EFFORT[phase]),
         });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {

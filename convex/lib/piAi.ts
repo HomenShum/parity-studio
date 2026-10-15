@@ -87,12 +87,50 @@ export interface CallResult {
   provider: SupportedProvider;
   stopReason: AssistantMessage['stopReason'];
   /**
-   * The `model` string the provider returned. pi-ai records `responseModel` only when it DIFFERS from the requested
-   * id (anthropic-messages.js:453, openai-completions.js:360), so a matching echo arrives as `undefined`; it is
-   * normalised here to the requested id, which is what the provider returned in that case.
+   * The model string the provider itself returned, read off the raw provider stream (Anthropic `message_start.model`,
+   * OpenAI-compatible chunk `model`, Google `modelVersion`), or pi-ai's `responseModel` when it saw a different one.
+   * `null` when the provider returned none (call aborted or failed before any reply): it is never filled in from the
+   * requested id, because pi-ai's Google adapter initialises `model` from the request and ignores `modelVersion`
+   * (google-generative-ai.js:23), so `result.model` would hide a substitution. SPEC A.0.3.
    */
-  echoedModel: string;
+  echoedModel: string | null;
   errorMessage?: string;
+}
+
+/**
+ * Per-call effort that actually governs the current turn. pi-ai 1.1.0 hard-codes the top-level `output_config.effort`
+ * of a managed-effort (Claude 5.5) request to 'high' (anthropic-messages.js:944) and puts the per-call `effort` only
+ * in a trailing `role: 'system'` message after the last user message (:1216). The API applies a per-message effort
+ * change "from the next user turn" (migration guide), and no user turn follows, so the trailing value alone would
+ * leave every phase at 'high'. This sets the top-level value to `effort` as well. Payloads with no
+ * `output_config.effort` (every other API, and pre-5.5 Claude) are left untouched.
+ */
+export function effortOptions(effort: Effort | undefined): {
+  effort?: Effort;
+  onPayload?: (payload: unknown) => unknown;
+} {
+  if (effort === undefined) return {};
+  return {
+    effort,
+    onPayload: (payload) => {
+      const p = payload as { output_config?: { effort?: unknown } } | null;
+      if (p?.output_config?.effort === undefined) return undefined;
+      return { ...p, output_config: { ...p.output_config, effort } };
+    },
+  };
+}
+
+/** The model string a raw provider stream event carries, if any (see `CallResult.echoedModel`). */
+function eventModel(data: unknown): string | undefined {
+  const d = data as {
+    message?: { model?: unknown };
+    model?: unknown;
+    modelVersion?: unknown;
+  } | null;
+  for (const v of [d?.message?.model, d?.model, d?.modelVersion]) {
+    if (typeof v === 'string' && v !== '') return v;
+  }
+  return undefined;
 }
 
 /** Convert USD float to integer micro-cents (avoids float drift on summation). */
@@ -185,7 +223,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
-    ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
+    ...effortOptions(opts.effort),
     ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };
 
@@ -197,8 +235,13 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   let lastResult: Awaited<ReturnType<typeof piComplete>> | undefined;
   let completionAttempts = 0;
   let spentUsd = 0;
+  let providerModel: string | undefined;
+  const onProviderStreamEvent = (data: unknown) => {
+    providerModel = eventModel(data) ?? providerModel;
+  };
   for (let attempt = 0; attempt <= MAX_SOFT_RETRIES; attempt += 1) {
-    lastResult = await piComplete(model, context, baseOptions);
+    providerModel = undefined;
+    lastResult = await piComplete(model, context, { ...baseOptions, onProviderStreamEvent });
     completionAttempts += 1;
     spentUsd += Number.isFinite(lastResult.usage.cost.total) ? lastResult.usage.cost.total : 0;
     const isSoftError =
@@ -224,7 +267,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     provider: opts.provider,
     modelUsed: result.model,
     stopReason: result.stopReason,
-    echoedModel: result.responseModel ?? result.model,
+    echoedModel: providerModel ?? result.responseModel ?? null,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
   return out;

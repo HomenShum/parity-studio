@@ -15,7 +15,7 @@
  * Spend is bounded per dispatch, not just up front. `call()` soft-retries OpenRouter up to `maxAttempts` times and
  * sums every attempt's cost, so before each cell the harness requires spentUsd + (attempts x single-attempt worst
  * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: with the MCP cells the one-attempt
- * worst case is ~$1.01, so a real run passes 2); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
+ * worst case is ~$1.02, so a real run passes 2); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
  * review treats as an incomplete run, never a pass. The all-attempts worst case is printed before any call.
  * `budget.requests` and each row's `transportRequests` are counted at the transport (a wrapper around the global
  * `fetch` pi-ai sends through), so they include pi-ai's own HTTP retries of a 429/5xx. `completionAttempts` is the
@@ -33,15 +33,20 @@
  *
  * Row fields: `requestedModel` is the SPEC 1.2 id the cell claims to test (a literal below, independent of the
  * code); `resolvedModel` is what `resolveRunModel` returned for that cell's tier and phase (asserted equal BEFORE
- * any spend); `echoedModel` is `CallResult.echoedModel` (pi-ai's `responseModel` when the provider echoed a
- * different id, else the requested id).
+ * any spend); `echoedModel` is `CallResult.echoedModel`, the model string read off the provider's own reply (null
+ * when none came, which rejects the row). `effortOnWire` is the effort the dispatched Anthropic request carried,
+ * read at the transport: the top-level `output_config.effort` (which governs the turn) and the trailing system
+ * message's (applied only from the next user turn). A row is accepted only when `rowFailure` finds nothing: the
+ * call finished with stopReason 'stop' (an aborted, errored or truncated call is not evidence), at least one
+ * request reached the transport, the provider returned a model, and the top-level effort equals the cell's.
+ * `effortOnWire` shows what was SENT; the provider does not report the effort it applied.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel } from '@earendil-works/pi-ai/compat';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { OUTPUT_CAPS, PHASE_EFFORT, type Phase, resolveRunModel } from './autoRouter';
 import { type Effort, call, maxAttempts } from './piAi';
 
@@ -80,6 +85,29 @@ const JUDGE_PROMPT =
 
 const PROMPT =
   'In about 300 words, explain how a design-token pipeline turns brand colors into CSS custom properties.';
+// The three video verifiers (scripts/verify-*-demo-gemini.mjs) default GEMINI_VIDEO_MODEL to this id; the cell
+// calls whatever they ship (all three must agree), so editing a script's default changes what the receipt tests.
+const GEMINI_VIDEO_SCRIPTS = [
+  'verify-demo-video-gemini.mjs',
+  'verify-current-workflows-demo-gemini.mjs',
+  'verify-readme-proof-demo-gemini.mjs',
+];
+function videoVerifierDefaultModel(): string {
+  const ids = new Set(
+    GEMINI_VIDEO_SCRIPTS.map((file) => {
+      const src = readFileSync(
+        fileURLToPath(new URL(`../../scripts/${file}`, import.meta.url)),
+        'utf8',
+      );
+      const m = /GEMINI_VIDEO_MODEL \?\? '([^']+)'/.exec(src);
+      if (m?.[1] === undefined) throw new Error(`${file}: no GEMINI_VIDEO_MODEL default found`);
+      return m[1];
+    }),
+  );
+  if (ids.size !== 1) throw new Error(`video verifiers disagree on the default: ${[...ids]}`);
+  return [...ids][0] as string;
+}
+
 // One call per changed phase, plus the kimi-k2.6 phases whose caps became real (they were ignored before the
 // maxTokens fix) and the FREE-tier replacement. Opus decompose differs from Opus advise only in cap (24000 vs
 // 16000, both far below the model max), so it is not repeated.
@@ -127,6 +155,16 @@ const CELLS: Cell[] = [
     effort: PHASE_EFFORT.generate,
   },
   {
+    // Native Google generateContent, the transport the three video verifiers use (SPEC section D: one keyed call
+    // per repo confirms the migrated gemini-3.8-flash). Text-only: it proves the id, key and request shape are
+    // accepted, not video understanding.
+    phase: 'video verifiers (scripts/verify-*-demo-gemini.mjs default)',
+    expected: 'google:gemini-3.8-flash',
+    resolve: () => ({ provider: 'google', modelId: videoVerifierDefaultModel() }),
+    cap: 4_000,
+    effort: 'high', // ignored by the Google API
+  },
+  {
     phase: 'MCP visual judge (index.ts:365, frozen default)',
     expected: 'google:gemini-3.1-pro-preview',
     resolve: () => ({ provider: 'google', modelId: 'gemini-3.1-pro-preview' }),
@@ -152,13 +190,20 @@ const CELLS: Cell[] = [
 
 const INPUT_TOKENS_UPPER = 200;
 
-// Transport-level request counter: every pi-ai request goes through the global fetch.
+// Transport-level request counter and request-body capture: every pi-ai request goes through the global fetch.
 let transportRequests = 0;
+const sentBodies: Array<Record<string, unknown> | null> = [];
 const realFetch = globalThis.fetch;
 beforeAll(() => {
   if (process.env['PARITY_LIVE_RECEIPT'] !== '1') return;
   globalThis.fetch = ((...args: Parameters<typeof fetch>) => {
     transportRequests += 1;
+    const body = args[1]?.body;
+    try {
+      sentBodies.push(typeof body === 'string' ? JSON.parse(body) : null);
+    } catch {
+      sentBodies.push(null);
+    }
     return realFetch(...args);
   }) as typeof fetch;
 });
@@ -180,6 +225,113 @@ const worstCaseUsd = CELLS.reduce((sum, c) => {
   const route = c.resolve();
   return sum + maxAttempts(route.provider) * singleAttemptUsd(route, c.cap);
 }, 0);
+
+/** What a cell's call left behind, as seen at the provider and the transport. */
+interface RowEvidence {
+  stopReason: string;
+  errorMessage?: string;
+  echoedModel: string | null;
+  transportRequests: number;
+  /** Anthropic-API rows only (effort is ignored elsewhere): the requested effort and what the request carried. */
+  effort: { requested: Effort; topLevel?: string; trailing?: string } | null;
+}
+
+/** Why a row is NOT receipt evidence, or null when it is (SPEC A.0.3, A.2.7: one real keyed call per phase). */
+function rowFailure(e: RowEvidence): string | null {
+  if (e.stopReason !== 'stop') {
+    return `call did not complete: stopReason '${e.stopReason}' (need 'stop')${e.errorMessage ? `: ${e.errorMessage}` : ''}`;
+  }
+  if (e.transportRequests < 1) return 'no request reached the transport';
+  if (e.echoedModel === null || e.echoedModel === '') return 'the provider returned no model';
+  if (e.effort !== null) {
+    const { requested, topLevel, trailing } = e.effort;
+    if (topLevel !== requested || trailing !== requested) {
+      return `effort on the wire (top level ${topLevel}, trailing ${trailing}) is not the requested ${requested}`;
+    }
+  }
+  return null;
+}
+
+/** The effort the last Anthropic-shaped request since `from` carried, top-level and in the trailing message. */
+function effortOnWire(
+  from: number,
+  requested: Effort,
+): { requested: Effort; topLevel?: string; trailing?: string } {
+  const body = sentBodies
+    .slice(from)
+    .reverse()
+    .find((b) => b?.['output_config'] !== undefined);
+  const messages = (body?.['messages'] ?? []) as Array<{ output_config?: { effort?: string } }>;
+  const topLevel = (body?.['output_config'] as { effort?: string } | undefined)?.effort;
+  const trailing = messages.at(-1)?.output_config?.effort;
+  return {
+    requested,
+    ...(topLevel !== undefined ? { topLevel } : {}),
+    ...(trailing !== undefined ? { trailing } : {}),
+  };
+}
+
+describe('receipt row acceptance (SPEC A.0.3), no spend', () => {
+  const good: RowEvidence = {
+    stopReason: 'stop',
+    echoedModel: 'claude-haiku-5-5',
+    transportRequests: 1,
+    effort: { requested: 'low', topLevel: 'low', trailing: 'low' },
+  };
+  it('accepts a completed, echoed, correctly-effort call', () => {
+    expect(rowFailure(good)).toBeNull();
+    expect(rowFailure({ ...good, effort: null })).toBeNull();
+  });
+  it.each(['error', 'length', 'aborted', 'pending', 'toolUse'])(
+    'rejects stopReason %s',
+    (stopReason) => {
+      expect(rowFailure({ ...good, stopReason })).toMatch(/did not complete/);
+    },
+  );
+  it('rejects a row with no transport request, no provider echo, or the wrong effort on the wire', () => {
+    expect(rowFailure({ ...good, transportRequests: 0 })).toMatch(/transport/);
+    expect(rowFailure({ ...good, echoedModel: null })).toMatch(/no model/);
+    expect(
+      rowFailure({ ...good, effort: { requested: 'low', topLevel: 'high', trailing: 'low' } }),
+    ).toMatch(/effort on the wire/);
+    expect(
+      rowFailure({ ...good, effort: { requested: 'low', topLevel: 'low', trailing: 'high' } }),
+    ).toMatch(/effort on the wire/);
+  });
+  it('a call() cut off by an already-aborted signal (the 180 s timeout case) is rejected', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('the aborted call must not reach the transport');
+      }),
+    );
+    try {
+      const result = await call({
+        provider: 'anthropic',
+        modelId: 'claude-haiku-5-5',
+        systemPrompt: 's',
+        userText: 'u',
+        maxTokens: 10,
+        effort: 'low',
+        signal: AbortSignal.abort(),
+      });
+      expect(result.stopReason).toBe('aborted');
+      expect(result.echoedModel).toBeNull();
+      expect(
+        rowFailure({
+          stopReason: result.stopReason,
+          echoedModel: result.echoedModel,
+          transportRequests: 0,
+          effort: null,
+        }),
+      ).toMatch(/did not complete/);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+});
 
 const git = (...args: string[]): string =>
   execFileSync('git', args, {
@@ -222,6 +374,9 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
           signal: AbortSignal.timeout(180_000),
         });
         spentUsd += result.costMicroUsd / 1_000_000;
+        const transportCount = transportRequests - requestsBefore;
+        const effort =
+          route.provider === 'anthropic' ? effortOnWire(requestsBefore, cell.effort) : null;
         rows.push({
           phase: cell.phase,
           requestedModel: cell.expected,
@@ -230,16 +385,22 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
           usage: { input: result.inputTokens, output: result.outputTokens, cap: cell.cap },
           stopReason: result.stopReason,
           completionAttempts: result.completionAttempts,
-          transportRequests: transportRequests - requestsBefore,
+          transportRequests: transportCount,
+          effortOnWire: effort,
           costUsd: result.costMicroUsd / 1_000_000,
           // call() dispatches exactly the id it is given; there is no fallback hop in this path.
           fallbackUsed: false,
         });
-        expect(result.stopReason, `${cell.phase}: ${result.errorMessage ?? ''}`).not.toBe('error');
-        expect(result.stopReason, `${cell.phase} truncated at its ${cell.cap} cap`).not.toBe(
-          'length',
-        );
-        expect(result.echoedModel, `${cell.phase} echoed model`).toBeTruthy();
+        expect(
+          rowFailure({
+            stopReason: result.stopReason,
+            ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+            echoedModel: result.echoedModel,
+            transportRequests: transportCount,
+            effort,
+          }),
+          `${cell.phase} (cap ${cell.cap})`,
+        ).toBeNull();
       }
 
       const receipt = {

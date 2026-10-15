@@ -82,9 +82,8 @@ describe('llmClient request shape (Claude 5.5)', () => {
       }
       expect(body['max_tokens']).toBe(321);
       if (wire.endsWith('-5-5')) {
-        // The effort that applies is the trailing system message's; the top-level output_config is hard-coded
-        // 'high' by pi-ai 1.1.0 and cannot see it.
-        expect(body['output_config']).toEqual({ effort: 'high' });
+        // The top-level output_config governs the turn (the trailing message applies from the next user turn).
+        expect(body['output_config']).toEqual({ effort: DEFAULT_EFFORT });
         const messages = body['messages'] as Array<{ role: string; output_config?: unknown }>;
         expect(messages.at(-1)).toMatchObject({
           role: 'system',
@@ -94,7 +93,7 @@ describe('llmClient request shape (Claude 5.5)', () => {
     });
   }
 
-  it('an explicit effort reaches the trailing system message', async () => {
+  it('an explicit effort governs the turn: top-level output_config and the trailing message agree', async () => {
     await call({
       provider: 'anthropic',
       modelId: 'claude-opus-5-5',
@@ -106,6 +105,7 @@ describe('llmClient request shape (Claude 5.5)', () => {
       role: string;
       output_config?: unknown;
     }>;
+    expect(bodies[0]?.body['output_config']).toEqual({ effort: 'medium' });
     expect(messages.at(-1)).toMatchObject({ role: 'system', output_config: { effort: 'medium' } });
   });
 

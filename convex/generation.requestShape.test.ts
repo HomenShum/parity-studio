@@ -54,10 +54,17 @@ const handlerOf = (registered: unknown): ((ctx: any, args: any) => Promise<any>)
 const generateHandler = handlerOf(generateInitial);
 const decomposeHandler = handlerOf(decompose);
 
+/** The effort that governs the turn on a managed-effort 5.5 model: the top-level `output_config.effort`. */
 function activeEffort(body: Body): unknown {
   const messages = body['messages'] as Array<{ role: string; output_config?: { effort?: string } }>;
   expect(messages.at(-1)?.role, 'trailing effort message').toBe('system');
-  return messages.at(-1)?.output_config?.effort;
+  const topLevel = (body['output_config'] as { effort?: string } | undefined)?.effort;
+  // The API applies a per-message effort from the NEXT user turn and none follows, so the top-level value is the
+  // one that governs this turn: it must carry the phase effort, and the trailing message must agree with it.
+  expect(messages.at(-1)?.output_config?.effort, 'trailing effort agrees with top level').toBe(
+    topLevel,
+  );
+  return topLevel;
 }
 
 describe('generation pipeline builds the SPEC 1.2 request', () => {

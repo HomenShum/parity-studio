@@ -5,8 +5,9 @@
  *  - `costMicroUsd` and `completionAttempts` cover every OpenRouter soft retry, not just the attempt whose text is
  *    returned (the live harness budgets its spend from them). `completionAttempts` is NOT a request count: pi-ai's own
  *    HTTP retries happen inside one completion, so the live harness counts requests at the transport instead;
- *  - `echoedModel` is the provider-returned model, which pi-ai reports as `responseModel` only when it DIFFERS from
- *    the requested id, so a matching echo must still come back non-empty.
+ *  - `echoedModel` is the model string the provider returned, read off the raw provider stream: a matching echo is
+ *    that string, a different one is reported as returned (Google's `modelVersion` included, which pi-ai's Google
+ *    adapter ignores), and a call that never got a reply has none (null), never the requested id.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { call, maxAttempts } from './piAi';
@@ -76,6 +77,19 @@ const openRouterReply = (finish: string): Response =>
     },
   ]);
 
+/** A Google generateContent stream whose provider-returned `modelVersion` is `returned`. */
+const googleReply = (returned: string | undefined): Response =>
+  new Response(
+    `data: ${JSON.stringify({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+      ...(returned !== undefined ? { modelVersion: returned } : {}),
+    })}
+
+`,
+    { status: 200, headers: { 'content-type': 'text/event-stream' } },
+  );
+
 let replies: Array<() => Response> = [];
 let requests = 0;
 
@@ -84,6 +98,7 @@ beforeEach(() => {
   requests = 0;
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-key-not-real');
   vi.stubEnv('OPENROUTER_API_KEY', 'test-key-not-real');
+  vi.stubEnv('GEMINI_API_KEY', 'test-key-not-real');
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => {
@@ -171,7 +186,7 @@ describe('call() accounts for every attempt (SPEC A.0.3)', () => {
 });
 
 describe('call() echoedModel (SPEC A.0.3)', () => {
-  it('a matching provider echo (pi-ai leaves responseModel unset) is the requested id, not empty', async () => {
+  it('a matching provider echo (pi-ai leaves responseModel unset) is the string the provider returned', async () => {
     replies = [() => anthropicReply('claude-haiku-5-5')];
     const result = await call({
       provider: 'anthropic',
@@ -190,5 +205,36 @@ describe('call() echoedModel (SPEC A.0.3)', () => {
       ...base,
     });
     expect(result.echoedModel).toBe('claude-haiku-5-5-substitute');
+  });
+
+  it('Google: modelVersion is the echo, so a substituted model is not hidden behind the requested id', async () => {
+    replies = [() => googleReply('gemini-provider-substitution-for-review')];
+    const result = await call({
+      provider: 'google',
+      modelId: 'gemini-3.1-pro-preview',
+      ...base,
+    });
+    expect(result.stopReason).toBe('stop');
+    expect(result.modelUsed).toBe('gemini-3.1-pro-preview');
+    expect(result.echoedModel).toBe('gemini-provider-substitution-for-review');
+  });
+
+  it('Google: a reply with no modelVersion has no echo (null), not the requested id', async () => {
+    replies = [() => googleReply(undefined)];
+    const result = await call({ provider: 'google', modelId: 'gemini-3.1-pro-preview', ...base });
+    expect(result.stopReason).toBe('stop');
+    expect(result.echoedModel).toBeNull();
+  });
+
+  it('an aborted call that never reached the provider has no echo', async () => {
+    const result = await call({
+      provider: 'anthropic',
+      modelId: 'claude-haiku-5-5',
+      ...base,
+      signal: AbortSignal.abort(),
+    });
+    expect(result.stopReason).toBe('aborted');
+    expect(requests).toBe(0);
+    expect(result.echoedModel).toBeNull();
   });
 });

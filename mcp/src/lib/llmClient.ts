@@ -56,9 +56,10 @@ export type SupportedProvider =
   | 'mistral';
 
 /**
- * Anthropic effort for the managed-effort Claude 5.5 models (SPEC 1.3). pi-ai 1.1.0 reads `options.effort` and puts
- * it into the trailing system message's `output_config`; the top-level `output_config.effort` stays hard-coded
- * 'high' and is not what applies. Ignored by every other API.
+ * Anthropic effort for the managed-effort Claude 5.5 models (SPEC 1.3). pi-ai 1.1.0 hard-codes the top-level
+ * `output_config.effort` to 'high' (anthropic-messages.js:944) and carries `options.effort` only in a trailing system
+ * message (:1216), which the API applies from the NEXT user turn, not to this one. `effortOptions` below also sets the
+ * top-level value so the requested effort is what governs the turn. Ignored by every other API.
  */
 export type Effort = 'low' | 'medium' | 'high';
 
@@ -68,6 +69,24 @@ export type Effort = 'low' | 'medium' | 'high';
  * 'medium'; lowering any phase is a measured follow-up, not part of the refresh.
  */
 export const DEFAULT_EFFORT: Effort = 'high';
+
+/**
+ * Same as `effortOptions` in convex/lib/piAi.ts (the MCP package is built from `src/` alone and cannot import it):
+ * rewrite a managed-effort payload's top-level `output_config.effort`; leave every other payload untouched.
+ */
+function effortOptions(effort: Effort): {
+  effort: Effort;
+  onPayload: (payload: unknown) => unknown;
+} {
+  return {
+    effort,
+    onPayload: (payload) => {
+      const p = payload as { output_config?: { effort?: unknown } } | null;
+      if (p?.output_config?.effort === undefined) return undefined;
+      return { ...p, output_config: { ...p.output_config, effort } };
+    },
+  };
+}
 
 export interface VisionInput {
   base64: string;
@@ -220,7 +239,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   };
 
   const result = await piComplete(model, context, {
-    effort: opts.effort ?? DEFAULT_EFFORT,
+    ...effortOptions(opts.effort ?? DEFAULT_EFFORT),
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
   });
