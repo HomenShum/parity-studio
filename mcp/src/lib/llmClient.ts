@@ -129,6 +129,9 @@ export interface CallOptions {
   signal?: AbortSignal;
   /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
   baseUrl?: string;
+  /** Names the stage and what is lost, in the error `call` throws for an unfinished reply. */
+  stage?: string;
+  consequence?: string;
 }
 
 export interface CallResult {
@@ -242,7 +245,8 @@ export class IncompleteCompletionError extends Error {
  * Throws unless the reply finished (stopReason 'stop'). The caps in this package are real (`maxTokens` reaches the
  * wire), so a reply can end at the cap ('length'), be refused or fail ('error': pi-ai maps Anthropic 'refusal'
  * here) or be aborted, and its text is then a partial artifact: parsing it would return a cut-off kit or judge
- * rubric as a success, or replace a complete stored kit with it. Every caller that parses `text` calls this first.
+ * rubric as a success, or replace a complete stored kit with it. `call` runs this on every reply, so no caller
+ * (including the vendored NodeSlide tools, which only reject 'error') ever sees an unfinished one.
  * The thrown error carries `costUsd`, because the provider billed for the reply either way.
  */
 export function assertCompleted(result: CallResult, stage: string, consequence: string): void {
@@ -265,9 +269,8 @@ export function assertCompleted(result: CallResult, stage: string, consequence: 
  * Error handling per agentic_reliability HONEST_STATUS:
  * - Network/auth errors throw (callers wrap with try/catch and surface
  *   structured error in MCP tool response)
- * - Model returns stopReason='error' -> CallResult with errorMessage set
- * - Model returns stopReason='length' -> CallResult; caller decides whether
- *   to retry with larger maxTokens
+ * - Any reply that did not finish (stopReason other than 'stop': 'length', 'error', 'aborted', ...) ->
+ *   IncompleteCompletionError carrying the billed cost, via `assertCompleted`
  */
 export async function call(opts: CallOptions): Promise<CallResult> {
   const { provider, modelId: canonicalId } = resolveWire(opts.provider, opts.modelId);
@@ -321,6 +324,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     stopReason: result.stopReason,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
+  assertCompleted(out, opts.stage ?? 'completion', opts.consequence ?? 'the reply was discarded');
   return out;
 }
 

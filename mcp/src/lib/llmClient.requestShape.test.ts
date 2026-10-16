@@ -8,12 +8,26 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireLocalKeys } from './byok';
-import { DEFAULT_EFFORT, VERIFIED_FREE_MODEL, WIRE_IDS, call, callByModel } from './llmClient';
+import {
+  DEFAULT_EFFORT,
+  IncompleteCompletionError,
+  VERIFIED_FREE_MODEL,
+  WIRE_IDS,
+  call,
+  callByModel,
+} from './llmClient';
 
 // The first request per provider lazy-loads that provider's SDK (3 s+ on a cold machine).
 vi.setConfig({ testTimeout: 30_000 });
 
 let bodies: Array<{ url: string; body: Record<string, unknown> }> = [];
+
+// The fake transport answers 400, which call() reports as IncompleteCompletionError (it throws for any reply that
+// did not finish). These cases assert on the request that was built, so only that error is tolerated.
+const sendFake = (opts: Parameters<typeof call>[0]) =>
+  call(opts).catch((err: unknown) => {
+    if (!(err instanceof IncompleteCompletionError)) throw err;
+  });
 
 beforeEach(() => {
   bodies = [];
@@ -62,7 +76,7 @@ describe('llmClient request shape (Claude 5.5)', () => {
 
   for (const [input, wire] of cases) {
     it(`${input} -> wire model ${wire}, no forbidden keys, caller cap honoured`, async () => {
-      await call({
+      await sendFake({
         provider: 'anthropic',
         modelId: input,
         systemPrompt: 's',
@@ -96,7 +110,7 @@ describe('llmClient request shape (Claude 5.5)', () => {
   }
 
   it('an explicit effort governs the turn: top-level output_config and the trailing message agree', async () => {
-    await call({
+    await sendFake({
       provider: 'anthropic',
       modelId: 'claude-opus-5-5',
       systemPrompt: 's',

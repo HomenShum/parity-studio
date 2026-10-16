@@ -513,17 +513,19 @@ export const explainParity = action({
     // What the provider billed for a reply that is then rejected below (cut off, refused, empty): the fallback text
     // is free but the request was not, and adaptive thinking can use up the whole 4,000-token cap.
     let billedMicroUsd = 0;
+    // Outside the try (A.0.10): an unknown non-free PARITY_EXPLAIN_MODEL or stale stored override throws here, at the
+    // public action boundary, instead of being swallowed into the rule-based text. Only provider/transport failures
+    // below fall back.
+    const routed = resolvePhaseModel({
+      runId,
+      run,
+      phase: 'advise',
+      fallbackProvider: ENHANCE_PROVIDER,
+      fallbackModel: ENHANCE_MODEL,
+      providerEnvKey: 'PARITY_EXPLAIN_PROVIDER',
+      modelEnvKey: 'PARITY_EXPLAIN_MODEL',
+    });
     try {
-      // Inside the try, as on main: an unknown id falls back to the rule-based explanation instead of throwing.
-      const routed = resolvePhaseModel({
-        runId,
-        run,
-        phase: 'advise',
-        fallbackProvider: ENHANCE_PROVIDER,
-        fallbackModel: ENHANCE_MODEL,
-        providerEnvKey: 'PARITY_EXPLAIN_PROVIDER',
-        modelEnvKey: 'PARITY_EXPLAIN_MODEL',
-      });
       // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
       const model = (getModel as any)(routed.provider, routed.modelId);
       const result = await withTimeout(

@@ -63,7 +63,7 @@ import {
   parseFigmaBridgeJson,
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
-import { IncompleteCompletionError, assertCompleted, callByModel } from './lib/llmClient.js';
+import { IncompleteCompletionError, callByModel } from './lib/llmClient.js';
 import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
@@ -232,9 +232,9 @@ async function handleDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
+    stage: 'decompose stage',
+    consequence: 'no kit was returned',
   });
-
-  assertCompleted(result, 'decompose stage', 'no kit was returned');
 
   const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
   return {
@@ -655,8 +655,9 @@ async function handlePlatformToUiKit(args: {
         designMission: args.designMission,
       }),
       maxTokens: 24_000,
+      stage: 'platform decompose',
+      consequence: 'no kit was returned',
     });
-    assertCompleted(result, 'platform decompose', 'no kit was returned');
     let parsed = parseUiKitResponse(result.text, args.fallbackSlug);
     const latencyMs = Date.now() - t0;
     if (Object.keys(parsed.files).length === 0) {
@@ -1204,8 +1205,9 @@ async function handlePipeline(args: {
           ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
           : {}),
         maxTokens: 16_000,
+        stage: 'generate stage',
+        consequence: 'no artifact was produced',
       });
-      assertCompleted(gen, 'generate stage', 'no artifact was produced');
       artifactHtml = stripWrappingFences(gen.text);
       totalCostUsd += gen.costUsd;
       generateLatencyMs = Date.now() - t0;
@@ -1678,8 +1680,9 @@ async function runDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
+    stage: 'decompose stage',
+    consequence: 'no kit was stored',
   });
-  assertCompleted(dec, 'decompose stage', 'no kit was stored');
   const parsed = parseUiKitResponse(dec.text);
   const latencyMs = Date.now() - t0;
 
@@ -1772,8 +1775,9 @@ ${args.artifactHtml.slice(0, 8_000)}`;
     systemPrompt: ITERATE_SYSTEM,
     userText,
     maxTokens: 24_000,
+    stage: 'iterate stage',
+    consequence: 'the previous kit was kept',
   });
-  assertCompleted(result, 'iterate stage', 'the previous kit was kept');
   const parsed = parseUiKitResponse(result.text);
   const latencyMs = Date.now() - t0;
 

@@ -341,10 +341,21 @@ describe('env overrides still win over a run override the resolver would reject 
     expect(errorTurns()[0]).toMatch(/Unknown model "made-up\/other-paid-model"/);
   });
 
-  it('explainParity with an unknown stored override falls back to the rule-based explanation, zero requests', async () => {
-    const out = await explainHandler(fakeCtx(badRun, []), { runId: RUN_ID });
+  // A.0.10: an unknown non-free id throws at the first resolver and again at the public action boundary; it is not
+  // swallowed into the rule-based text (which reported success, provider 'local', $0).
+  it('explainParity with an unknown stored override throws at the action boundary, zero requests', async () => {
+    await expect(explainHandler(fakeCtx(badRun, []), { runId: RUN_ID })).rejects.toThrow(
+      /Unknown model/,
+    );
     expect(bodies).toHaveLength(0);
-    expect(out).toMatchObject({ modelUsed: 'rule-based', provider: 'local', costMicroUsd: 0 });
+  });
+
+  it('explainParity with an unknown non-free PARITY_EXPLAIN_MODEL throws, zero requests', async () => {
+    vi.stubEnv('PARITY_EXPLAIN_MODEL', 'made-up/other-paid-model');
+    await expect(
+      explainHandler(fakeCtx({ tier: 'balanced' }, []), { runId: RUN_ID }),
+    ).rejects.toThrow(/Unknown model "made-up\/other-paid-model"/);
+    expect(bodies).toHaveLength(0);
   });
 });
 

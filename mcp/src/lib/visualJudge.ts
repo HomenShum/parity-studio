@@ -1,5 +1,5 @@
 import { requireLocalKeys } from './byok.js';
-import { assertCompleted, callByModel } from './llmClient.js';
+import { callByModel } from './llmClient.js';
 import { type ParityReport, statusFromBooleans } from './parityChecker.js';
 import { VISUAL_JUDGE_SYSTEM } from './prompts.js';
 import { renderHtmlToPng } from './render.js';
@@ -37,12 +37,11 @@ export async function runVisualJudge(args: {
       'IMAGE 1 = SOURCE (reference). IMAGE 2 = RENDERED candidate.\nReturn the JSON rubric described above.',
     userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType },
     maxTokens: 4_000,
+    // A reply cut off at the cap (or failed) has no complete rubric. call() throws for it, with the judge's billed
+    // cost, instead of letting a parse give checks=[] and a silent 0/12 'fail' that reads as a verdict on the candidate.
+    stage: 'visual judge',
+    consequence: 'no score reported',
   });
-
-  // A reply that was cut off at the cap (or failed) has no complete rubric. Parsing it would give checks=[] and a
-  // silent 0/12 'fail' that reads as a verdict on the candidate, so it is reported as a judge failure instead.
-  // The thrown error carries the judge's billed cost so parity_pipeline can still record it.
-  assertCompleted(judge, 'visual judge', 'no score reported');
 
   // Parse JSON loosely — providers sometimes wrap in fences
   const parsed = parseLooseJson(judge.text);
