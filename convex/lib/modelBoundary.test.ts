@@ -11,7 +11,7 @@ import { MODEL_PRESETS } from '../../src/lib/modelRouting';
 import { setModelSelection } from '../runs';
 import { failClosedRoute, resolveRunModel } from './autoRouter';
 import { KNOWN_MODEL_IDS } from './knownModelIds.generated';
-import { assertSelectableModel } from './modelBoundary';
+import { SPEC_FREE_MODELS, assertSelectableModel } from './modelBoundary';
 
 const PROVIDERS = [
   'anthropic',
@@ -84,6 +84,40 @@ describe('assertSelectableModel', () => {
         }
       })();
       expect(boundary, `${provider}:${modelId}`).toBe(resolver);
+    }
+  });
+
+  // SPEC D1: a known id is never silently rerouted to another model.
+  it('a known free id spelled under the wrong provider runs as itself on OpenRouter, not as the verified free constant', () => {
+    for (const modelId of ['google/gemma-4-26b-a4b-it:free', 'google/gemma-4-31b-it:free']) {
+      expect(() => assertSelectableModel('google', modelId), modelId).not.toThrow();
+      expect(failClosedRoute('google', modelId), modelId).toEqual({
+        provider: 'openrouter',
+        modelId,
+      });
+    }
+  });
+
+  it('a SPEC 1.2 free id the pi-ai catalog cannot call is refused at both layers, never rerouted', () => {
+    const modelId = 'nvidia/nemotron-3.5-content-safety:free';
+    for (const provider of ['openrouter', 'google'] as const) {
+      expect(() => assertSelectableModel(provider, modelId), `boundary ${provider}`).toThrow(
+        /known free route/,
+      );
+      expect(() => failClosedRoute(provider, modelId), `resolver ${provider}`).toThrow(
+        /known free route/,
+      );
+    }
+  });
+
+  it('every SPEC 1.2 free id is either callable as itself or refused: none is substituted', () => {
+    const openrouter = new Set(getModels('openrouter' as never).map((m: { id: string }) => m.id));
+    for (const modelId of SPEC_FREE_MODELS) {
+      if (openrouter.has(modelId)) {
+        expect(failClosedRoute('openrouter', modelId)).toEqual({ provider: 'openrouter', modelId });
+      } else {
+        expect(() => failClosedRoute('openrouter', modelId), modelId).toThrow(/known free route/);
+      }
     }
   });
 

@@ -15,6 +15,7 @@ import {
   WIRE_IDS,
   call,
   callByModel,
+  keyProviderFor,
 } from './llmClient';
 
 // The first request per provider lazy-loads that provider's SDK (3 s+ on a cold machine).
@@ -208,6 +209,28 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     expect(bodies).toHaveLength(1);
     expect(bodies[0]?.body['model']).toBe(VERIFIED_FREE_MODEL);
     expect(VERIFIED_FREE_MODEL).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+  });
+
+  // SPEC D1: a known id is never silently rerouted to another model. `google/gemma-...:free` is inferred as
+  // Google, which does not serve it; the exact spelling is in the OpenRouter catalog, so it runs as itself there.
+  it.each(['google/gemma-4-26b-a4b-it:free', 'google/gemma-4-31b-it:free'])(
+    'the known free id %s runs as itself on OpenRouter, not as the verified free constant',
+    async (model) => {
+      expect(keyProviderFor(model)).toBe('openrouter');
+      await callByModel({ model, systemPrompt: 's', userText: 'u' }).catch(() => undefined);
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]?.url).toContain('openrouter.ai');
+      expect(bodies[0]?.body['model']).toBe(model);
+    },
+  );
+
+  it('a SPEC 1.2 free id the catalog cannot call is refused, not rerouted to another model (D1)', async () => {
+    const model = 'nvidia/nemotron-3.5-content-safety:free';
+    await expect(callByModel({ model, systemPrompt: 's', userText: 'u' })).rejects.toThrow(
+      /known free route/,
+    );
+    expect(() => requireLocalKeys([model])).toThrow(/known free route/);
+    expect(bodies).toHaveLength(0);
   });
 
   it('the key precheck follows the route the call will use: an unknown -free id needs the OpenRouter key, not OpenAI', async () => {

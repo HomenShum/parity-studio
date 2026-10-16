@@ -183,11 +183,35 @@ export const WIRE_IDS: Readonly<Record<string, Readonly<Record<string, string>>>
 const FREE_LOOKING = /[:-]free$/i;
 
 /**
+ * The live `:free` list of SPEC 1.2 (fetched 2026-10-10): the free ids that are *known* under D1. Copy of
+ * SPEC_FREE_MODELS in convex/lib/modelBoundary.ts (this package cannot import outside its src); one of them is not
+ * in the pi-ai OpenRouter catalog and must be refused, not rerouted to a different model.
+ */
+const SPEC_FREE_MODELS: readonly string[] = [
+  'apodex/apodex-1.1-mini:free',
+  'dots-studio/dots-3-note-preview:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'thinkingmachines/inkling-small:free',
+  'poolside/laguna-s-2.1:free',
+  'thinkingmachines/inkling:free',
+  'poolside/laguna-xs-2.1:free',
+  'cohere/north-mini-code:free',
+  'nvidia/nemotron-3.5-content-safety:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+];
+
+/**
  * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.4, A.0.5, A.0.10). Caller spellings keep
  * working exactly as before: the explicit table for the dotted OpenRouter slugs, then the exact `${provider}/`
  * prefix strip (`openai/gpt-4o`, `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1` map to the same catalog
- * id `inferProvider` routed them to). Only an id that still misses the catalog fails closed: an unknown
- * free-looking id falls to the verified free constant, any other throws before a request exists.
+ * id `inferProvider` routed them to). Only an id that still misses the catalog fails closed: a free-looking id
+ * the OpenRouter catalog lists runs as itself, a known one it cannot call throws (D1), an unknown one falls to the
+ * verified free constant, and any other throws before a request exists.
  */
 function resolveWire(
   provider: SupportedProvider,
@@ -202,7 +226,20 @@ function resolveWire(
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
   if ((getModels as any)(provider).some((m: { id: string }) => m.id === id))
     return { provider, modelId: id };
-  if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  if (FREE_LOOKING.test(modelId)) {
+    // The exact spelling in the OpenRouter catalog is the same model on its real transport (`google/gemma-...:free`
+    // is inferred as Google, which does not serve it). SPEC 1.2 lists it but the catalog cannot call it: refuse,
+    // since any substitute is a different model (D1). Known nowhere: the verified free constant.
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+    if ((getModels as any)('openrouter').some((m: { id: string }) => m.id === modelId))
+      return { provider: 'openrouter', modelId };
+    if (SPEC_FREE_MODELS.includes(modelId)) {
+      throw new Error(
+        `Model "${modelId}" is a known free route that the pi-ai catalog cannot call; refusing to reroute it to a different model.`,
+      );
+    }
+    return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  }
   throw new Error(
     `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
   );

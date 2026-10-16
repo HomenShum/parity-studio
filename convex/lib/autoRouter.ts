@@ -23,7 +23,7 @@
  */
 
 import { getModels } from '@earendil-works/pi-ai/compat';
-import { FREE_LOOKING } from './modelBoundary';
+import { FREE_LOOKING, freeLookingRoute } from './modelBoundary';
 import type { Effort, SupportedProvider } from './piAi';
 
 // Wire ids this file writes (model-defaults SPEC 1.2, the only source). One constant per id so the tier tables
@@ -405,8 +405,10 @@ export function tierFromRun(run: RunModelConfig | null | undefined): ModelTier {
 /**
  * SPEC A.0.10, applied to the (provider, model) pair that is about to be sent, wherever it came from (the run's
  * override, an env override, or a mix). A pair pi-ai's catalog knows passes through untouched (persisted 4.x rows
- * included). An unknown free-looking id resolves to the verified free constant, so a free request never becomes a
- * paid one; any other unknown id throws here, before a request exists, instead of becoming a TypeError in getModel.
+ * included). A free-looking id the OpenRouter catalog lists runs as itself on OpenRouter; one SPEC 1.2 lists but
+ * the catalog cannot call throws (D1: a known id is never rerouted to another model); an id known nowhere
+ * resolves to the verified free constant, so a free request never becomes a paid one. Any other unknown id
+ * throws here, before a request exists, instead of becoming a TypeError in getModel.
  */
 export function failClosedRoute(
   provider: SupportedProvider,
@@ -417,7 +419,15 @@ export function failClosedRoute(
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
   if ((getModels as any)(provider).some((m: { id: string }) => m.id === modelId))
     return { provider, modelId };
-  if (FREE_LOOKING.test(modelId)) return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  if (FREE_LOOKING.test(modelId)) {
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+    const openrouterIds = (getModels as any)('openrouter').map((m: { id: string }) => m.id);
+    return {
+      provider: 'openrouter',
+      modelId:
+        freeLookingRoute(modelId, openrouterIds) === 'openrouter' ? modelId : VERIFIED_FREE_MODEL,
+    };
+  }
   throw new Error(
     `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
   );

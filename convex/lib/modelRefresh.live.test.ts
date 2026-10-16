@@ -6,23 +6,29 @@
  * did not truncate the answer (stopReason != 'length', the check that guards the BALANCED -> paid-fallback path),
  * and writes a SPEC A.0.3 receipt.
  *
- *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=3 ANTHROPIC_API_KEY=... OPENROUTER_API_KEY=... GEMINI_API_KEY=... \
+ *   PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=2 ANTHROPIC_API_KEY=... GEMINI_API_KEY=... \
  *     pnpm exec vitest run convex/lib/modelRefresh.live.test.ts
+ *
+ * No OpenRouter key is needed or used (SPEC D2: the only key returns 401 'User not found'). Every cell whose resolved
+ * route is OpenRouter is recorded in the receipt as `liveUnverified: 'no key, Homen 2026-10-16'` instead of called,
+ * so the Anthropic and Gemini cells always run and the receipt is always written; a failing Anthropic or Gemini cell
+ * still fails the run with no receipt.
  *
  * Run it on a clean checkout of the PR head (a dirty tree is refused). It then writes
  * evidence/model-refresh/receipt-<headSha>.json: commit that file alone on top of the tested commit (SPEC A.0.3 (a)).
  *
  * Spend is bounded per dispatch, not just up front. `call()` soft-retries OpenRouter up to `maxAttempts` times and
  * sums every attempt's cost, so before each cell the harness requires spentUsd + (attempts x single-attempt worst
- * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: the one-attempt worst case is
- * about $2.6, dominated by the 64,000-token agent-loop cap on Opus and Sonnet, so a real run passes 3); a cell that cannot fit stops the run with `budget.stoppedBy` set, which
- * review treats as an incomplete run, never a pass. The all-attempts worst case is printed before any call.
+ * case) <= PARITY_LIVE_MAX_USD (default 1, which fails closed: the one-attempt worst case is about $1.99, dominated
+ * by the 64,000-token agent-loop cap on Opus and Sonnet, so a real run passes 2); a cell that cannot fit stops the
+ * run with `budget.stoppedBy` set, which review treats as an incomplete run, never a pass. The all-attempts worst case is printed before any call.
  * `budget.requests` and each row's `transportRequests` are counted at the transport (a wrapper around the global
  * `fetch` pi-ai sends through), so they include pi-ai's own HTTP retries of a 429/5xx. `completionAttempts` is the
  * number of completions `call()` asked pi-ai for and is lower whenever pi-ai retried inside one.
  * The Convex `verifyVisual` phase issues no model request, but the MCP server does, and the `maxOutputTokens` ->
  * `maxTokens` fix in mcp/src/lib/llmClient.ts turned every MCP caller's cap into a real cap. The last three cells
- * cover them: the visual judge (mcp/src/lib/visualJudge.ts, cap 4,000, default google/gemini-3.1-pro-preview, run
+ * cover them (only the Google visual judge is called; the kimi-k2.6 and GLM cells are OpenRouter, so
+ * liveUnverified): the visual judge (mcp/src/lib/visualJudge.ts, cap 4,000, default google/gemini-3.1-pro-preview, run
  * with a 12-check rubric-shaped prompt so the cell shows the rubric fits the cap; runVisualJudge reports a judge
  * failure rather than a score when the reply is cut off, but a cap that is too tight would still make every
  * verification fail), decompose/generate (index.ts:238, 724, 1742, 1835 at 24,000 and :1271 at 16,000, default
@@ -118,8 +124,8 @@ function videoVerifierDefaultModel(): string {
 }
 
 // One call per changed phase, plus the kimi-k2.6 phases whose caps became real (they were ignored before the
-// maxTokens fix) and the FREE-tier replacement. Opus decompose differs from Opus advise only in cap (24000 vs
-// 16000, both far below the model max), so it is not repeated.
+// maxTokens fix) and the FREE-tier replacement. The Anthropic and Google cells are called; every OpenRouter cell is
+// recorded liveUnverified (SPEC D2). Advise and execute run at the agent-loop cap (64,000), the largest any phase sends.
 const CELLS: Cell[] = [
   {
     phase: 'enhance',
@@ -214,9 +220,13 @@ const CELLS: Cell[] = [
   },
 ];
 
+/** SPEC D2: no working OpenRouter key exists, so OpenRouter-routed cells are recorded, not called. */
+const LIVE_UNVERIFIED = 'no key, Homen 2026-10-16';
+const isLiveUnverified = (route: Route): boolean => route.provider === 'openrouter';
+
 const INPUT_TOKENS_UPPER = 200;
 /** The budget the header command passes. The estimate must fit it, or the documented command fails closed. */
-const DOCUMENTED_MAX_USD = 3;
+const DOCUMENTED_MAX_USD = 2;
 /** The command as run, with the budget it ran under: re-running it as recorded must reproduce the same gate. */
 const receiptCommand = (maxUsd: number): string =>
   `PARITY_LIVE_RECEIPT=1 PARITY_LIVE_MAX_USD=${maxUsd} pnpm exec vitest run convex/lib/modelRefresh.live.test.ts`;
@@ -260,8 +270,9 @@ function singleAttemptUsd(route: Route, cap: number): number {
   return (INPUT_TOKENS_UPPER * model.cost.input + cap * model.cost.output) / 1_000_000;
 }
 
-const estimateUsd = CELLS.reduce((sum, c) => sum + singleAttemptUsd(c.resolve(), c.cap), 0);
-const worstCaseUsd = CELLS.reduce((sum, c) => {
+const CALLED_CELLS = CELLS.filter((c) => !isLiveUnverified(c.resolve()));
+const estimateUsd = CALLED_CELLS.reduce((sum, c) => sum + singleAttemptUsd(c.resolve(), c.cap), 0);
+const worstCaseUsd = CALLED_CELLS.reduce((sum, c) => {
   const route = c.resolve();
   return sum + maxAttempts(route.provider) * singleAttemptUsd(route, c.cap);
 }, 0);
@@ -312,6 +323,26 @@ function effortOnWire(
 }
 
 describe('receipt harness bookkeeping (SPEC A.0.3), no spend', () => {
+  it('OpenRouter cells are recorded liveUnverified; every Anthropic and Google cell is called (SPEC D2)', () => {
+    for (const c of CELLS) {
+      expect(isLiveUnverified(c.resolve()), c.phase).toBe(c.resolve().provider === 'openrouter');
+    }
+    const called = CALLED_CELLS.map((c) => c.expected);
+    expect(called).toEqual(
+      expect.arrayContaining([
+        'anthropic:claude-haiku-5-5',
+        'anthropic:claude-opus-5-5',
+        'anthropic:claude-sonnet-5-5',
+        'google:gemini-3.8-flash',
+        'google:gemini-3.1-pro-preview',
+      ]),
+    );
+    expect(called.every((id) => id.startsWith('anthropic:') || id.startsWith('google:'))).toBe(
+      true,
+    );
+    // Every OpenRouter cell stays in the receipt as a row, so none is silently dropped.
+    expect(CELLS.length - CALLED_CELLS.length).toBeGreaterThan(0);
+  });
   it('the generate fallback is exercised at the generate cap, the decompose/iterate fallback at theirs', () => {
     const byPhase = Object.fromEntries(CELLS.map((c) => [c.phase, c.cap]));
     expect(byPhase['generate-fallback']).toBe(OUTPUT_CAPS.generate);
@@ -426,6 +457,18 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
         const route = cell.resolve();
         // A.0.3: review rejects resolvedModel != requestedModel, so refuse before any spend.
         expect(routeKey(route), `${cell.phase}: the resolver chose another id`).toBe(cell.expected);
+        if (isLiveUnverified(route)) {
+          rows.push({
+            phase: cell.phase,
+            requestedModel: cell.expected,
+            resolvedModel: routeKey(route),
+            echoedModel: null,
+            liveUnverified: LIVE_UNVERIFIED,
+            costUsd: 0,
+            fallbackUsed: false,
+          });
+          continue;
+        }
         const worstUsd = maxAttempts(route.provider) * singleAttemptUsd(route, cell.cap);
         if (spentUsd + worstUsd > maxUsd) {
           stoppedBy = `budget before ${cell.phase}: spent $${spentUsd.toFixed(4)} + worst case $${worstUsd.toFixed(4)} > $${maxUsd}`;
@@ -475,7 +518,15 @@ describe.skipIf(process.env['PARITY_LIVE_RECEIPT'] !== '1')(
       const receipt = {
         command: receiptCommand(maxUsd),
         candidateIds: CELLS.map((c) => c.expected),
-        echoedModels: rows.map((r) => r['echoedModel']),
+        echoedModels: rows
+          .filter((r) => r['liveUnverified'] === undefined)
+          .map((r) => r['echoedModel']),
+        liveUnverified: {
+          reason: LIVE_UNVERIFIED,
+          requestedModels: rows
+            .filter((r) => r['liveUnverified'] !== undefined)
+            .map((r) => r['requestedModel']),
+        },
         rows,
         testedCommit,
         constantSha256: createHash('sha256')
