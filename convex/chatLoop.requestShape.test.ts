@@ -548,3 +548,111 @@ describe('tool calls on an OpenAI-compatible route (finish_reason stop / tool_ca
     expect(bodies).toHaveLength(1);
   });
 });
+
+// Persona: a builder clicks the sparkle button on a half-written prompt, asks for the parity explanation, or chats
+// with the agent. The reply is plain text (no tool call) and stops mid-sentence: it hit the output cap (adaptive
+// thinking counts toward it, so 4,000 tokens can be used up before the answer is done) or the model refused. Before
+// this fix enhance dropped the half sentence into the composer as a finished rewrite, explainParity showed it as the
+// parity readout, and the agent loop stored it as an ordinary turn. All three must say the reply is unfinished.
+describe('a text-only reply that did not finish is never presented as a finished one', () => {
+  const sse = (type: string, data: unknown) =>
+    `event: ${type}\ndata: ${JSON.stringify({ type, ...(data as object) })}\n\n`;
+  const CUT_OFF = 'Redesign the hero with a soft 12px rad';
+  const OUT_TOKENS = 4_000;
+
+  const textStream = (model: string, stopReason: 'end_turn' | 'max_tokens' | 'refusal') =>
+    [
+      sse('message_start', {
+        message: {
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model,
+          content: [],
+          stop_reason: null,
+          usage: { input_tokens: 10, output_tokens: 1 },
+        },
+      }),
+      sse('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }),
+      sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: CUT_OFF } }),
+      sse('content_block_stop', { index: 0 }),
+      sse('message_delta', {
+        delta: { stop_reason: stopReason },
+        usage: { output_tokens: OUT_TOKENS },
+      }),
+      sse('message_stop', {}),
+    ].join('');
+
+  const stubText = (model: string, stopReason: 'end_turn' | 'max_tokens' | 'refusal') =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+        bodies.push(JSON.parse(String(init?.body ?? '{}')));
+        return new Response(textStream(model, stopReason), {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }),
+    );
+
+  const turns = () => mutationCalls.filter((c) => c.name === 'chat:insertTurn').map((c) => c.args);
+  const unfinished = ['max_tokens', 'refusal'] as const;
+
+  for (const stop of unfinished) {
+    it(`enhance, stop_reason ${stop}: throws, so the UI shows "couldn't enhance"`, async () => {
+      stubText('claude-haiku-5-5', stop);
+      await expect(
+        enhanceHandler(fakeCtx({ tier: 'frontier' }, []), { text: 'make it nicer', runId: RUN_ID }),
+      ).rejects.toThrow(/chat:enhance reply unfinished/);
+      expect(bodies).toHaveLength(1);
+    });
+
+    it(`explainParity, stop_reason ${stop}: the rule-based text, and the billed cost is kept`, async () => {
+      stubText('claude-opus-5-5', stop);
+      const out = await explainHandler(fakeCtx({ tier: 'frontier' }, []), { runId: RUN_ID });
+      expect(bodies).toHaveLength(1);
+      expect(out.modelUsed).toBe('rule-based');
+      expect(out.text).not.toContain(CUT_OFF);
+      // 10 input + 4,000 output tokens at the catalog price of the model that answered.
+      // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+      const price = (getModel as any)('anthropic', 'claude-opus-5-5').cost as {
+        input: number;
+        output: number;
+      };
+      const expected = Math.round(((10 * price.input + OUT_TOKENS * price.output) / 1e6) * 1e6);
+      expect(expected).toBeGreaterThan(0);
+      expect(out.costMicroUsd).toBe(expected);
+    });
+
+    it(`agent loop, stop_reason ${stop}: the user sees an agent error turn, not a plain reply`, async () => {
+      stubText('claude-sonnet-5-5', stop);
+      await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'go' }]), {
+        runId: RUN_ID,
+      });
+      expect(bodies).toHaveLength(1);
+      expect(mutations).not.toContain('uiKits:upsertFileInternal');
+      const last = String(turns().at(-1)?.['content']);
+      expect(last).toMatch(/^\(agent error: /);
+      expect(last).toMatch(stop === 'max_tokens' ? /output cap/ : /ended the reply early/);
+    });
+  }
+
+  it('control: the same text ending in end_turn is a finished reply on all three paths', async () => {
+    stubText('claude-haiku-5-5', 'end_turn');
+    const enhanced = await enhanceHandler(fakeCtx({ tier: 'frontier' }, []), {
+      text: 'make it nicer',
+      runId: RUN_ID,
+    });
+    expect(enhanced.text).toBe(CUT_OFF);
+    stubText('claude-opus-5-5', 'end_turn');
+    const explained = await explainHandler(fakeCtx({ tier: 'frontier' }, []), { runId: RUN_ID });
+    expect(explained.text).toBe(CUT_OFF);
+    expect(explained.modelUsed).not.toBe('rule-based');
+    stubText('claude-sonnet-5-5', 'end_turn');
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'go' }]), {
+      runId: RUN_ID,
+    });
+    const last = String(turns().at(-1)?.['content']);
+    expect(last).toBe(CUT_OFF);
+  });
+});

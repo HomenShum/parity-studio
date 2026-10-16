@@ -42,9 +42,12 @@ export const FREE_FALLBACK_MODEL = 'google/gemma-4-26b-a4b-it:free';
  * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto the
  * paid fallback, so these values are part of the needs-live-eval scope on PR #101 until measured.
  * `agentLoop` sits at what an `upsert_file` can carry (200 KB, about 50-67k tokens): a lower cap would make every
- * large file write truncate. runAgentLoop runs tool calls only from a reply that completed (stopReason 'toolUse'),
- * so a write longer than this fails visibly instead of saving a cut-off file. The MCP caps (llmClient
- * assertCompleted) reject an unfinished reply the same way before anything is parsed or stored.
+ * large file write truncate. A reply counts as completed on stopReason 'toolUse', or 'stop' (pi-ai reports an
+ * OpenAI-compatible finish_reason 'stop' as 'stop' even when tool_calls came with it). runAgentLoop runs tool calls
+ * only from a completed reply and writes an '(agent error: ...)' turn for any other, with or without tool calls, so
+ * a write longer than this fails visibly instead of saving a cut-off file; `enhance` throws and `explainParity`
+ * falls back to its rule-based text (keeping the billed cost). The MCP caps (llmClient assertCompleted) reject an
+ * unfinished reply the same way before anything is parsed or stored.
  */
 export const OUTPUT_CAPS = {
   enhance: 4_000,

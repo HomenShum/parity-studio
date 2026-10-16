@@ -65,11 +65,22 @@ export type SupportedProvider =
 export type Effort = 'low' | 'medium' | 'high';
 
 /**
- * Every phase the MCP server runs (decompose, generate, iterate, judge) ran at 'high' before the refresh (Opus 4.7
- * and Sonnet 4.6 defaulted to high), so that stays the explicit per-phase value. Opus 5.5's own default is
- * 'medium'; lowering any phase is a measured follow-up, not part of the refresh.
+ * Every phase the MCP server runs (decompose, generate, iterate, judge) ran at 'high' on Opus 4.7 and Sonnet 4.6
+ * (both defaulted to high), so that stays the explicit value for Opus and Sonnet 5.5. Opus 5.5's own default is
+ * 'medium'; lowering any phase is a measured follow-up, not part of the refresh. Haiku does not take this value:
+ * see `defaultEffortFor`.
  */
 export const DEFAULT_EFFORT: Effort = 'high';
+
+/**
+ * The effort `call` sends when the caller names none. Haiku 4.5 ran with no thinking and no effort parameter, so
+ * 'high' has no baseline on Haiku 5.5 and would be an unmeasured rise in cost and latency on the cheap model; it
+ * takes Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited. Same rule as `effortFor` in
+ * convex/lib/autoRouter.ts (this package cannot import it); every phase here is a non-`enhance` phase.
+ */
+export function defaultEffortFor(wireModelId: string): Effort {
+  return wireModelId === 'claude-haiku-5-5' ? 'medium' : DEFAULT_EFFORT;
+}
 
 /**
  * Same as `effortOptions` in convex/lib/piAi.ts (the MCP package is built from `src/` alone and cannot import it):
@@ -113,7 +124,7 @@ export interface CallOptions {
   /** Optional vision input. Both fields required if present. Errors if model lacks vision. */
   userImage?: VisionInput;
   maxTokens?: number;
-  /** Anthropic effort; defaults to DEFAULT_EFFORT. */
+  /** Anthropic effort; defaults to `defaultEffortFor(model)`. */
   effort?: Effort;
   signal?: AbortSignal;
   /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
@@ -292,7 +303,7 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   };
 
   const result = await piComplete(model, context, {
-    ...effortOptions(opts.effort ?? DEFAULT_EFFORT),
+    ...effortOptions(opts.effort ?? defaultEffortFor(canonicalId)),
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     ...(opts.maxTokens !== undefined ? { maxTokens: boundedMaxTokens(model, opts.maxTokens) } : {}),
   });

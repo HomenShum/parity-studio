@@ -83,11 +83,13 @@ describe('llmClient request shape (Claude 5.5)', () => {
       expect(body['max_tokens']).toBe(321);
       if (wire.endsWith('-5-5')) {
         // The top-level output_config governs the turn (the trailing message applies from the next user turn).
-        expect(body['output_config']).toEqual({ effort: DEFAULT_EFFORT });
+        // Haiku 5.5 takes its own default 'medium' (Haiku 4.5 never ran thinking, so 'high' has no baseline there).
+        const effort = wire === 'claude-haiku-5-5' ? 'medium' : DEFAULT_EFFORT;
+        expect(body['output_config']).toEqual({ effort });
         const messages = body['messages'] as Array<{ role: string; output_config?: unknown }>;
         expect(messages.at(-1)).toMatchObject({
           role: 'system',
-          output_config: { effort: DEFAULT_EFFORT },
+          output_config: { effort },
         });
       }
     });

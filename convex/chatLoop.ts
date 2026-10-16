@@ -191,6 +191,12 @@ export const enhance = action({
       maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.enhance),
       ...effortOptions(PHASE_EFFORT.enhance),
     });
+    // A rewrite cut off at the cap or refused is not a rewrite: the UI would drop half a prompt into the composer.
+    if (!isCompleted(result)) {
+      throw new Error(
+        `chat:enhance reply unfinished: ${describeUnfinished(result, OUTPUT_CAPS.enhance)}`,
+      );
+    }
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
     if (out.length === 0) {
@@ -218,6 +224,23 @@ Rules:
 - Do not give generic advice like "make one visible iteration" unless you also name the screen area and file path.
 - Fix next should be phrased as an agent-ready user request, e.g. "Ask the agent to rebuild the header/hero/CTA so a visitor understands X and can click Y."
 - No markdown table. No markdown bold/italic. No sales language.`;
+
+/**
+ * A reply is complete only when it ended on its own: 'stop' (end_turn, and OpenAI-compatible finish_reason 'stop',
+ * which pi-ai also reports when tool_calls came with it) or 'toolUse'. 'length' (the output cap, which adaptive
+ * thinking counts toward), 'error' (pi-ai maps Anthropic stop_reason 'refusal' here), 'aborted' and 'pending' carry
+ * text or tool arguments that stop mid-way. Same rule as `assertCompleted` in mcp/src/lib/llmClient.ts.
+ */
+function isCompleted(result: AssistantMessage): boolean {
+  return result.stopReason === 'toolUse' || result.stopReason === 'stop';
+}
+
+/** Why an unfinished reply stopped, for an error message the user reads. */
+function describeUnfinished(result: AssistantMessage, cap: number): string {
+  return result.stopReason === 'length'
+    ? `the reply hit the ${cap.toLocaleString('en-US')}-token output cap`
+    : `the model ended the reply early (${result.stopReason}${result.errorMessage ? `: ${result.errorMessage}` : ''})`;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -487,6 +510,9 @@ export const explainParity = action({
       context,
     };
 
+    // What the provider billed for a reply that is then rejected below (cut off, refused, empty): the fallback text
+    // is free but the request was not, and adaptive thinking can use up the whole 4,000-token cap.
+    let billedMicroUsd = 0;
     try {
       // Inside the try, as on main: an unknown id falls back to the rule-based explanation instead of throwing.
       const routed = resolvePhaseModel({
@@ -521,6 +547,12 @@ export const explainParity = action({
         25_000,
         'parity explanation',
       );
+      billedMicroUsd = usdToMicroUsd(result.usage?.cost?.total ?? 0);
+      if (!isCompleted(result)) {
+        throw new Error(
+          `parity explanation unfinished: ${describeUnfinished(result, OUTPUT_CAPS.explain)}`,
+        );
+      }
       const textBlocks = result.content.filter(
         (block): block is TextContent => block.type === 'text',
       );
@@ -530,14 +562,14 @@ export const explainParity = action({
         text,
         modelUsed: result.model,
         provider: result.provider,
-        costMicroUsd: usdToMicroUsd(result.usage?.cost?.total ?? 0),
+        costMicroUsd: billedMicroUsd,
       };
     } catch {
       return {
         text: buildExplainFallback(payload, locale),
         modelUsed: 'rule-based',
         provider: 'local',
-        costMicroUsd: 0,
+        costMicroUsd: billedMicroUsd,
       };
     }
   },
@@ -788,20 +820,18 @@ export const runAgentLoop = internalAction({
         .join('')
         .trim();
 
-      // Tool calls run only from a reply that finished: 'toolUse' (Anthropic tool_use, OpenAI tool_calls) or 'stop'
-      // (pi-ai maps an OpenAI-compatible finish_reason 'stop' to 'stop' even when tool_calls came with it, and
-      // OpenRouter/kimi/nemotron routes report that; main ran those calls). A reply that was cut off by the output
-      // cap ('length'), refused or failed ('error': pi-ai maps Anthropic stop_reason 'refusal' here and keeps the
-      // partial tool_use block), was aborted or never got a finish_reason ('pending') carries calls whose arguments
-      // are partial, so an upsert_file whose content stops mid-file would be written as if complete. Nothing in
-      // such a reply runs, and its calls are not recorded, so the stored history never holds a tool call without
-      // its result.
-      if (toolCalls.length > 0 && result.stopReason !== 'toolUse' && result.stopReason !== 'stop') {
+      // A reply is stored as an ordinary turn, and its tool calls run, only if it finished: 'toolUse' (Anthropic
+      // tool_use, OpenAI tool_calls) or 'stop' (pi-ai maps an OpenAI-compatible finish_reason 'stop' to 'stop' even
+      // when tool_calls came with it, and OpenRouter/kimi/nemotron routes report that; main ran those calls). A
+      // reply that was cut off by the output cap ('length'; adaptive thinking counts toward it), refused or failed
+      // ('error': pi-ai maps Anthropic stop_reason 'refusal' here and keeps the partial tool_use block), was aborted
+      // or never got a finish_reason ('pending') is unfinished: its text stops mid-sentence and its calls carry
+      // partial arguments, so an upsert_file whose content stops mid-file would be written as if complete. Nothing
+      // in such a reply runs and its calls are not recorded, so the stored history never holds a tool call without
+      // its result; a text-only reply is kept for the cost record but the user is told it is unfinished.
+      if (!isCompleted(result)) {
         const names = toolCalls.map((tc) => tc.name).join(', ');
-        const why =
-          result.stopReason === 'length'
-            ? `the reply hit the ${OUTPUT_CAPS.agentLoop.toLocaleString('en-US')}-token output cap while writing ${names}`
-            : `the model ended the reply early (${result.stopReason}${result.errorMessage ? `: ${result.errorMessage}` : ''}) while writing ${names}`;
+        const why = `${describeUnfinished(result, OUTPUT_CAPS.agentLoop)}${names ? ` while writing ${names}` : ''}`;
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
           role: 'assistant',
@@ -814,7 +844,10 @@ export const runAgentLoop = internalAction({
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
           role: 'assistant',
-          content: `(agent error: ${why}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`,
+          content:
+            toolCalls.length > 0
+              ? `(agent error: ${why}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`
+              : `(agent error: ${why}, so the reply above may be cut off or missing. Ask again, or ask for a smaller piece at a time.)`,
           turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
         });
         await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);
