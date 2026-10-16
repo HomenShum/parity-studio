@@ -32,10 +32,22 @@ export const CLAUDE_HAIKU = 'claude-haiku-5-5';
 export const CLAUDE_SONNET = 'claude-sonnet-5-5';
 export const CLAUDE_OPUS = 'claude-opus-5-5';
 export const OPENROUTER_CLAUDE_SONNET = 'anthropic/claude-sonnet-5.5';
-/** The only verified free route (SPEC 1.2 live :free list). Unknown free-looking ids resolve here. */
-export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
-/** Free recovery model for the FREE tier (SPEC 1.2 live :free list; takes image input, which the primary does not). */
-export const FREE_FALLBACK_MODEL = 'google/gemma-4-26b-a4b-it:free';
+/**
+ * FREE-tier primary and the route unknown free-looking ids resolve to (SPEC D2: the latest `:free` model with the
+ * capabilities the roles need). Eligibility filter, applied to the public OpenRouter list fetched 2026-10-16T20:40Z
+ * (467 rows): `:free`, no `expiration_date`, `tools` in supported_parameters (the agent loop's tool surface),
+ * context >= 262,144, max completion >= OUTPUT_CAPS.agentLoop (64,000, so an `upsert_file` is not clamped), and in
+ * the pi-ai 1.1.0 OpenRouter catalog (getModel throws otherwise). Parity code sends no `response_format` and no
+ * `tool_choice`, so `structured_outputs` is not a requirement. Newest row that passes: nemotron-3.5-lightning
+ * (2026-08-11); the result is the same for any context floor from 131,072 to 1,000,000.
+ */
+export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3.5-lightning:free';
+/**
+ * Free recovery model for the FREE tier: the newest row that passes the filter above and also takes image input
+ * (the primary is text-only, and a FREE generate run can carry a source image): inkling-small, 2026-07-30. The
+ * previous pick, gemma-4-26b, tops out at 32,768 output tokens, below the 64,000 agent-loop cap.
+ */
+export const FREE_FALLBACK_MODEL = 'thinkingmachines/inkling-small:free';
 /**
  * Output-token caps per call site. Thinking counts toward `max_tokens` on Claude 5.5 (SPEC 1.3), and since the
  * maxOutputTokens -> maxTokens fix they are real caps on every model, kimi-k2.6 included (before, pi-ai ignored
@@ -79,13 +91,21 @@ export const PHASE_EFFORT: Record<Phase, Effort> = {
   judge: 'high',
 };
 /**
+ * Both SPEC 1.2 spellings of Haiku 5.5 that reach an Anthropic Messages request: the direct wire id and the OpenRouter
+ * slug (pi-ai 1.1.0 serves it with `anthropic-messages` and managed effort too). No route here is built from the
+ * slug; it is compared so a run or env override that picks it gets the same effort as the direct id.
+ */
+const HAIKU_5_5_WIRE_IDS: readonly string[] = [CLAUDE_HAIKU, 'anthropic/claude-haiku-5.5'];
+/**
  * The effort a call sends: `PHASE_EFFORT[phase]`, except on Haiku 5.5 outside `enhance`. The SMALL tier's advise and
  * execute cells (and any run override or env override that picks Haiku) ran Haiku 4.5 with no thinking and no effort
  * parameter, so the table's 'high' has no baseline there and would be an unmeasured rise in cost and latency on the
  * cheap tier. They take Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited.
  */
 export function effortFor(phase: Phase, modelId: string): Effort {
-  return modelId === CLAUDE_HAIKU && phase !== 'enhance' ? 'medium' : PHASE_EFFORT[phase];
+  return HAIKU_5_5_WIRE_IDS.includes(modelId) && phase !== 'enhance'
+    ? 'medium'
+    : PHASE_EFFORT[phase];
 }
 /**
  * convex/chatLoop.ts default when CHAT_MODEL is unset and CHAT_PROVIDER is anthropic. The OpenRouter default
@@ -269,63 +289,63 @@ const BALANCED: Record<Phase, ResolvedModel> = {
 //
 // Graceful-degrade fallback when the free primary fails: FREE_FALLBACK_MODEL (free -> free). SPEC A.0.10 forbids
 // turning a free request into a paid one without allowPaidFallback plus a financial reservation, and neither exists
-// here, so the former paid Haiku hop is gone. gemma-4-26b is the eval's own secondary free pick (above), is on the
-// SPEC 1.2 live :free list, and, unlike the text-only nemotron primary, accepts images (pi-ai 1.1.0 catalog), so a
-// FREE generate run with a source image is rejected locally by nemotron and served by gemma instead of going paid.
-// The (a) free fallback versus (b) allowPaidFallback-with-reservation choice stays Homen's; this is (a).
-// 2026-10-14: inclusionai/ling-2.6-1t:free is absent from OpenRouter (live :free list 2026-10-10), so the
-// FREE tier primary moved to nvidia/nemotron-3-super-120b-a12b:free (tools + structured outputs; the
-// NodeVideo benchmark pick). UNMEASURED on this repo's tool surface (needs-live-eval): the eval above
-// measured ling, not nemotron; scripts/eval-free-models.mjs is the evidence path once its import is fixed.
+// here, so the former paid Haiku hop is gone. Unlike the text-only primary, the fallback accepts images (pi-ai 1.1.0
+// catalog), so a FREE generate run with a source image is rejected locally by the primary and served by the
+// fallback instead of going paid. The (a) free fallback versus (b) allowPaidFallback-with-reservation choice stays
+// Homen's; this is (a).
+// 2026-10-14: inclusionai/ling-2.6-1t:free is absent from OpenRouter (live :free list 2026-10-10), so the FREE tier
+// moved to the picks above (SPEC D2, filter and fetch time at VERIFIED_FREE_MODEL). Both are UNMEASURED on this
+// repo's tool surface (needs-live-eval): the eval above measured ling and gemma, not these;
+// scripts/eval-free-models.mjs is the evidence path once its import is fixed.
 const FREE: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   advise: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   execute: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   generate: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   decompose: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   iterate: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
   judge: {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
 };
 
@@ -380,7 +400,7 @@ const SMALL: Record<Phase, ResolvedModel> = {
     provider: 'openrouter',
     modelId: VERIFIED_FREE_MODEL,
     isFree: true,
-    label: 'nemotron-3-super :free',
+    label: 'nemotron-3.5-lightning :free',
   },
 };
 

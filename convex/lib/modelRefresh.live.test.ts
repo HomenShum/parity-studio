@@ -173,7 +173,7 @@ const CELLS: Cell[] = [
   })),
   {
     phase: 'generate (FREE)',
-    expected: 'openrouter:nvidia/nemotron-3-super-120b-a12b:free',
+    expected: 'openrouter:nvidia/nemotron-3.5-lightning:free',
     resolve: primary('free', 'generate'),
     cap: OUTPUT_CAPS.generate,
     effort: PHASE_EFFORT.generate,
@@ -181,7 +181,7 @@ const CELLS: Cell[] = [
   {
     // The FREE recovery hop (SPEC A.0.10): free, so it adds no spend, and it is the only model that takes an image.
     phase: 'generate-fallback (FREE)',
-    expected: 'openrouter:google/gemma-4-26b-a4b-it:free',
+    expected: 'openrouter:thinkingmachines/inkling-small:free',
     resolve: fallback('free', 'generate'),
     cap: OUTPUT_CAPS.generate,
     effort: PHASE_EFFORT.generate,

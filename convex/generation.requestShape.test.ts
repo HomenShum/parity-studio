@@ -114,7 +114,7 @@ describe('generation pipeline builds the SPEC 1.2 request', () => {
     }
   });
 
-  it('FREE generate: nemotron then the free gemma recovery hop, never a paid model (SPEC A.0.10)', async () => {
+  it('FREE generate: the free primary then the free recovery hop, never a paid model (SPEC A.0.10)', async () => {
     await expect(
       generateHandler(fakeCtx({ tier: 'free' }), { runId: 'run_1', prompt: 'a landing page' }),
     ).rejects.toThrow(/generate stage error/);
@@ -130,7 +130,7 @@ describe('generation pipeline builds the SPEC 1.2 request', () => {
         sourceImageMimeType: 'image/png',
       }),
     ).rejects.toThrow(/does not support image input/);
-    // nemotron never reaches the wire (pi-ai rejects image input on a text-only model); gemma does; nothing paid.
+    // the primary never reaches the wire (pi-ai rejects image input on a text-only model); the fallback does; nothing paid.
     expect(bodies.map((b) => b['model'])).toEqual([FREE_FALLBACK_MODEL]);
   });
 });

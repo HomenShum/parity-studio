@@ -2,8 +2,8 @@
 /**
  * Request-shape proof for mcp/src/lib/llmClient.ts (model-defaults SPEC A.0 rule 6, A.2.7).
  * Real request through this repo's own `call()` against a fake transport (stubbed fetch, always 400, no spend).
- * Asserts the explicit spelling table (SPEC A.0.5) covers the dotted OpenRouter slugs, the exact `<provider>/`
- * prefix strip keeps every spelling `inferProvider` routes working (SPEC A.0.4), the caller's maxTokens and the
+ * Asserts the explicit spelling table (SPEC A.0.5) covers the dotted OpenRouter slugs, the catalog-derived
+ * `<provider>/<catalog id>` alias table keeps every spelling `inferProvider` routes working (SPEC A.0.4), the caller's maxTokens and the
  * per-phase effort reach the wire, and unknown ids fail closed (SPEC A.0.10).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,7 @@ import {
   WIRE_IDS,
   call,
   callByModel,
+  defaultEffortFor,
   keyProviderFor,
 } from './llmClient';
 
@@ -147,6 +148,18 @@ describe('llmClient request shape (Claude 5.5)', () => {
   });
 });
 
+describe('Haiku 5.5 takes medium effort under both SPEC 1.2 spellings', () => {
+  it.each(['claude-haiku-5-5', 'anthropic/claude-haiku-5.5'])('%s', (id) => {
+    expect(defaultEffortFor(id)).toBe('medium');
+  });
+  it.each(['claude-sonnet-5-5', 'claude-opus-5-5', 'anthropic/claude-sonnet-5.5'])(
+    '%s keeps high',
+    (id) => {
+      expect(defaultEffortFor(id)).toBe(DEFAULT_EFFORT);
+    },
+  );
+});
+
 describe('callByModel keeps every provider-prefixed spelling inferProvider routes (SPEC A.0.4)', () => {
   // [spelling a caller passes, text that must appear in the request URL or body model]
   const spellings: Array<[string, string]> = [
@@ -208,7 +221,7 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     }).catch(() => undefined);
     expect(bodies).toHaveLength(1);
     expect(bodies[0]?.body['model']).toBe(VERIFIED_FREE_MODEL);
-    expect(VERIFIED_FREE_MODEL).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+    expect(VERIFIED_FREE_MODEL).toBe('nvidia/nemotron-3.5-lightning:free');
   });
 
   // SPEC D1: a known id is never silently rerouted to another model. `google/gemma-...:free` is inferred as

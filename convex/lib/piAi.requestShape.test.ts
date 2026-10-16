@@ -34,8 +34,8 @@ const WIRE = {
   'anthropic:claude-opus-5-5': 'claude-opus-5-5',
   'openrouter:anthropic/claude-sonnet-5.5': 'anthropic/claude-sonnet-5.5',
 } as const;
-const WIRE_FREE = 'nvidia/nemotron-3-super-120b-a12b:free'; // SPEC 1.2 live :free list
-const WIRE_FREE_FALLBACK = 'google/gemma-4-26b-a4b-it:free'; // SPEC 1.2 live :free list; takes image input
+const WIRE_FREE = 'nvidia/nemotron-3.5-lightning:free'; // SPEC 1.2 live :free list
+const WIRE_FREE_FALLBACK = 'thinkingmachines/inkling-small:free'; // SPEC 1.2 live :free list; takes image input
 
 const TIERS: ModelTier[] = ['frontier', 'balanced', 'free', 'small'];
 const PHASES: Phase[] = [
@@ -267,7 +267,7 @@ describe('request shape: tier x phase cells', () => {
 });
 
 describe('request shape: the caller cap is bounded by the model maximum', () => {
-  // pi-ai copies maxTokens into the request unclamped; gemma-4-26b :free (the FREE-tier recovery model) tops out at
+  // pi-ai copies maxTokens into the request unclamped; gemma-4-26b :free (a FREE-tier model before the D2 re-pick) tops out at
   // 32,768 in the pi-ai 1.1.0 catalog, below OUTPUT_CAPS.agentLoop (64,000).
   const GEMMA = 'google/gemma-4-26b-a4b-it:free';
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface

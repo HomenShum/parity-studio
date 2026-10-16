@@ -64,8 +64,8 @@ export const MODEL_PRESETS: ModelOverride[] = [
   },
   {
     provider: 'openrouter',
-    modelId: 'nvidia/nemotron-3-super-120b-a12b:free',
-    label: 'Nemotron 3 Super free via OpenRouter',
+    modelId: 'nvidia/nemotron-3.5-lightning:free',
+    label: 'Nemotron 3.5 Lightning free via OpenRouter',
   },
   { provider: 'google', modelId: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro direct' },
 ];

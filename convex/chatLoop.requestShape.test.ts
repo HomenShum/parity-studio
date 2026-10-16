@@ -198,7 +198,7 @@ describe('chatLoop.runAgentLoop builds the SPEC 1.2 request with the tool surfac
   });
 });
 
-// Persona: a user (or ops, via CHAT_EXECUTOR_MODEL) picks the free recovery model google/gemma-4-26b-a4b-it:free
+// Persona: a user (or ops, via CHAT_EXECUTOR_MODEL) picks the free model google/gemma-4-26b-a4b-it:free
 // for the chat agent. Its catalog maximum output is 32,768, but OUTPUT_CAPS.agentLoop (64,000) is sized for the
 // 128K Claude 5.5 models and pi-ai copies maxTokens into the request unclamped, so the request asked for more than
 // the model can emit. The phase cap must be bounded by the selected model's own maximum.

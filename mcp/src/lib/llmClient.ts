@@ -75,11 +75,14 @@ export const DEFAULT_EFFORT: Effort = 'high';
 /**
  * The effort `call` sends when the caller names none. Haiku 4.5 ran with no thinking and no effort parameter, so
  * 'high' has no baseline on Haiku 5.5 and would be an unmeasured rise in cost and latency on the cheap model; it
- * takes Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited. Same rule as `effortFor` in
+ * takes Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited, under both its SPEC 1.2
+ * spellings (the OpenRouter slug is also served by `anthropic-messages`). Same rule as `effortFor` in
  * convex/lib/autoRouter.ts (this package cannot import it); every phase here is a non-`enhance` phase.
  */
 export function defaultEffortFor(wireModelId: string): Effort {
-  return wireModelId === 'claude-haiku-5-5' ? 'medium' : DEFAULT_EFFORT;
+  return wireModelId === 'claude-haiku-5-5' || wireModelId === 'anthropic/claude-haiku-5.5'
+    ? 'medium'
+    : DEFAULT_EFFORT;
 }
 
 /**
@@ -164,13 +167,13 @@ export function inferProvider(modelId: string): SupportedProvider {
   return 'openai';
 }
 
-/** The only verified free route (model-defaults SPEC 1.2). Unknown free-looking ids resolve here. */
-export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+/** FREE-tier route chosen under SPEC D2 (filter: see VERIFIED_FREE_MODEL in convex/lib/autoRouter.ts). Unknown free-looking ids resolve here. */
+export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3.5-lightning:free';
 
 /**
- * Spellings that are not `<provider>/<catalog id>` (SPEC A.0.5): OpenRouter's dotted Claude slugs, which
- * `inferProvider` also sends to Anthropic, mapped onto the direct wire ids of SPEC 1.2. Everything else is
- * resolved by `resolveWire`: the exact `<provider>/` prefix strip, then the catalog.
+ * Spellings that are not catalog ids (SPEC A.0.5): OpenRouter's dotted Claude slugs, which `inferProvider` also
+ * sends to Anthropic, mapped onto the direct wire ids of SPEC 1.2. The `<provider>/<catalog id>` spellings
+ * (A.0.4) are enumerated per provider from the catalog by `providerAliases`; nothing is converted by pattern.
  */
 export const WIRE_IDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   anthropic: {
@@ -206,21 +209,34 @@ const SPEC_FREE_MODELS: readonly string[] = [
 ];
 
 /**
+ * Every `<provider>/<catalog id>` spelling `inferProvider` can route to `provider` (`openai/gpt-4o`,
+ * `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1`), enumerated from the catalog once per provider: an
+ * explicit alias table (SPEC A.0.5) instead of a generic prefix strip, so only a real catalog id is ever aliased.
+ */
+const aliasCache = new Map<string, ReadonlyMap<string, string>>();
+function providerAliases(provider: SupportedProvider): ReadonlyMap<string, string> {
+  let aliases = aliasCache.get(provider);
+  if (!aliases) {
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+    const ids = (getModels as any)(provider).map((m: { id: string }) => m.id) as string[];
+    aliases = new Map(ids.map((id) => [`${provider}/${id}`, id]));
+    aliasCache.set(provider, aliases);
+  }
+  return aliases;
+}
+
+/**
  * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.4, A.0.5, A.0.10). Caller spellings keep
- * working exactly as before: the explicit table for the dotted OpenRouter slugs, then the exact `${provider}/`
- * prefix strip (`openai/gpt-4o`, `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1` map to the same catalog
- * id `inferProvider` routed them to). Only an id that still misses the catalog fails closed: a free-looking id
- * the OpenRouter catalog lists runs as itself, a known one it cannot call throws (D1), an unknown one falls to the
- * verified free constant, and any other throws before a request exists.
+ * working exactly as before: the explicit `WIRE_IDS` table for the dotted OpenRouter slugs, then the catalog-derived
+ * `providerAliases` table, then the id as written. Only an id that still misses the catalog fails closed: a
+ * free-looking id the OpenRouter catalog lists runs as itself, a known one it cannot call throws (D1), an unknown
+ * one falls to the verified free constant, and any other throws before a request exists.
  */
 function resolveWire(
   provider: SupportedProvider,
   modelId: string,
 ): { provider: SupportedProvider; modelId: string } {
-  const prefix = `${provider}/`;
-  const id =
-    WIRE_IDS[provider]?.[modelId] ??
-    (modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId);
+  const id = WIRE_IDS[provider]?.[modelId] ?? providerAliases(provider).get(modelId) ?? modelId;
   // Own-property membership, not `getModel(...) !== undefined`: pi-ai looks ids up as MODELS[provider]?.[id], so
   // 'toString' / 'constructor' / '__proto__' come back as an inherited function or object and would pass.
   // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
