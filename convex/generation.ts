@@ -4,7 +4,13 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { action, internalAction } from './_generated/server';
 import { findActiveKitFile, inferActiveKitSlug } from './lib/activeKitFiles';
-import { type Phase, type ResolvedModel, resolveRunModel } from './lib/autoRouter';
+import {
+  OUTPUT_CAPS,
+  type Phase,
+  type ResolvedModel,
+  effortFor,
+  resolveRunModel,
+} from './lib/autoRouter';
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { withOperatingContract } from './lib/kitContract';
 import { checkDeterministic } from './lib/parityChecker';
@@ -175,6 +181,10 @@ async function callValidatedPipelineModel(
         systemPrompt: args.systemPrompt,
         userText: args.userText,
         maxTokens: args.maxTokens,
+        effort: effortFor(
+          args.stage.startsWith('iterate') ? 'iterate' : (args.stage as Phase),
+          model.modelId,
+        ),
         signal: AbortSignal.timeout(timeoutMs),
         ...(args.userImage !== undefined ? { userImage: args.userImage } : {}),
       });
@@ -251,16 +261,18 @@ export const generateInitial = internalAction({
       ? prompt
       : 'Generate a polished, production-quality UI matching the attached image.';
 
-    const picked = await pickPhase(ctx, String(runId), 'generate');
     let generated: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(runId), 'generate');
       generated = await callValidatedPipelineModel(ctx, {
         runId: String(runId),
         stage: 'generate',
         picked,
         systemPrompt: GENERATE_SYSTEM,
         userText,
-        maxTokens: 16_000,
+        maxTokens: OUTPUT_CAPS.generate,
         ...(sourceImageBase64 !== undefined && sourceImageMimeType !== undefined
           ? { userImage: { base64: sourceImageBase64, mimeType: sourceImageMimeType } }
           : {}),
@@ -298,16 +310,18 @@ export const decompose = internalAction({
   handler: async (ctx, { runId, artifactVersion, artifactHtml }) => {
     await ctx.runMutation(internal.runs.updateStatus, { runId, status: 'decomposing' });
 
-    const picked = await pickPhase(ctx, String(runId), 'decompose');
     let decomposeResult: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(runId), 'decompose');
       decomposeResult = await callValidatedPipelineModel(ctx, {
         runId: String(runId),
         stage: 'decompose',
         picked,
         systemPrompt: DECOMPOSE_SYSTEM,
         userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${artifactHtml}`,
-        maxTokens: 24_000,
+        maxTokens: OUTPUT_CAPS.decompose,
         validate: (text) => {
           const parsed = parseUiKitResponse(text);
           const validation = validateParsedUiKit(parsed);
@@ -489,16 +503,18 @@ ${previousTokensCss.slice(0, 2_000)}
 ORIGINAL SOURCE (the artifact you should be matching):
 ${args.sourceHtml.slice(0, 8_000)}`;
 
-    const picked = await pickPhase(ctx, String(args.runId), 'iterate');
     let iterateResult: { result: CallResult; text: string };
     try {
+      // Resolved inside the try, as on main: an unknown stored id fails the stage with a visible error instead of
+      // throwing past it (A.0.10) and leaving the run in its in-progress status.
+      const picked = await pickPhase(ctx, String(args.runId), 'iterate');
       iterateResult = await callValidatedPipelineModel(ctx, {
         runId: String(args.runId),
         stage: `iterate-${args.iterationNumber}`,
         picked,
         systemPrompt: ITERATE_SYSTEM,
         userText,
-        maxTokens: 24_000,
+        maxTokens: OUTPUT_CAPS.iterate,
         validate: (text) => {
           const parsed = parseUiKitResponse(text);
           const validation = validateParsedUiKit(parsed);

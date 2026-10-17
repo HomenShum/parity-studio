@@ -1,5 +1,5 @@
 import { PROVIDER_KEY_ENV } from './byok.js';
-import { type SupportedProvider, inferProvider } from './llmClient.js';
+import { type SupportedProvider, keyProviderFor } from './llmClient.js';
 
 export interface AgentRuntimeProfile {
   id: 'claude-code' | 'codex' | 'cursor' | 'windsurf' | 'generic-mcp';
@@ -80,7 +80,7 @@ export function buildAgentRuntimeMetadata(models: readonly string[] = []): {
   modelProviders: Array<{ model: string; provider: SupportedProvider; envVar: string }>;
 } {
   const modelProviders = models.map((model) => {
-    const provider = inferProvider(model);
+    const provider = keyProviderFor(model);
     return { model, provider, envVar: PROVIDER_KEY_ENV[provider] };
   });
   return {

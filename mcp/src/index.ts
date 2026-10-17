@@ -26,8 +26,8 @@
  *     "env": {
  *       "ANTHROPIC_API_KEY": "sk-ant-...",
  *       "OPENAI_API_KEY": "sk-...",
- *       "PARITY_DECOMPOSE_MODEL": "claude-opus-4-7",
- *       "PARITY_JUDGE_MODEL": "claude-sonnet-4-6"
+ *       "PARITY_DECOMPOSE_MODEL": "claude-opus-5-5",
+ *       "PARITY_JUDGE_MODEL": "claude-sonnet-5-5"
  *     }
  *   }
  */
@@ -63,19 +63,15 @@ import {
   parseFigmaBridgeJson,
 } from './lib/figmaBridge.js';
 import { withOperatingContract } from './lib/kitContract.js';
-import { callByModel } from './lib/llmClient.js';
+import { IncompleteCompletionError, callByModel } from './lib/llmClient.js';
 import { registerNodeSlideTools } from './lib/nodeslideTools.js';
 import { type ParityReport, checkDeterministic, statusFromBooleans } from './lib/parityChecker.js';
 import { capturePlatformRoute } from './lib/platformCapture.js';
 import { redactSensitiveValues } from './lib/privacy.js';
-import {
-  DECOMPOSE_SYSTEM,
-  GENERATE_SYSTEM,
-  ITERATE_SYSTEM,
-  VISUAL_JUDGE_SYSTEM,
-} from './lib/prompts.js';
-import { renderHtmlToPng, shutdownRenderer } from './lib/render.js';
+import { DECOMPOSE_SYSTEM, GENERATE_SYSTEM, ITERATE_SYSTEM } from './lib/prompts.js';
+import { shutdownRenderer } from './lib/render.js';
 import { parseUiKitResponse } from './lib/uiKitParser.js';
+import { type VisualJudgeOutcome, runVisualJudge } from './lib/visualJudge.js';
 
 /**
  * Eager-init the dashboard at MCP server boot. Returns the URL (or null
@@ -196,8 +192,8 @@ async function convexCall(
 
 // Cheap-tier defaults (Kimi K2.6 via OpenRouter for LLM, Gemini 2.5 Flash
 // for vision judge). Override via env for any tier you prefer:
-//   PARITY_GENERATE_MODEL=claude-sonnet-4-6
-//   PARITY_DECOMPOSE_MODEL=claude-opus-4-7
+//   PARITY_GENERATE_MODEL=claude-sonnet-5-5
+//   PARITY_DECOMPOSE_MODEL=claude-opus-5-5
 //   PARITY_JUDGE_MODEL=gpt-4o
 const GENERATE_MODEL = process.env.PARITY_GENERATE_MODEL ?? 'moonshotai/kimi-k2.6';
 const DECOMPOSE_MODEL = process.env.PARITY_DECOMPOSE_MODEL ?? 'moonshotai/kimi-k2.6';
@@ -236,11 +232,8 @@ async function handleDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
+    requireComplete: { stage: 'decompose stage', consequence: 'no kit was returned' },
   });
-
-  if (result.stopReason === 'error') {
-    throw new Error(`decompose stage error from model ${result.modelUsed}`);
-  }
 
   const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
   return {
@@ -327,67 +320,6 @@ async function handleVerify(args: {
         ),
       },
     ],
-  };
-}
-
-interface VisualJudgeOutcome {
-  passCount: number;
-  totalChecks: number;
-  parityScore: number;
-  status: ParityReport['status'];
-  summary: string;
-  checks: Array<{ dimension: string; id: string; passed: boolean; note: string }>;
-  judgeCostUsd: number;
-  modelUsed: string;
-  renderLatencyMs: number;
-}
-
-async function runVisualJudge(args: {
-  sourceImageBase64: string;
-  sourceImageMimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-  indexHtml: string;
-  judgeModel: string;
-}): Promise<VisualJudgeOutcome> {
-  requireLocalKeys([args.judgeModel]);
-  const rendered = await renderHtmlToPng(args.indexHtml);
-
-  // Build a single user message with both images side-by-side context.
-  // Some providers only accept one image per message — we send the rendered as
-  // primary and pass the source as a leading reference inside the userText.
-  // For Anthropic vision multi-image: use both via two image blocks.
-  // Simpler: pass them sequentially in the same prompt body, judge tolerates.
-  const judge = await callByModel({
-    model: args.judgeModel,
-    systemPrompt: VISUAL_JUDGE_SYSTEM,
-    userText:
-      'IMAGE 1 = SOURCE (reference). IMAGE 2 = RENDERED candidate.\nReturn the JSON rubric described above.',
-    userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType },
-    maxTokens: 4_000,
-  });
-
-  // Parse JSON loosely — providers sometimes wrap in fences
-  const parsed = parseLooseJson(judge.text);
-  const checks: VisualJudgeOutcome['checks'] = Array.isArray(parsed?.checks)
-    ? (parsed.checks as VisualJudgeOutcome['checks'])
-    : [];
-  const passCount = checks.filter((c) => c.passed === true).length;
-  const totalChecks = checks.length || 12;
-  const parityScore = totalChecks === 0 ? 0 : passCount / totalChecks;
-  const status = statusFromBooleans(passCount, totalChecks);
-
-  return {
-    passCount,
-    totalChecks,
-    parityScore,
-    status,
-    summary:
-      typeof parsed?.summary === 'string'
-        ? (parsed.summary as string)
-        : `${passCount}/${totalChecks} visual checks passed`,
-    checks,
-    judgeCostUsd: judge.costUsd,
-    modelUsed: judge.modelUsed,
-    renderLatencyMs: rendered.latencyMs,
   };
 }
 
@@ -722,6 +654,7 @@ async function handlePlatformToUiKit(args: {
         designMission: args.designMission,
       }),
       maxTokens: 24_000,
+      requireComplete: { stage: 'platform decompose', consequence: 'no kit was returned' },
     });
     let parsed = parseUiKitResponse(result.text, args.fallbackSlug);
     const latencyMs = Date.now() - t0;
@@ -865,6 +798,7 @@ async function handlePlatformToUiKit(args: {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof IncompleteCompletionError) eventBus.addCost(runId, err.costUsd);
     eventBus.updateRun(runId, { status: 'failed', errorMessage: message });
     eventBus.appendLog(runId, 'error', message);
     throw err;
@@ -1269,6 +1203,7 @@ async function handlePipeline(args: {
           ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
           : {}),
         maxTokens: 16_000,
+        requireComplete: { stage: 'generate stage', consequence: 'no artifact was produced' },
       });
       artifactHtml = stripWrappingFences(gen.text);
       totalCostUsd += gen.costUsd;
@@ -1455,6 +1390,8 @@ async function handlePipeline(args: {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // A reply that never finished is billed all the same; its stage threw before it could record the cost.
+    if (err instanceof IncompleteCompletionError) eventBus.addCost(runId, err.costUsd);
     eventBus.updateRun(runId, { status: 'failed', errorMessage: message });
     eventBus.appendLog(runId, 'error', `pipeline failed: ${message}`);
     throw err;
@@ -1740,6 +1677,7 @@ async function runDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
+    requireComplete: { stage: 'decompose stage', consequence: 'no kit was stored' },
   });
   const parsed = parseUiKitResponse(dec.text);
   const latencyMs = Date.now() - t0;
@@ -1833,6 +1771,7 @@ ${args.artifactHtml.slice(0, 8_000)}`;
     systemPrompt: ITERATE_SYSTEM,
     userText,
     maxTokens: 24_000,
+    requireComplete: { stage: 'iterate stage', consequence: 'the previous kit was kept' },
   });
   const parsed = parseUiKitResponse(result.text);
   const latencyMs = Date.now() - t0;
@@ -1884,29 +1823,6 @@ function stripWrappingFences(raw: string): string {
   const trimmed = raw.trim();
   const fenceMatch = trimmed.match(/^```(?:html)?\s*\n([\s\S]*?)\n```$/);
   return fenceMatch?.[1] ?? trimmed;
-}
-
-function parseLooseJson(raw: string): Record<string, unknown> | null {
-  const trimmed = raw.trim();
-  // Strip leading/trailing fence
-  const stripped = trimmed
-    .replace(/^```(?:json)?\s*\n?/, '')
-    .replace(/\n?```$/, '')
-    .trim();
-  try {
-    return JSON.parse(stripped) as Record<string, unknown>;
-  } catch {
-    // Try to extract first { ... } block
-    const m = stripped.match(/\{[\s\S]*\}/);
-    if (m) {
-      try {
-        return JSON.parse(m[0]) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
 }
 
 // ---------- Server bootstrap ----------------------------------------------

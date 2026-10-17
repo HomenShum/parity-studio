@@ -5,7 +5,7 @@
  * `@earendil-works/pi-ai`). Real API surface, NOT a stub:
  *
  *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
- *   const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+ *   const model = getModel('anthropic', 'claude-sonnet-5-5');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
  *     messages: [{ role: 'user', content: [
@@ -55,6 +55,9 @@ export type SupportedProvider =
   | 'xai'
   | 'mistral';
 
+/** Anthropic effort for the managed-effort Claude 5.5 models; every other API ignores it. */
+export type Effort = 'low' | 'medium' | 'high';
+
 export interface CallOptions {
   provider: SupportedProvider;
   modelId: string;
@@ -63,18 +66,82 @@ export interface CallOptions {
   /** Optional vision input. Both fields required if present. */
   userImage?: { base64: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp' };
   maxTokens?: number;
+  /** Per-phase effort (PHASE_EFFORT in autoRouter.ts). Omitted = pi-ai's own default. */
+  effort?: Effort;
   signal?: AbortSignal;
 }
 
 export interface CallResult {
   text: string;
+  /** Cost of every attempt `call()` made (soft retries included), not just the one whose text it returns. */
   costMicroUsd: number;
+  /**
+   * Completions `call()` asked pi-ai for: 1 + soft retries (OpenRouter only; see `maxAttempts`). NOT the number of
+   * HTTP requests: pi-ai retries 429/5xx itself inside one completion (`maxRetries: 3` for OpenRouter), so count
+   * transport requests at the transport (the live receipt wraps `fetch`) when the real number matters.
+   */
+  completionAttempts: number;
   inputTokens: number;
   outputTokens: number;
   modelUsed: string;
   provider: SupportedProvider;
   stopReason: AssistantMessage['stopReason'];
+  /**
+   * The model string the provider itself returned, read off the raw provider stream (Anthropic `message_start.model`,
+   * OpenAI-compatible chunk `model`, Google `modelVersion`), or pi-ai's `responseModel` when it saw a different one.
+   * `null` when the provider returned none (call aborted or failed before any reply): it is never filled in from the
+   * requested id, because pi-ai's Google adapter initialises `model` from the request and ignores `modelVersion`
+   * (google-generative-ai.js:23), so `result.model` would hide a substitution. SPEC A.0.3.
+   */
+  echoedModel: string | null;
   errorMessage?: string;
+}
+
+/**
+ * Per-call effort that actually governs the current turn. pi-ai 1.1.0 hard-codes the top-level `output_config.effort`
+ * of a managed-effort (Claude 5.5) request to 'high' (anthropic-messages.js:944) and puts the per-call `effort` only
+ * in a trailing `role: 'system'` message after the last user message (:1216). The API applies a per-message effort
+ * change "from the next user turn" (migration guide), and no user turn follows, so the trailing value alone would
+ * leave every phase at 'high'. This sets the top-level value to `effort` as well. Payloads with no
+ * `output_config.effort` (every other API, and pre-5.5 Claude) are left untouched.
+ */
+export function effortOptions(effort: Effort | undefined): {
+  effort?: Effort;
+  onPayload?: (payload: unknown) => unknown;
+} {
+  if (effort === undefined) return {};
+  return {
+    effort,
+    onPayload: (payload) => {
+      const p = payload as { output_config?: { effort?: unknown } } | null;
+      if (p?.output_config?.effort === undefined) return undefined;
+      return { ...p, output_config: { ...p.output_config, effort } };
+    },
+  };
+}
+
+/**
+ * A phase cap, bounded by the selected model's own maximum output. pi-ai copies `maxTokens` straight into
+ * `max_tokens` / `max_completion_tokens` and does not clamp it, so a cap sized for the 128K Claude 5.5 models
+ * (OUTPUT_CAPS.agentLoop is 64,000) would reach a catalog model with a smaller limit (the free
+ * `google/gemma-4-26b-a4b-it:free` is 32,768) as an oversized request. `mcp/src/lib/llmClient.ts` mirrors this.
+ */
+export function boundedMaxTokens(model: { maxTokens?: number }, cap: number): number {
+  const max = model.maxTokens;
+  return typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.min(cap, max) : cap;
+}
+
+/** The model string a raw provider stream event carries, if any (see `CallResult.echoedModel`). */
+function eventModel(data: unknown): string | undefined {
+  const d = data as {
+    message?: { model?: unknown };
+    model?: unknown;
+    modelVersion?: unknown;
+  } | null;
+  for (const v of [d?.message?.model, d?.model, d?.modelVersion]) {
+    if (typeof v === 'string' && v !== '') return v;
+  }
+  return undefined;
 }
 
 /** Convert USD float to integer micro-cents (avoids float drift on summation). */
@@ -105,6 +172,15 @@ function isRetriableError(msg: string | undefined): boolean {
     lower.includes('upstream')
   );
 }
+
+/**
+ * Completion requests `call()` may dispatch for one provider: OpenRouter soft-retries upstream errors twice
+ * (SOFT_RETRIES), everything else is one request. The live receipt harness budgets against this. It counts the
+ * completion requests this function dispatches, not pi-ai's own HTTP-level retries (`maxRetries: 3`) inside one.
+ */
+const OPENROUTER_SOFT_RETRIES = 2;
+export const maxAttempts = (provider: SupportedProvider): number =>
+  provider === 'openrouter' ? 1 + OPENROUTER_SOFT_RETRIES : 1;
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -157,7 +233,8 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const isOpenRouter = opts.provider === 'openrouter';
   const baseOptions = {
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxOutputTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: boundedMaxTokens(model, opts.maxTokens) } : {}),
+    ...effortOptions(opts.effort),
     ...(isOpenRouter ? { headers: OPENROUTER_ATTRIBUTION_HEADERS, maxRetries: 3 } : {}),
   };
 
@@ -165,10 +242,19 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   // pi-ai's maxRetries handles HTTP-level retries inside the SDK, but
   // OpenRouter often returns a 200-with-error-body for upstream 429s, which
   // pi-ai surfaces as stopReason='error'. We catch that here.
-  const MAX_SOFT_RETRIES = isOpenRouter ? 2 : 0;
+  const MAX_SOFT_RETRIES = maxAttempts(opts.provider) - 1;
   let lastResult: Awaited<ReturnType<typeof piComplete>> | undefined;
+  let completionAttempts = 0;
+  let spentUsd = 0;
+  let providerModel: string | undefined;
+  const onProviderStreamEvent = (data: unknown) => {
+    providerModel = eventModel(data) ?? providerModel;
+  };
   for (let attempt = 0; attempt <= MAX_SOFT_RETRIES; attempt += 1) {
-    lastResult = await piComplete(model, context, baseOptions);
+    providerModel = undefined;
+    lastResult = await piComplete(model, context, { ...baseOptions, onProviderStreamEvent });
+    completionAttempts += 1;
+    spentUsd += Number.isFinite(lastResult.usage.cost.total) ? lastResult.usage.cost.total : 0;
     const isSoftError =
       lastResult.stopReason === 'error' && isRetriableError(lastResult.errorMessage);
     if (!isSoftError || attempt === MAX_SOFT_RETRIES) break;
@@ -185,12 +271,14 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   const text = textBlocks.map((b) => b.text).join('');
   const out: CallResult = {
     text,
-    costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+    costMicroUsd: usdToMicroUsd(spentUsd),
+    completionAttempts,
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
     provider: opts.provider,
     modelUsed: result.model,
     stopReason: result.stopReason,
+    echoedModel: providerModel ?? result.responseModel ?? null,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
   return out;

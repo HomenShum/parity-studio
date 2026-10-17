@@ -5,6 +5,7 @@ import { internalMutation, internalQuery, mutation, query } from './_generated/s
 import { expandToCanonicalShape } from './lib/canonicalShape';
 import { recordDesignRevision } from './lib/designRevisions';
 import { withOperatingContract } from './lib/kitContract';
+import { assertSelectableModel } from './lib/modelBoundary';
 import { RUN_STATUSES } from './schema';
 import { workflow } from './workflows';
 
@@ -59,6 +60,7 @@ export const setModelSelection = mutation({
     if (modelOverride !== undefined) {
       const modelId = modelOverride.modelId.trim();
       if (modelId.length === 0) throw new Error('runs:setModelSelection requires a model id');
+      assertSelectableModel(modelOverride.provider, modelId);
       await ctx.db.patch(runId, {
         tier: undefined,
         modelOverride: {
@@ -148,6 +150,7 @@ function normalizeModelOverride(
   if (modelOverride === undefined) return undefined;
   const modelId = modelOverride.modelId.trim();
   if (modelId.length === 0) throw new Error('model override requires a model id');
+  assertSelectableModel(modelOverride.provider, modelId);
   return {
     provider: modelOverride.provider,
     modelId,

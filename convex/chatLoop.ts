@@ -15,8 +15,16 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action, internalAction } from './_generated/server';
-import { type Phase, type RunModelConfig, resolveRunModel } from './lib/autoRouter';
-import { type SupportedProvider, usdToMicroUsd } from './lib/piAi';
+import {
+  CHAT_DEFAULT_MODEL,
+  OUTPUT_CAPS,
+  type Phase,
+  type RunModelConfig,
+  effortFor,
+  failClosedRoute,
+  pickRunModel,
+} from './lib/autoRouter';
+import { type SupportedProvider, boundedMaxTokens, effortOptions, usdToMicroUsd } from './lib/piAi';
 import { QUALITY_GATE_MAX_REPAIRS } from './lib/qualityGate';
 import { lintKit } from './lib/staticLint';
 
@@ -34,11 +42,12 @@ import { lintKit } from './lib/staticLint';
 //   CHAT_EXECUTOR_MODEL=nvidia/nemotron-3-super-120b  # best reliable, 14.5s
 // (Slugs subject to openrouter's catalog — verify with their /models endpoint.)
 //
-// Defaults: Claude Sonnet 4.6 for both when using Anthropic directly.
+// Defaults: Claude Sonnet 5.5 for both when using Anthropic directly. The OpenRouter default (kimi-k2.6, an active
+// open-weight id frozen until Part B v2 ranks it) stays a literal here so its site anchor does not move.
 const CHAT_PROVIDER = (process.env['CHAT_PROVIDER'] ?? 'anthropic') as 'anthropic' | 'openrouter';
 const CHAT_MODEL =
   process.env['CHAT_MODEL'] ??
-  (CHAT_PROVIDER === 'anthropic' ? 'claude-sonnet-4-6' : 'moonshotai/kimi-k2.6');
+  (CHAT_PROVIDER === 'anthropic' ? CHAT_DEFAULT_MODEL.anthropic : 'moonshotai/kimi-k2.6');
 // Advisor + Executor envs are read inline at hop time (in runAgentLoop)
 // since the tier resolver is the new default; only fall back to env on
 // explicit override. We keep the ADVISOR_* constants here for the
@@ -106,9 +115,9 @@ function resolvePhaseModel({
   let modelId = fallbackModel;
   let source: 'router' | 'custom' | 'env' | 'fallback' = 'fallback';
   if (runId !== undefined) {
-    const resolved = resolveRunModel(run, phase, String(runId));
-    provider = resolved.provider;
-    modelId = resolved.modelId;
+    const picked = pickRunModel(run, phase, String(runId));
+    provider = picked.provider;
+    modelId = picked.modelId;
     source = run?.modelOverride !== undefined && phase !== 'judge' ? 'custom' : 'router';
   }
   const providerOverride = process.env[providerEnvKey];
@@ -118,6 +127,8 @@ function resolvePhaseModel({
     modelId = modelOverride ?? modelId;
     source = 'env';
   }
+  // A.0.4 / A.0.10: env wins over the run's pick, and the pair that will actually be sent is what gets validated.
+  ({ provider, modelId } = failClosedRoute(provider, modelId));
   return { provider, modelId, source };
 }
 
@@ -175,7 +186,16 @@ export const enhance = action({
       systemPrompt: ENHANCE_INSTRUCTION,
       messages: [{ role: 'user', content: trimmed, timestamp: Date.now() }],
     };
-    const result = await piComplete(model, ctxObj, { maxOutputTokens: 1_000 });
+    const result = await piComplete(model, ctxObj, {
+      maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.enhance),
+      ...effortOptions(effortFor('enhance', routed.modelId)),
+    });
+    // A rewrite cut off at the cap or refused is not a rewrite: the UI would drop half a prompt into the composer.
+    if (!isCompleted(result)) {
+      throw new Error(
+        `chat:enhance reply unfinished: ${describeUnfinished(result, OUTPUT_CAPS.enhance)}`,
+      );
+    }
     const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
     const out = cleanEnhanced(textBlocks.map((b) => b.text).join(''));
     if (out.length === 0) {
@@ -203,6 +223,23 @@ Rules:
 - Do not give generic advice like "make one visible iteration" unless you also name the screen area and file path.
 - Fix next should be phrased as an agent-ready user request, e.g. "Ask the agent to rebuild the header/hero/CTA so a visitor understands X and can click Y."
 - No markdown table. No markdown bold/italic. No sales language.`;
+
+/**
+ * A reply is complete only when it ended on its own: 'stop' (end_turn, and OpenAI-compatible finish_reason 'stop',
+ * which pi-ai also reports when tool_calls came with it) or 'toolUse'. 'length' (the output cap, which adaptive
+ * thinking counts toward), 'error' (pi-ai maps Anthropic stop_reason 'refusal' here), 'aborted' and 'pending' carry
+ * text or tool arguments that stop mid-way. Same rule as `assertCompleted` in mcp/src/lib/llmClient.ts.
+ */
+function isCompleted(result: AssistantMessage): boolean {
+  return result.stopReason === 'toolUse' || result.stopReason === 'stop';
+}
+
+/** Why an unfinished reply stopped, for an error message the user reads. */
+function describeUnfinished(result: AssistantMessage, cap: number): string {
+  return result.stopReason === 'length'
+    ? `the reply hit the ${cap.toLocaleString('en-US')}-token output cap`
+    : `the model ended the reply early (${result.stopReason}${result.errorMessage ? `: ${result.errorMessage}` : ''})`;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -472,6 +509,12 @@ export const explainParity = action({
       context,
     };
 
+    // What the provider billed for a reply that is then rejected below (cut off, refused, empty): the fallback text
+    // is free but the request was not, and adaptive thinking can use up the whole 4,000-token cap.
+    let billedMicroUsd = 0;
+    // Outside the try (A.0.10): an unknown non-free PARITY_EXPLAIN_MODEL or stale stored override throws here, at the
+    // public action boundary, instead of being swallowed into the rule-based text. Only provider/transport failures
+    // below fall back.
     const routed = resolvePhaseModel({
       runId,
       run,
@@ -497,11 +540,20 @@ export const explainParity = action({
               },
             ],
           },
-          { maxOutputTokens: 700 },
+          {
+            maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.explain),
+            ...effortOptions(effortFor('advise', routed.modelId)),
+          },
         ),
         25_000,
         'parity explanation',
       );
+      billedMicroUsd = usdToMicroUsd(result.usage?.cost?.total ?? 0);
+      if (!isCompleted(result)) {
+        throw new Error(
+          `parity explanation unfinished: ${describeUnfinished(result, OUTPUT_CAPS.explain)}`,
+        );
+      }
       const textBlocks = result.content.filter(
         (block): block is TextContent => block.type === 'text',
       );
@@ -511,14 +563,14 @@ export const explainParity = action({
         text,
         modelUsed: result.model,
         provider: result.provider,
-        costMicroUsd: usdToMicroUsd(result.usage?.cost?.total ?? 0),
+        costMicroUsd: billedMicroUsd,
       };
     } catch {
       return {
         text: buildExplainFallback(payload, locale),
         modelUsed: 'rule-based',
         provider: 'local',
-        costMicroUsd: 0,
+        costMicroUsd: billedMicroUsd,
       };
     }
   },
@@ -727,15 +779,11 @@ export const runAgentLoop = internalAction({
       // Direct env overrides (CHAT_ADVISOR_MODEL / CHAT_EXECUTOR_MODEL) win
       // over tier defaults, preserving the v1 dual-model knob.
       const phase = useAdvisor ? 'advise' : 'execute';
-      const baseResolved = resolveRunModel(runRow, phase, String(runId));
-      const provider = useAdvisor
-        ? (process.env['CHAT_ADVISOR_PROVIDER'] ?? baseResolved.provider)
-        : (process.env['CHAT_EXECUTOR_PROVIDER'] ?? baseResolved.provider);
-      const modelId = useAdvisor
-        ? (process.env['CHAT_ADVISOR_MODEL'] ?? baseResolved.modelId)
-        : (process.env['CHAT_EXECUTOR_MODEL'] ?? baseResolved.modelId);
-      // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
-      const model = (getModel as any)(provider, modelId);
+      const envProvider =
+        process.env[useAdvisor ? 'CHAT_ADVISOR_PROVIDER' : 'CHAT_EXECUTOR_PROVIDER'];
+      const envModel = process.env[useAdvisor ? 'CHAT_ADVISOR_MODEL' : 'CHAT_EXECUTOR_MODEL'];
+      // Env wins over the run's pick (A.0.4); the pair that will actually be sent is what gets validated (A.0.10).
+      const picked = pickRunModel(runRow, phase, String(runId));
       const ctxObj: Context = {
         systemPrompt: SYSTEM_PROMPT,
         messages,
@@ -743,7 +791,19 @@ export const runAgentLoop = internalAction({
       };
       let result: AssistantMessage;
       try {
-        result = await piComplete(model, ctxObj, { maxOutputTokens: 4_000 });
+        // Resolved inside the try: an unknown id (a stale stored override, a bad CHAT_*_MODEL) must reach the user as
+        // a visible '(agent error: ...)' turn, as it did on main, not as an exception that escapes the scheduled
+        // action. failClosedRoute still throws before any request exists, so nothing is spent.
+        const { provider, modelId } = failClosedRoute(
+          (envProvider ?? picked.provider) as SupportedProvider,
+          envModel ?? picked.modelId,
+        );
+        // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModel surface
+        const model = (getModel as any)(provider, modelId);
+        result = await piComplete(model, ctxObj, {
+          maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.agentLoop),
+          ...effortOptions(effortFor(phase, modelId)),
+        });
       } catch (err) {
         await ctx.runMutation(internal.chat.insertTurn, {
           runId,
@@ -760,6 +820,40 @@ export const runAgentLoop = internalAction({
         .map((b) => b.text)
         .join('')
         .trim();
+
+      // A reply is stored as an ordinary turn, and its tool calls run, only if it finished: 'toolUse' (Anthropic
+      // tool_use, OpenAI tool_calls) or 'stop' (pi-ai maps an OpenAI-compatible finish_reason 'stop' to 'stop' even
+      // when tool_calls came with it, and OpenRouter/kimi/nemotron routes report that; main ran those calls). A
+      // reply that was cut off by the output cap ('length'; adaptive thinking counts toward it), refused or failed
+      // ('error': pi-ai maps Anthropic stop_reason 'refusal' here and keeps the partial tool_use block), was aborted
+      // or never got a finish_reason ('pending') is unfinished: its text stops mid-sentence and its calls carry
+      // partial arguments, so an upsert_file whose content stops mid-file would be written as if complete. Nothing
+      // in such a reply runs and its calls are not recorded, so the stored history never holds a tool call without
+      // its result; a text-only reply is kept for the cost record but the user is told it is unfinished.
+      if (!isCompleted(result)) {
+        const names = toolCalls.map((tc) => tc.name).join(', ');
+        const why = `${describeUnfinished(result, OUTPUT_CAPS.agentLoop)}${names ? ` while writing ${names}` : ''}`;
+        await ctx.runMutation(internal.chat.insertTurn, {
+          runId,
+          role: 'assistant',
+          content: text,
+          turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
+          modelId: result.model,
+          provider: result.provider,
+          costMicroUsd: usdToMicroUsd(result.usage.cost.total),
+        });
+        await ctx.runMutation(internal.chat.insertTurn, {
+          runId,
+          role: 'assistant',
+          content:
+            toolCalls.length > 0
+              ? `(agent error: ${why}, so no tool call from it was run and nothing was saved. Ask for the change in smaller pieces, for example one file or section at a time.)`
+              : `(agent error: ${why}, so the reply above may be cut off or missing. Ask again, or ask for a smaller piece at a time.)`,
+          turn: await ctx.runQuery(internal.chat.nextTurnNumber, { runId }),
+        });
+        await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);
+        return;
+      }
 
       await ctx.runMutation(internal.chat.insertTurn, {
         runId,
@@ -780,16 +874,10 @@ export const runAgentLoop = internalAction({
         costMicroUsd: usdToMicroUsd(result.usage.cost.total),
       });
 
-      messages.push({
-        role: 'assistant',
-        content: result.content,
-        api: result.api,
-        provider: result.provider,
-        model: result.model,
-        usage: result.usage,
-        stopReason: result.stopReason,
-        timestamp: Date.now(),
-      } as AssistantMessage);
+      // The reply goes back as pi-ai returned it. Rebuilding it field by field dropped providerThinkingLevel, which
+      // pi-ai replays as the effort system message sent before this reply; without it hop N+1 is not an extension of
+      // hop N, and Claude 5.5 silently drops every replayed thinking block (and misses the prompt cache).
+      messages.push(result);
 
       if (toolCalls.length === 0) {
         await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);

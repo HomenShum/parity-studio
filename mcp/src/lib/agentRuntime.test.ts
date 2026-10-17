@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { buildAgentRuntimeMetadata, filterSafeAgentEnv } from './agentRuntime';
 
+// claude-sonnet-4-6 was superseded by the Claude 5.5 migration (guide rename table; SPEC 1.1 still lists it Active
+// legacy; SPEC 1.2 -> claude-sonnet-5-5).
+// The mcp package cannot import the convex constants, so the id is named once here.
+const CLAUDE_SONNET = 'claude-sonnet-5-5';
+
 describe('agentRuntime', () => {
   it('returns runtime profiles and model-specific provider env allowlist', () => {
-    const metadata = buildAgentRuntimeMetadata(['claude-sonnet-4-6', 'moonshotai/kimi-k2.6']);
+    const metadata = buildAgentRuntimeMetadata([CLAUDE_SONNET, 'moonshotai/kimi-k2.6']);
     expect(metadata.profiles.some((profile) => profile.id === 'claude-code')).toBe(true);
     expect(metadata.launchCommands).toContainEqual(
       expect.objectContaining({ platform: 'windows', command: 'npx.cmd' }),

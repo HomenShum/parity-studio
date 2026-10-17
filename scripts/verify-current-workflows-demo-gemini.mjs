@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const videoPath = resolve(process.argv[2] ?? '');
 const evidencePath = process.argv[3] ? resolve(process.argv[3]) : null;
-const model = process.env.GEMINI_VIDEO_MODEL ?? 'gemini-2.5-flash';
+const model = process.env.GEMINI_VIDEO_MODEL ?? 'gemini-3.8-flash';
 const deployment = process.env.CONVEX_DEPLOYMENT_FOR_ENV ?? 'blissful-pig-998';
 
 if (!videoPath || !existsSync(videoPath)) {
@@ -229,7 +229,6 @@ Pass only if all eight workflows are visibly represented and the demo is coheren
           },
         ],
         generationConfig: {
-          temperature: 0,
           responseMimeType: 'application/json',
         },
       }),

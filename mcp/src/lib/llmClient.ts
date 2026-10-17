@@ -6,7 +6,7 @@
  *
  * API surface:
  *   import { getModel, complete } from '@earendil-works/pi-ai/compat';
- *   const model = getModel('anthropic', 'claude-sonnet-4-6');
+ *   const model = getModel('anthropic', 'claude-sonnet-5-5');
  *   const result = await complete(model, {
  *     systemPrompt: '...',
  *     messages: [{ role: 'user', content: [
@@ -37,6 +37,7 @@ import {
   type ImageContent,
   type TextContent,
   getModel,
+  getModels,
   complete as piComplete,
 } from '@earendil-works/pi-ai/compat';
 
@@ -55,6 +56,62 @@ export type SupportedProvider =
   | 'xai'
   | 'mistral';
 
+/**
+ * Anthropic effort for the managed-effort Claude 5.5 models (SPEC 1.3). pi-ai 1.1.0 hard-codes the top-level
+ * `output_config.effort` to 'high' (anthropic-messages.js:944) and carries `options.effort` only in a trailing system
+ * message (:1216), which the API applies from the NEXT user turn, not to this one. `effortOptions` below also sets the
+ * top-level value so the requested effort is what governs the turn. Ignored by every other API.
+ */
+export type Effort = 'low' | 'medium' | 'high';
+
+/**
+ * Every phase the MCP server runs (decompose, generate, iterate, judge) ran at 'high' on Opus 4.7 and Sonnet 4.6
+ * (both defaulted to high), so that stays the explicit value for Opus and Sonnet 5.5. Opus 5.5's own default is
+ * 'medium'; lowering any phase is a measured follow-up, not part of the refresh. Haiku does not take this value:
+ * see `defaultEffortFor`.
+ */
+export const DEFAULT_EFFORT: Effort = 'high';
+
+/**
+ * The effort `call` sends when the caller names none. Haiku 4.5 ran with no thinking and no effort parameter, so
+ * 'high' has no baseline on Haiku 5.5 and would be an unmeasured rise in cost and latency on the cheap model; it
+ * takes Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited, under both its SPEC 1.2
+ * spellings (the OpenRouter slug is also served by `anthropic-messages`). Same rule as `effortFor` in
+ * convex/lib/autoRouter.ts (this package cannot import it); every phase here is a non-`enhance` phase.
+ */
+export function defaultEffortFor(wireModelId: string): Effort {
+  return wireModelId === 'claude-haiku-5-5' || wireModelId === 'anthropic/claude-haiku-5.5'
+    ? 'medium'
+    : DEFAULT_EFFORT;
+}
+
+/**
+ * Same as `effortOptions` in convex/lib/piAi.ts (the MCP package is built from `src/` alone and cannot import it):
+ * rewrite a managed-effort payload's top-level `output_config.effort`; leave every other payload untouched.
+ */
+function effortOptions(effort: Effort): {
+  effort: Effort;
+  onPayload: (payload: unknown) => unknown;
+} {
+  return {
+    effort,
+    onPayload: (payload) => {
+      const p = payload as { output_config?: { effort?: unknown } } | null;
+      if (p?.output_config?.effort === undefined) return undefined;
+      return { ...p, output_config: { ...p.output_config, effort } };
+    },
+  };
+}
+
+/**
+ * Same as `boundedMaxTokens` in convex/lib/piAi.ts: pi-ai copies `maxTokens` into the request unclamped, so a cap
+ * larger than the selected catalog model's own maximum output would reach it as an oversized request.
+ */
+function boundedMaxTokens(model: { maxTokens?: number }, cap: number): number {
+  const max = model.maxTokens;
+  return typeof max === 'number' && Number.isFinite(max) && max > 0 ? Math.min(cap, max) : cap;
+}
+
 export interface VisionInput {
   base64: string;
   mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -63,16 +120,24 @@ export interface VisionInput {
 export interface CallOptions {
   /** Provider id (anthropic, openai, google, openrouter, groq, cerebras, xai, mistral). */
   provider: SupportedProvider;
-  /** Provider-specific model id (e.g. claude-sonnet-4-6, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
+  /** Provider-specific model id (e.g. claude-sonnet-5-5, gpt-5, gemini-2.5-pro, openai/gpt-4o). */
   modelId: string;
   systemPrompt: string;
   userText: string;
   /** Optional vision input. Both fields required if present. Errors if model lacks vision. */
   userImage?: VisionInput;
   maxTokens?: number;
+  /** Anthropic effort; defaults to `defaultEffortFor(model)`. */
+  effort?: Effort;
   signal?: AbortSignal;
   /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
   baseUrl?: string;
+  /**
+   * Parity callers set this: `call` then throws `IncompleteCompletionError` for any reply that did not finish
+   * (`assertCompleted`), naming the stage and what is lost. Left unset, `call` returns the reply as it always did with
+   * its `stopReason`; the vendored NodeSlide planner (frozen, SPEC A.2.7) relies on that and is not edited.
+   */
+  requireComplete?: { stage: string; consequence: string };
 }
 
 export interface CallResult {
@@ -105,14 +170,160 @@ export function inferProvider(modelId: string): SupportedProvider {
   return 'openai';
 }
 
+/** FREE-tier route chosen under SPEC D2 (filter: see VERIFIED_FREE_MODEL in convex/lib/autoRouter.ts). Unknown free-looking ids resolve here. */
+export const VERIFIED_FREE_MODEL = 'nvidia/nemotron-3.5-lightning:free';
+
 /**
- * Strip provider prefix if present so getModel(provider, id) gets the canonical
- * id. e.g. "anthropic/claude-sonnet-4-6" + provider="anthropic" -> "claude-sonnet-4-6".
+ * Spellings that are not catalog ids (SPEC A.0.5): OpenRouter's dotted Claude slugs, which `inferProvider` also
+ * sends to Anthropic, mapped onto the direct wire ids of SPEC 1.2. The `<provider>/<catalog id>` spellings
+ * (A.0.4) are enumerated per provider from the catalog by `providerAliases`; nothing is converted by pattern.
  */
-function canonicalizeModelId(provider: SupportedProvider, modelId: string): string {
-  const prefix = `${provider}/`;
-  if (modelId.startsWith(prefix)) return modelId.slice(prefix.length);
-  return modelId;
+export const WIRE_IDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  anthropic: {
+    'anthropic/claude-haiku-5.5': 'claude-haiku-5-5',
+    'anthropic/claude-sonnet-5.5': 'claude-sonnet-5-5',
+    'anthropic/claude-opus-5.5': 'claude-opus-5-5',
+  },
+};
+
+const FREE_LOOKING = /[:-]free$/i;
+
+/**
+ * The live `:free` list of SPEC 1.2 (fetched 2026-10-10): the free ids that are *known* under D1. Copy of
+ * SPEC_FREE_MODELS in convex/lib/modelBoundary.ts (this package cannot import outside its src); one of them is not
+ * in the pi-ai OpenRouter catalog and must be refused, not rerouted to a different model.
+ */
+const SPEC_FREE_MODELS: readonly string[] = [
+  'apodex/apodex-1.1-mini:free',
+  'dots-studio/dots-3-note-preview:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'thinkingmachines/inkling-small:free',
+  'poolside/laguna-s-2.1:free',
+  'thinkingmachines/inkling:free',
+  'poolside/laguna-xs-2.1:free',
+  'cohere/north-mini-code:free',
+  'nvidia/nemotron-3.5-content-safety:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+];
+
+/** Copy of REPO_REGISTRY_FREE_MODELS in convex/lib/modelBoundary.ts: free ids this repo's own registries name. */
+const REPO_REGISTRY_FREE_MODELS: readonly string[] = [
+  'inclusionai/ling-2.6-1t:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+];
+
+/**
+ * Every `<provider>/<catalog id>` spelling `inferProvider` can route to `provider` (`openai/gpt-4o`,
+ * `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1`), enumerated from the catalog once per provider: an
+ * explicit alias table (SPEC A.0.5) instead of a generic prefix strip, so only a real catalog id is ever aliased.
+ */
+const aliasCache = new Map<string, ReadonlyMap<string, string>>();
+function providerAliases(provider: SupportedProvider): ReadonlyMap<string, string> {
+  let aliases = aliasCache.get(provider);
+  if (!aliases) {
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+    const ids = (getModels as any)(provider).map((m: { id: string }) => m.id) as string[];
+    aliases = new Map(ids.map((id) => [`${provider}/${id}`, id]));
+    aliasCache.set(provider, aliases);
+  }
+  return aliases;
+}
+
+/**
+ * Resolve (provider, spelling) to the pair handed to getModel (SPEC A.0.4, A.0.5, A.0.10). Caller spellings keep
+ * working exactly as before: the explicit `WIRE_IDS` table for the dotted OpenRouter slugs, then the catalog-derived
+ * `providerAliases` table, then the id as written. Only an id that still misses the catalog fails closed: a
+ * free-looking id the OpenRouter catalog lists runs as itself, a known one it cannot call throws (D1), an unknown
+ * one falls to the verified free constant, and any other throws before a request exists.
+ */
+function resolveWire(
+  provider: SupportedProvider,
+  modelId: string,
+): { provider: SupportedProvider; modelId: string } {
+  const id = WIRE_IDS[provider]?.[modelId] ?? providerAliases(provider).get(modelId) ?? modelId;
+  // Own-property membership, not `getModel(...) !== undefined`: pi-ai looks ids up as MODELS[provider]?.[id], so
+  // 'toString' / 'constructor' / '__proto__' come back as an inherited function or object and would pass.
+  // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+  if ((getModels as any)(provider).some((m: { id: string }) => m.id === id))
+    return { provider, modelId: id };
+  if (FREE_LOOKING.test(modelId)) {
+    // The exact spelling in the OpenRouter catalog is the same model on its real transport (`google/gemma-...:free`
+    // is inferred as Google, which does not serve it). SPEC 1.2 lists it but the catalog cannot call it: refuse,
+    // since any substitute is a different model (D1). Known nowhere: the verified free constant.
+    // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
+    if ((getModels as any)('openrouter').some((m: { id: string }) => m.id === modelId))
+      return { provider: 'openrouter', modelId };
+    if (SPEC_FREE_MODELS.includes(modelId) || REPO_REGISTRY_FREE_MODELS.includes(modelId)) {
+      throw new Error(
+        `Model "${modelId}" is a known free route that the pi-ai catalog cannot call; refusing to reroute it to a different model.`,
+      );
+    }
+    return { provider: 'openrouter', modelId: VERIFIED_FREE_MODEL };
+  }
+  throw new Error(
+    `Unknown model "${modelId}" for provider "${provider}": not in the pi-ai catalog, refusing to guess a paid default.`,
+  );
+}
+
+/**
+ * Tool-entry check (SPEC A.0.10, "again at the public API boundary"): throws for an id `call()` would refuse, so a
+ * bad `decomposeModel` / `judgeModel` / `generateModel` argument fails before any run record, capture or render.
+ */
+export function assertCallableModel(model: string): void {
+  resolveWire(inferProvider(model), model);
+}
+
+/**
+ * The provider whose key a call for `model` will actually use: `inferProvider`, then `resolveWire`, so an unknown
+ * free-looking id (`obsolete-model-free`, inferred as openai) is keyed as the OpenRouter route it is redirected
+ * to. An id `resolveWire` refuses keeps the inferred provider; `call()` throws for it before any request.
+ */
+export function keyProviderFor(model: string): SupportedProvider {
+  const inferred = inferProvider(model);
+  try {
+    return resolveWire(inferred, model).provider;
+  } catch {
+    return inferred;
+  }
+}
+
+/** A reply that did not finish. `costUsd` is what the provider billed for it, so callers can still record it. */
+export class IncompleteCompletionError extends Error {
+  constructor(
+    message: string,
+    readonly costUsd: number,
+  ) {
+    super(message);
+    this.name = 'IncompleteCompletionError';
+  }
+}
+
+/**
+ * Throws unless the reply finished (stopReason 'stop'). The caps in this package are real (`maxTokens` reaches the
+ * wire), so a reply can end at the cap ('length'), be refused or fail ('error': pi-ai maps Anthropic 'refusal'
+ * here) or be aborted, and its text is then a partial artifact: parsing it would return a cut-off kit or judge
+ * rubric as a success, or replace a complete stored kit with it. `call` runs this for every caller that sets
+ * `requireComplete`; the vendored NodeSlide planner does not (frozen, SPEC A.2.7), so it still receives the reply
+ * with its `stopReason` exactly as before.
+ * The thrown error carries `costUsd`, because the provider billed for the reply either way.
+ */
+export function assertCompleted(result: CallResult, stage: string, consequence: string): void {
+  if (result.stopReason === 'stop') return;
+  const what =
+    result.stopReason === 'length'
+      ? 'truncated at its output cap'
+      : result.stopReason === 'error'
+        ? 'error'
+        : `ended with stopReason ${result.stopReason}`;
+  throw new IncompleteCompletionError(
+    `${stage} ${what} from model ${result.modelUsed}${result.errorMessage ? `: ${result.errorMessage}` : ''}; ${consequence} (billed $${result.costUsd.toFixed(4)})`,
+    result.costUsd,
+  );
 }
 
 /**
@@ -121,24 +332,23 @@ function canonicalizeModelId(provider: SupportedProvider, modelId: string): stri
  * Error handling per agentic_reliability HONEST_STATUS:
  * - Network/auth errors throw (callers wrap with try/catch and surface
  *   structured error in MCP tool response)
- * - Model returns stopReason='error' -> CallResult with errorMessage set
- * - Model returns stopReason='length' -> CallResult; caller decides whether
- *   to retry with larger maxTokens
+ * - With `requireComplete`, any reply that did not finish (stopReason other than 'stop': 'length', 'error',
+ *   'aborted', ...) -> IncompleteCompletionError carrying the billed cost, via `assertCompleted`
  */
 export async function call(opts: CallOptions): Promise<CallResult> {
-  const canonicalId = canonicalizeModelId(opts.provider, opts.modelId);
+  const { provider, modelId: canonicalId } = resolveWire(opts.provider, opts.modelId);
   // pi-ai's getModel is typed against its compile-time MODEL registry, but
   // we accept arbitrary strings at this boundary (env-driven model overrides,
   // per-call user input). Runtime validation inside getModel throws for
   // unknown ids — we surface that as a clear error message to the agent.
   // biome-ignore lint/suspicious/noExplicitAny: see comment above
-  const registryModel = (getModel as any)(opts.provider, canonicalId);
+  const registryModel = (getModel as any)(provider, canonicalId);
   const model = opts.baseUrl ? { ...registryModel, baseUrl: opts.baseUrl } : registryModel;
 
   const userContent: (TextContent | ImageContent)[] = [{ type: 'text', text: opts.userText }];
   if (opts.userImage !== undefined) {
     if (!model.input.includes('image')) {
-      throw new Error(`pi-ai model ${opts.provider}/${canonicalId} does not support image input`);
+      throw new Error(`pi-ai model ${provider}/${canonicalId} does not support image input`);
     }
     userContent.push({
       type: 'image',
@@ -159,8 +369,9 @@ export async function call(opts: CallOptions): Promise<CallResult> {
   };
 
   const result = await piComplete(model, context, {
+    ...effortOptions(opts.effort ?? defaultEffortFor(canonicalId)),
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    ...(opts.maxTokens !== undefined ? { maxOutputTokens: opts.maxTokens } : {}),
+    ...(opts.maxTokens !== undefined ? { maxTokens: boundedMaxTokens(model, opts.maxTokens) } : {}),
   });
 
   const textBlocks = result.content.filter((b): b is TextContent => b.type === 'text');
@@ -171,11 +382,14 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     costUsd: Number.isFinite(result.usage.cost.total) ? result.usage.cost.total : 0,
     inputTokens: result.usage.input,
     outputTokens: result.usage.output,
-    provider: opts.provider,
+    provider,
     modelUsed: result.model,
     stopReason: result.stopReason,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
+  if (opts.requireComplete) {
+    assertCompleted(out, opts.requireComplete.stage, opts.requireComplete.consequence);
+  }
   return out;
 }
 
