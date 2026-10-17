@@ -67,11 +67,14 @@ describe('auto router', () => {
     expect(catalog.get(FREE_FALLBACK_MODEL)?.input).toContain('image');
   });
 
-  it('Haiku 5.5 takes medium effort outside enhance under both SPEC 1.2 spellings', () => {
+  it('Haiku 5.5 takes low effort for enhance and medium elsewhere under both SPEC 1.2 spellings', () => {
     for (const id of [CLAUDE_HAIKU, 'anthropic/claude-haiku-5.5']) {
       expect(effortFor('execute', id), id).toBe('medium');
-      expect(effortFor('enhance', id), id).toBe(PHASE_EFFORT.enhance);
+      expect(effortFor('enhance', id), id).toBe('low');
     }
     expect(effortFor('execute', 'claude-sonnet-5-5')).toBe(PHASE_EFFORT.execute);
+    // enhance is only 'low' on Haiku (which ran it with no thinking); Sonnet/Opus ran at the API default 'high'.
+    expect(effortFor('enhance', 'claude-sonnet-5-5')).toBe('high');
+    expect(effortFor('enhance', 'claude-opus-5-5')).toBe('high');
   });
 });

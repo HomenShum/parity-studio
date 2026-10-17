@@ -138,6 +138,20 @@ describe('chatLoop.enhance builds the SPEC 1.2 request', () => {
     const body = bodies[0] as Body;
     expect(body['model']).toBe('claude-haiku-5-5');
     expect(body['max_tokens']).toBe(OUTPUT_CAPS.enhance);
+    // Haiku 4.5 ran enhance with no thinking, so Haiku 5.5 takes 'low' (HAIKU_EFFORT), not the Opus/Sonnet table value.
+    expect(activeEffort(body)).toBe('low');
+    assertNoForbiddenKeys(body);
+  });
+
+  // MCP parity_enhance_prompt and the ChatPanel without a runId call enhance with no run, so the model is the env
+  // chain's end (CHAT_MODEL, Sonnet 5.5), not Haiku. It ran on Sonnet 4.6 at the API default 'high', so the phase
+  // table's 'high' applies; 'low' here would be an unmeasured drop.
+  it('no run -> claude-sonnet-5-5 keeps the Sonnet/Opus phase effort (high), not the Haiku enhance effort', async () => {
+    expect(ORIGINAL_EFFORT.enhance).toBe('high');
+    await settle(enhanceHandler(fakeCtx({}, []), { text: 'make it nicer' }));
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0] as Body;
+    expect(body['model']).toBe('claude-sonnet-5-5');
     expect(activeEffort(body)).toBe(PHASE_EFFORT.enhance);
     assertNoForbiddenKeys(body);
   });

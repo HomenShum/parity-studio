@@ -18,7 +18,6 @@ import { action, internalAction } from './_generated/server';
 import {
   CHAT_DEFAULT_MODEL,
   OUTPUT_CAPS,
-  PHASE_EFFORT,
   type Phase,
   type RunModelConfig,
   effortFor,
@@ -189,7 +188,7 @@ export const enhance = action({
     };
     const result = await piComplete(model, ctxObj, {
       maxTokens: boundedMaxTokens(model, OUTPUT_CAPS.enhance),
-      ...effortOptions(PHASE_EFFORT.enhance),
+      ...effortOptions(effortFor('enhance', routed.modelId)),
     });
     // A rewrite cut off at the cap or refused is not a rewrite: the UI would drop half a prompt into the composer.
     if (!isCompleted(result)) {

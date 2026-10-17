@@ -62,7 +62,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel } from '@earendil-works/pi-ai/compat';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { OUTPUT_CAPS, PHASE_EFFORT, type Phase, resolveRunModel } from './autoRouter';
+import { OUTPUT_CAPS, PHASE_EFFORT, type Phase, effortFor, resolveRunModel } from './autoRouter';
 import { type Effort, call, maxAttempts } from './piAi';
 
 type Provider = 'anthropic' | 'openrouter' | 'google';
@@ -132,7 +132,7 @@ const CELLS: Cell[] = [
     expected: 'anthropic:claude-haiku-5-5',
     resolve: primary('frontier', 'enhance'),
     cap: OUTPUT_CAPS.enhance,
-    effort: PHASE_EFFORT.enhance,
+    effort: effortFor('enhance', 'claude-haiku-5-5'),
   },
   {
     phase: 'advise',

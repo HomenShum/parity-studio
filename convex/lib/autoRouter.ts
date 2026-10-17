@@ -75,13 +75,14 @@ export const OUTPUT_CAPS = {
  * applies from the NEXT user turn, i.e. not to this one. Every call site therefore spreads `effortOptions(effort)`
  * (piAi.ts), which also sets the top-level value, so the phase value is what governs the turn. On the Opus and Sonnet
  * cells every phase except `enhance` ran at 'high' before the refresh (Opus 4.7 and Sonnet 4.6 defaulted to high);
- * `enhance` is the one-shot prompt rewrite that ran on Haiku 4.5 with no thinking, so it gets 'low'. That 'high'
- * describes Opus and Sonnet only: Haiku 4.5 never ran adaptive thinking, so a Haiku cell is resolved by
- * `effortFor`, not by this table. Lowering a phase below its old behaviour is a measured follow-up. Other APIs
- * ignore the option.
+ * `enhance` is no exception on those two: with no run (MCP `parity_enhance_prompt`, ChatPanel without a run) it resolves to
+ * `ENHANCE_MODEL` -> `ADVISOR_MODEL` -> `CHAT_MODEL`, which is Sonnet 5.5 (it was Sonnet 4.6, default 'high'), so it
+ * keeps 'high' too. That 'high' describes Opus and Sonnet only: Haiku 4.5 never ran adaptive thinking, so a Haiku
+ * cell is resolved by `effortFor` (`HAIKU_EFFORT`), not by this table. Lowering a phase below its old behaviour is a
+ * measured follow-up. Other APIs ignore the option.
  */
 export const PHASE_EFFORT: Record<Phase, Effort> = {
-  enhance: 'low',
+  enhance: 'high',
   advise: 'high',
   execute: 'high',
   generate: 'high',
@@ -96,15 +97,19 @@ export const PHASE_EFFORT: Record<Phase, Effort> = {
  */
 const HAIKU_5_5_WIRE_IDS: readonly string[] = [CLAUDE_HAIKU, 'anthropic/claude-haiku-5.5'];
 /**
- * The effort a call sends: `PHASE_EFFORT[phase]`, except on Haiku 5.5 outside `enhance`. The SMALL tier's advise and
- * execute cells (and any run override or env override that picks Haiku) ran Haiku 4.5 with no thinking and no effort
- * parameter, so the table's 'high' has no baseline there and would be an unmeasured rise in cost and latency on the
- * cheap tier. They take Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited.
+ * Haiku 5.5's effort. Haiku 4.5 ran with no thinking and no effort parameter, so there is no baseline to keep:
+ * `enhance` (the one-shot prompt rewrite, the one phase that ran on Haiku 4.5) takes 'low', the closest to no
+ * thinking, and every other phase takes Haiku 5.5's own default, 'medium' (SPEC 1.3), stated instead of inherited.
+ */
+export const HAIKU_EFFORT: { enhance: Effort; other: Effort } = { enhance: 'low', other: 'medium' };
+/**
+ * The effort a call sends: `PHASE_EFFORT[phase]`, except on Haiku 5.5, which takes `HAIKU_EFFORT` (the table's 'high'
+ * has no baseline there and would be an unmeasured rise in cost and latency on the cheap tier). Every call site
+ * resolves its effort here, `enhance` included, so the effort follows the model that was actually routed.
  */
 export function effortFor(phase: Phase, modelId: string): Effort {
-  return HAIKU_5_5_WIRE_IDS.includes(modelId) && phase !== 'enhance'
-    ? 'medium'
-    : PHASE_EFFORT[phase];
+  if (!HAIKU_5_5_WIRE_IDS.includes(modelId)) return PHASE_EFFORT[phase];
+  return phase === 'enhance' ? HAIKU_EFFORT.enhance : HAIKU_EFFORT.other;
 }
 /**
  * convex/chatLoop.ts default when CHAT_MODEL is unset and CHAT_PROVIDER is anthropic. The OpenRouter default
