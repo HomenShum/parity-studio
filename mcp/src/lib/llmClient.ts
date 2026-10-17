@@ -132,9 +132,12 @@ export interface CallOptions {
   signal?: AbortSignal;
   /** Optional local/OpenAI-compatible endpoint override. Kept in the MCP process. */
   baseUrl?: string;
-  /** Names the stage and what is lost, in the error `call` throws for an unfinished reply. */
-  stage?: string;
-  consequence?: string;
+  /**
+   * Parity callers set this: `call` then throws `IncompleteCompletionError` for any reply that did not finish
+   * (`assertCompleted`), naming the stage and what is lost. Left unset, `call` returns the reply as it always did with
+   * its `stopReason`; the vendored NodeSlide planner (frozen, SPEC A.2.7) relies on that and is not edited.
+   */
+  requireComplete?: { stage: string; consequence: string };
 }
 
 export interface CallResult {
@@ -208,6 +211,12 @@ const SPEC_FREE_MODELS: readonly string[] = [
   'nvidia/nemotron-3-super-120b-a12b:free',
 ];
 
+/** Copy of REPO_REGISTRY_FREE_MODELS in convex/lib/modelBoundary.ts: free ids this repo's own registries name. */
+const REPO_REGISTRY_FREE_MODELS: readonly string[] = [
+  'inclusionai/ling-2.6-1t:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+];
+
 /**
  * Every `<provider>/<catalog id>` spelling `inferProvider` can route to `provider` (`openai/gpt-4o`,
  * `google/gemini-3.6-flash`, `anthropic/claude-fable-5-1`), enumerated from the catalog once per provider: an
@@ -249,7 +258,7 @@ function resolveWire(
     // biome-ignore lint/suspicious/noExplicitAny: pi-ai's getModels is typed against its compile-time registry
     if ((getModels as any)('openrouter').some((m: { id: string }) => m.id === modelId))
       return { provider: 'openrouter', modelId };
-    if (SPEC_FREE_MODELS.includes(modelId)) {
+    if (SPEC_FREE_MODELS.includes(modelId) || REPO_REGISTRY_FREE_MODELS.includes(modelId)) {
       throw new Error(
         `Model "${modelId}" is a known free route that the pi-ai catalog cannot call; refusing to reroute it to a different model.`,
       );
@@ -298,8 +307,9 @@ export class IncompleteCompletionError extends Error {
  * Throws unless the reply finished (stopReason 'stop'). The caps in this package are real (`maxTokens` reaches the
  * wire), so a reply can end at the cap ('length'), be refused or fail ('error': pi-ai maps Anthropic 'refusal'
  * here) or be aborted, and its text is then a partial artifact: parsing it would return a cut-off kit or judge
- * rubric as a success, or replace a complete stored kit with it. `call` runs this on every reply, so no caller
- * (including the vendored NodeSlide tools, which only reject 'error') ever sees an unfinished one.
+ * rubric as a success, or replace a complete stored kit with it. `call` runs this for every caller that sets
+ * `requireComplete`; the vendored NodeSlide planner does not (frozen, SPEC A.2.7), so it still receives the reply
+ * with its `stopReason` exactly as before.
  * The thrown error carries `costUsd`, because the provider billed for the reply either way.
  */
 export function assertCompleted(result: CallResult, stage: string, consequence: string): void {
@@ -322,8 +332,8 @@ export function assertCompleted(result: CallResult, stage: string, consequence: 
  * Error handling per agentic_reliability HONEST_STATUS:
  * - Network/auth errors throw (callers wrap with try/catch and surface
  *   structured error in MCP tool response)
- * - Any reply that did not finish (stopReason other than 'stop': 'length', 'error', 'aborted', ...) ->
- *   IncompleteCompletionError carrying the billed cost, via `assertCompleted`
+ * - With `requireComplete`, any reply that did not finish (stopReason other than 'stop': 'length', 'error',
+ *   'aborted', ...) -> IncompleteCompletionError carrying the billed cost, via `assertCompleted`
  */
 export async function call(opts: CallOptions): Promise<CallResult> {
   const { provider, modelId: canonicalId } = resolveWire(opts.provider, opts.modelId);
@@ -377,7 +387,9 @@ export async function call(opts: CallOptions): Promise<CallResult> {
     stopReason: result.stopReason,
   };
   if (result.errorMessage !== undefined) out.errorMessage = result.errorMessage;
-  assertCompleted(out, opts.stage ?? 'completion', opts.consequence ?? 'the reply was discarded');
+  if (opts.requireComplete) {
+    assertCompleted(out, opts.requireComplete.stage, opts.requireComplete.consequence);
+  }
   return out;
 }
 

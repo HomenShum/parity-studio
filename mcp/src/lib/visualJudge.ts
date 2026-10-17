@@ -39,8 +39,7 @@ export async function runVisualJudge(args: {
     maxTokens: 4_000,
     // A reply cut off at the cap (or failed) has no complete rubric. call() throws for it, with the judge's billed
     // cost, instead of letting a parse give checks=[] and a silent 0/12 'fail' that reads as a verdict on the candidate.
-    stage: 'visual judge',
-    consequence: 'no score reported',
+    requireComplete: { stage: 'visual judge', consequence: 'no score reported' },
   });
 
   // Parse JSON loosely — providers sometimes wrap in fences

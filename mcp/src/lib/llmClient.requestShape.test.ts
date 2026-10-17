@@ -246,6 +246,18 @@ describe('llmClient fails closed on unknown ids (SPEC A.0.10)', () => {
     expect(bodies).toHaveLength(0);
   });
 
+  // D1: ids the repo's own registries name (the removed Ling preset, the benchmark's llama) are known too.
+  it.each(['inclusionai/ling-2.6-1t:free', 'meta-llama/llama-3.3-70b-instruct:free'])(
+    'the repo-registry free id %s is refused, not rerouted to another model (D1)',
+    async (model) => {
+      await expect(callByModel({ model, systemPrompt: 's', userText: 'u' })).rejects.toThrow(
+        /known free route/,
+      );
+      expect(() => requireLocalKeys([model])).toThrow(/known free route/);
+      expect(bodies).toHaveLength(0);
+    },
+  );
+
   it('the key precheck follows the route the call will use: an unknown -free id needs the OpenRouter key, not OpenAI', async () => {
     // inferProvider('obsolete-model-free') is 'openai'; resolveWire redirects it to OpenRouter (SPEC A.0.10).
     vi.stubEnv('OPENAI_API_KEY', '');

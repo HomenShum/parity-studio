@@ -3,9 +3,10 @@
  * Pricing-source inventory and agreement test (model-defaults SPEC A.0 rule 6, A.2.7 pre-PR).
  *
  * Every place this repo holds a per-million-token price is listed below with a `pricingAsOf` date, loaded, and
- * compared per (id, transport). SPEC rule: equal `{inPerM, outPerM}` per (id, transport). The one place the
- * sources legitimately differ is named in KNOWN_DIVERGENCE with both numbers pinned, so a change on either side
- * fails loudly instead of drifting.
+ * compared per (id, transport). SPEC rule: equal `{inPerM, outPerM}` per (id, transport), no exception. One pair
+ * does not satisfy it (z-ai/glm-5.2 on openrouter: request-price ceiling vs catalog): its equality assertion is an
+ * `it.fails` (known-unmet, open question for Homen) and both numbers are pinned so neither side drifts unnoticed;
+ * see the block at the end of the file.
  *
  * Sources (all USD per million tokens unless noted):
  *   1. pi-ai installed catalog          getModel(provider, id).cost                       pricingAsOf = pi-ai 1.1.0 install
@@ -143,12 +144,24 @@ describe('pricing sources agree per (id, transport)', () => {
     expect(runBudget).toEqual(catalogRate('openrouter', 'google/gemini-3.5-flash'));
   });
 
-  // KNOWN_DIVERGENCE. NODESLIDE_MODEL_PRICING['z-ai/glm-5.2'] is `openrouter_request_price_ceiling` (a cap sent to
-  // OpenRouter as a max price), not a catalog price, and has never equalled the catalog. pi-ai 0.80.6 -> 1.1.0
-  // moved the catalog side from 0.532 / 1.672 to 0.171 / 7.2, so the output ceiling (4.4) is now BELOW the catalog
-  // output price (7.2). Both sides are NodeSlide-domain and frozen here; the pin makes the divergence visible and
-  // is the hand-off to HomenShum/NodeSlide, which owns the ceiling.
-  it('(z-ai/glm-5.2, openrouter): the request-price ceiling and the catalog price diverge, pinned on both sides', () => {
+  // A.0.6 asks for equal {inPerM, outPerM} per (id, transport) and allows no exception. For (z-ai/glm-5.2,
+  // openrouter) the sources are NOT equal: NODESLIDE_MODEL_PRICING is `openrouter_request_price_ceiling` (a cap sent
+  // to OpenRouter as a max price), and pi-ai 0.80.6 -> 1.1.0 moved the catalog side from 0.532 / 1.672 to 0.171 / 7.2,
+  // so the output ceiling (4.4) is now BELOW the catalog output price (7.2). Both sides are NodeSlide-domain and
+  // frozen here, and raising the ceiling is NodeSlide's decision (it changes what a request may cost), so this PR
+  // cannot make them equal. The rule is therefore asserted as written and marked `it.fails`: the suite is green only
+  // because the requirement is known-unmet. It turns RED the moment the two sources agree (remove `.fails` then), and
+  // the pinned numbers below keep either side from drifting unnoticed. OPEN: needs a Homen exception to A.0.6 or a
+  // fix in HomenShum/NodeSlide; this is not an agreement.
+  it.fails(
+    '(z-ai/glm-5.2, openrouter): REQUIRED A.0.6 agreement - request-price ceiling equals catalog price',
+    () => {
+      const { verifiedAt: _verifiedAt, ...ceiling } = budgetRate('z-ai/glm-5.2');
+      expect(ceiling).toEqual(catalogRate('openrouter', 'z-ai/glm-5.2'));
+    },
+  );
+
+  it('(z-ai/glm-5.2, openrouter): KNOWN DIVERGENCE, not agreement - both sides pinned so neither drifts unnoticed', () => {
     const { verifiedAt, ...ceiling } = budgetRate('z-ai/glm-5.2');
     expect(verifiedAt).toBe('2026-07-16T20:30:00Z');
     expect(ceiling).toEqual({ inPerM: 1.4, outPerM: 4.4 });

@@ -5,13 +5,19 @@
  * as the action-side resolver. The V8 runtime cannot import pi-ai, so the boundary reads a generated snapshot of the
  * catalog; the drift test below fails the moment that snapshot and the installed catalog disagree.
  */
+import { readFileSync } from 'node:fs';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 import { MODEL_PRESETS } from '../../src/lib/modelRouting';
 import { setModelSelection } from '../runs';
 import { failClosedRoute, resolveRunModel } from './autoRouter';
 import { KNOWN_MODEL_IDS } from './knownModelIds.generated';
-import { SPEC_FREE_MODELS, assertSelectableModel } from './modelBoundary';
+import {
+  KNOWN_FREE_MODELS,
+  REPO_REGISTRY_FREE_MODELS,
+  SPEC_FREE_MODELS,
+  assertSelectableModel,
+} from './modelBoundary';
 
 const PROVIDERS = [
   'anthropic',
@@ -110,15 +116,68 @@ describe('assertSelectableModel', () => {
     }
   });
 
-  it('every SPEC 1.2 free id is either callable as itself or refused: none is substituted', () => {
+  it('every known free id (SPEC 1.2 and the repo registries) is either callable as itself or refused: none is substituted', () => {
     const openrouter = new Set(getModels('openrouter' as never).map((m: { id: string }) => m.id));
-    for (const modelId of SPEC_FREE_MODELS) {
+    for (const modelId of KNOWN_FREE_MODELS) {
       if (openrouter.has(modelId)) {
         expect(failClosedRoute('openrouter', modelId)).toEqual({ provider: 'openrouter', modelId });
       } else {
         expect(() => failClosedRoute('openrouter', modelId), modelId).toThrow(/known free route/);
       }
     }
+  });
+
+  // D1: the repo's own registries make an id known. Ling was the FREE-tier UI preset and primary on origin/main and
+  // llama-3.3-70b is in the frozen benchmark list; before this, both were accepted and quietly became Nemotron while
+  // the stored 'Ling 2.6 free via OpenRouter' label kept showing.
+  it.each(REPO_REGISTRY_FREE_MODELS)(
+    'the repo-registry free id %s is refused at the boundary and in both resolver paths, never substituted',
+    (modelId) => {
+      for (const provider of ['openrouter', 'google'] as const) {
+        expect(() => assertSelectableModel(provider, modelId), `boundary ${provider}`).toThrow(
+          /known free route/,
+        );
+        expect(() => failClosedRoute(provider, modelId), `failClosedRoute ${provider}`).toThrow(
+          /known free route/,
+        );
+      }
+      expect(() =>
+        resolveRunModel(
+          {
+            modelOverride: {
+              provider: 'openrouter',
+              modelId,
+              label: 'Ling 2.6 free via OpenRouter',
+            },
+          },
+          'execute',
+          'r',
+        ),
+      ).toThrow(/known free route/);
+    },
+  );
+
+  it('the repo-registry lists cannot drift: the benchmark MODELS and the mcp copy are covered', () => {
+    const benchmark = readFileSync(
+      new URL('../../scripts/eval-free-models.mjs', import.meta.url),
+      'utf8',
+    );
+    const benchmarkFree = [...benchmark.matchAll(/modelId:\s*'([^']+:free)'/g)].map(
+      (m) => m[1] as string,
+    );
+    expect(benchmarkFree.length).toBeGreaterThan(0);
+    const openrouter = new Set(getModels('openrouter' as never).map((m: { id: string }) => m.id));
+    for (const modelId of benchmarkFree) {
+      expect(KNOWN_FREE_MODELS.includes(modelId) || openrouter.has(modelId), modelId).toBe(true);
+    }
+    const mcp = readFileSync(new URL('../../mcp/src/lib/llmClient.ts', import.meta.url), 'utf8');
+    const listOf = (name: string): string[] => {
+      const start = mcp.indexOf(`const ${name}: readonly string[] = [`);
+      const body = mcp.slice(start, mcp.indexOf('];', start));
+      return [...body.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+    };
+    expect(listOf('SPEC_FREE_MODELS')).toEqual([...SPEC_FREE_MODELS]);
+    expect(listOf('REPO_REGISTRY_FREE_MODELS')).toEqual([...REPO_REGISTRY_FREE_MODELS]);
   });
 
   // pi-ai looks ids up as MODELS[provider]?.[id], so getModel('openrouter', 'toString') returns an inherited
@@ -181,6 +240,17 @@ describe('runs.setModelSelection handler', () => {
         modelOverride: { provider: 'openrouter', modelId: 'made-up/paid-model' },
       }),
     ).rejects.toThrow(/Unknown model/);
+    expect(patches).toHaveLength(0);
+  });
+
+  it('refuses a repo-registry free id (removed Ling preset): throws, nothing persisted', async () => {
+    const { ctx, patches } = fakeDb();
+    await expect(
+      handler(ctx, {
+        runId: 'run_1',
+        modelOverride: { provider: 'openrouter', modelId: 'inclusionai/ling-2.6-1t:free' },
+      }),
+    ).rejects.toThrow(/known free route/);
     expect(patches).toHaveLength(0);
   });
 

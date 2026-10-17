@@ -232,8 +232,7 @@ async function handleDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
-    stage: 'decompose stage',
-    consequence: 'no kit was returned',
+    requireComplete: { stage: 'decompose stage', consequence: 'no kit was returned' },
   });
 
   const parsed = parseUiKitResponse(result.text, args.fallbackSlug);
@@ -655,8 +654,7 @@ async function handlePlatformToUiKit(args: {
         designMission: args.designMission,
       }),
       maxTokens: 24_000,
-      stage: 'platform decompose',
-      consequence: 'no kit was returned',
+      requireComplete: { stage: 'platform decompose', consequence: 'no kit was returned' },
     });
     let parsed = parseUiKitResponse(result.text, args.fallbackSlug);
     const latencyMs = Date.now() - t0;
@@ -1205,8 +1203,7 @@ async function handlePipeline(args: {
           ? { userImage: { base64: args.sourceImageBase64, mediaType: args.sourceImageMimeType } }
           : {}),
         maxTokens: 16_000,
-        stage: 'generate stage',
-        consequence: 'no artifact was produced',
+        requireComplete: { stage: 'generate stage', consequence: 'no artifact was produced' },
       });
       artifactHtml = stripWrappingFences(gen.text);
       totalCostUsd += gen.costUsd;
@@ -1680,8 +1677,7 @@ async function runDecompose(args: {
     systemPrompt: DECOMPOSE_SYSTEM,
     userText: `Decompose this HTML artifact into a ui_kit/<slug>/ bundle:\n\n${args.artifactHtml}`,
     maxTokens: 24_000,
-    stage: 'decompose stage',
-    consequence: 'no kit was stored',
+    requireComplete: { stage: 'decompose stage', consequence: 'no kit was stored' },
   });
   const parsed = parseUiKitResponse(dec.text);
   const latencyMs = Date.now() - t0;
@@ -1775,8 +1771,7 @@ ${args.artifactHtml.slice(0, 8_000)}`;
     systemPrompt: ITERATE_SYSTEM,
     userText,
     maxTokens: 24_000,
-    stage: 'iterate stage',
-    consequence: 'the previous kit was kept',
+    requireComplete: { stage: 'iterate stage', consequence: 'the previous kit was kept' },
   });
   const parsed = parseUiKitResponse(result.text);
   const latencyMs = Date.now() - t0;
