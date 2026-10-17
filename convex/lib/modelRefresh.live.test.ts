@@ -149,9 +149,9 @@ const CELLS: Cell[] = [
     effort: PHASE_EFFORT.execute,
   },
   {
-    // Production sends the generate cap to this fallback on a generate truncation or error.
+    // Production sends the generate cap to this fallback on a generate truncation or error (BALANCED; SPEC D2/D2a).
     phase: 'generate-fallback',
-    expected: 'openrouter:anthropic/claude-sonnet-5.5',
+    expected: 'openrouter:thinkingmachines/inkling-small:free',
     resolve: fallback('balanced', 'generate'),
     cap: OUTPUT_CAPS.generate,
     effort: PHASE_EFFORT.generate,
@@ -159,7 +159,7 @@ const CELLS: Cell[] = [
   {
     // The same fallback model under the larger cap decompose and iterate send it (both 24,000).
     phase: 'decompose/iterate-fallback',
-    expected: 'openrouter:anthropic/claude-sonnet-5.5',
+    expected: 'openrouter:thinkingmachines/inkling-small:free',
     resolve: fallback('balanced', 'iterate'),
     cap: OUTPUT_CAPS.iterate,
     effort: PHASE_EFFORT.iterate,

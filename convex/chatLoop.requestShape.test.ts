@@ -667,3 +667,87 @@ describe('a text-only reply that did not finish is never presented as a finished
     expect(last).toBe(CUT_OFF);
   });
 });
+
+describe('runAgentLoop keeps the request append-only across hops (Claude 5.5 preserved thinking)', () => {
+  const sse = (type: string, data: unknown) =>
+    `event: ${type}\ndata: ${JSON.stringify({ type, ...(data as object) })}\n\n`;
+  const start = sse('message_start', {
+    message: {
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-5-5',
+      content: [],
+      stop_reason: null,
+      usage: { input_tokens: 10, output_tokens: 1 },
+    },
+  });
+  // Hop 1: a signed thinking block, then a tool call. Hop 2: plain text, which ends the loop.
+  const hop1 = [
+    start,
+    sse('content_block_start', { index: 0, content_block: { type: 'thinking', thinking: '' } }),
+    sse('content_block_delta', { index: 0, delta: { type: 'thinking_delta', thinking: 'plan' } }),
+    sse('content_block_delta', {
+      index: 0,
+      delta: { type: 'signature_delta', signature: 'sig-1' },
+    }),
+    sse('content_block_stop', { index: 0 }),
+    sse('content_block_start', {
+      index: 1,
+      content_block: { type: 'tool_use', id: 'toolu_1', name: 'list_files', input: {} },
+    }),
+    sse('content_block_delta', {
+      index: 1,
+      delta: { type: 'input_json_delta', partial_json: '{}' },
+    }),
+    sse('content_block_stop', { index: 1 }),
+    sse('message_delta', { delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 5 } }),
+    sse('message_stop', {}),
+  ].join('');
+  const hop2 = [
+    start,
+    sse('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }),
+    sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'done' } }),
+    sse('content_block_stop', { index: 0 }),
+    sse('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }),
+    sse('message_stop', {}),
+  ].join('');
+
+  it('hop 2 sends every hop-1 message unchanged, then the new ones', async () => {
+    let hop = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+        bodies.push(JSON.parse(String(init?.body ?? '{}')));
+        hop += 1;
+        return new Response(hop === 1 ? hop1 : hop2, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }),
+    );
+    await agentLoopHandler(fakeCtx({ tier: 'frontier' }, [{ role: 'user', content: 'list' }]), {
+      runId: RUN_ID,
+    });
+    expect(bodies).toHaveLength(2);
+    expect(bodies.map((b) => b['model'])).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5']);
+    type Msg = { role: string; content: unknown };
+    const normalise = (body: Body) =>
+      (body['messages'] as Msg[]).map((m) => ({
+        ...m,
+        // cache_control breakpoints move with the tail by design; they are not part of the cached prefix's content.
+        content: (typeof m.content === 'string'
+          ? [{ type: 'text', text: m.content }]
+          : (m.content as Array<Record<string, unknown>>)
+        ).map(({ cache_control: _cacheControl, ...block }) => block),
+      }));
+    const first = normalise(bodies[0] as Body);
+    const second = normalise(bodies[1] as Body);
+    // The effort system message is replayed where pi-ai sent it. Dropping it (the loop used to rebuild the reply
+    // without providerThinkingLevel) shortens the prefix, so the API drops the signed thinking block and misses cache.
+    expect(second.slice(0, first.length)).toEqual(first);
+    expect(second.length).toBeGreaterThan(first.length);
+    // The signed thinking block itself was replayed, not stripped.
+    expect(JSON.stringify(second)).toContain('sig-1');
+  });
+});

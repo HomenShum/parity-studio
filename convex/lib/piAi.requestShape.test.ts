@@ -32,8 +32,10 @@ const WIRE = {
   'anthropic:claude-haiku-5-5': 'claude-haiku-5-5',
   'anthropic:claude-sonnet-5-5': 'claude-sonnet-5-5',
   'anthropic:claude-opus-5-5': 'claude-opus-5-5',
-  'openrouter:anthropic/claude-sonnet-5.5': 'anthropic/claude-sonnet-5.5',
 } as const;
+// SPEC 1.2 OpenRouter spelling. No tier cell routes here since the BALANCED fallbacks moved to a :free model
+// (SPEC D2/D2a); it stays reachable as a run's custom model override, so its request shape is still pinned below.
+const WIRE_OPENROUTER_SONNET = 'anthropic/claude-sonnet-5.5';
 const WIRE_FREE = 'nvidia/nemotron-3.5-lightning:free'; // SPEC 1.2 live :free list
 const WIRE_FREE_FALLBACK = 'thinkingmachines/inkling-small:free'; // SPEC 1.2 live :free list; takes image input
 
@@ -210,7 +212,7 @@ describe('request shape: tier x phase cells', () => {
   );
 
   it('covers every Claude cell the refresh touched', () => {
-    // opus-5-5 (advise/decompose), sonnet-5-5, haiku-5-5, OpenRouter sonnet 5.5 fallback.
+    // opus-5-5 (advise/decompose), sonnet-5-5, haiku-5-5 (all direct); no OpenRouter Claude route is a tier cell.
     const ids = new Set(claudeCells.map((c) => `${c.provider}:${c.modelId}`));
     expect(ids).toEqual(new Set(Object.keys(WIRE)));
   });
@@ -239,6 +241,18 @@ describe('request shape: tier x phase cells', () => {
       }
     });
   }
+
+  it('an OpenRouter Claude 5.5 override (no longer a tier cell) still builds the SPEC 1.2 id and the managed-effort shape', async () => {
+    expect(
+      allRoutes().filter((r) => r.provider === 'openrouter' && /claude/i.test(r.modelId)),
+    ).toEqual([]);
+    const body = await build('openrouter', WIRE_OPENROUTER_SONNET, 1234, 'medium');
+    expect(body['model']).toBe(WIRE_OPENROUTER_SONNET);
+    assertNoForbiddenKeys(body);
+    expect(body['max_tokens']).toBe(1234);
+    expect(usesAnthropicMessages('openrouter', WIRE_OPENROUTER_SONNET)).toBe(true);
+    expect(activeEffort(body)).toBe('medium');
+  });
 
   it('FREE tier primary is the verified free constant and its request carries no sampling keys', async () => {
     const cell = resolveModel('free', 'execute');

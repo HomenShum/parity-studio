@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_HAIKU,
   FREE_FALLBACK_MODEL,
-  OPENROUTER_CLAUDE_SONNET,
   OUTPUT_CAPS,
   PHASE_EFFORT,
   type Phase,
@@ -46,13 +45,13 @@ describe('auto router', () => {
     }
   });
 
-  it('has a paid recovery model for balanced prompt generation', () => {
+  it('recovers balanced prompt generation on the free image-capable model, not a paid one (SPEC D2/D2a)', () => {
     const model = resolveModel('balanced', 'generate');
     expect(model.modelId).toBe('moonshotai/kimi-k2.6');
-    expect(model.fallback).toEqual({
-      provider: 'openrouter',
-      modelId: OPENROUTER_CLAUDE_SONNET,
-    });
+    expect(model.fallback).toEqual({ provider: 'openrouter', modelId: FREE_FALLBACK_MODEL });
+    for (const phase of ['generate', 'decompose', 'iterate'] as const) {
+      expect(resolveModel('balanced', phase).fallback?.modelId, phase).toBe(FREE_FALLBACK_MODEL);
+    }
   });
 
   // The parts of the SPEC D2 eligibility filter (VERIFIED_FREE_MODEL) the pi-ai 1.1.0 catalog can state; `tools`,

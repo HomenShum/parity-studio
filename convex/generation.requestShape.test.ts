@@ -3,7 +3,7 @@
  * Request-shape proof for the generation pipeline builder in convex/generation.ts (model-defaults SPEC A.0 rule 6):
  * `generateInitial` and `decompose` reach pi-ai through `callValidatedPipelineModel`, driven here through their
  * registered Convex handlers with a fake ctx and a stubbed fetch (always 400, no spend). Asserts the model that goes
- * on the wire, the production cap, the effort that applies, and the paid recovery hop on BALANCED.
+ * on the wire, the production cap, the effort that applies, and the free recovery hop on BALANCED.
  */
 import { getFunctionName } from 'convex/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,14 +101,11 @@ describe('generation pipeline builds the SPEC 1.2 request', () => {
     expect(activeEffort(body)).toBe('low');
   });
 
-  it('BALANCED generate: kimi-k2.6 with its real cap, then the paid Sonnet 5.5 recovery hop', async () => {
+  it('BALANCED generate: kimi-k2.6 with its real cap, then the free recovery hop (SPEC D2/D2a)', async () => {
     await expect(
       generateHandler(fakeCtx({ tier: 'balanced' }), { runId: 'run_1', prompt: 'a landing page' }),
     ).rejects.toThrow(/generate stage error/);
-    expect(bodies.map((b) => b['model'])).toEqual([
-      'moonshotai/kimi-k2.6',
-      'anthropic/claude-sonnet-5.5',
-    ]);
+    expect(bodies.map((b) => b['model'])).toEqual(['moonshotai/kimi-k2.6', FREE_FALLBACK_MODEL]);
     for (const body of bodies) {
       expect(body['max_tokens'] ?? body['max_completion_tokens']).toBe(OUTPUT_CAPS.generate);
     }

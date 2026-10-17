@@ -875,16 +875,10 @@ export const runAgentLoop = internalAction({
         costMicroUsd: usdToMicroUsd(result.usage.cost.total),
       });
 
-      messages.push({
-        role: 'assistant',
-        content: result.content,
-        api: result.api,
-        provider: result.provider,
-        model: result.model,
-        usage: result.usage,
-        stopReason: result.stopReason,
-        timestamp: Date.now(),
-      } as AssistantMessage);
+      // The reply goes back as pi-ai returned it. Rebuilding it field by field dropped providerThinkingLevel, which
+      // pi-ai replays as the effort system message sent before this reply; without it hop N+1 is not an extension of
+      // hop N, and Claude 5.5 silently drops every replayed thinking block (and misses the prompt cache).
+      messages.push(result);
 
       if (toolCalls.length === 0) {
         await reverifyLatestAfterAgentEdits(ctx, runId, mutatedPaths);

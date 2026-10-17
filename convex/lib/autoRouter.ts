@@ -31,7 +31,6 @@ import type { Effort, SupportedProvider } from './piAi';
 export const CLAUDE_HAIKU = 'claude-haiku-5-5';
 export const CLAUDE_SONNET = 'claude-sonnet-5-5';
 export const CLAUDE_OPUS = 'claude-opus-5-5';
-export const OPENROUTER_CLAUDE_SONNET = 'anthropic/claude-sonnet-5.5';
 /**
  * FREE-tier primary and the route unknown free-looking ids resolve to (SPEC D2: the latest `:free` model with the
  * capabilities the roles need). Eligibility filter, applied to the public OpenRouter list fetched 2026-10-16T20:40Z
@@ -51,8 +50,8 @@ export const FREE_FALLBACK_MODEL = 'thinkingmachines/inkling-small:free';
 /**
  * Output-token caps per call site. Thinking counts toward `max_tokens` on Claude 5.5 (SPEC 1.3), and since the
  * maxOutputTokens -> maxTokens fix they are real caps on every model, kimi-k2.6 included (before, pi-ai ignored
- * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto the
- * paid fallback, so these values are part of the needs-live-eval scope on PR #101 until measured.
+ * the old option name and sent the model default). A truncation (stopReason 'length') pushes BALANCED onto its
+ * free fallback (FREE_FALLBACK_MODEL), so these values are part of the needs-live-eval scope on PR #101 until measured.
  * `agentLoop` sits at what an `upsert_file` can carry (200 KB, about 50-67k tokens): a lower cap would make every
  * large file write truncate. A reply counts as completed on stopReason 'toolUse', or 'stop' (pi-ai reports an
  * OpenAI-compatible finish_reason 'stop' as 'stop' even when tool_calls came with it). runAgentLoop runs tool calls
@@ -196,6 +195,11 @@ const FRONTIER: Record<Phase, ResolvedModel> = {
   },
 };
 
+// The kimi-k2.6 primaries are frozen (SPEC A.0.1: active, no vendor-named successor). Their recovery hop was
+// openrouter anthropic/claude-sonnet-4.6, which the refresh moves (A.0.1, vendor-named successor), and SPEC D2/D2a
+// sets the target of a moved OpenRouter role to the latest eligible `:free` model: FREE_FALLBACK_MODEL (filter and
+// fetch time above). That also keeps the cost class: a recovery hop never costs more than the request it recovers.
+// UNMEASURED on this repo's tool surface and live-unverified (no OpenRouter key, D2): needs-live-eval.
 const BALANCED: Record<Phase, ResolvedModel> = {
   enhance: {
     provider: 'anthropic',
@@ -218,21 +222,21 @@ const BALANCED: Record<Phase, ResolvedModel> = {
   generate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
   decompose: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
   iterate: {
     provider: 'openrouter',
     modelId: 'moonshotai/kimi-k2.6',
-    fallback: { provider: 'openrouter', modelId: OPENROUTER_CLAUDE_SONNET },
+    fallback: { provider: 'openrouter', modelId: FREE_FALLBACK_MODEL },
     isFree: false,
     label: 'kimi-k2.6',
   },
